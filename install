@@ -1021,7 +1021,19 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
 
     installed = []
     failed = []
+    skipped_tools = []
     for tool_name, pkg_name in tools_to_install:
+        # Check if a wheel for this package exists in wheels_dir before attempting install
+        import glob as _glob
+        norm = pkg_name.lower().replace("-", "_").replace(".", "_")
+        matches = (
+            _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl")) +
+            _glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
+        )
+        if not matches:
+            warn("skipping {} — no wheel found in {}".format(pkg_name, wheels_dir))
+            skipped_tools.append(tool_name)
+            continue
         cmd = [
             uv_bin, "tool", "install", pkg_name,
             "--python", python_bin,
@@ -1046,8 +1058,10 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
 
     if failed:
         record_result("Python tools", "FAIL", "failed: {}".format(", ".join(failed)))
-    else:
+    elif installed:
         record_result("Python tools", "yes", "installed: {}".format(", ".join(installed)))
+    else:
+        record_result("Python tools", "SKIP", "no wheels available for: {}".format(", ".join(skipped_tools)))
 
 
 def check_prebuilt_binary_dependencies(dest_bin_dir):
