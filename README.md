@@ -23,7 +23,7 @@ Linux box in under two minutes and gets out of your way.
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `dotkeys_config.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
-| **Pre-built binaries** | 45 modern CLI tools, zero internet required — see table below |
+| **Pre-built binaries** | 52 modern CLI tools, zero internet required — see table below |
 | **Nerd Fonts** | 6 font families, split-archive support for GitHub's 50 MB limit |
 
 ---
@@ -135,44 +135,56 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 
 | Binary | Version | Description |
 |--------|---------|-------------|
+| agent-deck | 1.9.12 | TUI dashboard for AI agent orchestration |
 | [bash](https://www.gnu.org/software/bash/) | 5.3.9 | The GNU Bourne Again SHell |
 | [bat](https://github.com/sharkdp/bat) | 0.26.1 | `cat` with syntax highlighting and Git integration |
 | [broot](https://dystroy.org/broot/) | 1.56.2 | Interactive tree navigator and fuzzy finder |
 | [btm](https://github.com/ClementTsang/bottom) | 0.12.3 | Cross-platform system monitor (CPU, memory, process tree) |
 | [btop](https://github.com/aristocratos/btop) | 1.4.7 | Resource monitor — `top` for people who care about aesthetics |
+| [bzip2](https://sourceware.org/bzip2/) | 1.0.8 | High-quality block-sorting file compressor |
 | [choose](https://github.com/theryangeary/choose) | 1.3.7 | Human-friendly `cut` and `awk` replacement |
 | [dasel](https://github.com/TomWright/dasel) | 3.8.1 | Select, update, and convert data across JSON/YAML/TOML/XML/CSV |
+| [delta](https://github.com/dandavison/delta) | 0.19.2 | Git diff pager with syntax highlighting and line numbers |
+| [duf](https://github.com/muesli/duf) | 0.9.1 | `df` replacement with colored disk usage table |
 | [dust](https://github.com/bootandy/dust) | 1.2.4 | Intuitive `du` — shows disk usage by size, at a glance |
 | [eza](https://github.com/eza-community/eza) | 0.23.4 | Modern `ls` with color, icons, Git status, and tree view |
 | [fd](https://github.com/sharkdp/fd) | 10.4.2 | Fast, ergonomic `find` replacement |
 | [fzf](https://github.com/junegunn/fzf) | 0.62.0 | Blazing-fast fuzzy finder for files, history, anything |
-| [bzip2](https://sourceware.org/bzip2/) | 1.0.8 | High-quality block-sorting file compressor |
 | [gnuplot](http://www.gnuplot.info) | 6.0.2 | Portable command-line graphing utility |
 | [gping](https://github.com/orf/gping) | 1.20.1 | `ping` with a real-time ASCII graph |
-| [htop](https://htop.dev) | 3.6.0 | Interactive process viewer — the original `top` upgrade |
+| [htop](https://htop.dev) | 3.2.1 | Interactive process viewer — the original `top` upgrade |
 | [hx](https://helix-editor.com) | 25.07.1 | Helix modal editor — Kakoune-inspired, batteries included |
 | [hyperfine](https://github.com/sharkdp/hyperfine) | 1.20.0 | Command-line benchmarking tool with statistical output |
 | [jq](https://jqlang.github.io/jq/) | 1.8.1 | Lightweight and flexible command-line JSON processor |
 | [just](https://github.com/casey/just) | 1.50.0 | Command runner — sane `make` replacement for project tasks |
 | [kak](https://kakoune.org) | 2026.04.12 | Kakoune — selection-first modal editor |
-| [micro](https://micro-editor.github.io) | 2.0.16 | Modern, intuitive terminal text editor — Ctrl+S just works |
+| [lazygit](https://github.com/jesseduffield/lazygit) | 0.61.1 | TUI git client for staging, committing, and rebasing |
+| [micro](https://micro-editor.github.io) | 2.0.15 | Modern, intuitive terminal text editor — Ctrl+S just works |
+| [miller](https://github.com/johnkerl/miller) | 6.18.1 | CSV/TSV/JSON/NDJSON/XML data processor (`mlr`) |
+| [nvim](https://neovim.io) | 0.12.2 | Hyperextensible Vim-based text editor |
 | [patchelf](https://github.com/NixOS/patchelf) | 0.12 | Modify ELF binary RPATHs and interpreters at install time |
 | [pigz](https://zlib.net/pigz/) | 2.8 | Parallel gzip — multi-core `gzip`/`gunzip` replacement |
-| [resize](https://invisible-island.net/xterm/) | 371 | XTerm terminal resize utility — fixes `$COLUMNS`/`$LINES` |
+| [procs](https://github.com/dalance/procs) | 0.14.11 | `ps` replacement with colors and process tree |
+| [pv](https://www.ivarch.com/programs/pv.shtml) | 1.6.6 | Monitor progress of data through a pipe |
+| [resize](https://invisible-island.net/xterm/) | 331 | XTerm terminal resize utility — fixes `$COLUMNS`/`$LINES` |
 | [rg](https://github.com/BurntSushi/ripgrep) | 15.1.0 | ripgrep — recursive search that respects `.gitignore` |
-| [rsync](https://rsync.samba.org) | 3.4.2 | Fast, incremental file transfer |
+| [rsync](https://rsync.samba.org) | 3.4.1 | Fast, incremental file transfer |
 | [ruff](https://github.com/astral-sh/ruff) | 0.15.12 | Extremely fast Python linter and formatter, written in Rust |
 | [sd](https://github.com/chmln/sd) | 1.0.0 | Intuitive `sed` replacement — `sd 'old' 'new'` just works |
 | [shfmt](https://github.com/mvdan/sh) | 3.13.1 | Shell script formatter (bash/sh/mksh/bats) |
 | [starship](https://starship.rs) | 1.25.1 | Cross-shell prompt — fast, informative, configurable |
 | [stylua](https://github.com/JohnnyMorganz/StyLua) | 2.4.1 | Opinionated Lua code formatter |
 | [tealdeer / tldr](https://github.com/dbrgn/tealdeer) | 1.8.1 | Fast `tldr` client with offline page cache |
+| [tkdiff](https://sourceforge.net/projects/tkdiff/) | 6.0 | Tcl/Tk visual diff and merge tool (requires `wish`) |
 | [tmux](https://github.com/tmux/tmux) | 3.6a | Terminal multiplexer |
 | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) | 0.26.8 | Parser generator tool and incremental parsing library |
-| [ty](https://github.com/astral-sh/ty) | 0.0.34 | Extremely fast Python type checker by Astral |
+| [ty](https://github.com/astral-sh/ty) | 0.0.35 | Extremely fast Python type checker by Astral |
 | [uv](https://github.com/astral-sh/uv) | 0.11.13 | Extremely fast Python package installer and resolver |
 | [vim](https://www.vim.org) | 9.2 | Vim 9.2 pre-built binary + shell wrapper |
-| [xterm](https://invisible-island.net/xterm/) | 371 | X Window System terminal emulator |
+| [xsel](https://github.com/kfish/xsel) | 1.2.0 | X11 clipboard command-line access tool |
+| [xterm](https://invisible-island.net/xterm/) | 331 | X Window System terminal emulator |
+| [yank](https://github.com/mptre/yank) | 1.3.0 | Select terminal output and copy to clipboard |
+| [yara](https://virustotal.github.io/yara/) | 4.5.5 | Malware pattern matching and classification |
 | [yq](https://github.com/mikefarah/yq) | 4.53.2 | `jq` for YAML, JSON, XML, CSV, TOML, and properties files |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | 0.9.9 | Smarter `cd` — learns your most-used directories |
 
@@ -183,9 +195,11 @@ Not installed by default. Add with `./install --add-tools <name>` or view all wi
 | Binary | Version | Description |
 |--------|---------|-------------|
 | [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim — `gvim.bin` (stripped binary) + `gvim` wrapper setting VIM/VIMRUNTIME |
-| [nedit-ng](https://github.com/eteran/nedit-ng) | 2.0.1 | Qt5 rewrite of NEdit — single self-contained binary, no runtime files |
+| [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit — single self-contained binary, no runtime files |
 | [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing (~163 MB uncompressed; see notes below) |
 | [gui\_libs](https://github.com/smprather/dotfiles) | — | ~80 bundled Qt5/GTK3/xcb/Wayland shared libs for headless farm nodes |
+| [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV/TSV/JSON/NDJSON data |
+| [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + PyGObject) |
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 
