@@ -1450,6 +1450,54 @@ def install_octave_runtime(repo_dir, home, selected_tools):
         warn("Octave runtime archive did not install {}/share/octave/11.1.0/m as expected".format(local_dir))
 
 
+def install_meld_runtime(repo_dir, home, selected_tools):
+    # Only install if meld was selected (or tool registry is empty — install everything).
+    if selected_tools is not None and "meld" not in selected_tools:
+        skipped("Meld runtime (meld not selected)", "")
+        record_result("Meld runtime", "SKIP", "meld not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        candidate = os.path.join(platform_dir, "runtime", "meld.tar.bz2")
+        if os.path.isfile(candidate):
+            archive = candidate
+    if archive is None:
+        skipped("Meld runtime (no meld.tar.bz2 in pre_built/<platform>/runtime/)",
+                "meld will NOT be installed")
+        record_result("Meld runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "Meld runtime")
+
+    # Remove stale meld-owned paths before re-extracting.
+    for stale in (
+        os.path.join(local_dir, "lib", "python3.6", "site-packages", "meld"),
+        os.path.join(local_dir, "lib", "python3.6", "site-packages", "meld3"),
+        os.path.join(local_dir, "lib", "python3.6", "site-packages", "gi"),
+        os.path.join(local_dir, "lib", "python3.6", "site-packages", "cairo"),
+        os.path.join(local_dir, "share", "meld"),
+        os.path.join(local_dir, "bin", "meld"),
+    ):
+        remove_if_exists(stale)
+
+    pv_extract_tar(archive, local_dir)
+
+    # Ensure launcher is executable (may have been extracted without +x).
+    meld_bin = os.path.join(local_dir, "bin", "meld")
+    if os.path.isfile(meld_bin):
+        os.chmod(meld_bin, 0o755)
+
+    sentinel = os.path.join(local_dir, "lib", "python3.6", "site-packages", "meld", "conf.py")
+    if os.path.isfile(sentinel):
+        record_result("Meld runtime", "yes", "meld 3.20.4 -> {}/".format(local_dir))
+        print("  Installed: {} -> {}/".format(archive, local_dir))
+    else:
+        warn("Meld runtime archive did not install {}/lib/python3.6/site-packages/meld as expected".format(local_dir))
+        record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
+
+
 def install_treesitter_parsers(repo_dir, home):
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, "treesitter", "prebuilt", platform)
@@ -2075,6 +2123,7 @@ def main(argv):
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home)
     run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home)
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
+    run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
     run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home)
     run_install_step("git hooks", install_git_hooks, repo_dir, args.dev)

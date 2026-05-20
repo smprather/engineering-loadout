@@ -118,6 +118,7 @@ sha256  d064c511792a46c8cbe8b8ee2086ba04de8a98dbbe3cb14eb1d18413d2536cc8  pre_bu
 sha256  5dce8aa40a597fd8f0a13be2cd0a2a350a94cca670d34f484a20d7696065c202  pre_built/el8.x86_64.glibc2p28/lib64/libgdk_pixbuf-2.0.so.0.bz2
 sha256  eecdd3088a0869074abf0ce6413d51eae1c7a814ed63aacaf816dfd21408ae78  pre_built/el8.x86_64.glibc2p28/lib64/libgfortran.so.5.bz2
 sha256  a596ed8ff6150e3d0c772fb555af8b97c6275375b8305bd15edfb04b41d9c7a5  pre_built/el8.x86_64.glibc2p28/lib64/libgio-2.0.so.0.bz2
+sha256  fbbefc8b6eb7466cd5f0d6476bfc2ea7388d82123e1f1cf5852d33a7b2f4427c  pre_built/el8.x86_64.glibc2p28/lib64/libgirepository-1.0.so.1.bz2
 sha256  c5be052ef44d6762060ad950250ab04f016ba99a6457e7ca01948b24dacdc93c  pre_built/el8.x86_64.glibc2p28/lib64/libglib-2.0.so.0.bz2
 sha256  2173a0ef668dc465b4aba1b5aa9530ab9f07a855534dcaa84a9c037e1edbd225  pre_built/el8.x86_64.glibc2p28/lib64/libglpk.so.40.bz2
 sha256  bf8f9679c286909e43425664e71e9b3cb680ddba6569af3f27925b4138181e76  pre_built/el8.x86_64.glibc2p28/lib64/libgmodule-2.0.so.0.bz2
@@ -128,6 +129,7 @@ sha256  f7f7a94c82aa945a25caf043af50778c4a30047195ef567ae5ba9ac2aa946207  pre_bu
 sha256  1610f60df63c48ea817ad2bbd337c4e86e2b0e98e6906c94fb6bca611e5974fd  pre_built/el8.x86_64.glibc2p28/lib64/libgsm.so.1.bz2
 sha256  083bf72fb8ec6186805e9b75f595d5d9ef863d65612f3a768ea78b50cf5e6d5b  pre_built/el8.x86_64.glibc2p28/lib64/libgthread-2.0.so.0.bz2
 sha256  23244b24e9020c598baf902eb1125856333772381b73acd2661ca0e7a608d4dd  pre_built/el8.x86_64.glibc2p28/lib64/libgtk-3.so.0.bz2
+sha256  025629da63b7301d58667126890630c41a487de0dd956f42622c7779a457ed67  pre_built/el8.x86_64.glibc2p28/lib64/libgtksourceview-3.0.so.1.bz2
 sha256  2e39d91e3ebc769e8efe1e063b8e60edde3c34031a2441fb2edf878c2d1ca982  pre_built/el8.x86_64.glibc2p28/lib64/libharfbuzz.so.0.bz2
 sha256  3827ec6ae5a85cfa8df3eba22dd2f65194d01eee782b467b436aab8d7008f7ff  pre_built/el8.x86_64.glibc2p28/lib64/libhdf5.so.103.bz2
 sha256  3471513e032fbd20e7f81d143c1943a71f5511758ce24122e31b656ee47428de  pre_built/el8.x86_64.glibc2p28/lib64/libicudata.so.60.bz2
@@ -192,6 +194,7 @@ sha256  762794ca28d4da4d557bdf6593eb44f1bf1cfb637fd1de9873af58a6b1b0e831  pre_bu
 sha256  fcf47e453dd59a265b921a1f73b523343383fa654110cc8dde2c1def45c70cbe  pre_built/el8.x86_64.glibc2p28/lib64/libxxhash.so.0.bz2
 sha256  08ace58677105a879ee6c45dccfa797c169cc027752e023bb826db78f5f66c0a  pre_built/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
+tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4430091  1778655123  pre_built/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  8483290  1778430063  pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2

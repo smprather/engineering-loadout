@@ -221,8 +221,12 @@
 
   "meld": {
     "bins":     [],
-    "version":  "3.23.1",
-    "description": "Visual diff and merge tool (system install only — PyGObject requires GLib >= 2.62, EL8 has 2.56)",
+    "libs":     ["libgirepository-1.0.so.1", "libgtksourceview-3.0.so.1"],
+    "typelibs": ["Atk-1.0.typelib", "cairo-1.0.typelib", "Gdk-3.0.typelib", "GdkPixbuf-2.0.typelib",
+                 "Gio-2.0.typelib", "GIRepository-2.0.typelib", "GLib-2.0.typelib", "GObject-2.0.typelib",
+                 "Gtk-3.0.typelib", "GtkSource-3.0.typelib", "Pango-1.0.typelib"],
+    "version":  "3.20.4",
+    "description": "GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource)",
     "optional": true
   }
 }
