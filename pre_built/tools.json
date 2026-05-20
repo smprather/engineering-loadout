@@ -228,5 +228,52 @@
     "version":  "3.20.4",
     "description": "GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource)",
     "optional": true
+  },
+
+  "zsh": {
+    "bins":     ["zsh"],
+    "version":  "",
+    "description": "Z shell — powerful interactive shell with advanced tab completion",
+    "optional": true
+  },
+
+  "fish": {
+    "bins":     ["fish"],
+    "version":  "",
+    "description": "Fish shell — friendly interactive shell with autosuggestions and syntax highlighting",
+    "optional": true
+  },
+
+  "jupyterlab": {
+    "bins":     [],
+    "wheels":   [
+      "jupyterlab", "jupyter_server", "jupyterlab_server", "jupyter_client",
+      "jupyter_core", "jupyter_events", "jupyter_lsp", "jupyter_server_terminals",
+      "ipykernel", "ipython", "ipython_pygments_lexers", "comm",
+      "notebook_shim", "nbconvert", "nbformat", "nbclient",
+      "tornado", "pyzmq", "traitlets", "packaging",
+      "jinja2", "markupsafe", "babel", "pygments",
+      "jsonschema", "jsonschema_specifications", "referencing", "rpds_py",
+      "fastjsonschema", "attrs", "pyyaml",
+      "anyio", "httpx", "httpcore", "h11", "websocket_client",
+      "debugpy", "psutil", "nest_asyncio", "matplotlib_inline",
+      "prompt_toolkit", "wcwidth", "jedi", "parso", "decorator",
+      "stack_data", "executing", "asttokens", "pure_eval", "pexpect", "ptyprocess",
+      "argon2_cffi", "argon2_cffi_bindings", "cffi", "pycparser",
+      "terminado", "send2trash", "prometheus_client",
+      "requests", "urllib3", "certifi", "charset_normalizer", "idna",
+      "python_dateutil", "six", "platformdirs", "setuptools",
+      "python_json_logger", "rfc3986_validator", "rfc3339_validator",
+      "rfc3987_syntax", "lark", "json5", "jsonpointer",
+      "nbclient", "mistune", "bleach", "webencodings", "tinycss2",
+      "beautifulsoup4", "soupsieve", "defusedxml",
+      "pandocfilters", "jupyterlab_pygments", "async_lru",
+      "typing_extensions", "arrow", "tzdata", "isoduration",
+      "fqdn", "uri_template", "webcolors", "comm"
+    ],
+    "uv_tool":  "jupyterlab",
+    "version":  "4.5.7",
+    "description": "Web-based interactive development environment for notebooks, code, and data",
+    "optional": true
   }
 }

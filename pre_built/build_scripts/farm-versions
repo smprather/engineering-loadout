@@ -288,8 +288,17 @@ TOOLS = [
     ("zoxide",      "zoxide",      "https://github.com/ajeetdsouza/zoxide",
      strategy_flag(["--version"], r"zoxide ([0-9]+\.[0-9]+\.[0-9]+)")),
 
+    ("zsh",         "zsh",         "https://www.zsh.org",
+     strategy_flag(["--version"], r"zsh ([0-9]+\.[0-9]+(?:\.[0-9]+)?)")),
+
+    ("fish",        "fish",        "https://fishshell.com",
+     strategy_flag(["--version"], r"fish, version ([0-9]+\.[0-9]+\.[0-9]+)")),
+
     ("vd",          "visidata",    "https://www.visidata.org",
      strategy_flag(["--version"], r"VisiData ([0-9]+\.[0-9]+)")),
+
+    ("jupyter-lab",  "jupyterlab",  "https://jupyter.org",
+     strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
 
     ("uv",          "uv",          "https://github.com/astral-sh/uv",
      strategy_flag(["--version"], r"uv ([0-9]+\.[0-9]+\.[0-9]+)")),

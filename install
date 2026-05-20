@@ -1498,6 +1498,42 @@ def install_meld_runtime(repo_dir, home, selected_tools):
         record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
 
 
+def install_fish_runtime(repo_dir, home, selected_tools):
+    # Only install if fish was selected (or tool registry is empty — install everything).
+    if selected_tools is not None and "fish" not in selected_tools:
+        skipped("Fish runtime (fish not selected)", "")
+        record_result("Fish runtime", "SKIP", "fish not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        candidate = os.path.join(platform_dir, "runtime", "fish.tar.bz2")
+        if os.path.isfile(candidate):
+            archive = candidate
+    if archive is None:
+        skipped("Fish runtime (no fish.tar.bz2 in pre_built/<platform>/runtime/)",
+                "fish standard library will NOT be installed")
+        record_result("Fish runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    # Archive contains ./share/fish/... relative to ~/.local, so extract to ~/.local.
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "Fish runtime")
+
+    fish_share = os.path.join(local_dir, "share", "fish")
+    remove_if_exists(fish_share)
+
+    pv_extract_tar(archive, local_dir)
+
+    sentinel = os.path.join(fish_share, "functions", "fish_prompt.fish")
+    if os.path.isfile(sentinel):
+        record_result("Fish runtime", "yes", "fish -> {}/".format(fish_share))
+        print("  Installed: {} -> {}/".format(archive, fish_share))
+    else:
+        warn("Fish runtime archive did not install {}/functions/fish_prompt.fish as expected".format(fish_share))
+        record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
+
+
 def install_treesitter_parsers(repo_dir, home):
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, "treesitter", "prebuilt", platform)
@@ -2124,6 +2160,7 @@ def main(argv):
     run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home)
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
+    run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools)
     run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home)
     run_install_step("git hooks", install_git_hooks, repo_dir, args.dev)
