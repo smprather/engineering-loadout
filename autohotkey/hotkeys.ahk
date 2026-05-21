@@ -4,8 +4,8 @@ SetTitleMatchMode("Slow")
 InstallMouseHook()
 InstallKeybdHook()
 
-; Installer-managed feature flags. install.ps1 patches these values from
-; %USERPROFILE%\dotkeys_config.toml after copying this file into place.
+; Installer-managed feature flags. engineering-loadout.ps1 patches these values from
+; %USERPROFILE%\loadout_keys.toml after copying this file into place.
 cfg_feature_corp_logins := false
 cfg_feature_mouse_wiggle := false
 cfg_feature_cisco_secure_client_vpn := false

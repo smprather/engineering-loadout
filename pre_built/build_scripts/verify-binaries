@@ -44,7 +44,7 @@ _PREBUILT_DIR = os.path.dirname(_SCRIPT_DIR)                     # pre_built/
 _REPO_DIR     = os.path.dirname(_PREBUILT_DIR)                   # dotfiles/
 _PLATFORM     = "el8.x86_64.glibc2p28"
 _BIN_DIR      = os.path.join(_PREBUILT_DIR, _PLATFORM, "bin")
-_TOOLS_JSON   = os.path.join(_PREBUILT_DIR, "tools.json")
+_TOOLS_JSON   = os.path.join(_PREBUILT_DIR, "packages.json")
 _STRIP        = shutil.which("strip") or "/usr/bin/strip"
 
 # patchelf: prefer bundled binary, fall back to system
@@ -53,8 +53,8 @@ _PATCHELF     = (shutil.which("patchelf")
 _BIN_RPATH    = "$ORIGIN/../lib64:$ORIGIN/../lib"  # standard RPATH for ~/.local/bin/ binaries
 
 # ── upstream release registry ─────────────────────────────────────────────
-# Key matches tools.json entry name.
-# url: {ver} replaced with tools.json version string.
+# Key matches packages.json entry name.
+# url: {ver} replaced with packages.json version string.
 # bin: binary name to extract from the archive (searched by basename).
 # strip: False if upstream already ships a stripped binary (skip re-strip).
 
@@ -387,7 +387,7 @@ def main():
 
         entry = _REGISTRY[name]
         if not version:
-            print(_row("SKIP", "no version in tools.json"))
+            print(_row("SKIP", "no version in packages.json"))
             counts["SKIP"] += 1
             continue
 

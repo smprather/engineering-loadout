@@ -170,7 +170,7 @@ Key rules:
   other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted — they are
   always installed regardless of tool selection.
 - `"optional": true` — if the tool should NOT be installed by default (e.g. large optional tools
-  like `octave`). Users opt in with `./install --add-tools mytool`.
+  like `octave`). Users opt in with `./engineering-loadout --add-tools mytool`.
 
 If a tool produces no lib64 files and installs a single binary, the entry can be just:
 `"mytool": {"bins": ["mytool"]}`.
@@ -361,7 +361,7 @@ cp /tmp/nedit_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
 ```
 
 nedit-ng is `optional: true` in `tools.json` because it requires `gui_libs`. Install together:
-`./install --add-tools gui_libs,nedit-ng`.
+`./engineering-loadout --add-tools gui_libs,nedit-ng`.
 
 Binary sizes: 3.8 MB unstripped → 3.1 MB stripped → ~1.1 MB bzip2.
 See `pre_built/build_scripts/build-nedit-ng.sh` for the full recipe.

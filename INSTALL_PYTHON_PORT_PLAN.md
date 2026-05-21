@@ -6,7 +6,7 @@
 ## Goal
 
 Replace the growing Bash installer implementation with a Python 3.6-compatible
-installer while keeping `./install` as the stable command entrypoint.
+installer while keeping `./engineering-loadout` as the stable command entrypoint.
 
 ## Constraints
 
@@ -38,7 +38,7 @@ installer while keeping `./install` as the stable command entrypoint.
    - Managed shell entrypoint symlinks:
      `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile`.
    - Backup behavior, including font-file excludes.
-   - Absolute `DOTFILES_BACKUP_DIR` for hooks.
+   - Absolute `LOADOUT_BACKUP_DIR` for hooks.
    - Multiple post-install hooks in argument order.
    - Optional font install from top-level `fonts/`.
    - Pre-built binary install from `pre_built/<platform>/`, RPATH is pre-baked
@@ -50,7 +50,7 @@ installer while keeping `./install` as the stable command entrypoint.
 
 4. Update docs.
    - `README.md`, `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`
-     should note that `./install` is a Bash shim over Python.
+     should note that `./engineering-loadout` is a Bash shim over Python.
    - Keep cold-start notes current.
 
 5. Validate.
@@ -59,7 +59,7 @@ installer while keeping `./install` as the stable command entrypoint.
    - `bash -n tests/install_linux_tmp_home`
    - `git diff --check`
    - `./tests/install_linux_tmp_home`
-   - Direct `./install --help` sanity check.
+   - Direct `./engineering-loadout --help` sanity check.
 
 ## Handoff Notes
 

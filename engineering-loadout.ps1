@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs dotfiles on Windows by copying files into their expected locations.
+    Installs engineering-loadout on Windows by copying files into their expected locations.
 .DESCRIPTION
     Copies WezTerm, Starship, Neovim, PowerShell profile, AutoHotKey, and
     EditorConfig configs. To update after repo changes, re-run this script.
@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Warning "This installer requires PowerShell 7+."
-    Write-Warning "Run .\install-powershell-latest.ps1 from Windows PowerShell 5.1, then rerun .\install.ps1 from pwsh."
+    Write-Warning "Run .\engineering-loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\engineering-loadout.ps1 from pwsh."
     exit 1
 }
 
@@ -56,7 +56,7 @@ function Get-AhkFeatureDefinitions {
     )
 }
 
-function New-DotkeysConfig {
+function New-LoadoutKeysConfig {
     param(
         [string]$ConfigPath,
         [object[]]$FeatureDefinitions
@@ -66,7 +66,7 @@ function New-DotkeysConfig {
         'version = 1',
         '',
         '# This file is user-local and not shared from the repo.',
-        '# install.ps1 patches feature flags in hotkeys.ahk from this list.',
+        '# engineering-loadout.ps1 patches feature flags in hotkeys.ahk from this list.',
         '# Legacy [autohotkey.plugins] entries are still accepted for existing installs.',
         '',
         '[autohotkey]',
@@ -88,10 +88,10 @@ function New-DotkeysConfig {
     }
 
     Set-Content -Path $ConfigPath -Value $lines -Encoding UTF8
-    Write-Host "  Created default dotkeys config: $ConfigPath"
+    Write-Host "  Created default loadout-keys config: $ConfigPath"
 }
 
-function Get-DotkeysAhkConfig {
+function Get-LoadoutAhkConfig {
     param(
         [string]$ConfigPath,
         [object[]]$FeatureDefinitions
@@ -180,7 +180,7 @@ function Get-DotkeysAhkConfig {
     }
 
     foreach ($entry in $unknownEntries) {
-        Write-Warning "  dotkeys_config.toml enables unknown AHK feature '$entry'; ignoring."
+        Write-Warning "  loadout_keys.toml enables unknown AHK feature '$entry'; ignoring."
     }
 
     $result.EnabledFeatureIds = $enabledFeatureIds
@@ -251,27 +251,27 @@ Write-Host "AutoHotKey..."
 $startupDir  = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
 $ahkHomeDir  = "$HOME\autohotkey"
 $ahkScript   = "$ahkHomeDir\hotkeys.ahk"
-$dotkeysConfigPath = Join-Path $HOME 'dotkeys_config.toml'
+$loadoutKeysConfigPath = Join-Path $HOME 'loadout_keys.toml'
 $ahkFeatureDefinitions = Get-AhkFeatureDefinitions
 
-if (-not (Test-Path $dotkeysConfigPath -PathType Leaf)) {
-    New-DotkeysConfig -ConfigPath $dotkeysConfigPath -FeatureDefinitions $ahkFeatureDefinitions
+if (-not (Test-Path $loadoutKeysConfigPath -PathType Leaf)) {
+    New-LoadoutKeysConfig -ConfigPath $loadoutKeysConfigPath -FeatureDefinitions $ahkFeatureDefinitions
 }
 
-$dotkeysAhkConfig = Get-DotkeysAhkConfig -ConfigPath $dotkeysConfigPath -FeatureDefinitions $ahkFeatureDefinitions
-Write-Host "  Using config: $dotkeysConfigPath"
+$loadoutAhkConfig = Get-LoadoutAhkConfig -ConfigPath $loadoutKeysConfigPath -FeatureDefinitions $ahkFeatureDefinitions
+Write-Host "  Using config: $loadoutKeysConfigPath"
 
 Copy-Config "$repoDir\autohotkey\hotkeys.ahk" $ahkScript
-Set-AhkFeatureFlags -AhkScriptPath $ahkScript -AutoHotkeyEnabled $dotkeysAhkConfig.AutoHotkeyEnabled -EnabledFeatureIds $dotkeysAhkConfig.EnabledFeatureIds -FeatureDefinitions $ahkFeatureDefinitions
+Set-AhkFeatureFlags -AhkScriptPath $ahkScript -AutoHotkeyEnabled $loadoutAhkConfig.AutoHotkeyEnabled -EnabledFeatureIds $loadoutAhkConfig.EnabledFeatureIds -FeatureDefinitions $ahkFeatureDefinitions
 
-if ($dotkeysAhkConfig.AutoHotkeyEnabled) {
-    if ($dotkeysAhkConfig.EnabledFeatureIds.Count -gt 0) {
-        Write-Host "  Enabled AHK features: $($dotkeysAhkConfig.EnabledFeatureIds -join ', ')"
+if ($loadoutAhkConfig.AutoHotkeyEnabled) {
+    if ($loadoutAhkConfig.EnabledFeatureIds.Count -gt 0) {
+        Write-Host "  Enabled AHK features: $($loadoutAhkConfig.EnabledFeatureIds -join ', ')"
     } else {
         Write-Host "  Enabled AHK features: (none)"
     }
 } else {
-    Write-Host "  AutoHotKey is globally disabled in dotkeys_config.toml; optional AHK features were written as off."
+    Write-Host "  AutoHotKey is globally disabled in loadout_keys.toml; optional AHK features were written as off."
 }
 
 $legacyGeneratedFile = Join-Path $ahkHomeDir '_autoload_plugins.generated.ahk'

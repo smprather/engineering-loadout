@@ -353,7 +353,7 @@ def main(argv):
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     manifest = Manifest(repo_dir, not args.no_manifest)
     manifest.load()
-    tmp_dir = tempfile.mkdtemp(prefix="dotfiles-strip.", dir="/tmp")
+    tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir="/tmp")
     stats = {
         "processed": 0,
         "stripped": 0,

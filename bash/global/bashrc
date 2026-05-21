@@ -82,7 +82,7 @@ export PYTHONPYCACHEPREFIX=/dev/shm/$USER/pycache
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
 export PAGER='less --incsearch --use-color --no-init --ignore-case --mouse'
-export EDITOR="${DOTFILES_CFG_PREFERRED_VI}"
+export EDITOR="${LOADOUT_CFG_PREFERRED_VI}"
 export VISUAL=$EDITOR
 export GIT_EDITOR=$EDITOR
 export PIP_REQUIRE_VIRTUALENV=1
@@ -171,20 +171,20 @@ if [[ -n $_bat_exec ]]; then
 fi
 
 # Fall back if preferred ls tool is not installed
-if ! command -v "${DOTFILES_CFG_PREFERRED_LS}" >/dev/null; then
-    DOTFILES_CFG_PREFERRED_LS="ls"
+if ! command -v "${LOADOUT_CFG_PREFERRED_LS}" >/dev/null; then
+    LOADOUT_CFG_PREFERRED_LS="ls"
 fi
 
 ### Optional integrations ###
 # GRC: adds color to many basic linux commands
-if is_truthy "${DOTFILES_CFG_ENABLE_GRC}"; then
+if is_truthy "${LOADOUT_CFG_ENABLE_GRC}"; then
     path_prepend PATH "$BASH_CONFIG_ROOT_DIR/global/grc/bin"
     export GRC_ALIASES="true"
     source $BASH_CONFIG_ROOT_DIR/global/grc/etc/profile.d/grc.sh
 fi
 
 # fzf: shell integration (CTRL-T file picker, CTRL-R history, ALT-C cd)
-if command -v fzf >&/dev/null && is_truthy "${DOTFILES_CFG_ENABLE_FZF}"; then
+if command -v fzf >&/dev/null && is_truthy "${LOADOUT_CFG_ENABLE_FZF}"; then
     if [[ -n $_bat_exec ]]; then
         # https://junegunn.github.io/fzf/shell-integration/
         # Preview file content using bat (https://github.com/sharkdp/bat)
@@ -197,12 +197,12 @@ if command -v fzf >&/dev/null && is_truthy "${DOTFILES_CFG_ENABLE_FZF}"; then
 fi
 
 # zoxide: smart cd with frecency tracking (z/zi commands)
-if command -v zoxide >/dev/null && is_truthy "${DOTFILES_CFG_ENABLE_ZOXIDE}"; then
+if command -v zoxide >/dev/null && is_truthy "${LOADOUT_CFG_ENABLE_ZOXIDE}"; then
     eval "$(zoxide init bash)"
 fi
 
 # tmux_path_store: create per-path tmux session aliases
-if is_truthy "${DOTFILES_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux_path_store >/dev/null; then
+if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux_path_store >/dev/null; then
     eval $(tmux_path_store --bash)
 fi
 
@@ -211,14 +211,14 @@ fi
 # Disable ctrl-s terminal pausing
 /bin/stty -ixon
 set_prompt() {
-    local include_host=${DOTFILES_CFG_PROMPT_INCLUDE_HOST}
-    local prompt_color=${DOTFILES_CFG_PROMPT_COLOR_NORMAL}
+    local include_host=${LOADOUT_CFG_PROMPT_INCLUDE_HOST}
+    local prompt_color=${LOADOUT_CFG_PROMPT_COLOR_NORMAL}
     local prompt_joined=""
     local prompt_parts=()
 
     if [[ -n $LSB_JOBID ]]; then
         prompt_parts+=('LSF')
-        prompt_color="${DOTFILES_CFG_PROMPT_COLOR_FARM}"
+        prompt_color="${LOADOUT_CFG_PROMPT_COLOR_FARM}"
     fi
 
     prompt_joined=$(join_by : "${prompt_parts[@]}")
@@ -243,7 +243,7 @@ set_prompt() {
 }
 unset PROMPT_COMMAND
 /bin/stty sane
-if is_truthy "${DOTFILES_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
+if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
     eval "$(starship init bash)"
     # Sometimes, ctrl-c killing a process leaves the -echo stty option enabled, which
@@ -254,7 +254,7 @@ else
     set_prompt
 fi
 
-#export MANPAGER="/bin/sh -c '/bin/sed -u -e \"s/\\x1B\[[0-9;]*m//g; s/.\\x08//g\" | ${DOTFILES_CFG_PREFERRED_CAT} -p -l man'"
+#export MANPAGER="/bin/sh -c '/bin/sed -u -e \"s/\\x1B\[[0-9;]*m//g; s/.\\x08//g\" | ${LOADOUT_CFG_PREFERRED_CAT} -p -l man'"
 export LESS_TERMCAP_mb=$'\e[1;32m'
 export LESS_TERMCAP_md=$'\e[1;32m'
 export LESS_TERMCAP_me=$'\e[0m'
@@ -292,7 +292,7 @@ done
 if fpcmp $_glibc -gt 2.17; then
     export EZA_ARGS="--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
     export LSD_ARGS="--sort time --long --reverse --date '+%D %H:%M:%S'"
-    if [[ ${DOTFILES_CFG_PREFERRED_LS} == "lsd" ]]; then
+    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "lsd" ]]; then
         eval "
         ls() {
             if [[ \$1 == '-1' ]]; then
@@ -303,7 +303,7 @@ if fpcmp $_glibc -gt 2.17; then
             # Careful, the ^[ in the sd search string is acually [ESC] ie typed with <ctrl-v>ESC
             $(realpath $(which lsd)) --size \$option_size \$LSD_ARGS --date '+%D %H:%M:%S' \$LSD_ARGS \$*
         }"
-    elif [[ ${DOTFILES_CFG_PREFERRED_LS} == "eza" ]]; then
+    elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
         _eza_src=$(realpath $(which eza) 2>/dev/null)
         if [[ -n $_eza_src && (! -f /dev/shm/$USER/bin/eza || $_eza_src -nt /dev/shm/$USER/bin/eza) ]]; then
             mkdir -p /dev/shm/$USER/bin
@@ -321,7 +321,7 @@ if fpcmp $_glibc -gt 2.17; then
             local option_g=\$([[ \$show_group == 1 ]] && echo -n '-g' || echo -n '')
             /dev/shm/$USER/bin/eza --time-style '+%D %H:%M:%S' \$option_a \$option_B \$option_g \$EZA_ARGS \$*
         }"
-    elif [[ ${DOTFILES_CFG_PREFERRED_LS} == "ls" ]]; then
+    elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "ls" ]]; then
         eval "
         ls() {
             local option_a=\$([[ \$list_all == 1 ]] && echo -n '-a' || echo -n '')
@@ -374,7 +374,7 @@ alias lsg='lg'
 alias tree='ls -T'
 
 ### Editing ###
-_vi=${DOTFILES_CFG_PREFERRED_VI}
+_vi=${LOADOUT_CFG_PREFERRED_VI}
 alias vi="$_vi"
 alias vim="$_vi"
 alias vic="$_vi --clean -u ~/.vimrc"
@@ -567,18 +567,18 @@ alias stopvnc="vncserver -kill"
 alias killvnc="vncserver -kill"
 killvnc() {
     local max_display
-    max_display=$(
-        ps -ef | awk '
-            /Xtigervnc|Xvnc/ && $0 !~ /awk/ {
-                for (i=1; i<=NF; i++) {
-                    if ($i ~ /^:[0-9]+/) {
-                        gsub(":", "", $i)
-                        print $i
-                    }
-                }
-            }
-        ' | sort -n | tail -1
-    )
+    # max_display=$(
+    #     ps -ef | awk '
+    #         /Xtigervnc|Xvnc/ && $0 !~ /awk/ {
+    #             for (i=1; i<=NF; i++) {
+    #                 if ($i ~ /^:[0-9]+/) {
+    #                     gsub(":", "", $i)
+    #                     print $i
+    #                 }
+    #             }
+    #         }
+    #     ' | sort -n | tail -1
+    # )
     if [[ -z "$max_display" ]]; then
         echo "No VNC sessions found."
         return 1

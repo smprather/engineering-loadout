@@ -15,7 +15,7 @@ if (-not (Test-Path $scriptPath)) {
     throw "Could not find AutoHotkey script at: $scriptPath"
 }
 
-$sandboxRoot = Join-Path $env:TEMP ("dotkeys-ahk-test-" + [guid]::NewGuid().ToString('N'))
+$sandboxRoot = Join-Path $env:TEMP ("loadout-ahk-test-" + [guid]::NewGuid().ToString('N'))
 
 New-Item -ItemType Directory -Path $sandboxRoot -Force | Out-Null
 

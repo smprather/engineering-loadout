@@ -7,7 +7,7 @@ format = """
 $character"""
 
 [custom.username]
-when = 'if ($env:DOTFILES_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT -split "\s+" -contains $env:USERNAME) { exit 0 } else { exit 1 }'
+when = 'if ($env:LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT -split "\s+" -contains $env:USERNAME) { exit 0 } else { exit 1 }'
 command = 'Write-Output $env:USERNAME'
 format = "[$output]($style) "
 style = "bold yellow"

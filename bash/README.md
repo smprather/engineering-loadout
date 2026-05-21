@@ -11,7 +11,7 @@ bash/
                     (path_*, is_truthy, fpcmp, array_slice, source_if_exists, etc.)
   global/         - Canonical upstream config. Don't edit locally — changes here
                     should be upstreamed to the repo.
-    config.sh     - DOTFILES_CFG_* preference defaults
+    config.sh     - LOADOUT_CFG_* preference defaults
     bashrc        - PATH, colors, history, GRC, aliases, prompt, completions
     completions/  - Bundled bash completions (bat, rg, zoxide, hyperfine, watchexec)
     github.scop.bash-completion/  - Bundled bash-completion library (offline)
@@ -30,12 +30,12 @@ Each later layer overrides the previous.
 ```
 bashrc
   └── functions.sh                     # shared utils (all layers can use these)
-  └── global/config.sh                 # DOTFILES_CFG_* defaults
-  └── corp/config.sh                   # (if exists) DOTFILES_CFG_* overrides
+  └── global/config.sh                 # LOADOUT_CFG_* defaults
+  └── corp/config.sh                   # (if exists) LOADOUT_CFG_* overrides
   └── site/config.sh                   # ...
   └── project/config.sh
   └── user/config.sh
-  └── [exec into DOTFILES_CFG_PREFERRED_BASH]  # if set, executable, and not already running it
+  └── [exec into LOADOUT_CFG_PREFERRED_BASH]  # if set, executable, and not already running it
   └── global/bashrc                    # PATH, aliases, completions (exits if non-interactive)
   └── corp/bashrc                      # (if exists)
   └── site/bashrc
@@ -50,7 +50,7 @@ bashrc
 Create files that will be picked up automatically — no edits to `global/` needed:
 
 ```bash
-bash/user/config.sh      # override DOTFILES_CFG_* variables
+bash/user/config.sh      # override LOADOUT_CFG_* variables
 bash/user/bashrc         # add aliases, functions, PATH entries
 bash/corp/completions/mytool.bash  # add a completion (auto-sourced)
 ```

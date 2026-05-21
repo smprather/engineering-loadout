@@ -14,14 +14,14 @@ set +x
 #exec 2> ~/bashrc.log
 #exec 1> ~/bashrc.log
 
-if [[ "${DOTFILES_BASHRC_SOURCED:-0}" == "1" ]]; then
+if [[ "${LOADOUT_BASHRC_SOURCED:-0}" == "1" ]]; then
     return 0 2>/dev/null || exit 0
 fi
 # unset first to strip from environment (the preferred-bash re-exec passes it as
-# DOTFILES_BASHRC_SOURCED=0, which lands it in the exported env); re-setting without
+# LOADOUT_BASHRC_SOURCED=0, which lands it in the exported env); re-setting without
 # export after unset makes it shell-local so child processes don't inherit it.
-unset DOTFILES_BASHRC_SOURCED
-DOTFILES_BASHRC_SOURCED=1
+unset LOADOUT_BASHRC_SOURCED
+LOADOUT_BASHRC_SOURCED=1
 
 # Start with a clean slate: clear all aliases and functions.
 # Preserve inherited PATH when present; otherwise use a minimal fallback.
@@ -69,14 +69,14 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/project/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
 
 # Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
-# Set DOTFILES_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
+# Set LOADOUT_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
 # Silently skipped if the binary doesn't exist or isn't executable.
 # Also skip if this is being sourced as part of a non-interactive startup (rare, but can happen).
-if [[ $- == *i* && -n "${DOTFILES_CFG_PREFERRED_BASH:-}" && -x "${DOTFILES_CFG_PREFERRED_BASH}" ]]; then
-    _preferred_real=$(realpath "${DOTFILES_CFG_PREFERRED_BASH}" 2>/dev/null)
+if [[ $- == *i* && -n "${LOADOUT_CFG_PREFERRED_BASH:-}" && -x "${LOADOUT_CFG_PREFERRED_BASH}" ]]; then
+    _preferred_real=$(realpath "${LOADOUT_CFG_PREFERRED_BASH}" 2>/dev/null)
     _current_real=$(realpath /proc/$$/exe 2>/dev/null || realpath "$BASH" 2>/dev/null)
     if [[ -n "$_preferred_real" && "$_current_real" != "$_preferred_real" ]]; then
-        DOTFILES_BASHRC_SOURCED=0 exec "${DOTFILES_CFG_PREFERRED_BASH}" --init-file "${BASH_SOURCE[0]}"
+        LOADOUT_BASHRC_SOURCED=0 exec "${LOADOUT_CFG_PREFERRED_BASH}" --init-file "${BASH_SOURCE[0]}"
     fi
 fi
 

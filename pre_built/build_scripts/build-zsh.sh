@@ -130,9 +130,9 @@ bzip2 -kf "$WORK"
 cp "${WORK}.bz2" "$BIN_DIR/zsh.bz2"
 rm -f "$WORK" "${WORK}.bz2"
 
-# Update tools.json version
+# Update packages.json version
 ver="${tag}"
-TOOLS_JSON="$REPO/pre_built/tools.json"
+TOOLS_JSON="$REPO/pre_built/packages.json"
 python3 -c "
 import re, sys
 path = sys.argv[1]; ver = sys.argv[2]
@@ -143,7 +143,7 @@ txt = re.sub(
     txt
 )
 open(path, 'w').write(txt)
-print('tools.json: zsh version -> ' + ver)
+print('packages.json: zsh version -> ' + ver)
 " "$TOOLS_JSON" "$ver"
 
 # Update strip manifest
@@ -166,5 +166,5 @@ echo "Installed: $BIN_DIR/zsh.bz2"
 echo ""
 echo "Commit with:"
 echo "  git add pre_built/el8.x86_64.glibc2p28/bin/zsh.bz2 \\"
-echo "          .strip-manifest pre_built/tools.json"
+echo "          .strip-manifest pre_built/packages.json"
 echo "  git commit -m 'feat(pre_built): zsh ${ver} stable EL8 source build'"

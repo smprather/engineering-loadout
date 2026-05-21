@@ -1,7 +1,7 @@
 # Files and directories excluded from "git archive" and GitHub's auto-generated
 # source archives (Source code .tar.gz / .zip on releases).
-# These are dev/build/AI tooling — end users do not need them to run ./install
-# or .\install.ps1.
+# These are dev/build/AI tooling — end users do not need them to run ./engineering-loadout
+# or .\engineering-loadout.ps1.
 
 # AI / agent instructions
 /AGENTS.md                      export-ignore
@@ -9,7 +9,7 @@
 /INSTALL_PYTHON_PORT_PLAN.md    export-ignore
 /.github                        export-ignore
 
-# Git hooks (dev mode only; installed by ./install --dev or copied manually)
+# Git hooks (dev mode only; installed by ./engineering-loadout --dev or copied manually)
 /hooks                          export-ignore
 
 # Build and maintenance scripts

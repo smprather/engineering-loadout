@@ -131,9 +131,9 @@ tar -cjf /tmp/fish_runtime_"${tag}".tar.bz2 \
 cp /tmp/fish_runtime_"${tag}".tar.bz2 "$RUNTIME_DIR/fish.tar.bz2"
 rm -f /tmp/fish_runtime_"${tag}".tar.bz2
 
-# Update tools.json version
+# Update packages.json version
 ver="${tag}"
-TOOLS_JSON="$REPO/pre_built/tools.json"
+TOOLS_JSON="$REPO/pre_built/packages.json"
 python3 -c "
 import re, sys
 path = sys.argv[1]; ver = sys.argv[2]
@@ -144,7 +144,7 @@ txt = re.sub(
     txt
 )
 open(path, 'w').write(txt)
-print('tools.json: fish version -> ' + ver)
+print('packages.json: fish version -> ' + ver)
 " "$TOOLS_JSON" "$ver"
 
 # Update strip manifest
@@ -171,5 +171,5 @@ echo ""
 echo "Commit with:"
 echo "  git add pre_built/el8.x86_64.glibc2p28/bin/fish.bz2 \\"
 echo "          pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2 \\"
-echo "          .strip-manifest pre_built/tools.json"
+echo "          .strip-manifest pre_built/packages.json"
 echo "  git commit -m 'feat(pre_built): fish ${ver} stable EL8 source build'"

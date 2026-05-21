@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-dotfiles-pending-daemon: apply deferred dotfiles binary installs.
+loadout-pending-daemon: apply deferred engineering-loadout binary installs.
 
-Spawned automatically by the dotfiles installer when a binary cannot be
+Spawned automatically by the engineering-loadout installer when a binary cannot be
 replaced because a blocking process (e.g. tmux server) is running. Polls
 every 10 seconds; exits when all pending ops are done, the timeout is
 reached, or staged files are gone.
 
-Timeout: 1 week from last_activity in pending.json. Re-running ./install
+Timeout: 1 week from last_activity in pending.json. Re-running ./engineering-loadout
 while ops are outstanding updates last_activity and resets the clock. If
-the daemon has already exited due to timeout, re-running ./install spawns
+the daemon has already exited due to timeout, re-running ./engineering-loadout spawns
 a fresh one.
 
-Pending state directory: /tmp/dotfiles-pending/
-  pending.json  - op list (written/updated by ./install on each run)
+Pending state directory: /tmp/engineering-loadout-pending/
+  pending.json  - op list (written/updated by ./engineering-loadout on each run)
   pending.lock  - exclusive lock file for JSON read-modify-write
   files/        - staged decompressed binaries ready to install
   daemon.pid    - this process's PID
@@ -34,7 +34,7 @@ import sys
 import tempfile
 import time
 
-PENDING_DIR = "/tmp/dotfiles-pending"
+PENDING_DIR = "/tmp/engineering-loadout-pending"
 PENDING_JSON = os.path.join(PENDING_DIR, "pending.json")
 PID_FILE = os.path.join(PENDING_DIR, "daemon.pid")
 LOG_FILE = os.path.join(PENDING_DIR, "daemon.log")
@@ -43,7 +43,7 @@ TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
 
 def log(msg):
-    line = "[dotfiles-pending-daemon] {}\n".format(msg)
+    line = "[loadout-pending-daemon] {}\n".format(msg)
     sys.stdout.write(line)
     sys.stdout.flush()
 
@@ -231,11 +231,11 @@ def main():
                 break
 
             # Timeout check: 1 week from last_activity, reset whenever
-            # ./install writes new or updated ops.
+            # ./engineering-loadout writes new or updated ops.
             last_ts = _parse_iso(last_activity)
             if last_ts and (time.time() - last_ts) > TIMEOUT_SECS:
                 log("timeout: no install activity since {}, giving up".format(last_activity))
-                log("re-run ./install to try again")
+                log("re-run ./engineering-loadout to try again")
                 break
 
             remaining = dict(ops_by_dest)

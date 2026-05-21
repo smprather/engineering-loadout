@@ -21,7 +21,7 @@ Linux box in under two minutes and gets out of your way.
 | **[Starship](https://starship.rs)** | Cross-shell prompt, `starship/starship.linux.toml` and `starship/starship.windows.toml` |
 | **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
-| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `dotkeys_config.toml` |
+| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
 | **Pre-built binaries** | 52 modern CLI tools, zero internet required — see table below |
 | **Nerd Fonts** | 6 font families, split-archive support for GitHub's 50 MB limit |
@@ -114,13 +114,13 @@ EDA tool paths, and personal tweaks all coexist without forking. Pull a dotfiles
 overrides still work.
 
 **Opinionated but escapable.** Sensible defaults ship out of the box. Every preference is a
-`DOTFILES_CFG_*` variable you can override in your user layer:
+`LOADOUT_CFG_*` variable you can override in your user layer:
 
 ```bash
 # bash/user/config.sh
-export DOTFILES_CFG_PREFERRED_VI=vim        # use vim instead of nvim
-export DOTFILES_CFG_ENABLE_STARSHIP=0       # use the built-in prompt
-export DOTFILES_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
+export LOADOUT_CFG_PREFERRED_VI=vim        # use vim instead of nvim
+export LOADOUT_CFG_ENABLE_STARSHIP=0       # use the built-in prompt
+export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
 ```
 
 ---
@@ -190,14 +190,14 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 
 ### Optional Tools
 
-Not installed by default. Add with `./install --add-tools <name>` or view all with `./install --list-tools`.
+Not installed by default. Add with `./engineering-loadout --add <name>` or view all with `./engineering-loadout list`.
 
 | Binary | Version | Description |
 |--------|---------|-------------|
 | [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim — `gvim.bin` (stripped binary) + `gvim` wrapper setting VIM/VIMRUNTIME |
 | [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit — single self-contained binary, no runtime files |
 | [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing (~163 MB uncompressed; see notes below) |
-| [gui\_libs](https://github.com/smprather/dotfiles) | — | ~80 bundled Qt5/GTK3/xcb/Wayland shared libs for headless farm nodes |
+| [gui\_libs](https://github.com/smprather/engineering-loadout) | — | ~80 bundled Qt5/GTK3/xcb/Wayland shared libs for headless farm nodes |
 | [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV/TSV/JSON/NDJSON data |
 | [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + PyGObject) |
 | [zsh](https://www.zsh.org) | — | Z shell — advanced tab completion, powerful scripting |
@@ -208,7 +208,9 @@ Not installed by default. Add with `./install --add-tools <name>` or view all wi
 
 ```bash
 # Install GUI editors + all their shared library deps in one shot
-./install --no-backup --no-fonts --no-tldr-cache --add-tools gui_libs,gvim,nedit-ng
+./engineering-loadout --no-backup --skip @fonts-all,tldr-data --add gui_libs,gvim,nedit-ng
+# Or use the bundled group:
+./engineering-loadout --no-backup --add @gui-suite
 ```
 
 **WSLg note:** Qt5's XCB backend corrupts XWayland's global cursor state (all X11 apps in the session lose their cursor). Fix: add `export QT_QPA_PLATFORM=wayland` to `~/.config/bash/user/bashrc`. The Wayland backend (included in gui_libs) routes cursor management through the compositor directly, bypassing XWayland.
@@ -255,7 +257,7 @@ Runtime dependencies vendored alongside binaries — no system library assumptio
 | `libxxhash.so.0` | Fast non-cryptographic hash |
 | `libz.so.1` | zlib compression |
 
-**gui_libs optional package** (~80 libs, opt in with `--add-tools gui_libs`):
+**gui_libs optional package** (~80 libs, opt in with `--add gui_libs`):
 
 Qt5 5.15.3: `libQt5Core`, `libQt5Gui`, `libQt5Widgets`, `libQt5DBus`, `libQt5Network`, `libQt5PrintSupport`, `libQt5XcbQpa`, `libQt5Xml`, `libQt5WaylandClient` + platform plugins `libqxcb.so`, `libqwayland-generic.so` (flat in `~/.local/lib64/`). GTK3 3.22: `libgtk-3`, `libgdk-3`, `libgdk_pixbuf-2.0`, `libatk-1.0`, `libatk-bridge-2.0`, `libatspi`. ICU 60: `libicudata`, `libicui18n`, `libicuuc` (~27 MB). Cairo/Pango: `libcairo`, `libpango-1.0`, `libharfbuzz`, `libfribidi`, `libgraphite2`. xcb extensions: `libxcb-icccm`, `libxcb-image`, `libxcb-keysyms`, `libxcb-randr`, `libxcb-render`, `libxcb-render-util`, `libxcb-shape`, `libxcb-shm`, `libxcb-sync`, `libxcb-util`, `libxcb-xfixes`, `libxcb-xinerama`, `libxcb-xinput`, `libxcb-xkb`. Wayland: `libwayland-client`, `libwayland-cursor`, `libwayland-egl`. xkbcommon: `libxkbcommon`, `libxkbcommon-x11`. glib2 family: `libglib-2.0`, `libgobject-2.0`, `libgio-2.0`, `libgmodule-2.0`, `libgthread-2.0`. Fonts: `libfontconfig`, `libfreetype`, `libpixman-1`, `libpng16`. All patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 
@@ -286,7 +288,8 @@ Six font families bundled and installed to `~/.local/share/fonts`:
 
 Large archives are split into `*.zip.part-*` chunks (≤ 45 MiB) to stay below
 GitHub's 50 MB file warning. The installer rejoins them in `/tmp` before
-extracting. Use `./install --no-fonts` to skip.
+extracting. Use `./engineering-loadout --skip @fonts-all` to skip every font, or
+`--skip font-firacode` to skip a single family.
 
 ---
 
@@ -295,28 +298,44 @@ extracting. Use `./install --no-fonts` to skip.
 ### Linux
 
 ```bash
-git clone https://github.com/smprather/dotfiles.git
+git clone https://github.com/smprather/engineering-loadout.git
 cd dotfiles
-./install
+./engineering-loadout
 ```
 
 The installer is a single Python 3.6-compatible executable. It can be invoked
 from any working directory — it resolves the repo from the script path.
 
-**Options:**
+**Subcommands & options:**
 
 ```bash
-./install --dev                              # dev mode: repo symlinks instead of copies
-./install --dest-dir /tmp/test-home          # stage install into alternate root
-./install --no-backup                        # skip backup of existing files
-./install --no-fonts                         # skip font extraction
-./install --no-tldr-cache                    # skip bundled tldr page cache
-./install --post-install-hook ~/corp/install.sh  # run corp/site add-on hooks
-./install --list-tools                       # show all tools with default install status
-./install --add-tools octave                 # add optional tool(s) to defaults
-./install --skip-tools gnuplot,kak           # remove tool(s) from defaults
-./install --tools vim,nvim,rg,tmux           # install exactly this set
+./engineering-loadout                                     # default: install everything in @default
+./engineering-loadout list                                # show all packages
+./engineering-loadout list --groups                       # show all @groups
+./engineering-loadout list --tag editor                   # filter packages by tag
+./engineering-loadout describe gvim                       # full package metadata + reverse-deps
+./engineering-loadout describe @core-cli                  # group membership
+./engineering-loadout resolve gvim                        # dry-run resolver, prints set by kind
+./engineering-loadout doctor                              # platform + registry integrity check
+./engineering-loadout restore-backup loadout_backups/backup.1
+
+./engineering-loadout --dest-dir /tmp/test-home           # stage install into alternate root
+./engineering-loadout --no-backup                         # skip backup of existing files
+./engineering-loadout --post-install-hook ~/corp/install.sh
+./engineering-loadout --add octave                        # add package(s); deps auto-pulled
+./engineering-loadout --add @gui-suite                    # add a group; expands recursively
+./engineering-loadout --skip @fonts-all                   # skip every font (replaces --no-fonts)
+./engineering-loadout --skip tldr-data                    # skip the tldr cache (replaces --no-tldr-cache)
+./engineering-loadout --skip gnuplot,kak                  # remove package(s) from defaults
+./engineering-loadout --only vim,nvim,rg,tmux             # install exactly this set
+./engineering-loadout --profile engineering-loadout       # alias for --only @engineering-loadout
+./engineering-loadout --no-deps --add gvim                # install gvim verbatim, no dep walk
+./engineering-loadout --dry-run --add gvim                # resolve + print; no writes
 ```
+
+> **Removed in the engineering-loadout package-manager refactor:**
+> `--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`, `--no-fonts`, `--no-tldr-cache`.
+> Use the new flag names above. Edit files in the repo and re-run `./engineering-loadout` (idempotent) instead of `--dev`.
 
 **What gets installed:**
 
@@ -358,21 +377,21 @@ Simulate a completely fresh user environment:
 #### Corporate / site add-ons
 
 ```bash
-./install --post-install-hook ~/corp-dotfiles/install.sh \
+./engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh \
            --post-install-hook ~/site-dotfiles/install.sh
 ```
 
-Hooks receive these environment variables: `DOTFILES_REPO`, `DOTFILES_HOME`,
-`DOTFILES_MODE` (`copy` or `dev`), `DOTFILES_BACKUP_DIR`, `DOTFILES_DEST_DIR`,
-`DOTFILES_NO_BACKUP`, `DOTFILES_NO_FONTS`, `DOTFILES_NO_TLDR_CACHE`.
+Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
+`LOADOUT_MODE` (`copy` or `dev`), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`,
+`LOADOUT_NO_BACKUP`, `LOADOUT_NO_FONTS`, `LOADOUT_NO_TLDR_CACHE`.
 
 #### Restore a backup
 
 ```bash
-./install --restore-backup dotfiles_backups/backup.1
+./engineering-loadout --restore-backup loadout_backups/backup.1
 ```
 
-Numbered backups are created in `dotfiles_backups/backup.N/` before each install.
+Numbered backups are created in `loadout_backups/backup.N/` before each install.
 Font files are excluded from backups (large and reproducible).
 
 ---
@@ -382,18 +401,18 @@ Font files are excluded from backups (large and reproducible).
 **PowerShell 7+ (recommended):**
 
 ```powershell
-.\install.ps1
+.\engineering-loadout.ps1
 ```
 
 **Starting from Windows PowerShell 5.1:**
 
 ```powershell
-.\install-powershell-latest.ps1   # installs pwsh via winget
+.\engineering-loadout-pwsh-bootstrap.ps1   # installs pwsh via winget
 # then reopen as pwsh:
-.\install.ps1
+.\engineering-loadout.ps1
 ```
 
-No elevation required. Files are copied, not symlinked — re-run `.\install.ps1`
+No elevation required. Files are copied, not symlinked — re-run `.\engineering-loadout.ps1`
 after repo updates.
 
 **Windows destinations:**
@@ -405,10 +424,10 @@ after repo updates.
 | `%USERPROFILE%\.config\starship\starship.toml` | `starship/starship.windows.toml` |
 | `%USERPROFILE%\.editorconfig` | `editorconfig/editorconfig` |
 | `%USERPROFILE%\autohotkey\hotkeys.ahk` | `autohotkey/hotkeys.ahk` (feature-patched) |
-| `%USERPROFILE%\dotkeys_config.toml` | Created if missing — choose AHK features |
+| `%USERPROFILE%\loadout_keys.toml` | Created if missing — choose AHK features |
 | PowerShell profile (5.1 + 7+) | `powershell/Microsoft.PowerShell_profile.ps1` |
 
-**AutoHotKey feature flags** (edit `%USERPROFILE%\dotkeys_config.toml`):
+**AutoHotKey feature flags** (edit `%USERPROFILE%\loadout_keys.toml`):
 
 | Feature | Description |
 |---------|-------------|
@@ -435,14 +454,14 @@ bash/user/      ← personal overrides            (user-created)
 ```
 
 Each layer sources `config.sh` (preferences) then `bashrc` (aliases/prompt).
-Override any `DOTFILES_CFG_*` variable in your layer's `config.sh`:
+Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
 
 ```bash
 # bash/user/config.sh
-export DOTFILES_CFG_PREFERRED_VI=nvim
-export DOTFILES_CFG_ENABLE_STARSHIP=1
-export DOTFILES_CFG_ENABLE_FZF=1
-export DOTFILES_CFG_PREFERRED_BASH=/home/user/.local/bin/bash
+export LOADOUT_CFG_PREFERRED_VI=nvim
+export LOADOUT_CFG_ENABLE_STARSHIP=1
+export LOADOUT_CFG_ENABLE_FZF=1
+export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/bin/bash
 ```
 
 ### Hook Injection Points
@@ -474,7 +493,7 @@ cdd / cddd …          # cd to Nth most-recently-modified directory
 p / cdp               # bookmark cwd / return to it
 g                     # ripgrep (falls back to grep -r -i)
 f                     # fd (falls back to find .)
-vi / vim              # DOTFILES_CFG_PREFERRED_VI
+vi / vim              # LOADOUT_CFG_PREFERRED_VI
 v                     # nvim -n -R - (read stdin, read-only)
 fvi                   # fzf file picker → open in editor
 t                     # exec bash (reload shell)
@@ -572,23 +591,20 @@ git commit
 
 ---
 
-## Development Mode
+## Repo Development
+
+`--dev` symlink-mode was removed in the engineering-loadout refactor. The repo is
+the source of truth; editing a file there and re-running `./engineering-loadout` is the
+canonical workflow. Most install steps are idempotent (rsync, atomic bz2
+decompress) so a re-run finishes quickly.
+
+Install repo git hooks manually:
 
 ```bash
-./install --dev
+cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 ```
 
-For **nvim**: `~/.config/nvim/` is a real directory with file-level symlinks —
-`init.lua`, `lazy-lock.json`, `lsp/`, `after/` point into the repo; `lua/global/`
-symlinks to `repo/nvim/lua/global/`; user layer dirs (`lua/corp/`, `lua/site/`,
-`lua/project/`, `lua/user/`) are preserved as real directories and never touched.
-
-For **vim/tmux/editorconfig**: whole-directory symlinks. Starship uses file-level symlinks for the selected OS config and, on Linux, `config-schema.json`.
-
-For **bash**: symlinks individual managed files (`global/`, `functions.sh`, `bashrc`)
-while leaving user layer dirs as real directories.
-
-Installs repo git hooks:
+Provides:
 
 - **pre-commit** — strips ELF payloads from newly staged binaries and archives,
   normalizes tarballs to `.tar.bz2`, updates `.strip-manifest`. Removes any

@@ -2,7 +2,7 @@
 """
 test-prebuilt-binaries: smoke-test installed binary and runtime payloads.
 
-Runs ./install --dest-dir /tmp/... --no-backup --no-fonts --no-tldr-cache to get
+Runs ./engineering-loadout --dest-dir /tmp/... --no-backup --skip @fonts-all,tldr-data to get
 a real deployment layout, then probes each executable in <dest>/.local/bin/ for:
   - exit 127  (loader failure / broken ELF)
   - exit 139  (SIGSEGV)
@@ -230,17 +230,16 @@ def main():
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_dir = os.path.dirname(os.path.dirname(script_dir))
-    installer = os.path.join(repo_dir, "install")
+    installer = os.path.join(repo_dir, "engineering-loadout")
 
-    tmpdir = tempfile.mkdtemp(prefix="dotfiles-smoketest-")
+    tmpdir = tempfile.mkdtemp(prefix="loadout-smoketest-")
     try:
         print("Installing to {} ...".format(tmpdir))
         proc = subprocess.run(
             [installer,
              "--dest-dir", tmpdir,
              "--no-backup",
-             "--no-fonts",
-             "--no-tldr-cache"],
+             "--skip", "@fonts-all,tldr-data"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=300,

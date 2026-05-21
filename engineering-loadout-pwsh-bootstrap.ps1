@@ -5,7 +5,7 @@
 .DESCRIPTION
     Intended for users starting from Windows PowerShell 5.1. Installs or updates
     Microsoft PowerShell via winget, then tells the user how to rerun the main
-    dotfiles installer from PowerShell 7+.
+    engineering-loadout installer from PowerShell 7+.
 #>
 
 Set-StrictMode -Version Latest
@@ -16,7 +16,7 @@ if (-not $winget) {
     Write-Error "winget.exe was not found. Install App Installer / winget first, then rerun this script."
 }
 
-$installScript = Join-Path $PSScriptRoot 'install.ps1'
+$installScript = Join-Path $PSScriptRoot 'engineering-loadout.ps1'
 $packageId = 'Microsoft.PowerShell'
 
 Write-Host "Installing latest PowerShell via winget..."
@@ -47,5 +47,5 @@ Write-Host 'PowerShell install complete.'
 if ($pwshPath) {
     Write-Host "Launch PowerShell 7 with: $pwshPath"
 }
-Write-Host 'Then rerun the dotfiles installer from PowerShell 7+:'
+Write-Host 'Then rerun the engineering-loadout installer from PowerShell 7+:'
 Write-Host "  pwsh -NoProfile -ExecutionPolicy Bypass -File `"$installScript`""

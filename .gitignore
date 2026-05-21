@@ -1,4 +1,4 @@
-dotfiles_backups/
+loadout_backups/
 __pycache__/
 *.log
 !bash/global/grc/share/grc/conf.log

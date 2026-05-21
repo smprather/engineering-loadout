@@ -130,7 +130,7 @@ def main():
 
     patchelf = find_patchelf(repo_dir)
     if not patchelf:
-        print("ERROR: patchelf not found. Run ./install first (patchelf is bundled).")
+        print("ERROR: patchelf not found. Run ./engineering-loadout first (patchelf is bundled).")
         sys.exit(1)
     print("Using patchelf: {}".format(patchelf))
 

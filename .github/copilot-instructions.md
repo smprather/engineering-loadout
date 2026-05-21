@@ -6,20 +6,20 @@ Dotfiles for Electrical Engineering work environments: multi-platform (RedHat 7/
 
 ```bash
 # Linux install (copies files — no repo references remain)
-./install
+./engineering-loadout
 
 # Install with directory-level symlinks (easiest for editing)
-./install --dev
+./engineering-loadout --dev
 
 # Stage an install into a temp/test root
-./install --dest-dir /tmp/dotfiles-home
+./engineering-loadout --dest-dir /tmp/dotfiles-home
 
 # Restore from numbered backup
-./install --restore-backup dotfiles_backups/backup.1
+./engineering-loadout --restore-backup loadout_backups/backup.1
 
 # Skip optional large/offline payloads
-./install --no-fonts
-./install --no-tldr-cache
+./engineering-loadout --no-fonts
+./engineering-loadout --no-tldr-cache
 
 # Reload bash after changes
 exec bash
@@ -50,7 +50,7 @@ with headless Neovim.
 
 Loading sequence (`bash/bashrc`):
 1. Sources `bash/functions.sh` (shared utilities available to all layers)
-2. Sources `config.sh` per layer (sets `DOTFILES_CFG_*` preferences as exported scalars)
+2. Sources `config.sh` per layer (sets `LOADOUT_CFG_*` preferences as exported scalars)
 3. Sources `bashrc` per layer; each exits early if not interactive
 
 `source_if_exists <path>` is used throughout for safe optional sourcing.
@@ -73,7 +73,7 @@ Each layer can inject code into `global/bashrc` via numbered files in `<layer>/g
 
 ### Install Modes
 
-- **Production** (default): copies files; re-run `./install` to pick up repo changes
+- **Production** (default): copies files; re-run `./engineering-loadout` to pick up repo changes
 - **`--dev`**: directory-level symlinks for nvim/vim/tmux/editorconfig; for Starship, file-level symlinks to the selected OS config and Linux schema; for bash, symlinks individual repo-managed files (`global/`, `functions.sh`, `bashrc`) while preserving user layer dirs as real directories
 - **`--dest-dir <dir>`**: install into an alternate root instead of `$HOME`; used by installer tests and staging
 - **`--no-backup`**: skip backup creation (useful for clean reinstalls or automation)
@@ -85,10 +85,10 @@ Each layer can inject code into `global/bashrc` via numbered files in `<layer>/g
 - **`--skip-tools <names>`**: remove tool(s) from the default install set
 - **`--tools <names>`**: install exactly this set (replaces defaults entirely)
 
-Backups are numbered (`dotfiles_backups/backup.N/`). The installer skips targets already pointing into the repo and never overwrites an existing backup.
+Backups are numbered (`loadout_backups/backup.N/`). The installer skips targets already pointing into the repo and never overwrites an existing backup.
 Backups intentionally exclude font files because vendored Nerd Font archives are large and reproducible.
 
-Repo git hooks are installed only by `./install --dev`; normal end-user installs skip them.
+Repo git hooks are installed only by `./engineering-loadout --dev`; normal end-user installs skip them.
 The Linux installer resolves the repo from the `install` script path, not the
 current working directory. `install` is a Python 3.6-compatible executable and
 checks the Python version before running.
@@ -158,8 +158,8 @@ and copies metadata directories to `~/.local/share/nvim/tree-sitter-parsers/`.
 
 ### Variable Naming in Bash
 
-- `DOTFILES_CFG_*` variables are user-facing preferences defined in `bash/global/config.sh` as `export DOTFILES_CFG_*=value`. They propagate to child processes and are visible in `env | grep DOTFILES_CFG_`. Override any variable in a user layer's `config.sh` with the same `export DOTFILES_CFG_*=value` form.
-- Variables prefixed with `_` are treated as bashrc-local and cleaned up by `unset_bashrc_local_vars` (in `functions.sh`) before bashrc exits. `DOTFILES_CFG_*` are exported scalars and are intentionally retained so child processes and aliases/functions can reference them at runtime.
+- `LOADOUT_CFG_*` variables are user-facing preferences defined in `bash/global/config.sh` as `export LOADOUT_CFG_*=value`. They propagate to child processes and are visible in `env | grep LOADOUT_CFG_`. Override any variable in a user layer's `config.sh` with the same `export LOADOUT_CFG_*=value` form.
+- Variables prefixed with `_` are treated as bashrc-local and cleaned up by `unset_bashrc_local_vars` (in `functions.sh`) before bashrc exits. `LOADOUT_CFG_*` are exported scalars and are intentionally retained so child processes and aliases/functions can reference them at runtime.
 
 ### Pre-commit Hook
 
@@ -175,7 +175,7 @@ and copies metadata directories to `~/.local/share/nvim/tree-sitter-parsers/`.
 
 Create layer files that will be automatically picked up — no changes to `bash/global/` needed:
 ```bash
-bash/user/config.sh       # DOTFILES_CFG_* variable overrides (export DOTFILES_CFG_FOO=value)
+bash/user/config.sh       # LOADOUT_CFG_* variable overrides (export LOADOUT_CFG_FOO=value)
 bash/user/bashrc          # alias/function overrides
 bash/corp/global_hooks/3.sh  # inject code after PATH setup
 ```

@@ -171,10 +171,10 @@ case "$MAX_GLIBC" in
         echo "WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
 esac
 
-# ── update tools.json ─────────────────────────────────────────────────────────
+# ── update packages.json ─────────────────────────────────────────────────────────
 
 ver="${tag#v}"
-TOOLS_JSON="$REPO/pre_built/tools.json"
+TOOLS_JSON="$REPO/pre_built/packages.json"
 # Use Python (guaranteed available — it's in pre_built) for reliable JSON field update
 python3 -c "
 import re, sys
@@ -186,7 +186,7 @@ txt = re.sub(
     txt
 )
 open(path, 'w').write(txt)
-print('tools.json: nvim version -> ' + ver)
+print('packages.json: nvim version -> ' + ver)
 " "$TOOLS_JSON" "$ver"
 
 # ── strip manifest ────────────────────────────────────────────────────────────
@@ -198,5 +198,5 @@ echo ""
 echo "Done. Commit with:"
 echo "  git add pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2 \\"
 echo "          pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2 \\"
-echo "          .strip-manifest pre_built/tools.json"
+echo "          .strip-manifest pre_built/packages.json"
 echo "  git commit -m 'feat(pre_built): nvim ${ver} stable EL8 source build'"

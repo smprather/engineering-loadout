@@ -7,7 +7,7 @@ format = """
 $character"""
 
 [custom.username]
-when = 'for u in $DOTFILES_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT; do [ "$(whoami)" = "$u" ] && exit 0; done; exit 1'
+when = 'for u in $LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT; do [ "$(whoami)" = "$u" ] && exit 0; done; exit 1'
 command = 'whoami'
 format = "[$output]($style) "
 style = "bold yellow"

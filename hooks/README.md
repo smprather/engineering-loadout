@@ -1,7 +1,7 @@
 # Git Hooks
 
-Git hooks for this repo. They are installed automatically by `./install --dev`.
-To install manually:
+Git hooks for this repo. The installer no longer installs them automatically
+(the `--dev` mode was removed). Install manually when developing this repo:
 
 ```bash
 cp hooks/* .git/hooks/ && chmod +x .git/hooks/*

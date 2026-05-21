@@ -99,65 +99,236 @@ BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
 NVIM_LAYERS = ("corp", "site", "project", "user")
 
 def _load_tool_registry(repo_dir):
-    """Load pre_built/tools.json.  Returns {} if missing or unreadable.
+    """Load pre_built/packages.json.  Returns {} if missing or unreadable.
 
-    tools.json maps logical tool names to their owned files:
-      bins     — bin/*.bz2 stems (without .bz2) that belong to this tool.
-      libs     — lib64/*.bz2 stems exclusively owned by this tool; omit or
-                 leave empty for libs shared by multiple tools (those are
-                 always installed regardless of selection).
-      optional — if true the tool is not installed by default; user must
-                 opt in with --add-tools.
-    Files not claimed by any tool are unregistered and always installed.
+    Two top-level shapes are accepted:
+      1. New (schema_version >= 1):
+           {"schema_version": N, "packages": {name: entry, ...},
+            "_comment": ..., "_schema": ...}
+      2. Legacy (flat dict of name -> entry, with underscore-prefixed
+         metadata keys for _comment, _schema, ...).
+
+    Per-entry fields (all optional unless noted otherwise):
+      kind         — package type: 'bin', 'lib-bundle', 'runtime', 'typelib',
+                     'python-base', 'python-tool', 'env', 'font', 'data', 'group'.
+                     Defaults to 'bin' when absent.
+      default      — bool. True means installed when no selection flags given.
+                     Preferred over legacy 'optional'. When both are present,
+                     'default' wins.
+      optional     — DEPRECATED legacy field. If true the entry is not installed
+                     by default. Honored when 'default' is absent.
+      platforms    — list of platforms where the entry is valid: 'linux',
+                     'macos', 'windows'. Reserved for the resolver.
+      depends      — list of hard-dependency package names. Reserved for the
+                     resolver.
+      recommends   — list of soft-dependency package names. Reserved for the
+                     resolver.
+      bins         — bin/*.bz2 stems exclusively owned by this entry.
+      libs         — lib64/*.bz2 stems exclusively owned by this entry.
+                     Omit or leave empty for libs shared by multiple tools.
+      typelibs     — typelibs/*.typelib files documented as required.
+      wheels       — Python wheel basenames bundled offline.
+      uv_tool      — package name passed to 'uv tool install'.
+
+    Files not claimed by any entry are unregistered and always installed.
     """
-    path = os.path.join(repo_dir, "pre_built", "tools.json")
+    path = os.path.join(repo_dir, "pre_built", "packages.json")
     if not os.path.isfile(path):
         return {}
     try:
         with open(path) as _f:
             raw = json.load(_f)
-        # Strip non-tool metadata keys (e.g. _comment, _schema).
-        return {k: v for k, v in raw.items() if isinstance(v, dict) and not k.startswith("_")}
+        if isinstance(raw, dict) and "schema_version" in raw and isinstance(raw.get("packages"), dict):
+            entries = raw["packages"]
+        else:
+            entries = raw
+        return {k: v for k, v in entries.items() if isinstance(v, dict) and not k.startswith("_")}
     except (ValueError, IOError) as _e:
-        warn("could not read pre_built/tools.json: {}; tool selection disabled".format(_e))
+        warn("could not read pre_built/packages.json: {}; tool selection disabled".format(_e))
         return {}
 
 
+def _is_default_pkg(entry):
+    """True when a package should be in the default install set.
+
+    Prefers the explicit 'default' field; falls back to the legacy 'optional'
+    field (inverted) when 'default' is absent.
+    """
+    if "default" in entry:
+        return bool(entry["default"])
+    return not entry.get("optional")
+
+
+class ResolverError(Exception):
+    pass
+
+
+def _current_platform():
+    """Return the current OS platform key used by the resolver."""
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform == "win32":
+        return "windows"
+    return "linux"
+
+
+def _parse_namelist(raw):
+    """Split a comma-separated CLI value into a list of trimmed names."""
+    if not raw:
+        return []
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+def expand_groups(names, registry, _stack=None):
+    """Expand @group references recursively into leaf package names.
+
+    @default is special: it expands to every package marked default=true.
+    Cycles in the group graph raise ResolverError.
+    Unknown package names produce a warning and are dropped.
+    """
+    if _stack is None:
+        _stack = ()
+    out = set()
+    for name in names:
+        if name == "all":
+            out |= {n for n in registry if not n.startswith("@")}
+            continue
+        if name == "@default":
+            out |= {n for n, e in registry.items()
+                    if not n.startswith("@") and _is_default_pkg(e)}
+            continue
+        if name.startswith("@"):
+            if name in _stack:
+                raise ResolverError("group cycle detected: {} -> {}".format(
+                    " -> ".join(_stack), name))
+            entry = registry.get(name)
+            if entry is None:
+                warn("unknown group '{}' (ignored)".format(name))
+                continue
+            members = entry.get("members", [])
+            out |= expand_groups(members, registry, _stack + (name,))
+            continue
+        if name not in registry:
+            warn("unknown package '{}' (ignored)".format(name))
+            continue
+        if name.startswith("@"):
+            continue  # group key without @-prefix? unreachable, but safe
+        out.add(name)
+    return out
+
+
+def walk_depends(names, registry, forbidden=None, force=False):
+    """Return names plus the transitive closure of hard 'depends'.
+
+    forbidden: a set of pkg names the user has skipped. If a depended-upon pkg
+               is in forbidden, raise ResolverError (unless force is True).
+    """
+    if forbidden is None:
+        forbidden = set()
+    out = set()
+    pending = list(names)
+    parent = {n: None for n in names}
+    while pending:
+        name = pending.pop()
+        if name in out:
+            continue
+        out.add(name)
+        entry = registry.get(name, {})
+        for dep in entry.get("depends", []):
+            if dep.startswith("@"):
+                dep_set = expand_groups([dep], registry)
+            else:
+                dep_set = {dep}
+            for d in dep_set:
+                if d in forbidden:
+                    if force:
+                        warn("package '{}' hard-depends on '{}' which was skipped (--force: continuing)".format(name, d))
+                        continue
+                    raise ResolverError(
+                        "package '{}' hard-depends on '{}', but '{}' was passed to --skip. "
+                        "Either remove from --skip, drop '{}' from selection, or pass --no-deps / --force.".format(
+                            name, d, d, name))
+                if d not in out:
+                    parent[d] = name
+                    pending.append(d)
+    return out
+
+
+def walk_recommends(names, registry, forbidden=None):
+    """Add transitive soft 'recommends'. Silently drop forbidden / unknown."""
+    if forbidden is None:
+        forbidden = set()
+    out = set(names)
+    pending = list(names)
+    while pending:
+        name = pending.pop()
+        entry = registry.get(name, {})
+        for rec in entry.get("recommends", []):
+            if rec.startswith("@"):
+                rec_set = expand_groups([rec], registry)
+            else:
+                rec_set = {rec}
+            for r in rec_set:
+                if r in forbidden or r in out or r not in registry:
+                    continue
+                out.add(r)
+                pending.append(r)
+    return out
+
+
+def filter_by_platform(names, registry, platform):
+    """Drop pkgs whose 'platforms' list excludes the current platform."""
+    out = set()
+    for n in names:
+        entry = registry.get(n, {})
+        plats = entry.get("platforms", ["linux"])
+        if platform in plats:
+            out.add(n)
+    return out
+
+
 def resolve_tool_selection(args, registry):
-    """Return a frozenset of tool names to install, based on CLI flags.
+    """Resolve CLI selectors into a frozenset of package names.
 
-    --tools t1,t2     Install exactly this set; ignores --add-tools/--skip-tools.
-    --add-tools t1    Add optional (or extra) tools to the default set.
-    --skip-tools t1   Remove tools from the default set.
+    Resolution steps:
+      1. Parse --skip (groups expanded).
+      2. Build initial set:
+           --only X,Y      → exactly X,Y (groups expanded; bypasses defaults).
+           default + --add → default set unioned with --add (groups expanded).
+      3. Subtract --skip.
+      4. Walk hard 'depends' (error if any dep is in skip set, unless --no-deps/--force).
+      5. Walk soft 'recommends' (silently drop anything in skip set).
+      6. Filter by current platform.
 
-    When registry is empty all bin/lib files are unmanaged and always installed.
-    Unknown names produce a warning (lenient for forward-compatibility).
+    When the registry is empty (legacy / missing JSON) returns None as before.
     """
     if not registry:
         return None  # sentinel: no registry → install everything
 
-    known = set(registry)
+    no_deps = bool(getattr(args, "no_deps", False))
+    force = bool(getattr(args, "force", False))
 
-    def _parse_list(raw):
-        names = [t.strip() for t in raw.split(",") if t.strip()]
-        if "all" in names:
-            return set(known)
-        for n in names:
-            if n not in known:
-                warn("unknown tool name '{}' (ignored); known tools: {}".format(
-                    n, ", ".join(sorted(known))))
-        return set(names) & known
+    skip_set = expand_groups(_parse_namelist(args.skip), registry) if args.skip else set()
 
-    if args.tools:
-        if args.add_tools or args.skip_tools:
-            warn("--tools overrides --add-tools / --skip-tools; those flags are ignored")
-        return frozenset(_parse_list(args.tools))
+    if args.only:
+        if args.add:
+            warn("--only overrides --add; --add is ignored")
+        selected = expand_groups(_parse_namelist(args.only), registry)
+    else:
+        selected = expand_groups(["@default"], registry)
+        if args.add:
+            selected |= expand_groups(_parse_namelist(args.add), registry)
 
-    selected = {n for n, t in registry.items() if not t.get("optional")}
-    if args.add_tools:
-        selected |= _parse_list(args.add_tools)
-    if args.skip_tools:
-        selected -= _parse_list(args.skip_tools)
+    selected -= skip_set
+
+    if not no_deps:
+        selected = walk_depends(selected, registry, forbidden=skip_set, force=force)
+        selected = walk_recommends(selected, registry, forbidden=skip_set)
+
+    selected = filter_by_platform(selected, registry, _current_platform())
+
     return frozenset(selected)
 
 
@@ -559,12 +730,10 @@ def select_prebuilt_platform_dir(root_dir):
 
 
 def install_mode(args):
-    if args.dev:
-        return "dev"
     return "copy"
 
 
-_PENDING_DIR = "/tmp/dotfiles-pending"
+_PENDING_DIR = "/tmp/engineering-loadout-pending"
 _PENDING_TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
 
@@ -669,7 +838,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         _write_pending_state(existing, now)
 
     # Copy daemon script to pending dir and spawn if not already running.
-    daemon_src = os.path.join(repo_dir, "pre_built", "build_scripts", "dotfiles-pending-daemon")
+    daemon_src = os.path.join(repo_dir, "pre_built", "build_scripts", "loadout-pending-daemon")
     daemon_dst = os.path.join(_PENDING_DIR, "daemon.py")
     if os.path.isfile(daemon_src):
         try:
@@ -876,7 +1045,11 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     return blocked_deferred, blocked_failed
 
 
-def install_portable_python(repo_dir, home):
+def install_portable_python(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "portable-python" not in selected_tools:
+        skipped("portable Python (portable-python not selected)", "")
+        record_result("portable Python", "SKIP", "portable-python not in selected packages")
+        return
     root_dir = os.path.join(repo_dir, "pre_built")
     if not os.path.isdir(root_dir):
         skipped("portable Python (no pre_built/ directory in repo)", "")
@@ -899,7 +1072,7 @@ def install_portable_python(repo_dir, home):
         return
 
     archive = os.path.join(src_dir, archives[-1])
-    tmp_dir = tempfile.mkdtemp(prefix="dotfiles-python-install.", dir="/tmp")
+    tmp_dir = tempfile.mkdtemp(prefix="loadout-python-install.", dir="/tmp")
     try:
         print("  extracting {}...".format(archive))
         pv_extract_tar(archive, tmp_dir)
@@ -940,8 +1113,12 @@ def install_portable_python(repo_dir, home):
     print("  Installed portable Python -> {}/.local/".format(home))
 
 
-def install_typelibs(repo_dir, home):
+def install_typelibs(repo_dir, home, selected_tools=None):
     """Copy *.typelib files from pre_built/<platform>/typelibs/ to ~/.local/lib/girepository-1.0/."""
+    if selected_tools is not None and "gobject-typelibs" not in selected_tools:
+        skipped("GObject typelibs (gobject-typelibs not selected)", "")
+        record_result("GObject typelibs", "SKIP", "gobject-typelibs not in selected packages")
+        return
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if not platform_dir:
         skipped("GObject typelibs (no matching platform)", "")
@@ -1171,7 +1348,12 @@ def extract_font_zip(zip_path, user_fonts_dir):
                 shutil.copyfileobj(src, out)
 
 
-def install_fonts(repo_dir, home):
+def install_fonts(repo_dir, home, selected_tools=None):
+    if selected_tools is not None:
+        if not any(n.startswith("font-") for n in selected_tools):
+            skipped("fonts (no font-* packages selected)", "")
+            record_result("fonts", "SKIP", "no font-* packages in selected set")
+            return
     vendor_fonts_dir = os.path.join(repo_dir, "fonts")
     user_fonts_dir = os.path.join(home, ".local", "share", "fonts")
 
@@ -1208,7 +1390,7 @@ def install_fonts(repo_dir, home):
             if not name.endswith(".zip.part-000"):
                 continue
             if tmp_dir is None:
-                tmp_dir = tempfile.mkdtemp(prefix="dotfiles-fonts.", dir="/tmp")
+                tmp_dir = tempfile.mkdtemp(prefix="loadout-fonts.", dir="/tmp")
             first_part = os.path.join(vendor_fonts_dir, name)
             split_base = first_part[:-len(".part-000")]
             rejoined_zip = os.path.join(tmp_dir, os.path.basename(split_base))
@@ -1245,7 +1427,11 @@ def install_fonts(repo_dir, home):
         print("  WSL note: Windows Terminal needs fonts installed on the Windows side.")
 
 
-def install_tldr_cache(repo_dir, home):
+def install_tldr_cache(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "tldr-data" not in selected_tools:
+        skipped("tldr cache (tldr-data not selected)", "")
+        record_result("tldr cache", "SKIP", "tldr-data not in selected packages")
+        return
     archive = None
     for candidate in ("tldr-pages.tar.bz2", "tldr-pages.tar.gz"):
         path = os.path.join(repo_dir, "tldr", candidate)
@@ -1414,10 +1600,11 @@ def install_nvim_runtime(repo_dir, home):
 
 
 def install_octave_runtime(repo_dir, home, selected_tools):
-    # Only install if octave was selected (or tool registry is empty — install everything).
-    if selected_tools is not None and "octave" not in selected_tools:
-        skipped("Octave runtime (octave not selected)", "")
-        record_result("Octave runtime", "SKIP", "octave not in selected tools")
+    # Resolver pulls octave-runtime in when octave is selected (depends edge).
+    # We check for the runtime pkg name directly so --add octave-runtime works too.
+    if selected_tools is not None and "octave-runtime" not in selected_tools and "octave" not in selected_tools:
+        skipped("Octave runtime (octave-runtime not selected)", "")
+        record_result("Octave runtime", "SKIP", "octave-runtime not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1451,10 +1638,9 @@ def install_octave_runtime(repo_dir, home, selected_tools):
 
 
 def install_meld_runtime(repo_dir, home, selected_tools):
-    # Only install if meld was selected (or tool registry is empty — install everything).
-    if selected_tools is not None and "meld" not in selected_tools:
-        skipped("Meld runtime (meld not selected)", "")
-        record_result("Meld runtime", "SKIP", "meld not in selected tools")
+    if selected_tools is not None and "meld-runtime" not in selected_tools and "meld" not in selected_tools:
+        skipped("Meld runtime (meld-runtime not selected)", "")
+        record_result("Meld runtime", "SKIP", "meld-runtime not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1499,10 +1685,9 @@ def install_meld_runtime(repo_dir, home, selected_tools):
 
 
 def install_fish_runtime(repo_dir, home, selected_tools):
-    # Only install if fish was selected (or tool registry is empty — install everything).
-    if selected_tools is not None and "fish" not in selected_tools:
-        skipped("Fish runtime (fish not selected)", "")
-        record_result("Fish runtime", "SKIP", "fish not in selected tools")
+    if selected_tools is not None and "fish-runtime" not in selected_tools and "fish" not in selected_tools:
+        skipped("Fish runtime (fish-runtime not selected)", "")
+        record_result("Fish runtime", "SKIP", "fish-runtime not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1534,7 +1719,11 @@ def install_fish_runtime(repo_dir, home, selected_tools):
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
-def install_treesitter_parsers(repo_dir, home):
+def install_treesitter_parsers(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "treesitter-queries" not in selected_tools:
+        skipped("Tree-sitter parsers (treesitter-parsers/queries not selected)", "")
+        record_result("Tree-sitter parsers", "SKIP", "treesitter-parsers/queries not in selected packages")
+        return
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, "treesitter", "prebuilt", platform)
     dest_dir = os.path.join(home, ".local", "share", "nvim", "tree-sitter-parsers")
@@ -1586,7 +1775,11 @@ def install_treesitter_parsers(repo_dir, home):
     print("  Installed {} parsers -> {}/".format(len(parser_files), parser_dest))
 
 
-def install_nvim_treesitter_vendor(repo_dir, home):
+def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "treesitter-queries" not in selected_tools and "env-nvim" not in selected_tools:
+        skipped("vendored nvim-treesitter (no treesitter packages or env-nvim selected)", "")
+        record_result("nvim-treesitter vendor", "SKIP", "no treesitter packages or env-nvim selected")
+        return
     src_root = os.path.join(repo_dir, "treesitter", "vendor")
     dest_root = os.path.join(home, ".local", "share", "nvim", "dotfiles", "vendor")
     if not (os.path.isdir(os.path.join(src_root, "nvim-treesitter")) and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))):
@@ -1606,9 +1799,9 @@ def restore_backup(backup_dir, home):
         eprint("Error: Backup directory not found: {}".format(backup_dir))
         sys.exit(1)
 
-    print("Restoring dotfiles from backup: {}".format(backup_dir))
+    print("Restoring config bundles from backup: {}".format(backup_dir))
     print("")
-    print("Removing current dotfiles...")
+    print("Removing current config bundles...")
     bash_config = os.path.join(home, ".config", "bash")
     if os.path.islink(bash_config):
         os.unlink(bash_config)
@@ -1684,7 +1877,7 @@ def install_bash(repo_dir, home, links_mode):
 
 
 def backup_existing(home, repo_dir):
-    backup_rel = mkdirn(os.path.join(home, "dotfiles_backups", "backup"))
+    backup_rel = mkdirn(os.path.join(home, "loadout_backups", "backup"))
     backup_dir = os.path.abspath(backup_rel)
     print("Making backups in: {}".format(backup_dir))
     for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".vim", ".tmux", ".tmux.conf", ".editorconfig",
@@ -1716,7 +1909,7 @@ def _nvim_save_user_layers(nvim_config):
     for layer in NVIM_LAYERS:
         layer_path = os.path.join(lua_dir, layer)
         if os.path.isdir(layer_path) and not os.path.islink(layer_path):
-            tmp = tempfile.mkdtemp(prefix="dotfiles-nvim-layer-")
+            tmp = tempfile.mkdtemp(prefix="loadout-nvim-layer-")
             tmp_layer = os.path.join(tmp, layer)
             shutil.move(layer_path, tmp_layer)
             saved[layer] = (tmp, tmp_layer)
@@ -1760,60 +1953,13 @@ def _nvim_migration_notice(nvim_config):
     shutil.rmtree(custom, ignore_errors=True)
 
 
-def install_dev_mode(repo_dir, home):
-    config_dir = os.path.join(home, ".config")
-    ensure_dir(config_dir, "dotfiles")
-
-    # nvim: file-level symlinks for global layer; user layer dirs are real dirs preserved across installs
-    nvim_src    = os.path.join(repo_dir, "nvim")
-    nvim_config = os.path.join(config_dir, "nvim")
-    saved_layers = _nvim_save_user_layers(nvim_config)
-    remove_if_exists(nvim_config)
-    ensure_dir(os.path.join(nvim_config, "lua"), "Neovim config")
-    lns(os.path.join(nvim_src, "init.lua"),         os.path.join(nvim_config, "init.lua"),         verbose=True)
-    lns(os.path.join(nvim_src, "lazy-lock.json"),   os.path.join(nvim_config, "lazy-lock.json"),   verbose=True)
-    for name in ("lsp", "after"):
-        lns(os.path.join(nvim_src, name), os.path.join(nvim_config, name), verbose=True)
-    lns(os.path.join(nvim_src, "lua", "global"), os.path.join(nvim_config, "lua", "global"), verbose=True)
-    _nvim_restore_user_layers(saved_layers, nvim_config)
-    _nvim_migration_notice(nvim_config)
-
-    for name in ("vim", "tmux", "editorconfig"):
-        remove_if_exists(os.path.join(config_dir, name))
-        lns(os.path.join(repo_dir, name), os.path.join(config_dir, name), verbose=True)
-
-    starship_dir = os.path.join(config_dir, "starship")
-    remove_if_exists(starship_dir)
-    ensure_dir(starship_dir, "starship config")
-    install_path(os.path.join(repo_dir, "starship", "config-schema.json"), os.path.join(starship_dir, "config-schema.json"), True)
-    install_path(os.path.join(repo_dir, "starship", "starship.linux.toml"), os.path.join(starship_dir, "starship.toml"), True)
-
-    install_bash(repo_dir, home, links_mode=True)
-    lns(".config/vim/vimrc", os.path.join(home, ".vimrc"), verbose=True)
-    lns(".config/vim/vim", os.path.join(home, ".vim"), verbose=True)
-    lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
-    lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
-    lns(".config/editorconfig/editorconfig", os.path.join(home, ".editorconfig"), verbose=True)
-    # helix: file-level symlink only (can't symlink whole dir — runtime/ lives alongside config.toml)
-    _helix_cfg = os.path.join(repo_dir, "helix", "config.toml")
-    if os.path.isfile(_helix_cfg):
-        ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
-        lns(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), verbose=True)
-
-    # kak: copy default kakrc only if the user doesn't already have one
-    _kak_src = os.path.join(repo_dir, "kak", "kakrc")
-    _kak_dest = os.path.join(home, ".config", "kak", "kakrc")
-    if os.path.isfile(_kak_src) and not os.path.exists(_kak_dest):
-        ensure_dir(os.path.join(home, ".config", "kak"), "kakoune config")
-        shutil.copy2(_kak_src, _kak_dest)
-        print("  Installed default kakrc: {}".format(_kak_dest))
-
-
-def install_copy_mode(repo_dir, home):
+def _install_env_bash(repo_dir, home):
     for entrypoint in BASH_ENTRYPOINTS:
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
 
+
+def _install_env_nvim(repo_dir, home):
     nvim_src    = os.path.join(repo_dir, "nvim")
     nvim_config = os.path.join(home, ".config", "nvim")
     ensure_dir(os.path.join(nvim_config, "after", "lsp"),      "Neovim config")
@@ -1829,6 +1975,8 @@ def install_copy_mode(repo_dir, home):
         ensure_dir(os.path.join(nvim_config, "lua", layer), "Neovim {} layer".format(layer))
     _nvim_migration_notice(nvim_config)
 
+
+def _install_env_vim(repo_dir, home):
     remove_if_exists(os.path.join(home, ".vimrc"))
     remove_if_exists(os.path.join(home, ".vim"))
     vim_config = os.path.join(home, ".config", "vim")
@@ -1845,6 +1993,8 @@ def install_copy_mode(repo_dir, home):
     install_path(os.path.join(repo_dir, "vim", "vimrc"), os.path.join(vim_config, "vimrc"), False)
     lns(".config/vim/vimrc", os.path.join(home, ".vimrc"), verbose=True)
 
+
+def _install_env_tmux(repo_dir, home):
     remove_if_exists(os.path.join(home, ".tmux.conf"))
     remove_if_exists(os.path.join(home, ".tmux"))
     tmux_config = os.path.join(home, ".config", "tmux")
@@ -1862,6 +2012,8 @@ def install_copy_mode(repo_dir, home):
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
     lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
 
+
+def _install_env_editorconfig(repo_dir, home):
     remove_if_exists(os.path.join(home, ".editorconfig"))
     editorconfig_dir = os.path.join(home, ".config", "editorconfig")
     if os.path.islink(editorconfig_dir):
@@ -1870,12 +2022,17 @@ def install_copy_mode(repo_dir, home):
     install_path(os.path.join(repo_dir, "editorconfig", "editorconfig"), os.path.join(editorconfig_dir, "editorconfig"), False)
     lns(".config/editorconfig/editorconfig", os.path.join(home, ".editorconfig"), verbose=True)
 
-    _pip_conf_src = os.path.join(repo_dir, "python", "pip.conf")
-    if os.path.isfile(_pip_conf_src):
-        _pip_cfg_dir = os.path.join(home, ".config", "pip")
-        ensure_dir(_pip_cfg_dir, "pip config")
-        install_path(_pip_conf_src, os.path.join(_pip_cfg_dir, "pip.conf"), False)
 
+def _install_env_pip(repo_dir, home):
+    _pip_conf_src = os.path.join(repo_dir, "python", "pip.conf")
+    if not os.path.isfile(_pip_conf_src):
+        return
+    _pip_cfg_dir = os.path.join(home, ".config", "pip")
+    ensure_dir(_pip_cfg_dir, "pip config")
+    install_path(_pip_conf_src, os.path.join(_pip_cfg_dir, "pip.conf"), False)
+
+
+def _install_env_starship(repo_dir, home):
     starship_dir = os.path.join(home, ".config", "starship")
     if os.path.islink(starship_dir):
         os.unlink(starship_dir)
@@ -1883,12 +2040,16 @@ def install_copy_mode(repo_dir, home):
     install_path(os.path.join(repo_dir, "starship", "config-schema.json"), os.path.join(starship_dir, "config-schema.json"), False)
     install_path(os.path.join(repo_dir, "starship", "starship.linux.toml"), os.path.join(starship_dir, "starship.toml"), False)
 
-    _helix_cfg = os.path.join(repo_dir, "helix", "config.toml")
-    if os.path.isfile(_helix_cfg):
-        ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
-        install_path(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), False)
 
-    # kak: copy default kakrc only if the user doesn't already have one
+def _install_env_helix(repo_dir, home):
+    _helix_cfg = os.path.join(repo_dir, "helix", "config.toml")
+    if not os.path.isfile(_helix_cfg):
+        return
+    ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
+    install_path(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), False)
+
+
+def _install_env_kak(repo_dir, home):
     _kak_src = os.path.join(repo_dir, "kak", "kakrc")
     _kak_dest = os.path.join(home, ".config", "kak", "kakrc")
     if os.path.isfile(_kak_src) and not os.path.exists(_kak_dest):
@@ -1897,32 +2058,58 @@ def install_copy_mode(repo_dir, home):
         print("  Installed default kakrc: {}".format(_kak_dest))
 
 
+ENV_HANDLERS = {
+    "env-bash":         _install_env_bash,
+    "env-nvim":         _install_env_nvim,
+    "env-vim":          _install_env_vim,
+    "env-tmux":         _install_env_tmux,
+    "env-editorconfig": _install_env_editorconfig,
+    "env-pip":          _install_env_pip,
+    "env-starship":     _install_env_starship,
+    "env-helix":        _install_env_helix,
+    "env-kak":          _install_env_kak,
+}
+
+
+# Order matters: bash first (sets up .bashrc symlinks), then everything else.
+ENV_INSTALL_ORDER = (
+    "env-bash",
+    "env-nvim",
+    "env-vim",
+    "env-tmux",
+    "env-editorconfig",
+    "env-pip",
+    "env-starship",
+    "env-helix",
+    "env-kak",
+)
+
+
+def install_env_pkg(pkg_name, pkg_entry, repo_dir, home):
+    """Per-package handler for kind='env'. Dispatches to the right helper."""
+    handler = ENV_HANDLERS.get(pkg_name)
+    if handler is None:
+        warn("env package '{}' has no Linux handler; skipped".format(pkg_name))
+        return
+    handler(repo_dir, home)
+
+
+def install_copy_mode(repo_dir, home, selected_pkgs=None):
+    """Install all env-kind packages in registered order.
+
+    When selected_pkgs is None, install every env that has a Linux handler.
+    Otherwise, install only envs present in selected_pkgs.
+    """
+    for pkg_name in ENV_INSTALL_ORDER:
+        if selected_pkgs is not None and pkg_name not in selected_pkgs:
+            continue
+        ENV_HANDLERS[pkg_name](repo_dir, home)
+
+
 def glob_paths(path):
     if not os.path.isdir(path):
         return []
     return [os.path.join(path, x) for x in os.listdir(path)]
-
-
-def install_git_hooks(repo_dir, dev_mode):
-    if not dev_mode:
-        print("  Skipped (not in --dev mode; run ./install --dev to install repo development hooks)")
-        record_result("git hooks", "SKIP", "not in --dev mode")
-        return
-    hooks_dir = os.path.join(repo_dir, "hooks")
-    if not os.path.isdir(hooks_dir):
-        skipped("git hooks (no hooks/ directory in repo)")
-        record_result("git hooks", "SKIP", "no hooks/ directory")
-        return
-    dest_dir = os.path.join(repo_dir, ".git", "hooks")
-    for hook in sorted(os.listdir(hooks_dir)):
-        src = os.path.join(hooks_dir, hook)
-        if os.path.isfile(src) and "README" not in hook:
-            dest = os.path.join(dest_dir, hook)
-            require_writable_parent(dest, "git hooks")
-            shutil.copy2(src, dest)
-            mode = os.stat(dest).st_mode
-            os.chmod(dest, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-            print("  Installed: {}".format(hook))
 
 
 def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
@@ -1930,14 +2117,12 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
         print("Running post-install hook: {}".format(hook))
         env = os.environ.copy()
         env.update({
-            "DOTFILES_REPO": repo_dir,
-            "DOTFILES_HOME": home,
-            "DOTFILES_MODE": install_mode(args),
-            "DOTFILES_BACKUP_DIR": backup_dir,
-            "DOTFILES_NO_BACKUP": "1" if args.no_backup else "0",
-            "DOTFILES_NO_FONTS": "1" if args.no_fonts else "0",
-            "DOTFILES_NO_TLDR_CACHE": "1" if args.no_tldr_cache else "0",
-            "DOTFILES_DEST_DIR": home,
+            "LOADOUT_REPO": repo_dir,
+            "LOADOUT_HOME": home,
+            "LOADOUT_MODE": install_mode(args),
+            "LOADOUT_BACKUP_DIR": backup_dir,
+            "LOADOUT_NO_BACKUP": "1" if args.no_backup else "0",
+            "LOADOUT_DEST_DIR": home,
         })
         run([hook], env=env)
 
@@ -1950,160 +2135,361 @@ def run_layer_install_scripts(home):
             run(["/bin/bash", "-c", 'source "$1"', "/bin/bash", install_script])
 
 
+SUBCOMMANDS = ("install", "list", "describe", "resolve", "doctor", "restore-backup")
+
+
+def _extract_subcommand(argv):
+    """Return (subcommand, remaining_argv).
+
+    Subcommand is the first non-flag arg in argv, if it matches SUBCOMMANDS.
+    Defaults to 'install' when no recognized verb is found.
+    """
+    for i, tok in enumerate(argv):
+        if tok.startswith("-"):
+            continue
+        if tok in SUBCOMMANDS:
+            return tok, argv[:i] + argv[i + 1:]
+        break
+    return "install", list(argv)
+
+
 def parse_args(argv):
+    subcommand, argv = _extract_subcommand(argv)
+
     parser = argparse.ArgumentParser(
-        prog="./install",
-        description="Install dotfiles to the home directory.",
+        prog="./engineering-loadout",
+        description="Install engineering-loadout (dotfiles + bundled packages) to the home directory.",
         add_help=False,
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument("--dev", action="store_true")
     parser.add_argument("--dest-dir", default=None, dest="dest_dir",
                         metavar="DIR", help="Install root (default: $HOME)")
     parser.add_argument("--no-backup", action="store_true", dest="no_backup")
-    parser.add_argument("--no-fonts", action="store_true", dest="no_fonts")
-    parser.add_argument("--no-tldr-cache", action="store_true", dest="no_tldr_cache")
     parser.add_argument("--post-install-hook", action="append", default=[])
     parser.add_argument("--restore-backup")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--help", "-h", action="store_true")
-    parser.add_argument("--tools", default=None, metavar="TOOL,…",
-                        help="Install exactly these tools (comma-separated, or 'all'); overrides defaults.")
-    parser.add_argument("--add-tools", default=None, dest="add_tools", metavar="TOOL,…",
-                        help="Add optional tools to the default install set (use 'all' for every tool).")
-    parser.add_argument("--skip-tools", default=None, dest="skip_tools", metavar="TOOL,…",
-                        help="Remove tools from the default install set (use 'all' to skip every tool).")
-    parser.add_argument("--list-tools", action="store_true", dest="list_tools",
-                        help="List all available tools and whether they install by default.")
+
+    # Selection
+    parser.add_argument("--only", default=None, metavar="NAME,…",
+                        help="Install exactly these packages/@groups; bypasses defaults.")
+    parser.add_argument("--add", default=None, metavar="NAME,…",
+                        help="Add packages/@groups to the default install set.")
+    parser.add_argument("--skip", default=None, metavar="NAME,…",
+                        help="Remove packages/@groups from the install set.")
+    parser.add_argument("--profile", default=None, metavar="NAME",
+                        help="Alias for --only @NAME (e.g. --profile engineering-loadout).")
+    parser.add_argument("--no-deps", action="store_true", dest="no_deps",
+                        help="Do not walk depends/recommends.")
+    parser.add_argument("--force", action="store_true", dest="force",
+                        help="Continue past resolver errors.")
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                        help="Resolve + print, no install writes.")
+
+    # list/describe/resolve subcommand options
+    parser.add_argument("--groups", action="store_true", dest="list_groups",
+                        help="With 'list': show groups instead of packages.")
+    parser.add_argument("--tag", default=None,
+                        help="With 'list': filter packages by tag.")
+
+    # Positional args for describe/resolve/restore-backup
+    parser.add_argument("positional", nargs="*", default=[])
+
     args, unknown = parser.parse_known_args(argv)
+    args.subcommand = subcommand
+
     if args.help:
         print_help()
         sys.exit(0)
-    if args.list_tools:
-        return args  # skip unknown-args check; main() will print table and exit
+
+    # --profile X -> --only @X (--only wins if also set)
+    if args.profile is not None and args.only is None:
+        args.only = "@" + args.profile
+
     if unknown:
+        if unknown[0] == "--dev":
+            eprint("Error: --dev mode has been removed. Edit files in the repo and re-run ./engineering-loadout to copy them into place.")
+            sys.exit(2)
+        for legacy in ("--tools", "--add-tools", "--skip-tools", "--list-tools",
+                       "--no-fonts", "--no-tldr-cache"):
+            if unknown[0] == legacy or unknown[0].startswith(legacy + "="):
+                eprint("Error: {} was removed in the engineering-loadout refactor. See ./engineering-loadout --help for the new flag names.".format(legacy))
+                sys.exit(2)
         eprint("Unknown option: {}".format(unknown[0]))
-        eprint("Usage: ./install [--dev] [--dest-dir DIR] [--no-backup] [--no-fonts] "
-               "[--no-tldr-cache] [--post-install-hook <script>] [--verbose] "
-               "[--tools TOOL,…] [--add-tools TOOL,…] [--skip-tools TOOL,…] "
-               "[--restore-backup <dir>]")
-        eprint("Run './install --help' for details.")
+        eprint("Run './engineering-loadout --help' for details.")
         sys.exit(1)
     return args
 
 
 def print_help():
-    print("""Usage: ./install [OPTIONS]
+    print("""Usage: ./engineering-loadout [SUBCOMMAND] [OPTIONS]
 
-Install dotfiles to the home directory.
+Engineering-loadout installer — installs config bundles and packages.
 
-Options:
-  (default)                  Copy files from repo - no symlinks to the repo remain.
-                             Re-run ./install after repo changes to update.
+Subcommands:
+  install                    (default) Install selected packages into $HOME.
+  list                       Show all available packages.
+                             Use --groups to show groups instead.
+                             Use --tag T to filter by tag.
+  describe <pkg>             Show package metadata: kind, version, deps, file list,
+                             reverse deps, group memberships.
+  resolve [<pkg>...]         Resolve selection and print the package set.
+                             Use selection flags (--add/--only/--skip) to drive resolution.
+  doctor                     Platform detection + registry integrity check.
+  restore-backup <dir>       Restore dotfiles from a previous backup directory.
 
-  --dev                      Directory-level symlinks to the repo (e.g. ~/.config/nvim -> repo/nvim).
-                             Easiest when editing files frequently. Skips backups.
+Selection flags (apply to install / resolve / list):
+  --only NAME,…              Install exactly these packages or @groups (bypasses defaults).
+                             'all' is shorthand for every non-group package.
+                             Example: ./engineering-loadout --only @core-cli,vim,nvim
+  --add NAME,…               Add packages or @groups to the default install set.
+                             Example: ./engineering-loadout --add octave,@fonts-all
+  --skip NAME,…              Remove packages or @groups from the install set.
+                             Example: ./engineering-loadout --skip @fonts-all,gnuplot
+  --profile NAME             Alias for --only @NAME.
+                             Example: ./engineering-loadout --profile engineering-loadout
+  --no-deps                  Skip walking depends/recommends.
+  --force                    Continue past resolver errors (record FAIL, keep going).
+  --dry-run                  Resolve and print the plan; no files written.
 
-  --dest-dir <dir>           Install into <dir> as the root instead of $HOME.
-                             Useful for staging installs or testing.
-
-  --no-backup                Skip creating a backup of existing dotfiles before installing.
-
-  --no-fonts                 Skip installing vendored fonts to ~/.local/share/fonts.
-
-  --no-tldr-cache            Skip installing the bundled tldr page cache.
-
-  --post-install-hook <script>
-                             Run a corp/site/user hook after global install steps.
+Install behavior:
+  --dest-dir DIR             Install into DIR instead of $HOME (testing/staging).
+  --no-backup                Skip backup of existing dotfiles before installing.
+  --post-install-hook FILE   Run a corp/site/user hook after global install steps.
                              Can be given multiple times; hooks run in argument order.
-                             Hooks are executed directly and receive DOTFILES_* env vars.
+                             Hooks are executed directly and receive LOADOUT_* env vars.
 
-  --tools TOOL,…             Install exactly these pre-built tools (comma-separated).
-                             Overrides --add-tools and --skip-tools.
-                             Tool names and groupings are defined in pre_built/tools.json.
-                             Use 'all' to install every tool.
-                             Example: ./install --tools vim,nvim,rg,tmux
-                             Example: ./install --tools all
+Other:
+  --verbose                  Verbose progress output.
+  --help, -h                 Show this help message.
 
-  --add-tools TOOL,…         Add optional tools to the default install set.
-                             Use 'all' to add every optional tool.
-                             Example: ./install --add-tools octave
-                             Example: ./install --add-tools all
+Skipping fonts or the tldr cache is now done via --skip:
+  ./engineering-loadout --skip @fonts-all
+  ./engineering-loadout --skip tldr-data
 
-  --skip-tools TOOL,…        Remove tools from the default install set.
-                             Use 'all' to skip every tool.
-                             Example: ./install --skip-tools gnuplot,kak
-                             Example: ./install --skip-tools all
-
-  --restore-backup <dir>     Restore dotfiles from a previous backup directory.
-                             Example: ./install --restore-backup dotfiles_backups/backup.1
-
-  --list-tools               List all available tools and whether they install by default.
-
-  --help, -h                 Show this help message.""")
+The --dev / --tools / --add-tools / --skip-tools / --list-tools / --no-fonts /
+--no-tldr-cache flags were removed in the engineering-loadout package-manager
+refactor. Use the new subcommands and flag names above.""")
 
 
-def main(argv):
-    if not _RSYNC:
-        eprint("Error: This script requires rsync (/usr/bin/rsync not found).")
+def _list_table(rows, columns):
+    """Render rows as a table (rich when available, plain otherwise).
+
+    rows: list of tuples matching `columns` order.
+    columns: list of dicts: {"name", "style", "max_width", "no_wrap"}.
+    """
+    import textwrap as _textwrap
+    if not rows:
+        print("(no rows)")
+        return
+    if _RICH and _console is not None:
+        t = _RichTable(box=None, show_header=True, header_style="bold",
+                       pad_edge=False, show_edge=False, expand=False)
+        for col in columns:
+            t.add_column(col["name"], style=col.get("style", ""),
+                         no_wrap=col.get("no_wrap", True),
+                         max_width=col.get("max_width"))
+        for r in rows:
+            t.add_row(*[str(c) for c in r])
+        _console.print(t)
+        return
+    # Plain fallback
+    widths = [max(len(col["name"]), *(len(str(r[i])) for r in rows))
+              for i, col in enumerate(columns)]
+    header = "  ".join("{:<{}}".format(col["name"], widths[i]) for i, col in enumerate(columns))
+    sep = "  ".join("-" * widths[i] for i in range(len(columns)))
+    print(header)
+    print(sep)
+    for r in rows:
+        print("  ".join("{:<{}}".format(str(r[i]), widths[i]) for i in range(len(columns))))
+
+
+def cmd_list(args, registry):
+    """Print packages or groups table."""
+    if args.list_groups:
+        rows = []
+        for n in sorted(registry):
+            if not n.startswith("@"):
+                continue
+            entry = registry[n]
+            members = entry.get("members", [])
+            rows.append((n, str(len(members)), entry.get("description", "")))
+        _list_table(rows, [
+            {"name": "GROUP", "style": "bold cyan"},
+            {"name": "MEMBERS"},
+            {"name": "DESCRIPTION", "no_wrap": False, "max_width": 70},
+        ])
+        return 0
+    tag = args.tag
+    rows = []
+    for n in sorted(registry):
+        entry = registry[n]
+        if entry.get("kind") == "group":
+            continue
+        if tag is not None and tag not in entry.get("tags", []):
+            continue
+        rows.append((
+            n,
+            entry.get("kind", ""),
+            "yes" if _is_default_pkg(entry) else "no",
+            entry.get("version", ""),
+            entry.get("description", ""),
+        ))
+    _list_table(rows, [
+        {"name": "PACKAGE", "style": "bold cyan"},
+        {"name": "KIND"},
+        {"name": "DEFAULT"},
+        {"name": "VERSION"},
+        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 60},
+    ])
+    return 0
+
+
+def cmd_describe(args, registry):
+    """Print full metadata for a package or @group."""
+    if not args.positional:
+        eprint("Usage: ./engineering-loadout describe <package-or-@group>")
         return 1
-
-    args = parse_args(argv)
-    repo_dir = os.path.dirname(os.path.abspath(__file__))
-    home = os.path.abspath(args.dest_dir) if args.dest_dir else os.path.expanduser("~")
-    _tool_registry = _load_tool_registry(repo_dir)
-    selected_tools = resolve_tool_selection(args, _tool_registry)
-
-    if args.list_tools:
-        import textwrap as _textwrap
-        _rows = []
-        for _n in sorted(_tool_registry):
-            _info = _tool_registry[_n]
-            _rows.append((
-                _n,
-                "no" if _info.get("optional") else "yes",
-                _info.get("version", ""),
-                _info.get("description", ""),
-            ))
-        _MAX_WIDTH = 100
-        _c_name    = max((len(r[0]) for r in _rows), default=4)
-        _c_default = max(len("DEFAULT"), 7)
-        _c_ver     = max((len(r[2]) for r in _rows), default=7)
-        _c_ver     = max(_c_ver, len("VERSION"))
-        _c_desc    = max(_MAX_WIDTH - _c_name - 2 - _c_default - 2 - _c_ver - 2, 20)
-        if _RICH and _console is not None:
-            _lt = _RichTable(box=None, show_header=True, header_style="bold",
-                             pad_edge=False, show_edge=False, expand=False)
-            _lt.add_column("TOOL",    style="bold cyan", min_width=_c_name,    no_wrap=True)
-            _lt.add_column("DEFAULT", justify="center",  min_width=_c_default, no_wrap=True)
-            _lt.add_column("VERSION",                    min_width=_c_ver,     no_wrap=True)
-            _lt.add_column("DESCRIPTION",                max_width=_c_desc,    no_wrap=False)
-            for _n, _def, _ver, _desc in _rows:
-                _ds = "green" if _def == "yes" else "dim"
-                _lt.add_row(_n, "[{s}]{v}[/{s}]".format(s=_ds, v=_def), _ver, _desc)
-            _lt_console = _RichConsole(highlight=False, width=_MAX_WIDTH)
-            _lt_console.print(_lt)
-        else:
-            _hdr_fmt = "{{:<{}}}  {{:^{}}}  {{:<{}}}  {{}}".format(
-                _c_name, _c_default, _c_ver)
-            print(_hdr_fmt.format("TOOL", "DEFAULT", "VERSION", "DESCRIPTION"))
-            print(_hdr_fmt.format("-" * _c_name, "-" * _c_default,
-                                  "-" * _c_ver, "-" * _c_desc))
-            _indent = " " * (_c_name + 2 + _c_default + 2 + _c_ver + 2)
-            for _n, _def, _ver, _desc in _rows:
-                _lines = _textwrap.wrap(_desc, _c_desc) or [""]
-                print(_hdr_fmt.format(_n, _def, _ver, _lines[0]))
-                for _line in _lines[1:]:
-                    print("{}{}".format(_indent, _line))
+    name = args.positional[0]
+    entry = registry.get(name)
+    if entry is None:
+        eprint("Unknown package: {}".format(name))
+        return 1
+    print("{}".format(name))
+    print("=" * len(name))
+    print("kind:        {}".format(entry.get("kind", "(missing)")))
+    if entry.get("kind") == "group":
+        print("description: {}".format(entry.get("description", "")))
+        members = entry.get("members", [])
+        print("members ({}):".format(len(members)))
+        for m in members:
+            print("  - {}".format(m))
         return 0
+    print("default:     {}".format("yes" if _is_default_pkg(entry) else "no"))
+    print("version:     {}".format(entry.get("version", "")))
+    print("platforms:   {}".format(", ".join(entry.get("platforms", ["linux"]))))
+    if entry.get("tags"):
+        print("tags:        {}".format(", ".join(entry["tags"])))
+    print("description: {}".format(entry.get("description", "")))
+    if entry.get("depends"):
+        print("depends:     {}".format(", ".join(entry["depends"])))
+    if entry.get("recommends"):
+        print("recommends:  {}".format(", ".join(entry["recommends"])))
+    for fkey in ("bins", "libs", "wheels", "typelibs", "uv_tool", "archive",
+                 "source", "install_to", "extra_links", "supports_layers"):
+        if fkey in entry:
+            v = entry[fkey]
+            if isinstance(v, list):
+                if v:
+                    print("{:12} {}".format(fkey + ":", ", ".join(str(x) for x in v)))
+            else:
+                print("{:12} {}".format(fkey + ":", v))
+    # Reverse deps
+    rdeps = [n for n, e in registry.items()
+             if name in e.get("depends", []) or name in e.get("recommends", [])]
+    if rdeps:
+        print("rdeps:       {}".format(", ".join(sorted(rdeps))))
+    # Group memberships
+    groups = [n for n, e in registry.items()
+              if e.get("kind") == "group" and name in e.get("members", [])]
+    if groups:
+        print("groups:      {}".format(", ".join(sorted(groups))))
+    return 0
 
-    if args.restore_backup:
-        restore_backup(args.restore_backup, home)
+
+def cmd_resolve(args, registry):
+    """Resolve selection (treating positional args as --add) and print sorted set."""
+    if args.positional and not args.only and not args.add:
+        args.add = ",".join(args.positional)
+    try:
+        selected = resolve_tool_selection(args, registry)
+    except ResolverError as _err:
+        eprint("Resolver error: {}".format(_err))
+        return 1
+    if selected is None:
+        print("(empty registry; resolver returned None → install-everything sentinel)")
         return 0
+    print("Resolved {} packages:".format(len(selected)))
+    by_kind = {}
+    for n in sorted(selected):
+        k = registry.get(n, {}).get("kind", "?")
+        by_kind.setdefault(k, []).append(n)
+    for k in sorted(by_kind):
+        pkgs = by_kind[k]
+        print("  [{}] ({}): {}".format(k, len(pkgs), ", ".join(pkgs)))
+    return 0
 
-    print("Dotfiles repo base directory: {}".format(repo_dir))
+
+def cmd_doctor(args, registry, repo_dir):
+    """Platform detection + per-package archive sanity check."""
+    print("Platform:    {}".format(_current_platform()))
+    print("Repo dir:    {}".format(repo_dir))
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    print("Pre-built:   {}".format(platform_dir or "(none matched)"))
+    print()
+
+    missing = []
+    checked = 0
+    for name in sorted(registry):
+        entry = registry[name]
+        kind = entry.get("kind")
+        if kind in ("runtime", "data", "font", "python-base"):
+            archive = entry.get("archive", "")
+            if not archive:
+                continue
+            checked += 1
+            # Resolve PLATFORM token
+            if "PLATFORM" in archive and platform_dir:
+                resolved = archive.replace("PLATFORM", os.path.basename(platform_dir))
+            else:
+                resolved = archive
+            # Glob with shell-style wildcards
+            full_path = os.path.join(repo_dir, resolved)
+            matches = glob_paths_glob(full_path)
+            if not matches:
+                missing.append((name, kind, resolved))
+    if missing:
+        print("Missing archives ({} of {} checked):".format(len(missing), checked))
+        for n, k, p in missing:
+            print("  [{}] {}: {}".format(k, n, p))
+    else:
+        print("All {} runtime/data/font/python-base archives present.".format(checked))
+    print()
+
+    # Registry sanity
+    unknown_deps = []
+    for n, e in registry.items():
+        for field in ("depends", "recommends"):
+            for ref in e.get(field, []):
+                if ref.startswith("@"):
+                    if ref not in registry and ref != "@default":
+                        unknown_deps.append((n, field, ref))
+                elif ref not in registry:
+                    unknown_deps.append((n, field, ref))
+    if unknown_deps:
+        print("Unresolved references:")
+        for n, f, r in unknown_deps:
+            print("  {} → {} → {}".format(n, f, r))
+    else:
+        print("All depends/recommends resolve to known packages.")
+    return 0 if not missing and not unknown_deps else 2
+
+
+def glob_paths_glob(pattern):
+    """Glob with shell-style wildcards (handles 'archive.zip.part-*' and similar)."""
+    import glob as _glob
+    return sorted(_glob.glob(pattern))
+
+
+def cmd_install(args, registry, selected_tools, repo_dir, home):
+    """The default install verb."""
+    if args.dry_run:
+        print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
+        return cmd_resolve(args, registry)
+
+    print("Engineering-loadout repo: {}".format(repo_dir))
     if args.dest_dir:
-        print("Destination directory: {}".format(home))
+        print("Destination: {}".format(home))
 
     hooks = []
     for hook in args.post_install_hook:
@@ -2117,10 +2503,7 @@ def main(argv):
     os.chdir(home)
 
     backup_dir = ""
-    if args.dev:
-        print("Backup: skipped (dev mode)")
-        record_result("backup", "SKIP", "dev mode")
-    elif args.no_backup:
+    if args.no_backup:
         skipped("backup (--no-backup)",
                 "existing dotfiles will be overwritten with NO backup")
         record_result("backup", "SKIP", "--no-backup")
@@ -2131,39 +2514,20 @@ def main(argv):
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
-    if args.dev:
-        run_install_step("dotfiles", install_dev_mode, repo_dir, home)
-    else:
-        run_install_step("dotfiles", install_copy_mode, repo_dir, home)
-
-    if args.no_fonts:
-        print("Installing fonts...")
-        skipped("fonts (--no-fonts)",
-                "Nerd Fonts will NOT be installed to ~/.local/share/fonts")
-        record_result("fonts", "SKIP", "--no-fonts")
-    else:
-        run_install_step("fonts", install_fonts, repo_dir, home)
-
-    if args.no_tldr_cache:
-        print("Installing tldr page cache...")
-        skipped("tldr cache (--no-tldr-cache)",
-                "tldr page cache will NOT be installed to ~/.cache/tealdeer")
-        record_result("tldr cache", "SKIP", "--no-tldr-cache")
-    else:
-        run_install_step("tldr cache", install_tldr_cache, repo_dir, home)
-
-    run_install_step("portable Python", install_portable_python, repo_dir, home)
-    run_install_step("GObject typelibs", install_typelibs, repo_dir, home)
-    run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, _tool_registry)
+    run_install_step("dotfiles", install_copy_mode, repo_dir, home)
+    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools)
+    run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
+    run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
+    run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
+    run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
     run_install_step("Helix runtime", install_helix_runtime, repo_dir, home)
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home)
     run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home)
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools)
-    run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home)
-    run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home)
-    run_install_step("git hooks", install_git_hooks, repo_dir, args.dev)
+    run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools)
+    run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools)
     if hooks:
         run_install_step("post-install hooks", run_post_install_hooks, hooks, repo_dir, home, args, backup_dir)
     else:
@@ -2172,6 +2536,48 @@ def main(argv):
     print_final_notices()
     print_install_results()
     return 0
+
+
+def main(argv):
+    if not _RSYNC:
+        eprint("Error: This script requires rsync (/usr/bin/rsync not found).")
+        return 1
+
+    args = parse_args(argv)
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    home = os.path.abspath(args.dest_dir) if args.dest_dir else os.path.expanduser("~")
+    registry = _load_tool_registry(repo_dir)
+
+    # restore-backup is independent of selection
+    if args.subcommand == "restore-backup":
+        target = args.restore_backup or (args.positional[0] if args.positional else None)
+        if not target:
+            eprint("Usage: ./engineering-loadout restore-backup <backup-dir>")
+            return 1
+        restore_backup(target, home)
+        return 0
+
+    if args.subcommand == "describe":
+        return cmd_describe(args, registry)
+
+    if args.subcommand == "doctor":
+        return cmd_doctor(args, registry, repo_dir)
+
+    if args.subcommand == "list":
+        return cmd_list(args, registry)
+
+    # install / resolve both need a resolved selection
+    try:
+        selected_tools = resolve_tool_selection(args, registry)
+    except ResolverError as _err:
+        eprint("Resolver error: {}".format(_err))
+        return 1
+
+    if args.subcommand == "resolve":
+        return cmd_resolve(args, registry)
+
+    # Default subcommand: install
+    return cmd_install(args, registry, selected_tools, repo_dir, home)
 
 
 if __name__ == "__main__":

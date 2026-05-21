@@ -12,7 +12,7 @@ baked in so it works without system installation:
 - `grc/bin/grcat` — hardcoded: `conffilepath += [home + '/.config/bash/global/grc/share/grc/']`
 
 If you rebuild GRC from source, patch these paths accordingly.
-Enabled via `DOTFILES_CFG_ENABLE_GRC=1` in `config.sh`.
+Enabled via `LOADOUT_CFG_ENABLE_GRC=1` in `config.sh`.
 
 ## Bash Completions (`completions/`)
 

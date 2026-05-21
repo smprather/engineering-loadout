@@ -32,7 +32,7 @@ _ZIP_MEMBER = "packages/full/yara-rules-full.yar"
 
 
 def _fetch_json(url):
-    req = Request(url, headers={"User-Agent": "dotfiles-update-yara/1.0",
+    req = Request(url, headers={"User-Agent": "engineering-loadout-update-yara/1.0",
                                 "Accept": "application/vnd.github+json"})
     with urlopen(req, timeout=60) as r:
         return json.loads(r.read())
@@ -40,7 +40,7 @@ def _fetch_json(url):
 
 def _download(url, dest):
     print(f"  GET {url}")
-    req = Request(url, headers={"User-Agent": "dotfiles-update-yara/1.0"})
+    req = Request(url, headers={"User-Agent": "engineering-loadout-update-yara/1.0"})
     with urlopen(req, timeout=120) as r:
         with open(dest, "wb") as f:
             while True:
