@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Dotfiles for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins bundled), no root access, multi-organizational (global/corp/site/project/user hierarchy). Manages Bash, Vim/Neovim, and Tmux via symlinks.
+Engineering-loadout: an offline-first package manager and dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root access, multi-organizational (global/corp/site/project/user layer hierarchy). The `./engineering-loadout` Python 3.6-compatible installer is driven by a typed package registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft dependencies, and a resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, and data caches.
 
 **Related project:** [EE Linux Tools](https://github.com/smprather/ee-linux-tools) - modern utilities (RipGrep, Tmux, EZA) for offline environments.
 
@@ -162,9 +162,9 @@ autohotkey/
 hooks/
   pre-commit                - Removes embedded .git dirs before commits. Manual install only: cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
-install                     - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
-engineering-loadout-pwsh-bootstrap.ps1 - Windows PowerShell 5.1 bootstrapper for pwsh via winget
+engineering-loadout         - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
 engineering-loadout.ps1                 - Windows installation script (PowerShell)
+engineering-loadout-pwsh-bootstrap.ps1 - Windows PowerShell 5.1 bootstrapper for pwsh via winget
 update_tmux_plugins         - Re-clones all tmux plugins listed in tmux.conf from GitHub (strips .git on next commit)
 update_tldr_cache           - Bundles tealdeer pages as tldr/tldr-pages.tar.bz2 for offline installs
 strip_all_elf_binaries      - Python 3.6-compatible helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2
@@ -173,7 +173,7 @@ tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fres
 
 ## Installation Details
 
-**Default install** (no flags): Copies files from repo — no symlinks to the repo remain. Re-run `./engineering-loadout` after repo changes to update; most steps are idempotent so re-runs are fast. The Linux installer resolves the repo from the `install` script path, so it can be run from any current working directory. `./engineering-loadout` is the Python 3.6-compatible installer and checks the Python version before running. **`--dev` mode was removed** in the engineering-loadout package-manager refactor — symlink-style installs are no longer supported.
+**Default install** (no flags): Copies files from repo — no symlinks to the repo remain. Re-run `./engineering-loadout` after repo changes to update; most steps are idempotent so re-runs are fast. The Linux installer resolves the repo from the script path, so it can be run from any current working directory. `./engineering-loadout` is the Python 3.6-compatible installer and checks the Python version before running. **`--dev` mode was removed** in the engineering-loadout package-manager refactor — symlink-style installs are no longer supported.
 
 ### Package registry (pre_built/packages.json)
 
@@ -226,7 +226,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Skipping fonts**: Pass `--skip @fonts-all` to skip extracting any vendored Nerd Font archives and the font cache refresh. Individual families can be skipped with `--skip font-firacode`, etc.
 
-**Post-install hook** (`--post-install-hook <script>`): Runs explicit add-on hooks after global install steps, before automatic layer `install.sh` scripts are sourced. The option can be provided multiple times; hooks run in argument order. Hook paths are resolved before the installer changes to `$HOME`; each hook must be executable and provide its own shebang or binary format. Hook failure fails the installer. Environment passed to each hook: `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_MODE` (always `copy` — `dev` was removed), `LOADOUT_BACKUP_DIR` (absolute current backup dir, or empty when backups are skipped), `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`, `LOADOUT_NO_FONTS`, and `LOADOUT_NO_TLDR_CACHE`.
+**Post-install hook** (`--post-install-hook <script>`): Runs explicit add-on hooks after global install steps, before automatic layer `install.sh` scripts are sourced. The option can be provided multiple times; hooks run in argument order. Hook paths are resolved before the installer changes to `$HOME`; each hook must be executable and provide its own shebang or binary format. Hook failure fails the installer. Environment passed to each hook: `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_MODE` (always `copy` — `dev` was removed), `LOADOUT_BACKUP_DIR` (absolute current backup dir, or empty when backups are skipped), `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`. (Per-phase skip flags `--no-fonts` / `--no-tldr-cache` were removed in the package-manager refactor; corresponding `LOADOUT_NO_FONTS` / `LOADOUT_NO_TLDR_CACHE` env vars are no longer set. Use `--skip @fonts-all` / `--skip tldr-data` instead.)
 
 **Install result behavior**: Before each install area writes files, the Linux installer verifies that the target directory is writable. If not, it refuses that area with a warning, records a failed row, and continues with later areas when possible. Every normal run ends with an install results table whose success column is `yes`, `no`, or `skip`.
 
@@ -497,7 +497,7 @@ bash/corp/global_hooks/5.sh  # hook injection at point 5
 
 1. Copy plugin directory into `vim/vim/pack/vendor/start/` or `tmux/vendor/plugins/`
 2. The pre-commit hook will strip `.git` dirs automatically on next commit
-3. Update `install` if new symlink logic is needed
+3. The relevant env handler (`_install_env_vim` / `_install_env_tmux`) already rsyncs the whole vendor dir, so no installer change is needed.
 
 ### Stable-release policy for bundled binaries
 

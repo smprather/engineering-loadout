@@ -6,10 +6,9 @@
 # AI / agent instructions
 /AGENTS.md                      export-ignore
 /CLAUDE.md                      export-ignore
-/INSTALL_PYTHON_PORT_PLAN.md    export-ignore
 /.github                        export-ignore
 
-# Git hooks (dev mode only; installed by ./engineering-loadout --dev or copied manually)
+# Git hooks (developer-only; install manually with cp hooks/* .git/hooks/)
 /hooks                          export-ignore
 
 # Build and maintenance scripts

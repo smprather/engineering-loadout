@@ -1,11 +1,20 @@
-# Dotfiles
+# Engineering Loadout
 
-Modern, layered dotfiles for **Electrical Engineering work environments** — and anyone who lives
-in a terminal and refuses to apologize for it.
+A self-contained, offline-first package manager + dotfiles bundle for
+**Electrical Engineering work environments** — and anyone who lives in a
+terminal and refuses to apologize for it.
 
-Built from 30+ years of EE workflow experience. Hardened against the constraints that define
-real engineering environments: **no internet, no root, no mercy**. Installs to `$HOME` on any
-Linux box in under two minutes and gets out of your way.
+Built from 30+ years of EE workflow experience. Hardened against the
+constraints that define real engineering environments: **no internet, no root,
+no mercy**. Installs to `$HOME` on any Linux box in under two minutes and gets
+out of your way.
+
+A typed package registry (`pre_built/packages.json`, `schema_version: 2`)
+names every installable thing — binary, library bundle, runtime archive,
+config bundle, font, data cache. Packages declare dependencies; groups
+bundle them; a built-in resolver walks the graph; the CLI gives you
+`list` / `describe` / `resolve` / `doctor` subcommands and `--add` /
+`--skip` / `--only` selection flags.
 
 ---
 
@@ -13,6 +22,7 @@ Linux box in under two minutes and gets out of your way.
 
 | Component | Description |
 |-----------|-------------|
+| **Package manager** | `./engineering-loadout` — typed registry, group expansion, depends/recommends resolver, kind-dispatched install (`bin`/`lib-bundle`/`runtime`/`env`/`font`/`data`/...) |
 | **[Bash](https://www.gnu.org/software/bash/)** | Layered config (global→corp→site→project→user), 100+ power aliases, fzf/zoxide/eza/bat integration |
 | **[Neovim](https://neovim.io)** | Kickstart.nvim base, Lazy.nvim, LSP, 326 offline Tree-sitter parsers, locked plugin versions |
 | **[Vim](https://www.vim.org)** | Bundled plugins (NERDTree, SimpylFold, vim-liberty), vendored runtime, pre-built binary |
@@ -23,8 +33,8 @@ Linux box in under two minutes and gets out of your way.
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
-| **Pre-built binaries** | 52 modern CLI tools, zero internet required — see table below |
-| **Nerd Fonts** | 6 font families, split-archive support for GitHub's 50 MB limit |
+| **Pre-built binaries** | 52 default + 9 optional modern CLI tools, zero internet required — see table below |
+| **Nerd Fonts** | 7 font families, split-archive support for GitHub's 50 MB limit |
 
 ---
 
@@ -92,6 +102,49 @@ so they are SKIP in the hash verification step but covered by the ClamAV + YARA 
 
 ---
 
+## Package Manager
+
+`./engineering-loadout` reads `pre_built/packages.json` (`schema_version: 2`)
+and resolves a selection into a flat install set.
+
+**Package kinds** (`kind` field): `bin`, `lib-bundle`, `runtime`, `typelib`,
+`python-base`, `python-tool`, `env`, `font`, `data`, `group`. Every package
+also has `default: true|false`, `platforms: [...]`, optional `tags`, and per-kind
+artifact fields (`bins` / `libs` / `archive` / `source` / `wheels` / etc.).
+
+**Groups** are entries whose names start with `@` and carry a `members` list.
+They expand recursively with cycle detection. The synthetic `@default` group
+expands at runtime to every `default: true` package.
+
+**Dependencies** are declared per package:
+
+- `depends` — hard. Skipping one while a depender is selected raises `ResolverError`
+  unless `--no-deps` or `--force`.
+- `recommends` — soft. Auto-pulled when available; silently dropped if skipped or
+  unknown.
+
+**Resolution order** (`resolve_tool_selection`): parse `--skip` → build initial set
+from `@default` ∪ `--add` (or `--only`) → subtract `--skip` → walk hard `depends`
+→ walk soft `recommends` → filter by current platform.
+
+```bash
+./engineering-loadout list                     # every package
+./engineering-loadout list --groups            # every @-group + member count
+./engineering-loadout list --tag editor        # filter by tag
+./engineering-loadout describe gvim            # full metadata + reverse-deps + group memberships
+./engineering-loadout describe @core-cli       # group members
+./engineering-loadout resolve gvim             # dry-run resolver; prints set grouped by kind
+./engineering-loadout doctor                   # platform + registry integrity check
+./engineering-loadout --dry-run --add octave   # resolve + print; no writes
+./engineering-loadout --add @gui-suite         # add a group
+./engineering-loadout --skip @fonts-all        # drop all font packages
+./engineering-loadout --profile engineering-loadout   # alias for --only @engineering-loadout
+```
+
+See the full CLI surface under [Installation → Subcommands & options](#installation) below.
+
+---
+
 ## Design Goals
 
 **Offline-first.** Plugins, parsers, fonts, and binaries are all bundled. Nothing is fetched at
@@ -110,7 +163,7 @@ Global → Corp → Site → Project → User
 ```
 
 Each layer overrides the previous without touching upstream files. Corp secrets, site-specific
-EDA tool paths, and personal tweaks all coexist without forking. Pull a dotfiles update and your
+EDA tool paths, and personal tweaks all coexist without forking. Pull a loadout update and your
 overrides still work.
 
 **Opinionated but escapable.** Sensible defaults ship out of the box. Every preference is a
@@ -299,7 +352,7 @@ extracting. Use `./engineering-loadout --skip @fonts-all` to skip every font, or
 
 ```bash
 git clone https://github.com/smprather/engineering-loadout.git
-cd dotfiles
+cd engineering-loadout
 ./engineering-loadout
 ```
 
@@ -382,8 +435,8 @@ Simulate a completely fresh user environment:
 ```
 
 Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
-`LOADOUT_MODE` (`copy` or `dev`), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`,
-`LOADOUT_NO_BACKUP`, `LOADOUT_NO_FONTS`, `LOADOUT_NO_TLDR_CACHE`.
+`LOADOUT_MODE` (always `copy` — `dev` mode was removed in the package-manager
+refactor), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
 
 #### Restore a backup
 
@@ -547,14 +600,19 @@ cp /tmp/mybinary_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/mybinary.bz2
 # 2. Update strip manifest
 ./strip_all_elf_binaries
 
-# 3. Smoke-test and commit
+# 3. Register in the package registry (pre_built/packages.json)
+#    {"mybinary": {"kind": "bin", "bins": ["mybinary"], "version": "X.Y.Z",
+#                  "platforms": ["linux"], "default": true,
+#                  "description": "..."}}
+
+# 4. Smoke-test and commit
 pre_built/build_scripts/test-prebuilt-binaries --keep  # or just ./release --dry-run
 git add pre_built/ .strip-manifest
 git commit
 ```
 
 See `pre_built/ADDING_BINARIES.md` for the full workflow including dependency auditing,
-go binary flags, and `farm-versions` registration.
+go binary flags, `farm-versions` registration, and the schema-2 registry fields.
 
 ### Importing a new portable Python build
 
@@ -617,5 +675,5 @@ Provides:
 
 **[EE Linux Tools](https://github.com/smprather/ee-linux-tools)** — companion repo
 providing pre-built modern CLI binaries (RipGrep, Tmux, EZA, and more) for
-offline/locked-down Linux environments. The tools in this dotfiles repo are
+offline/locked-down Linux environments. The tools in engineering-loadout are
 also available there in standalone form.

@@ -12,8 +12,7 @@ At minimum check and update:
 - `CLAUDE.md` for detailed repository architecture and operational notes.
 - `AGENTS.md` for current agent rules, repo-specific pitfalls, and lessons learned.
 - `.github/copilot-instructions.md` for GitHub/Copilot agent cold-start notes.
-- Any active plan or handoff Markdown, such as `INSTALL_PYTHON_PORT_PLAN.md`,
-  when the area it describes changes.
+- Any active plan or handoff Markdown when the area it describes changes.
 
 Use `rg` to search these docs for renamed commands, retired flags, new
 environment variables, and changed install behavior. The docs must match the
@@ -21,9 +20,9 @@ code being committed.
 
 ## Cold Start
 
-This repository is offline-first, no-root dotfiles for EE Linux/Windows environments. Prefer changes that preserve RedHat/Alma/RHEL 7/8/9, Suse, WSL, Windows PowerShell, and locked-down corporate machines.
+This repository is engineering-loadout: an offline-first, no-root package manager + dotfiles bundle for EE Linux/Windows environments. The installer is `./engineering-loadout` (Python 3.6+), driven by `pre_built/packages.json` (`schema_version: 2`). Prefer changes that preserve RedHat/Alma/RHEL 7/8/9, Suse, WSL, Windows PowerShell, and locked-down corporate machines.
 
-Use `rg` first. Use `python3 -m py_compile install` and `bash -n bash/global/bashrc` after installer/shell edits. For Neovim config checks in this sandbox, use temporary writable state/cache dirs:
+Use `rg` first. Use `python3 -m py_compile engineering-loadout` and `bash -n bash/global/bashrc` after installer/shell edits. For Neovim config checks in this sandbox, use temporary writable state/cache dirs:
 
 ```bash
 XDG_CACHE_HOME=/tmp/codex-nvim-cache XDG_STATE_HOME=/tmp/codex-nvim-state nvim --headless +qa
@@ -52,7 +51,8 @@ XDG_CACHE_HOME=/tmp/codex-nvim-cache XDG_STATE_HOME=/tmp/codex-nvim-state nvim -
 - Tree-sitter offline support targets Neovim v0.12+ only. Vendored `nvim-treesitter` and `treesitter-parser-registry` live under `treesitter/vendor/`; prebuilt parsers, parser-info, queries, and registry cache live under `treesitter/prebuilt/<platform>/`, where platform is `$(uname -s lower)-$(uname -m)-<glibc|musl>`. Build all supported parsers with `./treesitter/build_parsers`; it stores parsers as `parser/*.so.bz2`. Installer copies vendor plugins to `~/.local/share/nvim/dotfiles/vendor/`, decompresses matching parser artifacts to installed `parser/*.so`, and copies metadata directories to `~/.local/share/nvim/tree-sitter-parsers/`.
 - `tests/install_linux_tmp_home` simulates a fresh Linux user by running the real installer with a temp `HOME`, temp XDG cache/state dirs, test `--post-install-hook` scripts, and `--skip @fonts-all`, then smoke-tests offline Tree-sitter with headless Neovim.
 - Project Codex config lives in `.codex/config.toml`; this project sets `approval_policy = "never"` and default caveman full style through `developer_instructions`.
-- Corp/site/user add-ons can be invoked explicitly with `./engineering-loadout --post-install-hook <script>`. Multiple hooks are allowed and run in argument order. Hooks are executed directly, so each must be executable and provide its own shebang or binary format. Hooks run after global install steps, before automatic layer `install.sh` scripts, with `DOTFILES_*` environment variables including `LOADOUT_BACKUP_DIR`. (`--dev` mode was removed in the engineering-loadout package-manager refactor; `LOADOUT_MODE` is always `copy`.)
+- Corp/site/user add-ons can be invoked explicitly with `./engineering-loadout --post-install-hook <script>`. Multiple hooks are allowed and run in argument order. Hooks are executed directly, so each must be executable and provide its own shebang or binary format. Hooks run after global install steps, before automatic layer `install.sh` scripts, with `LOADOUT_*` environment variables including `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`, `LOADOUT_MODE`. (`--dev` mode was removed in the engineering-loadout package-manager refactor; `LOADOUT_MODE` is always `copy`. Per-phase skip env vars `LOADOUT_NO_FONTS` / `LOADOUT_NO_TLDR_CACHE` are no longer set — use `--skip @fonts-all` / `--skip tldr-data` selectors instead.)
 - Linux installer manages Starship at `~/.config/starship/starship.toml` from `starship/starship.linux.toml` and `starship/config-schema.json`; Windows uses `starship/starship.windows.toml`.
-- Linux installer is the Python 3.6-compatible executable `install`. It checks the Python version before running, resolves the repo from the script path, and must work when invoked from outside the repo root; `tests/install_linux_tmp_home` runs it from `/tmp` to catch regressions.
-- Bash startup converges `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, and `~/.profile` onto `~/.config/bash/bashrc`. Keep the non-exported `DOTFILES_BASHRC_SOURCED` guard so accidental double-sourcing in one shell returns immediately without blocking exec into a preferred bash.
+- Linux installer is the Python 3.6-compatible executable `engineering-loadout`. It checks the Python version before running, resolves the repo from the script path, and must work when invoked from outside the repo root; `tests/install_linux_tmp_home` runs it from `/tmp` to catch regressions.
+- Bash startup converges `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, and `~/.profile` onto `~/.config/bash/bashrc`. Keep the non-exported `LOADOUT_BASHRC_SOURCED` guard so accidental double-sourcing in one shell returns immediately without blocking exec into a preferred bash.
+- Package registry (`pre_built/packages.json`, `schema_version: 2`): every installable thing has a named entry with `kind` (`bin`/`lib-bundle`/`runtime`/`typelib`/`python-base`/`python-tool`/`env`/`font`/`data`/`group`), `default: true|false`, `platforms: [...]`, and per-kind artifact fields. Packages can declare hard `depends` and soft `recommends`. Groups (keys starting with `@`) bundle related packages and expand recursively with cycle detection. The synthetic `@default` group resolves at runtime to every `default: true` package. Resolver: `expand_groups` → `walk_depends` (raise on skip-set conflict unless `--no-deps`/`--force`) → `walk_recommends` (silent drop) → `filter_by_platform`. CLI: `install` (default), `list [--groups|--tag T]`, `describe`, `resolve`, `doctor`, `restore-backup`; selection via `--only` / `--add` / `--skip` / `--profile` / `--no-deps` / `--force` / `--dry-run`. Removed flags (`--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`, `--no-fonts`, `--no-tldr-cache`) emit a hard error pointing to the new flag names.

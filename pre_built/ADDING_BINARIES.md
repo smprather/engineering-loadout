@@ -69,7 +69,7 @@ Anything missing: decide whether to bundle or accept as system dependency.
 
 If any of these appear in `lib64/` from a previous mistake, remove them and purge from `~/.local/lib64` on deployed systems.
 
-**Safe to bundle**: everything else — libz, libpng, libX11, libreadline, libncurses, libfreetype, libfontconfig, libevent, libxxhash, Qt5, GTK3, glib2, ICU, pango, cairo, xcb extensions, xkbcommon, Wayland client libs. See `gui_libs` in `tools.json` as a worked example of a large GUI lib bundle.
+**Safe to bundle**: everything else — libz, libpng, libX11, libreadline, libncurses, libfreetype, libfontconfig, libevent, libxxhash, Qt5, GTK3, glib2, ICU, pango, cairo, xcb extensions, xkbcommon, Wayland client libs. See `gui_libs` in `packages.json` as a worked example of a large GUI lib bundle.
 
 ### 3. Minimize the dep chain
 
@@ -87,7 +87,7 @@ gives dumb, x11, svg, postscript, eps, epslatex — enough for EE plotting. Only
 ### 4. Bundle the binary
 
 ```bash
-REPO=/path/to/dotfiles
+REPO=/path/to/engineering-loadout
 BIN_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/lib64"
 
@@ -152,28 +152,46 @@ lambda binary: (lambda m: re.sub(r" patchlevel ", ".", m.group(1)) if m else Non
     re.search(r"toolname ([0-9]+\.[0-9]+ patchlevel [0-9]+)", _run([binary, "--version"])))
 ```
 
-### 7. Register in tools.json
+### 7. Register in packages.json
 
-Add an entry to `pre_built/tools.json`:
+Add an entry under `packages` in `pre_built/packages.json` (`schema_version: 2`):
 
 ```json
 "mytool": {
+  "kind": "bin",
   "bins": ["mytool"],
-  "libs": ["libnewdep.so.3"]
+  "libs": ["libnewdep.so.3"],
+  "version": "X.Y.Z",
+  "platforms": ["linux"],
+  "default": true,
+  "tags": ["data"],
+  "description": "One-line description"
 }
 ```
 
 Key rules:
+- `kind` — one of `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`,
+  `python-tool`, `env`, `font`, `data`, `group`. For a normal pre-built binary use `bin`.
 - `bins` — every `bin/*.bz2` stem this build produces (e.g. `"vim"` lists `["vim", "vim.bin"]`,
   `"xterm"` lists `["xterm", "resize"]`).
 - `libs` — **only** lib64 stems that are *exclusively* owned by this tool (not needed by any
   other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted — they are
   always installed regardless of tool selection.
-- `"optional": true` — if the tool should NOT be installed by default (e.g. large optional tools
-  like `octave`). Users opt in with `./engineering-loadout --add-tools mytool`.
+- `default: false` — if the tool should NOT be installed by default (e.g. large optional tools
+  like `octave`). Users opt in with `./engineering-loadout --add mytool`. The legacy
+  `optional: true` field still works but `default` is preferred.
+- `platforms` — list from `linux`, `macos`, `windows`. Resolver filters by current platform.
+- `tags` — free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
+- `depends` — list of hard-dep package names (or `@group` refs). Resolver auto-pulls them;
+  skipping a hard dep raises `ResolverError` unless `--no-deps` or `--force`. Use for
+  binary-needs-lib-bundle (e.g. `"gvim"` depends on `"gui_libs"` + `"vim92-runtime"`).
+- `recommends` — list of soft-dep package names. Silently dropped if skipped.
 
-If a tool produces no lib64 files and installs a single binary, the entry can be just:
-`"mytool": {"bins": ["mytool"]}`.
+For a tool with a single binary, no exclusive libs, and no deps:
+`"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "default": true, "description": "..."}`.
+
+To make it discoverable by group selection, add it to an `@group` `members` list elsewhere
+in `packages.json` (e.g. `@core-cli`, `@dev-tools`, `@editor-cli`).
 
 ### 8. Verify and commit
 
@@ -189,7 +207,7 @@ pre_built/build_scripts/farm-versions --format text
 git add pre_built/el8.x86_64.glibc2p28/bin/mytool.bz2 \
         pre_built/el8.x86_64.glibc2p28/lib64/libnew*.bz2 \
         pre_built/build_scripts/farm-versions \
-        pre_built/tools.json \
+        pre_built/packages.json \
         .strip-manifest
 git commit
 ```
@@ -265,7 +283,7 @@ See `pre_built/build_scripts/build-octave.sh` for the full bundling recipe.
 
 **What is NOT bundled:** doc (saves ~5.6 MB), Qt/FLTK/X11 (no display on headless machines).
 
-**Total uncompressed install size:** ~163 MB. Dominated by libopenblas + libopenblasp (~110 MB combined). This is why octave is `optional: true` in `tools.json`.
+**Total uncompressed install size:** ~163 MB. Dominated by libopenblas + libopenblasp (~110 MB combined). This is why octave is `optional: true` in `packages.json`.
 
 ## Disk quota considerations
 
@@ -360,8 +378,8 @@ bzip2 -k /tmp/nedit_tmp
 cp /tmp/nedit_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
 ```
 
-nedit-ng is `optional: true` in `tools.json` because it requires `gui_libs`. Install together:
-`./engineering-loadout --add-tools gui_libs,nedit-ng`.
+nedit-ng is `optional: true` in `packages.json` because it requires `gui_libs`. Install together:
+`./engineering-loadout --add gui_libs,nedit-ng`.
 
 Binary sizes: 3.8 MB unstripped → 3.1 MB stripped → ~1.1 MB bzip2.
 See `pre_built/build_scripts/build-nedit-ng.sh` for the full recipe.
