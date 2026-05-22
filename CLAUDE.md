@@ -117,6 +117,7 @@ pre_built/
   build_scripts/            - Helper scripts (not installed)
     import-portable-python  - Package a portable-python dir → pre_built/<platform>/*.tar.bz2
     farm-versions           - Query installed binary versions (json/tsv/text output)
+    check-versions          - Compare bundled package versions against upstream (GitHub releases / PyPI)
     build-kakoune.sh        - Build kakoune from source
     build-jq.sh             - Build jq from source
     build-ncdu.sh           - Build ncdu from source
@@ -540,6 +541,24 @@ pre_built/build_scripts/farm-versions --missing-only   # find gaps
 ```
 
 When adding a new binary, add an entry to `TOOLS` in `farm-versions` with the right strategy.
+
+### Check bundled versions against upstream
+
+```bash
+pre_built/build_scripts/check-versions                 # current vs latest, text table
+pre_built/build_scripts/check-versions --outdated-only # only rows where current < latest
+pre_built/build_scripts/check-versions --include-na    # include pkgs with no upstream API
+pre_built/build_scripts/check-versions --format tsv    # tab-separated, for spreadsheets
+pre_built/build_scripts/check-versions --format json   # machine-readable
+pre_built/build_scripts/check-versions --offline       # skip network; just list current versions
+```
+
+Reads `packages.json` for bundled `version` and `farm-versions`'s TOOLS table for homepage
+URLs. Queries `api.github.com/.../releases/latest` (falling back to `/tags`) for GitHub-hosted
+projects and `pypi.org/pypi/<name>/json` for `python-tool` packages with a `uv_tool` field.
+Authenticates against GitHub via `$GITHUB_TOKEN`/`$GH_TOKEN` or `gh auth token` to get the
+5000/hr authenticated quota instead of 60/hr unauthenticated. Packages whose homepage isn't
+on GitHub/PyPI are marked `n/a` (skipped from the default view).
 
 ### Create a GitHub release
 

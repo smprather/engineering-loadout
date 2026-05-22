@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""
+check-versions: compare currently bundled package versions against the
+latest available upstream.
+
+Reads:
+  - pre_built/packages.json — current bundled `version` field per package.
+  - pre_built/build_scripts/farm-versions — homepage URLs per binary.
+
+For each package with a non-empty `version`, looks up the latest upstream:
+  - github.com/<owner>/<repo>  → GitHub API releases/latest (or tags fallback).
+  - PyPI for `python-tool` packages (uses the `uv_tool` field).
+  - other homepages → marked n/a (no programmatic API).
+
+Usage:
+    ./check-versions [--format text|tsv|json] [--outdated-only] [--include-na]
+
+Default: text, sorted by name. Skips packages with no upstream API by default;
+pass --include-na to show them too.
+
+Network: queries api.github.com and pypi.org. Pass --offline to skip network
+lookups (just print current versions). Requires network for accurate output;
+fails individual queries gracefully with status=error.
+"""
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import ssl
+import sys
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PACKAGES_JSON = os.path.join(REPO_DIR, "pre_built", "packages.json")
+FARM_VERSIONS = os.path.join(REPO_DIR, "pre_built", "build_scripts", "farm-versions")
+
+GITHUB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/#?]+)")
+HTTP_TIMEOUT = 10
+USER_AGENT = "engineering-loadout-check-versions"
+
+
+# --------------------------------------------------------------------- loaders
+
+def load_packages():
+    with open(PACKAGES_JSON) as f:
+        data = json.load(f)
+    pkgs = data.get("packages", {})
+    return {name: entry for name, entry in pkgs.items() if not name.startswith("@")}
+
+
+def load_homepages():
+    """Import farm-versions and pull (binary_name, homepage) pairs out of TOOLS.
+    Map by display_name (which matches the packages.json key for most pkgs).
+    Returns dict keyed by both binary_name and display_name → homepage.
+    """
+    loader = importlib.machinery.SourceFileLoader("farm_versions", FARM_VERSIONS)
+    spec = importlib.util.spec_from_loader("farm_versions", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    by_name = {}
+    for binary_name, display_name, homepage, _strategy in mod.TOOLS:
+        if homepage:
+            by_name.setdefault(binary_name, homepage)
+            by_name.setdefault(display_name, homepage)
+    return by_name
+
+
+# ------------------------------------------------------------------- upstream
+
+def _http_get_json(url):
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    # Authenticated GitHub requests get 5000/hr vs 60/hr unauthenticated.
+    # Anything we point at api.github.com should pass a token if available.
+    if "api.github.com" in url:
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if not token:
+            # Try `gh auth token` if gh CLI is installed and logged in.
+            import shutil as _shutil
+            import subprocess as _sp
+            gh = _shutil.which("gh")
+            if gh:
+                try:
+                    proc = _sp.run([gh, "auth", "token"], stdout=_sp.PIPE,
+                                   stderr=_sp.DEVNULL, timeout=2)
+                    if proc.returncode == 0:
+                        token = proc.stdout.decode().strip() or None
+                except (OSError, _sp.TimeoutExpired):
+                    pass
+        if token:
+            headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, headers=headers)
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT, context=ctx) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _strip_v(tag):
+    """Strip common tag prefixes ('v', 'release-', 'name-v', etc.) and surface
+    the bare version. e.g. 'gping-v1.20.1' -> '1.20.1', 'v3.4.0' -> '3.4.0'."""
+    if not tag:
+        return tag
+    # Strip everything up to first digit.
+    m = re.search(r"\d.*", tag)
+    return m.group(0) if m else tag
+
+
+def github_latest(owner, repo):
+    """Try releases/latest first; fall back to tags list (skip prereleases)."""
+    try:
+        data = _http_get_json("https://api.github.com/repos/{}/{}/releases/latest".format(owner, repo))
+        return _strip_v(data.get("tag_name", ""))
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+    # Fallback: list tags, return first non-prerelease-looking tag.
+    data = _http_get_json("https://api.github.com/repos/{}/{}/tags".format(owner, repo))
+    for entry in data or []:
+        name = entry.get("name", "")
+        if not re.search(r"(alpha|beta|rc|pre|dev|nightly)", name, re.I):
+            return _strip_v(name)
+    return ""
+
+
+def pypi_latest(pkg_name):
+    data = _http_get_json("https://pypi.org/pypi/{}/json".format(pkg_name))
+    return (data.get("info") or {}).get("version", "")
+
+
+def upstream_for(name, entry, homepages):
+    """Returns (source, latest, error_or_None). Source: 'github'|'pypi'|'n/a'."""
+    if entry.get("kind") == "python-tool" and entry.get("uv_tool"):
+        try:
+            return ("pypi", pypi_latest(entry["uv_tool"]), None)
+        except Exception as e:
+            return ("pypi", "", str(e))
+    homepage = homepages.get(name, "")
+    m = GITHUB_RE.match(homepage)
+    if m:
+        try:
+            repo = m.group(2)
+            if repo.endswith(".git"):
+                repo = repo[:-4]
+            return ("github", github_latest(m.group(1), repo), None)
+        except Exception as e:
+            return ("github", "", str(e))
+    return ("n/a", "", None)
+
+
+# --------------------------------------------------------------- comparison
+
+def _ver_tuple(v):
+    """Coerce 'X.Y[.Z[…]]' into a tuple of ints+strings for comparison."""
+    if not v:
+        return ()
+    parts = re.split(r"[.\-]", v)
+    out = []
+    for p in parts:
+        if p.isdigit():
+            out.append((0, int(p)))
+        else:
+            out.append((1, p))
+    return tuple(out)
+
+
+def status_of(current, latest):
+    if not current:
+        return "?"
+    if not latest:
+        return "?"
+    if current == latest:
+        return "current"
+    return "outdated" if _ver_tuple(current) < _ver_tuple(latest) else "ahead"
+
+
+# ------------------------------------------------------------------- output
+
+def render_text(rows, include_na):
+    rows = [r for r in rows if include_na or r["source"] != "n/a"]
+    if not rows:
+        print("(no rows)")
+        return
+    name_w = max(len(r["name"]) for r in rows)
+    cur_w = max(len(r["current"]) for r in rows)
+    lat_w = max(len(r["latest"] or "-") for r in rows)
+    src_w = max(len(r["source"]) for r in rows)
+    header = "  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  status".format(
+        "name", "current", "latest", "source",
+        nw=name_w, cw=max(cur_w, 7), lw=max(lat_w, 6), sw=max(src_w, 6))
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for r in sorted(rows, key=lambda r: (r["status"] != "outdated", r["name"])):
+        latest = r["latest"] or "-"
+        note = " ({})".format(r["error"]) if r["error"] else ""
+        print("  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  {}{}".format(
+            r["name"], r["current"], latest, r["source"], r["status"], note,
+            nw=name_w, cw=max(cur_w, 7), lw=max(lat_w, 6), sw=max(src_w, 6)))
+
+
+def render_tsv(rows, include_na):
+    rows = [r for r in rows if include_na or r["source"] != "n/a"]
+    print("name\tcurrent\tlatest\tsource\tstatus\terror")
+    for r in sorted(rows, key=lambda r: r["name"]):
+        print("{}\t{}\t{}\t{}\t{}\t{}".format(
+            r["name"], r["current"], r["latest"], r["source"], r["status"], r["error"] or ""))
+
+
+def render_json(rows, include_na):
+    rows = [r for r in rows if include_na or r["source"] != "n/a"]
+    print(json.dumps(sorted(rows, key=lambda r: r["name"]), indent=2))
+
+
+# ----------------------------------------------------------------------- main
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--format", choices=("text", "tsv", "json"), default="text")
+    ap.add_argument("--outdated-only", action="store_true")
+    ap.add_argument("--include-na", action="store_true",
+                    help="include packages with no upstream API (default: hide)")
+    ap.add_argument("--offline", action="store_true",
+                    help="skip network lookups; just print current versions")
+    ap.add_argument("--jobs", type=int, default=12, help="concurrent upstream queries (default 12)")
+    args = ap.parse_args()
+
+    packages = load_packages()
+    homepages = load_homepages()
+
+    work = []
+    for name, entry in sorted(packages.items()):
+        version = entry.get("version", "")
+        if not version:
+            continue
+        work.append((name, entry))
+
+    rows = []
+    if args.offline:
+        for name, entry in work:
+            rows.append({"name": name, "current": entry["version"], "latest": "",
+                         "source": "(offline)", "status": "?", "error": None})
+    else:
+        def task(name, entry):
+            source, latest, err = upstream_for(name, entry, homepages)
+            return {"name": name, "current": entry["version"], "latest": latest,
+                    "source": source, "status": status_of(entry["version"], latest), "error": err}
+
+        with ThreadPoolExecutor(max_workers=args.jobs) as ex:
+            futs = [ex.submit(task, name, entry) for name, entry in work]
+            for f in as_completed(futs):
+                rows.append(f.result())
+
+    if args.outdated_only:
+        rows = [r for r in rows if r["status"] == "outdated"]
+
+    if args.format == "text":
+        render_text(rows, args.include_na)
+    elif args.format == "tsv":
+        render_tsv(rows, args.include_na)
+    else:
+        render_json(rows, args.include_na)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
