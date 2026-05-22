@@ -45,65 +45,7 @@ In other words, it does basic package-management stuff.
 
 ## Security
 
-All binaries shipped in this repo pass a three-layer scan before each release.
-
-### Steps taken
-
-**1 — Decompress.** All `.bz2` blobs are extracted to a temp directory (raw ELF
-files, not compressed archives). Scanning is performed on the decompressed
-binaries.
-
-**2 — ClamAV** (updated signature database):
-
-```bash
-freshclam                           # pull latest signatures
-find pre_built/ -name '*.bz2' -exec sh -c 'bzcat "$1" | clamscan -' _ {} \;
-# Or extract all first:
-tmpdir=$(mktemp -d)
-for f in pre_built/el8.x86_64.glibc2p28/bin/*.bz2; do
-    bzcat "$f" > "$tmpdir/$(basename "${f%.bz2}")"
-done
-clamscan -r "$tmpdir"
-rm -rf "$tmpdir"
-```
-
-Result: **0 detections** (ClamAV 28005 / 355455+ signatures).
-
-**3 — [YARA-Forge](https://github.com/YARAHQ/yara-forge) full ruleset** (11,679 rules from
-ReversingLabs, elastic, and community sources; YARA-QA filtered to ≥ quality 20, ≥ score 40):
-
-```bash
-# Install: https://github.com/YARAHQ/yara-forge (packages/full/yara-rules-full.yar)
-tmpdir=$(mktemp -d)
-for f in pre_built/el8.x86_64.glibc2p28/bin/*.bz2; do
-    bzcat "$f" > "$tmpdir/$(basename "${f%.bz2}")"
-done
-yara -r /etc/yara/packages/full/yara-rules-full.yar "$tmpdir"
-rm -rf "$tmpdir"
-```
-
-Result: **0 detections**.
-
-**4 — Upstream hash verification** (`pre_built/build_scripts/verify-binaries`):
-Downloads each tool's official GitHub release, applies the same bundling
-transformation (strip → patchelf RPATH for dynamic ELFs), and compares SHA-256
-against the decompressed bundled binary.
-
-```bash
-pre_built/build_scripts/verify-binaries        # verify all
-pre_built/build_scripts/verify-binaries rg bat uv   # spot-check
-pre_built/build_scripts/verify-binaries -v     # verbose (shows download URLs)
-```
-
-Three outcomes:
-- **PASS**: byte-for-byte match with upstream release (after strip + patchelf)
-- **PASS** (patchelf layout delta): identical NEEDED libs + near-identical size; only RPATH section layout differs — functionally the same binary
-- **SKIP**: source build, dev version, or no matching upstream binary release
-- **FAIL**: different shared library dependencies or significant size difference — warrants investigation
-
-Many tools (bash, rg, bat, jq, eza, fd, tmux, vim, gnuplot, rsync, htop, kak, octave, etc.)
-are intentionally built from source on EL8 targets rather than downloaded from GitHub releases,
-so they are SKIP in the hash verification step but covered by the ClamAV + YARA scans above.
+All binaries shipped in this repo pass a three-layer scan (ClamAV + YARA-Forge + upstream SHA-256) before each release. [Details](docs/SECURITY.md)
 
 ---
 
@@ -282,43 +224,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 
 ### Vendored Shared Libraries
 
-Runtime dependencies vendored alongside binaries — no system library assumptions.
-
-**Always installed** (core deps for default tools):
-
-| Library | Provides |
-|---------|---------|
-| `libbz2.so.1` | bzip2 compression (bat, tmux, and others) |
-| `libevent_core-2.1.so.6` | Event loop (tmux) |
-| `libexpat.so.1` | XML parsing |
-| `libfontconfig.so.1` | Font discovery (xterm) |
-| `libfreetype.so.6` | Font rendering (xterm) |
-| `libICE.so.6` | Inter-Client Exchange (X11) |
-| `libjq.so` | jq shared library |
-| `libncurses.so.6` | Terminal UI (gnuplot, htop) |
-| `libonig.so.5` | Oniguruma regex (jq) |
-| `libpng16.so.16` | PNG image support (xterm) |
-| `libreadline.so.7` | GNU readline (gnuplot, bash) |
-| `libSM.so.6` | Session Management (X11) |
-| `libtinfo.so.6` | Terminal info (ncurses) |
-| `libuuid.so.1` | UUID generation |
-| `libX11.so.6` | Core X11 client library |
-| `libXau.so.6` | X11 authorization |
-| `libXaw.so.7` | X11 Athena Widgets (xterm UI) |
-| `libxcb.so.1` | X protocol C-language Binding |
-| `libXext.so.6` | X11 extensions |
-| `libXft.so.2` | X FreeType font rendering |
-| `libXinerama.so.1` | Multi-monitor extension |
-| `libXmu.so.6` | X11 miscellaneous utilities |
-| `libXpm.so.4` | X PixMap (xterm icon) |
-| `libXrender.so.1` | X Render extension |
-| `libXt.so.6` | X Toolkit Intrinsics |
-| `libxxhash.so.0` | Fast non-cryptographic hash |
-| `libz.so.1` | zlib compression |
-
-**gui_libs optional package** (~80 libs, opt in with `--add gui_libs`):
-
-Qt5 5.15.3: `libQt5Core`, `libQt5Gui`, `libQt5Widgets`, `libQt5DBus`, `libQt5Network`, `libQt5PrintSupport`, `libQt5XcbQpa`, `libQt5Xml`, `libQt5WaylandClient` + platform plugins `libqxcb.so`, `libqwayland-generic.so` (flat in `~/.local/lib64/`). GTK3 3.22: `libgtk-3`, `libgdk-3`, `libgdk_pixbuf-2.0`, `libatk-1.0`, `libatk-bridge-2.0`, `libatspi`. ICU 60: `libicudata`, `libicui18n`, `libicuuc` (~27 MB). Cairo/Pango: `libcairo`, `libpango-1.0`, `libharfbuzz`, `libfribidi`, `libgraphite2`. xcb extensions: `libxcb-icccm`, `libxcb-image`, `libxcb-keysyms`, `libxcb-randr`, `libxcb-render`, `libxcb-render-util`, `libxcb-shape`, `libxcb-shm`, `libxcb-sync`, `libxcb-util`, `libxcb-xfixes`, `libxcb-xinerama`, `libxcb-xinput`, `libxcb-xkb`. Wayland: `libwayland-client`, `libwayland-cursor`, `libwayland-egl`. xkbcommon: `libxkbcommon`, `libxkbcommon-x11`. glib2 family: `libglib-2.0`, `libgobject-2.0`, `libgio-2.0`, `libgmodule-2.0`, `libgthread-2.0`. Fonts: `libfontconfig`, `libfreetype`, `libpixman-1`, `libpng16`. All patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
+Runtime dependencies vendored alongside binaries — no system library assumptions. ~28 always-installed core libs + ~80 in the opt-in `gui_libs` bundle for Qt5/GTK3/xcb/Wayland on headless farm nodes. [Details](docs/SHARED_LIBS.md)
 
 ---
 
@@ -362,320 +268,39 @@ cd engineering-loadout
 ./engineering-loadout
 ```
 
-The installer is a single Python 3.6-compatible executable. It can be invoked
-from any working directory — it resolves the repo from the script path.
-
-**Subcommands & options:**
-
-```bash
-./engineering-loadout                                     # default: install everything in @default
-./engineering-loadout list                                # show all packages
-./engineering-loadout list --groups                       # show all @groups
-./engineering-loadout list --tag editor                   # filter packages by tag
-./engineering-loadout describe gvim                       # full package metadata + reverse-deps
-./engineering-loadout describe @core-cli                  # group membership
-./engineering-loadout resolve gvim                        # dry-run resolver, prints set by kind
-./engineering-loadout doctor                              # platform + registry integrity check
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
-
-./engineering-loadout --dest-dir /tmp/test-home           # stage install into alternate root
-./engineering-loadout --no-backup                         # skip backup of existing files
-./engineering-loadout --post-install-hook ~/corp/install.sh
-./engineering-loadout --add octave                        # add package(s); deps auto-pulled
-./engineering-loadout --add @gui-suite                    # add a group; expands recursively
-./engineering-loadout --skip @fonts-all                   # skip every font (replaces --no-fonts)
-./engineering-loadout --skip tldr-data                    # skip the tldr cache (replaces --no-tldr-cache)
-./engineering-loadout --skip gnuplot,kak                  # remove package(s) from defaults
-./engineering-loadout --only vim,nvim,rg,tmux             # install exactly this set
-./engineering-loadout --profile engineering-loadout       # alias for --only @engineering-loadout
-./engineering-loadout --no-deps --add gvim                # install gvim verbatim, no dep walk
-./engineering-loadout --dry-run --add gvim                # resolve + print; no writes
-```
-
-> **Removed in the engineering-loadout package-manager refactor:**
-> `--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`, `--no-fonts`, `--no-tldr-cache`.
-> Use the new flag names above. Edit files in the repo and re-run `./engineering-loadout` (idempotent) instead of `--dev`.
-
-**What gets installed:**
-
-| Destination | Source |
-|-------------|--------|
-| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | → `bash/bashrc` |
-| `~/.config/bash/` | Layered bash config |
-| `~/.vimrc` | `vim/vimrc` |
-| `~/.vim/` | `vim/vim/` |
-| `~/.tmux.conf` | `tmux/tmux.conf` |
-| `~/.tmux/` | `tmux/tmux/` |
-| `~/.editorconfig` | `editorconfig/editorconfig` |
-| `~/.config/nvim/` | `nvim/` |
-| `~/.config/starship/starship.toml` | `starship/starship.linux.toml` + `starship/config-schema.json` |
-| `~/.config/helix/runtime/` | `pre_built/<platform>/runtime/helix.tar.bz2` |
-| `~/.local/share/vim/vim92/` | `pre_built/<platform>/runtime/vim92.tar.bz2` |
-| `~/.local/share/nvim/runtime/` | `pre_built/<platform>/runtime/nvim.tar.bz2` |
-| `~/.local/bin/` | `pre_built/<platform>/bin/*.bz2` (decompressed) |
-| `~/.local/lib64/` | `pre_built/<platform>/lib64/*.bz2` (decompressed) |
-| `~/.local/bin/python3.14` | `pre_built/<platform>/portable-python-*.tar.bz2` |
-| `~/.local/share/fonts/` | `fonts/*.zip` (Nerd Font archives) |
-| `~/.local/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
-| `~/.cache/tealdeer/tldr-pages/` | `tldr/tldr-pages.tar.bz2` |
-
-**After install**, reload your shell:
-
-```bash
-exec bash
-```
-
-#### Smoke testing
-
-Simulate a completely fresh user environment:
-
-```bash
-./tests/install_linux_tmp_home
-```
-
-#### Corporate / site add-ons
-
-```bash
-./engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh \
-           --post-install-hook ~/site-dotfiles/install.sh
-```
-
-Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
-`LOADOUT_MODE` (always `copy` — `dev` mode was removed in the package-manager
-refactor), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
-
-#### Restore a backup
-
-```bash
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
-```
-
-Numbered backups are created in `loadout_backups/backup.N/` before each install (numbering always starts at `.1`).
-At the end of a successful run the backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompressed
-dir is removed. `restore-backup` accepts either the uncompressed dir or the `.tar.bz2` archive.
-Font files are excluded from backups (large and reproducible).
-
----
+Single Python 3.6-compatible executable. Re-run after each `git pull`
+(idempotent; unchanged files skip the install step). Reload your shell with
+`exec bash` afterward.
 
 ### Windows
 
-**PowerShell 7+ (recommended):**
-
 ```powershell
-.\engineering-loadout.ps1
+.\engineering-loadout.ps1                  # PowerShell 7+
+.\engineering-loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
 ```
 
-**Starting from Windows PowerShell 5.1:**
+No elevation required.
 
-```powershell
-.\engineering-loadout-pwsh-bootstrap.ps1   # installs pwsh via winget
-# then reopen as pwsh:
-.\engineering-loadout.ps1
-```
-
-No elevation required. Files are copied, not symlinked — re-run `.\engineering-loadout.ps1`
-after repo updates.
-
-**Windows destinations:**
-
-| Destination | Source |
-|-------------|--------|
-| `%LOCALAPPDATA%\nvim\` | `nvim/` |
-| `%USERPROFILE%\.config\wezterm\wezterm.lua` | `wezterm/wezterm.lua` |
-| `%USERPROFILE%\.config\starship\starship.toml` | `starship/starship.windows.toml` |
-| `%USERPROFILE%\.editorconfig` | `editorconfig/editorconfig` |
-| `%USERPROFILE%\autohotkey\hotkeys.ahk` | `autohotkey/hotkeys.ahk` (feature-patched) |
-| `%USERPROFILE%\loadout_keys.toml` | Created if missing — choose AHK features |
-| PowerShell profile (5.1 + 7+) | `powershell/Microsoft.PowerShell_profile.ps1` |
-
-**AutoHotKey feature flags** (edit `%USERPROFILE%\loadout_keys.toml`):
-
-| Feature | Description |
-|---------|-------------|
-| `corp-logins` | Corp credential entry hotkeys |
-| `mouse-wiggle` | Idle mouse nudge to prevent lock screens |
-| `cisco-secure-client-vpn` | Cisco Secure Client auto-reconnect |
-| `password-manager` | Password manager quick-type hotkey |
-| `tmux-hotkeys` | `RAlt`/`RWin` zoom toggle, `Ctrl+;` last-pane toggle |
-| `f1f2f3-as-mouse-buttons` | F1/F2/F3 mouse remaps for mspaint/etxc/wezterm-gui |
-| `thinlinc-reconnect` | Auto-dismiss ThinLinc errors and reconnect |
+Full subcommand reference, install destinations, post-install hooks, backup
+restore, and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 
 ---
 
 ## Bash Configuration
 
-### Layer System
-
-```
-bash/global/    ← upstream, managed here — do not modify locally
-bash/corp/      ← corporation-level overrides  (user-created)
-bash/site/      ← site-level overrides         (user-created)
-bash/project/   ← project-level overrides      (user-created)
-bash/user/      ← personal overrides            (user-created)
-```
-
-Each layer sources `config.sh` (preferences) then `bashrc` (aliases/prompt).
-Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
-
-```bash
-# bash/user/config.sh
-export LOADOUT_CFG_PREFERRED_VI=nvim
-export LOADOUT_CFG_ENABLE_STARSHIP=1
-export LOADOUT_CFG_ENABLE_FZF=1
-export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/bin/bash
-```
-
-### Hook Injection Points
-
-Insert code at precise points in the shell startup sequence:
-
-| Hook | Fires after |
-|------|-------------|
-| `global_hooks/1.sh` | Functions loaded |
-| `global_hooks/2.sh` | glibc detection |
-| `global_hooks/3.sh` | PATH setup |
-| `global_hooks/4.sh` | Prompt configured |
-| `global_hooks/5.sh` | Before completions |
-| `global_hooks/6.sh` | Completions loaded |
-
-Example — inject a site-specific EDA tool path at hook 3:
-
-```bash
-# bash/site/global_hooks/3.sh
-path_prepend_if_dir /tools/cadence/bin
-path_prepend_if_dir /tools/synopsys/bin
-```
-
-### Notable Aliases
-
-```bash
-b / bb / bbb …        # cd .. up 1–10 levels
-cdd / cddd …          # cd to Nth most-recently-modified directory
-p / cdp               # bookmark cwd / return to it
-g                     # ripgrep (falls back to grep -r -i)
-f                     # fd (falls back to find .)
-vi / vim              # LOADOUT_CFG_PREFERRED_VI
-v                     # nvim -n -R - (read stdin, read-only)
-fvi                   # fzf file picker → open in editor
-t                     # exec bash (reload shell)
-w                     # type -a (where is this defined?)
-we                    # watchexec --clear --poll 500
-ga / gs / gc / gp     # git add / status / commit / push
-gsp                   # git stash, pull, pop
-lh / la / lah         # ls --human / --all / both
-rs                    # rsync with progress, excludes .snapshot/
-du / dum              # disk usage sorted by size (GB / MB)
-extract_rpm           # rpm2cpio | cpio -idmv
-```
+Five-layer override chain (`global → corp → site → project → user`), `LOADOUT_CFG_*` knobs, 7 startup hook-injection points, and a curated alias set (`b/bb/…` directory hopping, `g/f` for `rg`/`fd` with fallbacks, `gs/gc/gp` git shortcuts, etc.). [Details](docs/BASH.md)
 
 ---
 
 ## Tmux
 
-Prefix: **`Ctrl-\`** (not `Ctrl-b` — your fingers will thank you)
-
-| Binding | Action |
-|---------|--------|
-| `Shift+←/→/↑/↓` | Navigate panes |
-| `Prefix+←/→/↑/↓` | Resize pane (repeatable) |
-| `Ctrl+←/→` | Previous/next window |
-| `Ctrl+Shift+←/→` | Reorder windows |
-| `Prefix+1–5` | Layout presets |
-| `Prefix+o` | 4-pane layout |
-| `Prefix+v` | Capture pane buffer → nvim |
-| `Prefix+r` | Reload config |
-| `Prefix+Ctrl-s` | Save session (resurrect) |
-| `Prefix+Ctrl-r` | Restore session (resurrect) |
-
-tmux-continuum auto-saves every 60 minutes.
+Prefix `Ctrl-\`. Shift-arrows for pane nav, Ctrl-arrows for windows, `Prefix+1–5` layouts, `Prefix+v` capture-to-nvim, tmux-resurrect + continuum bundled. [Details](docs/TMUX.md)
 
 ---
 
 ## Maintenance
 
-### Adding a new pre-built binary
-
-Order matters: always **strip → patchelf → bzip2**. Stripping after patchelf corrupts `.dynstr`.
-
-```bash
-# 1. Strip, set RPATH, compress
-cp /path/to/binary /tmp/mybinary_tmp
-/usr/bin/strip /tmp/mybinary_tmp
-/usr/bin/patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' /tmp/mybinary_tmp
-bzip2 -k /tmp/mybinary_tmp
-cp /tmp/mybinary_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/mybinary.bz2
-
-# 2. Update strip manifest
-./strip_all_elf_binaries
-
-# 3. Register in the package registry (pre_built/packages.json)
-#    {"mybinary": {"kind": "bin", "bins": ["mybinary"], "version": "X.Y.Z",
-#                  "platforms": ["linux"], "default": true,
-#                  "description": "..."}}
-
-# 4. Smoke-test and commit
-pre_built/build_scripts/test-prebuilt-binaries --keep  # or just ./release --dry-run
-git add pre_built/ .strip-manifest
-git commit
-```
-
-See `pre_built/ADDING_BINARIES.md` for the full workflow including dependency auditing,
-go binary flags, `farm-versions` registration, and the schema-2 registry fields.
-
-### Importing a new portable Python build
-
-```bash
-pre_built/build_scripts/import-portable-python /path/to/portable-python-X.Y.Z-tag/
-./strip_all_elf_binaries   # skips BOLT-optimized Python archive automatically
-git add pre_built/ .strip-manifest
-git commit
-```
-
-### Updating tldr pages
-
-```bash
-./update_tldr_cache
-git add tldr/
-git commit
-```
-
-### Updating tmux plugins
-
-```bash
-./update_tmux_plugins
-git add tmux/vendor/
-git commit
-```
-
-### Rebuilding Tree-sitter parsers
-
-```bash
-./treesitter/build_parsers
-git add treesitter/prebuilt/
-git commit
-```
-
----
-
-## Repo Development
-
-`--dev` symlink-mode was removed in the engineering-loadout refactor. The repo is
-the source of truth; editing a file there and re-running `./engineering-loadout` is the
-canonical workflow. Most install steps are idempotent (rsync, atomic bz2
-decompress) so a re-run finishes quickly.
-
-Install repo git hooks manually:
-
-```bash
-cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
-```
-
-Provides:
-
-- **pre-commit** — strips ELF payloads from newly staged binaries and archives,
-  normalizes tarballs to `.tar.bz2`, updates `.strip-manifest`. Removes any
-  embedded `.git` dirs from vendored plugins. Run `./release --dry-run` before
-  creating a release to smoke-test all binaries via a temp install.
+Recipes for adding/updating pre-built binaries (strip → patchelf → bzip2), importing portable Python, refreshing tldr/tmux-plugins/Tree-sitter parsers, and installing the repo git hooks: [Details](docs/MAINTENANCE.md). Per-tool update playbook (check-versions → per-kind build path → smoke + commit + release) covered there too.
 
 ---
 
