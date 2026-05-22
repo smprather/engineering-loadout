@@ -41,11 +41,44 @@ LOG_FILE = os.path.join(PENDING_DIR, "daemon.log")
 POLL_INTERVAL = 10
 TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
+# Mirror significant daemon events to the engineering-loadout dev-log if it
+# already exists. Heartbeats (idle polling status) are throttled to one per
+# hour so the log doesn't churn while waiting for tmux/bash to exit.
+RUN_LOG_PATH = "/tmp/engineering-loadout.log"
+HEARTBEAT_INTERVAL = 3600  # seconds
+_last_heartbeat_ts = 0.0
+
+
+def _append_run_log(msg):
+    """If the dev-log exists (i.e. installer was run from a repo clone),
+    append one timestamped line tagged [daemon]. Never creates the file."""
+    if not os.path.exists(RUN_LOG_PATH):
+        return
+    try:
+        with open(RUN_LOG_PATH, "a") as f:
+            ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            f.write("[{}] [daemon] {}\n".format(ts, msg))
+    except (IOError, OSError):
+        pass
+
 
 def log(msg):
     line = "[loadout-pending-daemon] {}\n".format(msg)
     sys.stdout.write(line)
     sys.stdout.flush()
+    # Significant event — always mirror to dev-log.
+    _append_run_log(msg)
+
+
+def heartbeat(msg):
+    """Throttled status log — emits to dev-log at most once per HEARTBEAT_INTERVAL.
+    Stdout is unchanged so daemon's normal log stream isn't affected."""
+    global _last_heartbeat_ts
+    now = time.time()
+    if now - _last_heartbeat_ts < HEARTBEAT_INTERVAL:
+        return
+    _last_heartbeat_ts = now
+    _append_run_log("heartbeat: " + msg)
 
 
 @contextlib.contextmanager
@@ -283,6 +316,11 @@ def main():
             if not remaining:
                 log("all ops applied, exiting")
                 break
+
+            # Throttled heartbeat: lets the dev-log show daemon is alive +
+            # what it's still waiting on, without spamming every 10s.
+            heartbeat("polling, {} op(s) pending: {}".format(
+                len(remaining), ", ".join(sorted(os.path.basename(d) for d in remaining))))
 
             time.sleep(POLL_INTERVAL)
 
