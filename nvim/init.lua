@@ -20,15 +20,15 @@ end
 
 -- Phase 2: Bootstrap lazy.nvim (offline-safe: skips plugin setup if git clone fails).
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-local dotfiles_plugins_enabled = true
+local loadout_plugins_enabled = true
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
     local out = vim.fn.system({
         "git", "clone", "--filter=blob:none", "--branch=stable",
         "https://github.com/folke/lazy.nvim.git", lazypath,
     })
     if vim.v.shell_error ~= 0 then
-        dotfiles_plugins_enabled = false
-        vim.g.dotfiles_lazy_bootstrap_error = out
+        loadout_plugins_enabled = false
+        vim.g.loadout_lazy_bootstrap_error = out
         vim.api.nvim_create_autocmd("VimEnter", {
             once     = true,
             callback = function()
@@ -37,10 +37,10 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
         })
     end
 end
-vim.g.dotfiles_plugins_enabled = dotfiles_plugins_enabled
+vim.g.loadout_plugins_enabled = loadout_plugins_enabled
 
 -- Phase 3: Collect plugin specs from all layers that have a plugins/ dir.
-if dotfiles_plugins_enabled then
+if loadout_plugins_enabled then
     vim.opt.rtp:prepend(lazypath)
 
     local specs = {}

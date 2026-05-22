@@ -86,7 +86,9 @@ if [ ! -d "$SRCDIR/.git" ]; then
 fi
 
 cd "$SRCDIR"
-git fetch --tags
+if ! git rev-parse "$tag" >/dev/null 2>&1; then
+    git fetch --tags
+fi
 git checkout "$tag"
 
 if [ "$clean" -eq 1 ]; then
@@ -100,7 +102,7 @@ echo "Configuring fish..."
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -DCMAKE_INSTALL_SYSCONFDIR="$INSTALL_PREFIX/etc" \
-    -DBUILD_DOCS=OFF \
+    -DWITH_DOCS=OFF \
     -G Ninja
 
 echo "Building fish..."

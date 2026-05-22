@@ -32,7 +32,7 @@ The platform ID is `$(uname -s lower)-$(uname -m)-<glibc|musl>`, for example
 The Linux installer copies vendored plugins to:
 
 ```text
-~/.local/share/nvim/dotfiles/vendor/
+~/.local/share/nvim/loadout/vendor/
 ```
 
 and decompresses matching prebuilt parsers to

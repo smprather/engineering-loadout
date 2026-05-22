@@ -69,6 +69,7 @@ import fnmatch
 import json
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import inspect
@@ -459,23 +460,76 @@ def record_result(thing, status, detail=""):
     INSTALL_RESULTS.append((thing, status, detail))
 
 
+_INTERRUPT_REQUESTED = False
+_INTERRUPT_PHASE = None      # "backup" while backup_existing is running, else None
+_ACTIVE_BACKUP_DIR = None    # set by backup_existing for sigint cleanup
+_ACTIVE_SUBPROCESS = None    # set by run() so handler can SIGTERM child before cleanup
+
+
+def _sigint_handler(signum, frame):
+    global _INTERRUPT_REQUESTED
+    if _INTERRUPT_PHASE == "backup":
+        eprint("\n^C during backup — removing partial backup and exiting.")
+        # Kill any active subprocess (e.g. rsync still writing into the backup dir)
+        # so cleanup doesn't race against its writes. Use os.kill rather than
+        # proc.wait() since main thread is already blocked inside communicate().
+        proc = _ACTIVE_SUBPROCESS
+        if proc is not None:
+            try:
+                os.kill(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            # Brief settle so the kernel reaps the writes already in flight.
+            time.sleep(0.1)
+        if _ACTIVE_BACKUP_DIR and os.path.isdir(_ACTIVE_BACKUP_DIR):
+            try:
+                shutil.rmtree(_ACTIVE_BACKUP_DIR)
+                eprint("Removed: {}".format(_ACTIVE_BACKUP_DIR))
+            except OSError as exc:
+                eprint("Warning: could not remove {}: {}".format(_ACTIVE_BACKUP_DIR, exc))
+        # Silence any post-mortem death-rattle from dying subprocesses (e.g. rsync's
+        # "broken pipe" on stderr) — the install is already aborted, the noise is just noise.
+        try:
+            sys.stderr.flush()
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, 2)
+            os.close(devnull)
+        except OSError:
+            pass
+        sys.exit(130)
+    if _INTERRUPT_REQUESTED:
+        eprint("\n^C^C — force exit.")
+        sys.exit(130)
+    _INTERRUPT_REQUESTED = True
+    eprint("\n^C received — finishing current step then exiting. (Press Ctrl-C again to force quit.)")
+
+
 def run_install_step(thing, func, *args, **kwargs):
     _section("Installing {}...".format(thing))
     try:
         result = func(*args, **kwargs)
         if not any(row[0] == thing for row in INSTALL_RESULTS):
             record_result(thing, "OK", "")
-        return result
     except InstallRefused as exc:
         warn(str(exc))
         record_result(thing, "FAIL", str(exc))
-        return None
+        result = None
+    except KeyboardInterrupt:
+        record_result(thing, "FAIL", "interrupted by user (Ctrl-C)")
+        global _INTERRUPT_REQUESTED
+        _INTERRUPT_REQUESTED = True
+        result = None
     except (OSError, subprocess.CalledProcessError) as exc:
         detail = "{} failed: {}".format(thing, exc)
         warn(detail)
         traceback.print_exc()
         record_result(thing, "FAIL", detail)
-        return None
+        result = None
+    if _INTERRUPT_REQUESTED:
+        eprint("Stopping after '{}' step due to Ctrl-C.".format(thing))
+        print_install_results()
+        sys.exit(130)
+    return result
 
 
 def skipped(reason, consequence=None):
@@ -490,7 +544,22 @@ def command_exists(name):
 
 
 def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
-    return subprocess.run(cmd, cwd=cwd, env=env, check=check, stdout=stdout, stderr=stderr)
+    global _ACTIVE_SUBPROCESS
+    # start_new_session=True isolates the child from the terminal's process group
+    # so a Ctrl-C at the keyboard only reaches the installer, not (e.g.) rsync.
+    # The installer's SIGINT handler decides whether to SIGKILL the child (backup
+    # cleanup) or let it finish (other steps).
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
+                            start_new_session=True)
+    _ACTIVE_SUBPROCESS = proc
+    try:
+        out, err = proc.communicate()
+    finally:
+        _ACTIVE_SUBPROCESS = None
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd, output=out, stderr=err)
+    completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
+    return completed
 
 
 def output(cmd, cwd=None, env=None, check=True):
@@ -527,10 +596,12 @@ def lns(target, link_name, unsafe=False, verbose=False):
 
 def mkdirn(base_dir):
     require_writable_dir(os.path.dirname(os.path.abspath(base_dir)), "backup")
-    target_dir = base_dir
     counter = 1
-    while os.path.exists(target_dir):
+    while True:
         target_dir = "{}.{}".format(base_dir, counter)
+        archive = target_dir + ".tar.bz2"
+        if not os.path.exists(target_dir) and not os.path.exists(archive):
+            break
         counter += 1
     os.makedirs(target_dir)
     return target_dir
@@ -1036,7 +1107,10 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             _lp.stop()
 
     check_prebuilt_binary_dependencies(dest_bin_dir)
-    print("  Installed: {}/ -> {}/.local/".format(src_dir, home))
+    _bin_count = len(_bin_bz2_files) if os.path.isdir(bin_dir) else 0
+    _lib_count = len(_lib64_bz2_files) if os.path.isdir(lib64_dir) else 0
+    print("  Installed {} binaries, {} libraries from {} -> {}/.local/".format(
+        _bin_count, _lib_count, src_dir, home))
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
@@ -1505,7 +1579,11 @@ def pv_extract_tar(archive_path, dest_dir):
         p.stop()
 
 
-def install_helix_runtime(repo_dir, home):
+def install_helix_runtime(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "helix-runtime" not in selected_tools and "hx" not in selected_tools:
+        skipped("Helix runtime (helix-runtime not selected)", "")
+        record_result("Helix runtime", "SKIP", "helix-runtime not in selected tools")
+        return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
@@ -1536,7 +1614,11 @@ def install_helix_runtime(repo_dir, home):
         warn("Helix runtime archive did not install {}/tutor as expected".format(runtime_dir))
 
 
-def install_vim_runtime(repo_dir, home):
+def install_vim_runtime(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "vim92-runtime" not in selected_tools and "vim" not in selected_tools and "gvim" not in selected_tools:
+        skipped("Vim runtime (vim92-runtime not selected)", "")
+        record_result("Vim runtime", "SKIP", "vim92-runtime not in selected tools")
+        return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
@@ -1572,7 +1654,11 @@ def install_vim_runtime(repo_dir, home):
         warn("Vim runtime archive did not install {} as expected".format(sentinel))
 
 
-def install_nvim_runtime(repo_dir, home):
+def install_nvim_runtime(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "nvim-runtime" not in selected_tools and "nvim" not in selected_tools:
+        skipped("Neovim runtime (nvim-runtime not selected)", "")
+        record_result("Neovim runtime", "SKIP", "nvim-runtime not in selected tools")
+        return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
@@ -1781,7 +1867,7 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
         record_result("nvim-treesitter vendor", "SKIP", "no treesitter packages or env-nvim selected")
         return
     src_root = os.path.join(repo_dir, "treesitter", "vendor")
-    dest_root = os.path.join(home, ".local", "share", "nvim", "dotfiles", "vendor")
+    dest_root = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor")
     if not (os.path.isdir(os.path.join(src_root, "nvim-treesitter")) and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))):
         skipped("vendored nvim-treesitter (missing from treesitter/vendor/)",
                 "Neovim Tree-sitter plugin will NOT be available offline")
@@ -1794,12 +1880,34 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
     print("  Installed: {}/ -> {}/".format(src_root, dest_root))
 
 
-def restore_backup(backup_dir, home):
-    if not os.path.isdir(backup_dir):
-        eprint("Error: Backup directory not found: {}".format(backup_dir))
-        sys.exit(1)
+def restore_backup(backup_path, home):
+    if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
+        tmp_dir = tempfile.mkdtemp(prefix="loadout_restore_", dir="/tmp")
+        try:
+            with tarfile.open(backup_path, "r:bz2") as tf:
+                safe_extract_tar(tf, tmp_dir)
+            inner = os.path.basename(backup_path)[:-len(".tar.bz2")]
+            extracted = os.path.join(tmp_dir, inner)
+            if not os.path.isdir(extracted):
+                entries = [e for e in os.listdir(tmp_dir) if os.path.isdir(os.path.join(tmp_dir, e))]
+                if not entries:
+                    eprint("Error: Backup archive is empty: {}".format(backup_path))
+                    sys.exit(1)
+                extracted = os.path.join(tmp_dir, entries[0])
+            _restore_backup_dir(extracted, home, source_display=backup_path)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        return
 
-    print("Restoring config bundles from backup: {}".format(backup_dir))
+    if not os.path.isdir(backup_path):
+        eprint("Error: Backup not found: {}".format(backup_path))
+        sys.exit(1)
+    _restore_backup_dir(backup_path, home, source_display=backup_path)
+
+
+def _restore_backup_dir(backup_dir, home, source_display=None):
+    display = source_display or backup_dir
+    print("Restoring config bundles from backup: {}".format(display))
     print("")
     print("Removing current config bundles...")
     bash_config = os.path.join(home, ".config", "bash")
@@ -1827,7 +1935,7 @@ def restore_backup(backup_dir, home):
     print("")
     print("Backup restored successfully!")
     print("")
-    print("Restored from: {}".format(backup_dir))
+    print("Restored from: {}".format(display))
 
 
 def remove_if_exists(path):
@@ -1877,27 +1985,53 @@ def install_bash(repo_dir, home, links_mode):
 
 
 def backup_existing(home, repo_dir):
+    global _INTERRUPT_PHASE, _ACTIVE_BACKUP_DIR
     backup_rel = mkdirn(os.path.join(home, "loadout_backups", "backup"))
     backup_dir = os.path.abspath(backup_rel)
-    print("Making backups in: {}".format(backup_dir))
-    for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".vim", ".tmux", ".tmux.conf", ".editorconfig",
-                                        ".config/vim", ".config/nvim", ".config/bash/global",
-                                        ".config/bash/functions.sh", ".config/bash/README.md",
-                                        ".config/bash/bashrc", ".config/tmux", ".config/starship",
-                                        ".config/editorconfig", ".config/helix/runtime"]:
-        path = os.path.join(home, rel)
-        if not (os.path.exists(path) or os.path.islink(path)):
-            continue
-        if os.path.islink(path):
-            link_target = os.readlink(path)
-            real = os.path.realpath(path) if os.path.exists(path) else ""
-            if link_target.startswith(repo_dir) or real.startswith(repo_dir):
-                print("  Skipping (points to repo): {}".format(rel))
+    _INTERRUPT_PHASE = "backup"
+    _ACTIVE_BACKUP_DIR = backup_dir
+    try:
+        print("Making backups in: {}".format(backup_dir))
+        for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".vim", ".tmux", ".tmux.conf", ".editorconfig",
+                                            ".config/vim", ".config/nvim", ".config/bash/global",
+                                            ".config/bash/functions.sh", ".config/bash/README.md",
+                                            ".config/bash/bashrc", ".config/tmux", ".config/starship",
+                                            ".config/editorconfig", ".config/helix/runtime"]:
+            path = os.path.join(home, rel)
+            if not (os.path.exists(path) or os.path.islink(path)):
                 continue
-        print("  Backing up: {}".format(rel))
-        backup_item(path, os.path.join(backup_dir, rel))
-    print("")
-    return backup_dir
+            if os.path.islink(path):
+                link_target = os.readlink(path)
+                real = os.path.realpath(path) if os.path.exists(path) else ""
+                if link_target.startswith(repo_dir) or real.startswith(repo_dir):
+                    print("  Skipping (points to repo): {}".format(rel))
+                    continue
+            print("  Backing up: {}".format(rel))
+            backup_item(path, os.path.join(backup_dir, rel))
+        print("")
+        return backup_dir
+    finally:
+        _INTERRUPT_PHASE = None
+        _ACTIVE_BACKUP_DIR = None
+
+
+def compress_backup(backup_dir):
+    if not backup_dir or not os.path.isdir(backup_dir):
+        skipped("compress backup (no backup dir)", "")
+        return ""
+    archive_path = backup_dir + ".tar.bz2"
+    if os.path.exists(archive_path):
+        i = 1
+        while os.path.exists("{}.{}.tar.bz2".format(backup_dir, i)):
+            i += 1
+        archive_path = "{}.{}.tar.bz2".format(backup_dir, i)
+    parent = os.path.dirname(backup_dir)
+    base = os.path.basename(backup_dir)
+    print("Compressing backup: {} -> {}".format(backup_dir, archive_path))
+    with tarfile.open(archive_path, "w:bz2") as tf:
+        tf.add(backup_dir, arcname=base)
+    shutil.rmtree(backup_dir)
+    return archive_path
 
 
 def _nvim_save_user_layers(nvim_config):
@@ -2438,11 +2572,12 @@ def cmd_doctor(args, registry, repo_dir):
             if not archive:
                 continue
             checked += 1
-            # Resolve PLATFORM token
-            if "PLATFORM" in archive and platform_dir:
-                resolved = archive.replace("PLATFORM", os.path.basename(platform_dir))
-            else:
-                resolved = archive
+            # Resolve TS_PLATFORM (treesitter-specific) first, then PLATFORM (binary platform)
+            resolved = archive
+            if "TS_PLATFORM" in resolved:
+                resolved = resolved.replace("TS_PLATFORM", treesitter_platform_id())
+            if "PLATFORM" in resolved and platform_dir:
+                resolved = resolved.replace("PLATFORM", os.path.basename(platform_dir))
             # Glob with shell-style wildcards
             full_path = os.path.join(repo_dir, resolved)
             matches = glob_paths_glob(full_path)
@@ -2514,15 +2649,15 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
-    run_install_step("dotfiles", install_copy_mode, repo_dir, home)
+    run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools)
     run_install_step("fonts", install_fonts, repo_dir, home, selected_tools)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
-    run_install_step("Helix runtime", install_helix_runtime, repo_dir, home)
-    run_install_step("Vim runtime", install_vim_runtime, repo_dir, home)
-    run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home)
+    run_install_step("Helix runtime", install_helix_runtime, repo_dir, home, selected_tools)
+    run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools)
+    run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home, selected_tools)
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools)
@@ -2533,6 +2668,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     else:
         record_result("post-install hooks", "SKIP", "none requested")
     run_install_step("layer install scripts", run_layer_install_scripts, home)
+    if backup_dir:
+        run_install_step("compress backup", compress_backup, backup_dir)
     print_final_notices()
     print_install_results()
     return 0
@@ -2542,6 +2679,8 @@ def main(argv):
     if not _RSYNC:
         eprint("Error: This script requires rsync (/usr/bin/rsync not found).")
         return 1
+
+    signal.signal(signal.SIGINT, _sigint_handler)
 
     args = parse_args(argv)
     repo_dir = os.path.dirname(os.path.abspath(__file__))

@@ -4,13 +4,13 @@ return {
     "nvim-treesitter/nvim-treesitter",
     cond  = utils.buf_smaller_than(10),
     build = false,
-    dir   = vim.fn.isdirectory(vim.fn.stdpath("data") .. "/dotfiles/vendor/nvim-treesitter") == 1
-            and (vim.fn.stdpath("data") .. "/dotfiles/vendor/nvim-treesitter") or nil,
+    dir   = vim.fn.isdirectory(vim.fn.stdpath("data") .. "/loadout/vendor/nvim-treesitter") == 1
+            and (vim.fn.stdpath("data") .. "/loadout/vendor/nvim-treesitter") or nil,
     dependencies = {
         {
             "neovim-treesitter/treesitter-parser-registry",
-            dir = vim.fn.isdirectory(vim.fn.stdpath("data") .. "/dotfiles/vendor/treesitter-parser-registry") == 1
-                    and (vim.fn.stdpath("data") .. "/dotfiles/vendor/treesitter-parser-registry") or nil,
+            dir = vim.fn.isdirectory(vim.fn.stdpath("data") .. "/loadout/vendor/treesitter-parser-registry") == 1
+                    and (vim.fn.stdpath("data") .. "/loadout/vendor/treesitter-parser-registry") or nil,
         },
     },
     config = function()
@@ -26,7 +26,7 @@ return {
         local disable_indent    = { ruby = true, tcl = true, yaml = true }
 
         vim.api.nvim_create_autocmd("FileType", {
-            group    = vim.api.nvim_create_augroup("dotfiles_native_treesitter", { clear = true }),
+            group    = vim.api.nvim_create_augroup("loadout_native_treesitter", { clear = true }),
             callback = function(args)
                 if vim.bo[args.buf].buftype ~= "" then return end
                 local filetype = vim.bo[args.buf].filetype

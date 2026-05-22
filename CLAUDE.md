@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Engineering-loadout: an offline-first package manager and dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root access, multi-organizational (global/corp/site/project/user layer hierarchy). The `./engineering-loadout` Python 3.6-compatible installer is driven by a typed package registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft dependencies, and a resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, and data caches.
 
-**Related project:** [EE Linux Tools](https://github.com/smprather/ee-linux-tools) - modern utilities (RipGrep, Tmux, EZA) for offline environments.
-
 ## Key Commands
 
 **Linux:**
@@ -33,7 +31,7 @@ Engineering-loadout: an offline-first package manager and dotfiles bundle for **
 ./engineering-loadout resolve gvim                    # dry-run resolver; prints set by kind
 ./engineering-loadout --dry-run --add gvim            # resolve + print only, no install
 ./engineering-loadout doctor                          # platform + registry integrity check
-./engineering-loadout restore-backup loadout_backups/backup.1
+./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
 
 # Package selection (names + groupings defined in pre_built/packages.json)
 ./engineering-loadout --add octave                    # add package(s); deps (octave-runtime) auto-pulled
@@ -48,15 +46,9 @@ Engineering-loadout: an offline-first package manager and dotfiles bundle for **
 ./engineering-loadout --no-deps --only gvim           # install gvim without walking depends/recommends
 ./engineering-loadout --force --skip gui_libs --add gvim  # WARN on conflict, continue
 
-# Reload bash config after changes
-exec bash
-source ~/.bashrc
-
 # Manually install repo-development git hooks
 cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 ```
-
-**Removed flags** (engineering-loadout package-manager refactor): `--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`, `--no-fonts`, `--no-tldr-cache`. New replacements: `--only`, `--add`, `--skip`, `list` subcommand, `--skip @fonts-all`, `--skip tldr-data`. The installer prints a hard-error pointer when an old flag is passed.
 
 **Windows** (no elevation required — copies files):
 ```powershell
@@ -205,7 +197,7 @@ The installer dispatches on the first non-flag argument (defaulting to `install`
 - `./engineering-loadout resolve [<pkg>...]` — runs the resolver and prints the resolved set grouped by `kind`. Positional args treated as `--add`.
 - `./engineering-loadout --dry-run` — resolve + print; no writes. Combine with selection flags.
 - `./engineering-loadout doctor` — platform/registry sanity check; verifies archive paths for every `runtime`/`data`/`font`/`python-base` package; flags unresolved `depends`/`recommends`.
-- `./engineering-loadout restore-backup <dir>` — restore dotfiles from a numbered backup.
+- `./engineering-loadout restore-backup <dir-or-tar.bz2>` — restore dotfiles from a numbered backup (uncompressed dir or `.tar.bz2` archive).
 
 ### Selection flags (apply to `install`, `resolve`, `--dry-run`)
 
@@ -237,7 +229,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - **OpenGL dispatcher** (`libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0`) — must be the system's display-driver-linked version; bundling causes crashes or wrong driver selection.
 - **C++ runtime** (`libstdc++.so.6`, `libgcc_s.so.1`) — present on all EL8 systems; version mismatches with C++ code are subtle and hard to diagnose. Run the Python 3.6-compatible `./strip_all_elf_binaries` after adding binaries, libraries, parser grammars, or tar archives. It strips raw ELF files in place, strips ELF payloads inside standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs are skipped on later runs when size and modification time match the strip manifest. Non-ELF `.bz2` payloads (e.g. `vim.bz2` which is a shell wrapper) are also recorded in `.strip-manifest` after first check so they are skipped as manifest hits on subsequent runs. Archives whose names match `NOSTRIP_ARCHIVE_PREFIXES` (currently `portable-python-*`) are completely skipped and never stripped — LLVM BOLT-optimized binaries must not be touched.
 
-**Tree-sitter parser behavior**: Offline support targets Neovim v0.12+ only. The installer copies vendored `nvim-treesitter` and `treesitter-parser-registry` into `~/.local/share/nvim/dotfiles/vendor/`, then looks for prebuilt artifacts under `treesitter/prebuilt/$(uname -s lower)-$(uname -m)-<glibc|musl>/`, decompresses `parser/*.so.bz2` to installed `parser/*.so`, and copies `parser-info/`, `queries/`, `registry/`, and `build-info/` into `~/.local/share/nvim/tree-sitter-parsers/`. Neovim appends that parser directory to `runtimepath` and starts native Tree-sitter on filetype buffers. Build all supported parsers with `./treesitter/build_parsers`; prebuilt `.so.bz2`, parser-info, queries, registry cache, and `build-info/*.env` are tracked.
+**Tree-sitter parser behavior**: Offline support targets Neovim v0.12+ only. The installer copies vendored `nvim-treesitter` and `treesitter-parser-registry` into `~/.local/share/nvim/loadout/vendor/`, then looks for prebuilt artifacts under `treesitter/prebuilt/$(uname -s lower)-$(uname -m)-<glibc|musl>/`, decompresses `parser/*.so.bz2` to installed `parser/*.so`, and copies `parser-info/`, `queries/`, `registry/`, and `build-info/` into `~/.local/share/nvim/tree-sitter-parsers/`. Neovim appends that parser directory to `runtimepath` and starts native Tree-sitter on filetype buffers. Build all supported parsers with `./treesitter/build_parsers`; prebuilt `.so.bz2`, parser-info, queries, registry cache, and `build-info/*.env` are tracked.
 
 **tldr cache behavior**: `./update_tldr_cache` writes `tldr/tldr-pages.tar.bz2` for offline tealdeer installs. The installer accepts both `.tar.bz2` and legacy `.tar.gz`, replaces any existing `~/.cache/tealdeer/tldr-pages` unless `--skip tldr-data` is passed, and `./strip_all_elf_binaries` normalizes tar archives to bzip2.
 
@@ -265,8 +257,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **JupyterLab Python tool behavior**: `jupyterlab` is an optional `uv_tool` (`optional: true` in `packages.json` — opt in with `./engineering-loadout --add jupyterlab`). Installed via `uv tool install jupyterlab` using bundled wheels in `wheels/`. After install, `jupyter` and `jupyter-lab` launchers appear at `~/.local/bin/`. Users run `jupyter lab` and JupyterLab opens in the system browser. Requires a working browser accessible from the machine (WSL2: Windows browser via WSL interop; headless farm nodes: point `BROWSER` to a VNC-accessible browser or use `--no-browser --port=8888` and forward the port). Wheels must be downloaded with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download jupyterlab --platform manylinux2014_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/` — JupyterLab has ~80 dependency packages.
 
-**Backup behavior**: Numbered backups in `loadout_backups/backup.N/`. Skips files already pointing to the repo. Never overwrites existing backups.
-Backups intentionally exclude font files (`*.ttf`, `*.otf`, `*.pcf`, `*.bdf`, `*.woff`, `*.woff2`, etc.) because vendored Nerd Fonts are large and reproducible.
+**Backup behavior**: Numbered backups in `loadout_backups/backup.N/` (always starts at `.1`; never bare `backup`). Skips files already pointing to the repo. Never overwrites existing backups. At the end of a successful install run, the backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompressed dir is removed; numbering checks both `backup.N/` and `backup.N.tar.bz2` when picking the next N. Post-install hooks (which receive `LOADOUT_BACKUP_DIR`) run before compression, so the dir still exists during hook execution. `restore-backup` accepts either the uncompressed dir or the `.tar.bz2` archive (extracts to `/tmp` and restores). Backups intentionally exclude font files (`*.ttf`, `*.otf`, `*.pcf`, `*.bdf`, `*.woff`, `*.woff2`, etc.) because vendored Nerd Fonts are large and reproducible.
 
 **Tmux plugin behavior**: All bundled plugins are always copied/linked from the repo. Run `./update_tmux_plugins` to re-clone them from GitHub (pre-commit hook strips `.git` dirs on next commit).
 
@@ -464,7 +455,7 @@ Existing `%USERPROFILE%\loadout_keys.toml` files that still use legacy plugin ID
 
 
 
-**Layer architecture** (analogous to bash `global→corp→site→project→user`): `nvim/init.lua` is a thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), then sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are the defaults; later layers override them. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.dotfiles_plugins_enabled` is false when lazy.nvim bootstrap fails offline — core editor still starts cleanly.
+**Layer architecture** (analogous to bash `global→corp→site→project→user`): `nvim/init.lua` is a thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), then sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are the defaults; later layers override them. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` is false when lazy.nvim bootstrap fails offline — core editor still starts cleanly.
 
 Snacks dashboard provides the no-argument `nvim` startup screen (`filetype=snacks_dashboard`). `mini.trailspace` highlights trailing whitespace with window-local matches, so dashboard cleanup must disable `vim.b.minitrailspace_disable`, turn off local `list`, and delete existing `MiniTrailspace` matches on dashboard open/update.
 

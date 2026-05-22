@@ -307,7 +307,7 @@
     "fish": {
       "kind": "bin",
       "bins":     ["fish"],
-      "version":  "",
+      "version":  "4.7.1",
       "platforms": ["linux"],
       "default": false,
       "optional": true,
@@ -437,24 +437,12 @@
       "kind": "runtime",
       "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
       "install_to": "~/.local",
-      "version": "",
+      "version": "4.7.1",
       "platforms": ["linux"],
       "default": false,
       "tags": ["shell", "runtime"],
       "depends": ["fish"],
       "description": "Fish standard library (functions, completions, themes)"
-    },
-
-    "zsh-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/zsh.tar.bz2",
-      "install_to": "~/.local",
-      "version": "",
-      "platforms": ["linux"],
-      "default": false,
-      "tags": ["shell", "runtime"],
-      "depends": ["zsh"],
-      "description": "Zsh module set (when bundled as runtime)"
     },
 
     "tldr-data": {
@@ -470,7 +458,7 @@
 
     "treesitter-parsers": {
       "kind": "data",
-      "archive": "treesitter/prebuilt/PLATFORM/parser/",
+      "archive": "treesitter/prebuilt/TS_PLATFORM/parser/",
       "install_to": "~/.local/share/nvim/tree-sitter-parsers/parser",
       "version": "",
       "platforms": ["linux"],
@@ -481,7 +469,7 @@
 
     "treesitter-queries": {
       "kind": "data",
-      "archive": "treesitter/prebuilt/PLATFORM/",
+      "archive": "treesitter/prebuilt/TS_PLATFORM/",
       "install_to": "~/.local/share/nvim/tree-sitter-parsers",
       "version": "",
       "platforms": ["linux"],

@@ -116,7 +116,7 @@ vim.api.nvim_create_autocmd("BufReadPost", {
     end,
 })
 
-if vim.g.dotfiles_plugins_enabled then
+if vim.g.loadout_plugins_enabled then
     vim.api.nvim_create_autocmd({ "BufWritePre", "FileChangedShell", "InsertLeave" }, {
         group    = my_augroup1,
         pattern  = "*",

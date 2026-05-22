@@ -564,7 +564,6 @@ vnc() {
 alias startvnc="vncserver -SecurityTypes None"
 alias runvnc="startvnc"
 alias stopvnc="vncserver -kill"
-alias killvnc="vncserver -kill"
 killvnc() {
     local max_display
     # max_display=$(

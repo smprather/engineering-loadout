@@ -15,6 +15,7 @@ sha256  49e8479000bee36225dae5bb1aecd7cb3a6f906128c470af7637c2f38d1b5386  pre_bu
 sha256  d2c1570d81b342fe5d4884ee50336a8c9ab6ee28f5c7ab3e0343b50763ddbf9c  pre_built/el8.x86_64.glibc2p28/bin/dust.bz2
 sha256  cfaf4bf343cea07f168e1af1609c7c0be928a80ca49b6e3ae27ea8dc238cdc1b  pre_built/el8.x86_64.glibc2p28/bin/eza.bz2
 sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  pre_built/el8.x86_64.glibc2p28/bin/fd.bz2
+sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
 sha256  5ef0735503de39b2d0e64838bd16ab1b2c63d1cddc6253a610c896c96811510c  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
@@ -193,6 +194,7 @@ sha256  85bd2183970e7184f9c56ea68f014cbc07a1db8f44ac0590b95ae4569ebe3a88  pre_bu
 sha256  762794ca28d4da4d557bdf6593eb44f1bf1cfb637fd1de9873af58a6b1b0e831  pre_built/el8.x86_64.glibc2p28/lib64/libxkbcommon.so.0.bz2
 sha256  fcf47e453dd59a265b921a1f73b523343383fa654110cc8dde2c1def45c70cbe  pre_built/el8.x86_64.glibc2p28/lib64/libxxhash.so.0.bz2
 sha256  08ace58677105a879ee6c45dccfa797c169cc027752e023bb826db78f5f66c0a  pre_built/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2
+tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2

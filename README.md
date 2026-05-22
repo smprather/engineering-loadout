@@ -1,20 +1,25 @@
 # Engineering Loadout
 
-A self-contained, offline-first package manager + dotfiles bundle for
-**Electrical Engineering work environments** — and anyone who lives in a
-terminal and refuses to apologize for it.
+A self-contained, offline-first package manager + dotfiles bundle for **Engineering work environments**.
+- Old Linux distro versions
+- Limited, or no, internet access
+- No sudo/root
+- Built from 30+ years of Electrical Engineering workflow experience
+- All built on AlmaLinux8.10 (Redhat 8.10 clone), GLIBC2.28
+  - Compatible with RHEL9.X and beyond
+  - Redhat7 is EoL. If you see any Redhat7 zombies 🧟 walking around, please stab them in the head 🔪.
 
-Built from 30+ years of EE workflow experience. Hardened against the
-constraints that define real engineering environments: **no internet, no root,
-no mercy**. Installs to `$HOME` on any Linux box in under two minutes and gets
-out of your way.
+If you can get the singular tar file into your work environment (an sftp pipeline is usually available),
+then you can start working with modern Linux tools and "sane" configurations.
+"Sane" as defined by me of course :smiley:.
 
-A typed package registry (`pre_built/packages.json`, `schema_version: 2`)
+The Loadout is a typed package registry (`pre_built/packages.json`, `schema_version: 2`) that
 names every installable thing — binary, library bundle, runtime archive,
 config bundle, font, data cache. Packages declare dependencies; groups
 bundle them; a built-in resolver walks the graph; the CLI gives you
 `list` / `describe` / `resolve` / `doctor` subcommands and `--add` /
 `--skip` / `--only` selection flags.
+In other words, it does basic package-management stuff.
 
 ---
 
@@ -272,7 +277,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [Python](https://www.python.org) | 3.14.4 | LLVM BOLT-optimized portable Python build for EL8. Installs to `~/.local` via bundled `install.sh`. Generic `python3`/`pip3` entries are removed post-install so EDA tools find the system Python at `/usr/bin/python3`. Use `python3.14` and `pip3.14` for this build. |
+| [Python](https://www.python.org) | 3.14.4 | LLVM BOLT-optimized portable Python build for EL8. Installs to `~/.local` via bundled `install.sh`. Generic `python3`/`pip3` links are left in place, so `python3` on PATH resolves to 3.14. Tools that hard-require system Python 3.6 must invoke `/usr/bin/python3` explicitly. Use `python3.14` and `pip3.14` to pin this build. |
 
 ### Vendored Shared Libraries
 
@@ -370,7 +375,7 @@ from any working directory — it resolves the repo from the script path.
 ./engineering-loadout describe @core-cli                  # group membership
 ./engineering-loadout resolve gvim                        # dry-run resolver, prints set by kind
 ./engineering-loadout doctor                              # platform + registry integrity check
-./engineering-loadout restore-backup loadout_backups/backup.1
+./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
 
 ./engineering-loadout --dest-dir /tmp/test-home           # stage install into alternate root
 ./engineering-loadout --no-backup                         # skip backup of existing files
@@ -441,10 +446,12 @@ refactor), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
 #### Restore a backup
 
 ```bash
-./engineering-loadout --restore-backup loadout_backups/backup.1
+./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
 ```
 
-Numbered backups are created in `loadout_backups/backup.N/` before each install.
+Numbered backups are created in `loadout_backups/backup.N/` before each install (numbering always starts at `.1`).
+At the end of a successful run the backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompressed
+dir is removed. `restore-backup` accepts either the uncompressed dir or the `.tar.bz2` archive.
 Font files are excluded from backups (large and reproducible).
 
 ---

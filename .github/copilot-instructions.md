@@ -21,7 +21,7 @@ driven by `pre_built/packages.json` (`schema_version: 2`).
 ./engineering-loadout resolve gvim                    # dry-run resolver
 ./engineering-loadout --dry-run --add gvim            # resolve + print, no writes
 ./engineering-loadout doctor                          # platform + registry sanity check
-./engineering-loadout restore-backup loadout_backups/backup.1
+./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
 
 # Stage an install into a temp/test root
 ./engineering-loadout --dest-dir /tmp/loadout-home
@@ -151,9 +151,12 @@ Each layer can inject code into `global/bashrc` via numbered files in
   format. Hooks receive `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_MODE` (always
   `copy`), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
 
-Backups are numbered (`loadout_backups/backup.N/`). The installer skips targets
-already pointing into the repo and never overwrites an existing backup. Backups
-intentionally exclude font files because vendored Nerd Font archives are large
+Backups are numbered (`loadout_backups/backup.N/`, always starting at `.1`; never bare `backup`). The installer skips targets
+already pointing into the repo and never overwrites an existing backup. At the end of a successful install run, the
+backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompressed dir is removed; numbering checks
+both `backup.N/` and `backup.N.tar.bz2` when picking the next N. Post-install hooks run before compression so
+`LOADOUT_BACKUP_DIR` still resolves during hook execution. `restore-backup` accepts either the uncompressed dir or
+the `.tar.bz2` archive. Backups intentionally exclude font files because vendored Nerd Font archives are large
 and reproducible.
 
 Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
@@ -201,9 +204,11 @@ backend avoids this.
 
 **Release gate: `./release --dry-run`** runs
 `pre_built/build_scripts/test-prebuilt-binaries`, which does a full temp
-install, probes every binary, checks editor runtime sentinels, runs installed
-`nvim` headless against its installed runtime, and asserts portable Python
-does not shadow system `python3`/`pip3` before any tag is created.
+install, probes every binary, checks editor runtime sentinels, and runs
+installed `nvim` headless against its installed runtime before any tag is
+created. Portable Python keeps generic `python3`/`pip3` links in
+`~/.local/bin` so `python3` on PATH resolves to 3.14; tools that hard-require
+system Python 3.6 must invoke `/usr/bin/python3` explicitly.
 
 The Helix runtime lives at `pre_built/<platform>/runtime/helix.tar.bz2`; the
 installer extracts it to `~/.config/helix/runtime`; `runtime/tutor` is the
