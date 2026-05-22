@@ -135,7 +135,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 
 | Binary | Version | Description |
 |--------|---------|-------------|
-| agent-deck | 1.9.12 | TUI dashboard for AI agent orchestration |
+| [agent-deck](https://github.com/asheshgoplani/agent-deck) | 1.9.12 | TUI dashboard for AI agent orchestration |
 | [bash](https://www.gnu.org/software/bash/) | 5.3.9 | The GNU Bourne Again SHell |
 | [bat](https://github.com/sharkdp/bat) | 0.26.1 | `cat` with syntax highlighting and Git integration |
 | [broot](https://dystroy.org/broot/) | 1.56.2 | Interactive tree navigator and fuzzy finder |
