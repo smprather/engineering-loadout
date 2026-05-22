@@ -1136,6 +1136,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 [os.path.join(bin_dir, x) for x in os.listdir(bin_dir)], "*.bz2")
             if _bin_selected(os.path.basename(f)[:-4]))
         _max_bin_name = max((len(os.path.basename(f[:-4])) for f in _bin_bz2_files), default=0)
+        _bins_unchanged = 0
         _progress_ctx = (
             _RichProgress(
                 TextColumn("[cyan]{task.description}"),
@@ -1177,6 +1178,16 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                         _progress_ctx.advance(_progress_task)
                     continue
                 # Not running from this path; attempt install normally and fall through.
+
+            # Skip no-op installs: when dest already byte-identical to the bundled
+            # bz2, avoid the decompress + atomic-rename + chmod + fsync. Cuts disk
+            # churn on re-runs (matters for restic/rsync delta noise downstream).
+            if _bz2_matches_dest(bz2_file, dest_file):
+                _bins_unchanged += 1
+                _vprint("  unchanged: {}".format(name))
+                if _progress_ctx is not None:
+                    _progress_ctx.advance(_progress_task)
+                continue
 
             try:
                 require_writable_parent(dest_file, "pre-built binaries")
@@ -1238,11 +1249,19 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             f for f in fnmatch.filter(
                 [os.path.join(lib64_dir, x) for x in os.listdir(lib64_dir)], "*.bz2")
             if _lib_selected(os.path.basename(f)[:-4]))
+        _libs_unchanged = 0
         _lp, _lpt = _progress("Installing libraries", len(_lib64_bz2_files))
         for bz2_file in _lib64_bz2_files:
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
             if _lp:
                 _lp.update(_lpt, description="  {}".format(os.path.basename(dest_file)))
+            # Skip no-op installs: dest already byte-identical to bundled bz2.
+            if _bz2_matches_dest(bz2_file, dest_file):
+                _libs_unchanged += 1
+                _vprint("  unchanged: {}".format(os.path.basename(dest_file)))
+                if _lp:
+                    _lp.advance(_lpt)
+                continue
             require_writable_parent(dest_file, "pre-built libraries")
             write_bz2_atomic(bz2_file, dest_file, 0o644)
             _vprint("  bzip2: {} -> {}".format(bz2_file, dest_file))
@@ -1254,8 +1273,14 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     check_prebuilt_binary_dependencies(dest_bin_dir)
     _bin_count = len(_bin_bz2_files) if os.path.isdir(bin_dir) else 0
     _lib_count = len(_lib64_bz2_files) if os.path.isdir(lib64_dir) else 0
-    print("  Installed {} binaries, {} libraries from {} -> {}/.local/".format(
-        _bin_count, _lib_count, src_dir, home))
+    _bins_unchanged_n = locals().get("_bins_unchanged", 0)
+    _libs_unchanged_n = locals().get("_libs_unchanged", 0)
+    _unchanged_note = ""
+    if _bins_unchanged_n or _libs_unchanged_n:
+        _unchanged_note = " ({} binaries + {} libraries already current, skipped)".format(
+            _bins_unchanged_n, _libs_unchanged_n)
+    print("  Installed {} binaries, {} libraries from {} -> {}/.local/{}".format(
+        _bin_count, _lib_count, src_dir, home, _unchanged_note))
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
