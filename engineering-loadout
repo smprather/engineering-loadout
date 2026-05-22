@@ -487,6 +487,7 @@ def _sigint_handler(signum, frame):
                 eprint("Removed: {}".format(_ACTIVE_BACKUP_DIR))
             except OSError as exc:
                 eprint("Warning: could not remove {}: {}".format(_ACTIVE_BACKUP_DIR, exc))
+        _close_run_log("interrupted-during-backup")
         # Silence any post-mortem death-rattle from dying subprocesses (e.g. rsync's
         # "broken pipe" on stderr) — the install is already aborted, the noise is just noise.
         try:
@@ -499,6 +500,7 @@ def _sigint_handler(signum, frame):
         sys.exit(130)
     if _INTERRUPT_REQUESTED:
         eprint("\n^C^C — force exit.")
+        _close_run_log("interrupted-force")
         sys.exit(130)
     _INTERRUPT_REQUESTED = True
     eprint("\n^C received — finishing current step then exiting. (Press Ctrl-C again to force quit.)")
@@ -528,6 +530,7 @@ def run_install_step(thing, func, *args, **kwargs):
     if _INTERRUPT_REQUESTED:
         eprint("Stopping after '{}' step due to Ctrl-C.".format(thing))
         print_install_results()
+        _close_run_log(130)
         sys.exit(130)
     return result
 
@@ -543,12 +546,134 @@ def command_exists(name):
     return shutil.which(name) is not None
 
 
+# --- run-log: when invoked from inside a repo clone, tee every print/eprint
+# and every subprocess invocation into repo/.loadout-logs/install-<ts>-<pid>.log
+# so an AI assistant (or the user) can review post-mortem. Setup happens in
+# main() once we know repo_dir; before then this stays None and is a no-op.
+_RUN_LOG_FILE = None
+_RUN_LOG_PATH = ""
+
+
+def _log(msg):
+    """Append one timestamped line to the run-log if it is open."""
+    if _RUN_LOG_FILE is None:
+        return
+    try:
+        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        _RUN_LOG_FILE.write("[{}] {}\n".format(ts, msg))
+        _RUN_LOG_FILE.flush()
+    except (OSError, ValueError):
+        pass
+
+
+class _TeeStream:
+    """Wraps a stdio stream; mirrors output into the run-log with timestamps."""
+    def __init__(self, original, kind):
+        self._original = original
+        self._kind = kind
+        self._buf = ""
+
+    def write(self, s):
+        self._original.write(s)
+        if _RUN_LOG_FILE is None:
+            return
+        self._buf += s
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            try:
+                ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                _RUN_LOG_FILE.write("[{}] [{}] {}\n".format(ts, self._kind, line))
+                _RUN_LOG_FILE.flush()
+            except (OSError, ValueError):
+                pass
+
+    def flush(self):
+        self._original.flush()
+        if _RUN_LOG_FILE is not None:
+            try:
+                _RUN_LOG_FILE.flush()
+            except (OSError, ValueError):
+                pass
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+def _setup_run_log(repo_dir, argv):
+    """If repo_dir is a git clone, open a fresh run-log and tee stdout/stderr."""
+    global _RUN_LOG_FILE, _RUN_LOG_PATH
+    if not os.path.isdir(os.path.join(repo_dir, ".git")):
+        return
+    log_dir = os.path.join(repo_dir, ".loadout-logs")
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError as exc:
+        # Repo dir not writable (read-only checkout, exported tarball, etc.). Skip silently.
+        sys.stderr.write("Note: could not create run-log dir {}: {}\n".format(log_dir, exc))
+        return
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    _RUN_LOG_PATH = os.path.join(log_dir, "install-{}-{}.log".format(stamp, os.getpid()))
+    try:
+        _RUN_LOG_FILE = open(_RUN_LOG_PATH, "w", buffering=1)
+    except OSError as exc:
+        sys.stderr.write("Note: could not open run-log {}: {}\n".format(_RUN_LOG_PATH, exc))
+        _RUN_LOG_FILE = None
+        return
+    # Header
+    _RUN_LOG_FILE.write("# engineering-loadout run-log\n")
+    _RUN_LOG_FILE.write("# started: {}\n".format(datetime.datetime.now().isoformat()))
+    _RUN_LOG_FILE.write("# repo:    {}\n".format(repo_dir))
+    _RUN_LOG_FILE.write("# argv:    {}\n".format(" ".join(argv)))
+    _RUN_LOG_FILE.write("# pid:     {}\n".format(os.getpid()))
+    _RUN_LOG_FILE.write("# cwd:     {}\n".format(os.getcwd()))
+    _RUN_LOG_FILE.write("#\n")
+    _RUN_LOG_FILE.flush()
+    # Replace stdio so all print/eprint output flows in.
+    sys.stdout = _TeeStream(sys.stdout, "out")
+    sys.stderr = _TeeStream(sys.stderr, "err")
+    _prune_old_run_logs(log_dir, keep=20)
+    # Announce on terminal so the user sees the path.
+    print("Run log: {}".format(_RUN_LOG_PATH))
+
+
+def _prune_old_run_logs(log_dir, keep=20):
+    try:
+        entries = [os.path.join(log_dir, n) for n in os.listdir(log_dir)
+                   if n.startswith("install-") and n.endswith(".log")]
+    except OSError:
+        return
+    entries.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    for old in entries[keep:]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
+def _close_run_log(exit_code):
+    global _RUN_LOG_FILE
+    if _RUN_LOG_FILE is None:
+        return
+    try:
+        _RUN_LOG_FILE.write("#\n")
+        _RUN_LOG_FILE.write("# ended:   {}\n".format(datetime.datetime.now().isoformat()))
+        _RUN_LOG_FILE.write("# exit:    {}\n".format(exit_code))
+        _RUN_LOG_FILE.flush()
+        _RUN_LOG_FILE.close()
+    except (OSError, ValueError):
+        pass
+    _RUN_LOG_FILE = None
+
+
 def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
     global _ACTIVE_SUBPROCESS
     # start_new_session=True isolates the child from the terminal's process group
     # so a Ctrl-C at the keyboard only reaches the installer, not (e.g.) rsync.
     # The installer's SIGINT handler decides whether to SIGKILL the child (backup
     # cleanup) or let it finish (other steps).
+    if _RUN_LOG_FILE is not None:
+        _log("subprocess.run: cwd={} cmd={}".format(cwd or os.getcwd(), cmd))
+    _t0 = time.time()
     proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
                             start_new_session=True)
     _ACTIVE_SUBPROCESS = proc
@@ -556,6 +681,9 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
         out, err = proc.communicate()
     finally:
         _ACTIVE_SUBPROCESS = None
+    if _RUN_LOG_FILE is not None:
+        _log("subprocess.done rc={} dur={:.2f}s cmd={}".format(
+            proc.returncode, time.time() - _t0, cmd[0] if cmd else ""))
     if check and proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, cmd, output=out, stderr=err)
     completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
@@ -563,7 +691,11 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
 
 
 def output(cmd, cwd=None, env=None, check=True):
+    if _RUN_LOG_FILE is not None:
+        _log("subprocess.output: cwd={} cmd={}".format(cwd or os.getcwd(), cmd))
     proc = subprocess.run(cmd, cwd=cwd, env=env, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if _RUN_LOG_FILE is not None:
+        _log("subprocess.output done rc={} cmd={}".format(proc.returncode, cmd[0] if cmd else ""))
     return proc.stdout.decode("utf-8", "replace")
 
 
@@ -2678,6 +2810,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         run_install_step("compress backup", compress_backup, backup_dir)
     print_final_notices()
     print_install_results()
+    if _RUN_LOG_PATH:
+        print("Run log: {}".format(_RUN_LOG_PATH))
     return 0
 
 
@@ -2690,6 +2824,7 @@ def main(argv):
 
     args = parse_args(argv)
     repo_dir = os.path.dirname(os.path.abspath(__file__))
+    _setup_run_log(repo_dir, ["engineering-loadout"] + list(argv))
     home = os.path.abspath(args.dest_dir) if args.dest_dir else os.path.expanduser("~")
     registry = _load_tool_registry(repo_dir)
 
@@ -2726,4 +2861,15 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    _rc = 1
+    try:
+        _rc = main(sys.argv[1:])
+    except SystemExit as _se:
+        _rc = _se.code if isinstance(_se.code, int) else 1
+        _close_run_log(_rc)
+        raise
+    except BaseException:
+        _close_run_log("exception")
+        raise
+    _close_run_log(_rc)
+    sys.exit(_rc)
