@@ -385,6 +385,28 @@ def _find_tool(*candidates):
     return None
 
 
+def _bz2_matches_dest(bz2_file, dest_file):
+    """True iff decompressed bz2_file is byte-identical to dest_file.
+
+    Used to skip deferred-binary install when the bundled bz2 matches what's
+    already on disk (avoids spawning the pending-ops daemon for a no-op).
+    Returns False on any I/O error rather than raising.
+    """
+    if not os.path.isfile(dest_file):
+        return False
+    try:
+        with bz2.open(bz2_file, "rb") as src, open(dest_file, "rb") as dst:
+            while True:
+                a = src.read(64 * 1024)
+                b = dst.read(64 * 1024)
+                if a != b:
+                    return False
+                if not a:
+                    return True
+    except (OSError, EOFError):
+        return False
+
+
 def write_bz2_atomic(bz2_file, dest_file, mode):
     """Decompress bz2_file into dest_file via an atomic rename.
 
@@ -1140,6 +1162,14 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             if name in _DEFERRED_BINARIES:
                 pids = _exes_by_path(dest_file)
                 if pids:
+                    # Only defer if the bundled bz2 actually differs from what's
+                    # already installed. Otherwise a no-op rerun would needlessly
+                    # spawn a daemon + ask the user to restart their tmux server.
+                    if _bz2_matches_dest(bz2_file, dest_file):
+                        print("  {} already current, skipping".format(name))
+                        if _progress_ctx is not None:
+                            _progress_ctx.advance(_progress_task)
+                        continue
                     blocked_deferred.add(name)
                     warn("skipping {} — running at {} (PIDs: {})".format(
                         name, dest_file, ", ".join(str(p) for p in pids)))
