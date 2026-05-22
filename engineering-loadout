@@ -599,55 +599,38 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
+_RUN_LOG_FIXED_PATH = "/tmp/engineering-loadout.log"
+
+
 def _setup_run_log(repo_dir, argv):
-    """If repo_dir is a git clone, open a fresh run-log and tee stdout/stderr."""
+    """If repo_dir is a git clone, append this run's activity to the single
+    rolling log file at /tmp/engineering-loadout.log."""
     global _RUN_LOG_FILE, _RUN_LOG_PATH
     if not os.path.isdir(os.path.join(repo_dir, ".git")):
         return
-    log_dir = os.path.join(repo_dir, ".loadout-logs")
+    _RUN_LOG_PATH = _RUN_LOG_FIXED_PATH
     try:
-        os.makedirs(log_dir, exist_ok=True)
-    except OSError as exc:
-        # Repo dir not writable (read-only checkout, exported tarball, etc.). Skip silently.
-        sys.stderr.write("Note: could not create run-log dir {}: {}\n".format(log_dir, exc))
-        return
-    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    _RUN_LOG_PATH = os.path.join(log_dir, "install-{}-{}.log".format(stamp, os.getpid()))
-    try:
-        _RUN_LOG_FILE = open(_RUN_LOG_PATH, "w", buffering=1)
+        _RUN_LOG_FILE = open(_RUN_LOG_PATH, "a", buffering=1)
     except OSError as exc:
         sys.stderr.write("Note: could not open run-log {}: {}\n".format(_RUN_LOG_PATH, exc))
         _RUN_LOG_FILE = None
         return
-    # Header
-    _RUN_LOG_FILE.write("# engineering-loadout run-log\n")
+    # Per-run header — separator + metadata so successive runs are distinguishable
+    # when grep-ing/tailing the rolling log.
+    _RUN_LOG_FILE.write("\n")
+    _RUN_LOG_FILE.write("================================================================\n")
+    _RUN_LOG_FILE.write("# engineering-loadout run\n")
     _RUN_LOG_FILE.write("# started: {}\n".format(datetime.datetime.now().isoformat()))
     _RUN_LOG_FILE.write("# repo:    {}\n".format(repo_dir))
     _RUN_LOG_FILE.write("# argv:    {}\n".format(" ".join(argv)))
     _RUN_LOG_FILE.write("# pid:     {}\n".format(os.getpid()))
     _RUN_LOG_FILE.write("# cwd:     {}\n".format(os.getcwd()))
-    _RUN_LOG_FILE.write("#\n")
+    _RUN_LOG_FILE.write("================================================================\n")
     _RUN_LOG_FILE.flush()
     # Replace stdio so all print/eprint output flows in.
     sys.stdout = _TeeStream(sys.stdout, "out")
     sys.stderr = _TeeStream(sys.stderr, "err")
-    _prune_old_run_logs(log_dir, keep=20)
-    # Announce on terminal so the user sees the path.
-    print("Run log: {}".format(_RUN_LOG_PATH))
-
-
-def _prune_old_run_logs(log_dir, keep=20):
-    try:
-        entries = [os.path.join(log_dir, n) for n in os.listdir(log_dir)
-                   if n.startswith("install-") and n.endswith(".log")]
-    except OSError:
-        return
-    entries.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-    for old in entries[keep:]:
-        try:
-            os.remove(old)
-        except OSError:
-            pass
+    # No "Run log: ..." print — path is fixed at /tmp/engineering-loadout.log.
 
 
 def _close_run_log(exit_code):
@@ -2810,8 +2793,6 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         run_install_step("compress backup", compress_backup, backup_dir)
     print_final_notices()
     print_install_results()
-    if _RUN_LOG_PATH:
-        print("Run log: {}".format(_RUN_LOG_PATH))
     return 0
 
 

@@ -1,5 +1,4 @@
 loadout_backups/
-.loadout-logs/
 __pycache__/
 *.log
 !bash/global/grc/share/grc/conf.log
