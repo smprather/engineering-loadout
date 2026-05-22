@@ -47,7 +47,7 @@ sha256  2feae3d70a546f8f578658ab19a8443476d9f2f0dd9eaa5c5a3a3ae04f50ade1  pre_bu
 sha256  ea8663a62529908ee65ac75c41adc1874f13c98bd6a2887d9192ddc62810794a  pre_built/el8.x86_64.glibc2p28/bin/stylua.bz2
 sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  pre_built/el8.x86_64.glibc2p28/bin/tkdiff.bz2
 sha256  8d0227bcb09fb3f9f8af4dd7c23dc0dae64995de05f6440b2f0981b16354d5a2  pre_built/el8.x86_64.glibc2p28/bin/tldr.bz2
-sha256  0a284739c63496765c15d7b322d773fcbfc8cc31dfeba95b5ca7258958f1f101  pre_built/el8.x86_64.glibc2p28/bin/tmux.bz2
+sha256  ad5daa8d43dbce8cfdc48d672f2e6e51a57b4603d88ead0230e7d840923c97ee  pre_built/el8.x86_64.glibc2p28/bin/tmux.bz2
 sha256  c534b40982b206e17b37f538767d8a64f1ca26b96ccadb4f0dda01c8806a6f87  pre_built/el8.x86_64.glibc2p28/bin/tree-sitter.bz2
 sha256  e08959a946b3d2271de0dd076e698ba1f4f9ac358f356d99fa1da9df5249e1ba  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  58abf90523d435592de72aab7b610bfb070d23266a25587a631c08381b5420fa  pre_built/el8.x86_64.glibc2p28/bin/uv.bz2

@@ -95,7 +95,7 @@
       "kind": "bin",
       "bins": ["tmux"],
       "libs": ["libevent_core-2.1.so.6"],
-      "version": "3.6a",
+      "version": "3.6b",
       "platforms": ["linux"],
       "default": true,
       "tags": ["terminal"],
