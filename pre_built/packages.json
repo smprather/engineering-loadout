@@ -42,7 +42,7 @@
     "dust":        {"kind": "bin", "bins": ["dust"],        "version": "1.2.4",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "du replacement with visual bar chart"},
     "eza":         {"kind": "bin", "bins": ["eza"],         "version": "0.23.4",  "platforms": ["linux"], "default": true,  "tags": ["core", "nav"],           "description": "ls replacement with icons, colors, git status"},
     "fd":          {"kind": "bin", "bins": ["fd"],          "version": "10.4.2",  "platforms": ["linux"], "default": true,  "tags": ["core", "search"],        "description": "Fast and user-friendly find alternative"},
-    "fzf":         {"kind": "bin", "bins": ["fzf"],         "version": "0.62.0",  "platforms": ["linux"], "default": true,  "tags": ["core", "search"],        "description": "General-purpose command-line fuzzy finder"},
+    "fzf":         {"kind": "bin", "bins": ["fzf"],         "version": "0.72.0",  "platforms": ["linux"], "default": true,  "tags": ["core", "search"],        "description": "General-purpose command-line fuzzy finder"},
     "gnuplot":     {"kind": "bin", "bins": ["gnuplot"],     "version": "6.0.2",   "platforms": ["linux"], "default": true,  "tags": ["scientific"],            "description": "Command-line graphing and plotting utility"},
     "gping":       {"kind": "bin", "bins": ["gping"],       "version": "1.20.1",  "platforms": ["linux"], "default": true,  "tags": ["network", "monitor"],    "description": "Ping with live graph visualization"},
     "htop":        {"kind": "bin", "bins": ["htop"],        "version": "3.2.1",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "Interactive process viewer and manager"},

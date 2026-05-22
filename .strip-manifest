@@ -16,7 +16,7 @@ sha256  d2c1570d81b342fe5d4884ee50336a8c9ab6ee28f5c7ab3e0343b50763ddbf9c  pre_bu
 sha256  cfaf4bf343cea07f168e1af1609c7c0be928a80ca49b6e3ae27ea8dc238cdc1b  pre_built/el8.x86_64.glibc2p28/bin/eza.bz2
 sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  pre_built/el8.x86_64.glibc2p28/bin/fd.bz2
 sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
-sha256  5ef0735503de39b2d0e64838bd16ab1b2c63d1cddc6253a610c896c96811510c  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
+sha256  fd06bb9f7938718bb4aa03bc00b6114978cd99ed9e2ce6ea38c78fca5db9d993  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  c1b896060541f23075a624dddf79bb7bca06a875aa8007c2c0d4fc73e138a666  pre_built/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
