@@ -259,8 +259,9 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 | [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV/TSV/JSON/NDJSON data |
 | [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + PyGObject) |
 | [zsh](https://www.zsh.org) | — | Z shell — advanced tab completion, powerful scripting |
-| [fish](https://fishshell.com) | — | Fish shell — autosuggestions, syntax highlighting, no config needed |
+| [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
 | [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (Python via `uv tool`, opens in browser) |
+| [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 

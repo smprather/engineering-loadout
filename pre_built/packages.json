@@ -354,6 +354,21 @@
       "description": "Web-based interactive development environment for notebooks, code, and data"
     },
 
+    "time-plot": {
+      "kind": "python-tool",
+      "bins":    [],
+      "wheels":  ["time-plot", "click", "numpy", "rich-click",
+                  "uplot-python", "msgpack", "rich", "markdown-it-py", "mdurl"],
+      "uv_tool": "time-plot",
+      "version": "0.1.0",
+      "platforms": ["linux"],
+      "default": false,
+      "optional": true,
+      "tags": ["data", "plot", "python"],
+      "depends": ["portable-python", "uv"],
+      "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers"
+    },
+
     "portable-python": {
       "kind": "python-base",
       "archive": "pre_built/PLATFORM/portable-python-*.tar.bz2",
@@ -765,7 +780,7 @@
     },
     "@python-tools-extra": {
       "kind": "group",
-      "members": ["visidata", "jupyterlab"],
+      "members": ["visidata", "jupyterlab", "time-plot"],
       "description": "Optional Python tools installed via uv tool install"
     },
     "@security": {

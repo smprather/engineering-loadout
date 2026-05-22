@@ -1292,8 +1292,14 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             "--find-links", wheels_dir,
             "--no-cache",
         ]
+        # Force uv to install into the destination root (matters for --dest-dir runs;
+        # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
+        _env = os.environ.copy()
+        _env["HOME"] = home
+        _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
+        _env["XDG_BIN_HOME"] = os.path.join(home, ".local", "bin")
         print("  running: {}".format(" ".join(cmd)))
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=_env)
         out = proc.stdout.decode("utf-8", "replace")
         err = proc.stderr.decode("utf-8", "replace")
         for line in out.splitlines():
