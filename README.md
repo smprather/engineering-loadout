@@ -208,8 +208,8 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 
 ```bash
-# Install GUI editors + all their shared library deps in one shot
-./engineering-loadout --no-backup --skip @fonts-all,tldr-data --add gui_libs,gvim,nedit-ng
+# Install GUI editors — gui_libs + vim92-runtime are auto-pulled as dependencies.
+./engineering-loadout --no-backup --skip @fonts-all,tldr-data --add gvim,nedit-ng
 # Or use the bundled group:
 ./engineering-loadout --no-backup --add @gui-suite
 ```
