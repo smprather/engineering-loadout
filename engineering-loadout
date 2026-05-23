@@ -1946,6 +1946,37 @@ def install_meld_runtime(repo_dir, home, selected_tools):
         record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
 
 
+def install_st_runtime(repo_dir, home, selected_tools):
+    if selected_tools is not None and "st-runtime" not in selected_tools and "st" not in selected_tools:
+        skipped("st runtime (st-runtime not selected)", "")
+        record_result("st runtime", "SKIP", "st-runtime not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        candidate = os.path.join(platform_dir, "runtime", "st.tar.bz2")
+        if os.path.isfile(candidate):
+            archive = candidate
+    if archive is None:
+        skipped("st runtime (no st.tar.bz2 in pre_built/<platform>/runtime/)",
+                "st-256color terminfo with Smulx/Setulc undercurl caps will NOT be installed")
+        record_result("st runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    # Archive contains ./.terminfo/s/* relative to $HOME so undercurl-aware
+    # apps (nvim, etc.) see Smulx + Setulc capabilities for TERM=st-256color.
+    ensure_dir(home, "st runtime")
+    pv_extract_tar(archive, home)
+
+    sentinel = os.path.join(home, ".terminfo", "s", "st-256color")
+    if os.path.isfile(sentinel):
+        record_result("st runtime", "yes", "st-256color terminfo -> ~/.terminfo/s/")
+        print("  Installed: {} -> {}/".format(archive, os.path.join(home, ".terminfo")))
+    else:
+        warn("st runtime archive did not install {} as expected".format(sentinel))
+        record_result("st runtime", "FAIL", "archive extracted but st-256color terminfo not found")
+
+
 def install_fish_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "fish-runtime" not in selected_tools and "fish" not in selected_tools:
         skipped("Fish runtime (fish-runtime not selected)", "")
@@ -2837,6 +2868,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools)
+    run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools)
     run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools)
     if hooks:

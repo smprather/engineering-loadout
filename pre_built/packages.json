@@ -207,7 +207,7 @@
     "yara":   {"kind": "bin", "bins": ["yara"],            "version": "4.5.5",  "platforms": ["linux"], "default": true, "tags": ["security"],         "description": "Malware pattern matching and classification tool"},
     "xterm":  {"kind": "bin", "bins": ["xterm", "resize"], "version": "331",    "platforms": ["linux"], "default": true, "tags": ["terminal", "gui"],  "description": "X11 terminal emulator with Unicode and color"},
     "urxvt":  {"kind": "bin", "bins": ["urxvt", "urxvtc", "urxvtd"], "libs": ["libptytty.so.0"], "version": "9.31", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "description": "rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"},
-    "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
+    "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "depends": ["st-runtime"], "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
     "yank":   {"kind": "bin", "bins": ["yank"],            "version": "1.3.0",  "platforms": ["linux"], "default": true, "tags": ["clipboard"],        "description": "Select terminal output and copy to clipboard"},
     "yq":     {"kind": "bin", "bins": ["yq"],              "version": "4.53.2", "platforms": ["linux"], "default": true, "tags": ["data", "core"],     "description": "YAML/JSON/XML/CSV processor (jq for YAML)"},
     "zoxide": {"kind": "bin", "bins": ["zoxide"],          "version": "0.9.9",  "platforms": ["linux"], "default": true, "tags": ["nav", "core"],      "description": "Smarter cd with frecency ranking (z/zi)"},
@@ -460,6 +460,18 @@
       "tags": ["shell", "runtime"],
       "depends": ["fish"],
       "description": "Fish standard library (functions, completions, themes)"
+    },
+
+    "st-runtime": {
+      "kind": "runtime",
+      "archive": "pre_built/PLATFORM/runtime/st.tar.bz2",
+      "install_to": "~",
+      "version": "0.9.3",
+      "platforms": ["linux"],
+      "default": false,
+      "tags": ["terminal", "runtime"],
+      "depends": ["st"],
+      "description": "st-256color terminfo with Smulx/Setulc undercurl + colored-underline caps (installs to ~/.terminfo/)"
     },
 
     "tldr-data": {

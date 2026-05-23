@@ -37,6 +37,7 @@ set -eu
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 BIN_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/bin"
+RUNTIME_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
 DIST_URL_BASE="https://dl.suckless.org/st"
 UNDERCURL_PATCH_URL="https://st.suckless.org/patches/undercurl/st-undercurl-0.9-20240103.diff"
@@ -89,6 +90,8 @@ need pkg-config
 need patch
 need curl
 need bzip2
+need tic
+need tar
 
 SRCDIR="/tmp/st-${tag}"
 PATCHFILE="/tmp/st-undercurl-${tag}.diff"
@@ -150,6 +153,30 @@ PYEDIT
 
     # UNDERCURL_STYLE = CURLY (project default; edit if you want SPIKY/CAPPED).
     sed -i 's/^#define UNDERCURL_STYLE UNDERCURL_SPIKY/#define UNDERCURL_STYLE UNDERCURL_CURLY/' config.def.h
+
+    # Fixup 3: advertise undercurl + colored-underline support in the
+    # st-256color terminfo entry. nvim and other apps key off Smulx (set
+    # underline style) and Setulc (set underline color) to decide whether
+    # to emit SGR 4:3 / 58:2:r:g:b. Without these, they fall back to plain
+    # underline regardless of what st can actually render.
+    python3 - <<'PYEDIT'
+import pathlib
+p = pathlib.Path("st.info")
+src = p.read_text()
+old = ('\tsetaf=\\E[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m,\n'
+       '\nst-meta')
+new = ('\tsetaf=\\E[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m,\n'
+       '#\tundercurl + colored underline support (matches our undercurl patch)\n'
+       '\tSmulx=\\E[4\\:%p1%dm,\n'
+       '\tSetulc=\\E[58\\:2\\:\\:%p1%{65536}%/%d\\:%p1%{256}%/%{255}%&%d\\:%p1%{255}%&%dm,\n'
+       '\nst-meta')
+if old in src and "Smulx=" not in src:
+    src = src.replace(old, new, 1)
+    p.write_text(src)
+    print("terminfo fixup: added Smulx + Setulc to st-256color")
+else:
+    print("terminfo fixup: skipped (already applied or pattern not found)")
+PYEDIT
 
     # Silence "erresc: unknown csi / set/reset mode" warnings on stderr.
     # Modern apps probe st for features it doesn't have (synchronized output
@@ -216,6 +243,22 @@ bzip2 -kf "$WORK"
 cp "${WORK}.bz2" "$BIN_DIR/st.bz2"
 rm -f "$WORK" "${WORK}.bz2"
 echo "Installed: $BIN_DIR/st.bz2"
+
+# Build the st-runtime archive: compile st.info into terminfo entries (one
+# binary file per st-* variant) and pack them under ./.terminfo/s/ so the
+# installer extracts them to ~/.terminfo/s/, where ncurses finds them ahead
+# of the system /usr/share/terminfo entries.
+TI_DIR="/tmp/st_terminfo_${tag}"
+rm -rf "$TI_DIR"
+mkdir -p "$TI_DIR"
+tic -x -o "$TI_DIR" st.info
+STAGING="/tmp/st_runtime_staging_${tag}"
+rm -rf "$STAGING"
+mkdir -p "$STAGING/.terminfo/s"
+cp "$TI_DIR"/s/st* "$STAGING/.terminfo/s/"
+( cd "$STAGING" && tar -cjf "$RUNTIME_DIR/st.tar.bz2" ./.terminfo )
+rm -rf "$TI_DIR" "$STAGING"
+echo "Installed: $RUNTIME_DIR/st.tar.bz2 ($(stat -c%s "$RUNTIME_DIR/st.tar.bz2") bytes)"
 
 # packages.json version bump
 ver="${tag}"
