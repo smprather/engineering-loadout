@@ -2749,8 +2749,8 @@ def cmd_list(args, registry):
         {"name": "PACKAGE",     "style": "bold cyan"},
         {"name": "DEF",         "max_width": 3},
         {"name": "VERSION"},
-        {"name": "GROUPS",      "no_wrap": False, "max_width": 24},
-        {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1},
+        {"name": "GROUPS",      "no_wrap": False, "max_width": 18},
+        {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1, "min_width": 30},
     ])
     return 0
 
