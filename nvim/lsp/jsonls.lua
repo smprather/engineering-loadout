@@ -29,4 +29,8 @@ return {
     provideFormatter = true,
   },
   root_markers = { '.git' },
+  -- Attach in single-file mode when no project root is found, so loose
+  -- JSON files (one-off configs, snippets) still get diagnostics + schema
+  -- completion.
+  single_file_support = true,
 }

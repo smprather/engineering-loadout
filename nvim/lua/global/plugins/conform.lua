@@ -32,6 +32,8 @@ return {
             sh         = { "shfmt" },
             markdown   = { "rumdl" },
             yaml       = { "yamlfmt" },
+            json       = { "jq" },
+            jsonc      = { "jq" },
         },
         formatters = {
             stylua   = { prepend_args = { "--indent-type", "Spaces", "--collapse-simple-statement", "Always" } },
