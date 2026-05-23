@@ -1700,13 +1700,48 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
     print(f"  tldr page cache installed to {dest_dir}")
 
 
+def _validate_tar_members(members, dest_real):
+    """Shared safety check for tar extraction.
+
+    Python <3.12 lacks tarfile's `filter='data'` parameter, so we have to
+    enforce these rules ourselves. Even on 3.12+ we run the same check
+    pre-extract to fail fast with a clear error before any side-effects.
+
+    Rules:
+      1. member.name must resolve inside dest_real (no absolute paths,
+         no `..` escapes).
+      2. symlinks and hardlinks must have linknames whose resolved target
+         also stays inside dest_real (otherwise the planted link itself
+         is fine but follow-on writes can escape).
+      3. Reject device, FIFO, and char-special members on the legacy
+         (no-filter) extraction path — we never legitimately ship these.
+    """
+    for member in members:
+        target_real = os.path.realpath(os.path.join(dest_real, member.name))
+        if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
+            raise RuntimeError(f"unsafe tar member path: {member.name}")
+        if member.issym() or member.islnk():
+            linkname = member.linkname or ""
+            # Symlinks resolve relative to the symlink's own directory; hardlinks
+            # resolve relative to the archive root (which is dest_real for us).
+            if member.issym():
+                base = os.path.dirname(os.path.join(dest_real, member.name))
+            else:
+                base = dest_real
+            link_real = os.path.realpath(os.path.join(base, linkname))
+            if not (link_real == dest_real or link_real.startswith(dest_real + os.sep)):
+                raise RuntimeError(
+                    f"unsafe tar link target: {member.name} -> {linkname}")
+        if not _TAR_SUPPORTS_FILTER:
+            if member.ischr() or member.isblk() or member.isfifo() or member.isdev():
+                raise RuntimeError(
+                    f"refusing to extract special file on Python <3.12: {member.name}")
+
+
 def safe_extract_tar(tf, dest_dir):
     require_writable_dir(dest_dir, "archive extraction")
     dest_real = os.path.realpath(dest_dir)
-    for member in tf.getmembers():
-        target_real = os.path.realpath(os.path.join(dest_dir, member.name))
-        if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
-            raise RuntimeError(f"unsafe tar member path: {member.name}")
+    _validate_tar_members(tf.getmembers(), dest_real)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
         if _TAR_SUPPORTS_FILTER:
@@ -1722,10 +1757,7 @@ def pv_extract_tar(archive_path, dest_dir):
 
     with tarfile.open(archive_path, "r:*") as tf:
         members = tf.getmembers()
-        for member in members:
-            target_real = os.path.realpath(os.path.join(dest_dir, member.name))
-            if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
-                raise RuntimeError(f"unsafe tar member path: {member.name}")
+        _validate_tar_members(members, dest_real)
 
         if not _RICH:
             safe_extract_tar(tf, dest_dir)
@@ -2416,25 +2448,74 @@ ENV_INSTALL_ORDER = (
 )
 
 
+def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
+    """Fallback installer for kind='env' entries that declare a simple
+    source + install_to shape but have no custom handler in ENV_HANDLERS.
+
+    Reuses install_path() (rsync for dirs, atomic copy for files). Lets
+    new single-file or simple-tree env entries land without writing a
+    bespoke handler each time. Custom handlers (env-bash, env-nvim, …)
+    still take precedence because the caller checks ENV_HANDLERS first.
+    """
+    source = pkg_entry.get("source", "")
+    install_to = pkg_entry.get("install_to", "")
+    if not source or not install_to:
+        return False
+    src = os.path.join(repo_dir, source)
+    dest = os.path.expanduser(install_to)
+    if dest.startswith("~"):
+        dest = os.path.join(home, dest.lstrip("~/"))
+    elif not os.path.isabs(dest):
+        dest = os.path.join(home, dest)
+    # Anchor ~/-prefixed installs to the install root (--dest-dir aware).
+    home_real = os.path.realpath(home)
+    expanded_home = os.path.expanduser("~")
+    if dest.startswith(expanded_home + os.sep) and home_real != os.path.realpath(expanded_home):
+        dest = home_real + dest[len(expanded_home):]
+    if not os.path.exists(src):
+        warn(f"env package '{pkg_name}': source not found at {src}")
+        return False
+    print(f"  Installing env: {pkg_name} ({source} -> {install_to})")
+    install_path(src, dest, links_mode=False)
+    return True
+
+
 def install_env_pkg(pkg_name, pkg_entry, repo_dir, home):
     """Per-package handler for kind='env'. Dispatches to the right helper."""
     handler = ENV_HANDLERS.get(pkg_name)
-    if handler is None:
-        warn(f"env package '{pkg_name}' has no Linux handler; skipped")
+    if handler is not None:
+        handler(repo_dir, home)
         return
-    handler(repo_dir, home)
+    if _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
+        return
+    warn(f"env package '{pkg_name}' has no handler and no installable shape; skipped")
 
 
-def install_copy_mode(repo_dir, home, selected_pkgs=None):
-    """Install all env-kind packages in registered order.
+def install_copy_mode(repo_dir, home, selected_pkgs=None, registry=None):
+    """Install env-kind packages.
+
+    Registered handlers (ENV_INSTALL_ORDER) run first, in that fixed order.
+    Then any selected env package not in ENV_INSTALL_ORDER falls through to
+    the generic source/install_to copy fallback.
 
     When selected_pkgs is None, install every env that has a Linux handler.
-    Otherwise, install only envs present in selected_pkgs.
     """
     for pkg_name in ENV_INSTALL_ORDER:
         if selected_pkgs is not None and pkg_name not in selected_pkgs:
             continue
         ENV_HANDLERS[pkg_name](repo_dir, home)
+
+    if selected_pkgs is None or registry is None:
+        return
+    handled = set(ENV_INSTALL_ORDER)
+    for pkg_name in sorted(selected_pkgs):
+        if pkg_name in handled:
+            continue
+        entry = registry.get(pkg_name) or {}
+        if entry.get("kind") != "env":
+            continue
+        if _install_env_generic(pkg_name, entry, repo_dir, home):
+            handled.add(pkg_name)
 
 
 def glob_paths(path):
@@ -2798,7 +2879,34 @@ def cmd_doctor(args, registry, repo_dir):
             print(f"  {n} → {f} → {r}")
     else:
         print("All depends/recommends resolve to known packages.")
-    return 0 if not missing and not unknown_deps else 2
+    print()
+
+    # Env-handler sanity: every env package selectable on the current
+    # platform must either have a registered handler in ENV_HANDLERS or a
+    # generic-installable shape (source + install_to). Catches
+    # env-wezterm-style omissions at registration time.
+    current_plat = _current_platform()
+    handler_missing = []
+    for n, e in registry.items():
+        if e.get("kind") != "env":
+            continue
+        platforms = e.get("platforms") or ["linux"]
+        if current_plat not in platforms:
+            continue
+        if n in ENV_HANDLERS:
+            continue
+        if e.get("source") and e.get("install_to"):
+            continue
+        handler_missing.append(n)
+    if handler_missing:
+        print(f"env packages without handler or installable shape on {current_plat}:")
+        for n in handler_missing:
+            print(f"  {n}")
+        print("  (either register an ENV_HANDLERS entry or add 'source' + 'install_to'.)")
+    else:
+        print(f"All env packages installable on {current_plat}.")
+
+    return 0 if not missing and not unknown_deps and not handler_missing else 2
 
 
 def glob_paths_glob(pattern):
@@ -2840,7 +2948,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
-    run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools)
+    run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools, registry)
     run_install_step("fonts", install_fonts, repo_dir, home, selected_tools)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
