@@ -43,6 +43,7 @@ sha256  c91517d389e427058df5caa43f06a4136de8d931f4272cd7e7b3cc86759e7cdd  pre_bu
 sha256  644f8d5b37a2d200c3d439ad60a91954bd38ce98ddea3d9da83144be90e7deeb  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
 sha256  d96dceab12c2ff9045a99c853ed06ddde00d042862bac81532d6e6ab3268024c  pre_built/el8.x86_64.glibc2p28/bin/sd.bz2
 sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  pre_built/el8.x86_64.glibc2p28/bin/shfmt.bz2
+sha256  51ab3dde919c4639b6caf49a9bd6769959540b0ec4f2f45c3a4c30070aecbcdf  pre_built/el8.x86_64.glibc2p28/bin/st.bz2
 sha256  2feae3d70a546f8f578658ab19a8443476d9f2f0dd9eaa5c5a3a3ae04f50ade1  pre_built/el8.x86_64.glibc2p28/bin/starship.bz2
 sha256  ea8663a62529908ee65ac75c41adc1874f13c98bd6a2887d9192ddc62810794a  pre_built/el8.x86_64.glibc2p28/bin/stylua.bz2
 sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  pre_built/el8.x86_64.glibc2p28/bin/tkdiff.bz2

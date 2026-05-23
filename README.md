@@ -204,6 +204,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 | [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
 | [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (Python via `uv tool`, opens in browser) |
 | [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (`urxvt`/`urxvtc`/`urxvtd`; perl extensions disabled) |
+| [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal with [undercurl patch](https://st.suckless.org/patches/undercurl/) (`UNDERCURL_CURLY` style for LSP/spell-check diagnostics) |
 | [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
