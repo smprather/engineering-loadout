@@ -609,7 +609,7 @@
       "kind": "env",
       "source": "wezterm/wezterm.lua",
       "install_to": "~/.config/wezterm/wezterm.lua",
-      "platforms": ["windows", "linux", "macos"],
+      "platforms": ["windows", "macos"],
       "default": true,
       "tags": ["env", "terminal"],
       "description": "WezTerm config (Lua)"
