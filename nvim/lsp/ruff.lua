@@ -31,5 +31,9 @@ return {
   cmd = { 'ruff', 'server' },
   filetypes = { 'python' },
   root_markers = { 'pyproject.toml', 'ruff.toml', '.ruff.toml', '.git' },
+  -- Attach in single-file mode when no project root is found. Ruff is a
+  -- pure linter (no whole-project graph), so loose files like
+  -- ~/engineering-loadout still get diagnostics.
+  single_file_support = true,
   settings = {},
 }
