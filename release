@@ -59,12 +59,12 @@ def main():
     versions_tsv = versions_proc.stdout.decode("utf-8", "replace") if versions_proc.returncode == 0 else ""
 
     # Build markdown table from TSV
-    lines = [l for l in versions_tsv.splitlines() if l.strip()]
+    lines = [row for row in versions_tsv.splitlines() if row.strip()]
     md_rows = []
     for line in lines[1:]:   # skip header
         parts = line.split("\t")
         if len(parts) >= 5 and parts[2]:  # skip missing
-            binary, name, version, status, homepage = parts[0], parts[1], parts[2], parts[3], parts[4]
+            binary, name, version, _status, homepage = parts[0], parts[1], parts[2], parts[3], parts[4]
             md_rows.append("| [{}]({}) | `{}` | {} |".format(name, homepage, binary, version))
 
     version_table = ""

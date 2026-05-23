@@ -70,7 +70,6 @@ import json
 import re
 import shutil
 import signal
-import stat
 import subprocess
 import inspect
 import tarfile
@@ -2232,7 +2231,6 @@ def compress_backup(backup_dir):
         while os.path.exists("{}.{}.tar.bz2".format(backup_dir, i)):
             i += 1
         archive_path = "{}.{}.tar.bz2".format(backup_dir, i)
-    parent = os.path.dirname(backup_dir)
     base = os.path.basename(backup_dir)
     print("Compressing backup: {} -> {}".format(backup_dir, archive_path))
     with tarfile.open(archive_path, "w:bz2") as tf:
@@ -2619,7 +2617,6 @@ def _list_table(rows, columns):
     rows: list of tuples matching `columns` order.
     columns: list of dicts: {"name", "style", "max_width", "no_wrap"}.
     """
-    import textwrap as _textwrap
     if not rows:
         print("(no rows)")
         return
