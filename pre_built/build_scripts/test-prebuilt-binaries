@@ -92,10 +92,10 @@ def output_excerpt(data, limit=400):
 
 def require_path(path, label, failures):
     if os.path.exists(path):
-        print("  OK   (path):         {}".format(label))
+        print(f"  OK   (path):         {label}")
         return True
-    print("  FAIL (path):         {}  missing {}".format(label, path))
-    failures.append((label, "missing {}".format(path)))
+    print(f"  FAIL (path):         {label}  missing {path}")
+    failures.append((label, f"missing {path}"))
     return False
 
 
@@ -128,18 +128,18 @@ def probe_binary(binary_path):
                     return False, combined[:200].strip()
 
             first_line = combined.split("\n")[0][:100].strip()
-            return True, first_line or "(exit {})".format(proc.returncode)
+            return True, first_line or f"(exit {proc.returncode})"
 
         except subprocess.TimeoutExpired:
             return True, "(interactive — timeout counts as OK)"
         except OSError as exc:
-            return False, "OSError: {}".format(exc)
+            return False, f"OSError: {exc}"
 
     for pat in FATAL_OUTPUT_PATTERNS:
         if pat in last_out:
             return False, last_out[:200].strip()
-    code_str = "signal {}".format(-last_code) if last_code is not None and last_code < 0 else "exit {}".format(last_code)
-    return False, "{} — {}".format(code_str, last_out[:200].strip())
+    code_str = f"signal {-last_code}" if last_code is not None and last_code < 0 else f"exit {last_code}"
+    return False, f"{code_str} — {last_out[:200].strip()}"
 
 
 def smoke_runtime_layout(tmpdir):
@@ -182,14 +182,14 @@ def smoke_runtime_layout(tmpdir):
                 print("  FAIL (headless):     nvim runtime  timeout")
                 failures.append(("nvim runtime", "headless timeout"))
             except Exception as exc:
-                print("  FAIL (headless):     nvim runtime  {}".format(exc))
+                print(f"  FAIL (headless):     nvim runtime  {exc}")
                 failures.append(("nvim runtime", str(exc)))
             else:
                 if proc.returncode == 0:
                     print("  OK   (headless):     nvim runtime")
                 else:
                     detail = output_excerpt(proc.stdout)
-                    print("  FAIL (headless):     nvim runtime  {}".format(detail))
+                    print(f"  FAIL (headless):     nvim runtime  {detail}")
                     failures.append(("nvim runtime", detail))
 
     if has_bin("vim") or has_bin("vim.bin"):
@@ -234,7 +234,7 @@ def main():
 
     tmpdir = tempfile.mkdtemp(prefix="loadout-smoketest-")
     try:
-        print("Installing to {} ...".format(tmpdir))
+        print(f"Installing to {tmpdir} ...")
         proc = subprocess.run(
             [installer,
              "--dest-dir", tmpdir,
@@ -246,15 +246,15 @@ def main():
         )
         install_out = proc.stdout.decode("utf-8", "replace")
         if proc.returncode != 0:
-            print("Install failed (exit {}):\n{}".format(proc.returncode, install_out))
+            print(f"Install failed (exit {proc.returncode}):\n{install_out}")
             return 1
 
         bin_dir = os.path.join(tmpdir, ".local", "bin")
         if not os.path.isdir(bin_dir):
-            print("ERROR: {} not created by installer".format(bin_dir))
+            print(f"ERROR: {bin_dir} not created by installer")
             return 1
 
-        print("Smoke-testing binaries in {} ...\n".format(bin_dir))
+        print(f"Smoke-testing binaries in {bin_dir} ...\n")
         failures = []
         tested = 0
         skipped = 0
@@ -265,26 +265,26 @@ def main():
                 continue
 
             if fname in NON_ELF_WRAPPERS or not is_elf(fpath):
-                print("  skip (non-ELF):      {}".format(fname))
+                print(f"  skip (non-ELF):      {fname}")
                 skipped += 1
                 continue
 
             missing = ldd_check(fpath)
             if missing:
                 msg = "missing .so: " + "; ".join(missing)
-                print("  FAIL (ldd):          {:20s}  {}".format(fname, missing[0]))
+                print(f"  FAIL (ldd):          {fname:20s}  {missing[0]}")
                 failures.append((fname, msg))
                 continue
 
             if fname in NO_EXEC:
-                print("  OK   (ldd-only):     {}".format(fname))
+                print(f"  OK   (ldd-only):     {fname}")
                 tested += 1
                 continue
 
             tested += 1
             ok, detail = probe_binary(fpath)
             status = "OK:  " if ok else "FAIL:"
-            print("  {}                 {:20s}  {}".format(status, fname, detail))
+            print(f"  {status}                 {fname:20s}  {detail}")
             if not ok:
                 failures.append((fname, detail))
 
@@ -293,12 +293,12 @@ def main():
         failures.extend(runtime_failures)
 
         if failures:
-            print("FAILED: {} smoke checks:".format(len(failures)))
+            print(f"FAILED: {len(failures)} smoke checks:")
             for name, msg in failures:
-                print("  {}: {}".format(name, msg))
+                print(f"  {name}: {msg}")
             return 1
 
-        print("All {} binaries OK ({} non-ELF skipped); runtimes OK".format(tested, skipped))
+        print(f"All {tested} binaries OK ({skipped} non-ELF skipped); runtimes OK")
         return 0
 
     except subprocess.TimeoutExpired:
@@ -308,7 +308,7 @@ def main():
         if not args.keep:
             shutil.rmtree(tmpdir, ignore_errors=True)
         else:
-            print("Kept: {}".format(tmpdir))
+            print(f"Kept: {tmpdir}")
 
 
 if __name__ == "__main__":

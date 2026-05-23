@@ -4,7 +4,7 @@ import sys
 
 if sys.version_info < (3, 6):
     version = ".".join(str(part) for part in sys.version_info[:3])
-    print("Error: This installer requires python3 >= 3.6; found {}.".format(version), file=sys.stderr)
+    print(f"Error: This installer requires python3 >= 3.6; found {version}.", file=sys.stderr)
     raise SystemExit(1)
 
 # Vendor path: installer_vendor/ next to this script
@@ -55,7 +55,7 @@ def _section(title):
     """Print a section heading. Rich: styled bold; plain: plain print."""
     if _RICH:
         assert _console is not None
-        _console.print("[bold]{}[/bold]".format(title))
+        _console.print(f"[bold]{title}[/bold]")
     else:
         print(title)
 
@@ -144,7 +144,7 @@ def _load_tool_registry(repo_dir):
             entries = raw
         return {k: v for k, v in entries.items() if isinstance(v, dict) and not k.startswith("_")}
     except (ValueError, IOError) as _e:
-        warn("could not read pre_built/packages.json: {}; tool selection disabled".format(_e))
+        warn(f"could not read pre_built/packages.json: {_e}; tool selection disabled")
         return {}
 
 
@@ -205,13 +205,13 @@ def expand_groups(names, registry, _stack=None):
                     " -> ".join(_stack), name))
             entry = registry.get(name)
             if entry is None:
-                warn("unknown group '{}' (ignored)".format(name))
+                warn(f"unknown group '{name}' (ignored)")
                 continue
             members = entry.get("members", [])
             out |= expand_groups(members, registry, _stack + (name,))
             continue
         if name not in registry:
-            warn("unknown package '{}' (ignored)".format(name))
+            warn(f"unknown package '{name}' (ignored)")
             continue
         if name.startswith("@"):
             continue  # group key without @-prefix? unreachable, but safe
@@ -244,12 +244,11 @@ def walk_depends(names, registry, forbidden=None, force=False):
             for d in dep_set:
                 if d in forbidden:
                     if force:
-                        warn("package '{}' hard-depends on '{}' which was skipped (--force: continuing)".format(name, d))
+                        warn(f"package '{name}' hard-depends on '{d}' which was skipped (--force: continuing)")
                         continue
                     raise ResolverError(
-                        "package '{}' hard-depends on '{}', but '{}' was passed to --skip. "
-                        "Either remove from --skip, drop '{}' from selection, or pass --no-deps / --force.".format(
-                            name, d, d, name))
+                        f"package '{name}' hard-depends on '{d}', but '{d}' was passed to --skip. "
+                        f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force.")
                 if d not in out:
                     parent[d] = name
                     pending.append(d)
@@ -373,7 +372,7 @@ def eprint(*args):
 
 
 def warn(msg):
-    eprint("  WARNING: {}".format(msg))
+    eprint(f"  WARNING: {msg}")
 
 
 def _find_tool(*candidates):
@@ -468,9 +467,9 @@ def require_writable_dir(path, thing):
     if os.path.exists(target) and not os.path.isdir(target):
         existing = os.path.dirname(target)
     if not os.path.isdir(existing) or not os.access(existing, os.W_OK | os.X_OK):
-        raise InstallRefused("{} target directory is not writable: {}".format(thing, display_name(existing)))
+        raise InstallRefused(f"{thing} target directory is not writable: {display_name(existing)}")
     if os.path.isdir(target) and not os.access(target, os.W_OK | os.X_OK):
-        raise InstallRefused("{} target directory is not writable: {}".format(thing, display_name(target)))
+        raise InstallRefused(f"{thing} target directory is not writable: {display_name(target)}")
 
 
 def require_writable_parent(path, thing):
@@ -505,9 +504,9 @@ def _sigint_handler(signum, frame):
         if _ACTIVE_BACKUP_DIR and os.path.isdir(_ACTIVE_BACKUP_DIR):
             try:
                 shutil.rmtree(_ACTIVE_BACKUP_DIR)
-                eprint("Removed: {}".format(_ACTIVE_BACKUP_DIR))
+                eprint(f"Removed: {_ACTIVE_BACKUP_DIR}")
             except OSError as exc:
-                eprint("Warning: could not remove {}: {}".format(_ACTIVE_BACKUP_DIR, exc))
+                eprint(f"Warning: could not remove {_ACTIVE_BACKUP_DIR}: {exc}")
         _close_run_log("interrupted-during-backup")
         # Silence any post-mortem death-rattle from dying subprocesses (e.g. rsync's
         # "broken pipe" on stderr) — the install is already aborted, the noise is just noise.
@@ -528,7 +527,7 @@ def _sigint_handler(signum, frame):
 
 
 def run_install_step(thing, func, *args, **kwargs):
-    _section("Installing {}...".format(thing))
+    _section(f"Installing {thing}...")
     try:
         result = func(*args, **kwargs)
         if not any(row[0] == thing for row in INSTALL_RESULTS):
@@ -543,13 +542,13 @@ def run_install_step(thing, func, *args, **kwargs):
         _INTERRUPT_REQUESTED = True
         result = None
     except (OSError, subprocess.CalledProcessError) as exc:
-        detail = "{} failed: {}".format(thing, exc)
+        detail = f"{thing} failed: {exc}"
         warn(detail)
         traceback.print_exc()
         record_result(thing, "FAIL", detail)
         result = None
     if _INTERRUPT_REQUESTED:
-        eprint("Stopping after '{}' step due to Ctrl-C.".format(thing))
+        eprint(f"Stopping after '{thing}' step due to Ctrl-C.")
         print_install_results()
         _close_run_log(130)
         sys.exit(130)
@@ -557,9 +556,9 @@ def run_install_step(thing, func, *args, **kwargs):
 
 
 def skipped(reason, consequence=None):
-    msg = "  *** SKIPPED: {} ***".format(reason)
+    msg = f"  *** SKIPPED: {reason} ***"
     if consequence:
-        msg += "\n  ***         {} ***".format(consequence)
+        msg += f"\n  ***         {consequence} ***"
     eprint(msg)
 
 
@@ -581,7 +580,7 @@ def _log(msg):
         return
     try:
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        _RUN_LOG_FILE.write("[{}] {}\n".format(ts, msg))
+        _RUN_LOG_FILE.write(f"[{ts}] {msg}\n")
         _RUN_LOG_FILE.flush()
     except (OSError, ValueError):
         pass
@@ -603,7 +602,7 @@ class _TeeStream:
             line, self._buf = self._buf.split("\n", 1)
             try:
                 ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                _RUN_LOG_FILE.write("[{}] [{}] {}\n".format(ts, self._kind, line))
+                _RUN_LOG_FILE.write(f"[{ts}] [{self._kind}] {line}\n")
                 _RUN_LOG_FILE.flush()
             except (OSError, ValueError):
                 pass
@@ -633,7 +632,7 @@ def _setup_run_log(repo_dir, argv):
     try:
         _RUN_LOG_FILE = open(_RUN_LOG_PATH, "a", buffering=1)
     except OSError as exc:
-        sys.stderr.write("Note: could not open run-log {}: {}\n".format(_RUN_LOG_PATH, exc))
+        sys.stderr.write(f"Note: could not open run-log {_RUN_LOG_PATH}: {exc}\n")
         _RUN_LOG_FILE = None
         return
     # Per-run header — separator + metadata so successive runs are distinguishable
@@ -641,11 +640,11 @@ def _setup_run_log(repo_dir, argv):
     _RUN_LOG_FILE.write("\n")
     _RUN_LOG_FILE.write("================================================================\n")
     _RUN_LOG_FILE.write("# engineering-loadout run\n")
-    _RUN_LOG_FILE.write("# started: {}\n".format(datetime.datetime.now().isoformat()))
-    _RUN_LOG_FILE.write("# repo:    {}\n".format(repo_dir))
+    _RUN_LOG_FILE.write(f"# started: {datetime.datetime.now().isoformat()}\n")
+    _RUN_LOG_FILE.write(f"# repo:    {repo_dir}\n")
     _RUN_LOG_FILE.write("# argv:    {}\n".format(" ".join(argv)))
-    _RUN_LOG_FILE.write("# pid:     {}\n".format(os.getpid()))
-    _RUN_LOG_FILE.write("# cwd:     {}\n".format(os.getcwd()))
+    _RUN_LOG_FILE.write(f"# pid:     {os.getpid()}\n")
+    _RUN_LOG_FILE.write(f"# cwd:     {os.getcwd()}\n")
     _RUN_LOG_FILE.write("================================================================\n")
     _RUN_LOG_FILE.flush()
     # Replace stdio so all print/eprint output flows in.
@@ -660,8 +659,8 @@ def _close_run_log(exit_code):
         return
     try:
         _RUN_LOG_FILE.write("#\n")
-        _RUN_LOG_FILE.write("# ended:   {}\n".format(datetime.datetime.now().isoformat()))
-        _RUN_LOG_FILE.write("# exit:    {}\n".format(exit_code))
+        _RUN_LOG_FILE.write(f"# ended:   {datetime.datetime.now().isoformat()}\n")
+        _RUN_LOG_FILE.write(f"# exit:    {exit_code}\n")
         _RUN_LOG_FILE.flush()
         _RUN_LOG_FILE.close()
     except (OSError, ValueError):
@@ -676,7 +675,7 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
     # The installer's SIGINT handler decides whether to SIGKILL the child (backup
     # cleanup) or let it finish (other steps).
     if _RUN_LOG_FILE is not None:
-        _log("subprocess.run: cwd={} cmd={}".format(cwd or os.getcwd(), cmd))
+        _log(f"subprocess.run: cwd={cwd or os.getcwd()} cmd={cmd}")
     _t0 = time.time()
     proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
                             start_new_session=True)
@@ -696,7 +695,7 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
 
 def output(cmd, cwd=None, env=None, check=True):
     if _RUN_LOG_FILE is not None:
-        _log("subprocess.output: cwd={} cmd={}".format(cwd or os.getcwd(), cmd))
+        _log(f"subprocess.output: cwd={cwd or os.getcwd()} cmd={cmd}")
     proc = subprocess.run(cmd, cwd=cwd, env=env, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if _RUN_LOG_FILE is not None:
         _log("subprocess.output done rc={} cmd={}".format(proc.returncode, cmd[0] if cmd else ""))
@@ -716,17 +715,17 @@ def lns(target, link_name, unsafe=False, verbose=False):
     if os.path.lexists(link_name):
         if os.path.isdir(link_name) and not os.path.islink(link_name):
             if not unsafe:
-                eprint("Error: '{}' exists as a directory and cannot be removed (use --unsafe to override)".format(link_name))
+                eprint(f"Error: '{link_name}' exists as a directory and cannot be removed (use --unsafe to override)")
                 sys.exit(1)
             if verbose and not _RICH:
-                eprint("rm -rf '{}'".format(link_name))
+                eprint(f"rm -rf '{link_name}'")
             shutil.rmtree(link_name)
         else:
             if verbose and not _RICH:
-                eprint("rm -f '{}'".format(link_name))
+                eprint(f"rm -f '{link_name}'")
             os.unlink(link_name)
     if verbose and not _RICH:
-        eprint("ln -s {} {}".format(target, link_name))
+        eprint(f"ln -s {target} {link_name}")
     os.symlink(target, link_name)
 
 
@@ -734,7 +733,7 @@ def mkdirn(base_dir):
     require_writable_dir(os.path.dirname(os.path.abspath(base_dir)), "backup")
     counter = 1
     while True:
-        target_dir = "{}.{}".format(base_dir, counter)
+        target_dir = f"{base_dir}.{counter}"
         archive = target_dir + ".tar.bz2"
         if not os.path.exists(target_dir) and not os.path.exists(archive):
             break
@@ -749,7 +748,7 @@ def rsync_dir(src, dest, delete=False, excludes=None):
     if delete:
         cmd.append("--delete")
     for pattern in excludes or ():
-        cmd.append("--exclude={}".format(pattern))
+        cmd.append(f"--exclude={pattern}")
     cmd.extend([src.rstrip("/") + "/", dest.rstrip("/") + "/"])
     run(cmd)
 
@@ -765,7 +764,7 @@ def install_path(src, dest, links_mode):
             os.unlink(dest)
         ensure_dir(dest, "install")
         rsync_dir(src, dest, delete=True)
-        _vprint("  rsync: {}/ -> {}/".format(src, dest))
+        _vprint(f"  rsync: {src}/ -> {dest}/")
     else:
         if os.path.lexists(dest):
             remove_path(dest)
@@ -773,7 +772,7 @@ def install_path(src, dest, links_mode):
         if parent:
             ensure_dir(parent)
         shutil.copy2(src, dest)
-        _vprint("  cp: {} -> {}".format(src, dest))
+        _vprint(f"  cp: {src} -> {dest}")
 
 
 def backup_item(src, dest):
@@ -781,7 +780,7 @@ def backup_item(src, dest):
     ensure_dir(os.path.dirname(dest))
     cmd = [_RSYNC, "-a"]
     for pattern in FONT_EXCLUDES:
-        cmd.append("--exclude={}".format(pattern))
+        cmd.append(f"--exclude={pattern}")
     cmd.extend([src, dest])
     run(cmd)
 
@@ -810,7 +809,7 @@ def _exes_by_path(path):
             if not entry.isdigit():
                 continue
             try:
-                exe = os.readlink("/proc/{}/exe".format(entry))
+                exe = os.readlink(f"/proc/{entry}/exe")
             except OSError:
                 continue
             # Kernel appends " (deleted)" when the inode was replaced after exec.
@@ -879,7 +878,7 @@ def read_os_release():
 def prebuilt_exact_platform_ids():
     arch = uname("-m")
     if ldd_is_musl():
-        return ["linux.{}.musl".format(arch), "linux-{}-musl".format(arch)]
+        return [f"linux.{arch}.musl", f"linux-{arch}-musl"]
 
     glibc_version = glibc_version_id()
     glibc_id = "glibc{}".format(glibc_version.replace(".", "p")) if glibc_version else ""
@@ -897,11 +896,11 @@ def prebuilt_exact_platform_ids():
 
     ids = []
     if el_id and glibc_id:
-        ids.append("{}.{}.{}".format(el_id, arch, glibc_id))
+        ids.append(f"{el_id}.{arch}.{glibc_id}")
     if glibc_id:
-        ids.append("linux.{}.{}".format(arch, glibc_id))
-    ids.append("linux.{}.glibc".format(arch))
-    ids.append("linux-{}-glibc".format(arch))
+        ids.append(f"linux.{arch}.{glibc_id}")
+    ids.append(f"linux.{arch}.glibc")
+    ids.append(f"linux-{arch}-glibc")
     return ids
 
 
@@ -924,12 +923,12 @@ def select_prebuilt_platform_dir(root_dir):
         path = os.path.join(root_dir, name)
         if not os.path.isdir(path):
             continue
-        if not (fnmatch.fnmatch(name, "el*.{}.glibc*p*".format(arch)) or fnmatch.fnmatch(name, "linux.{}.glibc*p*".format(arch))):
+        if not (fnmatch.fnmatch(name, f"el*.{arch}.glibc*p*") or fnmatch.fnmatch(name, f"linux.{arch}.glibc*p*")):
             continue
         match = re.search(r"\.glibc([0-9]+)p([0-9]+)$", name)
         if not match:
             continue
-        build_num = glibc_version_num("{}.{}".format(match.group(1), match.group(2)))
+        build_num = glibc_version_num(f"{match.group(1)}.{match.group(2)}")
         if build_num <= host_num and build_num > best_num:
             best_num = build_num
             best_dir = path
@@ -1007,7 +1006,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         if not os.path.isdir(files_dir):
             os.makedirs(files_dir)
     except OSError as exc:
-        warn("could not create pending dir {}: {}".format(_PENDING_DIR, exc))
+        warn(f"could not create pending dir {_PENDING_DIR}: {exc}")
         return
 
     # Decompress staged files outside the lock (potentially slow I/O).
@@ -1020,10 +1019,10 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         try:
             write_bz2_atomic(bz2_path, staged, 0o755)
         except OSError as exc:
-            warn("could not stage {}: {}".format(name, exc))
+            warn(f"could not stage {name}: {exc}")
             continue
         staged_map[name] = staged
-        print("  staged pending op: {} -> {}".format(staged, os.path.join(dest_bin_dir, name)))
+        print(f"  staged pending op: {staged} -> {os.path.join(dest_bin_dir, name)}")
 
     if not staged_map:
         return
@@ -1051,10 +1050,10 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         try:
             shutil.copy2(daemon_src, daemon_dst)
         except OSError as exc:
-            warn("could not copy daemon script: {}".format(exc))
+            warn(f"could not copy daemon script: {exc}")
             return
     elif not os.path.isfile(daemon_dst):
-        warn("daemon script not found at {} — pending ops will not auto-apply".format(daemon_src))
+        warn(f"daemon script not found at {daemon_src} — pending ops will not auto-apply")
         return
 
     # Check if daemon already running via pidfile.
@@ -1063,7 +1062,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         with open(pid_file, "r") as f:
             pid = int(f.read().strip())
         os.kill(pid, 0)
-        print("  pending-ops daemon already running (pid {})".format(pid))
+        print(f"  pending-ops daemon already running (pid {pid})")
         return
     except (IOError, OSError, ValueError):
         pass
@@ -1078,9 +1077,9 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
             close_fds=True,
             start_new_session=True,
         )
-        print("  pending-ops daemon spawned (pid {}), log: {}".format(proc.pid, log_file))
+        print(f"  pending-ops daemon spawned (pid {proc.pid}), log: {log_file}")
     except OSError as exc:
-        warn("could not spawn pending-ops daemon: {}".format(exc))
+        warn(f"could not spawn pending-ops daemon: {exc}")
 
 
 def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
@@ -1157,7 +1156,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             name = os.path.basename(dest_file)
 
             if _progress_ctx is not None:
-                _progress_ctx.update(_progress_task, description="  {}".format(name.ljust(_max_bin_name)))
+                _progress_ctx.update(_progress_task, description=f"  {name.ljust(_max_bin_name)}")
 
             if name in _DEFERRED_BINARIES:
                 pids = _exes_by_path(dest_file)
@@ -1166,7 +1165,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     # already installed. Otherwise a no-op rerun would needlessly
                     # spawn a daemon + ask the user to restart their tmux server.
                     if _bz2_matches_dest(bz2_file, dest_file):
-                        print("  {} already current, skipping".format(name))
+                        print(f"  {name} already current, skipping")
                         if _progress_ctx is not None:
                             _progress_ctx.advance(_progress_task)
                         continue
@@ -1183,7 +1182,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             # churn on re-runs (matters for restic/rsync delta noise downstream).
             if _bz2_matches_dest(bz2_file, dest_file):
                 _bins_unchanged += 1
-                _vprint("  unchanged: {}".format(name))
+                _vprint(f"  unchanged: {name}")
                 if _progress_ctx is not None:
                     _progress_ctx.advance(_progress_task)
                 continue
@@ -1199,7 +1198,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 if name in _DEFERRED_BINARIES:
                     # Proactive check passed but rename raced with a new exec; defer anyway.
                     blocked_deferred.add(name)
-                    warn("could not replace {} (ETXTBSY race) — deferring".format(dest_file))
+                    warn(f"could not replace {dest_file} (ETXTBSY race) — deferring")
                     if _progress_ctx is not None:
                         _progress_ctx.advance(_progress_task)
                     continue
@@ -1220,12 +1219,12 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     pids = _exes_by_path(dest_file)
                     pid_str = ", ".join(str(p) for p in pids) if pids else "unknown"
                     blocked_failed[name] = pid_str
-                    warn("could not replace {} after 10s (PIDs: {})".format(dest_file, pid_str))
+                    warn(f"could not replace {dest_file} after 10s (PIDs: {pid_str})")
                     if _progress_ctx is not None:
                         _progress_ctx.advance(_progress_task)
                     continue
             if _progress_ctx is None:
-                print("  bzip2: {} -> {}".format(bz2_file, dest_file))
+                print(f"  bzip2: {bz2_file} -> {dest_file}")
             if _progress_ctx is not None:
                 _progress_ctx.advance(_progress_task)
 
@@ -1243,7 +1242,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             _glib_path = os.path.join(dest_lib64_dir, _glib)
             if os.path.isfile(_glib_path):
                 os.remove(_glib_path)
-                print("  removed stale glibc lib: {}".format(_glib_path))
+                print(f"  removed stale glibc lib: {_glib_path}")
         _lib64_bz2_files = sorted(
             f for f in fnmatch.filter(
                 [os.path.join(lib64_dir, x) for x in os.listdir(lib64_dir)], "*.bz2")
@@ -1253,17 +1252,17 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         for bz2_file in _lib64_bz2_files:
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
             if _lp:
-                _lp.update(_lpt, description="  {}".format(os.path.basename(dest_file)))
+                _lp.update(_lpt, description=f"  {os.path.basename(dest_file)}")
             # Skip no-op installs: dest already byte-identical to bundled bz2.
             if _bz2_matches_dest(bz2_file, dest_file):
                 _libs_unchanged += 1
-                _vprint("  unchanged: {}".format(os.path.basename(dest_file)))
+                _vprint(f"  unchanged: {os.path.basename(dest_file)}")
                 if _lp:
                     _lp.advance(_lpt)
                 continue
             require_writable_parent(dest_file, "pre-built libraries")
             write_bz2_atomic(bz2_file, dest_file, 0o644)
-            _vprint("  bzip2: {} -> {}".format(bz2_file, dest_file))
+            _vprint(f"  bzip2: {bz2_file} -> {dest_file}")
             if _lp:
                 _lp.advance(_lpt)
         if _lp:
@@ -1276,10 +1275,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     _libs_unchanged_n = locals().get("_libs_unchanged", 0)
     _unchanged_note = ""
     if _bins_unchanged_n or _libs_unchanged_n:
-        _unchanged_note = " ({} binaries + {} libraries already current, skipped)".format(
-            _bins_unchanged_n, _libs_unchanged_n)
-    print("  Installed {} binaries, {} libraries from {} -> {}/.local/{}".format(
-        _bin_count, _lib_count, src_dir, home, _unchanged_note))
+        _unchanged_note = f" ({_bins_unchanged_n} binaries + {_libs_unchanged_n} libraries already current, skipped)"
+    print(f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/.local/{_unchanged_note}")
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
@@ -1310,14 +1307,14 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         if f.startswith("portable-python-") and f.endswith(".tar.bz2")
     )
     if not archives:
-        skipped("portable Python (no portable-python-*.tar.bz2 in {})".format(src_dir), "")
+        skipped(f"portable Python (no portable-python-*.tar.bz2 in {src_dir})", "")
         record_result("portable Python", "SKIP", "no archive found")
         return
 
     archive = os.path.join(src_dir, archives[-1])
     tmp_dir = tempfile.mkdtemp(prefix="loadout-python-install.", dir="/tmp")
     try:
-        print("  extracting {}...".format(archive))
+        print(f"  extracting {archive}...")
         pv_extract_tar(archive, tmp_dir)
 
         extracted_dirs = [
@@ -1342,18 +1339,18 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         out = proc.stdout.decode("utf-8", "replace")
         err = proc.stderr.decode("utf-8", "replace")
         for line in out.splitlines():
-            print("  {}".format(line))
+            print(f"  {line}")
         if proc.returncode != 0:
             for line in err.splitlines():
-                eprint("  {}".format(line))
-            warn("portable Python install.sh exited with code {}".format(proc.returncode))
-            record_result("portable Python", "FAIL", "install.sh exit {}".format(proc.returncode))
+                eprint(f"  {line}")
+            warn(f"portable Python install.sh exited with code {proc.returncode}")
+            record_result("portable Python", "FAIL", f"install.sh exit {proc.returncode}")
             return
     finally:
         shutil.rmtree(tmp_dir)
 
     record_result("portable Python", "yes", "")
-    print("  Installed portable Python -> {}/.local/".format(home))
+    print(f"  Installed portable Python -> {home}/.local/")
 
 
 def install_typelibs(repo_dir, home, selected_tools=None):
@@ -1376,7 +1373,7 @@ def install_typelibs(repo_dir, home, selected_tools=None):
 
     typelib_files = sorted(f for f in os.listdir(src_dir) if f.endswith(".typelib"))
     if not typelib_files:
-        skipped("GObject typelibs (no *.typelib files in {})".format(src_dir), "")
+        skipped(f"GObject typelibs (no *.typelib files in {src_dir})", "")
         record_result("GObject typelibs", "SKIP", "no typelib files")
         return
 
@@ -1388,17 +1385,17 @@ def install_typelibs(repo_dir, home, selected_tools=None):
         src = os.path.join(src_dir, name)
         dest = os.path.join(dest_dir, name)
         if _p:
-            _p.update(_pt, description="  {}".format(name))
+            _p.update(_pt, description=f"  {name}")
         require_writable_parent(dest, "GObject typelibs")
         shutil.copy2(src, dest)
-        _vprint("  cp: {} -> {}".format(src, dest))
+        _vprint(f"  cp: {src} -> {dest}")
         if _p:
             _p.advance(_pt)
     if _p:
         _p.stop()
 
-    record_result("GObject typelibs", "yes", "{} files".format(len(typelib_files)))
-    print("  Installed {} typelibs -> {}/".format(len(typelib_files), dest_dir))
+    record_result("GObject typelibs", "yes", f"{len(typelib_files)} files")
+    print(f"  Installed {len(typelib_files)} typelibs -> {dest_dir}/")
 
 
 def install_python_tools(repo_dir, home, selected_tools, registry):
@@ -1418,11 +1415,11 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     uv_bin = os.path.join(home, ".local", "bin", "uv")
     python_bin = os.path.join(home, ".local", "bin", "python3.14")
     if not os.path.isfile(uv_bin):
-        warn("uv not found at {} — Python tools will NOT be installed".format(uv_bin))
+        warn(f"uv not found at {uv_bin} — Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
         return
     if not os.path.isfile(python_bin):
-        warn("python3.14 not found at {} — Python tools will NOT be installed".format(python_bin))
+        warn(f"python3.14 not found at {python_bin} — Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "python3.14 not installed")
         return
 
@@ -1451,7 +1448,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             _glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
         )
         if not matches:
-            warn("skipping {} — no wheel found in {}".format(pkg_name, wheels_dir))
+            warn(f"skipping {pkg_name} — no wheel found in {wheels_dir}")
             skipped_tools.append(tool_name)
             continue
         cmd = [
@@ -1472,15 +1469,15 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         out = proc.stdout.decode("utf-8", "replace")
         err = proc.stderr.decode("utf-8", "replace")
         for line in out.splitlines():
-            print("  {}".format(line))
+            print(f"  {line}")
         if proc.returncode != 0:
             for line in err.splitlines():
-                eprint("  {}".format(line))
-            warn("uv tool install {} exited {}".format(pkg_name, proc.returncode))
+                eprint(f"  {line}")
+            warn(f"uv tool install {pkg_name} exited {proc.returncode}")
             failed.append(tool_name)
         else:
             installed.append(tool_name)
-            print("  Installed Python tool: {} -> ~/.local/bin/".format(tool_name))
+            print(f"  Installed Python tool: {tool_name} -> ~/.local/bin/")
 
     if failed:
         record_result("Python tools", "FAIL", "failed: {}".format(", ".join(failed)))
@@ -1504,10 +1501,10 @@ def check_prebuilt_binary_dependencies(dest_bin_dir):
         out = proc.stdout.decode("utf-8", "replace")
         if "not found" in out:
             missing = True
-            warn("missing shared libraries for {} — this binary may not run".format(binary))
+            warn(f"missing shared libraries for {binary} — this binary may not run")
             for line in out.splitlines():
                 if "not found" in line:
-                    eprint("    {}".format(line.split()[0]))
+                    eprint(f"    {line.split()[0]}")
     if not missing:
         print("  Shared library check OK")
 
@@ -1528,9 +1525,8 @@ def add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed):
         )
     for name, pid_str in sorted(blocked_failed.items()):
         FINAL_NOTICES.append(
-            "{} was not installed: binary held by running process(es) {} "
-            "— kill or wait for them to exit, then re-run the installer.".format(
-                name, pid_str)
+            f"{name} was not installed: binary held by running process(es) {pid_str} "
+            "— kill or wait for them to exit, then re-run the installer."
         )
 
 
@@ -1540,7 +1536,7 @@ def print_final_notices():
     print("")
     print("Important final notices:")
     for notice in FINAL_NOTICES:
-        print("  - {}".format(notice))
+        print(f"  - {notice}")
 
 
 def print_install_results():
@@ -1559,7 +1555,7 @@ def print_install_results():
         _status_style = {"yes": "green", "no": "bold red", "skip": "yellow"}
         for thing, success, detail in rows:
             style = _status_style.get(success, "")
-            t.add_row(thing, "[{}]{}[/{}]".format(style, success, style), detail)
+            t.add_row(thing, f"[{style}]{success}[/{style}]", detail)
         assert _console is not None
         _console.print()
         _console.print(t)
@@ -1584,7 +1580,7 @@ def font_member(name):
 
 
 def extract_font_zip(zip_path, user_fonts_dir):
-    print("  Extracting: {} -> {}/".format(zip_path, user_fonts_dir))
+    print(f"  Extracting: {zip_path} -> {user_fonts_dir}/")
     with zipfile.ZipFile(zip_path, "r") as zf:
         for member in zf.namelist():
             if not font_member(member):
@@ -1615,7 +1611,7 @@ def install_fonts(repo_dir, home, selected_tools=None):
 
     if os.path.islink(user_fonts_dir):
         require_writable_parent(user_fonts_dir, "fonts")
-        print("  Removing symlink: {}".format(user_fonts_dir))
+        print(f"  Removing symlink: {user_fonts_dir}")
         os.unlink(user_fonts_dir)
     elif os.path.isdir(user_fonts_dir):
         require_writable_parent(user_fonts_dir, "fonts")
@@ -1623,9 +1619,9 @@ def install_fonts(repo_dir, home, selected_tools=None):
         backup_path = user_fonts_dir + ".bak"
         counter = 1
         while os.path.exists(backup_path):
-            backup_path = "{}.bak.{}".format(user_fonts_dir, counter)
+            backup_path = f"{user_fonts_dir}.bak.{counter}"
             counter += 1
-        print("  Backing up existing fonts dir: {} -> {}".format(user_fonts_dir, backup_path))
+        print(f"  Backing up existing fonts dir: {user_fonts_dir} -> {backup_path}")
         shutil.move(user_fonts_dir, backup_path)
     ensure_dir(user_fonts_dir, "fonts")
 
@@ -1643,7 +1639,7 @@ def install_fonts(repo_dir, home, selected_tools=None):
             first_part = os.path.join(vendor_fonts_dir, name)
             split_base = first_part[:-len(".part-000")]
             rejoined_zip = os.path.join(tmp_dir, os.path.basename(split_base))
-            print("  Rejoining: {}.part-* -> {}".format(split_base, rejoined_zip))
+            print(f"  Rejoining: {split_base}.part-* -> {rejoined_zip}")
             require_writable_parent(rejoined_zip, "fonts")
             with open(rejoined_zip, "wb") as dest:
                 for part in sorted(os.path.join(vendor_fonts_dir, x)
@@ -1661,13 +1657,13 @@ def install_fonts(repo_dir, home, selected_tools=None):
         if tool:
             proc = subprocess.run([tool, user_fonts_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if proc.returncode != 0:
-                warn("{} failed for {} — font metrics may be incomplete".format(name, user_fonts_dir))
+                warn(f"{name} failed for {user_fonts_dir} — font metrics may be incomplete")
 
     fc_cache = _find_tool("/usr/bin/fc-cache")
     if fc_cache:
         proc = subprocess.run([fc_cache, "-f", user_fonts_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if proc.returncode != 0:
-            warn("fc-cache failed for {} — fontconfig cache may be stale".format(user_fonts_dir))
+            warn(f"fc-cache failed for {user_fonts_dir} — fontconfig cache may be stale")
     else:
         warn("fc-cache is not available — fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually")
 
@@ -1705,7 +1701,7 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
             os.unlink(dest_dir)
 
     pv_extract_tar(archive, os.path.join(cache_home, "tealdeer"))
-    print("  tldr page cache installed to {}".format(dest_dir))
+    print(f"  tldr page cache installed to {dest_dir}")
 
 
 def safe_extract_tar(tf, dest_dir):
@@ -1714,7 +1710,7 @@ def safe_extract_tar(tf, dest_dir):
     for member in tf.getmembers():
         target_real = os.path.realpath(os.path.join(dest_dir, member.name))
         if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
-            raise RuntimeError("unsafe tar member path: {}".format(member.name))
+            raise RuntimeError(f"unsafe tar member path: {member.name}")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
         if _TAR_SUPPORTS_FILTER:
@@ -1733,7 +1729,7 @@ def pv_extract_tar(archive_path, dest_dir):
         for member in members:
             target_real = os.path.realpath(os.path.join(dest_dir, member.name))
             if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
-                raise RuntimeError("unsafe tar member path: {}".format(member.name))
+                raise RuntimeError(f"unsafe tar member path: {member.name}")
 
         if not _RICH:
             safe_extract_tar(tf, dest_dir)
@@ -1784,9 +1780,9 @@ def install_helix_runtime(repo_dir, home, selected_tools=None):
 
     tutor = os.path.join(runtime_dir, "tutor")
     if os.path.isfile(tutor):
-        print("  Installed: {} -> {}/".format(archive, runtime_dir))
+        print(f"  Installed: {archive} -> {runtime_dir}/")
     else:
-        warn("Helix runtime archive did not install {}/tutor as expected".format(runtime_dir))
+        warn(f"Helix runtime archive did not install {runtime_dir}/tutor as expected")
 
 
 def install_vim_runtime(repo_dir, home, selected_tools=None):
@@ -1824,9 +1820,9 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
 
     sentinel = os.path.join(vim92_dir, "filetype.vim")
     if os.path.isfile(sentinel):
-        print("  Installed: {} -> {}/".format(archive, vim92_dir))
+        print(f"  Installed: {archive} -> {vim92_dir}/")
     else:
-        warn("Vim runtime archive did not install {} as expected".format(sentinel))
+        warn(f"Vim runtime archive did not install {sentinel} as expected")
 
 
 def install_nvim_runtime(repo_dir, home, selected_tools=None):
@@ -1855,9 +1851,9 @@ def install_nvim_runtime(repo_dir, home, selected_tools=None):
 
     sentinel = os.path.join(runtime_dir, "filetype.lua")
     if os.path.isfile(sentinel):
-        print("  Installed: {} -> {}/".format(archive, runtime_dir))
+        print(f"  Installed: {archive} -> {runtime_dir}/")
     else:
-        warn("Neovim runtime archive did not install {} as expected".format(sentinel))
+        warn(f"Neovim runtime archive did not install {sentinel} as expected")
 
 
 def install_octave_runtime(repo_dir, home, selected_tools):
@@ -1893,9 +1889,9 @@ def install_octave_runtime(repo_dir, home, selected_tools):
 
     sentinel = os.path.join(local_dir, "share", "octave", "11.1.0", "m")
     if os.path.isdir(sentinel):
-        print("  Installed: {} -> {}/".format(archive, local_dir))
+        print(f"  Installed: {archive} -> {local_dir}/")
     else:
-        warn("Octave runtime archive did not install {}/share/octave/11.1.0/m as expected".format(local_dir))
+        warn(f"Octave runtime archive did not install {local_dir}/share/octave/11.1.0/m as expected")
 
 
 def install_meld_runtime(repo_dir, home, selected_tools):
@@ -1938,10 +1934,10 @@ def install_meld_runtime(repo_dir, home, selected_tools):
 
     sentinel = os.path.join(local_dir, "lib", "python3.6", "site-packages", "meld", "conf.py")
     if os.path.isfile(sentinel):
-        record_result("Meld runtime", "yes", "meld 3.20.4 -> {}/".format(local_dir))
-        print("  Installed: {} -> {}/".format(archive, local_dir))
+        record_result("Meld runtime", "yes", f"meld 3.20.4 -> {local_dir}/")
+        print(f"  Installed: {archive} -> {local_dir}/")
     else:
-        warn("Meld runtime archive did not install {}/lib/python3.6/site-packages/meld as expected".format(local_dir))
+        warn(f"Meld runtime archive did not install {local_dir}/lib/python3.6/site-packages/meld as expected")
         record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
 
 
@@ -1972,7 +1968,7 @@ def install_st_runtime(repo_dir, home, selected_tools):
         record_result("st runtime", "yes", "st-256color terminfo -> ~/.terminfo/s/")
         print("  Installed: {} -> {}/".format(archive, os.path.join(home, ".terminfo")))
     else:
-        warn("st runtime archive did not install {} as expected".format(sentinel))
+        warn(f"st runtime archive did not install {sentinel} as expected")
         record_result("st runtime", "FAIL", "archive extracted but st-256color terminfo not found")
 
 
@@ -2004,10 +2000,10 @@ def install_fish_runtime(repo_dir, home, selected_tools):
 
     sentinel = os.path.join(fish_share, "functions", "fish_prompt.fish")
     if os.path.isfile(sentinel):
-        record_result("Fish runtime", "yes", "fish -> {}/".format(fish_share))
-        print("  Installed: {} -> {}/".format(archive, fish_share))
+        record_result("Fish runtime", "yes", f"fish -> {fish_share}/")
+        print(f"  Installed: {archive} -> {fish_share}/")
     else:
-        warn("Fish runtime archive did not install {}/functions/fish_prompt.fish as expected".format(fish_share))
+        warn(f"Fish runtime archive did not install {fish_share}/functions/fish_prompt.fish as expected")
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
@@ -2021,9 +2017,9 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
     dest_dir = os.path.join(home, ".local", "share", "nvim", "tree-sitter-parsers")
 
     if not os.path.isdir(os.path.join(src_dir, "parser")):
-        skipped("Tree-sitter parsers (no prebuilt parsers for {})".format(platform),
+        skipped(f"Tree-sitter parsers (no prebuilt parsers for {platform})",
                 "Neovim Tree-sitter highlighting will NOT work offline")
-        record_result("Tree-sitter parsers", "SKIP", "no prebuilt parsers for {}".format(platform))
+        record_result("Tree-sitter parsers", "SKIP", f"no prebuilt parsers for {platform}")
         return
 
     for subdir in ("queries", "build-info", "parser-info", "registry"):
@@ -2046,25 +2042,25 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         src = os.path.join(parser_src, name)
         if _p:
             _stripped = name.replace(".so.bz2", "").replace(".so", "")
-            _p.update(_pt, description="  {}".format(_stripped.ljust(_max_parser_name)))
+            _p.update(_pt, description=f"  {_stripped.ljust(_max_parser_name)}")
         if name.endswith(".so.bz2"):
             dest = os.path.join(parser_dest, name[:-4])
             require_writable_parent(dest, "Tree-sitter parsers")
             with bz2.open(src, "rb") as src_fh, open(dest, "wb") as dest_fh:
                 shutil.copyfileobj(src_fh, dest_fh)
             os.chmod(dest, 0o644)
-            _vprint("  bzip2: {} -> {}".format(src, dest))
+            _vprint(f"  bzip2: {src} -> {dest}")
         elif name.endswith(".so"):
             dest = os.path.join(parser_dest, name)
             require_writable_parent(dest, "Tree-sitter parsers")
             shutil.copy2(src, dest)
             os.chmod(dest, 0o644)
-            _vprint("  cp: {} -> {}".format(src, dest))
+            _vprint(f"  cp: {src} -> {dest}")
         if _p:
             _p.advance(_pt)
     if _p:
         _p.stop()
-    print("  Installed {} parsers -> {}/".format(len(parser_files), parser_dest))
+    print(f"  Installed {len(parser_files)} parsers -> {parser_dest}/")
 
 
 def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
@@ -2083,7 +2079,7 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
     ensure_dir(dest_root, "nvim-treesitter vendor")
     rsync_dir(os.path.join(src_root, "nvim-treesitter"), os.path.join(dest_root, "nvim-treesitter"), delete=True, excludes=(".git",))
     rsync_dir(os.path.join(src_root, "treesitter-parser-registry"), os.path.join(dest_root, "treesitter-parser-registry"), delete=True, excludes=(".git",))
-    print("  Installed: {}/ -> {}/".format(src_root, dest_root))
+    print(f"  Installed: {src_root}/ -> {dest_root}/")
 
 
 def restore_backup(backup_path, home):
@@ -2097,7 +2093,7 @@ def restore_backup(backup_path, home):
             if not os.path.isdir(extracted):
                 entries = [e for e in os.listdir(tmp_dir) if os.path.isdir(os.path.join(tmp_dir, e))]
                 if not entries:
-                    eprint("Error: Backup archive is empty: {}".format(backup_path))
+                    eprint(f"Error: Backup archive is empty: {backup_path}")
                     sys.exit(1)
                 extracted = os.path.join(tmp_dir, entries[0])
             _restore_backup_dir(extracted, home, source_display=backup_path)
@@ -2106,14 +2102,14 @@ def restore_backup(backup_path, home):
         return
 
     if not os.path.isdir(backup_path):
-        eprint("Error: Backup not found: {}".format(backup_path))
+        eprint(f"Error: Backup not found: {backup_path}")
         sys.exit(1)
     _restore_backup_dir(backup_path, home, source_display=backup_path)
 
 
 def _restore_backup_dir(backup_dir, home, source_display=None):
     display = source_display or backup_dir
-    print("Restoring config bundles from backup: {}".format(display))
+    print(f"Restoring config bundles from backup: {display}")
     print("")
     print("Removing current config bundles...")
     bash_config = os.path.join(home, ".config", "bash")
@@ -2129,7 +2125,7 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
                                         ".config/helix/runtime"]:
         path = os.path.join(home, rel)
         if os.path.exists(path) or os.path.islink(path):
-            print("  Removing: {}".format(path))
+            print(f"  Removing: {path}")
             remove_path(path)
 
     print("")
@@ -2141,7 +2137,7 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
     print("")
     print("Backup restored successfully!")
     print("")
-    print("Restored from: {}".format(display))
+    print(f"Restored from: {display}")
 
 
 def remove_if_exists(path):
@@ -2154,7 +2150,7 @@ def ensure_dir(path, thing="directory"):
     require_writable_dir(path, thing)
     if os.path.islink(path) and not os.path.isdir(path):
         require_writable_parent(path, thing)
-        print("  Removing stale symlink: {}".format(path))
+        print(f"  Removing stale symlink: {path}")
         os.unlink(path)
     os.makedirs(path, exist_ok=True)
 
@@ -2166,7 +2162,7 @@ def preserve_bash_layers_from_symlink(home):
         for layer in BASH_LAYERS:
             src = os.path.join(bash_config, layer)
             if os.path.isdir(src):
-                tmp = tempfile.mkdtemp(prefix="dotfiles_bash_{}_".format(layer), dir="/tmp")
+                tmp = tempfile.mkdtemp(prefix=f"dotfiles_bash_{layer}_", dir="/tmp")
                 shutil.rmtree(tmp)
                 shutil.copytree(src, tmp, symlinks=True)
                 saved[layer] = tmp
@@ -2197,7 +2193,7 @@ def backup_existing(home, repo_dir):
     _INTERRUPT_PHASE = "backup"
     _ACTIVE_BACKUP_DIR = backup_dir
     try:
-        print("Making backups in: {}".format(backup_dir))
+        print(f"Making backups in: {backup_dir}")
         for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".vim", ".tmux", ".tmux.conf", ".editorconfig",
                                             ".config/vim", ".config/nvim", ".config/bash/global",
                                             ".config/bash/functions.sh", ".config/bash/README.md",
@@ -2210,9 +2206,9 @@ def backup_existing(home, repo_dir):
                 link_target = os.readlink(path)
                 real = os.path.realpath(path) if os.path.exists(path) else ""
                 if link_target.startswith(repo_dir) or real.startswith(repo_dir):
-                    print("  Skipping (points to repo): {}".format(rel))
+                    print(f"  Skipping (points to repo): {rel}")
                     continue
-            print("  Backing up: {}".format(rel))
+            print(f"  Backing up: {rel}")
             backup_item(path, os.path.join(backup_dir, rel))
         print("")
         return backup_dir
@@ -2228,11 +2224,11 @@ def compress_backup(backup_dir):
     archive_path = backup_dir + ".tar.bz2"
     if os.path.exists(archive_path):
         i = 1
-        while os.path.exists("{}.{}.tar.bz2".format(backup_dir, i)):
+        while os.path.exists(f"{backup_dir}.{i}.tar.bz2"):
             i += 1
-        archive_path = "{}.{}.tar.bz2".format(backup_dir, i)
+        archive_path = f"{backup_dir}.{i}.tar.bz2"
     base = os.path.basename(backup_dir)
-    print("Compressing backup: {} -> {}".format(backup_dir, archive_path))
+    print(f"Compressing backup: {backup_dir} -> {archive_path}")
     with tarfile.open(archive_path, "w:bz2") as tf:
         tf.add(backup_dir, arcname=base)
     shutil.rmtree(backup_dir)
@@ -2269,7 +2265,7 @@ def _nvim_restore_user_layers(saved, nvim_config):
             except OSError:
                 pass
         else:
-            ensure_dir(layer_dest, "Neovim {} layer".format(layer))
+            ensure_dir(layer_dest, f"Neovim {layer} layer")
 
 
 def _nvim_migration_notice(nvim_config):
@@ -2285,7 +2281,7 @@ def _nvim_migration_notice(nvim_config):
             if content and content != "return {}":
                 warn("lua/custom/plugins/init.lua has user content — migrate it to "
                      "~/.config/nvim/lua/user/plugins/ (the new user layer). "
-                     "Old path preserved: {}".format(custom_init))
+                     f"Old path preserved: {custom_init}")
                 return
         except (IOError, OSError):
             pass
@@ -2311,7 +2307,7 @@ def _install_env_nvim(repo_dir, home):
     rsync_dir(os.path.join(nvim_src, "after", "ftplugin"), os.path.join(nvim_config, "after", "ftplugin"), delete=True)
     rsync_dir(os.path.join(nvim_src, "after", "lsp"), os.path.join(nvim_config, "after", "lsp"), delete=True)
     for layer in NVIM_LAYERS:
-        ensure_dir(os.path.join(nvim_config, "lua", layer), "Neovim {} layer".format(layer))
+        ensure_dir(os.path.join(nvim_config, "lua", layer), f"Neovim {layer} layer")
     _nvim_migration_notice(nvim_config)
 
 
@@ -2394,7 +2390,7 @@ def _install_env_kak(repo_dir, home):
     if os.path.isfile(_kak_src) and not os.path.exists(_kak_dest):
         ensure_dir(os.path.join(home, ".config", "kak"), "kakoune config")
         shutil.copy2(_kak_src, _kak_dest)
-        print("  Installed default kakrc: {}".format(_kak_dest))
+        print(f"  Installed default kakrc: {_kak_dest}")
 
 
 ENV_HANDLERS = {
@@ -2428,7 +2424,7 @@ def install_env_pkg(pkg_name, pkg_entry, repo_dir, home):
     """Per-package handler for kind='env'. Dispatches to the right helper."""
     handler = ENV_HANDLERS.get(pkg_name)
     if handler is None:
-        warn("env package '{}' has no Linux handler; skipped".format(pkg_name))
+        warn(f"env package '{pkg_name}' has no Linux handler; skipped")
         return
     handler(repo_dir, home)
 
@@ -2453,7 +2449,7 @@ def glob_paths(path):
 
 def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
     for hook in hooks:
-        print("Running post-install hook: {}".format(hook))
+        print(f"Running post-install hook: {hook}")
         env = os.environ.copy()
         env.update({
             "LOADOUT_REPO": repo_dir,
@@ -2470,7 +2466,7 @@ def run_layer_install_scripts(home):
     for layer in BASH_LAYERS:
         install_script = os.path.join(home, ".config", "bash", layer, "install.sh")
         if os.path.isfile(install_script) and os.access(install_script, os.R_OK):
-            print("Sourcing '{}' ...".format(install_script))
+            print(f"Sourcing '{install_script}' ...")
             run(["/bin/bash", "-c", 'source "$1"', "/bin/bash", install_script])
 
 
@@ -2552,9 +2548,9 @@ def parse_args(argv):
         for legacy in ("--tools", "--add-tools", "--skip-tools", "--list-tools",
                        "--no-fonts", "--no-tldr-cache"):
             if unknown[0] == legacy or unknown[0].startswith(legacy + "="):
-                eprint("Error: {} was removed in the engineering-loadout refactor. See ./engineering-loadout --help for the new flag names.".format(legacy))
+                eprint(f"Error: {legacy} was removed in the engineering-loadout refactor. See ./engineering-loadout --help for the new flag names.")
                 sys.exit(2)
-        eprint("Unknown option: {}".format(unknown[0]))
+        eprint(f"Unknown option: {unknown[0]}")
         eprint("Run './engineering-loadout --help' for details.")
         sys.exit(1)
     return args
@@ -2691,17 +2687,17 @@ def cmd_describe(args, registry):
     name = args.positional[0]
     entry = registry.get(name)
     if entry is None:
-        eprint("Unknown package: {}".format(name))
+        eprint(f"Unknown package: {name}")
         return 1
-    print("{}".format(name))
+    print(f"{name}")
     print("=" * len(name))
     print("kind:        {}".format(entry.get("kind", "(missing)")))
     if entry.get("kind") == "group":
         print("description: {}".format(entry.get("description", "")))
         members = entry.get("members", [])
-        print("members ({}):".format(len(members)))
+        print(f"members ({len(members)}):")
         for m in members:
-            print("  - {}".format(m))
+            print(f"  - {m}")
         return 0
     print("default:     {}".format("yes" if _is_default_pkg(entry) else "no"))
     print("version:     {}".format(entry.get("version", "")))
@@ -2742,12 +2738,12 @@ def cmd_resolve(args, registry):
     try:
         selected = resolve_tool_selection(args, registry)
     except ResolverError as _err:
-        eprint("Resolver error: {}".format(_err))
+        eprint(f"Resolver error: {_err}")
         return 1
     if selected is None:
         print("(empty registry; resolver returned None → install-everything sentinel)")
         return 0
-    print("Resolved {} packages:".format(len(selected)))
+    print(f"Resolved {len(selected)} packages:")
     by_kind = {}
     for n in sorted(selected):
         k = registry.get(n, {}).get("kind", "?")
@@ -2760,8 +2756,8 @@ def cmd_resolve(args, registry):
 
 def cmd_doctor(args, registry, repo_dir):
     """Platform detection + per-package archive sanity check."""
-    print("Platform:    {}".format(_current_platform()))
-    print("Repo dir:    {}".format(repo_dir))
+    print(f"Platform:    {_current_platform()}")
+    print(f"Repo dir:    {repo_dir}")
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     print("Pre-built:   {}".format(platform_dir or "(none matched)"))
     print()
@@ -2788,11 +2784,11 @@ def cmd_doctor(args, registry, repo_dir):
             if not matches:
                 missing.append((name, kind, resolved))
     if missing:
-        print("Missing archives ({} of {} checked):".format(len(missing), checked))
+        print(f"Missing archives ({len(missing)} of {checked} checked):")
         for n, k, p in missing:
-            print("  [{}] {}: {}".format(k, n, p))
+            print(f"  [{k}] {n}: {p}")
     else:
-        print("All {} runtime/data/font/python-base archives present.".format(checked))
+        print(f"All {checked} runtime/data/font/python-base archives present.")
     print()
 
     # Registry sanity
@@ -2808,7 +2804,7 @@ def cmd_doctor(args, registry, repo_dir):
     if unknown_deps:
         print("Unresolved references:")
         for n, f, r in unknown_deps:
-            print("  {} → {} → {}".format(n, f, r))
+            print(f"  {n} → {f} → {r}")
     else:
         print("All depends/recommends resolve to known packages.")
     return 0 if not missing and not unknown_deps else 2
@@ -2826,18 +2822,18 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
         return cmd_resolve(args, registry)
 
-    print("Engineering-loadout repo: {}".format(repo_dir))
+    print(f"Engineering-loadout repo: {repo_dir}")
     if args.dest_dir:
-        print("Destination: {}".format(home))
+        print(f"Destination: {home}")
 
     hooks = []
     for hook in args.post_install_hook:
         if not os.path.isfile(hook) or not os.access(hook, os.X_OK):
-            eprint("Error: Post-install hook is not executable: {}".format(hook))
+            eprint(f"Error: Post-install hook is not executable: {hook}")
             return 1
         hooks.append(os.path.abspath(hook))
 
-    print("Changing directory to {}".format(home))
+    print(f"Changing directory to {home}")
     ensure_dir(home, "install destination")
     os.chdir(home)
 
@@ -2915,7 +2911,7 @@ def main(argv):
     try:
         selected_tools = resolve_tool_selection(args, registry)
     except ResolverError as _err:
-        eprint("Resolver error: {}".format(_err))
+        eprint(f"Resolver error: {_err}")
         return 1
 
     if args.subcommand == "resolve":

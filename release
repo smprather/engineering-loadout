@@ -65,7 +65,7 @@ def main():
         parts = line.split("\t")
         if len(parts) >= 5 and parts[2]:  # skip missing
             binary, name, version, _status, homepage = parts[0], parts[1], parts[2], parts[3], parts[4]
-            md_rows.append("| [{}]({}) | `{}` | {} |".format(name, homepage, binary, version))
+            md_rows.append(f"| [{name}]({homepage}) | `{binary}` | {version} |")
 
     version_table = ""
     if md_rows:
@@ -77,7 +77,7 @@ def main():
     notes = "All pre-built binaries passed smoke test.\n" + version_table
 
     print("\n" + "=" * 60)
-    print("Step 3: Creating tag and GitHub release: {}".format(tag))
+    print(f"Step 3: Creating tag and GitHub release: {tag}")
     print("=" * 60)
 
     result = run(["git", "tag", tag])
@@ -97,7 +97,7 @@ def main():
         print("gh release create failed.", file=sys.stderr)
         return 1
 
-    print("\nRelease {} created.".format(tag))
+    print(f"\nRelease {tag} created.")
     return 0
 
 

@@ -36,7 +36,7 @@ def eprint(*args):
 
 
 def die(msg):
-    eprint("error: {}".format(msg))
+    eprint(f"error: {msg}")
     sys.exit(1)
 
 
@@ -107,7 +107,7 @@ def detect_platform():
     arch = detect_arch()
 
     if ldd_is_musl():
-        return "linux.{}.musl".format(arch)
+        return f"linux.{arch}.musl"
 
     glibc_ver = detect_glibc_version()
     glibc_id  = "glibc{}".format(glibc_ver.replace(".", "p")) if glibc_ver else "glibc"
@@ -126,8 +126,8 @@ def detect_platform():
         el_id = "el{}".format(version_id.split(".", 1)[0])
 
     if el_id:
-        return "{}.{}.{}".format(el_id, arch, glibc_id)
-    return "linux.{}.{}".format(arch, glibc_id)
+        return f"{el_id}.{arch}.{glibc_id}"
+    return f"linux.{arch}.{glibc_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +161,11 @@ def detect_python_version(portable_dir):
 def make_archive(portable_dir, dest_path, dry_run):
     basename = os.path.basename(os.path.abspath(portable_dir))
 
-    print("source dir : {}".format(portable_dir))
-    print("archive    : {}".format(dest_path))
+    print(f"source dir : {portable_dir}")
+    print(f"archive    : {dest_path}")
 
     if dry_run:
-        print("[dry-run] would create {}".format(dest_path))
+        print(f"[dry-run] would create {dest_path}")
         return
 
     dest_dir = os.path.dirname(dest_path)
@@ -183,7 +183,7 @@ def make_archive(portable_dir, dest_path, dry_run):
             os.unlink(tmp_path)
 
     size_mb = os.path.getsize(dest_path) / 1024 / 1024
-    print("created    : {} ({:.1f} MB)".format(dest_path, size_mb))
+    print(f"created    : {dest_path} ({size_mb:.1f} MB)")
 
 
 # ---------------------------------------------------------------------------
@@ -207,20 +207,20 @@ def main():
 
     portable_dir = os.path.abspath(args.portable_dir)
     if not os.path.isdir(portable_dir):
-        die("not a directory: {}".format(portable_dir))
+        die(f"not a directory: {portable_dir}")
     if not os.path.isfile(os.path.join(portable_dir, "install.sh")):
-        die("no install.sh in {}: does not look like a portable-python directory".format(portable_dir))
+        die(f"no install.sh in {portable_dir}: does not look like a portable-python directory")
 
     # Python version
     py_version = detect_python_version(portable_dir)
     if py_version:
-        print("python     : {}".format(py_version))
+        print(f"python     : {py_version}")
     else:
         eprint("warning: could not determine Python version; using directory name")
 
     # Platform
     platform = args.platform or detect_platform()
-    print("platform   : {}".format(platform))
+    print(f"platform   : {platform}")
 
     # Output path
     if args.output:
@@ -231,7 +231,7 @@ def main():
         repo_dir   = os.path.dirname(repo_dir)            # repo root
         basename   = os.path.basename(portable_dir)
         dest_path  = os.path.join(repo_dir, "pre_built", platform,
-                                  "{}.tar.bz2".format(basename))
+                                  f"{basename}.tar.bz2")
 
     make_archive(portable_dir, dest_path, args.dry_run)
 

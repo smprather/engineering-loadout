@@ -57,13 +57,13 @@ def _append_run_log(msg):
     try:
         with open(RUN_LOG_PATH, "a") as f:
             ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            f.write("[{}] [daemon] {}\n".format(ts, msg))
+            f.write(f"[{ts}] [daemon] {msg}\n")
     except (IOError, OSError):
         pass
 
 
 def log(msg):
-    line = "[loadout-pending-daemon] {}\n".format(msg)
+    line = f"[loadout-pending-daemon] {msg}\n"
     sys.stdout.write(line)
     sys.stdout.flush()
     # Significant event — always mirror to dev-log.
@@ -159,7 +159,7 @@ def check_block(block):
                 if not entry.isdigit():
                     continue
                 try:
-                    exe = os.readlink("/proc/{}/exe".format(entry))
+                    exe = os.readlink(f"/proc/{entry}/exe")
                 except OSError:
                     continue
                 if exe == path or exe == path + " (deleted)":
@@ -167,7 +167,7 @@ def check_block(block):
         except OSError:
             return False  # /proc unreadable: be conservative
         return True
-    log("WARNING: unknown block type {!r} — leaving op pending".format(btype))
+    log(f"WARNING: unknown block type {btype!r} — leaving op pending")
     return False
 
 
@@ -183,12 +183,12 @@ def apply_op(op):
     mode = op.get("mode", 0o755)
 
     if not os.path.isfile(staged):
-        log("staged file gone for {}, dropping op".format(dest))
+        log(f"staged file gone for {dest}, dropping op")
         return "drop"
 
     dest_dir = os.path.dirname(dest)
     if not os.path.isdir(dest_dir):
-        log("dest dir missing for {}, dropping op".format(dest))
+        log(f"dest dir missing for {dest}, dropping op")
         return "drop"
 
     tmp_path = None
@@ -199,13 +199,13 @@ def apply_op(op):
         os.chmod(tmp_path, mode)
         os.rename(tmp_path, dest)
         tmp_path = None
-        log("installed {} -> {}".format(staged, dest))
+        log(f"installed {staged} -> {dest}")
         return "done"
     except OSError as exc:
         if exc.errno == errno.ETXTBSY:
-            log("{} still busy (ETXTBSY), will retry".format(dest))
+            log(f"{dest} still busy (ETXTBSY), will retry")
             return "retry"
-        log("ERROR applying {}: {}".format(dest, exc))
+        log(f"ERROR applying {dest}: {exc}")
         return "retry"
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -252,7 +252,7 @@ def main():
         sys.exit(0)
 
     write_pidfile()
-    log("started (pid {})".format(os.getpid()))
+    log(f"started (pid {os.getpid()})")
 
     try:
         while True:
@@ -267,7 +267,7 @@ def main():
             # ./engineering-loadout writes new or updated ops.
             last_ts = _parse_iso(last_activity)
             if last_ts and (time.time() - last_ts) > TIMEOUT_SECS:
-                log("timeout: no install activity since {}, giving up".format(last_activity))
+                log(f"timeout: no install activity since {last_activity}, giving up")
                 log("re-run ./engineering-loadout to try again")
                 break
 
@@ -308,9 +308,8 @@ def main():
                             if current.get(dest) == ops_by_dest.get(dest):
                                 current.pop(dest, None)
                             else:
-                                log("entry for {} was superseded by installer "
-                                    "while applying; keeping new entry".format(
-                                        os.path.basename(dest)))
+                                log(f"entry for {os.path.basename(dest)} was superseded by installer "
+                                    "while applying; keeping new entry")
                     write_pending_state(current, last_activity)
 
             if not remaining:

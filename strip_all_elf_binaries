@@ -146,9 +146,9 @@ class Manifest(object):
                     continue
                 entry = self.entries[key]
                 if entry[0] == "sha256":
-                    tmp.write("sha256  {}  {}\n".format(entry[1], key))
+                    tmp.write(f"sha256  {entry[1]}  {key}\n")
                 elif entry[0] == "tar-meta":
-                    tmp.write("tar-meta  {}  {}  {}\n".format(entry[1], entry[2], key))
+                    tmp.write(f"tar-meta  {entry[1]}  {entry[2]}  {key}\n")
             tmp.close()
             os.rename(tmp.name, self.path)
         finally:
@@ -204,7 +204,7 @@ def bzip2_write(src_path, dest_path):
 def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, stats):
     rel = repo_rel(repo_dir, bz2_path)
     if manifest.sha_hit(rel, bz2_path):
-        print("manifest hit (already stripped): {}".format(bz2_path))
+        print(f"manifest hit (already stripped): {bz2_path}")
         stats["skipped_manifest"] += 1
         return
 
@@ -214,7 +214,7 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
         shutil.copyfileobj(src, dest)
 
     if not is_elf_file(payload):
-        print("skip non-ELF bzip2 payload: {}".format(bz2_path))
+        print(f"skip non-ELF bzip2 payload: {bz2_path}")
         stats["skipped_nonelf"] += 1
         os.unlink(payload)
         manifest.record_sha(rel, bz2_path)
@@ -224,14 +224,14 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
         # RPATH present means patchelf already ran; strip must precede patchelf
         # (strip after patchelf corrupts .dynstr placement). Binary was already
         # stripped as part of the bundle workflow — do not strip again.
-        print("skip patchelf'd payload (RPATH set): {}".format(bz2_path))
+        print(f"skip patchelf'd payload (RPATH set): {bz2_path}")
         stats["skipped_nonelf"] += 1
         os.unlink(payload)
         manifest.record_sha(rel, bz2_path)
         return
 
     if dry_run:
-        print("would strip bzip2 payload: {}".format(bz2_path))
+        print(f"would strip bzip2 payload: {bz2_path}")
         os.unlink(payload)
         return
 
@@ -243,7 +243,7 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
     os.chmod(tmp_bz2, mode)
     os.rename(tmp_bz2, bz2_path)
     after_size = file_size(bz2_path)
-    print("stripped bzip2 payload: {} ({} -> {} bytes)".format(bz2_path, before_size, after_size))
+    print(f"stripped bzip2 payload: {bz2_path} ({before_size} -> {after_size} bytes)")
     stats["stripped"] += 1
     manifest.record_sha(rel, bz2_path)
     os.unlink(payload)
@@ -252,19 +252,19 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
 def process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats):
     rel = repo_rel(repo_dir, path)
     if manifest.sha_hit(rel, path):
-        print("manifest hit (already stripped): {}".format(path))
+        print(f"manifest hit (already stripped): {path}")
         stats["skipped_manifest"] += 1
         return
 
     stats["processed"] += 1
     if dry_run:
-        print("would strip: {}".format(path))
+        print(f"would strip: {path}")
         return
 
     before_size = file_size(path)
     strip_file(strip_bin, path)
     after_size = file_size(path)
-    print("stripped: {} ({} -> {} bytes)".format(path, before_size, after_size))
+    print(f"stripped: {path} ({before_size} -> {after_size} bytes)")
     stats["stripped"] += 1
     manifest.record_sha(rel, path)
 
@@ -287,16 +287,16 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
     out_path = tar_bz2_path(tar_path)
     out_rel = repo_rel(repo_dir, out_path)
     if os.path.isfile(out_path) and manifest.tar_hit(out_rel, out_path):
-        print("manifest hit (already processed tar): {}".format(out_path))
+        print(f"manifest hit (already processed tar): {out_path}")
         stats["skipped_manifest"] += 1
         return
 
     stats["processed"] += 1
     if dry_run:
         if tar_path == out_path:
-            print("would strip tar contents and rewrite: {}".format(tar_path))
+            print(f"would strip tar contents and rewrite: {tar_path}")
         else:
-            print("would strip tar contents and convert: {} -> {}".format(tar_path, out_path))
+            print(f"would strip tar contents and convert: {tar_path} -> {out_path}")
         return
 
     work_dir = tempfile.mkdtemp(prefix="tar.", dir=tmp_dir)
@@ -320,8 +320,7 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
         os.unlink(tar_path)
 
     after_size = file_size(out_path)
-    print("rewrote tar.bz2: {} -> {} ({} -> {} bytes, stripped {} ELF files)".format(
-        tar_path, out_path, before_size, after_size, tar_stripped))
+    print(f"rewrote tar.bz2: {tar_path} -> {out_path} ({before_size} -> {after_size} bytes, stripped {tar_stripped} ELF files)")
     stats["rewritten_tar"] += 1
     stats["stripped"] += tar_stripped
     manifest.record_tar(out_rel, out_path)
@@ -347,7 +346,7 @@ def main(argv):
     args = parse_args(argv)
     strip_bin = args.strip
     if not command_exists(strip_bin):
-        eprint("Error: strip executable not found: {}".format(strip_bin))
+        eprint(f"Error: strip executable not found: {strip_bin}")
         return 1
 
     repo_dir = os.path.dirname(os.path.abspath(__file__))
@@ -366,7 +365,7 @@ def main(argv):
         for path in list(walk_files(repo_dir)):
             if is_tar_path(path):
                 if is_nostrip_archive(path):
-                    print("skip nostrip archive: {}".format(path))
+                    print(f"skip nostrip archive: {path}")
                     continue
                 process_tar(repo_dir, manifest, strip_bin, path, tmp_dir, args.dry_run, stats)
 

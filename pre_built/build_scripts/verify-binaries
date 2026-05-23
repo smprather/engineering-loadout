@@ -149,7 +149,7 @@ def _sha256_file(path):
 
 def _download(url, dest, verbose):
     if verbose:
-        print("    GET {}".format(url), flush=True)
+        print(f"    GET {url}", flush=True)
     req = Request(url, headers={"User-Agent": "dotfiles-verify-binaries/1.0"})
     with urlopen(req, timeout=120) as resp:
         with open(dest, "wb") as f:
@@ -163,7 +163,7 @@ def _extract(archive, want, destdir, verbose):
     """Extract binary named `want` (matched by basename) from archive into destdir."""
     dest = os.path.join(destdir, want)
     if verbose:
-        print("    extract '{}' from {}".format(want, os.path.basename(archive)), flush=True)
+        print(f"    extract '{want}' from {os.path.basename(archive)}", flush=True)
 
     # Try tar first (handles .tar.gz .tar.bz2 .tbz .tar.xz .tgz by magic)
     if tarfile.is_tarfile(archive):
@@ -175,16 +175,14 @@ def _extract(archive, want, destdir, verbose):
                     break
             if hit is None:
                 names = [m.name for m in tf.getmembers()]
-                raise ValueError("'{}' not found in archive. Contents: {}".format(
-                    want, names[:8]))
+                raise ValueError(f"'{want}' not found in archive. Contents: {names[:8]}")
             hit.name = want  # flatten to dest/want
             tf.extract(hit, destdir)
     elif zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as zf:
             hit = next((n for n in zf.namelist() if os.path.basename(n) == want), None)
             if hit is None:
-                raise ValueError("'{}' not found in zip. Contents: {}".format(
-                    want, zf.namelist()[:8]))
+                raise ValueError(f"'{want}' not found in zip. Contents: {zf.namelist()[:8]}")
             data = zf.read(hit)
             with open(dest, "wb") as f:
                 f.write(data)
@@ -212,7 +210,7 @@ def _is_dynamic_elf(path):
 
 def _strip(path, verbose):
     if verbose:
-        print("    strip {}".format(os.path.basename(path)), flush=True)
+        print(f"    strip {os.path.basename(path)}", flush=True)
     r = subprocess.run([_STRIP, path], capture_output=True)
     # strip exits non-zero on already-stripped or non-ELF files — that's fine
     return r.returncode
@@ -222,7 +220,7 @@ def _patchelf_rpath(path, verbose):
     if not _PATCHELF or not os.path.exists(_PATCHELF):
         return False
     if verbose:
-        print("    patchelf --set-rpath '{}' {}".format(_BIN_RPATH, os.path.basename(path)), flush=True)
+        print(f"    patchelf --set-rpath '{_BIN_RPATH}' {os.path.basename(path)}", flush=True)
     r = subprocess.run([_PATCHELF, "--set-rpath", _BIN_RPATH, path], capture_output=True)
     return r.returncode == 0
 
@@ -260,11 +258,11 @@ def _verify_one(name, entry, version, tmpdir, verbose):
     try:
         _download(url, archive, verbose)
     except HTTPError as e:
-        return "ERROR", "HTTP {} from {}".format(e.code, url)
+        return "ERROR", f"HTTP {e.code} from {url}"
     except URLError as e:
-        return "ERROR", "download failed: {}".format(e.reason)
+        return "ERROR", f"download failed: {e.reason}"
     except Exception as e:
-        return "ERROR", "download: {}".format(e)
+        return "ERROR", f"download: {e}"
 
     # Extract
     extracted = os.path.join(tmpdir, name + "_bin")
@@ -277,7 +275,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
         elif not os.path.exists(extracted):
             extracted = extracted_raw
     except Exception as e:
-        return "ERROR", "extract: {}".format(e)
+        return "ERROR", f"extract: {e}"
 
     # Reproduce our bundling transformation: strip → patchelf (for dynamic ELFs)
     # Order matters: strip must come before patchelf or .dynstr gets corrupted.
@@ -292,7 +290,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
         # Try the tool name as stem too (e.g. miller→mlr)
         bundled_data = _bundled_bytes(name)
     if bundled_data is None:
-        return "ERROR", "bundled .bz2 not found for '{}' or '{}'".format(want, name)
+        return "ERROR", f"bundled .bz2 not found for '{want}' or '{name}'"
 
     bundled_hash = _sha256_bytes(bundled_data)
 
@@ -347,7 +345,7 @@ def main():
 
     tmpdir = tempfile.mkdtemp(prefix="dotfiles-verify.")
     if args.verbose:
-        print("Temp dir: {}".format(tmpdir))
+        print(f"Temp dir: {tmpdir}")
 
     # Column widths
     w_name   = max(len(t) for t in sel_tools)
@@ -412,7 +410,7 @@ def main():
     if not args.keep:
         shutil.rmtree(tmpdir, ignore_errors=True)
     else:
-        print("\nTemp dir kept: {}".format(tmpdir))
+        print(f"\nTemp dir kept: {tmpdir}")
 
     sys.exit(0 if counts["FAIL"] == 0 and counts["ERROR"] == 0 else 1)
 

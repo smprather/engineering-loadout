@@ -41,7 +41,7 @@ def find_patchelf(repo_dir):
             with bz2.open(bz2_path, "rb") as fin, open(tmp.name, "wb") as fout:
                 shutil.copyfileobj(fin, fout)
             os.chmod(tmp.name, 0o755)
-            print("Decompressed bundled patchelf to {}".format(tmp.name))
+            print(f"Decompressed bundled patchelf to {tmp.name}")
             return tmp.name
     return None
 
@@ -74,12 +74,12 @@ def repatch_bz2(bz2_path, patchelf, dry_run):
         os.chmod(tmp_elf, 0o755)
 
         if not is_dynamic_elf(tmp_elf, patchelf):
-            print("  skip non-dynamic-ELF: {}".format(bz2_path))
+            print(f"  skip non-dynamic-ELF: {bz2_path}")
             return "skip"
 
         current = get_rpath(tmp_elf, patchelf)
         if current == RPATH:
-            print("  already patched: {}".format(bz2_path))
+            print(f"  already patched: {bz2_path}")
             return "skip"
 
         if dry_run:
@@ -132,7 +132,7 @@ def main():
     if not patchelf:
         print("ERROR: patchelf not found. Run ./engineering-loadout first (patchelf is bundled).")
         sys.exit(1)
-    print("Using patchelf: {}".format(patchelf))
+    print(f"Using patchelf: {patchelf}")
 
     counts = {"patched": 0, "would-patch": 0, "skip": 0, "error": 0}
 
@@ -140,7 +140,7 @@ def main():
         bin_dir = os.path.join(pre_built_dir, platform, "bin")
         if not os.path.isdir(bin_dir):
             continue
-        print("\nPlatform: {}".format(platform))
+        print(f"\nPlatform: {platform}")
         for fname in sorted(os.listdir(bin_dir)):
             if not fname.endswith(".bz2"):
                 continue

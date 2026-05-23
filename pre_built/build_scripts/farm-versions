@@ -392,7 +392,7 @@ def fmt_text(results):
     unknown = sum(1 for r in results if r["status"] == "unknown")
     missing = sum(1 for r in results if r["status"] == "missing")
     print()
-    print("  {} versioned, {} unknown, {} missing".format(ok, unknown, missing))
+    print(f"  {ok} versioned, {unknown} unknown, {missing} missing")
 
 
 def main():

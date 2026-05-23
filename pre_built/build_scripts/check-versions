@@ -112,13 +112,13 @@ def _strip_v(tag):
 def github_latest(owner, repo):
     """Try releases/latest first; fall back to tags list (skip prereleases)."""
     try:
-        data = _http_get_json("https://api.github.com/repos/{}/{}/releases/latest".format(owner, repo))
+        data = _http_get_json(f"https://api.github.com/repos/{owner}/{repo}/releases/latest")
         return _strip_v(data.get("tag_name", ""))
     except urllib.error.HTTPError as e:
         if e.code != 404:
             raise
     # Fallback: list tags, return first non-prerelease-looking tag.
-    data = _http_get_json("https://api.github.com/repos/{}/{}/tags".format(owner, repo))
+    data = _http_get_json(f"https://api.github.com/repos/{owner}/{repo}/tags")
     for entry in data or []:
         name = entry.get("name", "")
         if not re.search(r"(alpha|beta|rc|pre|dev|nightly)", name, re.I):
@@ -127,7 +127,7 @@ def github_latest(owner, repo):
 
 
 def pypi_latest(pkg_name):
-    data = _http_get_json("https://pypi.org/pypi/{}/json".format(pkg_name))
+    data = _http_get_json(f"https://pypi.org/pypi/{pkg_name}/json")
     return (data.get("info") or {}).get("version", "")
 
 
