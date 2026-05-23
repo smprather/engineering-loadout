@@ -27,7 +27,7 @@
 ---   ...
 ---   settings = {
 ---     yaml = {
----       ... -- other settings. note this overrides the lspconfig defaults.
+---       ... -- other settings
 ---       schemas = {
 ---         ["https://json.schemastore.org/github-workflow.json"] = "/.github/workflows/*",
 ---         ["../path/relative/to/file.yml"] = "/.github/workflows/*",
@@ -49,7 +49,7 @@
 ---   ...
 ---   settings = {
 ---     yaml = {
----       ... -- other settings. note this overrides the lspconfig defaults.
+---       ... -- other settings
 ---       schemas = {
 ---         ["https://raw.githubusercontent.com/yannh/kubernetes-json-schema/refs/heads/master/v1.32.1-standalone-strict/all.json"] = "/*.k8s.yaml",
 ---         ... -- other schemas
@@ -71,10 +71,10 @@ return {
         yaml = { format = { enable = true }, inlayHints = { enable = true } },
     },
     on_init = function(client)
-        --- https://github.com/neovim/nvim-lspconfig/pull/4016
-        --- Since formatting is disabled by default if you check `client:supports_method('textDocument/formatting')`
-        --- during `LspAttach` it will return `false`. This hack sets the capability to `true` to facilitate
-        --- autocmd's which check this capability
+        --- Force documentFormattingProvider true. yaml-language-server reports
+        --- formatting disabled at handshake time, so checking the capability
+        --- in an LspAttach autocmd would return false; flip it on init so
+        --- format-on-save autocmds fire.
         client.server_capabilities.documentFormattingProvider = true
     end,
 }
