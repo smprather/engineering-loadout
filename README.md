@@ -138,6 +138,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 | [agent-deck](https://github.com/asheshgoplani/agent-deck) | 1.9.12 | TUI dashboard for AI agent orchestration |
 | [bash](https://www.gnu.org/software/bash/) | 5.3.9 | The GNU Bourne Again SHell |
 | [bat](https://github.com/sharkdp/bat) | 0.26.1 | `cat` with syntax highlighting and Git integration |
+| [biome](https://biomejs.dev) | 2.4.15 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | [broot](https://dystroy.org/broot/) | 1.56.2 | Interactive tree navigator and fuzzy finder |
 | [btm](https://github.com/ClementTsang/bottom) | 0.12.3 | Cross-platform system monitor (CPU, memory, process tree) |
 | [btop](https://github.com/aristocratos/btop) | 1.4.7 | Resource monitor — `top` for people who care about aesthetics |

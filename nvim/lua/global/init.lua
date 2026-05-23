@@ -159,7 +159,7 @@ vim.cmd([[
 
 -- ── LSP ──────────────────────────────────────────────────────────────────
 if vim.g.cfg_enable_lsp then
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "marksman", "jsonls" })
+    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "marksman", "biome" })
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {

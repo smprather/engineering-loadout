@@ -4,6 +4,7 @@
 sha256  a9131c8c4d3ddcc16db2bec37649624134ef92e125f4834bd1eedb24d9a74e9a  pre_built/el8.x86_64.glibc2p28/bin/agent-deck.bz2
 sha256  d3ee05b7027b48ee4d53c4e02131f374c5d45ddc45283fea17d80918c5627b7a  pre_built/el8.x86_64.glibc2p28/bin/bash.bz2
 sha256  e5bfde14cafd378a196bb2963d3fea9f486ad0a11276f7780cec8fa2b065caf0  pre_built/el8.x86_64.glibc2p28/bin/bat.bz2
+sha256  6a7d1013b2c05d63459ca6c597a65201329c61626d0381c15ac91020575bada6  pre_built/el8.x86_64.glibc2p28/bin/biome.bz2
 sha256  6b51f51c97878759ca92d950bf5abc3c6ce00aca11f973d8e5a9af4bc4985e26  pre_built/el8.x86_64.glibc2p28/bin/broot.bz2
 sha256  42fd896f958a30c58d20b8214ebf00227d934d78a0f3fde10570a485218e9c97  pre_built/el8.x86_64.glibc2p28/bin/btm.bz2
 sha256  9b02288377fa7ea47ede47b58aefa15e2e93673be2a8a2209508121360b57998  pre_built/el8.x86_64.glibc2p28/bin/btop.bz2
