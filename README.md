@@ -305,6 +305,10 @@ Prefix `Ctrl-\`. Shift-arrows for pane nav, Ctrl-arrows for windows, `Prefix+1�
 
 Recipes for adding/updating pre-built binaries (strip → patchelf → bzip2), importing portable Python, refreshing tldr/tmux-plugins/Tree-sitter parsers, and installing the repo git hooks: [Details](docs/MAINTENANCE.md). Per-tool update playbook (check-versions → per-kind build path → smoke + commit + release) covered there too.
 
+### Onboarding a new developer
+
+After cloning the repo and running `./engineering-loadout` to install the runtime, run `./dev-onboard` once to add the system-level packages, dev headers, and per-user toolchains required to rebuild any bundled tool from source. Six phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers (X11/Qt5/GTK3/ncurses/Octave) → release/CI (gh, docker) → per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent; `--check` for dry-run, `--yes` for non-interactive.
+
 ---
 
 ## Related
