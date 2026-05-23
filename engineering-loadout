@@ -935,10 +935,6 @@ def select_prebuilt_platform_dir(root_dir):
     return best_dir
 
 
-def install_mode(args):
-    return "copy"
-
-
 _PENDING_DIR = "/tmp/engineering-loadout-pending"
 _PENDING_TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
@@ -2454,7 +2450,6 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
         env.update({
             "LOADOUT_REPO": repo_dir,
             "LOADOUT_HOME": home,
-            "LOADOUT_MODE": install_mode(args),
             "LOADOUT_BACKUP_DIR": backup_dir,
             "LOADOUT_NO_BACKUP": "1" if args.no_backup else "0",
             "LOADOUT_DEST_DIR": home,
@@ -2542,14 +2537,6 @@ def parse_args(argv):
         args.only = "@" + args.profile
 
     if unknown:
-        if unknown[0] == "--dev":
-            eprint("Error: --dev mode has been removed. Edit files in the repo and re-run ./engineering-loadout to copy them into place.")
-            sys.exit(2)
-        for legacy in ("--tools", "--add-tools", "--skip-tools", "--list-tools",
-                       "--no-fonts", "--no-tldr-cache"):
-            if unknown[0] == legacy or unknown[0].startswith(legacy + "="):
-                eprint(f"Error: {legacy} was removed in the engineering-loadout refactor. See ./engineering-loadout --help for the new flag names.")
-                sys.exit(2)
         eprint(f"Unknown option: {unknown[0]}")
         eprint("Run './engineering-loadout --help' for details.")
         sys.exit(1)
@@ -2598,13 +2585,9 @@ Other:
   --verbose                  Verbose progress output.
   --help, -h                 Show this help message.
 
-Skipping fonts or the tldr cache is now done via --skip:
+Skip fonts or the tldr cache with --skip:
   ./engineering-loadout --skip @fonts-all
-  ./engineering-loadout --skip tldr-data
-
-The --dev / --tools / --add-tools / --skip-tools / --list-tools / --no-fonts /
---no-tldr-cache flags were removed in the engineering-loadout package-manager
-refactor. Use the new subcommands and flag names above.""")
+  ./engineering-loadout --skip tldr-data""")
 
 
 def _list_table(rows, columns):
@@ -2655,6 +2638,14 @@ def cmd_list(args, registry):
         ])
         return 0
     tag = args.tag
+    # Build reverse map: pkg name -> sorted list of @groups that directly
+    # name it in their members list (matches cmd_describe's 'groups:' line).
+    pkg_groups = {}
+    for gname, gentry in registry.items():
+        if gentry.get("kind") != "group":
+            continue
+        for m in gentry.get("members", []):
+            pkg_groups.setdefault(m, []).append(gname)
     rows = []
     for n in sorted(registry):
         entry = registry[n]
@@ -2667,6 +2658,7 @@ def cmd_list(args, registry):
             entry.get("kind", ""),
             "yes" if _is_default_pkg(entry) else "no",
             entry.get("version", ""),
+            ", ".join(sorted(pkg_groups.get(n, []))),
             entry.get("description", ""),
         ))
     _list_table(rows, [
@@ -2674,7 +2666,8 @@ def cmd_list(args, registry):
         {"name": "KIND"},
         {"name": "DEFAULT"},
         {"name": "VERSION"},
-        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 60},
+        {"name": "GROUPS", "no_wrap": False, "max_width": 30},
+        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 50},
     ])
     return 0
 

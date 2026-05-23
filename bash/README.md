@@ -68,6 +68,6 @@ files in `<layer>/global_hooks/`:
 | `4.sh` | After prompt configuration   |
 | `5.sh` | Before bash completions      |
 | `6.sh` | After bash completions loaded |
-| `7.sh` | Late / deprecated            |
+| `7.sh` | Late / final                  |
 
 Example: `bash/corp/global_hooks/3.sh` — inject PATH entries after global PATH is set.

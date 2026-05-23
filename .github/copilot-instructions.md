@@ -29,8 +29,8 @@ driven by `pre_built/packages.json` (`schema_version: 2`).
 # Selection
 ./engineering-loadout --add octave              # add package(s); deps auto-pulled
 ./engineering-loadout --add @gui-suite          # add a group; expands recursively
-./engineering-loadout --skip @fonts-all         # skip every font package (replaces --no-fonts)
-./engineering-loadout --skip tldr-data          # skip the tldr cache (replaces --no-tldr-cache)
+./engineering-loadout --skip @fonts-all         # skip every font package
+./engineering-loadout --skip tldr-data          # skip the tldr cache
 ./engineering-loadout --only @core-cli,vim      # exact set, bypass defaults
 ./engineering-loadout --profile engineering-loadout    # alias for --only @engineering-loadout
 ./engineering-loadout --no-deps --add gvim      # install verbatim, no dep walk
@@ -55,15 +55,6 @@ Use `python3 -m py_compile engineering-loadout` and `bash -n bash/global/bashrc`
 after installer or shell edits. `./tests/install_linux_tmp_home` runs the Linux
 installer against a temp `HOME` with temp XDG cache/state dirs from `/tmp`, then
 smoke-tests offline Tree-sitter with headless Neovim.
-
-## Removed flags (engineering-loadout package-manager refactor)
-
-`--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`, `--no-fonts`,
-`--no-tldr-cache`. The installer prints a hard-error pointer to the new flag name
-when an old flag is passed. Replacements: `--only`, `--add`, `--skip`, the `list`
-subcommand, `--skip @fonts-all`, `--skip tldr-data`. There is no symlink install
-mode anymore — edit files in the repo and re-run `./engineering-loadout` (most
-steps are idempotent so re-runs are fast).
 
 ## Architecture
 
@@ -135,7 +126,7 @@ Each layer can inject code into `global/bashrc` via numbered files in
 | `4.sh` | After prompt configuration |
 | `5.sh` | Before bash completions |
 | `6.sh` | After bash completions loaded |
-| `7.sh` | Late / deprecated |
+| `7.sh` | Late / final |
 
 ### Install behavior
 
@@ -148,8 +139,8 @@ Each layer can inject code into `global/bashrc` via numbered files in
 - **`--post-install-hook <script>`**: execute an explicit corp/site/user add-on
   hook after global install steps; can be repeated and hooks run in argument
   order; each hook must be executable and provide its own shebang or binary
-  format. Hooks receive `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_MODE` (always
-  `copy`), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
+  format. Hooks receive `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_BACKUP_DIR`,
+  `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
 
 Backups are numbered (`loadout_backups/backup.N/`, always starting at `.1`; never bare `backup`). The installer skips targets
 already pointing into the repo and never overwrites an existing backup. At the end of a successful install run, the

@@ -29,20 +29,14 @@ directory — it resolves the repo from the script path.
 ./engineering-loadout --post-install-hook ~/corp/install.sh
 ./engineering-loadout --add octave                        # add package(s); deps auto-pulled
 ./engineering-loadout --add @gui-suite                    # add a group; expands recursively
-./engineering-loadout --skip @fonts-all                   # skip every font (replaces --no-fonts)
-./engineering-loadout --skip tldr-data                    # skip the tldr cache (replaces --no-tldr-cache)
+./engineering-loadout --skip @fonts-all                   # skip every font
+./engineering-loadout --skip tldr-data                    # skip the tldr cache
 ./engineering-loadout --skip gnuplot,kak                  # remove package(s) from defaults
 ./engineering-loadout --only vim,nvim,rg,tmux             # install exactly this set
 ./engineering-loadout --profile engineering-loadout       # alias for --only @engineering-loadout
 ./engineering-loadout --no-deps --add gvim                # install gvim verbatim, no dep walk
 ./engineering-loadout --dry-run --add gvim                # resolve + print; no writes
 ```
-
-> **Removed in the engineering-loadout package-manager refactor:**
-> `--dev`, `--tools`, `--add-tools`, `--skip-tools`, `--list-tools`,
-> `--no-fonts`, `--no-tldr-cache`. Use the new flag names above. Edit
-> files in the repo and re-run `./engineering-loadout` (idempotent)
-> instead of `--dev`.
 
 ### What gets installed
 
@@ -89,9 +83,7 @@ Simulate a completely fresh user environment:
 ```
 
 Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
-`LOADOUT_MODE` (always `copy` — `dev` mode was removed in the
-package-manager refactor), `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`,
-`LOADOUT_NO_BACKUP`.
+`LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
 
 ### Restore a backup
 

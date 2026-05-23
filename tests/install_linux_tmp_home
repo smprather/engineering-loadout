@@ -82,7 +82,6 @@ set -euo pipefail
     echo "repo=$LOADOUT_REPO"
     echo "home=$LOADOUT_HOME"
     echo "dest_dir=$LOADOUT_DEST_DIR"
-    echo "mode=$LOADOUT_MODE"
     echo "backup=$LOADOUT_BACKUP_DIR"
     echo "no_backup=$LOADOUT_NO_BACKUP"
 } >> "$LOADOUT_HOME/post-install-hooks.log"

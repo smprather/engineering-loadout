@@ -66,8 +66,7 @@ git commit
 
 ## Repo development
 
-`--dev` symlink-mode was removed in the engineering-loadout refactor. The repo
-is the source of truth; editing a file there and re-running
+The repo is the source of truth; editing a file there and re-running
 `./engineering-loadout` is the canonical workflow. Most install steps are
 idempotent (rsync, atomic bz2 decompress, byte-compare skip) so a re-run
 finishes quickly.

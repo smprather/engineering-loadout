@@ -38,7 +38,7 @@ Engineering-loadout: an offline-first package manager and dotfiles bundle for **
 ./engineering-loadout --add @gui-suite                # add a group; expands recursively
 ./engineering-loadout --add gvim,@fonts-all           # mix packages and @groups
 ./engineering-loadout --skip @fonts-all               # remove every font package
-./engineering-loadout --skip tldr-data                # skip the tldr cache install (replaces --no-tldr-cache)
+./engineering-loadout --skip tldr-data                # skip the tldr cache install
 ./engineering-loadout --skip @fonts-all,gnuplot,kak   # remove package(s) and group(s) from defaults
 ./engineering-loadout --only @core-cli,vim,nvim       # exact set (bypass defaults; still walks deps)
 ./engineering-loadout --only @engineering-loadout     # install everything
@@ -166,7 +166,7 @@ tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fres
 
 ## Installation Details
 
-**Default install** (no flags): Copies files from repo — no symlinks to the repo remain. Re-run `./engineering-loadout` after repo changes to update; most steps are idempotent so re-runs are fast. The Linux installer resolves the repo from the script path, so it can be run from any current working directory. `./engineering-loadout` is the Python 3.6-compatible installer and checks the Python version before running. **`--dev` mode was removed** in the engineering-loadout package-manager refactor — symlink-style installs are no longer supported.
+**Default install** (no flags): Copies files from repo — no symlinks to the repo remain. Re-run `./engineering-loadout` after repo changes to update; most steps are idempotent so re-runs are fast. The Linux installer resolves the repo from the script path, so it can be run from any current working directory. `./engineering-loadout` is the Python 3.6-compatible installer and checks the Python version before running.
 
 ### Package registry (pre_built/packages.json)
 
@@ -219,7 +219,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Skipping fonts**: Pass `--skip @fonts-all` to skip extracting any vendored Nerd Font archives and the font cache refresh. Individual families can be skipped with `--skip font-firacode`, etc.
 
-**Post-install hook** (`--post-install-hook <script>`): Runs explicit add-on hooks after global install steps, before automatic layer `install.sh` scripts are sourced. The option can be provided multiple times; hooks run in argument order. Hook paths are resolved before the installer changes to `$HOME`; each hook must be executable and provide its own shebang or binary format. Hook failure fails the installer. Environment passed to each hook: `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_MODE` (always `copy` — `dev` was removed), `LOADOUT_BACKUP_DIR` (absolute current backup dir, or empty when backups are skipped), `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`. (Per-phase skip flags `--no-fonts` / `--no-tldr-cache` were removed in the package-manager refactor; corresponding `LOADOUT_NO_FONTS` / `LOADOUT_NO_TLDR_CACHE` env vars are no longer set. Use `--skip @fonts-all` / `--skip tldr-data` instead.)
+**Post-install hook** (`--post-install-hook <script>`): Runs explicit add-on hooks after global install steps, before automatic layer `install.sh` scripts are sourced. The option can be provided multiple times; hooks run in argument order. Hook paths are resolved before the installer changes to `$HOME`; each hook must be executable and provide its own shebang or binary format. Hook failure fails the installer. Environment passed to each hook: `LOADOUT_REPO`, `LOADOUT_HOME`, `LOADOUT_BACKUP_DIR` (absolute current backup dir, or empty when backups are skipped), `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`. Skip fonts or the tldr cache with `--skip @fonts-all` / `--skip tldr-data`.
 
 **Install result behavior**: Before each install area writes files, the Linux installer verifies that the target directory is writable. If not, it refuses that area with a warning, records a failed row, and continues with later areas when possible. Every normal run ends with an install results table whose success column is `yes`, `no`, or `skip`.
 
@@ -313,7 +313,7 @@ Each layer can have `global_hooks/1.sh` through `7.sh` injected at these points 
 | 4.sh | After prompt configuration |
 | 5.sh | Before bash completions |
 | 6.sh | After bash completions loaded |
-| 7.sh | Late / deprecated |
+| 7.sh | Late / final |
 
 ### Configuration Variables (`bash/global/config.sh`)
 
