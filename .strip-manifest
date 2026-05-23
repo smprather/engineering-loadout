@@ -50,6 +50,9 @@ sha256  8d0227bcb09fb3f9f8af4dd7c23dc0dae64995de05f6440b2f0981b16354d5a2  pre_bu
 sha256  ad5daa8d43dbce8cfdc48d672f2e6e51a57b4603d88ead0230e7d840923c97ee  pre_built/el8.x86_64.glibc2p28/bin/tmux.bz2
 sha256  c534b40982b206e17b37f538767d8a64f1ca26b96ccadb4f0dda01c8806a6f87  pre_built/el8.x86_64.glibc2p28/bin/tree-sitter.bz2
 sha256  e08959a946b3d2271de0dd076e698ba1f4f9ac358f356d99fa1da9df5249e1ba  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
+sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  pre_built/el8.x86_64.glibc2p28/bin/urxvt.bz2
+sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  pre_built/el8.x86_64.glibc2p28/bin/urxvtc.bz2
+sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  pre_built/el8.x86_64.glibc2p28/bin/urxvtd.bz2
 sha256  58abf90523d435592de72aab7b610bfb070d23266a25587a631c08381b5420fa  pre_built/el8.x86_64.glibc2p28/bin/uv.bz2
 sha256  7f9b3a1ef3e92cf8b5aab85b31ca5dc4f2860b37429e7c5ba2610bd337070893  pre_built/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  10b2d44db847e2d6bbdb387bb62af10729330941d23215285a989f5187c36db0  pre_built/el8.x86_64.glibc2p28/bin/vim.bz2
@@ -155,6 +158,7 @@ sha256  b6db0960129638e31116bc879ca64b59c29d5a3682be67d8d0f5ed302b899b8e  pre_bu
 sha256  cfb713bef2df8f67e1c8c31fd7f672c90bb7e1dbfd01817c5d5f261dd3da6b2f  pre_built/el8.x86_64.glibc2p28/lib64/libpixman-1.so.0.bz2
 sha256  6986b61db9683089da53add7b18e2f535ed5693589c8092b780e6065424fe663  pre_built/el8.x86_64.glibc2p28/lib64/libpng16.so.16.bz2
 sha256  cdfc0cdc7e787b17504da28bc4845c7ca1acb199b5928287104b47edfd0e4c4f  pre_built/el8.x86_64.glibc2p28/lib64/libportaudio.so.2.bz2
+sha256  24a138ff2b4ac1f6e379fd991955ba7d2da4dd9b82f78a1406c28567846aee79  pre_built/el8.x86_64.glibc2p28/lib64/libptytty.so.0.bz2
 sha256  e3511ef1f603605aac705b520e7be6b6cf703374bdd43ee6cbfd6b585f284be4  pre_built/el8.x86_64.glibc2p28/lib64/libqhull_r.so.7.bz2
 sha256  1c926d23c972e7148f9d9d620d9ea6deed5d9b707cc3d49863696816c50478c7  pre_built/el8.x86_64.glibc2p28/lib64/libquadmath.so.0.bz2
 sha256  c1d8c54ea1088137d0c4f44d0c560ca8264a1f3fdb7f859c13f07cd5c6864415  pre_built/el8.x86_64.glibc2p28/lib64/libqwayland-generic.so.bz2
