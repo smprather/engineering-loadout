@@ -115,15 +115,18 @@ echo "Temp HOME: $test_home"
         "$repo_dir/engineering-loadout" "${install_args[@]}"
 ) 2>&1 | tee "$install_log"
 
-if ! grep -q "^Install results:" "$install_log"; then
+# Header: Rich prints "Install Results" (no colon, embedded in box-drawing),
+# plain fallback prints "Install results:" — match either.
+if ! grep -Eq "Install [Rr]esults" "$install_log"; then
     echo "Expected final install results table" >&2
     exit 1
 fi
-if ! grep -Eq "^[[:space:]]+dotfiles[[:space:]]+yes[[:space:]]*$" "$install_log"; then
+# Per-row checks tolerate both Rich (│ name │ status │) and plain whitespace.
+if ! grep -Eq "dotfiles[[:space:]│|]+yes" "$install_log"; then
     echo "Expected dotfiles success row in install results table" >&2
     exit 1
 fi
-if ! grep -Eq "^[[:space:]]+fonts[[:space:]]+skip[[:space:]]+no font-\* packages in selected set[[:space:]]*$" "$install_log"; then
+if ! grep -Eq "fonts[[:space:]│|]+skip[[:space:]│|]+no font-\* packages" "$install_log"; then
     echo "Expected fonts skip row in install results table" >&2
     exit 1
 fi
@@ -192,8 +195,8 @@ fi
 if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2" || -f "$repo_dir/helix/helix_runtime.tar.bz2" ]]; then
     assert_exists "$test_home/.config/helix/runtime/tutor"
 fi
-assert_exists "$test_home/.local/share/nvim/dotfiles/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua"
-assert_exists "$test_home/.local/share/nvim/dotfiles/vendor/treesitter-parser-registry/registry.json"
+assert_exists "$test_home/.local/share/nvim/loadout/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua"
+assert_exists "$test_home/.local/share/nvim/loadout/vendor/treesitter-parser-registry/registry.json"
 assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser/python.so"
 assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/queries/python/highlights.scm"
 assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser-info/python.lua"
@@ -218,7 +221,7 @@ if [[ -n "$nvim_bin" ]]; then
             XDG_STATE_HOME="$test_state" \
             PATH="$fake_git_dir:$PATH" \
             "$nvim_bin" --headless -n \
-            +'lua if vim.g.dotfiles_plugins_enabled ~= false then vim.api.nvim_err_writeln("expected plugin layer disabled without lazy.nvim"); vim.cmd("cquit 1") end' \
+            +'lua if vim.g.loadout_plugins_enabled ~= false then vim.api.nvim_err_writeln("expected plugin layer disabled without lazy.nvim"); vim.cmd("cquit 1") end' \
             +qa
     fi
 
@@ -229,8 +232,8 @@ if [[ -n "$nvim_bin" ]]; then
         XDG_CACHE_HOME="$test_cache" \
         XDG_STATE_HOME="$test_state" \
         "$nvim_bin" --clean --headless -n "$test_home/tree-sitter-smoke.py" \
-        +"set runtimepath+=$test_home/.local/share/nvim/dotfiles/vendor/treesitter-parser-registry" \
-        +"set runtimepath+=$test_home/.local/share/nvim/dotfiles/vendor/nvim-treesitter" \
+        +"set runtimepath+=$test_home/.local/share/nvim/loadout/vendor/treesitter-parser-registry" \
+        +"set runtimepath+=$test_home/.local/share/nvim/loadout/vendor/nvim-treesitter" \
         +"set runtimepath+=$test_home/.local/share/nvim/tree-sitter-parsers" \
         +'lua local expected = vim.env.HOME .. "/.local/share/nvim/runtime"; if not vim.o.runtimepath:find(expected, 1, true) then vim.api.nvim_err_writeln(vim.o.runtimepath); vim.cmd("cquit 1") end; if vim.fn.filereadable(expected .. "/filetype.lua") ~= 1 then vim.api.nvim_err_writeln(expected); vim.cmd("cquit 1") end' \
         +'lua local ok, err = pcall(function() require("nvim-treesitter").setup({ install_dir = vim.fn.stdpath("data") .. "/tree-sitter-parsers" }); vim.treesitter.start(0); vim.treesitter.get_parser(0, "python"):parse() end); if not ok then vim.api.nvim_err_writeln(err); vim.cmd("cquit 1") end; print("Tree-sitter smoke OK")' \
