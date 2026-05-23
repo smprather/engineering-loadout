@@ -2682,11 +2682,15 @@ def _list_table(rows, columns):
         return
     if _RICH and _console is not None:
         t = _RichTable(box=None, show_header=True, header_style="bold",
-                       pad_edge=False, show_edge=False, expand=False)
+                       pad_edge=False, show_edge=False, expand=True,
+                       padding=(0, 1), collapse_padding=True)
         for col in columns:
             t.add_column(col["name"], style=col.get("style", ""),
                          no_wrap=col.get("no_wrap", True),
-                         max_width=col.get("max_width"))
+                         max_width=col.get("max_width"),
+                         min_width=col.get("min_width"),
+                         ratio=col.get("ratio"),
+                         overflow=col.get("overflow", "fold"))
         for r in rows:
             t.add_row(*[str(c) for c in r])
         _console.print(t)
@@ -2742,11 +2746,11 @@ def cmd_list(args, registry):
             entry.get("description", ""),
         ))
     _list_table(rows, [
-        {"name": "PACKAGE", "style": "bold cyan"},
-        {"name": "DEFAULT"},
+        {"name": "PACKAGE",     "style": "bold cyan"},
+        {"name": "DEF",         "max_width": 3},
         {"name": "VERSION"},
-        {"name": "GROUPS", "no_wrap": False, "max_width": 30},
-        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 60},
+        {"name": "GROUPS",      "no_wrap": False, "max_width": 24},
+        {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1},
     ])
     return 0
 
