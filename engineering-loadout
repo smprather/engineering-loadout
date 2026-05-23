@@ -2655,7 +2655,6 @@ def cmd_list(args, registry):
             continue
         rows.append((
             n,
-            entry.get("kind", ""),
             "yes" if _is_default_pkg(entry) else "no",
             entry.get("version", ""),
             ", ".join(sorted(pkg_groups.get(n, []))),
@@ -2663,11 +2662,10 @@ def cmd_list(args, registry):
         ))
     _list_table(rows, [
         {"name": "PACKAGE", "style": "bold cyan"},
-        {"name": "KIND"},
         {"name": "DEFAULT"},
         {"name": "VERSION"},
         {"name": "GROUPS", "no_wrap": False, "max_width": 30},
-        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 50},
+        {"name": "DESCRIPTION", "no_wrap": False, "max_width": 60},
     ])
     return 0
 
