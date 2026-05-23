@@ -150,6 +150,48 @@ PYEDIT
 
     # UNDERCURL_STYLE = CURLY (project default; edit if you want SPIKY/CAPPED).
     sed -i 's/^#define UNDERCURL_STYLE UNDERCURL_SPIKY/#define UNDERCURL_STYLE UNDERCURL_CURLY/' config.def.h
+
+    # Silence "erresc: unknown csi / set/reset mode" warnings on stderr.
+    # Modern apps probe st for features it doesn't have (synchronized output
+    # mode 2026, DECLRMM mode 69, etc.); logging every probe spams stderr.
+    python3 - <<'PYEDIT'
+import pathlib
+p = pathlib.Path("st.c")
+src = p.read_text()
+patches = [
+    (
+        '\t\tfprintf(stderr, "erresc: unknown csi ");\n'
+        '\t\tcsidump();\n'
+        '\t\t/* die(""); */\n'
+        '\t\tbreak;',
+        '\t\t/* silently ignore unknown CSI escapes (feature probes from modern apps) */\n'
+        '\t\tbreak;',
+    ),
+    (
+        '\t\t\t\tfprintf(stderr,\n'
+        '\t\t\t\t\t"erresc: unknown private set/reset mode %d\\n",\n'
+        '\t\t\t\t\t*args);\n'
+        '\t\t\t\tbreak;',
+        '\t\t\t\t/* silently ignore unknown private set/reset modes */\n'
+        '\t\t\t\tbreak;',
+    ),
+    (
+        '\t\t\t\tfprintf(stderr,\n'
+        '\t\t\t\t\t"erresc: unknown set/reset mode %d\\n",\n'
+        '\t\t\t\t\t*args);\n'
+        '\t\t\t\tbreak;',
+        '\t\t\t\t/* silently ignore unknown set/reset modes */\n'
+        '\t\t\t\tbreak;',
+    ),
+]
+changed = 0
+for old, new in patches:
+    if old in src:
+        src = src.replace(old, new, 1)
+        changed += 1
+p.write_text(src)
+print("silence-warnings fixup: applied {} of 3 patches".format(changed))
+PYEDIT
 fi
 
 cd "$SRCDIR"
