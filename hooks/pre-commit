@@ -2,6 +2,7 @@
 # Pre-commit hook:
 #   1. Remove .git directories from embedded repositories.
 #   2. Strip repo ELF payloads when staged binary/archive candidates change.
+#   3. Ruff-format staged Python files (.py and extensionless python shebangs).
 
 set -euo pipefail
 
@@ -62,6 +63,31 @@ if [[ -n "$staged_strip_candidates" ]]; then
         [[ -f .strip-manifest ]] && git add .strip-manifest
         [[ -f pre_built/.strip-manifest ]] && git add pre_built/.strip-manifest
         echo "✓ Repo binaries and archives stripped and staged"
+    fi
+fi
+
+# --- 3. Ruff formatting ---
+
+_staged_all=$(git diff --cached --name-only --diff-filter=ACM)
+_staged_py_files=()
+while IFS= read -r _f; do
+    [[ -z "$_f" ]] && continue
+    if [[ "$_f" == *.py ]]; then
+        _staged_py_files+=("$_f")
+    elif [[ -f "$_f" ]] && head -1 "$_f" 2>/dev/null | grep -qE '^\s*#!.*python'; then
+        _staged_py_files+=("$_f")
+    fi
+done <<< "$_staged_all"
+
+if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
+    echo "Pre-commit: Formatting Python files with ruff..."
+    if ! command -v ruff >/dev/null; then
+        echo "  WARNING: 'ruff' not found in PATH — skipping format." >&2
+        echo "  Run 'ruff format <files>' manually before committing Python changes." >&2
+    else
+        ruff format "${_staged_py_files[@]}"
+        git add -- "${_staged_py_files[@]}"
+        echo "✓ Python files formatted"
     fi
 fi
 
