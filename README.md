@@ -265,13 +265,28 @@ extracting. Use `./engineering-loadout --skip @fonts-all` to skip every font, or
 
 ### Linux
 
+Download **Source code (tar.gz)** from the
+[latest release](https://github.com/smprather/engineering-loadout/releases/latest),
+then extract and run:
+
 ```bash
-git clone https://github.com/smprather/engineering-loadout.git
+tar xzf engineering-loadout-v*.tar.gz
+cd engineering-loadout-v*/
+./engineering-loadout
+```
+
+Or, if `curl` and the GitHub API are reachable from the target machine:
+
+```bash
+curl -fsSL \
+  "$(curl -fsSL https://api.github.com/repos/smprather/engineering-loadout/releases/latest \
+     | python3 -c 'import sys,json; print(json.load(sys.stdin)["tarball_url"])')" \
+  | tar xz --one-top-level=engineering-loadout --strip-components=1
 cd engineering-loadout
 ./engineering-loadout
 ```
 
-Single Python 3.6-compatible executable. Re-run after each `git pull`
+Single Python 3.6-compatible executable. Re-run with a new release tarball to update
 (idempotent; unchanged files skip the install step). Reload your shell with
 `exec bash` afterward.
 
@@ -307,7 +322,7 @@ Recipes for adding/updating pre-built binaries (strip → patchelf → bzip2), i
 
 ### Onboarding a new developer
 
-After cloning the repo and running `./engineering-loadout` to install the runtime, run `./dev-onboard` once to add the system-level packages, dev headers, and per-user toolchains required to rebuild any bundled tool from source. Six phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers (X11/Qt5/GTK3/ncurses/Octave) → release/CI (gh, docker) → per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent; `--check` for dry-run, `--yes` for non-interactive.
+After extracting a release and running `./engineering-loadout` to install the runtime, run `./dev-onboard` once to add the system-level packages, dev headers, and per-user toolchains required to rebuild any bundled tool from source. Six phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers (X11/Qt5/GTK3/ncurses/Octave) → release/CI (gh, docker) → per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent; `--check` for dry-run, `--yes` for non-interactive.
 
 ---
 
