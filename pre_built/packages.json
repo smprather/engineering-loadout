@@ -456,6 +456,17 @@
       "description": "Neovim layer dispatcher (lazy.nvim plugin specs + LSP configs across all layers)"
     },
 
+    "nvim-catalog-plugins": {
+      "kind": "data",
+      "archive": "nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2",
+      "install_to": "~/.local/share/nvim/loadout/vendor/catalog-plugins",
+      "version": "",
+      "platforms": ["linux"],
+      "default": true,
+      "tags": ["editor", "nvim"],
+      "description": "50-plugin curated nvim catalog (disabled by default; enable per-plugin in user layer)"
+    },
+
     "env-vim": {
       "kind": "env",
       "source": "vim/",

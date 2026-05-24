@@ -2264,6 +2264,27 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
     print(f"  Installed: {src_root}/ -> {dest_root}/")
 
 
+def install_nvim_catalog_plugins(repo_dir, home, selected_tools=None):
+    if selected_tools is not None and "env-nvim" not in selected_tools:
+        skipped("nvim catalog plugins (env-nvim not selected)", "")
+        record_result("nvim catalog plugins", "SKIP", "env-nvim not in selected packages")
+        return
+    archive = os.path.join(repo_dir, "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
+    if not os.path.isfile(archive):
+        skipped(
+            "nvim catalog plugins (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2 not found)",
+            "Catalog plugins will NOT be available offline; users must run :Lazy sync online.",
+        )
+        record_result("nvim catalog plugins", "SKIP", "no catalog archive")
+        return
+    dest = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor", "catalog-plugins")
+    ensure_dir(dest, "nvim catalog plugins")
+    with tarfile.open(archive, "r:bz2") as tf:
+        safe_extract_tar(tf, dest)
+    record_result("nvim catalog plugins", "yes", f"-> {dest}")
+    print(f"  Installed: {archive} -> {dest}/")
+
+
 def restore_backup(backup_path, home):
     if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
         tmp_dir = tempfile.mkdtemp(prefix="loadout_restore_", dir="/tmp")
@@ -3210,6 +3231,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True
     )
+    run_install_step("nvim catalog plugins", install_nvim_catalog_plugins, repo_dir, home, selected_tools, silent=True)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
     if hooks:
         run_install_step("post-install hooks", run_post_install_hooks, hooks, repo_dir, home, args, backup_dir)
