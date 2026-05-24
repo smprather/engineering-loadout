@@ -63,6 +63,7 @@ sha256  bf8894b4c1ea959d90af7dfbf0fb58b888cead5721fcc1507cb748d86056ddc1  pre_bu
 sha256  440f16d186c93b1680d5aebf32ea8906cd69dfbf5af3a173e2ee0c875d0c8fbf  pre_built/el8.x86_64.glibc2p28/bin/yank.bz2
 sha256  41a74109cf13e40d61137e3abdc73e9ddde939247869f1992c1270e2f572eabc  pre_built/el8.x86_64.glibc2p28/bin/yara.bz2
 sha256  54fdc2afe2588185f3e87aea2bb2f5bffaeeb3e3d004448abd89cdf43219ba6c  pre_built/el8.x86_64.glibc2p28/bin/yq.bz2
+sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  pre_built/el8.x86_64.glibc2p28/bin/zellij.bz2
 sha256  4c00d72c2d66f4be0cf4a95942f1cc80d7bbf006425f48fdc34e2f162542eaad  pre_built/el8.x86_64.glibc2p28/bin/zoxide.bz2
 sha256  93bd2e1684b4f7881fb263f8181e87a05a68af33790301c2b5231f4b4a90a8be  pre_built/el8.x86_64.glibc2p28/lib64/libFLAC.so.8.bz2
 sha256  a505dfc0042b37350a6c6c3fa284a2d6179b52bde258fa85e5d1a54390ccf67f  pre_built/el8.x86_64.glibc2p28/lib64/libICE.so.6.bz2

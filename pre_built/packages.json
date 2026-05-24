@@ -211,6 +211,7 @@
     "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "archive": "pre_built/PLATFORM/runtime/st.tar.bz2", "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
     "yank":   {"kind": "bin", "bins": ["yank"],            "version": "1.3.0",  "platforms": ["linux"], "default": true, "tags": ["clipboard"],        "description": "Select terminal output and copy to clipboard"},
     "yq":     {"kind": "bin", "bins": ["yq"],              "version": "4.53.2", "platforms": ["linux"], "default": true, "tags": ["data", "core"],     "description": "YAML/JSON/XML/CSV processor (jq for YAML)"},
+    "zellij": {"kind": "bin", "bins": ["zellij"],          "version": "0.44.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "multiplexer"], "description": "Terminal workspace multiplexer (no-web build; WASM plugins disabled)"},
     "zoxide": {"kind": "bin", "bins": ["zoxide"],          "version": "0.9.9",  "platforms": ["linux"], "default": true, "tags": ["nav", "core"],      "description": "Smarter cd with frecency ranking (z/zi)"},
 
     "octave": {

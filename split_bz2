@@ -1,0 +1,75 @@
+#!/usr/bin/python3
+"""Split large .bz2 or .tar.bz2 files into .part-NNN chunks for git storage.
+
+GitHub warns on files > 50 MB; hard-blocks at 100 MB.  Default chunk size is
+45 MiB so each part stays comfortably below the warning threshold.
+
+Usage:
+    ./split_bz2 pre_built/el8.x86_64.glibc2p28/bin/clang.bz2
+    ./split_bz2 --chunk-mb 45 pre_built/el8.x86_64.glibc2p28/runtime/llvm.tar.bz2
+
+After splitting, the original file is removed.  The installer transparently
+rejoins parts at install time — no user action required.
+
+To reassemble manually:
+    cat file.bz2.part-* > file.bz2
+"""
+
+from __future__ import print_function
+import argparse
+import os
+import sys
+
+DEFAULT_CHUNK_MB = 45
+
+
+def split_file(path, chunk_size):
+    size = os.path.getsize(path)
+    if size <= chunk_size:
+        print("{}: {:.1f} MB — no split needed (under {:.0f} MiB limit)".format(
+            path, size / 1024 / 1024, chunk_size / 1024 / 1024))
+        return 0
+
+    part = 0
+    with open(path, "rb") as src:
+        while True:
+            data = src.read(chunk_size)
+            if not data:
+                break
+            part_path = "{}.part-{:03d}".format(path, part)
+            with open(part_path, "wb") as dst:
+                dst.write(data)
+            print("  wrote {} ({:.1f} MB)".format(part_path, len(data) / 1024 / 1024))
+            part += 1
+
+    os.remove(path)
+    print("Removed {} — split into {} parts".format(path, part))
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(
+        description="Split large bz2/tar.bz2 files into .part-NNN chunks for git storage.")
+    ap.add_argument("files", nargs="+", metavar="FILE",
+                    help=".bz2 or .tar.bz2 file to split")
+    ap.add_argument("--chunk-mb", type=int, default=DEFAULT_CHUNK_MB,
+                    metavar="N",
+                    help="chunk size in MiB (default: {})".format(DEFAULT_CHUNK_MB))
+    args = ap.parse_args(argv)
+
+    chunk_size = args.chunk_mb * 1024 * 1024
+    rc = 0
+    for path in args.files:
+        if not os.path.isfile(path):
+            print("ERROR: {}: not a file".format(path), file=sys.stderr)
+            rc = 1
+            continue
+        if not (path.endswith(".bz2") or path.endswith(".tar.bz2")):
+            print("WARNING: {} does not end in .bz2 or .tar.bz2 — splitting anyway".format(path),
+                  file=sys.stderr)
+        rc = rc or split_file(path, chunk_size)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
