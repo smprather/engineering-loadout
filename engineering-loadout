@@ -2128,6 +2128,40 @@ def install_fish_runtime(repo_dir, home, selected_tools):
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
+def install_nvim_qt_runtime(repo_dir, home, selected_tools):
+    if selected_tools is not None and "nvim-qt" not in selected_tools:
+        skipped("nvim-qt runtime (nvim-qt not selected)", "")
+        record_result("nvim-qt runtime", "SKIP", "nvim-qt not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "nvim-qt-runtime.tar.bz2"))
+    if archive is None:
+        skipped(
+            "nvim-qt runtime (no nvim-qt-runtime.tar.bz2 in pre_built/<platform>/runtime/)",
+            "nvim-qt :Gui* commands (GuiFont, GuiTabline, etc.) will NOT be available",
+        )
+        record_result("nvim-qt runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    # Archive contains runtime/ relative to install root; extract to ~/.local/share/nvim-qt/.
+    nvim_qt_share = os.path.join(home, ".local", "share", "nvim-qt")
+    ensure_dir(nvim_qt_share, "nvim-qt runtime")
+    runtime_dir = os.path.join(nvim_qt_share, "runtime")
+    remove_if_exists(runtime_dir)
+
+    pv_extract_tar(archive, nvim_qt_share)
+
+    sentinel = os.path.join(runtime_dir, "nvim_gui_shim.vim")
+    if os.path.isfile(sentinel):
+        record_result("nvim-qt runtime", "yes", f"-> {runtime_dir}/")
+        print(f"  Installed: {archive} -> {runtime_dir}/")
+    else:
+        warn(f"nvim-qt runtime archive did not install {sentinel} as expected")
+        record_result("nvim-qt runtime", "FAIL", "archive extracted but nvim_gui_shim.vim not found")
+
+
 def install_treesitter_parsers(repo_dir, home, selected_tools=None):
     if (
         selected_tools is not None
@@ -3172,6 +3206,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True
     )

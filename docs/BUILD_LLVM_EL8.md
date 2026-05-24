@@ -63,11 +63,11 @@ The active tools used for the successful build were not the base EL8 tool versio
 
 ```text
 /usr/local/bin/cmake       cmake 4.3.2
-/home/mylesp/.local/bin/ninja  1.11.1.git.kitware.jobserver-1
-/home/mylesp/.local/bin/python3  local Python 3.14.4
+$HOME/.local/bin/ninja     1.13.2
+$HOME/.local/bin/python3   local Python 3.14.4
 ```
 
-EL8 RPMs for `cmake` and `ninja-build` were installed too, but the PATH resolved to the newer local tools. If reproducing on a clean system, make sure `cmake --version`, `ninja --version`, and `python3 --version` are adequate before configuring.
+EL8 RPMs for `cmake` and `ninja-build` were installed too, but this build is pinned to `$HOME/.local/bin/ninja` through `CMAKE_MAKE_PROGRAM`. Do not rely on whichever `ninja` happens to appear first in `PATH`. If reproducing on a clean system, make sure `cmake --version`, `$HOME/.local/bin/ninja --version`, and `python3 --version` are adequate before configuring.
 
 Optional features that were missing and did not block this build:
 
@@ -111,7 +111,7 @@ Do not delete `.git` from the checkout. CMake and the LLVM version machinery use
 The revision that was built here was:
 
 ```text
-e6c316e374e7380415e7abb15e8816b9027307b1
+db7f01dc3b3395aebd0565172107ba8045a0da05
 ```
 
 ## Configure
@@ -120,8 +120,11 @@ From the repo root:
 
 ```bash
 source /opt/rh/gcc-toolset-14/enable
+NINJA="$HOME/.local/bin/ninja"
+test -x "$NINJA"
 
 cmake -S llvm -B build -G Ninja \
+  -DCMAKE_MAKE_PROGRAM="$NINJA" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr/local \
   -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lldb;lld;bolt' \
@@ -141,19 +144,22 @@ Notes:
 Use a capped job count. `-j8` worked with 24 GB WSL memory:
 
 ```bash
-ninja -C build -j8
+NINJA="$HOME/.local/bin/ninja"
+"$NINJA" -C build -j8
 ```
 
 Build compiler-rt explicitly:
 
 ```bash
-ninja -C build compiler-rt -j8
+NINJA="$HOME/.local/bin/ninja"
+"$NINJA" -C build compiler-rt -j8
 ```
 
 Build the stats runtime explicitly before install:
 
 ```bash
-ninja -C build/runtimes/runtimes-bins stats -j8
+NINJA="$HOME/.local/bin/ninja"
+"$NINJA" -C build/runtimes/runtimes-bins stats -j8
 ```
 
 This matters because the compiler-rt install manifest expects `libclang_rt.stats.a` and `libclang_rt.stats_client.a`, but the broad `compiler-rt` target did not build them in this environment.
@@ -260,7 +266,7 @@ Problem: attempted to inspect/install with an invalid Ninja tool invocation.
 
 Why it failed: `-t targets` takes Ninja tool options, not a build target named `install`.
 
-Resolution: use `ninja -C build -t targets` only to list targets. Use CMake install for installation.
+Resolution: use `$HOME/.local/bin/ninja -C build -t targets` only to list targets. Use CMake install for installation.
 
 ### `sudo ninja -C build install`
 
@@ -291,7 +297,8 @@ Why it failed: the compiler-rt install manifest expected the stats archives, but
 Resolution: build the stats target first, then rerun install:
 
 ```bash
-ninja -C build/runtimes/runtimes-bins stats -j8
+NINJA="$HOME/.local/bin/ninja"
+"$NINJA" -C build/runtimes/runtimes-bins stats -j8
 sudo cmake --install build/runtimes/runtimes-bins --prefix /usr/local
 ```
 

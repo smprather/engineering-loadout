@@ -97,6 +97,11 @@ fi
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 export EGL_LOG_LEVEL=fatal
 
+# nvim-qt GUI shim runtime — enables :GuiFont, :GuiTabline, :GuiScrollBar, etc.
+if [[ -d $HOME/.local/share/nvim-qt/runtime ]]; then
+    export NVIM_QT_RUNTIME_PATH=$HOME/.local/share/nvim-qt/runtime
+fi
+
 # GObject introspection typelib search path for bundled GUI Python tools (meld, etc.)
 if [[ -d $HOME/.local/lib/girepository-1.0 ]]; then
     export GI_TYPELIB_PATH=$HOME/.local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
