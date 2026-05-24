@@ -70,7 +70,7 @@
     "miller":      {"kind": "bin", "bins": ["mlr"],         "version": "6.18.1",     "platforms": ["linux"], "default": true,  "tags": ["data"],               "description": "CSV/TSV/JSON/NDJSON data processor (mlr)"},
     "ninja":       {"kind": "bin", "bins": ["ninja"],       "version": "1.13.2",     "platforms": ["linux"], "default": false, "optional": true, "tags": ["build", "dev"],       "description": "Fast build system used by CMake and LLVM"},
     "fresh":       {"kind": "bin", "bins": ["fresh"],       "version": "0.3.8",      "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor"],             "description": "Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config)"},
-    "nvim":        {"kind": "bin", "bins": ["nvim"],        "version": "0.12.2",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2", "recommends": ["env-nvim", "treesitter-parsers", "treesitter-queries"], "description": "Hyperextensible Vim-based text editor"},
+    "nvim":        {"kind": "bin", "bins": ["nvim"],        "version": "0.12.2",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2", "recommends": ["env-nvim", "treesitter-parsers"], "description": "Hyperextensible Vim-based text editor"},
     "patchelf":    {"kind": "bin", "bins": ["patchelf"],    "version": "0.12",       "platforms": ["linux"], "default": true,  "tags": ["dev", "elf"],         "description": "Modify ELF RPATH and interpreter in-place"},
     "pigz":        {"kind": "bin", "bins": ["pigz"],        "version": "2.8",        "platforms": ["linux"], "default": true,  "tags": ["compress"],           "description": "Parallel implementation of gzip"},
     "procs":       {"kind": "bin", "bins": ["procs"],       "version": "0.14.11",    "platforms": ["linux"], "default": true,  "tags": ["monitor"],            "description": "ps replacement with colors and process tree"},
@@ -416,24 +416,13 @@
 
     "treesitter-parsers": {
       "kind": "data",
-      "archive": "treesitter/prebuilt/TS_PLATFORM/parser/",
-      "install_to": "~/.local/share/nvim/tree-sitter-parsers/parser",
-      "version": "",
-      "platforms": ["linux"],
-      "default": true,
-      "tags": ["editor", "parser"],
-      "description": "Pre-built tree-sitter parsers (.so) for 300+ languages"
-    },
-
-    "treesitter-queries": {
-      "kind": "data",
       "archive": "treesitter/prebuilt/TS_PLATFORM/",
       "install_to": "~/.local/share/nvim/tree-sitter-parsers",
       "version": "",
       "platforms": ["linux"],
       "default": true,
       "tags": ["editor", "parser"],
-      "description": "Tree-sitter parser-info, queries, registry, and build-info metadata"
+      "description": "Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages"
     },
 
     "env-bash": {
@@ -463,7 +452,7 @@
       "platforms": ["linux", "macos", "windows"],
       "default": true,
       "tags": ["env", "editor"],
-      "recommends": ["nvim", "treesitter-parsers", "treesitter-queries"],
+      "recommends": ["nvim", "treesitter-parsers"],
       "description": "Neovim layer dispatcher (lazy.nvim plugin specs + LSP configs across all layers)"
     },
 
@@ -754,7 +743,7 @@
     },
     "@data-bundles": {
       "kind": "group",
-      "members": ["tldr-data", "treesitter-parsers", "treesitter-queries"],
+      "members": ["tldr-data", "treesitter-parsers"],
       "description": "Bundled data caches (tldr, tree-sitter parsers)"
     },
     "@engineering-loadout": {

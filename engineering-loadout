@@ -2172,13 +2172,9 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
 
 
 def install_treesitter_parsers(repo_dir, home, selected_tools=None):
-    if (
-        selected_tools is not None
-        and "treesitter-parsers" not in selected_tools
-        and "treesitter-queries" not in selected_tools
-    ):
-        skipped("Tree-sitter parsers (treesitter-parsers/queries not selected)", "")
-        record_result("Tree-sitter parsers", "SKIP", "treesitter-parsers/queries not in selected packages")
+    if selected_tools is not None and "treesitter-parsers" not in selected_tools:
+        skipped("Tree-sitter parsers (treesitter-parsers not selected)", "")
+        record_result("Tree-sitter parsers", "SKIP", "treesitter-parsers not in selected packages")
         return
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, "treesitter", "prebuilt", platform)
@@ -2235,12 +2231,7 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
 
 
 def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
-    if (
-        selected_tools is not None
-        and "treesitter-parsers" not in selected_tools
-        and "treesitter-queries" not in selected_tools
-        and "env-nvim" not in selected_tools
-    ):
+    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "env-nvim" not in selected_tools:
         skipped("vendored nvim-treesitter (no treesitter packages or env-nvim selected)", "")
         record_result("nvim-treesitter vendor", "SKIP", "no treesitter packages or env-nvim selected")
         return
