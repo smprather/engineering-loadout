@@ -2145,7 +2145,10 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
         record_result("nvim-qt runtime", "SKIP", "no bundled runtime archive")
         return
 
-    # Archive contains runtime/ relative to install root; extract to ~/.local/share/nvim-qt/.
+    # Extract archive to ~/.local/share/nvim-qt/ (keeps runtime/ available for
+    # NVIM_QT_RUNTIME_PATH), then also copy the shim plugin directly into
+    # ~/.local/share/nvim/site/plugin/ — that dir is on nvim's default runtimepath
+    # unconditionally, which is more reliable than the NVIM_QT_RUNTIME_PATH env var.
     nvim_qt_share = os.path.join(home, ".local", "share", "nvim-qt")
     ensure_dir(nvim_qt_share, "nvim-qt runtime")
     runtime_dir = os.path.join(nvim_qt_share, "runtime")
@@ -2153,13 +2156,19 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
 
     pv_extract_tar(archive, nvim_qt_share)
 
-    sentinel = os.path.join(runtime_dir, "plugin", "nvim_gui_shim.vim")
-    if os.path.isfile(sentinel):
-        record_result("nvim-qt runtime", "yes", f"-> {runtime_dir}/")
-        print(f"  Installed: {archive} -> {runtime_dir}/")
-    else:
-        warn(f"nvim-qt runtime archive did not install {sentinel} as expected")
+    shim_src = os.path.join(runtime_dir, "plugin", "nvim_gui_shim.vim")
+    if not os.path.isfile(shim_src):
+        warn(f"nvim-qt runtime archive did not install {shim_src} as expected")
         record_result("nvim-qt runtime", "FAIL", "archive extracted but nvim_gui_shim.vim not found")
+        return
+
+    # Install shim into nvim site/plugin so it loads unconditionally in all nvim sessions.
+    site_plugin_dir = os.path.join(home, ".local", "share", "nvim", "site", "plugin")
+    ensure_dir(site_plugin_dir, "nvim-qt runtime (site plugin)")
+    shim_dest = os.path.join(site_plugin_dir, "nvim_gui_shim.vim")
+    shutil.copy2(shim_src, shim_dest)
+    record_result("nvim-qt runtime", "yes", f"shim -> {shim_dest}")
+    print(f"  Installed: {shim_src} -> {shim_dest}")
 
 
 def install_treesitter_parsers(repo_dir, home, selected_tools=None):
