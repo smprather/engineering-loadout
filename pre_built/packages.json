@@ -113,7 +113,8 @@
     "uv":          {"kind": "bin", "bins": ["uv"],          "version": "0.11.13", "platforms": ["linux"], "default": true,  "tags": ["python", "pkg"],  "description": "Extremely fast Python package and project manager"},
     "vim":         {"kind": "bin", "bins": ["vim", "vim.bin"], "version": "9.2",  "platforms": ["linux"], "default": true,  "tags": ["editor"],         "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2", "recommends": ["env-vim"], "description": "Vi IMproved text editor"},
     "gvim":        {"kind": "bin", "bins": ["gvim", "gvim.bin"], "version": "9.2", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs", "vim"], "recommends": ["env-vim", "font-firacode"], "description": "GTK3 GUI Vim with clipboard and font rendering"},
-    "nedit-ng":    {"kind": "bin", "bins": ["nedit-ng"], "version": "2025.1", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs"], "description": "Qt5 GUI text editor, NEdit rewrite"},
+    "nedit-ng":    {"kind": "bin", "bins": ["nedit-ng"], "version": "2025.1",  "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs"], "description": "Qt5 GUI text editor, NEdit rewrite"},
+    "neovide":     {"kind": "bin", "bins": ["neovide"], "version": "0.16.2",  "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "recommends": ["nvim"], "description": "GPU-accelerated Neovim GUI (wgpu renderer; X11/Wayland via dlopen; no bundled libs needed)"},
 
     "gui_libs": {
       "kind": "lib-bundle",
@@ -686,7 +687,7 @@
     },
     "@editor-gui": {
       "kind": "group",
-      "members": ["gvim", "nedit-ng", "meld"],
+      "members": ["gvim", "nedit-ng", "neovide", "meld"],
       "description": "GUI editors (depend on gui_libs)"
     },
     "@editor-suite": {
