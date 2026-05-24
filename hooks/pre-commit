@@ -2,7 +2,7 @@
 # Pre-commit hook:
 #   1. Remove .git directories from embedded repositories.
 #   2. Strip repo ELF payloads when staged binary/archive candidates change.
-#   3. Ruff-format staged Python files (.py and extensionless python shebangs).
+#   3. Ruff-format and isort staged Python files (.py and extensionless python shebangs).
 
 set -euo pipefail
 
@@ -83,11 +83,12 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
     echo "Pre-commit: Formatting Python files with ruff..."
     if ! command -v ruff >/dev/null; then
         echo "  WARNING: 'ruff' not found in PATH — skipping format." >&2
-        echo "  Run 'ruff format <files>' manually before committing Python changes." >&2
+        echo "  Run 'ruff format <files>' && 'ruff check --fix <files>' manually before committing Python changes." >&2
     else
         ruff format "${_staged_py_files[@]}"
+        ruff check --fix "${_staged_py_files[@]}"
         git add -- "${_staged_py_files[@]}"
-        echo "✓ Python files formatted"
+        echo "✓ Python files formatted and imports sorted"
     fi
 fi
 

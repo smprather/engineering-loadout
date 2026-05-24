@@ -26,16 +26,16 @@ import gzip
 import hashlib
 import json
 import os
-import shutil
 import re
+import shutil
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
 import zipfile
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 # ── paths ─────────────────────────────────────────────────────────────────
 

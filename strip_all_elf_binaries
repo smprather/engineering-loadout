@@ -13,7 +13,6 @@ import tarfile
 import tempfile
 import warnings
 
-
 ARCHIVE_SUFFIXES = (
     ".tar.gz",
     ".tar.bz2",

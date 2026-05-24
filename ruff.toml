@@ -1,5 +1,8 @@
 line-length = 120
 
+[lint]
+select = ["I"]
+
 exclude = [
     "installer_vendor/",
     "treesitter/vendor/",
