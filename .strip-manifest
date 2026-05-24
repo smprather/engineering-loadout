@@ -55,6 +55,7 @@ sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  pre_bu
 sha256  cff9472b7bd266ee6df1161c7d3201b7a21963dd0e62642e2aec2f42547f23dc  pre_built/el8.x86_64.glibc2p28/bin/mlr.bz2
 sha256  7fa7cf9ee4e94a292cfa2f1f56b7f613c0bb231edb80d378e0739aac136bd77a  pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
 sha256  28b783c26131237e12d373b9923f2f43f6c95cffc24d67c79258f5c2f75dfc4c  pre_built/el8.x86_64.glibc2p28/bin/ninja.bz2
+sha256  ccfdbebf31b13995ce46069f2ad057a044eae0ebb8c5719d159f3ee31f2b728d  pre_built/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
 sha256  17713656c0d5ce6eb6dd885997a01f6589ea29ca19d503a85630034e445a4db2  pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  eacb73a3e57af3b2d3399f3785aab8305fcd1fa743bc08d7500ac15f19f3577d  pre_built/el8.x86_64.glibc2p28/bin/octave.bz2
 sha256  32fefa25d1f8378cfd840f49ca2b9a16a8b7c44a4f7ecbd0a13d6fc1496308a5  pre_built/el8.x86_64.glibc2p28/bin/patchelf.bz2
