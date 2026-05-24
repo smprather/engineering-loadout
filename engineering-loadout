@@ -505,6 +505,7 @@ _bz2 = _Bz2Store()
 
 FINAL_NOTICES = []
 INSTALL_RESULTS = []
+_SILENT_AREAS = set()  # area names whose non-FAIL results are omitted from install results table
 
 
 class InstallRefused(Exception):
@@ -601,6 +602,9 @@ def _sigint_handler(signum, frame):
 
 
 def run_install_step(thing, func, *args, **kwargs):
+    silent = kwargs.pop("silent", False)
+    if silent:
+        _SILENT_AREAS.add(thing)
     _section(f"Installing {thing}...")
     try:
         result = func(*args, **kwargs)
@@ -1635,6 +1639,8 @@ def print_install_results():
         return
     rows = []
     for thing, status, detail in INSTALL_RESULTS:
+        if thing in _SILENT_AREAS and status != "FAIL":
+            continue
         success = {"OK": "yes", "FAIL": "no", "SKIP": "skip"}.get(status, status.lower())
         rows.append((thing, success, detail or ""))
 
@@ -3159,15 +3165,17 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
-    run_install_step("Helix runtime", install_helix_runtime, repo_dir, home, selected_tools)
-    run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools)
-    run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home, selected_tools)
-    run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools)
-    run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools)
-    run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools)
-    run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools)
-    run_install_step("nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools)
-    run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools)
+    run_install_step("Helix runtime", install_helix_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step(
+        "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True
+    )
+    run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
     if hooks:
         run_install_step("post-install hooks", run_post_install_hooks, hooks, repo_dir, home, args, backup_dir)
     else:
