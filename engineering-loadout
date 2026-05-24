@@ -2153,7 +2153,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
 
     pv_extract_tar(archive, nvim_qt_share)
 
-    sentinel = os.path.join(runtime_dir, "nvim_gui_shim.vim")
+    sentinel = os.path.join(runtime_dir, "plugin", "nvim_gui_shim.vim")
     if os.path.isfile(sentinel):
         record_result("nvim-qt runtime", "yes", f"-> {runtime_dir}/")
         print(f"  Installed: {archive} -> {runtime_dir}/")
