@@ -47,7 +47,7 @@
     "gnuplot":     {"kind": "bin", "bins": ["gnuplot"],     "version": "6.0.2",   "platforms": ["linux"], "default": true,  "tags": ["scientific"],            "description": "Command-line graphing and plotting utility"},
     "gping":       {"kind": "bin", "bins": ["gping"],       "version": "1.20.1",  "platforms": ["linux"], "default": true,  "tags": ["network", "monitor"],    "description": "Ping with live graph visualization"},
     "htop":        {"kind": "bin", "bins": ["htop"],        "version": "3.2.1",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "Interactive process viewer and manager"},
-    "hx":          {"kind": "bin", "bins": ["hx"],          "version": "25.07.1", "platforms": ["linux"], "default": true,  "tags": ["editor"],                "recommends": ["helix-runtime", "treesitter-parsers"], "description": "Modern modal text editor with tree-sitter and LSP"},
+    "hx":          {"kind": "bin", "bins": ["hx"],          "version": "25.07.1", "platforms": ["linux"], "default": true,  "tags": ["editor"],                "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2", "recommends": ["treesitter-parsers"], "description": "Modern modal text editor with tree-sitter and LSP"},
     "hyperfine":   {"kind": "bin", "bins": ["hyperfine"],   "version": "1.20.0",  "platforms": ["linux"], "default": true,  "tags": ["benchmark"],             "description": "Command-line benchmarking tool"},
 
     "jq": {
@@ -66,7 +66,7 @@
     "lazygit":     {"kind": "bin", "bins": ["lazygit"],     "version": "0.61.1",     "platforms": ["linux"], "default": true,  "tags": ["git", "tui"],         "description": "TUI git client for staging, committing, rebasing"},
     "micro":       {"kind": "bin", "bins": ["micro"],       "version": "2.0.15",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "description": "Beginner-friendly terminal text editor"},
     "miller":      {"kind": "bin", "bins": ["mlr"],         "version": "6.18.1",     "platforms": ["linux"], "default": true,  "tags": ["data"],               "description": "CSV/TSV/JSON/NDJSON data processor (mlr)"},
-    "nvim":        {"kind": "bin", "bins": ["nvim"],        "version": "0.12.2",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "depends": ["nvim-runtime"], "recommends": ["env-nvim", "treesitter-parsers", "treesitter-queries"], "description": "Hyperextensible Vim-based text editor"},
+    "nvim":        {"kind": "bin", "bins": ["nvim"],        "version": "0.12.2",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2", "recommends": ["env-nvim", "treesitter-parsers", "treesitter-queries"], "description": "Hyperextensible Vim-based text editor"},
     "patchelf":    {"kind": "bin", "bins": ["patchelf"],    "version": "0.12",       "platforms": ["linux"], "default": true,  "tags": ["dev", "elf"],         "description": "Modify ELF RPATH and interpreter in-place"},
     "pigz":        {"kind": "bin", "bins": ["pigz"],        "version": "2.8",        "platforms": ["linux"], "default": true,  "tags": ["compress"],           "description": "Parallel implementation of gzip"},
     "procs":       {"kind": "bin", "bins": ["procs"],       "version": "0.14.11",    "platforms": ["linux"], "default": true,  "tags": ["monitor"],            "description": "ps replacement with colors and process tree"},
@@ -84,7 +84,7 @@
       "description": "Efficient file sync with delta-transfer algorithm"
     },
 
-    "ruff":        {"kind": "bin", "bins": ["ruff"],        "version": "0.15.12", "platforms": ["linux"], "default": true,  "tags": ["python", "format"],  "description": "Extremely fast Python linter and formatter"},
+    "ruff":        {"kind": "bin", "bins": ["ruff"],        "version": "0.15.14", "platforms": ["linux"], "default": true,  "tags": ["python", "format"],  "description": "Extremely fast Python linter and formatter"},
     "sd":          {"kind": "bin", "bins": ["sd"],          "version": "1.0.0",   "platforms": ["linux"], "default": true,  "tags": ["data"],              "description": "sed alternative with simpler regex syntax"},
     "shfmt":       {"kind": "bin", "bins": ["shfmt"],       "version": "3.13.1",  "platforms": ["linux"], "default": true,  "tags": ["shell", "format"],   "description": "Shell script formatter and parser"},
     "starship":    {"kind": "bin", "bins": ["starship"],    "version": "1.25.1",  "platforms": ["linux"], "default": true,  "tags": ["shell", "prompt"],   "recommends": ["env-starship"], "description": "Cross-shell customizable minimal prompt"},
@@ -105,10 +105,10 @@
     },
 
     "tree-sitter": {"kind": "bin", "bins": ["tree-sitter"], "version": "0.26.8",  "platforms": ["linux"], "default": true,  "tags": ["dev", "parser"],  "description": "Incremental parser generator and query tool"},
-    "ty":          {"kind": "bin", "bins": ["ty"],          "version": "0.0.35",  "platforms": ["linux"], "default": true,  "tags": ["python", "lint"], "description": "Fast Python type checker (Astral)"},
+    "ty":          {"kind": "bin", "bins": ["ty"],          "version": "0.0.39",  "platforms": ["linux"], "default": true,  "tags": ["python", "lint"], "description": "Fast Python type checker (Astral)"},
     "uv":          {"kind": "bin", "bins": ["uv"],          "version": "0.11.13", "platforms": ["linux"], "default": true,  "tags": ["python", "pkg"],  "description": "Extremely fast Python package and project manager"},
-    "vim":         {"kind": "bin", "bins": ["vim", "vim.bin"], "version": "9.2",  "platforms": ["linux"], "default": true,  "tags": ["editor"],         "depends": ["vim92-runtime"], "recommends": ["env-vim"], "description": "Vi IMproved text editor"},
-    "gvim":        {"kind": "bin", "bins": ["gvim", "gvim.bin"], "version": "9.2", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs", "vim92-runtime"], "recommends": ["env-vim", "font-firacode"], "description": "GTK3 GUI Vim with clipboard and font rendering"},
+    "vim":         {"kind": "bin", "bins": ["vim", "vim.bin"], "version": "9.2",  "platforms": ["linux"], "default": true,  "tags": ["editor"],         "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2", "recommends": ["env-vim"], "description": "Vi IMproved text editor"},
+    "gvim":        {"kind": "bin", "bins": ["gvim", "gvim.bin"], "version": "9.2", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs", "vim"], "recommends": ["env-vim", "font-firacode"], "description": "GTK3 GUI Vim with clipboard and font rendering"},
     "nedit-ng":    {"kind": "bin", "bins": ["nedit-ng"], "version": "2025.1", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs"], "description": "Qt5 GUI text editor, NEdit rewrite"},
 
     "gui_libs": {
@@ -208,7 +208,7 @@
     "yara":   {"kind": "bin", "bins": ["yara"],            "version": "4.5.5",  "platforms": ["linux"], "default": true, "tags": ["security"],         "description": "Malware pattern matching and classification tool"},
     "xterm":  {"kind": "bin", "bins": ["xterm", "resize"], "version": "331",    "platforms": ["linux"], "default": true, "tags": ["terminal", "gui"],  "description": "X11 terminal emulator with Unicode and color"},
     "urxvt":  {"kind": "bin", "bins": ["urxvt", "urxvtc", "urxvtd"], "libs": ["libptytty.so.0"], "version": "9.31", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "description": "rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"},
-    "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "depends": ["st-runtime"], "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
+    "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "archive": "pre_built/PLATFORM/runtime/st.tar.bz2", "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
     "yank":   {"kind": "bin", "bins": ["yank"],            "version": "1.3.0",  "platforms": ["linux"], "default": true, "tags": ["clipboard"],        "description": "Select terminal output and copy to clipboard"},
     "yq":     {"kind": "bin", "bins": ["yq"],              "version": "4.53.2", "platforms": ["linux"], "default": true, "tags": ["data", "core"],     "description": "YAML/JSON/XML/CSV processor (jq for YAML)"},
     "zoxide": {"kind": "bin", "bins": ["zoxide"],          "version": "0.9.9",  "platforms": ["linux"], "default": true, "tags": ["nav", "core"],      "description": "Smarter cd with frecency ranking (z/zi)"},
@@ -261,7 +261,7 @@
       "default": false,
       "optional": true,
       "tags": ["scientific"],
-      "depends": ["octave-runtime"],
+      "archive": "pre_built/PLATFORM/runtime/octave.tar.bz2",
       "recommends": ["gnuplot"],
       "description": "GNU scientific computing language (MATLAB-compatible)"
     },
@@ -292,7 +292,8 @@
       "default": false,
       "optional": true,
       "tags": ["diff", "gui"],
-      "depends": ["gui_libs", "gobject-typelibs", "meld-runtime"],
+      "archive": "pre_built/PLATFORM/runtime/meld.tar.bz2",
+      "depends": ["gui_libs", "gobject-typelibs"],
       "description": "GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource)"
     },
 
@@ -315,7 +316,7 @@
       "default": false,
       "optional": true,
       "tags": ["shell"],
-      "depends": ["fish-runtime"],
+      "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
       "description": "Fish shell — friendly interactive shell with autosuggestions and syntax highlighting"
     },
 
@@ -394,85 +395,6 @@
       "default": true,
       "tags": ["gui", "gobject"],
       "description": "GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo)"
-    },
-
-    "helix-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2",
-      "install_to": "~/.config/helix",
-      "version": "25.07.1",
-      "platforms": ["linux"],
-      "default": true,
-      "tags": ["editor", "runtime"],
-      "description": "Helix editor runtime tree (themes, language configs, tutor)"
-    },
-
-    "nvim-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2",
-      "install_to": "~/.local/share/nvim",
-      "version": "0.12.2",
-      "platforms": ["linux"],
-      "default": true,
-      "tags": ["editor", "runtime"],
-      "description": "Neovim runtime files (filetype.lua, syntax/, indent/, plugin/)"
-    },
-
-    "vim92-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2",
-      "install_to": "~/.local/share/vim",
-      "version": "9.2",
-      "platforms": ["linux"],
-      "default": true,
-      "tags": ["editor", "runtime"],
-      "description": "Vim 9.2 runtime files (filetype.vim, syntax/, indent/, ftplugin/)"
-    },
-
-    "octave-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/octave.tar.bz2",
-      "install_to": "~/.local",
-      "version": "11.1.0",
-      "platforms": ["linux"],
-      "default": false,
-      "tags": ["scientific", "runtime"],
-      "description": "Octave 11.1 runtime tree (m-files + .oct plugins)"
-    },
-
-    "meld-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/meld.tar.bz2",
-      "install_to": "~/.local",
-      "version": "3.20.4",
-      "platforms": ["linux"],
-      "default": false,
-      "tags": ["diff", "runtime"],
-      "description": "Meld shanghai bundle (system py3.6 + bundled PyGObject/cairo/meld packages + share/meld)"
-    },
-
-    "fish-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
-      "install_to": "~/.local",
-      "version": "4.7.1",
-      "platforms": ["linux"],
-      "default": false,
-      "tags": ["shell", "runtime"],
-      "depends": ["fish"],
-      "description": "Fish standard library (functions, completions, themes)"
-    },
-
-    "st-runtime": {
-      "kind": "runtime",
-      "archive": "pre_built/PLATFORM/runtime/st.tar.bz2",
-      "install_to": "~",
-      "version": "0.9.3",
-      "platforms": ["linux"],
-      "default": false,
-      "tags": ["terminal", "runtime"],
-      "depends": ["st"],
-      "description": "st-256color terminfo with Smulx/Setulc undercurl + colored-underline caps (installs to ~/.terminfo/)"
     },
 
     "tldr-data": {
@@ -576,8 +498,8 @@
       "platforms": ["linux", "macos", "windows"],
       "default": true,
       "tags": ["env", "editor"],
-      "recommends": ["hx", "helix-runtime"],
-      "description": "Helix editor user config (paired with helix-runtime)"
+      "recommends": ["hx"],
+      "description": "Helix editor user config"
     },
 
     "env-kak": {
@@ -769,7 +691,7 @@
     },
     "@shells-optional": {
       "kind": "group",
-      "members": ["zsh", "fish", "fish-runtime"],
+      "members": ["zsh", "fish"],
       "description": "Optional shells (bash is in @default)"
     },
     "@compression": {
@@ -779,13 +701,13 @@
     },
     "@scientific": {
       "kind": "group",
-      "members": ["gnuplot", "octave", "octave-runtime"],
+      "members": ["gnuplot", "octave"],
       "description": "Scientific computing (octave is opt-in)"
     },
     "@gui-suite": {
       "kind": "group",
       "members": ["@editor-gui", "gui_libs", "gobject-typelibs", "xterm", "xsel", "yank",
-                  "urxvt", "st", "meld-runtime", "vim92-runtime"],
+                  "urxvt", "st"],
       "description": "Full GUI stack for headless EE farm GUI forwarding"
     },
     "@python-stack": {

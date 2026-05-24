@@ -1779,9 +1779,9 @@ def pv_extract_tar(archive_path, dest_dir):
 
 
 def install_helix_runtime(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "helix-runtime" not in selected_tools and "hx" not in selected_tools:
-        skipped("Helix runtime (helix-runtime not selected)", "")
-        record_result("Helix runtime", "SKIP", "helix-runtime not in selected tools")
+    if selected_tools is not None and "hx" not in selected_tools:
+        skipped("Helix runtime (hx not selected)", "")
+        record_result("Helix runtime", "SKIP", "hx not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1814,9 +1814,9 @@ def install_helix_runtime(repo_dir, home, selected_tools=None):
 
 
 def install_vim_runtime(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "vim92-runtime" not in selected_tools and "vim" not in selected_tools and "gvim" not in selected_tools:
-        skipped("Vim runtime (vim92-runtime not selected)", "")
-        record_result("Vim runtime", "SKIP", "vim92-runtime not in selected tools")
+    if selected_tools is not None and "vim" not in selected_tools and "gvim" not in selected_tools:
+        skipped("Vim runtime (vim/gvim not selected)", "")
+        record_result("Vim runtime", "SKIP", "vim/gvim not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1854,9 +1854,9 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
 
 
 def install_nvim_runtime(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "nvim-runtime" not in selected_tools and "nvim" not in selected_tools:
-        skipped("Neovim runtime (nvim-runtime not selected)", "")
-        record_result("Neovim runtime", "SKIP", "nvim-runtime not in selected tools")
+    if selected_tools is not None and "nvim" not in selected_tools:
+        skipped("Neovim runtime (nvim not selected)", "")
+        record_result("Neovim runtime", "SKIP", "nvim not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1885,11 +1885,9 @@ def install_nvim_runtime(repo_dir, home, selected_tools=None):
 
 
 def install_octave_runtime(repo_dir, home, selected_tools):
-    # Resolver pulls octave-runtime in when octave is selected (depends edge).
-    # We check for the runtime pkg name directly so --add octave-runtime works too.
-    if selected_tools is not None and "octave-runtime" not in selected_tools and "octave" not in selected_tools:
-        skipped("Octave runtime (octave-runtime not selected)", "")
-        record_result("Octave runtime", "SKIP", "octave-runtime not in selected tools")
+    if selected_tools is not None and "octave" not in selected_tools:
+        skipped("Octave runtime (octave not selected)", "")
+        record_result("Octave runtime", "SKIP", "octave not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1923,9 +1921,9 @@ def install_octave_runtime(repo_dir, home, selected_tools):
 
 
 def install_meld_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "meld-runtime" not in selected_tools and "meld" not in selected_tools:
-        skipped("Meld runtime (meld-runtime not selected)", "")
-        record_result("Meld runtime", "SKIP", "meld-runtime not in selected tools")
+    if selected_tools is not None and "meld" not in selected_tools:
+        skipped("Meld runtime (meld not selected)", "")
+        record_result("Meld runtime", "SKIP", "meld not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -1970,9 +1968,9 @@ def install_meld_runtime(repo_dir, home, selected_tools):
 
 
 def install_st_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "st-runtime" not in selected_tools and "st" not in selected_tools:
-        skipped("st runtime (st-runtime not selected)", "")
-        record_result("st runtime", "SKIP", "st-runtime not in selected tools")
+    if selected_tools is not None and "st" not in selected_tools:
+        skipped("st runtime (st not selected)", "")
+        record_result("st runtime", "SKIP", "st not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -2001,9 +1999,9 @@ def install_st_runtime(repo_dir, home, selected_tools):
 
 
 def install_fish_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "fish-runtime" not in selected_tools and "fish" not in selected_tools:
-        skipped("Fish runtime (fish-runtime not selected)", "")
-        record_result("Fish runtime", "SKIP", "fish-runtime not in selected tools")
+    if selected_tools is not None and "fish" not in selected_tools:
+        skipped("Fish runtime (fish not selected)", "")
+        record_result("Fish runtime", "SKIP", "fish not in selected tools")
         return
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
@@ -2843,7 +2841,7 @@ def cmd_doctor(args, registry, repo_dir):
     for name in sorted(registry):
         entry = registry[name]
         kind = entry.get("kind")
-        if kind in ("runtime", "data", "font", "python-base"):
+        if kind in ("runtime", "data", "font", "python-base") or (kind == "bin" and entry.get("archive")):
             archive = entry.get("archive", "")
             if not archive:
                 continue

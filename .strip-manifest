@@ -41,7 +41,7 @@ sha256  147dc9863a2a0d30d54e1e5b15fb2427944a6eb34e9258e9699fad9fc046f018  pre_bu
 sha256  370a8103dba02819ff13b56dd3457a4e26332228fccdff1fdd3e49f456460204  pre_built/el8.x86_64.glibc2p28/bin/resize.bz2
 sha256  38d2a5fb1cc6f92edb6a3c7b92000c4721fd0c32f1a4ddd5c8e825bcbfd98a19  pre_built/el8.x86_64.glibc2p28/bin/rg.bz2
 sha256  c91517d389e427058df5caa43f06a4136de8d931f4272cd7e7b3cc86759e7cdd  pre_built/el8.x86_64.glibc2p28/bin/rsync.bz2
-sha256  644f8d5b37a2d200c3d439ad60a91954bd38ce98ddea3d9da83144be90e7deeb  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
+sha256  0765926196163a3b37249ff68b72db06eaa231f4e0d50669929c1dbe854dca9a  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
 sha256  d96dceab12c2ff9045a99c853ed06ddde00d042862bac81532d6e6ab3268024c  pre_built/el8.x86_64.glibc2p28/bin/sd.bz2
 sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  pre_built/el8.x86_64.glibc2p28/bin/shfmt.bz2
 sha256  1697a092d738bad2f27e694118403ba08694f7218796676e1510d342a2ebaad8  pre_built/el8.x86_64.glibc2p28/bin/st.bz2
@@ -51,7 +51,7 @@ sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  pre_bu
 sha256  8d0227bcb09fb3f9f8af4dd7c23dc0dae64995de05f6440b2f0981b16354d5a2  pre_built/el8.x86_64.glibc2p28/bin/tldr.bz2
 sha256  ad5daa8d43dbce8cfdc48d672f2e6e51a57b4603d88ead0230e7d840923c97ee  pre_built/el8.x86_64.glibc2p28/bin/tmux.bz2
 sha256  c534b40982b206e17b37f538767d8a64f1ca26b96ccadb4f0dda01c8806a6f87  pre_built/el8.x86_64.glibc2p28/bin/tree-sitter.bz2
-sha256  e08959a946b3d2271de0dd076e698ba1f4f9ac358f356d99fa1da9df5249e1ba  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
+sha256  258a0ba95857873aac7139de2294a898292aa9cd490eb54660a33294b704ab71  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  pre_built/el8.x86_64.glibc2p28/bin/urxvt.bz2
 sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  pre_built/el8.x86_64.glibc2p28/bin/urxvtc.bz2
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  pre_built/el8.x86_64.glibc2p28/bin/urxvtd.bz2
