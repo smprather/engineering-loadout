@@ -2827,7 +2827,9 @@ def _list_table(rows, columns):
     """Render rows as a table (rich when available, plain otherwise).
 
     rows: list of tuples matching `columns` order.
-    columns: list of dicts: {"name", "style", "max_width", "no_wrap"}.
+    columns: list of dicts: {"name", "style", "max_width", "no_wrap", "ratio", "min_width"}.
+    The last column is treated as elastic: it fills remaining terminal width and truncates
+    with an ellipsis rather than wrapping to a second line.
     """
     if not rows:
         print("(no rows)")
@@ -2851,20 +2853,42 @@ def _list_table(rows, columns):
                 max_width=col.get("max_width"),
                 min_width=col.get("min_width"),
                 ratio=col.get("ratio"),
-                overflow=col.get("overflow", "fold"),
+                overflow=col.get("overflow", "ellipsis"),
             )
         for r in rows:
             t.add_row(*[str(c) for c in r])
         _console.print(t)
         return
-    # Plain fallback
-    widths = [max(len(col["name"]), *(len(str(r[i])) for r in rows)) for i, col in enumerate(columns)]
+    # Plain fallback: give the last column whatever width remains in the terminal.
+    import shutil
+
+    term_cols = shutil.get_terminal_size(fallback=(160, 24)).columns
+    sep = 2  # spaces between columns
+    n = len(columns)
+
+    # Natural widths for all but the last column, capped at max_width when set.
+    widths = []
+    for i, col in enumerate(columns[:-1]):
+        w = max(len(col["name"]), *(len(str(r[i])) for r in rows))
+        if col.get("max_width"):
+            w = min(w, col["max_width"])
+        widths.append(w)
+
+    # Last column fills the rest, with a floor of its header width.
+    used = sum(widths) + sep * (n - 1)
+    last_w = max(term_cols - used, len(columns[-1]["name"]))
+    widths.append(last_w)
+
+    def _trunc(s, w):
+        return s if len(s) <= w else s[: w - 1] + "…"
+
     header = "  ".join("{:<{}}".format(col["name"], widths[i]) for i, col in enumerate(columns))
-    sep = "  ".join("-" * widths[i] for i in range(len(columns)))
+    rule = "  ".join("-" * widths[i] for i in range(n))
     print(header)
-    print(sep)
+    print(rule)
     for r in rows:
-        print("  ".join("{:<{}}".format(str(r[i]), widths[i]) for i in range(len(columns))))
+        cells = [_trunc(str(r[i]), widths[i]) for i in range(n)]
+        print("  ".join("{:<{}}".format(cells[i], widths[i]) for i in range(n)))
 
 
 def cmd_list(args, registry):
@@ -2882,7 +2906,7 @@ def cmd_list(args, registry):
             [
                 {"name": "GROUP", "style": "bold cyan"},
                 {"name": "MEMBERS"},
-                {"name": "DESCRIPTION", "no_wrap": False, "max_width": 70},
+                {"name": "DESCRIPTION"},
             ],
         )
         return 0
@@ -2917,8 +2941,8 @@ def cmd_list(args, registry):
             {"name": "PACKAGE", "style": "bold cyan"},
             {"name": "DEF", "max_width": 3},
             {"name": "VERSION"},
-            {"name": "GROUPS", "no_wrap": False, "max_width": 18},
-            {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1, "min_width": 30},
+            {"name": "GROUPS", "max_width": 22},
+            {"name": "DESCRIPTION", "ratio": 1, "min_width": 30},
         ],
     )
     return 0
