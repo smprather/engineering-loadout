@@ -22,6 +22,7 @@ Network: queries api.github.com and pypi.org. Pass --offline to skip network
 lookups (just print current versions). Requires network for accurate output;
 fails individual queries gracefully with status=error.
 """
+
 import argparse
 import importlib.machinery
 import importlib.util
@@ -45,6 +46,7 @@ USER_AGENT = "engineering-loadout-check-versions"
 
 
 # --------------------------------------------------------------------- loaders
+
 
 def load_packages():
     with open(PACKAGES_JSON) as f:
@@ -72,6 +74,7 @@ def load_homepages():
 
 # ------------------------------------------------------------------- upstream
 
+
 def _http_get_json(url):
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     # Authenticated GitHub requests get 5000/hr vs 60/hr unauthenticated.
@@ -82,11 +85,11 @@ def _http_get_json(url):
             # Try `gh auth token` if gh CLI is installed and logged in.
             import shutil as _shutil
             import subprocess as _sp
+
             gh = _shutil.which("gh")
             if gh:
                 try:
-                    proc = _sp.run([gh, "auth", "token"], stdout=_sp.PIPE,
-                                   stderr=_sp.DEVNULL, timeout=2)
+                    proc = _sp.run([gh, "auth", "token"], stdout=_sp.PIPE, stderr=_sp.DEVNULL, timeout=2)
                     if proc.returncode == 0:
                         token = proc.stdout.decode().strip() or None
                 except (OSError, _sp.TimeoutExpired):
@@ -153,6 +156,7 @@ def upstream_for(name, entry, homepages):
 
 # --------------------------------------------------------------- comparison
 
+
 def _ver_tuple(v):
     """Coerce 'X.Y[.Z[…]]' into a tuple of ints+strings for comparison."""
     if not v:
@@ -179,6 +183,7 @@ def status_of(current, latest):
 
 # ------------------------------------------------------------------- output
 
+
 def render_text(rows, include_na):
     rows = [r for r in rows if include_na or r["source"] != "n/a"]
     if not rows:
@@ -189,24 +194,38 @@ def render_text(rows, include_na):
     lat_w = max(len(r["latest"] or "-") for r in rows)
     src_w = max(len(r["source"]) for r in rows)
     header = "  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  status".format(
-        "name", "current", "latest", "source",
-        nw=name_w, cw=max(cur_w, 7), lw=max(lat_w, 6), sw=max(src_w, 6))
+        "name", "current", "latest", "source", nw=name_w, cw=max(cur_w, 7), lw=max(lat_w, 6), sw=max(src_w, 6)
+    )
     print(header)
     print("  " + "-" * (len(header) - 2))
     for r in sorted(rows, key=lambda r: (r["status"] != "outdated", r["name"])):
         latest = r["latest"] or "-"
         note = " ({})".format(r["error"]) if r["error"] else ""
-        print("  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  {}{}".format(
-            r["name"], r["current"], latest, r["source"], r["status"], note,
-            nw=name_w, cw=max(cur_w, 7), lw=max(lat_w, 6), sw=max(src_w, 6)))
+        print(
+            "  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  {}{}".format(
+                r["name"],
+                r["current"],
+                latest,
+                r["source"],
+                r["status"],
+                note,
+                nw=name_w,
+                cw=max(cur_w, 7),
+                lw=max(lat_w, 6),
+                sw=max(src_w, 6),
+            )
+        )
 
 
 def render_tsv(rows, include_na):
     rows = [r for r in rows if include_na or r["source"] != "n/a"]
     print("name\tcurrent\tlatest\tsource\tstatus\terror")
     for r in sorted(rows, key=lambda r: r["name"]):
-        print("{}\t{}\t{}\t{}\t{}\t{}".format(
-            r["name"], r["current"], r["latest"], r["source"], r["status"], r["error"] or ""))
+        print(
+            "{}\t{}\t{}\t{}\t{}\t{}".format(
+                r["name"], r["current"], r["latest"], r["source"], r["status"], r["error"] or ""
+            )
+        )
 
 
 def render_json(rows, include_na):
@@ -216,14 +235,13 @@ def render_json(rows, include_na):
 
 # ----------------------------------------------------------------------- main
 
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--format", choices=("text", "tsv", "json"), default="text")
     ap.add_argument("--outdated-only", action="store_true")
-    ap.add_argument("--include-na", action="store_true",
-                    help="include packages with no upstream API (default: hide)")
-    ap.add_argument("--offline", action="store_true",
-                    help="skip network lookups; just print current versions")
+    ap.add_argument("--include-na", action="store_true", help="include packages with no upstream API (default: hide)")
+    ap.add_argument("--offline", action="store_true", help="skip network lookups; just print current versions")
     ap.add_argument("--jobs", type=int, default=12, help="concurrent upstream queries (default 12)")
     args = ap.parse_args()
 
@@ -240,13 +258,28 @@ def main():
     rows = []
     if args.offline:
         for name, entry in work:
-            rows.append({"name": name, "current": entry["version"], "latest": "",
-                         "source": "(offline)", "status": "?", "error": None})
+            rows.append(
+                {
+                    "name": name,
+                    "current": entry["version"],
+                    "latest": "",
+                    "source": "(offline)",
+                    "status": "?",
+                    "error": None,
+                }
+            )
     else:
+
         def task(name, entry):
             source, latest, err = upstream_for(name, entry, homepages)
-            return {"name": name, "current": entry["version"], "latest": latest,
-                    "source": source, "status": status_of(entry["version"], latest), "error": err}
+            return {
+                "name": name,
+                "current": entry["version"],
+                "latest": latest,
+                "source": source,
+                "status": status_of(entry["version"], latest),
+                "error": err,
+            }
 
         with ThreadPoolExecutor(max_workers=args.jobs) as ex:
             futs = [ex.submit(task, name, entry) for name, entry in work]

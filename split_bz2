@@ -26,8 +26,11 @@ DEFAULT_CHUNK_MB = 45
 def split_file(path, chunk_size):
     size = os.path.getsize(path)
     if size <= chunk_size:
-        print("{}: {:.1f} MB — no split needed (under {:.0f} MiB limit)".format(
-            path, size / 1024 / 1024, chunk_size / 1024 / 1024))
+        print(
+            "{}: {:.1f} MB — no split needed (under {:.0f} MiB limit)".format(
+                path, size / 1024 / 1024, chunk_size / 1024 / 1024
+            )
+        )
         return 0
 
     part = 0
@@ -48,13 +51,15 @@ def split_file(path, chunk_size):
 
 
 def main(argv):
-    ap = argparse.ArgumentParser(
-        description="Split large bz2/tar.bz2 files into .part-NNN chunks for git storage.")
-    ap.add_argument("files", nargs="+", metavar="FILE",
-                    help=".bz2 or .tar.bz2 file to split")
-    ap.add_argument("--chunk-mb", type=int, default=DEFAULT_CHUNK_MB,
-                    metavar="N",
-                    help="chunk size in MiB (default: {})".format(DEFAULT_CHUNK_MB))
+    ap = argparse.ArgumentParser(description="Split large bz2/tar.bz2 files into .part-NNN chunks for git storage.")
+    ap.add_argument("files", nargs="+", metavar="FILE", help=".bz2 or .tar.bz2 file to split")
+    ap.add_argument(
+        "--chunk-mb",
+        type=int,
+        default=DEFAULT_CHUNK_MB,
+        metavar="N",
+        help="chunk size in MiB (default: {})".format(DEFAULT_CHUNK_MB),
+    )
     args = ap.parse_args(argv)
 
     chunk_size = args.chunk_mb * 1024 * 1024
@@ -65,8 +70,7 @@ def main(argv):
             rc = 1
             continue
         if not (path.endswith(".bz2") or path.endswith(".tar.bz2")):
-            print("WARNING: {} does not end in .bz2 or .tar.bz2 — splitting anyway".format(path),
-                  file=sys.stderr)
+            print("WARNING: {} does not end in .bz2 or .tar.bz2 — splitting anyway".format(path), file=sys.stderr)
         rc = rc or split_file(path, chunk_size)
     return rc
 

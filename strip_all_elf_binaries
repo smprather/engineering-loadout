@@ -25,9 +25,7 @@ ARCHIVE_SUFFIXES = (
 )
 
 # Archives whose ELF payloads must not be stripped (e.g. LLVM BOLT-optimized binaries).
-NOSTRIP_ARCHIVE_PREFIXES = (
-    "portable-python-",
-)
+NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-",)
 
 
 def eprint(*args):
@@ -87,10 +85,10 @@ def is_tar_path(path):
 def tar_bz2_path(path):
     for suffix in (".tar.gz", ".tar.xz", ".tar.bz2"):
         if path.endswith(suffix):
-            return path[:-len(suffix)] + ".tar.bz2"
+            return path[: -len(suffix)] + ".tar.bz2"
     for suffix in (".tgz", ".tbz2", ".txz", ".tar"):
         if path.endswith(suffix):
-            return path[:-len(suffix)] + ".tar.bz2"
+            return path[: -len(suffix)] + ".tar.bz2"
     return path + ".tar.bz2"
 
 
@@ -167,9 +165,9 @@ class Manifest(object):
         if not self.use_manifest:
             return False
         entry = self.entries.get(rel)
-        return bool(entry and entry[0] == "tar-meta"
-                    and str(file_size(path)) == entry[1]
-                    and str(file_mtime(path)) == entry[2])
+        return bool(
+            entry and entry[0] == "tar-meta" and str(file_size(path)) == entry[1] and str(file_mtime(path)) == entry[2]
+        )
 
     def record_sha(self, rel, path):
         self.entries[rel] = ("sha256", sha256_of(path))
@@ -187,7 +185,8 @@ def elf_has_rpath(path):
     try:
         proc = subprocess.run(
             ["/usr/bin/readelf", "-d", path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         out = proc.stdout.decode("utf-8", "replace")
         return "(RPATH)" in out or "(RUNPATH)" in out
@@ -320,7 +319,9 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
         os.unlink(tar_path)
 
     after_size = file_size(out_path)
-    print(f"rewrote tar.bz2: {tar_path} -> {out_path} ({before_size} -> {after_size} bytes, stripped {tar_stripped} ELF files)")
+    print(
+        f"rewrote tar.bz2: {tar_path} -> {out_path} ({before_size} -> {after_size} bytes, stripped {tar_stripped} ELF files)"
+    )
     stats["rewritten_tar"] += 1
     stats["stripped"] += tar_stripped
     manifest.record_tar(out_rel, out_path)
@@ -335,7 +336,8 @@ def parse_args(argv):
   Raw ELF files are stripped in place.
   Standalone *.bz2 files are stripped if their decompressed payload is ELF.
   Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
-  .git is skipped.""")
+  .git is skipped.""",
+    )
     parser.add_argument("--dry-run", action="store_true", help="show what would be stripped")
     parser.add_argument("--strip", default=os.environ.get("STRIP", "strip"), help="strip executable path")
     parser.add_argument("--no-manifest", action="store_true", help="ignore manifest and strip unconditionally")
@@ -385,8 +387,11 @@ def main(argv):
         shutil.rmtree(tmp_dir)
 
     skipped = stats["skipped_manifest"] + stats["skipped_nonelf"]
-    print("Processed: {processed}, stripped ELF files: {stripped}, rewritten tar archives: {rewritten_tar}, skipped: {skipped} (manifest: {skipped_manifest}, non-ELF bzip2: {skipped_nonelf})".format(
-        skipped=skipped, **stats))
+    print(
+        "Processed: {processed}, stripped ELF files: {stripped}, rewritten tar archives: {rewritten_tar}, skipped: {skipped} (manifest: {skipped_manifest}, non-ELF bzip2: {skipped_nonelf})".format(
+            skipped=skipped, **stats
+        )
+    )
     return 0
 
 

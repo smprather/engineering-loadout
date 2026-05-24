@@ -21,6 +21,7 @@ Platform auto-detection (used when --platform is not given):
 Python version is read from <portable-dir>/local/bin/python3.x --version, or
 parsed from the directory name as a fallback.
 """
+
 from __future__ import print_function
 
 import argparse
@@ -44,6 +45,7 @@ def die(msg):
 # Platform detection (mirrors logic in dotfiles/install)
 # ---------------------------------------------------------------------------
 
+
 def _find_tool(*candidates):
     for path in candidates:
         if os.path.isfile(path) and os.access(path, os.X_OK):
@@ -51,8 +53,8 @@ def _find_tool(*candidates):
     return None
 
 
-_UNAME   = _find_tool("/usr/bin/uname", "/bin/uname")
-_LDD     = _find_tool("/usr/bin/ldd", "/lib64/ld-linux-x86-64.so.2")
+_UNAME = _find_tool("/usr/bin/uname", "/bin/uname")
+_LDD = _find_tool("/usr/bin/ldd", "/lib64/ld-linux-x86-64.so.2")
 _GETCONF = _find_tool("/usr/bin/getconf")
 
 
@@ -110,19 +112,20 @@ def detect_platform():
         return f"linux.{arch}.musl"
 
     glibc_ver = detect_glibc_version()
-    glibc_id  = "glibc{}".format(glibc_ver.replace(".", "p")) if glibc_ver else "glibc"
+    glibc_id = "glibc{}".format(glibc_ver.replace(".", "p")) if glibc_ver else "glibc"
 
-    osr         = read_os_release()
-    distro_id   = osr.get("ID", "")
-    id_like     = osr.get("ID_LIKE", "")
-    version_id  = osr.get("VERSION_ID", "")
+    osr = read_os_release()
+    distro_id = osr.get("ID", "")
+    id_like = osr.get("ID_LIKE", "")
+    version_id = osr.get("VERSION_ID", "")
     platform_id = osr.get("PLATFORM_ID", "")
-    el_id       = ""
+    el_id = ""
 
     if platform_id.startswith("platform:el"):
-        el_id = platform_id[len("platform:"):]
-    elif any(x in (" " + distro_id + " " + id_like + " ")
-             for x in (" rhel ", " centos ", " almalinux ", " rocky ", " ol ")):
+        el_id = platform_id[len("platform:") :]
+    elif any(
+        x in (" " + distro_id + " " + id_like + " ") for x in (" rhel ", " centos ", " almalinux ", " rocky ", " ol ")
+    ):
         el_id = "el{}".format(version_id.split(".", 1)[0])
 
     if el_id:
@@ -133,6 +136,7 @@ def detect_platform():
 # ---------------------------------------------------------------------------
 # Python version detection
 # ---------------------------------------------------------------------------
+
 
 def detect_python_version(portable_dir):
     """Run python3.x from local/bin to get the version string."""
@@ -157,6 +161,7 @@ def detect_python_version(portable_dir):
 # ---------------------------------------------------------------------------
 # Archive construction
 # ---------------------------------------------------------------------------
+
 
 def make_archive(portable_dir, dest_path, dry_run):
     basename = os.path.basename(os.path.abspath(portable_dir))
@@ -190,19 +195,18 @@ def make_archive(portable_dir, dest_path, dry_run):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Package a portable Python build dir into dotfiles pre_built/.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("portable_dir",
-                        help="path to the portable-python-X.Y.Z-... directory")
-    parser.add_argument("--platform", default=None,
-                        help="override platform string (default: auto-detect)")
-    parser.add_argument("--output", default=None,
-                        help="write archive to this path instead of the default repo location")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="print what would be done without creating the archive")
+    parser.add_argument("portable_dir", help="path to the portable-python-X.Y.Z-... directory")
+    parser.add_argument("--platform", default=None, help="override platform string (default: auto-detect)")
+    parser.add_argument(
+        "--output", default=None, help="write archive to this path instead of the default repo location"
+    )
+    parser.add_argument("--dry-run", action="store_true", help="print what would be done without creating the archive")
     args = parser.parse_args()
 
     portable_dir = os.path.abspath(args.portable_dir)
@@ -227,11 +231,10 @@ def main():
         dest_path = os.path.abspath(args.output)
     else:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        repo_dir   = os.path.dirname(script_dir)          # pre_built/
-        repo_dir   = os.path.dirname(repo_dir)            # repo root
-        basename   = os.path.basename(portable_dir)
-        dest_path  = os.path.join(repo_dir, "pre_built", platform,
-                                  f"{basename}.tar.bz2")
+        repo_dir = os.path.dirname(script_dir)  # pre_built/
+        repo_dir = os.path.dirname(repo_dir)  # repo root
+        basename = os.path.basename(portable_dir)
+        dest_path = os.path.join(repo_dir, "pre_built", platform, f"{basename}.tar.bz2")
 
     make_archive(portable_dir, dest_path, args.dry_run)
 
@@ -240,8 +243,7 @@ def main():
         print("Next steps:")
         print("  cd <repo>")
         print("  ./strip_all_elf_binaries   # skips BOLT-optimized portable-python archives")
-        print("  git add pre_built/{}/{}".format(platform,
-              os.path.basename(portable_dir) + ".tar.bz2"))
+        print("  git add pre_built/{}/{}".format(platform, os.path.basename(portable_dir) + ".tar.bz2"))
         print("  git commit")
 
 

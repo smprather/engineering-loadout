@@ -19,8 +19,12 @@ try:
     from rich.table import Table as _RichTable  # type: ignore
     from rich.progress import (  # type: ignore
         Progress as _RichProgress,
-        BarColumn, TextColumn, TimeElapsedColumn, MofNCompleteColumn,
+        BarColumn,
+        TextColumn,
+        TimeElapsedColumn,
+        MofNCompleteColumn,
     )
+
     _RICH = True
     _console = _RichConsole(highlight=False)
 except Exception:
@@ -58,6 +62,7 @@ def _section(title):
         _console.print(f"[bold]{title}[/bold]")
     else:
         print(title)
+
 
 import argparse
 import bz2
@@ -97,6 +102,7 @@ FONT_EXCLUDES = (
 BASH_LAYERS = ("corp", "site", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
 NVIM_LAYERS = ("corp", "site", "project", "user")
+
 
 def _load_tool_registry(repo_dir):
     """Load pre_built/packages.json.  Returns {} if missing or unreadable.
@@ -196,13 +202,11 @@ def expand_groups(names, registry, _stack=None):
             out |= {n for n in registry if not n.startswith("@")}
             continue
         if name == "@default":
-            out |= {n for n, e in registry.items()
-                    if not n.startswith("@") and _is_default_pkg(e)}
+            out |= {n for n, e in registry.items() if not n.startswith("@") and _is_default_pkg(e)}
             continue
         if name.startswith("@"):
             if name in _stack:
-                raise ResolverError("group cycle detected: {} -> {}".format(
-                    " -> ".join(_stack), name))
+                raise ResolverError("group cycle detected: {} -> {}".format(" -> ".join(_stack), name))
             entry = registry.get(name)
             if entry is None:
                 warn(f"unknown group '{name}' (ignored)")
@@ -248,7 +252,8 @@ def walk_depends(names, registry, forbidden=None, force=False):
                         continue
                     raise ResolverError(
                         f"package '{name}' hard-depends on '{d}', but '{d}' was passed to --skip. "
-                        f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force.")
+                        f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force."
+                    )
                 if d not in out:
                     parent[d] = name
                     pending.append(d)
@@ -439,6 +444,7 @@ class _Bz2Store(object):
     def __init__(self):
         self._tmpfiles = []
         import atexit
+
         atexit.register(self._cleanup)
 
     def resolve(self, path):
@@ -479,7 +485,7 @@ class _Bz2Store(object):
                 results.append(os.path.join(dir_path, name))
                 seen.add(name)
             elif name.endswith(".bz2.part-000"):
-                base = name[:-len(".part-000")]
+                base = name[: -len(".part-000")]
                 if base not in seen:
                     results.append(os.path.join(dir_path, base))
                     seen.add(base)
@@ -548,9 +554,9 @@ def record_result(thing, status, detail=""):
 
 
 _INTERRUPT_REQUESTED = False
-_INTERRUPT_PHASE = None      # "backup" while backup_existing is running, else None
-_ACTIVE_BACKUP_DIR = None    # set by backup_existing for sigint cleanup
-_ACTIVE_SUBPROCESS = None    # set by run() so handler can SIGTERM child before cleanup
+_INTERRUPT_PHASE = None  # "backup" while backup_existing is running, else None
+_ACTIVE_BACKUP_DIR = None  # set by backup_existing for sigint cleanup
+_ACTIVE_SUBPROCESS = None  # set by run() so handler can SIGTERM child before cleanup
 
 
 def _sigint_handler(signum, frame):
@@ -655,6 +661,7 @@ def _log(msg):
 
 class _TeeStream:
     """Wraps a stdio stream; mirrors output into the run-log with timestamps."""
+
     def __init__(self, original, kind):
         self._original = original
         self._kind = kind
@@ -744,16 +751,16 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
     if _RUN_LOG_FILE is not None:
         _log(f"subprocess.run: cwd={cwd or os.getcwd()} cmd={cmd}")
     _t0 = time.time()
-    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
-                            start_new_session=True)
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr, start_new_session=True)
     _ACTIVE_SUBPROCESS = proc
     try:
         out, err = proc.communicate()
     finally:
         _ACTIVE_SUBPROCESS = None
     if _RUN_LOG_FILE is not None:
-        _log("subprocess.done rc={} dur={:.2f}s cmd={}".format(
-            proc.returncode, time.time() - _t0, cmd[0] if cmd else ""))
+        _log(
+            "subprocess.done rc={} dur={:.2f}s cmd={}".format(proc.returncode, time.time() - _t0, cmd[0] if cmd else "")
+        )
     if check and proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, cmd, output=out, stderr=err)
     completed = subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
@@ -957,8 +964,10 @@ def prebuilt_exact_platform_ids():
     el_id = ""
 
     if platform_id.startswith("platform:el"):
-        el_id = platform_id[len("platform:"):]
-    elif any(x in (" " + distro_id + " " + id_like + " ") for x in (" rhel ", " centos ", " almalinux ", " rocky ", " ol ")):
+        el_id = platform_id[len("platform:") :]
+    elif any(
+        x in (" " + distro_id + " " + id_like + " ") for x in (" rhel ", " centos ", " almalinux ", " rocky ", " ol ")
+    ):
         el_id = "el{}".format(version_id.split(".", 1)[0])
 
     ids = []
@@ -1047,11 +1056,15 @@ def _write_pending_state(ops_by_dest, last_activity_iso):
     """Atomically write pending.json. Caller must hold _pending_lock()."""
     tmp = _pending_json_path() + ".tmp"
     with open(tmp, "w") as f:
-        json.dump({
-            "schema_version": 1,
-            "last_activity": last_activity_iso,
-            "ops": list(ops_by_dest.values()),
-        }, f, indent=2)
+        json.dump(
+            {
+                "schema_version": 1,
+                "last_activity": last_activity_iso,
+                "ops": list(ops_by_dest.values()),
+            },
+            f,
+            indent=2,
+        )
         f.flush()
         os.fsync(f.fileno())
     os.rename(tmp, _pending_json_path())
@@ -1151,15 +1164,19 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     dest_lib64_dir = os.path.join(home, ".local", "lib64")
 
     if not os.path.isdir(root_dir):
-        skipped("pre-built binaries (no pre_built/ directory in repo)",
-                "eza, fd, rg, tmux and other bundled tools will NOT be installed")
+        skipped(
+            "pre-built binaries (no pre_built/ directory in repo)",
+            "eza, fd, rg, tmux and other bundled tools will NOT be installed",
+        )
         record_result("pre-built binaries", "SKIP", "no pre_built/ directory")
         return set()
 
     src_dir = select_prebuilt_platform_dir(root_dir)
     if not src_dir:
-        skipped("pre-built binaries (no matching platform)",
-                "eza, fd, rg, tmux and other bundled tools will NOT be installed")
+        skipped(
+            "pre-built binaries (no matching platform)",
+            "eza, fd, rg, tmux and other bundled tools will NOT be installed",
+        )
         eprint("  Checked platform IDs: {}".format(" ".join(prebuilt_exact_platform_ids())))
         record_result("pre-built binaries", "SKIP", "no matching platform")
         return set()
@@ -1192,9 +1209,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         #       No bash→bash IPC, so no version-mismatch risk.
         _DEFERRED_BINARIES = {"tmux"}
 
-        _bin_bz2_files = sorted(
-            f for f in _bz2.find(bin_dir)
-            if _bin_selected(os.path.basename(f)[:-4]))
+        _bin_bz2_files = sorted(f for f in _bz2.find(bin_dir) if _bin_selected(os.path.basename(f)[:-4]))
         _max_bin_name = max((len(os.path.basename(f[:-4])) for f in _bin_bz2_files), default=0)
         _bins_unchanged = 0
         _progress_ctx = (
@@ -1205,13 +1220,14 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 TimeElapsedColumn(),
                 console=_console,
                 transient=True,
-            ) if _RICH else None
+            )
+            if _RICH
+            else None
         )
         _progress_task = None
         if _progress_ctx is not None:
             _progress_ctx.start()
-            _progress_task = _progress_ctx.add_task(
-                "Installing binaries", total=len(_bin_bz2_files))
+            _progress_task = _progress_ctx.add_task("Installing binaries", total=len(_bin_bz2_files))
 
         for bz2_file in _bin_bz2_files:
             dest_file = os.path.join(dest_bin_dir, os.path.basename(bz2_file[:-4]))
@@ -1236,8 +1252,11 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                             _progress_ctx.advance(_progress_task)
                         continue
                     blocked_deferred.add(name)
-                    warn("skipping {} — running at {} (PIDs: {})".format(
-                        name, dest_file, ", ".join(str(p) for p in pids)))
+                    warn(
+                        "skipping {} — running at {} (PIDs: {})".format(
+                            name, dest_file, ", ".join(str(p) for p in pids)
+                        )
+                    )
                     if _progress_ctx is not None:
                         _progress_ctx.advance(_progress_task)
                     continue
@@ -1309,9 +1328,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             if os.path.isfile(_glib_path):
                 os.remove(_glib_path)
                 print(f"  removed stale glibc lib: {_glib_path}")
-        _lib64_bz2_files = sorted(
-            f for f in _bz2.find(lib64_dir)
-            if _lib_selected(os.path.basename(f)[:-4]))
+        _lib64_bz2_files = sorted(f for f in _bz2.find(lib64_dir) if _lib_selected(os.path.basename(f)[:-4]))
         _libs_unchanged = 0
         _lp, _lpt = _progress("Installing libraries", len(_lib64_bz2_files))
         for bz2_file in _lib64_bz2_files:
@@ -1345,7 +1362,9 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     _unchanged_note = ""
     if _bins_unchanged_n or _libs_unchanged_n:
         _unchanged_note = f" ({_bins_unchanged_n} binaries + {_libs_unchanged_n} libraries already current, skipped)"
-    print(f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/.local/{_unchanged_note}")
+    print(
+        f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/.local/{_unchanged_note}"
+    )
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
@@ -1371,10 +1390,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         record_result("portable Python", "SKIP", "no matching platform")
         return
 
-    archives = sorted(
-        f for f in os.listdir(src_dir)
-        if f.startswith("portable-python-") and f.endswith(".tar.bz2")
-    )
+    archives = sorted(f for f in os.listdir(src_dir) if f.startswith("portable-python-") and f.endswith(".tar.bz2"))
     if not archives:
         skipped(f"portable Python (no portable-python-*.tar.bz2 in {src_dir})", "")
         record_result("portable Python", "SKIP", "no archive found")
@@ -1387,8 +1403,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         pv_extract_tar(archive, tmp_dir)
 
         extracted_dirs = [
-            os.path.join(tmp_dir, d) for d in os.listdir(tmp_dir)
-            if os.path.isdir(os.path.join(tmp_dir, d))
+            os.path.join(tmp_dir, d) for d in os.listdir(tmp_dir) if os.path.isdir(os.path.join(tmp_dir, d))
         ]
         if not extracted_dirs:
             warn("portable Python archive extracted no directories")
@@ -1511,20 +1526,25 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     for tool_name, pkg_name in tools_to_install:
         # Check if a wheel for this package exists in wheels_dir before attempting install
         import glob as _glob
+
         norm = pkg_name.lower().replace("-", "_").replace(".", "_")
-        matches = (
-            _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl")) +
-            _glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
+        matches = _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl")) + _glob.glob(
+            os.path.join(wheels_dir, norm + "-*.whl")
         )
         if not matches:
             warn(f"skipping {pkg_name} — no wheel found in {wheels_dir}")
             skipped_tools.append(tool_name)
             continue
         cmd = [
-            uv_bin, "tool", "install", pkg_name,
-            "--python", python_bin,
+            uv_bin,
+            "tool",
+            "install",
+            pkg_name,
+            "--python",
+            python_bin,
             "--no-index",
-            "--find-links", wheels_dir,
+            "--find-links",
+            wheels_dir,
             "--no-cache",
         ]
         # Force uv to install into the destination root (matters for --dest-dir runs;
@@ -1590,7 +1610,8 @@ def add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed):
     if other_deferred:
         FINAL_NOTICES.append(
             "Deferred (pending daemon): {}. Will install automatically when those processes exit.".format(
-                ", ".join(sorted(other_deferred)))
+                ", ".join(sorted(other_deferred))
+            )
         )
     for name, pid_str in sorted(blocked_failed.items()):
         FINAL_NOTICES.append(
@@ -1673,8 +1694,7 @@ def install_fonts(repo_dir, home, selected_tools=None):
 
     if not os.path.isdir(vendor_fonts_dir):
         print("Installing fonts...")
-        skipped("fonts (no fonts/ directory in repo)",
-                "Nerd Fonts will NOT be installed to ~/.local/share/fonts")
+        skipped("fonts (no fonts/ directory in repo)", "Nerd Fonts will NOT be installed to ~/.local/share/fonts")
         record_result("fonts", "SKIP", "no fonts/ directory")
         return
 
@@ -1706,14 +1726,15 @@ def install_fonts(repo_dir, home, selected_tools=None):
             if tmp_dir is None:
                 tmp_dir = tempfile.mkdtemp(prefix="loadout-fonts.", dir="/tmp")
             first_part = os.path.join(vendor_fonts_dir, name)
-            split_base = first_part[:-len(".part-000")]
+            split_base = first_part[: -len(".part-000")]
             rejoined_zip = os.path.join(tmp_dir, os.path.basename(split_base))
             print(f"  Rejoining: {split_base}.part-* -> {rejoined_zip}")
             require_writable_parent(rejoined_zip, "fonts")
             with open(rejoined_zip, "wb") as dest:
-                for part in sorted(os.path.join(vendor_fonts_dir, x)
-                                   for x in fnmatch.filter(os.listdir(vendor_fonts_dir),
-                                                           os.path.basename(split_base) + ".part-*")):
+                for part in sorted(
+                    os.path.join(vendor_fonts_dir, x)
+                    for x in fnmatch.filter(os.listdir(vendor_fonts_dir), os.path.basename(split_base) + ".part-*")
+                ):
                     with open(part, "rb") as src:
                         shutil.copyfileobj(src, dest)
             extract_font_zip(rejoined_zip, user_fonts_dir)
@@ -1734,7 +1755,9 @@ def install_fonts(repo_dir, home, selected_tools=None):
         if proc.returncode != 0:
             warn(f"fc-cache failed for {user_fonts_dir} — fontconfig cache may be stale")
     else:
-        warn("fc-cache is not available — fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually")
+        warn(
+            "fc-cache is not available — fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually"
+        )
 
     if is_wsl():
         print("  WSL note: Linux GUI apps use these fonts through fontconfig.")
@@ -1753,8 +1776,10 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
             archive = path
             break
     if not archive:
-        skipped("tldr/tldr-pages.tar.bz2 or tldr/tldr-pages.tar.gz not found in repo",
-                "run ./update_tldr_cache on a connected machine to bundle the pages")
+        skipped(
+            "tldr/tldr-pages.tar.bz2 or tldr/tldr-pages.tar.gz not found in repo",
+            "run ./update_tldr_cache on a connected machine to bundle the pages",
+        )
         record_result("tldr cache", "SKIP", "no bundled cache archive")
         return
 
@@ -1803,12 +1828,10 @@ def _validate_tar_members(members, dest_real):
                 base = dest_real
             link_real = os.path.realpath(os.path.join(base, linkname))
             if not (link_real == dest_real or link_real.startswith(dest_real + os.sep)):
-                raise RuntimeError(
-                    f"unsafe tar link target: {member.name} -> {linkname}")
+                raise RuntimeError(f"unsafe tar link target: {member.name} -> {linkname}")
         if not _TAR_SUPPORTS_FILTER:
             if member.ischr() or member.isblk() or member.isfifo() or member.isdev():
-                raise RuntimeError(
-                    f"refusing to extract special file on Python <3.12: {member.name}")
+                raise RuntimeError(f"refusing to extract special file on Python <3.12: {member.name}")
 
 
 def safe_extract_tar(tf, dest_dir):
@@ -1839,8 +1862,7 @@ def pv_extract_tar(archive_path, dest_dir):
         p, task = _progress("  " + os.path.basename(archive_path), len(members))
         assert p is not None
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",
-                message="The default behavior of tarfile extraction has changed.*")
+            warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
             for member in members:
                 if _TAR_SUPPORTS_FILTER:
                     tf.extract(member, dest_dir, filter="data")
@@ -1863,8 +1885,10 @@ def install_helix_runtime(repo_dir, home, selected_tools=None):
     if archive is None:
         archive = _bz2.resolve(os.path.join(repo_dir, "helix", "helix_runtime.tar.bz2"))
     if archive is None:
-        skipped("Helix runtime (no helix.tar.bz2 in pre_built/<platform>/runtime/ or helix/)",
-                "hx will NOT have the vendored runtime at ~/.config/helix/runtime")
+        skipped(
+            "Helix runtime (no helix.tar.bz2 in pre_built/<platform>/runtime/ or helix/)",
+            "hx will NOT have the vendored runtime at ~/.config/helix/runtime",
+        )
         record_result("Helix runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -1894,8 +1918,10 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
     if archive is None:
         archive = _bz2.resolve(os.path.join(repo_dir, "vim", "runtime.tar.bz2"))
     if archive is None:
-        skipped("Vim runtime (no vim92.tar.bz2 in pre_built/<platform>/runtime/ or vim/)",
-                "vim will NOT have the vendored runtime at ~/.local/share/vim/vim92")
+        skipped(
+            "Vim runtime (no vim92.tar.bz2 in pre_built/<platform>/runtime/ or vim/)",
+            "vim will NOT have the vendored runtime at ~/.local/share/vim/vim92",
+        )
         record_result("Vim runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -1928,8 +1954,10 @@ def install_nvim_runtime(repo_dir, home, selected_tools=None):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "nvim.tar.bz2"))
     if archive is None:
-        skipped("Neovim runtime (no nvim.tar.bz2 in pre_built/<platform>/runtime/)",
-                "nvim will NOT have the vendored runtime at ~/.local/share/nvim/runtime")
+        skipped(
+            "Neovim runtime (no nvim.tar.bz2 in pre_built/<platform>/runtime/)",
+            "nvim will NOT have the vendored runtime at ~/.local/share/nvim/runtime",
+        )
         record_result("Neovim runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -1957,8 +1985,10 @@ def install_octave_runtime(repo_dir, home, selected_tools):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "octave.tar.bz2"))
     if archive is None:
-        skipped("Octave runtime (no octave.tar.bz2 in pre_built/<platform>/runtime/)",
-                "octave will NOT have its standard library at ~/.local/share/octave/")
+        skipped(
+            "Octave runtime (no octave.tar.bz2 in pre_built/<platform>/runtime/)",
+            "octave will NOT have its standard library at ~/.local/share/octave/",
+        )
         record_result("Octave runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -1991,8 +2021,7 @@ def install_meld_runtime(repo_dir, home, selected_tools):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "meld.tar.bz2"))
     if archive is None:
-        skipped("Meld runtime (no meld.tar.bz2 in pre_built/<platform>/runtime/)",
-                "meld will NOT be installed")
+        skipped("Meld runtime (no meld.tar.bz2 in pre_built/<platform>/runtime/)", "meld will NOT be installed")
         record_result("Meld runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -2036,8 +2065,10 @@ def install_st_runtime(repo_dir, home, selected_tools):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "st.tar.bz2"))
     if archive is None:
-        skipped("st runtime (no st.tar.bz2 in pre_built/<platform>/runtime/)",
-                "st-256color terminfo with Smulx/Setulc undercurl caps will NOT be installed")
+        skipped(
+            "st runtime (no st.tar.bz2 in pre_built/<platform>/runtime/)",
+            "st-256color terminfo with Smulx/Setulc undercurl caps will NOT be installed",
+        )
         record_result("st runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -2065,8 +2096,10 @@ def install_fish_runtime(repo_dir, home, selected_tools):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "fish.tar.bz2"))
     if archive is None:
-        skipped("Fish runtime (no fish.tar.bz2 in pre_built/<platform>/runtime/)",
-                "fish standard library will NOT be installed")
+        skipped(
+            "Fish runtime (no fish.tar.bz2 in pre_built/<platform>/runtime/)",
+            "fish standard library will NOT be installed",
+        )
         record_result("Fish runtime", "SKIP", "no bundled runtime archive")
         return
 
@@ -2089,7 +2122,11 @@ def install_fish_runtime(repo_dir, home, selected_tools):
 
 
 def install_treesitter_parsers(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "treesitter-queries" not in selected_tools:
+    if (
+        selected_tools is not None
+        and "treesitter-parsers" not in selected_tools
+        and "treesitter-queries" not in selected_tools
+    ):
         skipped("Tree-sitter parsers (treesitter-parsers/queries not selected)", "")
         record_result("Tree-sitter parsers", "SKIP", "treesitter-parsers/queries not in selected packages")
         return
@@ -2098,8 +2135,10 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
     dest_dir = os.path.join(home, ".local", "share", "nvim", "tree-sitter-parsers")
 
     if not os.path.isdir(os.path.join(src_dir, "parser")):
-        skipped(f"Tree-sitter parsers (no prebuilt parsers for {platform})",
-                "Neovim Tree-sitter highlighting will NOT work offline")
+        skipped(
+            f"Tree-sitter parsers (no prebuilt parsers for {platform})",
+            "Neovim Tree-sitter highlighting will NOT work offline",
+        )
         record_result("Tree-sitter parsers", "SKIP", f"no prebuilt parsers for {platform}")
         return
 
@@ -2113,11 +2152,12 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
     parser_src = os.path.join(src_dir, "parser")
     parser_dest = os.path.join(dest_dir, "parser")
     ensure_dir(parser_dest, "Tree-sitter parsers")
-    parser_files = [n for n in sorted(os.listdir(parser_src))
-                    if os.path.isfile(os.path.join(parser_src, n))
-                    and (n.endswith(".so.bz2") or n.endswith(".so"))]
-    _max_parser_name = max(
-        (len(n.replace(".so.bz2", "").replace(".so", "")) for n in parser_files), default=0)
+    parser_files = [
+        n
+        for n in sorted(os.listdir(parser_src))
+        if os.path.isfile(os.path.join(parser_src, n)) and (n.endswith(".so.bz2") or n.endswith(".so"))
+    ]
+    _max_parser_name = max((len(n.replace(".so.bz2", "").replace(".so", "")) for n in parser_files), default=0)
     _p, _pt = _progress("Tree-sitter parsers", len(parser_files))
     for name in parser_files:
         src = os.path.join(parser_src, name)
@@ -2145,21 +2185,41 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
 
 
 def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "treesitter-queries" not in selected_tools and "env-nvim" not in selected_tools:
+    if (
+        selected_tools is not None
+        and "treesitter-parsers" not in selected_tools
+        and "treesitter-queries" not in selected_tools
+        and "env-nvim" not in selected_tools
+    ):
         skipped("vendored nvim-treesitter (no treesitter packages or env-nvim selected)", "")
         record_result("nvim-treesitter vendor", "SKIP", "no treesitter packages or env-nvim selected")
         return
     src_root = os.path.join(repo_dir, "treesitter", "vendor")
     dest_root = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor")
-    if not (os.path.isdir(os.path.join(src_root, "nvim-treesitter")) and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))):
-        skipped("vendored nvim-treesitter (missing from treesitter/vendor/)",
-                "Neovim Tree-sitter plugin will NOT be available offline")
+    if not (
+        os.path.isdir(os.path.join(src_root, "nvim-treesitter"))
+        and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))
+    ):
+        skipped(
+            "vendored nvim-treesitter (missing from treesitter/vendor/)",
+            "Neovim Tree-sitter plugin will NOT be available offline",
+        )
         record_result("nvim-treesitter vendor", "SKIP", "missing treesitter/vendor/")
         return
 
     ensure_dir(dest_root, "nvim-treesitter vendor")
-    rsync_dir(os.path.join(src_root, "nvim-treesitter"), os.path.join(dest_root, "nvim-treesitter"), delete=True, excludes=(".git",))
-    rsync_dir(os.path.join(src_root, "treesitter-parser-registry"), os.path.join(dest_root, "treesitter-parser-registry"), delete=True, excludes=(".git",))
+    rsync_dir(
+        os.path.join(src_root, "nvim-treesitter"),
+        os.path.join(dest_root, "nvim-treesitter"),
+        delete=True,
+        excludes=(".git",),
+    )
+    rsync_dir(
+        os.path.join(src_root, "treesitter-parser-registry"),
+        os.path.join(dest_root, "treesitter-parser-registry"),
+        delete=True,
+        excludes=(".git",),
+    )
     print(f"  Installed: {src_root}/ -> {dest_root}/")
 
 
@@ -2169,7 +2229,7 @@ def restore_backup(backup_path, home):
         try:
             with tarfile.open(backup_path, "r:bz2") as tf:
                 safe_extract_tar(tf, tmp_dir)
-            inner = os.path.basename(backup_path)[:-len(".tar.bz2")]
+            inner = os.path.basename(backup_path)[: -len(".tar.bz2")]
             extracted = os.path.join(tmp_dir, inner)
             if not os.path.isdir(extracted):
                 entries = [e for e in os.listdir(tmp_dir) if os.path.isdir(os.path.join(tmp_dir, e))]
@@ -2201,9 +2261,19 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         for name in ("functions.sh", "README.md", "bashrc"):
             remove_if_exists(os.path.join(bash_config, name))
 
-    for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".tmux.conf", ".editorconfig", ".tmux", ".vim",
-                                        ".config/nvim", ".config/tmux", ".config/editorconfig", ".config/starship", ".config/vim",
-                                        ".config/helix/runtime"]:
+    for rel in list(BASH_ENTRYPOINTS) + [
+        ".vimrc",
+        ".tmux.conf",
+        ".editorconfig",
+        ".tmux",
+        ".vim",
+        ".config/nvim",
+        ".config/tmux",
+        ".config/editorconfig",
+        ".config/starship",
+        ".config/vim",
+        ".config/helix/runtime",
+    ]:
         path = os.path.join(home, rel)
         if os.path.exists(path) or os.path.islink(path):
             print(f"  Removing: {path}")
@@ -2275,11 +2345,23 @@ def backup_existing(home, repo_dir):
     _ACTIVE_BACKUP_DIR = backup_dir
     try:
         print(f"Making backups in: {backup_dir}")
-        for rel in list(BASH_ENTRYPOINTS) + [".vimrc", ".vim", ".tmux", ".tmux.conf", ".editorconfig",
-                                            ".config/vim", ".config/nvim", ".config/bash/global",
-                                            ".config/bash/functions.sh", ".config/bash/README.md",
-                                            ".config/bash/bashrc", ".config/tmux", ".config/starship",
-                                            ".config/editorconfig", ".config/helix/runtime"]:
+        for rel in list(BASH_ENTRYPOINTS) + [
+            ".vimrc",
+            ".vim",
+            ".tmux",
+            ".tmux.conf",
+            ".editorconfig",
+            ".config/vim",
+            ".config/nvim",
+            ".config/bash/global",
+            ".config/bash/functions.sh",
+            ".config/bash/README.md",
+            ".config/bash/bashrc",
+            ".config/tmux",
+            ".config/starship",
+            ".config/editorconfig",
+            ".config/helix/runtime",
+        ]:
             path = os.path.join(home, rel)
             if not (os.path.exists(path) or os.path.islink(path)):
                 continue
@@ -2360,9 +2442,11 @@ def _nvim_migration_notice(nvim_config):
             with open(custom_init, "r") as f:
                 content = f.read().strip()
             if content and content != "return {}":
-                warn("lua/custom/plugins/init.lua has user content — migrate it to "
-                     "~/.config/nvim/lua/user/plugins/ (the new user layer). "
-                     f"Old path preserved: {custom_init}")
+                warn(
+                    "lua/custom/plugins/init.lua has user content — migrate it to "
+                    "~/.config/nvim/lua/user/plugins/ (the new user layer). "
+                    f"Old path preserved: {custom_init}"
+                )
                 return
         except (IOError, OSError):
             pass
@@ -2376,11 +2460,11 @@ def _install_env_bash(repo_dir, home):
 
 
 def _install_env_nvim(repo_dir, home):
-    nvim_src    = os.path.join(repo_dir, "nvim")
+    nvim_src = os.path.join(repo_dir, "nvim")
     nvim_config = os.path.join(home, ".config", "nvim")
-    ensure_dir(os.path.join(nvim_config, "after", "lsp"),      "Neovim config")
+    ensure_dir(os.path.join(nvim_config, "after", "lsp"), "Neovim config")
     ensure_dir(os.path.join(nvim_config, "after", "ftplugin"), "Neovim config")
-    ensure_dir(os.path.join(nvim_config, "lsp"),               "Neovim config")
+    ensure_dir(os.path.join(nvim_config, "lsp"), "Neovim config")
     for rel in ("init.lua", "lazy-lock.json"):
         install_path(os.path.join(nvim_src, rel), os.path.join(nvim_config, rel), False)
     install_path(os.path.join(nvim_src, "lua", "global"), os.path.join(nvim_config, "lua", "global"), False)
@@ -2423,8 +2507,12 @@ def _install_env_tmux(repo_dir, home):
         delete=True,
     )
     install_path(os.path.join(repo_dir, "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
-    install_path(os.path.join(repo_dir, "tmux", "tmux-3col-layout.sh"), os.path.join(tmux_config, "tmux-3col-layout.sh"), False)
-    install_path(os.path.join(repo_dir, "tmux", "tmux-word-separators"), os.path.join(tmux_config, "tmux-word-separators"), False)
+    install_path(
+        os.path.join(repo_dir, "tmux", "tmux-3col-layout.sh"), os.path.join(tmux_config, "tmux-3col-layout.sh"), False
+    )
+    install_path(
+        os.path.join(repo_dir, "tmux", "tmux-word-separators"), os.path.join(tmux_config, "tmux-word-separators"), False
+    )
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
     lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
 
@@ -2435,7 +2523,9 @@ def _install_env_editorconfig(repo_dir, home):
     if os.path.islink(editorconfig_dir):
         os.unlink(editorconfig_dir)
     ensure_dir(editorconfig_dir, "editorconfig")
-    install_path(os.path.join(repo_dir, "editorconfig", "editorconfig"), os.path.join(editorconfig_dir, "editorconfig"), False)
+    install_path(
+        os.path.join(repo_dir, "editorconfig", "editorconfig"), os.path.join(editorconfig_dir, "editorconfig"), False
+    )
     lns(".config/editorconfig/editorconfig", os.path.join(home, ".editorconfig"), verbose=True)
 
 
@@ -2453,8 +2543,14 @@ def _install_env_starship(repo_dir, home):
     if os.path.islink(starship_dir):
         os.unlink(starship_dir)
     ensure_dir(starship_dir, "starship config")
-    install_path(os.path.join(repo_dir, "starship", "config-schema.json"), os.path.join(starship_dir, "config-schema.json"), False)
-    install_path(os.path.join(repo_dir, "starship", "starship.linux.toml"), os.path.join(starship_dir, "starship.toml"), False)
+    install_path(
+        os.path.join(repo_dir, "starship", "config-schema.json"),
+        os.path.join(starship_dir, "config-schema.json"),
+        False,
+    )
+    install_path(
+        os.path.join(repo_dir, "starship", "starship.linux.toml"), os.path.join(starship_dir, "starship.toml"), False
+    )
 
 
 def _install_env_helix(repo_dir, home):
@@ -2475,15 +2571,15 @@ def _install_env_kak(repo_dir, home):
 
 
 ENV_HANDLERS = {
-    "env-bash":         _install_env_bash,
-    "env-nvim":         _install_env_nvim,
-    "env-vim":          _install_env_vim,
-    "env-tmux":         _install_env_tmux,
+    "env-bash": _install_env_bash,
+    "env-nvim": _install_env_nvim,
+    "env-vim": _install_env_vim,
+    "env-tmux": _install_env_tmux,
     "env-editorconfig": _install_env_editorconfig,
-    "env-pip":          _install_env_pip,
-    "env-starship":     _install_env_starship,
-    "env-helix":        _install_env_helix,
-    "env-kak":          _install_env_kak,
+    "env-pip": _install_env_pip,
+    "env-starship": _install_env_starship,
+    "env-helix": _install_env_helix,
+    "env-kak": _install_env_kak,
 }
 
 
@@ -2524,7 +2620,7 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
     home_real = os.path.realpath(home)
     expanded_home = os.path.expanduser("~")
     if dest.startswith(expanded_home + os.sep) and home_real != os.path.realpath(expanded_home):
-        dest = home_real + dest[len(expanded_home):]
+        dest = home_real + dest[len(expanded_home) :]
     if not os.path.exists(src):
         warn(f"env package '{pkg_name}': source not found at {src}")
         return False
@@ -2581,13 +2677,15 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
     for hook in hooks:
         print(f"Running post-install hook: {hook}")
         env = os.environ.copy()
-        env.update({
-            "LOADOUT_REPO": repo_dir,
-            "LOADOUT_HOME": home,
-            "LOADOUT_BACKUP_DIR": backup_dir,
-            "LOADOUT_NO_BACKUP": "1" if args.no_backup else "0",
-            "LOADOUT_DEST_DIR": home,
-        })
+        env.update(
+            {
+                "LOADOUT_REPO": repo_dir,
+                "LOADOUT_HOME": home,
+                "LOADOUT_BACKUP_DIR": backup_dir,
+                "LOADOUT_NO_BACKUP": "1" if args.no_backup else "0",
+                "LOADOUT_DEST_DIR": home,
+            }
+        )
         run([hook], env=env)
 
 
@@ -2612,7 +2710,7 @@ def _extract_subcommand(argv):
         if tok.startswith("-"):
             continue
         if tok in SUBCOMMANDS:
-            return tok, argv[:i] + argv[i + 1:]
+            return tok, argv[:i] + argv[i + 1 :]
         break
     return "install", list(argv)
 
@@ -2626,8 +2724,9 @@ def parse_args(argv):
         add_help=False,
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument("--dest-dir", default=None, dest="dest_dir",
-                        metavar="DIR", help="Install root (default: $HOME)")
+    parser.add_argument(
+        "--dest-dir", default=None, dest="dest_dir", metavar="DIR", help="Install root (default: $HOME)"
+    )
     parser.add_argument("--no-backup", action="store_true", dest="no_backup")
     parser.add_argument("--post-install-hook", action="append", default=[])
     parser.add_argument("--restore-backup")
@@ -2635,26 +2734,25 @@ def parse_args(argv):
     parser.add_argument("--help", "-h", action="store_true")
 
     # Selection
-    parser.add_argument("--only", default=None, metavar="NAME,…",
-                        help="Install exactly these packages/@groups; bypasses defaults.")
-    parser.add_argument("--add", default=None, metavar="NAME,…",
-                        help="Add packages/@groups to the default install set.")
-    parser.add_argument("--skip", default=None, metavar="NAME,…",
-                        help="Remove packages/@groups from the install set.")
-    parser.add_argument("--profile", default=None, metavar="NAME",
-                        help="Alias for --only @NAME (e.g. --profile engineering-loadout).")
-    parser.add_argument("--no-deps", action="store_true", dest="no_deps",
-                        help="Do not walk depends/recommends.")
-    parser.add_argument("--force", action="store_true", dest="force",
-                        help="Continue past resolver errors.")
-    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
-                        help="Resolve + print, no install writes.")
+    parser.add_argument(
+        "--only", default=None, metavar="NAME,…", help="Install exactly these packages/@groups; bypasses defaults."
+    )
+    parser.add_argument(
+        "--add", default=None, metavar="NAME,…", help="Add packages/@groups to the default install set."
+    )
+    parser.add_argument("--skip", default=None, metavar="NAME,…", help="Remove packages/@groups from the install set.")
+    parser.add_argument(
+        "--profile", default=None, metavar="NAME", help="Alias for --only @NAME (e.g. --profile engineering-loadout)."
+    )
+    parser.add_argument("--no-deps", action="store_true", dest="no_deps", help="Do not walk depends/recommends.")
+    parser.add_argument("--force", action="store_true", dest="force", help="Continue past resolver errors.")
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run", help="Resolve + print, no install writes.")
 
     # list/describe/resolve subcommand options
-    parser.add_argument("--groups", action="store_true", dest="list_groups",
-                        help="With 'list': show groups instead of packages.")
-    parser.add_argument("--tag", default=None,
-                        help="With 'list': filter packages by tag.")
+    parser.add_argument(
+        "--groups", action="store_true", dest="list_groups", help="With 'list': show groups instead of packages."
+    )
+    parser.add_argument("--tag", default=None, help="With 'list': filter packages by tag.")
 
     # Positional args for describe/resolve/restore-backup
     parser.add_argument("positional", nargs="*", default=[])
@@ -2734,23 +2832,32 @@ def _list_table(rows, columns):
         print("(no rows)")
         return
     if _RICH and _console is not None:
-        t = _RichTable(box=None, show_header=True, header_style="bold",
-                       pad_edge=False, show_edge=False, expand=True,
-                       padding=(0, 1), collapse_padding=True)
+        t = _RichTable(
+            box=None,
+            show_header=True,
+            header_style="bold",
+            pad_edge=False,
+            show_edge=False,
+            expand=True,
+            padding=(0, 1),
+            collapse_padding=True,
+        )
         for col in columns:
-            t.add_column(col["name"], style=col.get("style", ""),
-                         no_wrap=col.get("no_wrap", True),
-                         max_width=col.get("max_width"),
-                         min_width=col.get("min_width"),
-                         ratio=col.get("ratio"),
-                         overflow=col.get("overflow", "fold"))
+            t.add_column(
+                col["name"],
+                style=col.get("style", ""),
+                no_wrap=col.get("no_wrap", True),
+                max_width=col.get("max_width"),
+                min_width=col.get("min_width"),
+                ratio=col.get("ratio"),
+                overflow=col.get("overflow", "fold"),
+            )
         for r in rows:
             t.add_row(*[str(c) for c in r])
         _console.print(t)
         return
     # Plain fallback
-    widths = [max(len(col["name"]), *(len(str(r[i])) for r in rows))
-              for i, col in enumerate(columns)]
+    widths = [max(len(col["name"]), *(len(str(r[i])) for r in rows)) for i, col in enumerate(columns)]
     header = "  ".join("{:<{}}".format(col["name"], widths[i]) for i, col in enumerate(columns))
     sep = "  ".join("-" * widths[i] for i in range(len(columns)))
     print(header)
@@ -2769,11 +2876,14 @@ def cmd_list(args, registry):
             entry = registry[n]
             members = entry.get("members", [])
             rows.append((n, str(len(members)), entry.get("description", "")))
-        _list_table(rows, [
-            {"name": "GROUP", "style": "bold cyan"},
-            {"name": "MEMBERS"},
-            {"name": "DESCRIPTION", "no_wrap": False, "max_width": 70},
-        ])
+        _list_table(
+            rows,
+            [
+                {"name": "GROUP", "style": "bold cyan"},
+                {"name": "MEMBERS"},
+                {"name": "DESCRIPTION", "no_wrap": False, "max_width": 70},
+            ],
+        )
         return 0
     tag = args.tag
     # Build reverse map: pkg name -> sorted list of @groups that directly
@@ -2791,20 +2901,25 @@ def cmd_list(args, registry):
             continue
         if tag is not None and tag not in entry.get("tags", []):
             continue
-        rows.append((
-            n,
-            "yes" if _is_default_pkg(entry) else "no",
-            entry.get("version", ""),
-            ", ".join(sorted(pkg_groups.get(n, []))),
-            entry.get("description", ""),
-        ))
-    _list_table(rows, [
-        {"name": "PACKAGE",     "style": "bold cyan"},
-        {"name": "DEF",         "max_width": 3},
-        {"name": "VERSION"},
-        {"name": "GROUPS",      "no_wrap": False, "max_width": 18},
-        {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1, "min_width": 30},
-    ])
+        rows.append(
+            (
+                n,
+                "yes" if _is_default_pkg(entry) else "no",
+                entry.get("version", ""),
+                ", ".join(sorted(pkg_groups.get(n, []))),
+                entry.get("description", ""),
+            )
+        )
+    _list_table(
+        rows,
+        [
+            {"name": "PACKAGE", "style": "bold cyan"},
+            {"name": "DEF", "max_width": 3},
+            {"name": "VERSION"},
+            {"name": "GROUPS", "no_wrap": False, "max_width": 18},
+            {"name": "DESCRIPTION", "no_wrap": False, "ratio": 1, "min_width": 30},
+        ],
+    )
     return 0
 
 
@@ -2838,8 +2953,18 @@ def cmd_describe(args, registry):
         print("depends:     {}".format(", ".join(entry["depends"])))
     if entry.get("recommends"):
         print("recommends:  {}".format(", ".join(entry["recommends"])))
-    for fkey in ("bins", "libs", "wheels", "typelibs", "uv_tool", "archive",
-                 "source", "install_to", "extra_links", "supports_layers"):
+    for fkey in (
+        "bins",
+        "libs",
+        "wheels",
+        "typelibs",
+        "uv_tool",
+        "archive",
+        "source",
+        "install_to",
+        "extra_links",
+        "supports_layers",
+    ):
         if fkey in entry:
             v = entry[fkey]
             if isinstance(v, list):
@@ -2848,13 +2973,11 @@ def cmd_describe(args, registry):
             else:
                 print("{:12} {}".format(fkey + ":", v))
     # Reverse deps
-    rdeps = [n for n, e in registry.items()
-             if name in e.get("depends", []) or name in e.get("recommends", [])]
+    rdeps = [n for n, e in registry.items() if name in e.get("depends", []) or name in e.get("recommends", [])]
     if rdeps:
         print("rdeps:       {}".format(", ".join(sorted(rdeps))))
     # Group memberships
-    groups = [n for n, e in registry.items()
-              if e.get("kind") == "group" and name in e.get("members", [])]
+    groups = [n for n, e in registry.items() if e.get("kind") == "group" and name in e.get("members", [])]
     if groups:
         print("groups:      {}".format(", ".join(sorted(groups))))
     return 0
@@ -2969,6 +3092,7 @@ def cmd_doctor(args, registry, repo_dir):
 def glob_paths_glob(pattern):
     """Glob with shell-style wildcards (handles 'archive.zip.part-*' and similar)."""
     import glob as _glob
+
     return sorted(_glob.glob(pattern))
 
 
@@ -2995,8 +3119,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
 
     backup_dir = ""
     if args.no_backup:
-        skipped("backup (--no-backup)",
-                "existing dotfiles will be overwritten with NO backup")
+        skipped("backup (--no-backup)", "existing dotfiles will be overwritten with NO backup")
         record_result("backup", "SKIP", "--no-backup")
     else:
         backup_dir = run_install_step("backup", backup_existing, home, repo_dir) or ""

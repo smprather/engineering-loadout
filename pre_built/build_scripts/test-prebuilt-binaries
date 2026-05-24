@@ -44,11 +44,11 @@ NO_EXEC = {"xterm"}
 
 # Per-binary probe flags tried in order. First non-fatal result wins.
 PROBE_FLAGS = {
-    "tmux":    [["-V"]],
-    "kak":     [["-version"]],
-    "resize":  [["--help"]],
-    "bzip2":   [["--help"]],
-    "nvim":    [["--version"]],
+    "tmux": [["-V"]],
+    "kak": [["-version"]],
+    "resize": [["--help"]],
+    "bzip2": [["--help"]],
+    "nvim": [["--version"]],
 }
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
 
@@ -68,13 +68,11 @@ def ldd_check(path):
     try:
         proc = subprocess.run(
             [ldd, path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5,
         )
-        return [
-            line.strip()
-            for line in proc.stdout.decode("utf-8", "replace").splitlines()
-            if "not found" in line
-        ]
+        return [line.strip() for line in proc.stdout.decode("utf-8", "replace").splitlines() if "not found" in line]
     except (OSError, subprocess.TimeoutExpired):
         return []
 
@@ -156,11 +154,13 @@ def smoke_runtime_layout(tmpdir):
         runtime = os.path.join(tmpdir, ".local", "share", "nvim", "runtime")
         if require_path(os.path.join(runtime, "filetype.lua"), "nvim runtime", failures):
             env = os.environ.copy()
-            env.update({
-                "HOME": tmpdir,
-                "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache", "nvim-smoke"),
-                "XDG_STATE_HOME": os.path.join(tmpdir, ".local", "state", "nvim-smoke"),
-            })
+            env.update(
+                {
+                    "HOME": tmpdir,
+                    "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache", "nvim-smoke"),
+                    "XDG_STATE_HOME": os.path.join(tmpdir, ".local", "state", "nvim-smoke"),
+                }
+            )
             lua_check = (
                 "local expected = vim.env.HOME .. '/.local/share/nvim/runtime'; "
                 "local rtp = vim.o.runtimepath; "
@@ -212,7 +212,6 @@ def smoke_runtime_layout(tmpdir):
         require_path(os.path.join(parsers, "queries", "python", "highlights.scm"), "tree-sitter python query", failures)
         require_path(os.path.join(parsers, "parser-info", "python.lua"), "tree-sitter python parser-info", failures)
 
-
     if not failures:
         print("Runtime payloads OK")
     print()
@@ -224,8 +223,7 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--keep", action="store_true",
-                   help="keep the temp install dir after testing")
+    p.add_argument("--keep", action="store_true", help="keep the temp install dir after testing")
     args = p.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -236,10 +234,7 @@ def main():
     try:
         print(f"Installing to {tmpdir} ...")
         proc = subprocess.run(
-            [installer,
-             "--dest-dir", tmpdir,
-             "--no-backup",
-             "--skip", "@fonts-all,tldr-data"],
+            [installer, "--dest-dir", tmpdir, "--no-backup", "--skip", "@fonts-all,tldr-data"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=300,

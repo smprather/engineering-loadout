@@ -33,7 +33,9 @@ def find_patchelf(repo_dir):
         if c and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     # Last resort: decompress bundled patchelf to /tmp
-    for platform in os.listdir(os.path.join(repo_dir, "pre_built")) if os.path.isdir(os.path.join(repo_dir, "pre_built")) else []:
+    for platform in (
+        os.listdir(os.path.join(repo_dir, "pre_built")) if os.path.isdir(os.path.join(repo_dir, "pre_built")) else []
+    ):
         bz2_path = os.path.join(repo_dir, "pre_built", platform, "bin", "patchelf.bz2")
         if os.path.isfile(bz2_path):
             tmp = tempfile.NamedTemporaryFile(delete=False, prefix="patchelf_", suffix="")
@@ -49,7 +51,8 @@ def find_patchelf(repo_dir):
 def is_dynamic_elf(path, patchelf):
     proc = subprocess.run(
         [patchelf, "--print-interpreter", path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     return proc.returncode == 0
 
@@ -57,7 +60,8 @@ def is_dynamic_elf(path, patchelf):
 def get_rpath(path, patchelf):
     proc = subprocess.run(
         [patchelf, "--print-rpath", path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     return proc.stdout.decode("utf-8", "replace").strip()
 
@@ -88,16 +92,15 @@ def repatch_bz2(bz2_path, patchelf, dry_run):
 
         # Strip before patchelf: strip after patchelf can leave .dynstr outside
         # a PT_LOAD segment and corrupt the binary at load time.
-        subprocess.run(["/usr/bin/strip", tmp_elf],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(["/usr/bin/strip", tmp_elf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         proc = subprocess.run(
             [patchelf, "--set-rpath", RPATH, tmp_elf],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         if proc.returncode != 0:
-            print("  ERROR: patchelf failed on {}: {}".format(
-                bz2_path, proc.stderr.decode("utf-8", "replace").strip()))
+            print("  ERROR: patchelf failed on {}: {}".format(bz2_path, proc.stderr.decode("utf-8", "replace").strip()))
             return "error"
 
         fd, tmp_bz2 = tempfile.mkstemp(suffix=".bz2", dir=os.path.dirname(bz2_path))
@@ -118,10 +121,8 @@ def repatch_bz2(bz2_path, patchelf, dry_run):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--dry-run", action="store_true",
-                   help="show what would change without modifying files")
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--dry-run", action="store_true", help="show what would change without modifying files")
     args = p.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -148,9 +149,11 @@ def main():
             counts[result] = counts.get(result, 0) + 1
 
     total_changed = counts["patched"] + counts["would-patch"]
-    print("\nDone: {} patched, {} skipped, {} errors".format(
-        counts["patched"] if not args.dry_run else counts["would-patch"],
-        counts["skip"], counts["error"]))
+    print(
+        "\nDone: {} patched, {} skipped, {} errors".format(
+            counts["patched"] if not args.dry_run else counts["would-patch"], counts["skip"], counts["error"]
+        )
+    )
     if total_changed and not args.dry_run:
         print("Next: run ./strip_all_elf_binaries to update .strip-manifest")
 

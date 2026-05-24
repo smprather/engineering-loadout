@@ -1,0 +1,8 @@
+line-length = 120
+
+exclude = [
+    "installer_vendor/",
+    "treesitter/vendor/",
+    "treesitter/src/",
+    "bash/global/github.scop.bash-completion/",
+]

@@ -39,18 +39,17 @@ from urllib.error import URLError, HTTPError
 
 # ── paths ─────────────────────────────────────────────────────────────────
 
-_SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-_PREBUILT_DIR = os.path.dirname(_SCRIPT_DIR)                     # pre_built/
-_REPO_DIR     = os.path.dirname(_PREBUILT_DIR)                   # dotfiles/
-_PLATFORM     = "el8.x86_64.glibc2p28"
-_BIN_DIR      = os.path.join(_PREBUILT_DIR, _PLATFORM, "bin")
-_TOOLS_JSON   = os.path.join(_PREBUILT_DIR, "packages.json")
-_STRIP        = shutil.which("strip") or "/usr/bin/strip"
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PREBUILT_DIR = os.path.dirname(_SCRIPT_DIR)  # pre_built/
+_REPO_DIR = os.path.dirname(_PREBUILT_DIR)  # dotfiles/
+_PLATFORM = "el8.x86_64.glibc2p28"
+_BIN_DIR = os.path.join(_PREBUILT_DIR, _PLATFORM, "bin")
+_TOOLS_JSON = os.path.join(_PREBUILT_DIR, "packages.json")
+_STRIP = shutil.which("strip") or "/usr/bin/strip"
 
 # patchelf: prefer bundled binary, fall back to system
-_PATCHELF     = (shutil.which("patchelf")
-                 or os.path.join(_PREBUILT_DIR, _PLATFORM, "bin", "patchelf"))
-_BIN_RPATH    = "$ORIGIN/../lib64:$ORIGIN/../lib"  # standard RPATH for ~/.local/bin/ binaries
+_PATCHELF = shutil.which("patchelf") or os.path.join(_PREBUILT_DIR, _PLATFORM, "bin", "patchelf")
+_BIN_RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"  # standard RPATH for ~/.local/bin/ binaries
 
 # ── upstream release registry ─────────────────────────────────────────────
 # Key matches packages.json entry name.
@@ -59,86 +58,133 @@ _BIN_RPATH    = "$ORIGIN/../lib64:$ORIGIN/../lib"  # standard RPATH for ~/.local
 # strip: False if upstream already ships a stripped binary (skip re-strip).
 
 _REGISTRY = {
-    "dasel":      {"url": "https://github.com/TomWright/dasel/releases/download/v{ver}/dasel_linux_amd64",                                      "bin": "dasel"},
-    "delta":      {"url": "https://github.com/dandavison/delta/releases/download/{ver}/delta-{ver}-x86_64-unknown-linux-musl.tar.gz",           "bin": "delta"},
-    "duf":        {"url": "https://github.com/muesli/duf/releases/download/v{ver}/duf_{ver}_linux_x86_64.tar.gz",                              "bin": "duf"},
-    "dust":       {"url": "https://github.com/bootandy/dust/releases/download/v{ver}/dust-v{ver}-x86_64-unknown-linux-gnu.tar.gz",              "bin": "dust"},
-    "eza":        {"url": "https://github.com/eza-community/eza/releases/download/v{ver}/eza_x86_64-unknown-linux-gnu.tar.gz",                  "bin": "eza"},
-    "fd":         {"url": "https://github.com/sharkdp/fd/releases/download/v{ver}/fd-v{ver}-x86_64-unknown-linux-gnu.tar.gz",                   "bin": "fd"},
-    "lazygit":    {"url": "https://github.com/jesseduffield/lazygit/releases/download/v{ver}/lazygit_{ver}_Linux_x86_64.tar.gz",                "bin": "lazygit"},
-    "micro":      {"url": "https://github.com/zyedidia/micro/releases/download/v{ver}/micro-{ver}-linux64.tar.gz",                            "bin": "micro"},
-    "miller":     {"url": "https://github.com/johnkerl/miller/releases/download/v{ver}/miller-{ver}-linux-amd64.tar.gz",                        "bin": "mlr"},
-    "procs":      {"url": "https://github.com/dalance/procs/releases/download/v{ver}/procs-v{ver}-x86_64-linux.zip",                            "bin": "procs"},
-    "ruff":       {"url": "https://github.com/astral-sh/ruff/releases/download/{ver}/ruff-x86_64-unknown-linux-gnu.tar.gz",                     "bin": "ruff"},
-    "shfmt":      {"url": "https://github.com/mvdan/sh/releases/download/v{ver}/shfmt_v{ver}_linux_amd64",                                      "bin": "shfmt"},
-    "starship":   {"url": "https://github.com/starship/starship/releases/download/v{ver}/starship-x86_64-unknown-linux-gnu.tar.gz",              "bin": "starship"},
-    "tree-sitter":{"url": "https://github.com/tree-sitter/tree-sitter/releases/download/v{ver}/tree-sitter-linux-x64.gz",                       "bin": "tree-sitter"},
-    "ty":         {"url": "https://github.com/astral-sh/ty/releases/download/{ver}/ty-x86_64-unknown-linux-gnu.tar.gz",                         "bin": "ty"},
-    "uv":         {"url": "https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz",                         "bin": "uv"},
-    "zoxide":     {"url": "https://github.com/ajeetdsouza/zoxide/releases/download/v{ver}/zoxide-{ver}-x86_64-unknown-linux-gnu.tar.gz",         "bin": "zoxide"},
+    "dasel": {"url": "https://github.com/TomWright/dasel/releases/download/v{ver}/dasel_linux_amd64", "bin": "dasel"},
+    "delta": {
+        "url": "https://github.com/dandavison/delta/releases/download/{ver}/delta-{ver}-x86_64-unknown-linux-musl.tar.gz",
+        "bin": "delta",
+    },
+    "duf": {
+        "url": "https://github.com/muesli/duf/releases/download/v{ver}/duf_{ver}_linux_x86_64.tar.gz",
+        "bin": "duf",
+    },
+    "dust": {
+        "url": "https://github.com/bootandy/dust/releases/download/v{ver}/dust-v{ver}-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "dust",
+    },
+    "eza": {
+        "url": "https://github.com/eza-community/eza/releases/download/v{ver}/eza_x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "eza",
+    },
+    "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v{ver}/fd-v{ver}-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "fd",
+    },
+    "lazygit": {
+        "url": "https://github.com/jesseduffield/lazygit/releases/download/v{ver}/lazygit_{ver}_Linux_x86_64.tar.gz",
+        "bin": "lazygit",
+    },
+    "micro": {
+        "url": "https://github.com/zyedidia/micro/releases/download/v{ver}/micro-{ver}-linux64.tar.gz",
+        "bin": "micro",
+    },
+    "miller": {
+        "url": "https://github.com/johnkerl/miller/releases/download/v{ver}/miller-{ver}-linux-amd64.tar.gz",
+        "bin": "mlr",
+    },
+    "procs": {
+        "url": "https://github.com/dalance/procs/releases/download/v{ver}/procs-v{ver}-x86_64-linux.zip",
+        "bin": "procs",
+    },
+    "ruff": {
+        "url": "https://github.com/astral-sh/ruff/releases/download/{ver}/ruff-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "ruff",
+    },
+    "shfmt": {"url": "https://github.com/mvdan/sh/releases/download/v{ver}/shfmt_v{ver}_linux_amd64", "bin": "shfmt"},
+    "starship": {
+        "url": "https://github.com/starship/starship/releases/download/v{ver}/starship-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "starship",
+    },
+    "tree-sitter": {
+        "url": "https://github.com/tree-sitter/tree-sitter/releases/download/v{ver}/tree-sitter-linux-x64.gz",
+        "bin": "tree-sitter",
+    },
+    "ty": {
+        "url": "https://github.com/astral-sh/ty/releases/download/{ver}/ty-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "ty",
+    },
+    "uv": {
+        "url": "https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "uv",
+    },
+    "zoxide": {
+        "url": "https://github.com/ajeetdsouza/zoxide/releases/download/v{ver}/zoxide-{ver}-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "zoxide",
+    },
 }
 
 # Tools with no public binary release (source builds, dev, custom, scripts)
 _SKIP_REASONS = {
     "agent-deck": "no public binary release",
-    "bash":       "built from source",
-    "bzip2":      "built from source",
-    "gnuplot":    "built from source",
-    "gvim":       "custom GTK3 build",
-    "htop":       "built from source",
-    "bat":        "bundled binary has different NEEDED libs than official release (libz.so.1 vs librt.so.1) — likely EL8 source build",
-    "jq":         "custom build with shared libjq.so.1 + libonig.so.5; official release is statically linked",
-    "kak":        "built from source (date-tagged dev)",
-    "nedit-ng":   "custom Qt5 build",
-    "nvim":       "official prebuilts require GLIBC_2.34; EL8 has 2.28 — must source-build from stable tag (v0.12.2+) on EL8",
-    "octave":     "built from source",
-    "patchelf":   "built from source",
-    "pigz":       "built from source",
-    "pv":         "built from source",
-    "resize":     "part of xterm source build",
-    "rsync":      "built from source",
-    "tkdiff":     "Tcl script, no upstream binary",
-    "vim":        "custom build (vim.bin wrapper + binary)",
-    "xsel":       "built from source",
-    "xterm":      "built from source",
-    "yank":       "built from source",
-    "yara":       "built from source (no Linux prebuilt in official releases)",
-    "rg":         "GNU ABI; ripgrep ships musl-only for Linux releases — EL8 RPM or source build",
-    "eza":        "NEEDED libs differ from official release (libz.so.1 vs librt.so.1) — EL8 source build",
-    "fd":         "NEEDED libs differ from official release — EL8 source build",
-    "zoxide":     "GNU ABI; zoxide ships musl-only for Linux — source build",
-    "tmux":       "built from source (long upstream release cycle; intentionally kept as latest stable source build)",
+    "bash": "built from source",
+    "bzip2": "built from source",
+    "gnuplot": "built from source",
+    "gvim": "custom GTK3 build",
+    "htop": "built from source",
+    "bat": "bundled binary has different NEEDED libs than official release (libz.so.1 vs librt.so.1) — likely EL8 source build",
+    "jq": "custom build with shared libjq.so.1 + libonig.so.5; official release is statically linked",
+    "kak": "built from source (date-tagged dev)",
+    "nedit-ng": "custom Qt5 build",
+    "nvim": "official prebuilts require GLIBC_2.34; EL8 has 2.28 — must source-build from stable tag (v0.12.2+) on EL8",
+    "octave": "built from source",
+    "patchelf": "built from source",
+    "pigz": "built from source",
+    "pv": "built from source",
+    "resize": "part of xterm source build",
+    "rsync": "built from source",
+    "tkdiff": "Tcl script, no upstream binary",
+    "vim": "custom build (vim.bin wrapper + binary)",
+    "xsel": "built from source",
+    "xterm": "built from source",
+    "yank": "built from source",
+    "yara": "built from source (no Linux prebuilt in official releases)",
+    "rg": "GNU ABI; ripgrep ships musl-only for Linux releases — EL8 RPM or source build",
+    "eza": "NEEDED libs differ from official release (libz.so.1 vs librt.so.1) — EL8 source build",
+    "fd": "NEEDED libs differ from official release — EL8 source build",
+    "zoxide": "GNU ABI; zoxide ships musl-only for Linux — source build",
+    "tmux": "built from source (long upstream release cycle; intentionally kept as latest stable source build)",
     # EL8 source builds — old Rust toolchain links libpthread.so.0/libdl.so.2 separately;
     # official releases use newer Rust (≥1.62) where these are folded into glibc.
-    "broot":      "EL8 source build — dynamic with libz.so.1+libpthread (old Rust); official release is static",
-    "btm":        "EL8 source build — extra libdl.so.2+libpthread vs official gnu release (old Rust)",
-    "btop":       "EL8 source build — dynamic GNU; official musl release is static",
-    "choose":     "EL8 source build — extra libpthread.so.0 vs official (old Rust)",
-    "dust":       "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
-    "fzf":        "EL8 source build — dynamic with libpthread (old Go); official release is static",
-    "gping":      "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "hx":         "EL8 source build — extra libpthread+libdl vs official gnu release (old Rust)",
-    "hyperfine":  "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
-    "sd":         "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "stylua":     "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "tree-sitter":"EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "yq":         "EL8 source build — dynamic with libpthread+libdl (old Go); official release is static",
+    "broot": "EL8 source build — dynamic with libz.so.1+libpthread (old Rust); official release is static",
+    "btm": "EL8 source build — extra libdl.so.2+libpthread vs official gnu release (old Rust)",
+    "btop": "EL8 source build — dynamic GNU; official musl release is static",
+    "choose": "EL8 source build — extra libpthread.so.0 vs official (old Rust)",
+    "dust": "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
+    "fzf": "EL8 source build — dynamic with libpthread (old Go); official release is static",
+    "gping": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
+    "hx": "EL8 source build — extra libpthread+libdl vs official gnu release (old Rust)",
+    "hyperfine": "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
+    "sd": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
+    "stylua": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
+    "tree-sitter": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
+    "yq": "EL8 source build — dynamic with libpthread+libdl (old Go); official release is static",
     # Go binaries built on EL8 with older Go toolchain — static but different binary layout
-    "dasel":      "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "just":       "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
-    "lazygit":    "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "shfmt":      "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "tldr":       "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
+    "dasel": "EL8 Go source build — static but different binary layout from official (older Go version)",
+    "just": "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
+    "lazygit": "EL8 Go source build — static but different binary layout from official (older Go version)",
+    "shfmt": "EL8 Go source build — static but different binary layout from official (older Go version)",
+    "tldr": "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
     # Optional-only tools with no bins to check
-    "gui_libs":   "shared library bundle, no top-level binary",
-    "meld":       "Python uv tool, no standalone binary",
-    "visidata":   "Python uv tool, no standalone binary",
+    "gui_libs": "shared library bundle, no top-level binary",
+    "meld": "Python uv tool, no standalone binary",
+    "visidata": "Python uv tool, no standalone binary",
 }
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
+
 def _sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
+
 
 def _sha256_file(path):
     h = hashlib.sha256()
@@ -146,6 +192,7 @@ def _sha256_file(path):
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
 
 def _download(url, dest, verbose):
     if verbose:
@@ -158,6 +205,7 @@ def _download(url, dest, verbose):
                 if not chunk:
                     break
                 f.write(chunk)
+
 
 def _extract(archive, want, destdir, verbose):
     """Extract binary named `want` (matched by basename) from archive into destdir."""
@@ -200,6 +248,7 @@ def _extract(archive, want, destdir, verbose):
     os.chmod(dest, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
     return dest
 
+
 def _is_dynamic_elf(path):
     """True if the file is a dynamically linked ELF (needs RPATH set)."""
     try:
@@ -208,12 +257,14 @@ def _is_dynamic_elf(path):
     except Exception:
         return False
 
+
 def _strip(path, verbose):
     if verbose:
         print(f"    strip {os.path.basename(path)}", flush=True)
     r = subprocess.run([_STRIP, path], capture_output=True)
     # strip exits non-zero on already-stripped or non-ELF files — that's fine
     return r.returncode
+
 
 def _patchelf_rpath(path, verbose):
     """Apply standard bin/ RPATH — matches our pre-commit bundling step."""
@@ -224,13 +275,15 @@ def _patchelf_rpath(path, verbose):
     r = subprocess.run([_PATCHELF, "--set-rpath", _BIN_RPATH, path], capture_output=True)
     return r.returncode == 0
 
+
 def _needed_libs(path):
     """Return sorted list of NEEDED shared libraries from ELF .dynamic section."""
     try:
         r = subprocess.run(["readelf", "-d", path], capture_output=True, text=True)
-        return sorted(m.group(1) for m in re.finditer(r'\(NEEDED\)\s+.*\[(.+?)\]', r.stdout))
+        return sorted(m.group(1) for m in re.finditer(r"\(NEEDED\)\s+.*\[(.+?)\]", r.stdout))
     except Exception:
         return []
+
 
 def _bundled_bytes(stem):
     """Decompress bundled .bz2 and return raw bytes, or None if not found."""
@@ -240,13 +293,16 @@ def _bundled_bytes(stem):
     with bz2.open(bz2_path, "rb") as f:
         return f.read()
 
+
 def _load_tools_json():
     with open(_TOOLS_JSON) as f:
         data = json.load(f)
     # Strip comment keys
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
+
 # ── verification ───────────────────────────────────────────────────────────
+
 
 def _verify_one(name, entry, version, tmpdir, verbose):
     """Returns (status, detail) where status is 'PASS'/'FAIL'/'ERROR'."""
@@ -304,9 +360,9 @@ def _verify_one(name, entry, version, tmpdir, verbose):
         bundled_tmp = os.path.join(os.path.dirname(extracted), name + "_bundled_tmp")
         with open(bundled_tmp, "wb") as f:
             f.write(bundled_data)
-        up_needed  = _needed_libs(extracted)
+        up_needed = _needed_libs(extracted)
         bnd_needed = _needed_libs(bundled_tmp)
-        up_sz  = os.path.getsize(extracted)
+        up_sz = os.path.getsize(extracted)
         bnd_sz = len(bundled_data)
         # Allow up to 0.5% size drift — patchelf restructures the ELF when adding/replacing
         # RPATH entries, which can shift section boundaries for large binaries.
@@ -315,25 +371,23 @@ def _verify_one(name, entry, version, tmpdir, verbose):
             return "PASS", "patchelf layout delta only (code+deps identical)"
         else:
             return "FAIL", "different deps/size: up={} bnd={}".format(
-                ",".join(up_needed) or "none", ",".join(bnd_needed) or "none")
+                ",".join(up_needed) or "none", ",".join(bnd_needed) or "none"
+            )
 
-    return "FAIL", "upstream={} bundled={}".format(
-        upstream_hash[:16] + "...", bundled_hash[:16] + "...")
+    return "FAIL", "upstream={} bundled={}".format(upstream_hash[:16] + "...", bundled_hash[:16] + "...")
+
 
 # ── main ───────────────────────────────────────────────────────────────────
 
+
 def main():
-    p = argparse.ArgumentParser(
-        description="Verify bundled .bz2 binaries against upstream releases.")
-    p.add_argument("tools", nargs="*", metavar="TOOL",
-                   help="Tool(s) to verify. Default: all registered.")
-    p.add_argument("--keep", action="store_true",
-                   help="Keep temp directory after exit.")
-    p.add_argument("-v", "--verbose", action="store_true",
-                   help="Show download/extract/strip steps.")
+    p = argparse.ArgumentParser(description="Verify bundled .bz2 binaries against upstream releases.")
+    p.add_argument("tools", nargs="*", metavar="TOOL", help="Tool(s) to verify. Default: all registered.")
+    p.add_argument("--keep", action="store_true", help="Keep temp directory after exit.")
+    p.add_argument("-v", "--verbose", action="store_true", help="Show download/extract/strip steps.")
     args = p.parse_args()
 
-    registry  = _load_tools_json()
+    registry = _load_tools_json()
     sel_tools = args.tools if args.tools else sorted(registry.keys())
 
     # Validate --tool names
@@ -348,16 +402,14 @@ def main():
         print(f"Temp dir: {tmpdir}")
 
     # Column widths
-    w_name   = max(len(t) for t in sel_tools)
-    w_ver    = max((len(registry[t].get("version", "")) for t in sel_tools), default=7)
+    w_name = max(len(t) for t in sel_tools)
+    w_ver = max((len(registry[t].get("version", "")) for t in sel_tools), default=7)
     w_status = 5
 
-    hdr = "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(
-        "TOOL", "VERSION", "STATUS", "DETAIL",
-        n=w_name, v=w_ver, s=w_status)
+    hdr = "{:<{n}}  {:<{v}}  {:<{s}}  {}".format("TOOL", "VERSION", "STATUS", "DETAIL", n=w_name, v=w_ver, s=w_status)
     sep = "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(
-        "-" * w_name, "-" * w_ver, "-" * w_status, "-" * 40,
-        n=w_name, v=w_ver, s=w_status)
+        "-" * w_name, "-" * w_ver, "-" * w_status, "-" * 40, n=w_name, v=w_ver, s=w_status
+    )
     print(hdr)
     print(sep)
 
@@ -366,12 +418,10 @@ def main():
 
     for name in sel_tools:
         tool_info = registry[name]
-        version   = tool_info.get("version", "")
+        version = tool_info.get("version", "")
 
         def _row(status, detail):
-            return "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(
-                name, version, status, detail,
-                n=w_name, v=w_ver, s=w_status)
+            return "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(name, version, status, detail, n=w_name, v=w_ver, s=w_status)
 
         if name in _SKIP_REASONS:
             print(_row("SKIP", _SKIP_REASONS[name]))
@@ -399,8 +449,11 @@ def main():
             fail_names.append(name)
 
     print(sep)
-    print("{} passed, {} failed, {} skipped, {} error(s)".format(
-        counts["PASS"], counts["FAIL"], counts["SKIP"], counts["ERROR"]))
+    print(
+        "{} passed, {} failed, {} skipped, {} error(s)".format(
+            counts["PASS"], counts["FAIL"], counts["SKIP"], counts["ERROR"]
+        )
+    )
 
     if fail_names:
         print("\nFAIL: {}".format(", ".join(fail_names)))
@@ -413,6 +466,7 @@ def main():
         print(f"\nTemp dir kept: {tmpdir}")
 
     sys.exit(0 if counts["FAIL"] == 0 and counts["ERROR"] == 0 else 1)
+
 
 if __name__ == "__main__":
     main()
