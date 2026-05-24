@@ -429,67 +429,71 @@ def write_bz2_atomic(bz2_file, dest_file, mode):
                 pass
 
 
-_SPLIT_TMPFILES = []
+class _Bz2Store(object):
+    """Transparent split-bz2 resolver and directory scanner.
 
-
-def _resolve_bz2_maybe_split(path):
-    """Return real filesystem path to bz2 data at logical path.
-
-    If ``path`` exists as a file, return it directly.
-    If ``path + ".part-000"`` exists, rejoin all ``.part-NNN`` siblings to a
-    temp file and return that path.  The temp file is registered for deletion
-    at process exit so callers need not manage cleanup.
-    Returns ``None`` when neither the file nor its parts can be found.
+    Tracks temp files created when rejoining split parts and removes them
+    on process exit.
     """
-    if os.path.isfile(path):
-        return path
-    part0 = path + ".part-000"
-    if not os.path.isfile(part0):
-        return None
-    parts = glob_paths_glob(path + ".part-*")
-    fd, tmp = tempfile.mkstemp(
-        prefix="loadout-rejoin.",
-        suffix="." + os.path.basename(path),
-    )
-    _SPLIT_TMPFILES.append(tmp)
-    with os.fdopen(fd, "wb") as out:
-        for p in parts:
-            with open(p, "rb") as inp:
-                shutil.copyfileobj(inp, out)
-    return tmp
+
+    def __init__(self):
+        self._tmpfiles = []
+        import atexit
+        atexit.register(self._cleanup)
+
+    def resolve(self, path):
+        """Return real filesystem path for logical bz2 path.
+
+        Returns *path* directly when it exists as a plain file.
+        When *path* does not exist but ``path + ".part-000"`` does, rejoins
+        all ``.part-NNN`` siblings into a temp file and returns that path.
+        Returns ``None`` when neither the file nor its parts are present.
+        """
+        if os.path.isfile(path):
+            return path
+        part0 = path + ".part-000"
+        if not os.path.isfile(part0):
+            return None
+        parts = glob_paths_glob(path + ".part-*")
+        fd, tmp = tempfile.mkstemp(
+            prefix="loadout-rejoin.",
+            suffix="." + os.path.basename(path),
+        )
+        self._tmpfiles.append(tmp)
+        with os.fdopen(fd, "wb") as out:
+            for p in parts:
+                with open(p, "rb") as inp:
+                    shutil.copyfileobj(inp, out)
+        return tmp
+
+    def find(self, dir_path):
+        """Return sorted list of logical .bz2 paths in *dir_path*.
+
+        Includes both real .bz2 files and virtual .bz2 paths synthesised from
+        ``.bz2.part-000`` sentinels.  Deduplicates when both exist (real wins).
+        """
+        seen = set()
+        results = []
+        for name in sorted(os.listdir(dir_path)):
+            if name.endswith(".bz2") and ".part-" not in name:
+                results.append(os.path.join(dir_path, name))
+                seen.add(name)
+            elif name.endswith(".bz2.part-000"):
+                base = name[:-len(".part-000")]
+                if base not in seen:
+                    results.append(os.path.join(dir_path, base))
+                    seen.add(base)
+        return sorted(results)
+
+    def _cleanup(self):
+        for p in self._tmpfiles:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
-def _cleanup_split_tmpfiles():
-    for p in _SPLIT_TMPFILES:
-        try:
-            os.unlink(p)
-        except OSError:
-            pass
-
-
-import atexit as _atexit
-_atexit.register(_cleanup_split_tmpfiles)
-
-
-def _find_bz2s_in_dir(dir_path):
-    """Return sorted list of logical .bz2 paths in dir_path.
-
-    Includes both real .bz2 files and virtual .bz2 paths synthesised from
-    .bz2.part-000 split files.  Deduplicates when both a real file and its
-    split parts exist (real file wins, but that shouldn't happen in practice).
-    """
-    seen = set()
-    results = []
-    for name in sorted(os.listdir(dir_path)):
-        if name.endswith(".bz2") and ".part-" not in name:
-            results.append(os.path.join(dir_path, name))
-            seen.add(name)
-        elif name.endswith(".bz2.part-000"):
-            base = name[:-len(".part-000")]
-            if base not in seen:
-                results.append(os.path.join(dir_path, base))
-                seen.add(base)
-    return sorted(results)
+_bz2 = _Bz2Store()
 
 
 FINAL_NOTICES = []
@@ -1189,7 +1193,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         _DEFERRED_BINARIES = {"tmux"}
 
         _bin_bz2_files = sorted(
-            f for f in _find_bz2s_in_dir(bin_dir)
+            f for f in _bz2.find(bin_dir)
             if _bin_selected(os.path.basename(f)[:-4]))
         _max_bin_name = max((len(os.path.basename(f[:-4])) for f in _bin_bz2_files), default=0)
         _bins_unchanged = 0
@@ -1212,7 +1216,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         for bz2_file in _bin_bz2_files:
             dest_file = os.path.join(dest_bin_dir, os.path.basename(bz2_file[:-4]))
             name = os.path.basename(dest_file)
-            bz2_src = _resolve_bz2_maybe_split(bz2_file)
+            bz2_src = _bz2.resolve(bz2_file)
             if bz2_src is None:
                 warn(f"skipping {name} — bz2 or split parts missing at {bz2_file}")
                 continue
@@ -1306,13 +1310,13 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 os.remove(_glib_path)
                 print(f"  removed stale glibc lib: {_glib_path}")
         _lib64_bz2_files = sorted(
-            f for f in _find_bz2s_in_dir(lib64_dir)
+            f for f in _bz2.find(lib64_dir)
             if _lib_selected(os.path.basename(f)[:-4]))
         _libs_unchanged = 0
         _lp, _lpt = _progress("Installing libraries", len(_lib64_bz2_files))
         for bz2_file in _lib64_bz2_files:
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
-            bz2_src = _resolve_bz2_maybe_split(bz2_file)
+            bz2_src = _bz2.resolve(bz2_file)
             if bz2_src is None:
                 warn(f"skipping {os.path.basename(dest_file)} — bz2 or split parts missing at {bz2_file}")
                 continue
@@ -1855,9 +1859,9 @@ def install_helix_runtime(repo_dir, home, selected_tools=None):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "helix.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "helix.tar.bz2"))
     if archive is None:
-        archive = _resolve_bz2_maybe_split(os.path.join(repo_dir, "helix", "helix_runtime.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(repo_dir, "helix", "helix_runtime.tar.bz2"))
     if archive is None:
         skipped("Helix runtime (no helix.tar.bz2 in pre_built/<platform>/runtime/ or helix/)",
                 "hx will NOT have the vendored runtime at ~/.config/helix/runtime")
@@ -1886,9 +1890,9 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "vim92.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "vim92.tar.bz2"))
     if archive is None:
-        archive = _resolve_bz2_maybe_split(os.path.join(repo_dir, "vim", "runtime.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(repo_dir, "vim", "runtime.tar.bz2"))
     if archive is None:
         skipped("Vim runtime (no vim92.tar.bz2 in pre_built/<platform>/runtime/ or vim/)",
                 "vim will NOT have the vendored runtime at ~/.local/share/vim/vim92")
@@ -1922,7 +1926,7 @@ def install_nvim_runtime(repo_dir, home, selected_tools=None):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "nvim.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "nvim.tar.bz2"))
     if archive is None:
         skipped("Neovim runtime (no nvim.tar.bz2 in pre_built/<platform>/runtime/)",
                 "nvim will NOT have the vendored runtime at ~/.local/share/nvim/runtime")
@@ -1951,7 +1955,7 @@ def install_octave_runtime(repo_dir, home, selected_tools):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "octave.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "octave.tar.bz2"))
     if archive is None:
         skipped("Octave runtime (no octave.tar.bz2 in pre_built/<platform>/runtime/)",
                 "octave will NOT have its standard library at ~/.local/share/octave/")
@@ -1985,7 +1989,7 @@ def install_meld_runtime(repo_dir, home, selected_tools):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "meld.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "meld.tar.bz2"))
     if archive is None:
         skipped("Meld runtime (no meld.tar.bz2 in pre_built/<platform>/runtime/)",
                 "meld will NOT be installed")
@@ -2030,7 +2034,7 @@ def install_st_runtime(repo_dir, home, selected_tools):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "st.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "st.tar.bz2"))
     if archive is None:
         skipped("st runtime (no st.tar.bz2 in pre_built/<platform>/runtime/)",
                 "st-256color terminfo with Smulx/Setulc undercurl caps will NOT be installed")
@@ -2059,7 +2063,7 @@ def install_fish_runtime(repo_dir, home, selected_tools):
     archive = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
     if platform_dir:
-        archive = _resolve_bz2_maybe_split(os.path.join(platform_dir, "runtime", "fish.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "fish.tar.bz2"))
     if archive is None:
         skipped("Fish runtime (no fish.tar.bz2 in pre_built/<platform>/runtime/)",
                 "fish standard library will NOT be installed")
