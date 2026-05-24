@@ -1,8 +1,14 @@
 " Enable Mouse
 set mouse=a
 
-" System clipboard — yank/paste use + register by default
-set clipboard=unnamedplus
+" System clipboard — yank/paste use + register by default; also mirror to *
+" (PRIMARY selection) for apps that support it.
+set clipboard=unnamed,unnamedplus
+
+" Auto-copy visual selection to system clipboard on mouse release.
+" Mimics X11 primary-selection behavior using the CLIPBOARD register instead,
+" since WSLg's XWayland does not reliably bridge PRIMARY to Windows clipboard.
+vnoremap <LeftRelease> "+y
 
 " Set Editor Font
 if exists(':GuiFont')
