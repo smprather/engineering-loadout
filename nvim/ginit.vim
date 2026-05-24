@@ -1,6 +1,9 @@
 " Enable Mouse
 set mouse=a
 
+" System clipboard — yank/paste use + register by default
+set clipboard=unnamedplus
+
 " Set Editor Font
 if exists(':GuiFont')
     " Use GuiFont! to ignore font errors
