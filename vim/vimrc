@@ -112,6 +112,11 @@ if !has('nvim')
     if has("gui_running")
         set guioptions=m
         set guicursor=i:block
+        set mouse=a
+        set clipboard=unnamed,unnamedplus
+        " Auto-copy visual selection to system clipboard on mouse release —
+        " xterm-like select-to-copy without needing to press y.
+        vnoremap <LeftRelease> "+y
     endif
 endif
 
