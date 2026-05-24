@@ -54,7 +54,6 @@ sha256  7baba7cb340fb4e19746d916fedcd601e8e02ee47a4c95c0e70814a38fc21216  pre_bu
 sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  pre_built/el8.x86_64.glibc2p28/bin/micro.bz2
 sha256  cff9472b7bd266ee6df1161c7d3201b7a21963dd0e62642e2aec2f42547f23dc  pre_built/el8.x86_64.glibc2p28/bin/mlr.bz2
 sha256  7fa7cf9ee4e94a292cfa2f1f56b7f613c0bb231edb80d378e0739aac136bd77a  pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
-sha256  656bf83efe4589a2f4e5fde0ca8d8c10532a88a2bf6b5e973779f79b89729955  pre_built/el8.x86_64.glibc2p28/bin/neovide.bz2
 sha256  28b783c26131237e12d373b9923f2f43f6c95cffc24d67c79258f5c2f75dfc4c  pre_built/el8.x86_64.glibc2p28/bin/ninja.bz2
 sha256  17713656c0d5ce6eb6dd885997a01f6589ea29ca19d503a85630034e445a4db2  pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  eacb73a3e57af3b2d3399f3785aab8305fcd1fa743bc08d7500ac15f19f3577d  pre_built/el8.x86_64.glibc2p28/bin/octave.bz2
@@ -144,7 +143,6 @@ sha256  57ab6c4b563f4501934d06418725e3bf89205f843ec1ed608186e791cb4a6bcf  pre_bu
 sha256  d4b0b3b60f182a46bab3009b613fd6fbd3c5a1b672c1fe36400d684705c9eae2  pre_built/el8.x86_64.glibc2p28/lib64/libfftw3f.so.3.bz2
 sha256  67e94ebf80ba2d5f0ac5cb653b9d9618ae843446e6be41434ca6cb63731b7e27  pre_built/el8.x86_64.glibc2p28/lib64/libfftw3f_threads.so.3.bz2
 sha256  c74081e53b9dd5ca77118b69f0618d7ee404c8a26feffd89b2e3d5ae8e00eeed  pre_built/el8.x86_64.glibc2p28/lib64/libfontconfig.so.1.bz2
-sha256  eec99d92d28f32f59d3c85fdf7e0bbd41c75e645566b04c9a54bf924c442d738  pre_built/el8.x86_64.glibc2p28/lib64/libfreetype.so.6.bz2
 sha256  e79e70d5a9dc5cecc6cc23435e7ec3825ced9fe03eaac5b66c92ae7483a2f158  pre_built/el8.x86_64.glibc2p28/lib64/libfribidi.so.0.bz2
 sha256  d064c511792a46c8cbe8b8ee2086ba04de8a98dbbe3cb14eb1d18413d2536cc8  pre_built/el8.x86_64.glibc2p28/lib64/libgdk-3.so.0.bz2
 sha256  5dce8aa40a597fd8f0a13be2cd0a2a350a94cca670d34f484a20d7696065c202  pre_built/el8.x86_64.glibc2p28/lib64/libgdk_pixbuf-2.0.so.0.bz2
