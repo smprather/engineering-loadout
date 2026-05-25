@@ -2929,7 +2929,7 @@ def _list_table(rows, columns):
     columns: list of dicts: {"name", "style", "max_width", "no_wrap", "ratio",
                               "min_width", "wrap"}.
     Columns with "wrap": "comma" or "wrap": "word" are treated as elastic:
-    their widths are jointly optimised to minimise total padding spaces.
+    their widths are jointly optimised to minimise total output lines.
     Content wraps (never truncates); GROUPS column breaks only at commas.
     """
     import shutil
@@ -2960,7 +2960,13 @@ def _list_table(rows, columns):
     fixed_total = sum(fixed_widths.values()) + sep * (n - 1)
     available = term_cols - fixed_total  # shared among elastic cols (no extra sep: already counted)
 
-    # Optimise elastic col widths by minimising total padding spaces.
+    # Optimise elastic col widths by minimising total output lines.
+    #
+    # Search bounds (content-derived, not terminal-derived):
+    #   min_g  = longest single group item — a group that won't fit in less
+    #   max_g  = longest full groups string — beyond this GROUPS never wraps,
+    #            only DESCRIPTION gets squeezed; no benefit to going wider
+    # Stop early once total_lines stops improving.
     if len(elastic_indices) == 2:
         gi, di = elastic_indices
         g_fn = _comma_wrap if columns[gi].get("wrap") == "comma" else _word_wrap
@@ -2973,23 +2979,20 @@ def _list_table(rows, columns):
             len(columns[gi]["name"]),
         )
         min_d = max(columns[di].get("min_width", 20), len(columns[di]["name"]))
-        max_g = available - min_d
+        # Natural ceiling: widest groups string — no wrap savings beyond this
+        natural_g = max((len(str(r[gi])) for r in rows), default=min_g)
+        max_g = min(natural_g, available - min_d)
 
-        best_g, best_spaces = min_g, float("inf")
+        best_g, best_lines = min_g, float("inf")
         for w_g in range(min_g, max(max_g + 1, min_g + 1)):
             w_d = available - w_g
             if w_d < min_d:
                 break
-            total = 0
-            for r in rows:
-                gl = g_fn(str(r[gi]), w_g)
-                dl = d_fn(str(r[di]), w_d)
-                h = max(len(gl), len(dl))
-                for k in range(h):
-                    total += w_g - len(gl[k] if k < len(gl) else "")
-                    total += w_d - len(dl[k] if k < len(dl) else "")
-            if total < best_spaces:
-                best_spaces, best_g = total, w_g
+            total = sum(max(len(g_fn(str(r[gi]), w_g)), len(d_fn(str(r[di]), w_d))) for r in rows)
+            if total < best_lines:
+                best_lines, best_g = total, w_g
+            elif total > best_lines:
+                break  # past the minimum; further widening only hurts
 
         elastic_widths = {gi: best_g, di: available - best_g}
         wrap_fns = {gi: g_fn, di: d_fn}
