@@ -27,6 +27,7 @@ sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_bu
 sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  pre_built/el8.x86_64.glibc2p28/bin/fresh.bz2
 sha256  fd06bb9f7938718bb4aa03bc00b6114978cd99ed9e2ce6ea38c78fca5db9d993  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
+sha256  e831fc837c259f399a55e973d9ec8df773ddadabeae33b8f34244a6a15dbd85f  pre_built/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  c1b896060541f23075a624dddf79bb7bca06a875aa8007c2c0d4fc73e138a666  pre_built/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
 sha256  9eee474d758bcd51967391e38d57234223b0a1afd0049f15cddfe1ab0fc388a0  pre_built/el8.x86_64.glibc2p28/bin/gvim.bz2
@@ -52,6 +53,7 @@ sha256  b8ba25fa61e3614b323769a72d6c0776bb06b84d725c6002c08f48f1bf851e72  pre_bu
 sha256  31156ae27be96ab33589bec1f7881f8a765d750c1d0658ee9333f2e014e08fc1  pre_built/el8.x86_64.glibc2p28/bin/llvm-readobj.bz2
 sha256  aba715deec08b553bb27ff3082ed45c2f1b5d893d5896402c611b3c3eca1204c  pre_built/el8.x86_64.glibc2p28/bin/llvm-strip.bz2
 sha256  281b620fdf18d2d76628bb3cdeb56c6e321f954a3dd9f07c5512b3b5da3f08f9  pre_built/el8.x86_64.glibc2p28/bin/llvm-symbolizer.bz2
+sha256  ad58f9a6c66c3a2939440b52855bf70e4b3dd13d5dd03de066ae1fa47213c76d  pre_built/el8.x86_64.glibc2p28/bin/lua-language-server.bz2
 sha256  7baba7cb340fb4e19746d916fedcd601e8e02ee47a4c95c0e70814a38fc21216  pre_built/el8.x86_64.glibc2p28/bin/merge-fdata.bz2
 sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  pre_built/el8.x86_64.glibc2p28/bin/micro.bz2
 sha256  cff9472b7bd266ee6df1161c7d3201b7a21963dd0e62642e2aec2f42547f23dc  pre_built/el8.x86_64.glibc2p28/bin/mlr.bz2
@@ -69,6 +71,7 @@ sha256  370a8103dba02819ff13b56dd3457a4e26332228fccdff1fdd3e49f456460204  pre_bu
 sha256  38d2a5fb1cc6f92edb6a3c7b92000c4721fd0c32f1a4ddd5c8e825bcbfd98a19  pre_built/el8.x86_64.glibc2p28/bin/rg.bz2
 sha256  c91517d389e427058df5caa43f06a4136de8d931f4272cd7e7b3cc86759e7cdd  pre_built/el8.x86_64.glibc2p28/bin/rsync.bz2
 sha256  0765926196163a3b37249ff68b72db06eaa231f4e0d50669929c1dbe854dca9a  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
+sha256  aa75ac95284fc3f1b4f5817b3fc7c5ac7bac8f4d21ab0ebe938d4702a36a9ae4  pre_built/el8.x86_64.glibc2p28/bin/rust-analyzer.bz2
 sha256  d96dceab12c2ff9045a99c853ed06ddde00d042862bac81532d6e6ab3268024c  pre_built/el8.x86_64.glibc2p28/bin/sd.bz2
 sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  pre_built/el8.x86_64.glibc2p28/bin/shfmt.bz2
 sha256  1697a092d738bad2f27e694118403ba08694f7218796676e1510d342a2ebaad8  pre_built/el8.x86_64.glibc2p28/bin/st.bz2
@@ -229,6 +232,7 @@ sha256  fcf47e453dd59a265b921a1f73b523343383fa654110cc8dde2c1def45c70cbe  pre_bu
 sha256  08ace58677105a879ee6c45dccfa797c169cc027752e023bb826db78f5f66c0a  pre_built/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2
 tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
+tar-meta  2996129  1779747334  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  38695258  1779735528  pre_built/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  5952  1779649520  pre_built/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
@@ -563,4 +567,4 @@ sha256  c52891aae13f34d05c509c114a3e92e97c26938fac67e14ce32b578c4c6ff5b2  treesi
 sha256  e342cf73d0933f8bfe60b7a6587786cd4bf53ce8d5608ddf5f89efc1215f4702  treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy.so.bz2
 sha256  ba384ab03a65cbd5e4e9c7f8159aef7c8c2975fc38d3732b3b60b79ee14ebc80  treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy_schema.so.bz2
 sha256  3a8f97cc4768000e6e3e349ea0ad1cfa8531a2cb1765619696da7f9c4cc592d3  treesitter/prebuilt/linux-x86_64-glibc/parser/zsh.so.bz2
-sha256  c664b4480d7dd539897de6fca5930b3c5b86b7a49d71e3507b33fcf7ceb5fb06  yara/yara-rules-full.yar.bz2
+sha256  474e57dfdde481f8572b9b5cae1af407720fb42511c1c27e6004d92e6a46dbe0  yara/yara-rules-full.yar.bz2

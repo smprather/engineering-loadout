@@ -2128,6 +2128,42 @@ def install_fish_runtime(repo_dir, home, selected_tools):
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
+def install_lua_ls_runtime(repo_dir, home, selected_tools):
+    if selected_tools is not None and "lua-language-server" not in selected_tools:
+        skipped("Lua language server runtime (lua-language-server not selected)", "")
+        record_result("Lua LS runtime", "SKIP", "lua-language-server not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "lua-language-server.tar.bz2"))
+    if archive is None:
+        skipped(
+            "Lua language server runtime (no lua-language-server.tar.bz2 in pre_built/<platform>/runtime/)",
+            "lua-language-server wrapper will be installed but binary data will be missing",
+        )
+        record_result("Lua LS runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    # Archive contains ./share/lua-language-server/... relative to ~/.local
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "Lua LS runtime")
+
+    lua_ls_share = os.path.join(local_dir, "share", "lua-language-server")
+    remove_if_exists(lua_ls_share)
+
+    pv_extract_tar(archive, local_dir)
+
+    sentinel = os.path.join(lua_ls_share, "bin", "lua-language-server")
+    if os.path.isfile(sentinel):
+        os.chmod(sentinel, 0o755)
+        record_result("Lua LS runtime", "yes", "lua-language-server -> {}/".format(lua_ls_share))
+        print("  Installed: {} -> {}/".format(archive, lua_ls_share))
+    else:
+        warn("Lua LS runtime archive did not install {}/bin/lua-language-server as expected".format(lua_ls_share))
+        record_result("Lua LS runtime", "FAIL", "archive extracted but binary not found")
+
+
 def install_nodejs_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "nodejs" not in selected_tools:
         skipped("Node.js runtime (nodejs not selected)", "")
@@ -3365,6 +3401,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Lua LS runtime", install_lua_ls_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Node.js runtime", install_nodejs_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)

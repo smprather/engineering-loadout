@@ -830,15 +830,21 @@
     },
     "uutils-coreutils": {
       "kind": "bin",
-      "bins": ["coreutils"],
+      "bins": [
+        "coreutils"
+      ],
       "version": "0.8.0",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["core", "compat"],
-      "description": "Rust reimplementation of GNU coreutils — single multi-call binary (coreutils ls, coreutils cat, …)"
+      "tags": [
+        "core",
+        "compat"
+      ],
+      "description": "Rust reimplementation of GNU coreutils \u2014 single multi-call binary (coreutils ls, coreutils cat, \u2026)"
     },
-
     "uv": {
       "kind": "bin",
       "bins": [
@@ -2197,6 +2203,72 @@
         "@shells-optional"
       ],
       "description": "Full loadout \u2014 every bundled package and group"
+    },
+    "rust-analyzer": {
+      "kind": "bin",
+      "bins": [
+        "rust-analyzer"
+      ],
+      "version": "2026-05-25",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "lsp"
+      ],
+      "description": "Rust language server (LSP) \u2014 diagnostics, go-to-def, completions"
+    },
+    "gopls": {
+      "kind": "bin",
+      "bins": [
+        "gopls"
+      ],
+      "version": "0.22.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "lsp"
+      ],
+      "description": "Go language server (LSP) \u2014 diagnostics, go-to-def, completions"
+    },
+    "lua-language-server": {
+      "kind": "bin",
+      "bins": [
+        "lua-language-server"
+      ],
+      "version": "3.18.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "lsp"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/lua-language-server.tar.bz2",
+      "description": "Lua language server (LSP) \u2014 useful for nvim config and Lua tooling"
+    },
+    "pyright": {
+      "kind": "python-tool",
+      "uv_tool": "pyright",
+      "wheels": [
+        "pyright"
+      ],
+      "version": "",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "lsp"
+      ],
+      "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions"
     }
   }
 }
