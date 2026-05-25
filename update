@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""update — unified dev-artifact updater for engineering-loadout.
+
+Automated items (default: all four):
+  tldr          bundle tealdeer tldr-pages for offline installs
+  tmux-plugins  re-clone tmux plugins listed in tmux.conf, strip .git
+  yara          vendor latest YARA-Forge full rules
+  nodejs        nvm install --lts, bundle as node.tar.bz2
+
+Guide items (print instructions, no network/build):
+  binaries      download, or build, latest 'bins'
+  runtimes      build/import runtime archives (fish, octave, nvim, ...)
+
+Usage:
+  ./update                        run all automated items, commit
+  ./update yara nodejs            only those two, commit
+  ./update nodejs --tag v26.2.0   pin version, commit
+  ./update --no-commit            run all automated, skip commit
+  ./update --dry-run              show commands without executing
+  ./update --list                 item table
+  ./update binaries               show binary update guidance
+  ./update runtimes               show runtime build guidance
+"""
+
+from __future__ import print_function
+
+import argparse
+import os
+import subprocess
+import sys
+import textwrap
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+BUILD = os.path.join(REPO, "pre_built", "build_scripts")
+
+ITEMS_ORDERED = ["tldr", "tmux-plugins", "yara", "nodejs", "binaries", "runtimes"]
+
+ITEMS = {
+    "tldr": {
+        "desc": "Bundle tealdeer tldr-pages cache for offline installs",
+        "kind": "auto",
+    },
+    "tmux-plugins": {
+        "desc": "Re-clone tmux plugins listed in tmux.conf, strip .git",
+        "kind": "auto",
+    },
+    "yara": {
+        "desc": "Vendor latest YARA-Forge full rules (--tag YYYYMMDD to pin)",
+        "kind": "auto",
+        "supports_tag": True,
+    },
+    "nodejs": {
+        "desc": "nvm install --lts, bundle as node.tar.bz2 (--tag vX.Y.Z to pin)",
+        "kind": "auto",
+        "supports_tag": True,
+    },
+    "binaries": {
+        "desc": "Download, or build, latest 'bins'",
+        "kind": "guide",
+    },
+    "runtimes": {
+        "desc": "Build and import runtime archives (fish, octave, nvim, ...)",
+        "kind": "guide",
+    },
+}
+
+AUTO_DEFAULT = [k for k in ITEMS_ORDERED if ITEMS[k]["kind"] == "auto"]
+
+
+# ── output helpers ────────────────────────────────────────────────────────────
+
+
+def _sep(title="", width=72):
+    if title:
+        pad = max(0, width - len(title) - 4)
+        print("\n── {} {}".format(title, "─" * pad))
+    else:
+        print("─" * width)
+
+
+def _run(cmd, dry_run=False):
+    """Print and optionally execute cmd; return subprocess exit code (0 on dry-run)."""
+    display = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
+    print("$ {}".format(display))
+    if dry_run:
+        return 0
+    return subprocess.call(cmd, cwd=REPO)
+
+
+# ── automated runners ─────────────────────────────────────────────────────────
+
+
+def run_tldr(dry_run=False, tag=None):
+    _sep("tldr")
+    rc = _run([os.path.join(REPO, "update_tldr_cache")], dry_run)
+    if rc != 0:
+        print("WARNING: update_tldr_cache exited rc={}".format(rc))
+    return rc == 0
+
+
+def run_tmux_plugins(dry_run=False, tag=None):
+    _sep("tmux-plugins")
+    rc = _run([os.path.join(REPO, "update_tmux_plugins")], dry_run)
+    if rc != 0:
+        print("WARNING: update_tmux_plugins exited rc={}".format(rc))
+    return rc == 0
+
+
+def run_yara(dry_run=False, tag=None):
+    _sep("yara")
+    cmd = [os.path.join(REPO, "update_yara_forge_rules_full")]
+    if tag:
+        cmd += ["--tag", tag]
+    rc = _run(cmd, dry_run)
+    if rc != 0:
+        print("WARNING: update_yara_forge_rules_full exited rc={}".format(rc))
+    return rc == 0
+
+
+def run_nodejs(dry_run=False, tag=None):
+    _sep("nodejs")
+    cmd = [os.path.join(BUILD, "import-nodejs")]
+    if tag:
+        cmd += ["--tag", tag]
+    rc = _run(cmd, dry_run)
+    if rc != 0:
+        print("WARNING: import-nodejs exited rc={}".format(rc))
+        return False
+    print()
+    rc2 = _run([os.path.join(REPO, "strip_all_elf_binaries")], dry_run)
+    if rc2 != 0:
+        print("WARNING: strip_all_elf_binaries exited rc={}".format(rc2))
+    return True
+
+
+# ── guide printers ────────────────────────────────────────────────────────────
+
+
+def show_binaries(dry_run=False, tag=None):
+    _sep("binaries")
+    print(
+        textwrap.dedent("""
+  Binary updates require an EL8 build machine with internet access.
+  Download, or build, latest 'bins':
+
+  1. Check which packages have upstream updates:
+       ./pre_built/build_scripts/check-versions --outdated-only
+
+  2. Download or build the updated binary, then import:
+       bzip2 -k <binary>
+       cp <binary>.bz2 pre_built/el8.x86_64.glibc2p28/bin/
+       ./strip_all_elf_binaries
+       git add pre_built/ .strip-manifest
+
+  Binaries with build scripts (./pre_built/build_scripts/BUILD --tag vX.Y.Z):
+    nvim          build-nvim.sh
+    vim / gvim    build-gvim.sh
+    tmux          build-tmux.sh
+    jq            build-jq.sh
+    kak           build-kakoune.sh
+    micro         build-micro.sh
+    ncdu          build-ncdu.sh
+    nedit-ng      build-nedit-ng.sh
+    nvim-qt       build-nvim-qt.sh
+    fish          build-fish.sh     (also produces runtime/fish.tar.bz2)
+    octave        build-octave.sh   (also produces runtime/octave.tar.bz2)
+    zsh           build-zsh.sh
+    st            build-st.sh
+    urxvt         build-urxvt.sh
+
+  All other binaries: download prebuilt from their GitHub releases page,
+  strip + patchelf RPATH ($ORIGIN/../lib64:$ORIGIN/../lib), bzip2, copy to
+  pre_built/<platform>/bin/.  See pre_built/ADDING_BINARIES.md.
+    """).rstrip()
+    )
+    return True
+
+
+def show_runtimes(dry_run=False, tag=None):
+    _sep("runtimes")
+    print(
+        textwrap.dedent("""
+  Runtime archives require building on EL8, then bundling with import scripts.
+  After any runtime update, run: ./strip_all_elf_binaries
+
+    Node.js:
+      ./pre_built/build_scripts/import-nodejs [--tag vX.Y.Z]
+
+    Portable Python:
+      ./pre_built/build_scripts/import-portable-python <dir>
+
+    Fish shell:
+      ./pre_built/build_scripts/build-fish.sh --tag vX.Y.Z
+      (produces bin/fish.bz2 + runtime/fish.tar.bz2)
+
+    Octave:
+      ./pre_built/build_scripts/build-octave.sh --tag vX.Y.Z
+      (produces bin/octave.bz2 + runtime/octave.tar.bz2)
+
+    Neovim:
+      ./pre_built/build_scripts/build-nvim.sh --tag vX.Y.Z
+      (produces bin/nvim.bz2 + runtime/nvim.tar.bz2)
+
+    Vim / GVim:
+      ./pre_built/build_scripts/build-gvim.sh --tag vX.Y.Z
+      (produces bin/vim.bz2, bin/gvim.bz2 + runtime/vim92.tar.bz2)
+
+    Helix:
+      Download release tarball from github.com/helix-editor/helix/releases
+      Bundle runtime/ as pre_built/<platform>/runtime/helix.tar.bz2
+    """).rstrip()
+    )
+    return True
+
+
+RUNNERS = {
+    "tldr": run_tldr,
+    "tmux-plugins": run_tmux_plugins,
+    "yara": run_yara,
+    "nodejs": run_nodejs,
+    "binaries": show_binaries,
+    "runtimes": show_runtimes,
+}
+
+# Paths to git-add for each automated item
+ITEM_GIT_PATHS = {
+    "tldr": ["tldr/"],
+    "tmux-plugins": ["tmux/vendor/plugins/"],
+    "yara": ["yara/"],
+    "nodejs": ["pre_built/", ".strip-manifest", "packages.json"],
+}
+
+
+# ── git commit ────────────────────────────────────────────────────────────────
+
+
+def git_commit(items_run, dry_run=False):
+    paths = []
+    for item in items_run:
+        for p in ITEM_GIT_PATHS.get(item, []):
+            if os.path.exists(os.path.join(REPO, p)):
+                paths.append(p)
+
+    if not paths:
+        return
+
+    _sep("git commit")
+    status = (
+        subprocess.check_output(
+            ["git", "status", "--porcelain"] + paths,
+            cwd=REPO,
+        )
+        .decode("utf-8")
+        .strip()
+    )
+    if not status:
+        print("No changes detected — nothing to commit.")
+        return
+
+    msg = "chore: update {}\n\nUpdated by ./update:\n{}".format(
+        ", ".join(items_run),
+        "\n".join("  - " + i for i in items_run),
+    )
+    print()
+    rc = _run(["git", "add"] + paths, dry_run)
+    if rc != 0 and not dry_run:
+        print("WARNING: git add failed rc={}".format(rc))
+        return
+    _run(["git", "commit", "-m", msg], dry_run)
+
+
+# ── subcommands ───────────────────────────────────────────────────────────────
+
+
+def cmd_list():
+    col_w = [14, 8]
+    fmt = "{:<{}} {:<{}} {}"
+    print(fmt.format("ITEM", col_w[0], "KIND", col_w[1], "DESCRIPTION"))
+    print("─" * 72)
+    for name in ITEMS_ORDERED:
+        info = ITEMS[name]
+        print(fmt.format(name, col_w[0], info["kind"], col_w[1], info["desc"]))
+
+
+# ── main ──────────────────────────────────────────────────────────────────────
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="update",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument(
+        "items",
+        nargs="*",
+        metavar="ITEM",
+        help="items to run (default: all automated); choices: {}".format(", ".join(ITEMS_ORDERED)),
+    )
+    ap.add_argument("--list", action="store_true", help="show item table and exit")
+    ap.add_argument("--dry-run", action="store_true", help="print commands without executing")
+    ap.add_argument("--no-commit", action="store_true", help="skip git commit (commit is default)")
+    ap.add_argument(
+        "--tag", default=None, metavar="VERSION", help="version hint for sub-updaters that support it (nodejs, yara)"
+    )
+    args = ap.parse_args()
+
+    if args.list:
+        cmd_list()
+        return
+
+    items = args.items if args.items else AUTO_DEFAULT
+
+    unknown = [i for i in items if i not in ITEMS]
+    if unknown:
+        ap.error("unknown item(s): {}  (choices: {})".format(", ".join(unknown), ", ".join(ITEMS_ORDERED)))
+
+    auto_succeeded = []
+    all_ok = True
+    for item in items:
+        ok = RUNNERS[item](dry_run=args.dry_run, tag=args.tag)
+        if ITEMS[item]["kind"] == "auto":
+            (auto_succeeded if ok else []).append(item)
+            if not ok:
+                all_ok = False
+
+    if not args.no_commit and auto_succeeded:
+        git_commit(auto_succeeded, dry_run=args.dry_run)
+
+    _sep()
+    if args.dry_run:
+        print("Dry-run complete.")
+    elif all_ok:
+        print("Done.")
+    else:
+        print("Done (some items failed — see warnings above).")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
