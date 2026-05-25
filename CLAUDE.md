@@ -126,7 +126,8 @@ pre_built/
 kak/
   kakrc                     - Default kakoune config (copy of share/kak/kakrc from build); copied to ~/.config/kak/kakrc only if not already present
 
-helix/                      - (empty; runtime archive moved to pre_built/<platform>/runtime/)
+helix/
+  config.toml               - Helix editor config → ~/.config/helix/config.toml
 
 editorconfig/
   editorconfig              - → ~/.editorconfig

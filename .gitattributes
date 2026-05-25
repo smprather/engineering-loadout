@@ -25,6 +25,3 @@
 # Test harness
 /tests                          export-ignore
 
-# Stray root files not used by installers
-/package.json                   export-ignore
-/package-lock.json              export-ignore
