@@ -3,12 +3,12 @@
 
 Usage:
   ./update                        run all automated packages (no commit)
-  ./update nodejs yara            run specific automated packages
+  ./update nodejs yara-rules      run specific automated packages
   ./update nvim bat rg            show update guidance for those packages
   ./update --list                 table: package | kind | version | description
   ./update --commit               stage + commit automated output
   ./update --dry-run              print commands without executing
-  ./update --tag vX.Y.Z          version hint for nodejs and yara
+  ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
 """
 
 from __future__ import print_function
@@ -26,11 +26,14 @@ BUILD = os.path.join(REPO, "pre_built", "build_scripts")
 # ── package registry ──────────────────────────────────────────────────────────
 
 # Fully automated: ./update runs a script end-to-end.
-# tmux-plugins is not in packages.json but included as a pseudo-package.
+# Dev-only repo artifacts (yara-rules, tldr-data, tmux-plugins) are not
+# end-user-installed packages but are vendored into the repo by the dev and
+# bundled into the installer; they live alongside installable packages here.
 AUTOMATED = {
-    "yara": {
+    "yara-rules": {
         "supports_tag": True,
         "git_paths": ["yara/"],
+        "desc": "Vendored YARA-Forge full ruleset (yara/yara-rules-full.yar.bz2)",
     },
     "nodejs": {
         "supports_tag": True,
@@ -41,6 +44,7 @@ AUTOMATED = {
     },
     "tmux-plugins": {
         "git_paths": ["tmux/vendor/plugins/"],
+        "desc": "Vendored tmux plugins (tmux/vendor/plugins/)",
     },
 }
 
@@ -146,10 +150,21 @@ PACKAGES = _load_packages()
 
 
 def _pkg_version(name):
+    # Dev-artifact versions live outside packages.json.
+    if name == "yara-rules":
+        tag_file = os.path.join(REPO, "yara", "release-tag.txt")
+        if os.path.isfile(tag_file):
+            with open(tag_file) as fh:
+                return fh.read().strip()
+        return ""
     return PACKAGES.get(name, {}).get("version", "")
 
 
 def _pkg_desc(name):
+    # Prefer inline desc for pseudo-packages not in packages.json.
+    inline = AUTOMATED.get(name, {}).get("desc") or IMPORT_SCRIPTS.get(name, {}).get("desc")
+    if inline:
+        return inline
     return PACKAGES.get(name, {}).get("description", "")
 
 
@@ -191,7 +206,7 @@ def _run(cmd, dry_run=False):
 
 def _run_automated(name, dry_run=False, tag=None):
     _sep(name)
-    if name == "yara":
+    if name == "yara-rules":
         cmd = [os.path.join(REPO, "update_yara_forge_rules_full")]
         if tag:
             cmd += ["--tag", tag]
@@ -279,7 +294,7 @@ def _show_download(name):
 def cmd_list():
     rows = []
 
-    for name in ("yara", "nodejs", "tldr-data", "tmux-plugins"):
+    for name in ("yara-rules", "nodejs", "tldr-data", "tmux-plugins"):
         tag_note = " (--tag)" if AUTOMATED[name].get("supports_tag") else ""
         rows.append((name, "automated" + tag_note, _pkg_version(name), _pkg_desc(name)))
 
@@ -291,7 +306,8 @@ def cmd_list():
     for name in sorted(IMPORT_SCRIPTS):
         rows.append((name, "import-script", _pkg_version(name), _pkg_desc(name)))
 
-    dl = sorted(n for n in DOWNLOAD_ONLY if n not in AUTOMATED and n not in BUILD_SCRIPTS and n not in IMPORT_SCRIPTS)
+    dl_names = DOWNLOAD_ONLY | {k for k, v in PACKAGES.items() if not k.startswith("@") and v.get("kind") == "bin"}
+    dl = sorted(n for n in dl_names if n not in AUTOMATED and n not in BUILD_SCRIPTS and n not in IMPORT_SCRIPTS)
     for name in dl:
         rows.append((name, "download", _pkg_version(name), _pkg_desc(name)))
 
