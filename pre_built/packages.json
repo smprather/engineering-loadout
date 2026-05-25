@@ -828,6 +828,17 @@
       ],
       "description": "Fast Python type checker (Astral)"
     },
+    "uutils-coreutils": {
+      "kind": "bin",
+      "bins": ["coreutils"],
+      "version": "0.8.0",
+      "platforms": ["linux"],
+      "default": false,
+      "optional": true,
+      "tags": ["core", "compat"],
+      "description": "Rust reimplementation of GNU coreutils — single multi-call binary (coreutils ls, coreutils cat, …)"
+    },
+
     "uv": {
       "kind": "bin",
       "bins": [
