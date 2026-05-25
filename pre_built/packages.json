@@ -1,121 +1,936 @@
 {
   "_comment": "Package registry for the engineering-loadout installer (formerly dotfiles). See pre_built/ADDING_BINARIES.md for the workflow.",
-
   "schema_version": 2,
-
   "_schema": {
-    "kind":                "Package type: 'bin', 'lib-bundle', 'runtime', 'typelib', 'python-base', 'python-tool', 'env', 'font', 'data', 'group'.",
-    "default":             "If true, installed when no selection flags given. Inverted polarity of legacy 'optional'. When both present, 'default' wins.",
-    "platforms":           "List of platforms where this package is valid: 'linux', 'macos', 'windows'. Default ['linux'] when omitted.",
-    "tags":                "Free-form labels for filtering/grouping (e.g. ['search', 'editor', 'gui']).",
-    "depends":             "Hard dependencies: package names (or @group refs) that MUST be installed alongside this one. Resolver auto-pulls them; skipping a hard dep of a selected pkg is an error unless --no-deps or --force.",
-    "recommends":          "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
-    "archive":             "Path (relative to repo root) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base'.",
-    "install_to":          "Target install path. '~' expanded at install time.",
-    "source":              "Source dir or file (relative to repo root). For kind='env'.",
-    "extra_links":         "List of {from, to} entries describing additional symlinks to create after the env is installed.",
-    "supports_layers":     "For kind='env': layer names (corp/site/project/user) the env supports for user overrides.",
+    "kind": "Package type: 'bin', 'lib-bundle', 'runtime', 'typelib', 'python-base', 'python-tool', 'env', 'font', 'data', 'group'.",
+    "default": "If true, installed when no selection flags given. Inverted polarity of legacy 'optional'. When both present, 'default' wins.",
+    "platforms": "List of platforms where this package is valid: 'linux', 'macos', 'windows'. Default ['linux'] when omitted.",
+    "tags": "Free-form labels for filtering/grouping (e.g. ['search', 'editor', 'gui']).",
+    "depends": "Hard dependencies: package names (or @group refs) that MUST be installed alongside this one. Resolver auto-pulls them; skipping a hard dep of a selected pkg is an error unless --no-deps or --force.",
+    "recommends": "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
+    "archive": "Path (relative to repo root) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base'.",
+    "install_to": "Target install path. '~' expanded at install time.",
+    "source": "Source dir or file (relative to repo root). For kind='env'.",
+    "extra_links": "List of {from, to} entries describing additional symlinks to create after the env is installed.",
+    "supports_layers": "For kind='env': layer names (corp/site/project/user) the env supports for user overrides.",
     "run_install_scripts": "For kind='env': if true, run install hooks discovered in the deployed env dir.",
-    "members":             "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
-    "bins":                "(legacy) List of bin/*.bz2 stems (without .bz2) owned by this package.",
-    "libs":                "(legacy) List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools — those are always installed.",
-    "typelibs":            "(legacy) List of typelibs/*.typelib files required by this package (documentation only; all typelibs in the dir are always installed).",
-    "wheels":              "(legacy) List of Python package names whose wheels are bundled in wheels/ for offline uv tool install.",
-    "uv_tool":             "(legacy) Package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
-    "version":             "(legacy) Version of the bundled binary or package.",
-    "description":         "(legacy) One-line description shown by --list-tools.",
-    "optional":            "DEPRECATED — use 'default: false' instead. Still honored when 'default' is absent."
+    "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
+    "bins": "(legacy) List of bin/*.bz2 stems (without .bz2) owned by this package.",
+    "libs": "(legacy) List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools \u2014 those are always installed.",
+    "typelibs": "(legacy) List of typelibs/*.typelib files required by this package (documentation only; all typelibs in the dir are always installed).",
+    "wheels": "(legacy) List of Python package names whose wheels are bundled in wheels/ for offline uv tool install.",
+    "uv_tool": "(legacy) Package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
+    "version": "(legacy) Version of the bundled binary or package.",
+    "description": "(legacy) One-line description shown by --list-tools.",
+    "optional": "DEPRECATED \u2014 use 'default: false' instead. Still honored when 'default' is absent."
   },
-
   "packages": {
-    "agent-deck":  {"kind": "bin", "bins": ["agent-deck"], "version": "1.9.12",  "platforms": ["linux"], "default": true,  "tags": ["agent", "tui"],          "description": "TUI dashboard for AI agent orchestration"},
-    "bash":        {"kind": "bin", "bins": ["bash"],        "version": "5.3.9",   "platforms": ["linux"], "default": true,  "tags": ["shell", "core"],         "description": "Portable GNU Bash ahead of EL8 system version"},
-    "bat":         {"kind": "bin", "bins": ["bat"],         "version": "0.26.1",  "platforms": ["linux"], "default": true,  "tags": ["core", "viewer"],        "description": "cat clone with syntax highlighting and line numbers"},
-    "biome":       {"kind": "bin", "bins": ["biome"],       "version": "2.4.15",  "platforms": ["linux"], "default": true,  "tags": ["dev", "format", "lsp"], "description": "Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep)"},
-    "broot":       {"kind": "bin", "bins": ["broot"],       "version": "1.56.2",  "platforms": ["linux"], "default": true,  "tags": ["nav", "tui"],            "description": "Interactive tree navigator with fuzzy search"},
-    "btm":         {"kind": "bin", "bins": ["btm"],         "version": "0.12.3",  "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "Cross-platform system resource monitor (TUI)"},
-    "btop":        {"kind": "bin", "bins": ["btop"],        "version": "1.4.7",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "Resource monitor with graphs and mouse support"},
-    "bzip2":       {"kind": "bin", "bins": ["bzip2"],       "version": "1.0.8",   "platforms": ["linux"], "default": true,  "tags": ["compress"],              "description": "Block-sorting file compressor"},
-    "choose":      {"kind": "bin", "bins": ["choose"],      "version": "1.3.7",   "platforms": ["linux"], "default": true,  "tags": ["data"],                  "description": "awk/cut alternative for column field selection"},
-    "clang":       {"kind": "bin", "bins": ["clang-23", "clang", "clang++", "lld", "ld.lld", "clangd", "clang-format", "clang-tidy", "llvm-ar", "llvm-nm", "llvm-objcopy", "llvm-objdump", "llvm-readobj", "llvm-readelf", "llvm-symbolizer", "llvm-cov", "llvm-profdata", "llvm-link", "llvm-strip", "llvm-ranlib"], "version": "23.0git", "platforms": ["linux"], "default": false, "optional": true, "tags": ["compiler", "llvm", "dev"], "description": "LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link)"},
-    "dasel":       {"kind": "bin", "bins": ["dasel"],       "version": "3.8.1",   "platforms": ["linux"], "default": true,  "tags": ["data"],                  "description": "Query and modify YAML/JSON/TOML/XML/CSV data"},
-    "delta":       {"kind": "bin", "bins": ["delta"],       "version": "0.19.2",  "platforms": ["linux"], "default": true,  "tags": ["git"],                   "description": "Git diff pager with syntax highlighting"},
-    "duf":         {"kind": "bin", "bins": ["duf"],         "version": "0.9.1",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "df replacement with colored usage table"},
-    "dust":        {"kind": "bin", "bins": ["dust"],        "version": "1.2.4",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "du replacement with visual bar chart"},
-    "eza":         {"kind": "bin", "bins": ["eza"],         "version": "0.23.4",  "platforms": ["linux"], "default": true,  "tags": ["core", "nav"],           "description": "ls replacement with icons, colors, git status"},
-    "fd":          {"kind": "bin", "bins": ["fd"],          "version": "10.4.2",  "platforms": ["linux"], "default": true,  "tags": ["core", "search"],        "description": "Fast and user-friendly find alternative"},
-    "fzf":         {"kind": "bin", "bins": ["fzf"],         "version": "0.72.0",  "platforms": ["linux"], "default": true,  "tags": ["core", "search"],        "description": "General-purpose command-line fuzzy finder"},
-    "gnuplot":     {"kind": "bin", "bins": ["gnuplot"],     "version": "6.0.2",   "platforms": ["linux"], "default": true,  "tags": ["scientific"],            "description": "Command-line graphing and plotting utility"},
-    "gping":       {"kind": "bin", "bins": ["gping"],       "version": "1.20.1",  "platforms": ["linux"], "default": true,  "tags": ["network", "monitor"],    "description": "Ping with live graph visualization"},
-    "htop":        {"kind": "bin", "bins": ["htop"],        "version": "3.2.1",   "platforms": ["linux"], "default": true,  "tags": ["monitor"],               "description": "Interactive process viewer and manager"},
-    "hx":          {"kind": "bin", "bins": ["hx"],          "version": "25.07.1", "platforms": ["linux"], "default": true,  "tags": ["editor"],                "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2", "description": "Modern modal text editor with tree-sitter and LSP"},
-    "hyperfine":   {"kind": "bin", "bins": ["hyperfine"],   "version": "1.20.0",  "platforms": ["linux"], "default": true,  "tags": ["benchmark"],             "description": "Command-line benchmarking tool"},
-
+    "agent-deck": {
+      "kind": "bin",
+      "bins": [
+        "agent-deck"
+      ],
+      "version": "1.9.12",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "agent",
+        "tui"
+      ],
+      "description": "TUI dashboard for AI agent orchestration"
+    },
+    "bash": {
+      "kind": "bin",
+      "bins": [
+        "bash"
+      ],
+      "version": "5.3.9",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "shell",
+        "core"
+      ],
+      "description": "Portable GNU Bash ahead of EL8 system version"
+    },
+    "bat": {
+      "kind": "bin",
+      "bins": [
+        "bat"
+      ],
+      "version": "0.26.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "core",
+        "viewer"
+      ],
+      "description": "cat clone with syntax highlighting and line numbers"
+    },
+    "biome": {
+      "kind": "bin",
+      "bins": [
+        "biome"
+      ],
+      "version": "2.4.15",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "format",
+        "lsp"
+      ],
+      "description": "Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep)"
+    },
+    "broot": {
+      "kind": "bin",
+      "bins": [
+        "broot"
+      ],
+      "version": "1.56.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "nav",
+        "tui"
+      ],
+      "description": "Interactive tree navigator with fuzzy search"
+    },
+    "btm": {
+      "kind": "bin",
+      "bins": [
+        "btm"
+      ],
+      "version": "0.12.3",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "Cross-platform system resource monitor (TUI)"
+    },
+    "btop": {
+      "kind": "bin",
+      "bins": [
+        "btop"
+      ],
+      "version": "1.4.7",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "Resource monitor with graphs and mouse support"
+    },
+    "bzip2": {
+      "kind": "bin",
+      "bins": [
+        "bzip2"
+      ],
+      "version": "1.0.8",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "compress"
+      ],
+      "description": "Block-sorting file compressor"
+    },
+    "choose": {
+      "kind": "bin",
+      "bins": [
+        "choose"
+      ],
+      "version": "1.3.7",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "data"
+      ],
+      "description": "awk/cut alternative for column field selection"
+    },
+    "clang": {
+      "kind": "bin",
+      "bins": [
+        "clang-23",
+        "clang",
+        "clang++",
+        "lld",
+        "ld.lld",
+        "clangd",
+        "clang-format",
+        "clang-tidy",
+        "llvm-ar",
+        "llvm-nm",
+        "llvm-objcopy",
+        "llvm-objdump",
+        "llvm-readobj",
+        "llvm-readelf",
+        "llvm-symbolizer",
+        "llvm-cov",
+        "llvm-profdata",
+        "llvm-link",
+        "llvm-strip",
+        "llvm-ranlib"
+      ],
+      "version": "23.0git",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "compiler",
+        "llvm",
+        "dev"
+      ],
+      "description": "LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link)"
+    },
+    "dasel": {
+      "kind": "bin",
+      "bins": [
+        "dasel"
+      ],
+      "version": "3.8.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "data"
+      ],
+      "description": "Query and modify YAML/JSON/TOML/XML/CSV data"
+    },
+    "delta": {
+      "kind": "bin",
+      "bins": [
+        "delta"
+      ],
+      "version": "0.19.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "git"
+      ],
+      "description": "Git diff pager with syntax highlighting"
+    },
+    "duf": {
+      "kind": "bin",
+      "bins": [
+        "duf"
+      ],
+      "version": "0.9.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "df replacement with colored usage table"
+    },
+    "dust": {
+      "kind": "bin",
+      "bins": [
+        "dust"
+      ],
+      "version": "1.2.4",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "du replacement with visual bar chart"
+    },
+    "eza": {
+      "kind": "bin",
+      "bins": [
+        "eza"
+      ],
+      "version": "0.23.4",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "core",
+        "nav"
+      ],
+      "description": "ls replacement with icons, colors, git status"
+    },
+    "fd": {
+      "kind": "bin",
+      "bins": [
+        "fd"
+      ],
+      "version": "10.4.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "core",
+        "search"
+      ],
+      "description": "Fast and user-friendly find alternative"
+    },
+    "fzf": {
+      "kind": "bin",
+      "bins": [
+        "fzf"
+      ],
+      "version": "0.72.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "core",
+        "search"
+      ],
+      "description": "General-purpose command-line fuzzy finder"
+    },
+    "gnuplot": {
+      "kind": "bin",
+      "bins": [
+        "gnuplot"
+      ],
+      "version": "6.0.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "scientific"
+      ],
+      "description": "Command-line graphing and plotting utility"
+    },
+    "gping": {
+      "kind": "bin",
+      "bins": [
+        "gping"
+      ],
+      "version": "1.20.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "network",
+        "monitor"
+      ],
+      "description": "Ping with live graph visualization"
+    },
+    "htop": {
+      "kind": "bin",
+      "bins": [
+        "htop"
+      ],
+      "version": "3.2.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "Interactive process viewer and manager"
+    },
+    "hx": {
+      "kind": "bin",
+      "bins": [
+        "hx"
+      ],
+      "version": "25.07.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "editor"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2",
+      "description": "Modern modal text editor with tree-sitter and LSP"
+    },
+    "hyperfine": {
+      "kind": "bin",
+      "bins": [
+        "hyperfine"
+      ],
+      "version": "1.20.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "benchmark"
+      ],
+      "description": "Command-line benchmarking tool"
+    },
     "jq": {
       "kind": "bin",
-      "bins": ["jq"],
-      "libs": ["libjq.so", "libjq.so.1", "libjq.so.1.0.4", "libonig.so.5"],
+      "bins": [
+        "jq"
+      ],
+      "libs": [
+        "libjq.so",
+        "libjq.so.1",
+        "libjq.so.1.0.4",
+        "libonig.so.5"
+      ],
       "version": "1.8.1",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["data", "core"],
+      "tags": [
+        "data",
+        "core"
+      ],
       "description": "Lightweight JSON processor and formatter"
     },
-
-    "just":        {"kind": "bin", "bins": ["just"],        "version": "1.50.0",     "platforms": ["linux"], "default": true,  "tags": ["dev"],                "description": "Command runner, ergonomic Makefile alternative"},
-    "kak":         {"kind": "bin", "bins": ["kak"],         "version": "2026.04.12", "platforms": ["linux"], "default": true,  "tags": ["editor"],             "recommends": ["env-kak"], "description": "Modal editor with multiple simultaneous selections"},
-    "lazygit":     {"kind": "bin", "bins": ["lazygit"],     "version": "0.61.1",     "platforms": ["linux"], "default": true,  "tags": ["git", "tui"],         "description": "TUI git client for staging, committing, rebasing"},
-    "llvm-bolt":   {"kind": "bin", "bins": ["llvm-bolt", "perf2bolt", "merge-fdata"], "version": "23.0git", "platforms": ["linux"], "default": false, "optional": true, "tags": ["llvm", "optimizer", "dev"], "description": "LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata"},
-    "micro":       {"kind": "bin", "bins": ["micro"],       "version": "2.0.15",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "description": "Beginner-friendly terminal text editor"},
-    "miller":      {"kind": "bin", "bins": ["mlr"],         "version": "6.18.1",     "platforms": ["linux"], "default": true,  "tags": ["data"],               "description": "CSV/TSV/JSON/NDJSON data processor (mlr)"},
-    "ninja":       {"kind": "bin", "bins": ["ninja"],       "version": "1.13.2",     "platforms": ["linux"], "default": false, "optional": true, "tags": ["build", "dev"],       "description": "Fast build system used by CMake and LLVM"},
-    "fresh":       {"kind": "bin", "bins": ["fresh"],       "version": "0.3.8",      "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor"],             "description": "Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config)"},
-    "nvim":        {"kind": "bin", "bins": ["nvim"],        "version": "0.12.2",     "platforms": ["linux"], "default": true,  "tags": ["editor"],             "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2", "recommends": ["env-nvim", "treesitter-parsers"], "description": "Hyperextensible Vim-based text editor"},
-    "patchelf":    {"kind": "bin", "bins": ["patchelf"],    "version": "0.12",       "platforms": ["linux"], "default": true,  "tags": ["dev", "elf"],         "description": "Modify ELF RPATH and interpreter in-place"},
-    "pigz":        {"kind": "bin", "bins": ["pigz"],        "version": "2.8",        "platforms": ["linux"], "default": true,  "tags": ["compress"],           "description": "Parallel implementation of gzip"},
-    "procs":       {"kind": "bin", "bins": ["procs"],       "version": "0.14.11",    "platforms": ["linux"], "default": true,  "tags": ["monitor"],            "description": "ps replacement with colors and process tree"},
-    "pv":          {"kind": "bin", "bins": ["pv"],          "version": "1.6.6",      "platforms": ["linux"], "default": true,  "tags": ["compress", "monitor"], "description": "Monitor and show progress of data through a pipe"},
-    "rg":          {"kind": "bin", "bins": ["rg"],          "version": "15.1.0",     "platforms": ["linux"], "default": true,  "tags": ["core", "search"],     "description": "Extremely fast grep alternative (ripgrep)"},
-
+    "just": {
+      "kind": "bin",
+      "bins": [
+        "just"
+      ],
+      "version": "1.50.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev"
+      ],
+      "description": "Command runner, ergonomic Makefile alternative"
+    },
+    "kak": {
+      "kind": "bin",
+      "bins": [
+        "kak"
+      ],
+      "version": "2026.04.12",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "editor"
+      ],
+      "recommends": [
+        "env-kak"
+      ],
+      "description": "Modal editor with multiple simultaneous selections"
+    },
+    "lazygit": {
+      "kind": "bin",
+      "bins": [
+        "lazygit"
+      ],
+      "version": "0.61.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "git",
+        "tui"
+      ],
+      "description": "TUI git client for staging, committing, rebasing"
+    },
+    "llvm-bolt": {
+      "kind": "bin",
+      "bins": [
+        "llvm-bolt",
+        "perf2bolt",
+        "merge-fdata"
+      ],
+      "version": "23.0git",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "llvm",
+        "optimizer",
+        "dev"
+      ],
+      "description": "LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata"
+    },
+    "micro": {
+      "kind": "bin",
+      "bins": [
+        "micro"
+      ],
+      "version": "2.0.15",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "editor"
+      ],
+      "description": "Beginner-friendly terminal text editor"
+    },
+    "miller": {
+      "kind": "bin",
+      "bins": [
+        "mlr"
+      ],
+      "version": "6.18.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "data"
+      ],
+      "description": "CSV/TSV/JSON/NDJSON data processor (mlr)"
+    },
+    "ninja": {
+      "kind": "bin",
+      "bins": [
+        "ninja"
+      ],
+      "version": "1.13.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "build",
+        "dev"
+      ],
+      "description": "Fast build system used by CMake and LLVM"
+    },
+    "fresh": {
+      "kind": "bin",
+      "bins": [
+        "fresh"
+      ],
+      "version": "0.3.8",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "editor"
+      ],
+      "description": "Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config)"
+    },
+    "nvim": {
+      "kind": "bin",
+      "bins": [
+        "nvim"
+      ],
+      "version": "0.12.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "editor"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2",
+      "recommends": [
+        "env-nvim",
+        "treesitter-parsers"
+      ],
+      "description": "Hyperextensible Vim-based text editor"
+    },
+    "patchelf": {
+      "kind": "bin",
+      "bins": [
+        "patchelf"
+      ],
+      "version": "0.12",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "elf"
+      ],
+      "description": "Modify ELF RPATH and interpreter in-place"
+    },
+    "pigz": {
+      "kind": "bin",
+      "bins": [
+        "pigz"
+      ],
+      "version": "2.8",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "compress"
+      ],
+      "description": "Parallel implementation of gzip"
+    },
+    "procs": {
+      "kind": "bin",
+      "bins": [
+        "procs"
+      ],
+      "version": "0.14.11",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "monitor"
+      ],
+      "description": "ps replacement with colors and process tree"
+    },
+    "pv": {
+      "kind": "bin",
+      "bins": [
+        "pv"
+      ],
+      "version": "1.6.6",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "compress",
+        "monitor"
+      ],
+      "description": "Monitor and show progress of data through a pipe"
+    },
+    "rg": {
+      "kind": "bin",
+      "bins": [
+        "rg"
+      ],
+      "version": "15.1.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "core",
+        "search"
+      ],
+      "description": "Extremely fast grep alternative (ripgrep)"
+    },
     "rsync": {
       "kind": "bin",
-      "bins": ["rsync"],
-      "libs": ["libxxhash.so.0"],
+      "bins": [
+        "rsync"
+      ],
+      "libs": [
+        "libxxhash.so.0"
+      ],
       "version": "3.4.1",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["network", "sync"],
+      "tags": [
+        "network",
+        "sync"
+      ],
       "description": "Efficient file sync with delta-transfer algorithm"
     },
-
-    "ruff":        {"kind": "bin", "bins": ["ruff"],        "version": "0.15.14", "platforms": ["linux"], "default": true,  "tags": ["python", "format"],  "description": "Extremely fast Python linter and formatter"},
-    "sd":          {"kind": "bin", "bins": ["sd"],          "version": "1.0.0",   "platforms": ["linux"], "default": true,  "tags": ["data"],              "description": "sed alternative with simpler regex syntax"},
-    "shfmt":       {"kind": "bin", "bins": ["shfmt"],       "version": "3.13.1",  "platforms": ["linux"], "default": true,  "tags": ["shell", "format"],   "description": "Shell script formatter and parser"},
-    "starship":    {"kind": "bin", "bins": ["starship"],    "version": "1.25.1",  "platforms": ["linux"], "default": true,  "tags": ["shell", "prompt"],   "recommends": ["env-starship"], "description": "Cross-shell customizable minimal prompt"},
-    "stylua":      {"kind": "bin", "bins": ["stylua"],      "version": "2.4.1",   "platforms": ["linux"], "default": true,  "tags": ["lua", "format"],     "description": "Opinionated Lua code formatter"},
-    "tkdiff":      {"kind": "bin", "bins": ["tkdiff"],      "version": "6.0",     "platforms": ["linux"], "default": true,  "tags": ["diff", "gui"],       "description": "Tcl/Tk visual diff and merge tool (needs wish)"},
-    "tldr":        {"kind": "bin", "bins": ["tldr"],        "version": "1.8.1",   "platforms": ["linux"], "default": true,  "tags": ["docs"],              "recommends": ["tldr-data"], "description": "Simplified community man pages (tealdeer)"},
-
+    "ruff": {
+      "kind": "bin",
+      "bins": [
+        "ruff"
+      ],
+      "version": "0.15.14",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "python",
+        "format"
+      ],
+      "description": "Extremely fast Python linter and formatter"
+    },
+    "sd": {
+      "kind": "bin",
+      "bins": [
+        "sd"
+      ],
+      "version": "1.0.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "data"
+      ],
+      "description": "sed alternative with simpler regex syntax"
+    },
+    "shfmt": {
+      "kind": "bin",
+      "bins": [
+        "shfmt"
+      ],
+      "version": "3.13.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "shell",
+        "format"
+      ],
+      "description": "Shell script formatter and parser"
+    },
+    "starship": {
+      "kind": "bin",
+      "bins": [
+        "starship"
+      ],
+      "version": "1.25.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "shell",
+        "prompt"
+      ],
+      "recommends": [
+        "env-starship"
+      ],
+      "description": "Cross-shell customizable minimal prompt"
+    },
+    "stylua": {
+      "kind": "bin",
+      "bins": [
+        "stylua"
+      ],
+      "version": "2.4.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "lua",
+        "format"
+      ],
+      "description": "Opinionated Lua code formatter"
+    },
+    "tkdiff": {
+      "kind": "bin",
+      "bins": [
+        "tkdiff"
+      ],
+      "version": "6.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "diff",
+        "gui"
+      ],
+      "description": "Tcl/Tk visual diff and merge tool (needs wish)"
+    },
+    "tldr": {
+      "kind": "bin",
+      "bins": [
+        "tldr"
+      ],
+      "version": "1.8.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "docs"
+      ],
+      "recommends": [
+        "tldr-data"
+      ],
+      "description": "Simplified community man pages (tealdeer)"
+    },
     "tmux": {
       "kind": "bin",
-      "bins": ["tmux"],
-      "libs": ["libevent_core-2.1.so.6"],
+      "bins": [
+        "tmux"
+      ],
+      "libs": [
+        "libevent_core-2.1.so.6"
+      ],
       "version": "3.6b",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["terminal"],
-      "recommends": ["env-tmux"],
+      "tags": [
+        "terminal"
+      ],
+      "recommends": [
+        "env-tmux"
+      ],
       "description": "Terminal multiplexer with session management"
     },
-
-    "tree-sitter": {"kind": "bin", "bins": ["tree-sitter"], "version": "0.26.8",  "platforms": ["linux"], "default": true,  "tags": ["dev", "parser"],  "description": "Incremental parser generator and query tool"},
-    "ty":          {"kind": "bin", "bins": ["ty"],          "version": "0.0.39",  "platforms": ["linux"], "default": true,  "tags": ["python", "lint"], "description": "Fast Python type checker (Astral)"},
-    "uv":          {"kind": "bin", "bins": ["uv"],          "version": "0.11.13", "platforms": ["linux"], "default": true,  "tags": ["python", "pkg"],  "description": "Extremely fast Python package and project manager"},
-    "vim":         {"kind": "bin", "bins": ["vim", "vim.bin"], "version": "9.2",  "platforms": ["linux"], "default": true,  "tags": ["editor"],         "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2", "recommends": ["env-vim"], "description": "Vi IMproved text editor"},
-    "gvim":        {"kind": "bin", "bins": ["gvim", "gvim.bin"], "version": "9.2", "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs", "vim"], "recommends": ["env-vim", "font-firacode"], "description": "GTK3 GUI Vim with clipboard and font rendering"},
-    "nedit-ng":    {"kind": "bin", "bins": ["nedit-ng"], "version": "2025.1",  "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs"], "description": "Qt5 GUI text editor, NEdit rewrite"},
-    "nvim-qt":     {"kind": "bin", "bins": ["nvim-qt"], "version": "0.2.19",  "platforms": ["linux"], "default": false, "optional": true, "tags": ["editor", "gui"], "depends": ["gui_libs", "nvim"], "description": "Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required)"},
-
+    "tree-sitter": {
+      "kind": "bin",
+      "bins": [
+        "tree-sitter"
+      ],
+      "version": "0.26.8",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "parser"
+      ],
+      "description": "Incremental parser generator and query tool"
+    },
+    "ty": {
+      "kind": "bin",
+      "bins": [
+        "ty"
+      ],
+      "version": "0.0.39",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "python",
+        "lint"
+      ],
+      "description": "Fast Python type checker (Astral)"
+    },
+    "uv": {
+      "kind": "bin",
+      "bins": [
+        "uv"
+      ],
+      "version": "0.11.13",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "python",
+        "pkg"
+      ],
+      "description": "Extremely fast Python package and project manager"
+    },
+    "vim": {
+      "kind": "bin",
+      "bins": [
+        "vim",
+        "vim.bin"
+      ],
+      "version": "9.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "editor"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2",
+      "recommends": [
+        "env-vim"
+      ],
+      "description": "Vi IMproved text editor"
+    },
+    "gvim": {
+      "kind": "bin",
+      "bins": [
+        "gvim",
+        "gvim.bin"
+      ],
+      "version": "9.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "editor",
+        "gui"
+      ],
+      "depends": [
+        "gui_libs",
+        "vim"
+      ],
+      "recommends": [
+        "env-vim",
+        "font-firacode"
+      ],
+      "description": "GTK3 GUI Vim with clipboard and font rendering"
+    },
+    "nedit-ng": {
+      "kind": "bin",
+      "bins": [
+        "nedit-ng"
+      ],
+      "version": "2025.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "editor",
+        "gui"
+      ],
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "Qt5 GUI text editor, NEdit rewrite"
+    },
+    "nvim-qt": {
+      "kind": "bin",
+      "bins": [
+        "nvim-qt"
+      ],
+      "version": "0.2.19",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "editor",
+        "gui"
+      ],
+      "depends": [
+        "gui_libs",
+        "nvim"
+      ],
+      "description": "Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required)"
+    },
     "gui_libs": {
       "kind": "lib-bundle",
       "bins": [],
@@ -202,27 +1017,175 @@
         "libz.so.1"
       ],
       "version": "",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["gui", "library"],
+      "tags": [
+        "gui",
+        "library"
+      ],
       "description": "Qt5/GTK3/X11/Wayland shared library bundle (for headless EE farm GUI forwarding)"
     },
-
-    "xsel":   {"kind": "bin", "bins": ["xsel"],            "version": "1.2.0",  "platforms": ["linux"], "default": true, "tags": ["gui", "clipboard"], "description": "X11 clipboard command-line access tool"},
-    "yara":   {"kind": "bin", "bins": ["yara"],            "version": "4.5.5",  "platforms": ["linux"], "default": true, "tags": ["security"],         "description": "Malware pattern matching and classification tool"},
-    "xterm":  {"kind": "bin", "bins": ["xterm", "resize"], "version": "331",    "platforms": ["linux"], "default": true, "tags": ["terminal", "gui"],  "description": "X11 terminal emulator with Unicode and color"},
-    "urxvt":  {"kind": "bin", "bins": ["urxvt", "urxvtc", "urxvtd"], "libs": ["libptytty.so.0"], "version": "9.31", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "description": "rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"},
-    "st":     {"kind": "bin", "bins": ["st"], "version": "0.9.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "gui"], "archive": "pre_built/PLATFORM/runtime/st.tar.bz2", "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"},
-    "yank":   {"kind": "bin", "bins": ["yank"],            "version": "1.3.0",  "platforms": ["linux"], "default": true, "tags": ["clipboard"],        "description": "Select terminal output and copy to clipboard"},
-    "yq":     {"kind": "bin", "bins": ["yq"],              "version": "4.53.2", "platforms": ["linux"], "default": true, "tags": ["data", "core"],     "description": "YAML/JSON/XML/CSV processor (jq for YAML)"},
-    "zellij": {"kind": "bin", "bins": ["zellij"],          "version": "0.44.3", "platforms": ["linux"], "default": false, "optional": true, "tags": ["terminal", "multiplexer"], "description": "Terminal workspace multiplexer (no-web build; WASM plugins disabled)"},
-    "zoxide": {"kind": "bin", "bins": ["zoxide"],          "version": "0.9.9",  "platforms": ["linux"], "default": true, "tags": ["nav", "core"],      "description": "Smarter cd with frecency ranking (z/zi)"},
-
+    "xsel": {
+      "kind": "bin",
+      "bins": [
+        "xsel"
+      ],
+      "version": "1.2.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "gui",
+        "clipboard"
+      ],
+      "description": "X11 clipboard command-line access tool"
+    },
+    "yara": {
+      "kind": "bin",
+      "bins": [
+        "yara"
+      ],
+      "version": "4.5.5",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "security"
+      ],
+      "description": "Malware pattern matching and classification tool"
+    },
+    "xterm": {
+      "kind": "bin",
+      "bins": [
+        "xterm",
+        "resize"
+      ],
+      "version": "331",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "terminal",
+        "gui"
+      ],
+      "description": "X11 terminal emulator with Unicode and color"
+    },
+    "urxvt": {
+      "kind": "bin",
+      "bins": [
+        "urxvt",
+        "urxvtc",
+        "urxvtd"
+      ],
+      "libs": [
+        "libptytty.so.0"
+      ],
+      "version": "9.31",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "terminal",
+        "gui"
+      ],
+      "description": "rxvt-unicode \u2014 X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"
+    },
+    "st": {
+      "kind": "bin",
+      "bins": [
+        "st"
+      ],
+      "version": "0.9.3",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "terminal",
+        "gui"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/st.tar.bz2",
+      "description": "suckless st \u2014 minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"
+    },
+    "yank": {
+      "kind": "bin",
+      "bins": [
+        "yank"
+      ],
+      "version": "1.3.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "clipboard"
+      ],
+      "description": "Select terminal output and copy to clipboard"
+    },
+    "yq": {
+      "kind": "bin",
+      "bins": [
+        "yq"
+      ],
+      "version": "4.53.2",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "data",
+        "core"
+      ],
+      "description": "YAML/JSON/XML/CSV processor (jq for YAML)"
+    },
+    "zellij": {
+      "kind": "bin",
+      "bins": [
+        "zellij"
+      ],
+      "version": "0.44.3",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "terminal",
+        "multiplexer"
+      ],
+      "description": "Terminal workspace multiplexer (no-web build; WASM plugins disabled)"
+    },
+    "zoxide": {
+      "kind": "bin",
+      "bins": [
+        "zoxide"
+      ],
+      "version": "0.9.9",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "nav",
+        "core"
+      ],
+      "description": "Smarter cd with frecency ranking (z/zi)"
+    },
     "octave": {
       "kind": "bin",
-      "bins":     ["octave"],
-      "libs":     [
+      "bins": [
+        "octave"
+      ],
+      "libs": [
         "liboctave.so.13",
         "liboctinterp.so.15",
         "liboctmex.so.1",
@@ -263,517 +1226,966 @@
         "libvorbisenc.so.2"
       ],
       "version": "11.1.0",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["scientific"],
+      "tags": [
+        "scientific"
+      ],
       "archive": "pre_built/PLATFORM/runtime/octave.tar.bz2",
-      "recommends": ["gnuplot"],
+      "recommends": [
+        "gnuplot"
+      ],
       "description": "GNU scientific computing language (MATLAB-compatible)"
     },
-
     "visidata": {
       "kind": "python-tool",
-      "bins":    [],
-      "wheels":  ["visidata", "python-dateutil", "six", "standard-mailcap"],
+      "bins": [],
+      "wheels": [
+        "visidata",
+        "python-dateutil",
+        "six",
+        "standard-mailcap"
+      ],
       "uv_tool": "visidata",
       "version": "3.3",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["data", "tui", "python"],
-      "depends": ["portable-python", "uv"],
+      "tags": [
+        "data",
+        "tui",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
       "description": "TUI spreadsheet for CSV/TSV/JSON data"
     },
-
     "meld": {
       "kind": "bin",
-      "bins":     [],
-      "libs":     ["libgirepository-1.0.so.1", "libgtksourceview-3.0.so.1"],
-      "typelibs": ["Atk-1.0.typelib", "cairo-1.0.typelib", "Gdk-3.0.typelib", "GdkPixbuf-2.0.typelib",
-                   "Gio-2.0.typelib", "GIRepository-2.0.typelib", "GLib-2.0.typelib", "GObject-2.0.typelib",
-                   "Gtk-3.0.typelib", "GtkSource-3.0.typelib", "Pango-1.0.typelib"],
-      "version":  "3.20.4",
-      "platforms": ["linux"],
+      "bins": [],
+      "libs": [
+        "libgirepository-1.0.so.1",
+        "libgtksourceview-3.0.so.1"
+      ],
+      "typelibs": [
+        "Atk-1.0.typelib",
+        "cairo-1.0.typelib",
+        "Gdk-3.0.typelib",
+        "GdkPixbuf-2.0.typelib",
+        "Gio-2.0.typelib",
+        "GIRepository-2.0.typelib",
+        "GLib-2.0.typelib",
+        "GObject-2.0.typelib",
+        "Gtk-3.0.typelib",
+        "GtkSource-3.0.typelib",
+        "Pango-1.0.typelib"
+      ],
+      "version": "3.20.4",
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["diff", "gui"],
+      "tags": [
+        "diff",
+        "gui"
+      ],
       "archive": "pre_built/PLATFORM/runtime/meld.tar.bz2",
-      "depends": ["gui_libs", "gobject-typelibs"],
-      "description": "GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource)"
+      "depends": [
+        "gui_libs",
+        "gobject-typelibs"
+      ],
+      "description": "GTK3 visual diff and merge tool (shanghai bundle \u2014 system py3.6 + bundled PyGObject/GtkSource)"
     },
-
     "zsh": {
       "kind": "bin",
-      "bins":     ["zsh"],
-      "version":  "",
-      "platforms": ["linux"],
+      "bins": [
+        "zsh"
+      ],
+      "version": "",
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["shell"],
-      "description": "Z shell — powerful interactive shell with advanced tab completion"
+      "tags": [
+        "shell"
+      ],
+      "description": "Z shell \u2014 powerful interactive shell with advanced tab completion"
     },
-
     "fish": {
       "kind": "bin",
-      "bins":     ["fish"],
-      "version":  "4.7.1",
-      "platforms": ["linux"],
+      "bins": [
+        "fish"
+      ],
+      "version": "4.7.1",
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["shell"],
+      "tags": [
+        "shell"
+      ],
       "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
-      "description": "Fish shell — friendly interactive shell with autosuggestions and syntax highlighting"
+      "description": "Fish shell \u2014 friendly interactive shell with autosuggestions and syntax highlighting"
     },
-
     "nodejs": {
       "kind": "bin",
-      "bins":     ["node", "npm", "npx", "corepack"],
-      "version":  "",
-      "platforms": ["linux"],
+      "bins": [
+        "node",
+        "npm",
+        "npx",
+        "corepack"
+      ],
+      "version": "26.2.0",
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["runtime", "javascript"],
+      "tags": [
+        "runtime",
+        "javascript"
+      ],
       "archive": "pre_built/PLATFORM/runtime/node.tar.bz2",
       "description": "Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling)"
     },
-
     "jupyterlab": {
       "kind": "python-tool",
-      "bins":     [],
-      "wheels":   [
-        "jupyterlab", "jupyter_server", "jupyterlab_server", "jupyter_client",
-        "jupyter_core", "jupyter_events", "jupyter_lsp", "jupyter_server_terminals",
-        "ipykernel", "ipython", "ipython_pygments_lexers", "comm",
-        "notebook_shim", "nbconvert", "nbformat", "nbclient",
-        "tornado", "pyzmq", "traitlets", "packaging",
-        "jinja2", "markupsafe", "babel", "pygments",
-        "jsonschema", "jsonschema_specifications", "referencing", "rpds_py",
-        "fastjsonschema", "attrs", "pyyaml",
-        "anyio", "httpx", "httpcore", "h11", "websocket_client",
-        "debugpy", "psutil", "nest_asyncio", "matplotlib_inline",
-        "prompt_toolkit", "wcwidth", "jedi", "parso", "decorator",
-        "stack_data", "executing", "asttokens", "pure_eval", "pexpect", "ptyprocess",
-        "argon2_cffi", "argon2_cffi_bindings", "cffi", "pycparser",
-        "terminado", "send2trash", "prometheus_client",
-        "requests", "urllib3", "certifi", "charset_normalizer", "idna",
-        "python_dateutil", "six", "platformdirs", "setuptools",
-        "python_json_logger", "rfc3986_validator", "rfc3339_validator",
-        "rfc3987_syntax", "lark", "json5", "jsonpointer",
-        "nbclient", "mistune", "bleach", "webencodings", "tinycss2",
-        "beautifulsoup4", "soupsieve", "defusedxml",
-        "pandocfilters", "jupyterlab_pygments", "async_lru",
-        "typing_extensions", "arrow", "tzdata", "isoduration",
-        "fqdn", "uri_template", "webcolors", "comm"
+      "bins": [],
+      "wheels": [
+        "jupyterlab",
+        "jupyter_server",
+        "jupyterlab_server",
+        "jupyter_client",
+        "jupyter_core",
+        "jupyter_events",
+        "jupyter_lsp",
+        "jupyter_server_terminals",
+        "ipykernel",
+        "ipython",
+        "ipython_pygments_lexers",
+        "comm",
+        "notebook_shim",
+        "nbconvert",
+        "nbformat",
+        "nbclient",
+        "tornado",
+        "pyzmq",
+        "traitlets",
+        "packaging",
+        "jinja2",
+        "markupsafe",
+        "babel",
+        "pygments",
+        "jsonschema",
+        "jsonschema_specifications",
+        "referencing",
+        "rpds_py",
+        "fastjsonschema",
+        "attrs",
+        "pyyaml",
+        "anyio",
+        "httpx",
+        "httpcore",
+        "h11",
+        "websocket_client",
+        "debugpy",
+        "psutil",
+        "nest_asyncio",
+        "matplotlib_inline",
+        "prompt_toolkit",
+        "wcwidth",
+        "jedi",
+        "parso",
+        "decorator",
+        "stack_data",
+        "executing",
+        "asttokens",
+        "pure_eval",
+        "pexpect",
+        "ptyprocess",
+        "argon2_cffi",
+        "argon2_cffi_bindings",
+        "cffi",
+        "pycparser",
+        "terminado",
+        "send2trash",
+        "prometheus_client",
+        "requests",
+        "urllib3",
+        "certifi",
+        "charset_normalizer",
+        "idna",
+        "python_dateutil",
+        "six",
+        "platformdirs",
+        "setuptools",
+        "python_json_logger",
+        "rfc3986_validator",
+        "rfc3339_validator",
+        "rfc3987_syntax",
+        "lark",
+        "json5",
+        "jsonpointer",
+        "nbclient",
+        "mistune",
+        "bleach",
+        "webencodings",
+        "tinycss2",
+        "beautifulsoup4",
+        "soupsieve",
+        "defusedxml",
+        "pandocfilters",
+        "jupyterlab_pygments",
+        "async_lru",
+        "typing_extensions",
+        "arrow",
+        "tzdata",
+        "isoduration",
+        "fqdn",
+        "uri_template",
+        "webcolors",
+        "comm"
       ],
-      "uv_tool":  "jupyterlab",
-      "version":  "4.5.7",
-      "platforms": ["linux"],
+      "uv_tool": "jupyterlab",
+      "version": "4.5.7",
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["python", "notebook"],
-      "depends": ["portable-python", "uv"],
+      "tags": [
+        "python",
+        "notebook"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
       "description": "Web-based interactive development environment for notebooks, code, and data"
     },
-
     "time-plot": {
       "kind": "python-tool",
-      "bins":    [],
-      "wheels":  ["time-plot", "click", "numpy", "rich-click",
-                  "uplot-python", "msgpack", "rich", "markdown-it-py", "mdurl"],
+      "bins": [],
+      "wheels": [
+        "time-plot",
+        "click",
+        "numpy",
+        "rich-click",
+        "uplot-python",
+        "msgpack",
+        "rich",
+        "markdown-it-py",
+        "mdurl"
+      ],
       "uv_tool": "time-plot",
       "version": "0.1.0",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": false,
       "optional": true,
-      "tags": ["data", "plot", "python"],
-      "depends": ["portable-python", "uv"],
+      "tags": [
+        "data",
+        "plot",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
       "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers"
     },
-
     "portable-python": {
       "kind": "python-base",
       "archive": "pre_built/PLATFORM/portable-python-*.tar.bz2",
       "install_to": "~/.local",
       "version": "3.14.4",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["python", "runtime"],
+      "tags": [
+        "python",
+        "runtime"
+      ],
       "description": "BOLT-optimized portable CPython build with bundled install.sh"
     },
-
     "gobject-typelibs": {
       "kind": "typelib",
-      "typelibs": ["Atk-1.0.typelib", "cairo-1.0.typelib", "Gdk-3.0.typelib", "GdkPixbuf-2.0.typelib",
-                   "Gio-2.0.typelib", "GIRepository-2.0.typelib", "GLib-2.0.typelib", "GObject-2.0.typelib",
-                   "Gtk-3.0.typelib", "GtkSource-3.0.typelib", "Pango-1.0.typelib"],
+      "typelibs": [
+        "Atk-1.0.typelib",
+        "cairo-1.0.typelib",
+        "Gdk-3.0.typelib",
+        "GdkPixbuf-2.0.typelib",
+        "Gio-2.0.typelib",
+        "GIRepository-2.0.typelib",
+        "GLib-2.0.typelib",
+        "GObject-2.0.typelib",
+        "Gtk-3.0.typelib",
+        "GtkSource-3.0.typelib",
+        "Pango-1.0.typelib"
+      ],
       "install_to": "~/.local/lib/girepository-1.0",
       "version": "",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["gui", "gobject"],
+      "tags": [
+        "gui",
+        "gobject"
+      ],
       "description": "GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo)"
     },
-
     "tldr-data": {
       "kind": "data",
       "archive": "tldr/tldr-pages.tar.bz2",
       "install_to": "~/.cache/tealdeer/tldr-pages",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["docs", "cache"],
+      "tags": [
+        "docs",
+        "cache"
+      ],
       "description": "Bundled tldr-pages cache for offline tealdeer use"
     },
-
     "treesitter-parsers": {
       "kind": "data",
       "archive": "treesitter/prebuilt/TS_PLATFORM/",
       "install_to": "~/.local/share/nvim/tree-sitter-parsers",
       "version": "",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["editor", "parser"],
+      "tags": [
+        "editor",
+        "parser"
+      ],
       "description": "Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages"
     },
-
     "env-bash": {
       "kind": "env",
       "source": "bash/",
       "install_to": "~/.config/bash",
       "extra_links": [
-        {"from": "~/.config/bash/bashrc", "to": "~/.bashrc"},
-        {"from": "~/.config/bash/bashrc", "to": "~/.bash_profile"},
-        {"from": "~/.config/bash/bashrc", "to": "~/.bash_login"},
-        {"from": "~/.config/bash/bashrc", "to": "~/.profile"}
+        {
+          "from": "~/.config/bash/bashrc",
+          "to": "~/.bashrc"
+        },
+        {
+          "from": "~/.config/bash/bashrc",
+          "to": "~/.bash_profile"
+        },
+        {
+          "from": "~/.config/bash/bashrc",
+          "to": "~/.bash_login"
+        },
+        {
+          "from": "~/.config/bash/bashrc",
+          "to": "~/.profile"
+        }
       ],
-      "supports_layers": ["corp", "site", "project", "user"],
+      "supports_layers": [
+        "corp",
+        "site",
+        "project",
+        "user"
+      ],
       "run_install_scripts": true,
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "shell"],
-      "recommends": ["bash", "starship", "env-starship", "fzf", "zoxide"],
-      "description": "Bash 5-layer config (system → corp → site → project → user) with prompt, aliases, completions"
+      "tags": [
+        "env",
+        "shell"
+      ],
+      "recommends": [
+        "bash",
+        "starship",
+        "env-starship",
+        "fzf",
+        "zoxide"
+      ],
+      "description": "Bash 5-layer config (system \u2192 corp \u2192 site \u2192 project \u2192 user) with prompt, aliases, completions"
     },
-
     "env-nvim": {
       "kind": "env",
       "source": "nvim/",
       "install_to": "~/.config/nvim",
-      "supports_layers": ["corp", "site", "project", "user"],
-      "platforms": ["linux", "macos", "windows"],
+      "supports_layers": [
+        "corp",
+        "site",
+        "project",
+        "user"
+      ],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["env", "editor"],
-      "recommends": ["nvim", "treesitter-parsers"],
+      "tags": [
+        "env",
+        "editor"
+      ],
+      "recommends": [
+        "nvim",
+        "treesitter-parsers"
+      ],
       "description": "Neovim layer dispatcher (lazy.nvim plugin specs + LSP configs across all layers)"
     },
-
     "nvim-catalog-plugins": {
       "kind": "data",
       "archive": "nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2",
       "install_to": "~/.local/share/nvim/loadout/vendor/catalog-plugins",
       "version": "",
-      "platforms": ["linux"],
+      "platforms": [
+        "linux"
+      ],
       "default": true,
-      "tags": ["editor", "nvim"],
+      "tags": [
+        "editor",
+        "nvim"
+      ],
       "description": "50-plugin curated nvim catalog (disabled by default; enable per-plugin in user layer)"
     },
-
     "env-vim": {
       "kind": "env",
       "source": "vim/",
       "install_to": "~/.config/vim",
       "extra_links": [
-        {"from": "~/.config/vim/vimrc", "to": "~/.vimrc"},
-        {"from": "~/.config/vim/vim",   "to": "~/.vim"}
+        {
+          "from": "~/.config/vim/vimrc",
+          "to": "~/.vimrc"
+        },
+        {
+          "from": "~/.config/vim/vim",
+          "to": "~/.vim"
+        }
       ],
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "editor"],
-      "recommends": ["vim"],
+      "tags": [
+        "env",
+        "editor"
+      ],
+      "recommends": [
+        "vim"
+      ],
       "description": "Vim 9 config + bundled native pack/vendor plugins"
     },
-
     "env-tmux": {
       "kind": "env",
       "source": "tmux/",
       "install_to": "~/.config/tmux",
       "extra_links": [
-        {"from": "~/.config/tmux/tmux.conf", "to": "~/.tmux.conf"},
-        {"from": "~/.config/tmux/tmux",      "to": "~/.tmux"}
+        {
+          "from": "~/.config/tmux/tmux.conf",
+          "to": "~/.tmux.conf"
+        },
+        {
+          "from": "~/.config/tmux/tmux",
+          "to": "~/.tmux"
+        }
       ],
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "terminal"],
-      "recommends": ["tmux"],
+      "tags": [
+        "env",
+        "terminal"
+      ],
+      "recommends": [
+        "tmux"
+      ],
       "description": "tmux config + bundled tpm/resurrect/continuum plugins"
     },
-
     "env-helix": {
       "kind": "env",
       "source": "helix/",
       "install_to": "~/.config/helix",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["env", "editor"],
-      "recommends": ["hx"],
+      "tags": [
+        "env",
+        "editor"
+      ],
+      "recommends": [
+        "hx"
+      ],
       "description": "Helix editor user config"
     },
-
     "env-kak": {
       "kind": "env",
       "source": "kak/kakrc",
       "install_to": "~/.config/kak/kakrc",
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "editor"],
-      "recommends": ["kak"],
+      "tags": [
+        "env",
+        "editor"
+      ],
+      "recommends": [
+        "kak"
+      ],
       "description": "Kakoune kakrc (copied only if not already present)"
     },
-
     "env-starship": {
       "kind": "env",
       "source": "starship/starship.linux.toml",
       "install_to": "~/.config/starship/starship.toml",
       "extra_links": [
-        {"from": "starship/config-schema.json", "to": "~/.config/starship/config-schema.json"}
+        {
+          "from": "starship/config-schema.json",
+          "to": "~/.config/starship/config-schema.json"
+        }
       ],
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "prompt"],
-      "recommends": ["starship"],
+      "tags": [
+        "env",
+        "prompt"
+      ],
+      "recommends": [
+        "starship"
+      ],
       "description": "Starship prompt config (Linux/macOS variant)"
     },
-
     "env-wezterm": {
       "kind": "env",
       "source": "wezterm/wezterm.lua",
       "install_to": "~/.config/wezterm/wezterm.lua",
-      "platforms": ["windows", "macos"],
+      "platforms": [
+        "windows",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "terminal"],
+      "tags": [
+        "env",
+        "terminal"
+      ],
       "description": "WezTerm config (Lua)"
     },
-
     "env-editorconfig": {
       "kind": "env",
       "source": "editorconfig/editorconfig",
       "install_to": "~/.editorconfig",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["env", "editor"],
+      "tags": [
+        "env",
+        "editor"
+      ],
       "description": "Root .editorconfig (whitespace + indent defaults)"
     },
-
     "env-pip": {
       "kind": "env",
       "source": "python/pip.conf",
       "install_to": "~/.config/pip/pip.conf",
-      "platforms": ["linux", "macos"],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
       "default": true,
-      "tags": ["env", "python"],
+      "tags": [
+        "env",
+        "python"
+      ],
       "description": "pip config with require-virtualenv=true (protects base Python env)"
     },
-
     "env-powershell": {
       "kind": "env",
       "source": "powershell/Microsoft.PowerShell_profile.ps1",
       "install_to": "%USERPROFILE%/Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
       "extra_links": [
-        {"from": "powershell/Microsoft.PowerShell_profile.ps1", "to": "%USERPROFILE%/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1"}
+        {
+          "from": "powershell/Microsoft.PowerShell_profile.ps1",
+          "to": "%USERPROFILE%/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1"
+        }
       ],
-      "platforms": ["windows"],
+      "platforms": [
+        "windows"
+      ],
       "default": true,
-      "tags": ["env", "shell"],
+      "tags": [
+        "env",
+        "shell"
+      ],
       "description": "PowerShell profile (aliases, coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf)"
     },
-
     "env-autohotkey": {
       "kind": "env",
       "source": "autohotkey/hotkeys.ahk",
       "install_to": "%USERPROFILE%/autohotkey/hotkeys.ahk",
-      "platforms": ["windows"],
+      "platforms": [
+        "windows"
+      ],
       "default": true,
-      "tags": ["env", "hotkeys"],
+      "tags": [
+        "env",
+        "hotkeys"
+      ],
       "description": "AutoHotkey v2 flat script (corp logins, mouse wiggle, VPN, tmux helpers, ThinLinc)"
     },
-
     "font-envycoder": {
       "kind": "font",
       "archive": "fonts/EnvyCodeR.zip",
       "install_to": "~/.local/share/fonts/EnvyCodeR",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Envy Code R Nerd Font"
     },
-
     "font-firacode": {
       "kind": "font",
       "archive": "fonts/FiraCode.zip",
       "install_to": "~/.local/share/fonts/FiraCode",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Fira Code Nerd Font"
     },
-
     "font-hack": {
       "kind": "font",
       "archive": "fonts/Hack.zip",
       "install_to": "~/.local/share/fonts/Hack",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Hack Nerd Font"
     },
-
     "font-inconsolata": {
       "kind": "font",
       "archive": "fonts/Inconsolata.zip",
       "install_to": "~/.local/share/fonts/Inconsolata",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Inconsolata Nerd Font"
     },
-
     "font-iosevkaterm": {
       "kind": "font",
       "archive": "fonts/IosevkaTerm.zip.part-*",
       "install_to": "~/.local/share/fonts/IosevkaTerm",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Iosevka Term Nerd Font (8-part split archive)"
     },
-
     "font-jetbrainsmono": {
       "kind": "font",
       "archive": "fonts/JetBrainsMono.zip.part-*",
       "install_to": "~/.local/share/fonts/JetBrainsMono",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "JetBrains Mono Nerd Font (3-part split archive)"
     },
-
     "font-sourcecodepro": {
       "kind": "font",
       "archive": "fonts/SourceCodePro.zip.part-*",
       "install_to": "~/.local/share/fonts/SourceCodePro",
       "version": "",
-      "platforms": ["linux", "macos", "windows"],
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
       "default": true,
-      "tags": ["font"],
+      "tags": [
+        "font"
+      ],
       "description": "Source Code Pro Nerd Font (2-part split archive)"
     },
-
     "@core-cli": {
       "kind": "group",
-      "members": ["rg", "bat", "eza", "fd", "fzf", "zoxide", "jq", "yq",
-                  "dasel", "miller", "choose", "sd", "tldr", "broot"],
+      "members": [
+        "rg",
+        "bat",
+        "eza",
+        "fd",
+        "fzf",
+        "zoxide",
+        "jq",
+        "yq",
+        "dasel",
+        "miller",
+        "choose",
+        "sd",
+        "tldr",
+        "broot"
+      ],
       "description": "Small, fast, daily-use CLI tools"
     },
     "@system-monitor": {
       "kind": "group",
-      "members": ["htop", "btop", "btm", "procs", "duf", "dust", "gping"],
+      "members": [
+        "htop",
+        "btop",
+        "btm",
+        "procs",
+        "duf",
+        "dust",
+        "gping"
+      ],
       "description": "Resource and process monitors"
     },
     "@dev-tools": {
       "kind": "group",
-      "members": ["just", "hyperfine", "lazygit", "delta", "shfmt", "stylua",
-                  "ruff", "ty", "uv", "tree-sitter", "patchelf"],
+      "members": [
+        "just",
+        "hyperfine",
+        "lazygit",
+        "delta",
+        "shfmt",
+        "stylua",
+        "ruff",
+        "ty",
+        "uv",
+        "tree-sitter",
+        "patchelf"
+      ],
       "description": "Developer tooling (runners, benchmarkers, formatters, linters)"
     },
     "@editor-cli": {
       "kind": "group",
-      "members": ["vim", "nvim", "hx", "micro", "kak"],
+      "members": [
+        "vim",
+        "nvim",
+        "hx",
+        "micro",
+        "kak"
+      ],
       "description": "Terminal modal editors"
     },
     "@editor-gui": {
       "kind": "group",
-      "members": ["gvim", "nedit-ng", "nvim-qt", "meld"],
+      "members": [
+        "gvim",
+        "nedit-ng",
+        "nvim-qt",
+        "meld"
+      ],
       "description": "GUI editors (depend on gui_libs)"
     },
     "@editor-suite": {
       "kind": "group",
-      "members": ["@editor-cli", "env-vim", "env-nvim", "env-helix", "env-kak"],
+      "members": [
+        "@editor-cli",
+        "env-vim",
+        "env-nvim",
+        "env-helix",
+        "env-kak"
+      ],
       "description": "Editor binaries plus their config bundles"
     },
     "@shells-optional": {
       "kind": "group",
-      "members": ["zsh", "fish"],
+      "members": [
+        "zsh",
+        "fish"
+      ],
       "description": "Optional shells (bash is in @default)"
     },
     "@compression": {
       "kind": "group",
-      "members": ["bzip2", "pigz", "pv"],
+      "members": [
+        "bzip2",
+        "pigz",
+        "pv"
+      ],
       "description": "Compression and pipe utilities"
     },
     "@scientific": {
       "kind": "group",
-      "members": ["gnuplot", "octave"],
+      "members": [
+        "gnuplot",
+        "octave"
+      ],
       "description": "Scientific computing (octave is opt-in)"
     },
     "@gui-suite": {
       "kind": "group",
-      "members": ["@editor-gui", "gui_libs", "gobject-typelibs", "xterm", "xsel", "yank",
-                  "urxvt", "st"],
+      "members": [
+        "@editor-gui",
+        "gui_libs",
+        "gobject-typelibs",
+        "xterm",
+        "xsel",
+        "yank",
+        "urxvt",
+        "st"
+      ],
       "description": "Full GUI stack for headless EE farm GUI forwarding"
     },
     "@python-stack": {
       "kind": "group",
-      "members": ["portable-python", "uv", "ruff", "ty"],
+      "members": [
+        "portable-python",
+        "uv",
+        "ruff",
+        "ty"
+      ],
       "description": "Python interpreter + Astral tooling"
     },
     "@python-tools-extra": {
       "kind": "group",
-      "members": ["visidata", "jupyterlab", "time-plot"],
+      "members": [
+        "visidata",
+        "jupyterlab",
+        "time-plot"
+      ],
       "description": "Optional Python tools installed via uv tool install"
     },
     "@security": {
       "kind": "group",
-      "members": ["yara", "agent-deck"],
+      "members": [
+        "yara",
+        "agent-deck"
+      ],
       "description": "Security and agent tooling"
     },
     "@core-environments": {
       "kind": "group",
-      "members": ["env-bash", "env-tmux", "env-starship", "env-editorconfig", "env-pip"],
+      "members": [
+        "env-bash",
+        "env-tmux",
+        "env-starship",
+        "env-editorconfig",
+        "env-pip"
+      ],
       "description": "Essential config bundles (bash, tmux, prompt, editorconfig, pip)"
     },
     "@all-environments": {
       "kind": "group",
-      "members": ["@core-environments", "env-nvim", "env-vim", "env-helix", "env-kak"],
+      "members": [
+        "@core-environments",
+        "env-nvim",
+        "env-vim",
+        "env-helix",
+        "env-kak"
+      ],
       "description": "Every Linux/macOS config bundle"
     },
     "@fonts-default": {
       "kind": "group",
-      "members": ["font-firacode", "font-jetbrainsmono"],
+      "members": [
+        "font-firacode",
+        "font-jetbrainsmono"
+      ],
       "description": "Smaller default font footprint"
     },
     "@fonts-all": {
       "kind": "group",
-      "members": ["@fonts-default", "font-envycoder", "font-hack", "font-inconsolata",
-                  "font-iosevkaterm", "font-sourcecodepro"],
+      "members": [
+        "@fonts-default",
+        "font-envycoder",
+        "font-hack",
+        "font-inconsolata",
+        "font-iosevkaterm",
+        "font-sourcecodepro"
+      ],
       "description": "All bundled Nerd Font families"
     },
     "@data-bundles": {
       "kind": "group",
-      "members": ["tldr-data", "treesitter-parsers"],
+      "members": [
+        "tldr-data",
+        "treesitter-parsers"
+      ],
       "description": "Bundled data caches (tldr, tree-sitter parsers)"
     },
     "@engineering-loadout": {
       "kind": "group",
-      "members": ["@default", "@editor-gui", "@gui-suite", "@scientific",
-                  "@python-tools-extra", "@fonts-all", "@shells-optional"],
-      "description": "Full loadout — every bundled package and group"
+      "members": [
+        "@default",
+        "@editor-gui",
+        "@gui-suite",
+        "@scientific",
+        "@python-tools-extra",
+        "@fonts-all",
+        "@shells-optional"
+      ],
+      "description": "Full loadout \u2014 every bundled package and group"
     }
   }
 }
