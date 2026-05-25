@@ -13,8 +13,7 @@
 
 # Build and maintenance scripts
 /strip_all_elf_binaries         export-ignore
-/update_tmux_plugins            export-ignore
-/update_tldr_cache              export-ignore
+/update                         export-ignore
 /release                        export-ignore
 /pre_built/build_scripts        export-ignore
 /pre_built/ADDING_BINARIES.md   export-ignore

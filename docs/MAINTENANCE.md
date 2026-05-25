@@ -43,7 +43,7 @@ git commit
 ## Updating tldr pages
 
 ```bash
-./update_tldr_cache
+./update tldr-data
 git add tldr/
 git commit
 ```
@@ -51,7 +51,7 @@ git commit
 ## Updating tmux plugins
 
 ```bash
-./update_tmux_plugins
+./update tmux-plugins
 git add tmux/vendor/
 git commit
 ```

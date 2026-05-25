@@ -155,8 +155,7 @@ hooks/
 engineering-loadout         - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
 engineering-loadout.ps1                 - Windows installation script (PowerShell)
 engineering-loadout-pwsh-bootstrap.ps1 - Windows PowerShell 5.1 bootstrapper for pwsh via winget
-update_tmux_plugins         - Re-clones all tmux plugins listed in tmux.conf from GitHub (strips .git on next commit)
-update_tldr_cache           - Bundles tealdeer pages as tldr/tldr-pages.tar.bz2 for offline installs
+update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; guidance for build/download packages)
 strip_all_elf_binaries      - Python 3.6-compatible helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2
 tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fresh-user smoke testing
 ```
@@ -229,7 +228,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Tree-sitter parser behavior**: Offline support targets Neovim v0.12+ only. Installer copies vendored `nvim-treesitter` and `treesitter-parser-registry` into `~/.local/share/nvim/loadout/vendor/`, looks for prebuilt artifacts under `treesitter/prebuilt/$(uname -s lower)-$(uname -m)-<glibc|musl>/`, decompresses `parser/*.so.bz2` to `parser/*.so`, copies `parser-info/`, `queries/`, `registry/`, `build-info/` into `~/.local/share/nvim/tree-sitter-parsers/`. Neovim appends that parser dir to `runtimepath`, starts native Tree-sitter on filetype buffers. Build all supported parsers with `./treesitter/build_parsers`; prebuilt `.so.bz2`, parser-info, queries, registry cache, `build-info/*.env` tracked.
 
-**tldr cache behavior**: `./update_tldr_cache` writes `tldr/tldr-pages.tar.bz2` for offline tealdeer. Installer accepts `.tar.bz2` and legacy `.tar.gz`, replaces existing `~/.cache/tealdeer/tldr-pages` unless `--skip tldr-data`, `./strip_all_elf_binaries` normalizes tar archives to bzip2.
+**tldr cache behavior**: `./update tldr-data` writes `tldr/tldr-pages.tar.bz2` for offline tealdeer. Installer accepts `.tar.bz2` and legacy `.tar.gz`, replaces existing `~/.cache/tealdeer/tldr-pages` unless `--skip tldr-data`, `./strip_all_elf_binaries` normalizes tar archives to bzip2.
 
 **Helix runtime behavior**: Installer looks for `helix.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `helix/helix_runtime.tar.bz2`. Safely extracts into `~/.config/helix/`, replacing existing `~/.config/helix/runtime`. Correct install has `~/.config/helix/runtime/tutor`. Archive contains `./runtime/...`, extracts directly to `~/.config/helix/`.
 
@@ -257,7 +256,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Backup behavior**: Numbered backups in `loadout_backups/backup.N/` (always starts at `.1`; never bare `backup`). Skips files already pointing to repo. Never overwrites existing backups. At end of successful install, backup dir compressed to `loadout_backups/backup.N.tar.bz2`, uncompressed dir removed; numbering checks both `backup.N/` and `backup.N.tar.bz2` when picking next N. Post-install hooks (receive `LOADOUT_BACKUP_DIR`) run before compression. `restore-backup` accepts uncompressed dir or `.tar.bz2` archive (extracts to `/tmp`, restores). Backups exclude font files (`*.ttf`, `*.otf`, `*.pcf`, `*.bdf`, `*.woff`, `*.woff2`, etc.) — large and reproducible.
 
-**Tmux plugin behavior**: All bundled plugins always copied/linked from repo. Run `./update_tmux_plugins` to re-clone from GitHub (pre-commit hook strips `.git` dirs on next commit).
+**Tmux plugin behavior**: All bundled plugins always copied/linked from repo. Run `./update tmux-plugins` to re-clone from GitHub (pre-commit hook strips `.git` dirs on next commit).
 
 **Tmux selection behavior**: `tmux/tmux-word-separators` run from `tmux.conf` to append broad emoji ranges to `word-separators`. Tmux only supports literal separator chars, not Unicode classes — keep helper in sync with `tmux.conf` if double-click word selection starts capturing prompt icons like Starship's read-only lock.
 

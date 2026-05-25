@@ -1785,7 +1785,7 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
     if not archive:
         skipped(
             "tldr/tldr-pages.tar.bz2 or tldr/tldr-pages.tar.gz not found in repo",
-            "run ./update_tldr_cache on a connected machine to bundle the pages",
+            "run ./update tldr-data on a connected machine to bundle the pages",
         )
         record_result("tldr cache", "SKIP", "no bundled cache archive")
         return

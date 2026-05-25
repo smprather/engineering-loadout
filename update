@@ -14,18 +14,31 @@ Usage:
 from __future__ import print_function
 
 import argparse
+import bz2
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
+from urllib.request import Request, urlopen
 
 REPO = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(REPO, "pre_built", "build_scripts")
 
+_YARA_DIR = os.path.join(REPO, "yara")
+_YARA_RULES_BZ2 = os.path.join(_YARA_DIR, "yara-rules-full.yar.bz2")
+_YARA_TAG_FILE = os.path.join(_YARA_DIR, "release-tag.txt")
+_YARA_API_LATEST = "https://api.github.com/repos/YARAHQ/yara-forge/releases/latest"
+_YARA_ZIP_URL = "https://github.com/YARAHQ/yara-forge/releases/download/{tag}/yara-forge-rules-full.zip"
+_YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
+
 
 # ── package registry ──────────────────────────────────────────────────────────
 
-# Fully automated: ./update runs a script end-to-end.
+# Fully automated: ./update runs end-to-end.
 # Dev-only repo artifacts (yara-rules, tldr-data, tmux-plugins) are not
 # end-user-installed packages but are vendored into the repo by the dev and
 # bundled into the installer; they live alongside installable packages here.
@@ -204,34 +217,169 @@ def _run(cmd, dry_run=False):
 # ── automated runners ─────────────────────────────────────────────────────────
 
 
+def _fetch_json(url):
+    req = Request(
+        url, headers={"User-Agent": "engineering-loadout-update/1.0", "Accept": "application/vnd.github+json"}
+    )
+    with urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+def _download_file(url, dest):
+    print("  GET {}".format(url))
+    req = Request(url, headers={"User-Agent": "engineering-loadout-update/1.0"})
+    with urlopen(req, timeout=120) as r:
+        with open(dest, "wb") as f:
+            while True:
+                chunk = r.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+
+
+def _run_yara_rules(dry_run=False, tag=None):
+    if tag:
+        resolved_tag = tag
+    else:
+        print("Fetching latest YARA-Forge release...")
+        meta = _fetch_json(_YARA_API_LATEST)
+        resolved_tag = meta["tag_name"]
+        print("  Latest: {}".format(resolved_tag))
+
+    current_tag = ""
+    if os.path.exists(_YARA_TAG_FILE):
+        with open(_YARA_TAG_FILE) as f:
+            current_tag = f.read().strip()
+    if current_tag == resolved_tag:
+        print("Already at {} — nothing to do.".format(resolved_tag))
+        return True
+
+    zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
+    if dry_run:
+        print("$ [download {} -> yara/]".format(zip_url))
+        return True
+
+    with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
+        zip_path = os.path.join(tmp, "rules-full.zip")
+        print("Downloading {} rules...".format(resolved_tag))
+        _download_file(zip_url, zip_path)
+
+        print("  Extracting {}...".format(_YARA_ZIP_MEMBER))
+        with zipfile.ZipFile(zip_path) as zf:
+            raw = zf.read(_YARA_ZIP_MEMBER)
+
+        print("  Rules size: {} MB uncompressed".format(len(raw) // 1024 // 1024))
+
+        os.makedirs(_YARA_DIR, exist_ok=True)
+        bz2_tmp = _YARA_RULES_BZ2 + ".tmp"
+        with bz2.open(bz2_tmp, "wb", compresslevel=9) as f:
+            f.write(raw)
+        os.replace(bz2_tmp, _YARA_RULES_BZ2)
+
+        with open(_YARA_TAG_FILE, "w") as f:
+            f.write(resolved_tag + "\n")
+
+    compressed_kb = os.path.getsize(_YARA_RULES_BZ2) // 1024
+    print("  Compressed: {} KB".format(compressed_kb))
+    return True
+
+
+def _run_tldr_data(dry_run=False):
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = os.path.join(cache_home, "tealdeer")
+    pages_dir = os.path.join(cache_dir, "tldr-pages")
+    output = os.path.join(REPO, "tldr", "tldr-pages.tar.bz2")
+
+    if dry_run:
+        print("$ tldr --update")
+        print("$ tar cjf {} -C {} tldr-pages/".format(output, cache_dir))
+        return True
+
+    rc = subprocess.call(["tldr", "--update"])
+    if rc != 0:
+        print("ERROR: tldr --update failed rc={}".format(rc))
+        return False
+
+    if not os.path.isdir(pages_dir):
+        print("ERROR: tldr-pages not found at {} after update".format(pages_dir))
+        return False
+
+    os.makedirs(os.path.join(REPO, "tldr"), exist_ok=True)
+    old_gz = os.path.join(REPO, "tldr", "tldr-pages.tar.gz")
+    if os.path.exists(old_gz):
+        os.remove(old_gz)
+
+    print("Bundling {} -> {}".format(pages_dir, output))
+    rc = subprocess.call(["tar", "cjf", output, "-C", cache_dir, "tldr-pages/"])
+    if rc != 0:
+        print("ERROR: tar failed rc={}".format(rc))
+        return False
+
+    size_mb = os.path.getsize(output) // 1024 // 1024
+    print("Done: {}M written to {}".format(size_mb, output))
+    return True
+
+
+def _run_tmux_plugins(dry_run=False):
+    tmux_conf = os.path.join(REPO, "tmux", "tmux.conf")
+    plugin_dir = os.path.join(REPO, "tmux", "vendor", "plugins")
+
+    plugins = []
+    with open(tmux_conf) as f:
+        for line in f:
+            m = re.search(r"set -g @plugin '([^']+)'", line)
+            if m:
+                plugins.append(m.group(1))
+
+    if not plugins:
+        print("No @plugin entries found in tmux.conf")
+        return True
+
+    os.makedirs(plugin_dir, exist_ok=True)
+    ok = True
+    for plugin in plugins:
+        name = os.path.basename(plugin)
+        dest = os.path.join(plugin_dir, name)
+        url = "https://github.com/{}.git".format(plugin)
+        print("Updating {}...".format(plugin))
+        if dry_run:
+            print("$ git clone --depth 1 {} {}".format(url, dest))
+            continue
+        shutil.rmtree(dest, ignore_errors=True)
+        rc = subprocess.call(["git", "clone", "--depth", "1", url, dest])
+        if rc != 0:
+            print("ERROR: git clone failed for {}".format(plugin))
+            ok = False
+            continue
+        shutil.rmtree(os.path.join(dest, ".git"), ignore_errors=True)
+
+    return ok
+
+
 def _run_automated(name, dry_run=False, tag=None):
     _sep(name)
     if name == "yara-rules":
-        cmd = [os.path.join(REPO, "update_yara_forge_rules_full")]
-        if tag:
-            cmd += ["--tag", tag]
-        rc = _run(cmd, dry_run)
+        return _run_yara_rules(dry_run=dry_run, tag=tag)
     elif name == "nodejs":
         cmd = [os.path.join(BUILD, "import-nodejs")]
         if tag:
             cmd += ["--tag", tag]
         rc = _run(cmd, dry_run)
-        if rc == 0:
-            print()
-            rc2 = _run([os.path.join(REPO, "strip_all_elf_binaries")], dry_run)
-            if rc2 != 0:
-                print("WARNING: strip_all_elf_binaries exited rc={}".format(rc2))
+        if rc != 0:
+            print("WARNING: {} exited rc={}".format(name, rc))
+            return False
+        print()
+        rc2 = _run([os.path.join(REPO, "strip_all_elf_binaries")], dry_run)
+        if rc2 != 0:
+            print("WARNING: strip_all_elf_binaries exited rc={}".format(rc2))
+        return True
     elif name == "tldr-data":
-        rc = _run([os.path.join(REPO, "update_tldr_cache")], dry_run)
+        return _run_tldr_data(dry_run=dry_run)
     elif name == "tmux-plugins":
-        rc = _run([os.path.join(REPO, "update_tmux_plugins")], dry_run)
+        return _run_tmux_plugins(dry_run=dry_run)
     else:
         print("ERROR: no runner for automated package '{}'".format(name))
         return False
-    if rc != 0:
-        print("WARNING: {} exited rc={}".format(name, rc))
-        return False
-    return True
 
 
 # ── guidance printers ─────────────────────────────────────────────────────────

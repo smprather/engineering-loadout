@@ -219,7 +219,7 @@ outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs
 are skipped later when size and modification time match the strip manifest.
 
-`./update_tldr_cache` writes `tldr/tldr-pages.tar.bz2`; the installer also
+`./update tldr-data` writes `tldr/tldr-pages.tar.bz2`; the installer also
 accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
 `--skip tldr-data` is passed (or `tldr-data` is not in the selected set).
 
@@ -231,7 +231,7 @@ Tmux and Vim plugins are vendored in-tree (no internet required):
 - `vim/vim/pack/vendor/start/` — nerdtree, SimpylFold, vim-liberty (auto-loaded)
 - `vim/vim/pack/vendor/opt/` — optional plugins
 
-Run `./update_tmux_plugins` to re-clone all tmux plugins from GitHub (pre-commit
+Run `./update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
 hook strips `.git` dirs on the next commit).
 
 Neovim uses Lazy.nvim with versions locked in `nvim/lazy-lock.json`.
