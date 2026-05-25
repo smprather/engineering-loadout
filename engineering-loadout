@@ -2884,17 +2884,137 @@ Skip fonts or the tldr cache with --skip:
   ./engineering-loadout --skip tldr-data""")
 
 
+def _comma_wrap(s, width):
+    """Wrap comma-separated groups so each non-last line ends with ','."""
+    items = [g.strip() for g in s.split(",") if g.strip()]
+    if not items:
+        return [s] if s else [""]
+    lines = []
+    current = []
+    for idx, item in enumerate(items):
+        is_last = idx == len(items) - 1
+        candidate = ", ".join(current + [item]) + ("," if not is_last else "")
+        if not current or len(candidate) <= width:
+            current.append(item)
+        else:
+            lines.append(", ".join(current) + ",")
+            current = [item]
+    if current:
+        lines.append(", ".join(current))
+    return lines or [""]
+
+
+def _word_wrap(s, width):
+    """Word-wrap s to width; long words are never split."""
+    if not s or width <= 0:
+        return [s or ""]
+    words = s.split()
+    if not words:
+        return [""]
+    lines, cur = [], words[0]
+    for word in words[1:]:
+        if len(cur) + 1 + len(word) <= width:
+            cur += " " + word
+        else:
+            lines.append(cur)
+            cur = word
+    lines.append(cur)
+    return lines
+
+
 def _list_table(rows, columns):
     """Render rows as a table (rich when available, plain otherwise).
 
     rows: list of tuples matching `columns` order.
-    columns: list of dicts: {"name", "style", "max_width", "no_wrap", "ratio", "min_width"}.
-    The last column is treated as elastic: it fills remaining terminal width and truncates
-    with an ellipsis rather than wrapping to a second line.
+    columns: list of dicts: {"name", "style", "max_width", "no_wrap", "ratio",
+                              "min_width", "wrap"}.
+    Columns with "wrap": "comma" or "wrap": "word" are treated as elastic:
+    their widths are jointly optimised to minimise total padding spaces.
+    Content wraps (never truncates); GROUPS column breaks only at commas.
     """
+    import shutil
+
     if not rows:
         print("(no rows)")
         return
+
+    n = len(columns)
+    sep = 2
+    term_cols = shutil.get_terminal_size(fallback=(160, 24)).columns
+
+    # ── Width computation ──────────────────────────────────────────────────
+    # Fixed cols: natural width (capped by max_width when set).
+    # Elastic cols: those with a "wrap" key — share remaining terminal space.
+    elastic_indices = [i for i, c in enumerate(columns) if c.get("wrap")]
+    fixed_indices = [i for i in range(n) if i not in elastic_indices]
+
+    fixed_widths = {}
+    for i in fixed_indices:
+        col = columns[i]
+        w = max(len(col["name"]), *(len(str(r[i])) for r in rows))
+        if col.get("max_width"):
+            w = min(w, col["max_width"])
+        fixed_widths[i] = w
+
+    # Total chars consumed by fixed columns and all separators.
+    fixed_total = sum(fixed_widths.values()) + sep * (n - 1)
+    available = term_cols - fixed_total  # shared among elastic cols (no extra sep: already counted)
+
+    # Optimise elastic col widths by minimising total padding spaces.
+    if len(elastic_indices) == 2:
+        gi, di = elastic_indices
+        g_fn = _comma_wrap if columns[gi].get("wrap") == "comma" else _word_wrap
+        d_fn = _word_wrap
+
+        min_g = max(
+            max(
+                (max((len(x.strip()) for x in str(r[gi]).split(",") if x.strip()), default=1) for r in rows), default=8
+            ),
+            len(columns[gi]["name"]),
+        )
+        min_d = max(columns[di].get("min_width", 20), len(columns[di]["name"]))
+        max_g = available - min_d
+
+        best_g, best_spaces = min_g, float("inf")
+        for w_g in range(min_g, max(max_g + 1, min_g + 1)):
+            w_d = available - w_g
+            if w_d < min_d:
+                break
+            total = 0
+            for r in rows:
+                gl = g_fn(str(r[gi]), w_g)
+                dl = d_fn(str(r[di]), w_d)
+                h = max(len(gl), len(dl))
+                for k in range(h):
+                    total += w_g - len(gl[k] if k < len(gl) else "")
+                    total += w_d - len(dl[k] if k < len(dl) else "")
+            if total < best_spaces:
+                best_spaces, best_g = total, w_g
+
+        elastic_widths = {gi: best_g, di: available - best_g}
+        wrap_fns = {gi: g_fn, di: d_fn}
+
+    elif len(elastic_indices) == 1:
+        (ei,) = elastic_indices
+        elastic_widths = {ei: max(available, len(columns[ei]["name"]))}
+        wrap_fns = {ei: (_comma_wrap if columns[ei].get("wrap") == "comma" else _word_wrap)}
+
+    else:
+        # No elastic cols: fixed widths only.
+        elastic_widths = {}
+        wrap_fns = {}
+
+    widths = {i: fixed_widths.get(i, elastic_widths.get(i, 0)) for i in range(n)}
+
+    # ── Pre-wrap all cells ─────────────────────────────────────────────────
+    # Each cell becomes a list of lines.
+    def _cell_lines(r, i):
+        s = str(r[i])
+        if i in wrap_fns:
+            return wrap_fns[i](s, widths[i])
+        return [s]
+
+    # ── Render ────────────────────────────────────────────────────────────
     if _RICH and _console is not None:
         t = _RichTable(
             box=None,
@@ -2902,54 +3022,39 @@ def _list_table(rows, columns):
             header_style="bold",
             pad_edge=False,
             show_edge=False,
-            expand=True,
+            expand=False,
             padding=(0, 1),
             collapse_padding=True,
         )
-        for col in columns:
+        for i, col in enumerate(columns):
             t.add_column(
                 col["name"],
                 style=col.get("style", ""),
-                no_wrap=col.get("no_wrap", True),
-                max_width=col.get("max_width"),
-                min_width=col.get("min_width"),
-                ratio=col.get("ratio"),
-                overflow=col.get("overflow", "ellipsis"),
+                no_wrap=True,
+                min_width=widths[i],
+                max_width=widths[i],
+                overflow="fold",
             )
         for r in rows:
-            t.add_row(*[str(c) for c in r])
+            cells = ["\n".join(_cell_lines(r, i)) for i in range(n)]
+            t.add_row(*cells)
         _console.print(t)
         return
-    # Plain fallback: give the last column whatever width remains in the terminal.
-    import shutil
 
-    term_cols = shutil.get_terminal_size(fallback=(160, 24)).columns
-    sep = 2  # spaces between columns
-    n = len(columns)
-
-    # Natural widths for all but the last column, capped at max_width when set.
-    widths = []
-    for i, col in enumerate(columns[:-1]):
-        w = max(len(col["name"]), *(len(str(r[i])) for r in rows))
-        if col.get("max_width"):
-            w = min(w, col["max_width"])
-        widths.append(w)
-
-    # Last column fills the rest, with a floor of its header width.
-    used = sum(widths) + sep * (n - 1)
-    last_w = max(term_cols - used, len(columns[-1]["name"]))
-    widths.append(last_w)
-
-    def _trunc(s, w):
-        return s if len(s) <= w else s[: w - 1] + "…"
-
-    header = "  ".join("{:<{}}".format(col["name"], widths[i]) for i, col in enumerate(columns))
+    # Plain fallback.
+    header = "  ".join("{:<{}}".format(columns[i]["name"], widths[i]) for i in range(n))
     rule = "  ".join("-" * widths[i] for i in range(n))
     print(header)
     print(rule)
     for r in rows:
-        cells = [_trunc(str(r[i]), widths[i]) for i in range(n)]
-        print("  ".join("{:<{}}".format(cells[i], widths[i]) for i in range(n)))
+        cell_lines = [_cell_lines(r, i) for i in range(n)]
+        row_h = max(len(cl) for cl in cell_lines)
+        for k in range(row_h):
+            parts = []
+            for i in range(n):
+                line = cell_lines[i][k] if k < len(cell_lines[i]) else ""
+                parts.append("{:<{}}".format(line, widths[i]))
+            print("  ".join(parts))
 
 
 def cmd_list(args, registry):
@@ -3002,8 +3107,8 @@ def cmd_list(args, registry):
             {"name": "PACKAGE", "style": "bold cyan"},
             {"name": "DEF", "max_width": 3},
             {"name": "VERSION"},
-            {"name": "GROUPS"},
-            {"name": "DESCRIPTION", "ratio": 1, "min_width": 30},
+            {"name": "GROUPS", "wrap": "comma"},
+            {"name": "DESCRIPTION", "wrap": "word", "min_width": 30},
         ],
     )
     return 0
