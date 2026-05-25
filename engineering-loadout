@@ -2128,6 +2128,37 @@ def install_fish_runtime(repo_dir, home, selected_tools):
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
+def install_nodejs_runtime(repo_dir, home, selected_tools):
+    if selected_tools is not None and "nodejs" not in selected_tools:
+        skipped("Node.js runtime (nodejs not selected)", "")
+        record_result("Node.js runtime", "SKIP", "nodejs not in selected packages")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "node.tar.bz2"))
+    if archive is None:
+        skipped(
+            "Node.js runtime (no node.tar.bz2 in pre_built/<platform>/runtime/)",
+            "Run: ./pre_built/build_scripts/import-nodejs",
+        )
+        record_result("Node.js runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "Node.js runtime")
+
+    pv_extract_tar(archive, local_dir)
+
+    node_bin = os.path.join(local_dir, "bin", "node")
+    if os.path.isfile(node_bin):
+        record_result("Node.js runtime", "yes", "-> {}/bin/node".format(local_dir))
+        print("  Installed: {} -> {}/bin/node".format(archive, local_dir))
+    else:
+        warn("Node.js runtime archive extracted but bin/node not found at {}".format(node_bin))
+        record_result("Node.js runtime", "FAIL", "bin/node missing after extract")
+
+
 def install_nvim_qt_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "nvim-qt" not in selected_tools:
         skipped("nvim-qt runtime (nvim-qt not selected)", "")
@@ -3334,6 +3365,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Node.js runtime", install_nodejs_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step(

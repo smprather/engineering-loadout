@@ -326,6 +326,18 @@
       "description": "Fish shell — friendly interactive shell with autosuggestions and syntax highlighting"
     },
 
+    "nodejs": {
+      "kind": "bin",
+      "bins":     ["node", "npm", "npx", "corepack"],
+      "version":  "",
+      "platforms": ["linux"],
+      "default": false,
+      "optional": true,
+      "tags": ["runtime", "javascript"],
+      "archive": "pre_built/PLATFORM/runtime/node.tar.bz2",
+      "description": "Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling)"
+    },
+
     "jupyterlab": {
       "kind": "python-tool",
       "bins":     [],
