@@ -15,3 +15,6 @@ export LOADOUT_CFG_ENABLE_ZOXIDE="0"
 export LOADOUT_CFG_ENABLE_GRC="1"
 export LOADOUT_CFG_ENABLE_STARSHIP="1"
 export LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT=""
+export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"  # auto | 1 | 0
+export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"  # seconds per host (GNU timeout; decimal ok)
+export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"  # space-separated host:port

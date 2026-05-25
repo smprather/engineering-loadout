@@ -333,6 +333,9 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) — propagate to c
 | `LOADOUT_CFG_PROMPT_INCLUDE_HOST` | `0` | Include hostname in prompt |
 | `LOADOUT_CFG_ATTACH_TO_TMUX` | `0` | Auto-attach tmux on login |
 | `LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS` | `0` | Detach other clients when attaching |
+| `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` | `auto` | Online mode: `auto` (parallel TCP probe on startup) \| `1` (force online) \| `0` (force offline). Exports `LOADOUT_ONLINE=1/0` inherited by child shells/tmux panes |
+| `LOADOUT_CFG_ONLINE_DETECT_TIMEOUT` | `0.15` | Per-host TCP connect timeout in seconds (GNU `timeout`; decimal OK). Total wall time ≈ this value |
+| `LOADOUT_CFG_ONLINE_DETECT_HOSTS` | `github.com:443 raw.githubusercontent.com:443 pypi.org:443` | Space-separated `host:port` pairs probed in parallel. Override in `user/config.sh` to use corporate mirror hosts |
 
 ### Key Functions (`bash/functions.sh`)
 
@@ -345,6 +348,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) — propagate to c
 - `array_slice` — Python-style array slicing (`array_slice 1:-1 "${arr[@]}"`)
 - `join_by` — join array with delimiter
 - `auto_attach_to_tmux` — attaches/creates tmux session if `LOADOUT_CFG_ATTACH_TO_TMUX` set (available for manual call from user layer)
+- `loadout_detect_online [timeout]` — parallel TCP probe against `LOADOUT_CFG_ONLINE_DETECT_HOSTS`; returns 0 (reachable) or 1 (blocked). Called automatically by bashrc when `LOADOUT_CFG_ENABLE_ONLINE_UPDATES=auto`; callable from user layer scripts
 - `unset_bashrc_local_vars` — unsets all `_*` variables before bashrc exits
 
 ### Notable Aliases (`bash/global/bashrc`)

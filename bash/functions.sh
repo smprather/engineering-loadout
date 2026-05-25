@@ -1,3 +1,23 @@
+# Probe network reachability against key hosts in parallel.
+# Usage: loadout_detect_online [timeout_secs]
+# Hosts: space-separated "host:port" pairs from LOADOUT_CFG_ONLINE_DETECT_HOSTS.
+# Returns 0 (online) or 1 (offline/blocked); safe to call from non-interactive context.
+loadout_detect_online() {
+    local _t="${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}"
+    local _hosts="${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}"
+    local _tmp _pids=() _hp _result
+    _tmp=$(mktemp 2>/dev/null) || return 1
+    for _hp in $_hosts; do
+        ( timeout "$_t" bash -c "echo >/dev/tcp/${_hp%%:*}/${_hp##*:}" 2>/dev/null \
+            && echo 1 >"$_tmp" ) &
+        _pids+=($!)
+    done
+    wait "${_pids[@]}" 2>/dev/null
+    _result=$(cat "$_tmp" 2>/dev/null)
+    rm -f "$_tmp"
+    [[ "$_result" == "1" ]]
+}
+
 auto_attach_to_tmux() {
     if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX}"; then
         # Make sure terminal is in a known-good state
