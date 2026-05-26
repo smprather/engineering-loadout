@@ -1822,8 +1822,11 @@ def _validate_tar_members(members, dest_real):
          (no-filter) extraction path — we never legitimately ship these.
     """
     for member in members:
-        target_real = os.path.realpath(os.path.join(dest_real, member.name))
-        if not (target_real == dest_real or target_real.startswith(dest_real + os.sep)):
+        # Use normpath (not realpath) so pre-existing symlinks in dest don't cause false
+        # positives — e.g. ~/.terminfo -> /usr/share/terminfo would fail realpath but the
+        # member name ./.terminfo is safe. normpath still catches absolute paths and .. escapes.
+        target_norm = os.path.normpath(os.path.join(dest_real, member.name))
+        if not (target_norm == dest_real or target_norm.startswith(dest_real + os.sep)):
             raise RuntimeError(f"unsafe tar member path: {member.name}")
         if member.issym() or member.islnk():
             linkname = member.linkname or ""
