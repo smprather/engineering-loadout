@@ -362,6 +362,7 @@ TOOLS = [
         "https://github.com/smprather/tmux-path-store",
         strategy_flag(["--version"], r"tmux-path-store ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
+    ("ncdu", "ncdu", "https://dev.yorhel.nl/ncdu", strategy_flag(["--version"], r"ncdu ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("vd", "visidata", "https://www.visidata.org", strategy_flag(["--version"], r"VisiData ([0-9]+\.[0-9]+)")),
     ("jupyter-lab", "jupyterlab", "https://jupyter.org", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
     ("uv", "uv", "https://github.com/astral-sh/uv", strategy_flag(["--version"], r"uv ([0-9]+\.[0-9]+\.[0-9]+)")),

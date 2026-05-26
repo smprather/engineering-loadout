@@ -74,6 +74,13 @@ def load_homepages():
 # ------------------------------------------------------------------- upstream
 
 
+def _http_get_text(url):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT, context=ctx) as resp:
+        return resp.read().decode("utf-8", "replace")
+
+
 def _http_get_json(url):
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     # Authenticated GitHub requests get 5000/hr vs 60/hr unauthenticated.
@@ -133,13 +140,25 @@ def pypi_latest(pkg_name):
     return (data.get("info") or {}).get("version", "")
 
 
+def scrape_latest(url, pattern):
+    """Fetch url, return first regex capture group match."""
+    text = _http_get_text(url)
+    m = re.search(pattern, text)
+    return m.group(1) if m else ""
+
+
 def upstream_for(name, entry, homepages):
-    """Returns (source, latest, error_or_None). Source: 'github'|'pypi'|'n/a'."""
+    """Returns (source, latest, error_or_None). Source: 'github'|'pypi'|'scrape'|'n/a'."""
     if entry.get("kind") == "python-tool" and entry.get("uv_tool"):
         try:
             return ("pypi", pypi_latest(entry["uv_tool"]), None)
         except Exception as e:
             return ("pypi", "", str(e))
+    if entry.get("version_url") and entry.get("version_pattern"):
+        try:
+            return ("scrape", scrape_latest(entry["version_url"], entry["version_pattern"]), None)
+        except Exception as e:
+            return ("scrape", "", str(e))
     homepage = homepages.get(name, "")
     m = GITHUB_RE.match(homepage)
     if m:
