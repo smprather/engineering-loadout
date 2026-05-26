@@ -1334,8 +1334,6 @@
         "Pango-1.0.typelib"
       ],
       "version": "3.20.4",
-      "version_url": "https://gitlab.gnome.org/GNOME/meld/-/releases.atom",
-      "version_pattern": "<title>([0-9]+\\.[0-9]+\\.[0-9]+)</title>",
       "platforms": [
         "linux"
       ],
