@@ -179,6 +179,12 @@ TOOLS = [
         "https://github.com/bootandy/dust",
         strategy_flag(["--version"], r"Dust ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
+    (
+        "expect",
+        "expect",
+        "https://core.tcl-lang.org/expect/",
+        strategy_flag(["-v"], r"expect version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     ("eza", "eza", "https://github.com/eza-community/eza", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
     ("fd", "fd", "https://github.com/sharkdp/fd", strategy_flag(["--version"], r"fd ([0-9]+\.[0-9]+\.[0-9]+)")),
     (

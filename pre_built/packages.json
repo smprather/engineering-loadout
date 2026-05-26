@@ -265,6 +265,28 @@
       ],
       "description": "du replacement with visual bar chart"
     },
+    "expect": {
+      "kind": "bin",
+      "bins": [
+        "expect"
+      ],
+      "libs": [
+        "libtcl8.6.so"
+      ],
+      "version": "",
+      "version_url": "https://sourceforge.net/projects/expect/rss?path=/Expect",
+      "version_pattern": "/Expect/([0-9]+\\.[0-9]+\\.[0-9]+)/",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "automation",
+        "scripting"
+      ],
+      "description": "Tcl-based tool for automating interactive CLI programs"
+    },
     "eza": {
       "kind": "bin",
       "bins": [
