@@ -402,10 +402,10 @@ def main():
     if args.verbose:
         print(f"Temp dir: {tmpdir}")
 
-    # Column widths
-    w_name = max(len(t) for t in sel_tools)
-    w_ver = max((len(registry[t].get("version", "")) for t in sel_tools), default=7)
-    w_status = 5
+    # Column widths — at least as wide as the header label
+    w_name = max(4, max(len(t) for t in sel_tools))
+    w_ver = max(7, max((len(registry[t].get("version", "")) for t in sel_tools), default=0))
+    w_status = 6
 
     hdr = "{:<{n}}  {:<{v}}  {:<{s}}  {}".format("TOOL", "VERSION", "STATUS", "DETAIL", n=w_name, v=w_ver, s=w_status)
     sep = "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(
