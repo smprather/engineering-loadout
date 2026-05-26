@@ -1107,7 +1107,7 @@
         "xterm",
         "resize"
       ],
-      "version": "331",
+      "version": "410",
       "platforms": [
         "linux"
       ],
@@ -2242,7 +2242,7 @@
       "bins": [
         "rust-analyzer"
       ],
-      "version": "2026-05-25",
+      "version": "410",
       "platforms": [
         "linux"
       ],

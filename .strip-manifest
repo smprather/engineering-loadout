@@ -67,7 +67,7 @@ sha256  993bd8d0fe6bf3b006cc5ac4ae70958bbfda6a8d92201e0b1fac6b144c8aa9c0  pre_bu
 sha256  9f067987f751cef72283d71f05c319153098ffe27443072d6689dd2032d1a2d1  pre_built/el8.x86_64.glibc2p28/bin/pigz.bz2
 sha256  093a8a46eede8e941363d2f12766a92ce644402bf5d846d9587b881ff99f4b4c  pre_built/el8.x86_64.glibc2p28/bin/procs.bz2
 sha256  147dc9863a2a0d30d54e1e5b15fb2427944a6eb34e9258e9699fad9fc046f018  pre_built/el8.x86_64.glibc2p28/bin/pv.bz2
-sha256  370a8103dba02819ff13b56dd3457a4e26332228fccdff1fdd3e49f456460204  pre_built/el8.x86_64.glibc2p28/bin/resize.bz2
+sha256  2cdac3a1c600cfa0f1d8d5fc4104bfe9004dc1ed2a19b91a085f66ac8ebca2e2  pre_built/el8.x86_64.glibc2p28/bin/resize.bz2
 sha256  38d2a5fb1cc6f92edb6a3c7b92000c4721fd0c32f1a4ddd5c8e825bcbfd98a19  pre_built/el8.x86_64.glibc2p28/bin/rg.bz2
 sha256  c91517d389e427058df5caa43f06a4136de8d931f4272cd7e7b3cc86759e7cdd  pre_built/el8.x86_64.glibc2p28/bin/rsync.bz2
 sha256  0765926196163a3b37249ff68b72db06eaa231f4e0d50669929c1dbe854dca9a  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
@@ -89,7 +89,7 @@ sha256  58abf90523d435592de72aab7b610bfb070d23266a25587a631c08381b5420fa  pre_bu
 sha256  7f9b3a1ef3e92cf8b5aab85b31ca5dc4f2860b37429e7c5ba2610bd337070893  pre_built/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  10b2d44db847e2d6bbdb387bb62af10729330941d23215285a989f5187c36db0  pre_built/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  93a1e62221255a524a18a84e9f4537888192b5daa24dbb07027351b1fa1292b7  pre_built/el8.x86_64.glibc2p28/bin/xsel.bz2
-sha256  bf8894b4c1ea959d90af7dfbf0fb58b888cead5721fcc1507cb748d86056ddc1  pre_built/el8.x86_64.glibc2p28/bin/xterm.bz2
+sha256  9aaa384a750b03d2672addfcda08ff13782688b844cf7ddf2c9646fc7a98a196  pre_built/el8.x86_64.glibc2p28/bin/xterm.bz2
 sha256  440f16d186c93b1680d5aebf32ea8906cd69dfbf5af3a173e2ee0c875d0c8fbf  pre_built/el8.x86_64.glibc2p28/bin/yank.bz2
 sha256  41a74109cf13e40d61137e3abdc73e9ddde939247869f1992c1270e2f572eabc  pre_built/el8.x86_64.glibc2p28/bin/yara.bz2
 sha256  54fdc2afe2588185f3e87aea2bb2f5bffaeeb3e3d004448abd89cdf43219ba6c  pre_built/el8.x86_64.glibc2p28/bin/yq.bz2
