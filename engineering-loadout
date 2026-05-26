@@ -559,6 +559,7 @@ _INTERRUPT_REQUESTED = False
 _INTERRUPT_PHASE = None  # "backup" while backup_existing is running, else None
 _ACTIVE_BACKUP_DIR = None  # set by backup_existing for sigint cleanup
 _ACTIVE_SUBPROCESS = None  # set by run() so handler can SIGTERM child before cleanup
+_FOLLOW_SYMLINKS = False  # set by --install-follows-symlinks; skips unlinking dir symlinks before tar extraction
 
 
 def _sigint_handler(signum, frame):
@@ -1851,7 +1852,12 @@ def _remove_symlinks_blocking_dirs(members, dest_dir):
     replacing them. A symlink like ~/.terminfo -> /usr/share/terminfo would cause
     directory members named ./.terminfo/* to be written outside dest. Remove such
     symlinks so extraction creates real directories there instead.
+
+    Skipped when --install-follows-symlinks is set (user wants writes to go through
+    the symlink into wherever it points).
     """
+    if _FOLLOW_SYMLINKS:
+        return
     for member in members:
         if not member.isdir():
             continue
@@ -2882,6 +2888,12 @@ def parse_args(argv):
         "--dest-dir", default=None, dest="dest_dir", metavar="DIR", help="Install root (default: $HOME)"
     )
     parser.add_argument("--no-backup", action="store_true", dest="no_backup")
+    parser.add_argument(
+        "--install-follows-symlinks",
+        action="store_true",
+        dest="install_follows_symlinks",
+        help="Follow existing directory symlinks during archive extraction instead of replacing them with real dirs.",
+    )
     parser.add_argument("--post-install-hook", action="append", default=[])
     parser.add_argument("--restore-backup")
     parser.add_argument("--verbose", action="store_true")
@@ -3384,6 +3396,9 @@ def glob_paths_glob(pattern):
 
 def cmd_install(args, registry, selected_tools, repo_dir, home):
     """The default install verb."""
+    global _FOLLOW_SYMLINKS
+    _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", False)
+
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
         return cmd_resolve(args, registry)
