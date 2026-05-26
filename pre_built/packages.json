@@ -47,6 +47,8 @@
         "bash"
       ],
       "version": "5.3.9",
+      "version_url": "https://ftp.gnu.org/gnu/bash/?C=M&O=D",
+      "version_pattern": "bash-([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\\.tar",
       "platforms": [
         "linux"
       ],
@@ -317,6 +319,8 @@
         "gnuplot"
       ],
       "version": "6.0.2",
+      "version_url": "https://sourceforge.net/projects/gnuplot/rss?path=/gnuplot",
+      "version_pattern": "/gnuplot/([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)/",
       "platforms": [
         "linux"
       ],
@@ -888,7 +892,7 @@
         "vim",
         "vim.bin"
       ],
-      "version": "9.2",
+      "version": "9.2.0458",
       "platforms": [
         "linux"
       ],
@@ -908,7 +912,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2",
+      "version": "9.2.0458",
       "platforms": [
         "linux"
       ],
@@ -1142,6 +1146,8 @@
         "st"
       ],
       "version": "0.9.3",
+      "version_url": "https://dl.suckless.org/st/",
+      "version_pattern": "st-([0-9]+\\.[0-9]+\\.[0-9]+)\\.tar",
       "platforms": [
         "linux"
       ],
@@ -1264,6 +1270,8 @@
         "libvorbisenc.so.2"
       ],
       "version": "11.1.0",
+      "version_url": "https://ftp.gnu.org/gnu/octave/?C=M&O=D",
+      "version_pattern": "octave-([0-9]+\\.[0-9]+\\.[0-9]+)\\.tar",
       "platforms": [
         "linux"
       ],

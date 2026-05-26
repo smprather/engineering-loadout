@@ -138,7 +138,12 @@ TOOLS = [
         strategy_flag(["--version"], r"version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("bat", "bat", "https://github.com/sharkdp/bat", strategy_flag(["--version"], r"bat ([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("broot", "broot", "https://dystroy.org/broot/", strategy_flag(["--version"], r"broot ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "broot",
+        "broot",
+        "https://github.com/Canop/broot",
+        strategy_flag(["--version"], r"broot ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "btm",
         "bottom",
@@ -190,15 +195,25 @@ TOOLS = [
         ),
     ),
     ("gping", "gping", "https://github.com/orf/gping", strategy_flag(["--version"], r"gping ([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("htop", "htop", "https://htop.dev", strategy_flag(["--version"], r"htop ([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("hx", "helix", "https://helix-editor.com", strategy_flag(["--version"], r"helix ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "htop",
+        "htop",
+        "https://github.com/htop-dev/htop",
+        strategy_flag(["--version"], r"htop ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "hx",
+        "helix",
+        "https://github.com/helix-editor/helix",
+        strategy_flag(["--version"], r"helix ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "hyperfine",
         "hyperfine",
         "https://github.com/sharkdp/hyperfine",
         strategy_flag(["--version"], r"hyperfine ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
-    ("jq", "jq", "https://jqlang.github.io/jq/", strategy_flag(["--version"], r"jq-([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("jq", "jq", "https://github.com/jqlang/jq", strategy_flag(["--version"], r"jq-([0-9]+\.[0-9]+\.[0-9]+)")),
     ("just", "just", "https://github.com/casey/just", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
     (
         "lazygit",
@@ -215,7 +230,7 @@ TOOLS = [
     (
         "kak",
         "kakoune",
-        "https://kakoune.org",
+        "https://github.com/mawww/kakoune",
         # kakoune uses date-based release tags (YYYY.MM.DD). The binary embeds no
         # version string in dev builds. Fall back to hardcoded version for this build.
         strategy_first(
@@ -227,7 +242,7 @@ TOOLS = [
     (
         "micro",
         "micro",
-        "https://micro-editor.github.io",
+        "https://github.com/zyedidia/micro",
         strategy_flag(["--version"], r"Version:\s*([0-9]+\.[0-9]+\.[0-9a-z.\-]+)"),
     ),
     (
@@ -242,7 +257,12 @@ TOOLS = [
         "https://github.com/johnkerl/miller",
         strategy_flag(["--version"], r"mlr ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
-    ("nvim", "neovim", "https://neovim.io", strategy_flag(["--version"], r"NVIM v([0-9]+\.[0-9]+\.[0-9]+[^\n]*)")),
+    (
+        "nvim",
+        "neovim",
+        "https://github.com/neovim/neovim",
+        strategy_flag(["--version"], r"NVIM v([0-9]+\.[0-9]+\.[0-9]+[^\n]*)"),
+    ),
     (
         "patchelf",
         "patchelf",
@@ -261,7 +281,12 @@ TOOLS = [
         "https://github.com/BurntSushi/ripgrep",
         strategy_flag(["--version"], r"ripgrep ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
-    ("rsync", "rsync", "https://rsync.samba.org", strategy_flag(["--version"], r"version ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "rsync",
+        "rsync",
+        "https://github.com/RsyncProject/rsync",
+        strategy_flag(["--version"], r"version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "ruff",
         "ruff",
@@ -277,7 +302,12 @@ TOOLS = [
     ("pv", "pv", "https://github.com/icetee/pv", strategy_flag(["--version"], r"pv ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("sd", "sd", "https://github.com/chmln/sd", strategy_flag(["--version"], r"sd ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("shfmt", "shfmt", "https://github.com/mvdan/sh", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("starship", "starship", "https://starship.rs", strategy_flag(["--version"], r"starship ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "starship",
+        "starship",
+        "https://github.com/starship/starship",
+        strategy_flag(["--version"], r"starship ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "stylua",
         "stylua",
@@ -300,12 +330,37 @@ TOOLS = [
     (
         "tree-sitter",
         "tree-sitter",
-        "https://tree-sitter.github.io/tree-sitter/",
+        "https://github.com/tree-sitter/tree-sitter",
         strategy_flag(["--version"], r"tree-sitter ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("ty", "ty", "https://github.com/astral-sh/ty", strategy_flag(["--version"], r"ty ([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("vim.bin", "vim", "https://www.vim.org", strategy_flag(["--version"], r"Vi IMproved ([0-9]+\.[0-9]+)")),
-    ("gvim.bin", "gvim", "https://www.vim.org", strategy_flag(["--version"], r"Vi IMproved ([0-9]+\.[0-9]+)")),
+    (
+        "vim.bin",
+        "vim",
+        "https://github.com/vim/vim",
+        # "Vi IMproved 9.2" + "Included patches: 1-458" → "9.2.0458"
+        lambda binary: (
+            lambda out: (
+                lambda b, p: "{}.{:04d}".format(b.group(1), int(p.group(1))) if b and p else (b.group(1) if b else None)
+            )(
+                re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
+                re.search(r"Included patches: 1-([0-9]+)", out or ""),
+            )
+        )(_run([binary, "--version"])),
+    ),
+    (
+        "gvim.bin",
+        "gvim",
+        "https://github.com/vim/vim",
+        lambda binary: (
+            lambda out: (
+                lambda b, p: "{}.{:04d}".format(b.group(1), int(p.group(1))) if b and p else (b.group(1) if b else None)
+            )(
+                re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
+                re.search(r"Included patches: 1-([0-9]+)", out or ""),
+            )
+        )(_run([binary, "--version"])),
+    ),
     (
         "nedit-ng",
         "nedit-ng",
@@ -315,7 +370,7 @@ TOOLS = [
     (
         "xterm",
         "xterm",
-        "https://invisible-island.net/xterm/",
+        "https://github.com/ThomasDickey/xterm-snapshots",
         # xterm -version prints to stdout
         strategy_first(
             strategy_flag(["-version"], r"XTerm\(([0-9]+)\)"),
@@ -325,7 +380,7 @@ TOOLS = [
     (
         "resize",
         "resize",
-        "https://invisible-island.net/xterm/",
+        "https://github.com/ThomasDickey/xterm-snapshots",
         # resize ships with xterm; its own binary lacks the version string.
         # Run the sibling xterm binary with -version instead.
         lambda binary: strategy_flag(["-version"], r"XTerm\(([0-9]+)\)")(
@@ -355,7 +410,12 @@ TOOLS = [
         strategy_flag(["--version"], r"zoxide ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("zsh", "zsh", "https://www.zsh.org", strategy_flag(["--version"], r"zsh ([0-9]+\.[0-9]+(?:\.[0-9]+)?)")),
-    ("fish", "fish", "https://fishshell.com", strategy_flag(["--version"], r"fish, version ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "fish",
+        "fish",
+        "https://github.com/fish-shell/fish-shell",
+        strategy_flag(["--version"], r"fish, version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "tmux_path_store",
         "tmux-path-store",
@@ -378,7 +438,7 @@ TOOLS = [
         "https://sourceware.org/bzip2/",
         strategy_flag(["--version"], r"Version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
-    ("pigz", "pigz", "https://zlib.net/pigz/", strategy_flag(["--version"], r"pigz ([0-9]+\.[0-9]+)")),
+    ("pigz", "pigz", "https://github.com/madler/pigz", strategy_flag(["--version"], r"pigz ([0-9]+\.[0-9]+)")),
     (
         "octave",
         "octave",
@@ -390,6 +450,47 @@ TOOLS = [
         "uutils-coreutils",
         "https://github.com/uutils/coreutils",
         strategy_flag(["--version"], r"coreutils ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "biome",
+        "biome",
+        "https://github.com/biomejs/biome",
+        strategy_flag(["--version"], r"Version: ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "fresh",
+        "fresh",
+        "https://github.com/sinelaw/fresh",
+        strategy_flag(["--version"], r"fresh ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "ninja",
+        "ninja",
+        "https://github.com/ninja-build/ninja",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("node", "nodejs", "https://github.com/nodejs/node", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "nvim-qt",
+        "nvim-qt",
+        "https://github.com/equalsraf/neovim-qt",
+        strategy_flag(["--version"], r"NVIM-QT v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("yara", "yara", "https://github.com/VirusTotal/yara", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "zellij",
+        "zellij",
+        "https://github.com/zellij-org/zellij",
+        strategy_flag(["--version"], r"zellij ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "st",
+        "st",
+        "https://st.suckless.org",
+        strategy_first(
+            strategy_strings(r"%s ([0-9]+\.[0-9]+\.[0-9]+)"),
+            strategy_strings(r"\b(0\.[0-9]+\.[0-9]+)\b"),
+        ),
     ),
 ]
 

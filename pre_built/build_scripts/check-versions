@@ -144,24 +144,31 @@ def pypi_latest(pkg_name):
 
 
 def scrape_latest(url, pattern):
-    """Fetch url, return first regex capture group match."""
+    """Fetch url, return highest version match across all regex capture group matches."""
     text = _http_get_text(url)
-    m = re.search(pattern, text)
-    return m.group(1) if m else ""
+    matches = re.findall(pattern, text)
+    if not matches:
+        return ""
+    return max(matches, key=_ver_tuple)
 
 
 def upstream_for(name, entry, homepages):
     """Returns (source, latest, error_or_None). Source: 'github'|'pypi'|'scrape'|'n/a'."""
-    if entry.get("kind") == "python-tool" and entry.get("uv_tool"):
-        try:
-            return ("pypi", pypi_latest(entry["uv_tool"]), None)
-        except Exception as e:
-            return ("pypi", "", str(e))
+    # Explicit scrape URL always wins — overrides PyPI for python-tools not on PyPI.
     if entry.get("version_url") and entry.get("version_pattern"):
         try:
             return ("scrape", scrape_latest(entry["version_url"], entry["version_pattern"]), None)
         except Exception as e:
             return ("scrape", "", str(e))
+    if entry.get("kind") == "python-tool" and entry.get("uv_tool"):
+        try:
+            return ("pypi", pypi_latest(entry["uv_tool"]), None)
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                return ("pypi", "", str(e))
+            # 404 → package not on PyPI; fall through to homepage/GitHub lookup
+        except Exception as e:
+            return ("pypi", "", str(e))
     homepage = homepages.get(name, "")
     m = GITHUB_RE.match(homepage)
     if m:
