@@ -2269,6 +2269,25 @@
         "lsp"
       ],
       "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions"
+    },
+    "tmux-path-store": {
+      "kind": "python-tool",
+      "uv_tool": "tmux-path-store",
+      "wheels": [
+        "tmux-path-store",
+        "rich"
+      ],
+      "version": "1.0.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "tmux",
+        "python"
+      ],
+      "description": "Tmux window-name-keyed directory/file path store \u2014 shell aliases for per-window path bookmarks"
     }
   }
 }

@@ -5,7 +5,8 @@ Usage:
   ./update                        run all automated packages (no commit)
   ./update nodejs yara-rules      run specific automated packages
   ./update nvim bat rg            show update guidance for those packages
-  ./update --list                 table: package | kind | version | description
+  ./update --list                 table: package | kind | version | latest
+  ./update --list-outdated        same table, only packages where latest > version
   ./update --commit               stage + commit automated output
   ./update --dry-run              print commands without executing
   ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
@@ -442,33 +443,60 @@ def _show_download(name):
 # ── --list ────────────────────────────────────────────────────────────────────
 
 
-def cmd_list():
+def _fetch_latest_map():
+    """Run check-versions --format tsv; return {name: latest_version_str}."""
+    cv = os.path.join(BUILD, "check-versions")
+    if not os.path.isfile(cv):
+        return {}
+    try:
+        out = subprocess.check_output(
+            [sys.executable, cv, "--format", "tsv"],
+            cwd=REPO,
+            timeout=60,
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8")
+    except Exception:
+        return {}
+    result = {}
+    for line in out.splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 3 and parts[0] and parts[2]:
+            result[parts[0]] = parts[2]
+    return result
+
+
+def cmd_list(outdated_only=False):
+    latest_map = _fetch_latest_map()
     rows = []
 
     for name in ("yara-rules", "nodejs", "tldr-data", "tmux-plugins"):
         tag_note = " (--tag)" if AUTOMATED[name].get("supports_tag") else ""
-        rows.append((name, "automated" + tag_note, _pkg_version(name), _pkg_desc(name)))
+        rows.append((name, "automated" + tag_note, _pkg_version(name)))
 
     for name in sorted(BUILD_SCRIPTS):
         runtime = BUILD_SCRIPTS[name].get("runtime", "")
         kind = "build" + (" +runtime" if runtime else "")
-        rows.append((name, kind, _pkg_version(name), _pkg_desc(name)))
+        rows.append((name, kind, _pkg_version(name)))
 
     for name in sorted(IMPORT_SCRIPTS):
-        rows.append((name, "import-script", _pkg_version(name), _pkg_desc(name)))
+        rows.append((name, "import-script", _pkg_version(name)))
 
     dl_names = DOWNLOAD_ONLY | {k for k, v in PACKAGES.items() if not k.startswith("@") and v.get("kind") == "bin"}
     dl = sorted(n for n in dl_names if n not in AUTOMATED and n not in BUILD_SCRIPTS and n not in IMPORT_SCRIPTS)
     for name in dl:
-        rows.append((name, "download", _pkg_version(name), _pkg_desc(name)))
+        rows.append((name, "download", _pkg_version(name)))
 
-    col = [16, 16, 9]
-    hdr = "{:<{}} {:<{}} {:<{}} {}".format("PACKAGE", col[0], "KIND", col[1], "VERSION", col[2], "DESCRIPTION")
+    col = [20, 16, 12]
+    hdr = "{:<{}} {:<{}} {:<{}} {}".format("PACKAGE", col[0], "KIND", col[1], "VERSION", col[2], "LATEST")
     print(hdr)
-    print("─" * 80)
-    for name, kind, ver, desc in rows:
+    print("─" * 72)
+    for name, kind, ver in rows:
+        raw_latest = latest_map.get(name, "")
+        if outdated_only and (not raw_latest or raw_latest == ver):
+            continue
         vstr = ("v" + ver) if ver else "-"
-        print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], desc[:48]))
+        lstr = ("v" + raw_latest) if raw_latest and not raw_latest.startswith("v") else (raw_latest or "-")
+        print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
 
 
 # ── git commit ────────────────────────────────────────────────────────────────
@@ -532,7 +560,8 @@ def main():
         metavar="PACKAGE",
         help="packages to update/show (default: run all automated)",
     )
-    ap.add_argument("--list", action="store_true", help="table: package | kind | version | description")
+    ap.add_argument("--list", action="store_true", help="table: package | kind | version | latest")
+    ap.add_argument("--list-outdated", action="store_true", help="same as --list but only outdated packages")
     ap.add_argument("--commit", action="store_true", help="stage + commit automated output (default: no commit)")
     ap.add_argument("--dry-run", action="store_true", help="print commands without executing")
     ap.add_argument(
@@ -540,8 +569,8 @@ def main():
     )
     args = ap.parse_args()
 
-    if args.list:
-        cmd_list()
+    if args.list or args.list_outdated:
+        cmd_list(outdated_only=args.list_outdated)
         return
 
     packages = args.packages if args.packages else list(AUTOMATED)
