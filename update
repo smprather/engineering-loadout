@@ -494,8 +494,8 @@ def cmd_list(outdated_only=False):
         raw_latest = latest_map.get(name, "")
         if outdated_only and (not raw_latest or raw_latest == ver):
             continue
-        vstr = ("v" + ver) if ver else "-"
-        lstr = ("v" + raw_latest) if raw_latest and not raw_latest.startswith("v") else (raw_latest or "-")
+        vstr = ver or "-"
+        lstr = raw_latest.lstrip("v") if raw_latest else "-"
         print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
 
 
