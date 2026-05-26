@@ -297,8 +297,9 @@ def _bundled_bytes(stem):
 def _load_tools_json():
     with open(_TOOLS_JSON) as f:
         data = json.load(f)
-    # Strip comment keys
-    return {k: v for k, v in data.items() if not k.startswith("_")}
+    pkgs = data.get("packages", data)
+    # Strip comment keys and group keys
+    return {k: v for k, v in pkgs.items() if not k.startswith("_") and not k.startswith("@")}
 
 
 # ── verification ───────────────────────────────────────────────────────────
