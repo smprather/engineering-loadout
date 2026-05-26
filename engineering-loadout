@@ -1844,10 +1844,29 @@ def _validate_tar_members(members, dest_real):
                 raise RuntimeError(f"refusing to extract special file on Python <3.12: {member.name}")
 
 
+def _remove_symlinks_blocking_dirs(members, dest_dir):
+    """Before extracting, unlink any symlinks in dest that would block directory members.
+
+    On Python <3.12 (no filter='data'), tarfile follows existing symlinks instead of
+    replacing them. A symlink like ~/.terminfo -> /usr/share/terminfo would cause
+    directory members named ./.terminfo/* to be written outside dest. Remove such
+    symlinks so extraction creates real directories there instead.
+    """
+    for member in members:
+        if not member.isdir():
+            continue
+        dest_path = os.path.join(dest_dir, member.name)
+        dest_norm = os.path.normpath(dest_path)
+        if os.path.islink(dest_norm):
+            os.unlink(dest_norm)
+
+
 def safe_extract_tar(tf, dest_dir):
     require_writable_dir(dest_dir, "archive extraction")
     dest_real = os.path.realpath(dest_dir)
-    _validate_tar_members(tf.getmembers(), dest_real)
+    members = tf.getmembers()
+    _validate_tar_members(members, dest_real)
+    _remove_symlinks_blocking_dirs(members, dest_dir)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
         if _TAR_SUPPORTS_FILTER:
@@ -1864,6 +1883,7 @@ def pv_extract_tar(archive_path, dest_dir):
     with tarfile.open(archive_path, "r:*") as tf:
         members = tf.getmembers()
         _validate_tar_members(members, dest_real)
+        _remove_symlinks_blocking_dirs(members, dest_dir)
 
         if not _RICH:
             safe_extract_tar(tf, dest_dir)
