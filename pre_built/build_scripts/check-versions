@@ -77,9 +77,15 @@ def load_homepages():
 _BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
-def _http_get_text(url, ua=None):
-    """Fetch url as text.  ua=None → browser UA; ua='' → no UA override (server default)."""
-    headers = {"Accept": "application/json, text/html, */*", "Accept-Encoding": "gzip, deflate"}
+def _http_get_text(url, ua=None, accept=None):
+    """Fetch url as text.
+    ua=None → browser UA; ua='' → omit User-Agent header.
+    accept=None → 'application/json, text/html, */*'; set to override.
+    """
+    headers = {
+        "Accept": accept if accept is not None else "application/json, text/html, */*",
+        "Accept-Encoding": "gzip, deflate",
+    }
     if ua is None:
         headers["User-Agent"] = _BROWSER_UA
     elif ua:
@@ -102,7 +108,7 @@ def _http_get_text(url, ua=None):
     except urllib.error.HTTPError as e:
         if e.code == 406 and ua is None:
             # Some CDNs accept plain requests but reject browser UAs — retry without.
-            return _http_get_text(url, ua="")
+            return _http_get_text(url, ua="", accept=accept)
         raise
 
 
@@ -165,9 +171,9 @@ def pypi_latest(pkg_name):
     return (data.get("info") or {}).get("version", "")
 
 
-def scrape_latest(url, pattern):
+def scrape_latest(url, pattern, accept=None, ua=None):
     """Fetch url, return highest version match across all regex capture group matches."""
-    text = _http_get_text(url)
+    text = _http_get_text(url, ua=ua, accept=accept)
     matches = re.findall(pattern, text)
     if not matches:
         return ""
@@ -179,7 +185,9 @@ def upstream_for(name, entry, homepages):
     # Explicit scrape URL always wins — overrides PyPI for python-tools not on PyPI.
     if entry.get("version_url") and entry.get("version_pattern"):
         try:
-            return ("scrape", scrape_latest(entry["version_url"], entry["version_pattern"]), None)
+            accept = entry.get("version_url_accept")
+            ua = entry.get("version_url_ua")
+            return ("scrape", scrape_latest(entry["version_url"], entry["version_pattern"], accept=accept, ua=ua), None)
         except Exception as e:
             return ("scrape", "", str(e))
     if entry.get("kind") == "python-tool" and entry.get("uv_tool"):
