@@ -559,7 +559,7 @@ _INTERRUPT_REQUESTED = False
 _INTERRUPT_PHASE = None  # "backup" while backup_existing is running, else None
 _ACTIVE_BACKUP_DIR = None  # set by backup_existing for sigint cleanup
 _ACTIVE_SUBPROCESS = None  # set by run() so handler can SIGTERM child before cleanup
-_FOLLOW_SYMLINKS = False  # set by --install-follows-symlinks; skips unlinking dir symlinks before tar extraction
+_FOLLOW_SYMLINKS = "no"  # "yes"|"no"|"auto" — set by --install-follows-symlinks
 
 
 def _sigint_handler(signum, frame):
@@ -1853,10 +1853,13 @@ def _remove_symlinks_blocking_dirs(members, dest_dir):
     directory members named ./.terminfo/* to be written outside dest. Remove such
     symlinks so extraction creates real directories there instead.
 
-    Skipped when --install-follows-symlinks is set (user wants writes to go through
-    the symlink into wherever it points).
+    Behaviour controlled by --install-follows-symlinks:
+      no (default) — always unlink, replace with real dir.
+      yes           — never unlink, follow all symlinks.
+      auto          — follow only if the symlink target is writable by the
+                      current user; otherwise unlink and replace.
     """
-    if _FOLLOW_SYMLINKS:
+    if _FOLLOW_SYMLINKS == "yes":
         return
     for member in members:
         if not member.isdir():
@@ -1864,6 +1867,8 @@ def _remove_symlinks_blocking_dirs(members, dest_dir):
         dest_path = os.path.join(dest_dir, member.name)
         dest_norm = os.path.normpath(dest_path)
         if os.path.islink(dest_norm):
+            if _FOLLOW_SYMLINKS == "auto" and os.access(dest_norm, os.W_OK):
+                continue  # writable target — follow
             os.unlink(dest_norm)
 
 
@@ -2890,9 +2895,18 @@ def parse_args(argv):
     parser.add_argument("--no-backup", action="store_true", dest="no_backup")
     parser.add_argument(
         "--install-follows-symlinks",
-        action="store_true",
+        nargs="?",
+        const="yes",
+        default="no",
+        choices=("yes", "no", "auto"),
         dest="install_follows_symlinks",
-        help="Follow existing directory symlinks during archive extraction instead of replacing them with real dirs.",
+        metavar="yes|no|auto",
+        help=(
+            "How to handle existing directory symlinks during archive extraction. "
+            "no (default): replace symlink with real dir. "
+            "yes: follow all symlinks. "
+            "auto: follow only if symlink target is writable."
+        ),
     )
     parser.add_argument("--post-install-hook", action="append", default=[])
     parser.add_argument("--restore-backup")
@@ -3397,7 +3411,7 @@ def glob_paths_glob(pattern):
 def cmd_install(args, registry, selected_tools, repo_dir, home):
     """The default install verb."""
     global _FOLLOW_SYMLINKS
-    _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", False)
+    _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", "no") or "no"
 
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
