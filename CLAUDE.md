@@ -512,6 +512,25 @@ Tools built from EL8 source (different NEEDED libs than upstream musl/gnu releas
 
 ### Add a new pre-built binary
 
+**MANDATORY: Record build notes in `pre_built/ADDING_BINARIES.md` before committing.**
+
+Every tool added to this repo — whether built from source, extracted from an RPM, or
+imported from a portable archive — MUST have its final build procedure documented in
+`pre_built/ADDING_BINARIES.md`. The note must be complete enough that anyone can
+reproduce the build without re-deriving anything. Optional: document failed approaches
+and pitfalls. Required: the working procedure.
+
+Minimum content for a build note:
+- Tool name and version
+- Prerequisites (`dnf install`, toolchain enable, etc.)
+- Configure/cmake/cargo flags actually used (not a template — the real flags)
+- Any patches applied to source code (full before/after if the change is non-trivial)
+- Packaging steps: strip → patchelf → bzip2, with exact commands
+- Any non-obvious quirks (e.g. binary lands in wrong prefix, GCC 14 compat flags needed)
+
+See existing entries in `ADDING_BINARIES.md` (gnuplot, octave, gvim, nedit-ng, nvim-qt,
+xterm, expect) as examples of the required level of detail.
+
 ```bash
 bzip2 -k mybinary
 cp mybinary.bz2 pre_built/el8.x86_64.glibc2p28/bin/
