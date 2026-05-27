@@ -408,3 +408,192 @@ the system's display-driver version. Qt5 and GTK3 work fine without them for non
 seen=(); queue=(/path/to/binary); while [[ ${#queue[@]} -gt 0 ]]; do ...
 ```
 See session history for the full `/tmp/dep_closure.sh` script.
+
+## nvim-qt build notes (v0.2.19, added 2026-05-2x)
+
+Qt5 GUI frontend for Neovim. CMake build — no Rust, no GPU renderer. No Docker needed.
+At runtime the binary resolves Qt5 from `~/.local/lib64` (gui_libs) via pre-baked RPATH,
+so users don't need a system Qt5 install.
+
+**Prerequisites:**
+```bash
+sudo dnf install -y cmake git gcc gcc-c++ bzip2 qt5-qtbase-devel qt5-qtsvg-devel
+sudo dnf config-manager --set-enabled powertools   # needed for qt5-qtsvg-devel
+. /opt/rh/gcc-toolset-14/enable
+```
+
+**Build:**
+```bash
+git clone --filter=blob:none https://github.com/equalsraf/neovim-qt.git /tmp/nvim-qt-build-0.2.19
+cd /tmp/nvim-qt-build-0.2.19
+git fetch --tags && git checkout v0.2.19
+cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DENABLE_TESTS=OFF \
+    -DCMAKE_SKIP_RPATH=ON
+cmake --build build -j$(nproc)
+# Binary at build/bin/nvim-qt
+```
+
+**Packaging (strip → patchelf → bzip2):**
+```bash
+cp build/bin/nvim-qt /tmp/nvim-qt_tmp
+/usr/bin/strip /tmp/nvim-qt_tmp
+~/.local/bin/patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' /tmp/nvim-qt_tmp
+bzip2 -k /tmp/nvim-qt_tmp
+cp /tmp/nvim-qt_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
+```
+
+nvim-qt depends on `gui_libs` at runtime. The `packages.json` entry sets
+`"depends": ["gui_libs"]` so the resolver auto-pulls gui_libs when nvim-qt is selected.
+
+**WSLg runtime note:** Qt5's XCB backend corrupts XWayland's global cursor state for
+all X11 apps (all windows lose their cursor after nvim-qt opens). This is a runtime
+issue, not a build issue. Fix: `export QT_QPA_PLATFORM=wayland` in
+`~/.config/bash/user/bashrc`. Routes Qt5 through the Wayland compositor instead of
+XWayland. Wayland backend is included in gui_libs (`libqwayland-generic.so`).
+
+See `pre_built/build_scripts/build-nvim-qt.sh` for the full recipe.
+
+## xterm build notes (410, added 2026-05-26)
+
+Produces two binaries from a single source build: `xterm` and `resize`.
+
+**Prerequisites:**
+```bash
+sudo dnf install -y gcc make libX11-devel libXft-devel libXt-devel libXext-devel \
+                   fontconfig-devel freetype-devel utempter-devel
+. /opt/rh/gcc-toolset-14/enable
+```
+
+**Build:**
+```bash
+curl -fsSL https://invisible-island.net/archives/xterm/xterm-410.tgz | \
+    tar xz -C /tmp && cd /tmp/xterm-410
+./configure \
+    --prefix=/tmp/xterm-install \
+    --enable-256-color \
+    --enable-wide-chars \
+    --with-xft \
+    --with-utempter
+make -j$(nproc) && make install
+# Binaries at /tmp/xterm-install/bin/xterm and /tmp/xterm-install/bin/resize
+```
+
+**Packaging (strip → patchelf → bzip2, both binaries):**
+```bash
+for b in xterm resize; do
+    cp /tmp/xterm-install/bin/$b /tmp/${b}_tmp
+    /usr/bin/strip /tmp/${b}_tmp
+    ~/.local/bin/patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' /tmp/${b}_tmp
+    bzip2 -k /tmp/${b}_tmp
+    cp /tmp/${b}_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/${b}.bz2
+done
+```
+
+`resize` is listed under the `xterm` packages.json entry (`"bins": ["xterm", "resize"]`).
+See `pre_built/build_scripts/build-xterm.sh` for the full recipe.
+
+## expect build notes (5.45.4 + Tcl 8.6.16, added 2026-05-26)
+
+Tcl-based CLI automation tool. Requires Tcl 8.6 built from source into a staging prefix
+so `libtcl8.6.so` can be bundled alongside `expect`.
+
+**Two mandatory patches for EL8 + gcc-toolset-14 (GCC 14):**
+
+### Patch 1: GCC 14 implicit-int errors in configure
+GCC 14 promotes `-Wimplicit-int`, `-Wimplicit-function-declaration`, and
+`-Wincompatible-pointer-types` to errors. expect's autoconf test code is C89-style and
+trips all three. Without this fix, the `struct termios` detection fails, PTY detection
+fails, and configure selects the wrong `pty_.c` — the build may succeed but expect won't
+work correctly.
+
+Add to CFLAGS for both Tcl and expect configure:
+```
+-Wno-implicit-int -Wno-implicit-function-declaration -Wno-return-type -Wno-incompatible-pointer-types
+```
+
+### Patch 2: exp_chan.c Tcl_ChannelType field order
+Modern Tcl (8.6+) requires `TCL_CHANNEL_VERSION_4` as the second field of
+`Tcl_ChannelType`. expect 5.45.4 puts `ExpBlockModeProc` there directly (old API).
+GCC 14 now errors on the incompatible pointer type. Patch `exp_chan.c` before `make`:
+
+```c
+/* Old (broken with GCC 14 + modern Tcl): */
+Tcl_ChannelType expChannelType = {
+    "exp",
+    ExpBlockModeProc,   /* WRONG: this slot is now for version, not blockModeProc */
+    ...
+};
+
+/* Fixed: */
+Tcl_ChannelType expChannelType = {
+    "exp",                      /* Type name. */
+    TCL_CHANNEL_VERSION_4,      /* Version. */         ← inserted
+    ExpCloseProc,               /* Close proc. */
+    ExpInputProc,               /* Input proc. */
+    ExpOutputProc,              /* Output proc. */
+    NULL,                       /* Seek proc. */
+    NULL,                       /* Set option proc. */
+    NULL,                       /* Get option proc. */
+    ExpWatchProc,               /* Initialize notifier. */
+    ExpGetHandleProc,           /* Get OS handles out of channel. */
+    NULL,                       /* Close2 proc */
+    ExpBlockModeProc,           /* Set blocking/nonblocking mode. */ ← moved to slot 12
+};
+```
+
+`build-expect.sh` applies this patch automatically via embedded Python.
+
+### Build procedure
+
+```bash
+# Step 1: Build Tcl 8.6 into a staging prefix
+TCL_INSTALL=/tmp/tcl-install-8.6.16
+curl -fsSL https://prdownloads.sourceforge.net/tcl/tcl8.6.16-src.tar.gz -o /tmp/tcl8.6.16-src.tar.gz
+mkdir -p /tmp/tcl-src-8.6.16 && tar xzf /tmp/tcl8.6.16-src.tar.gz -C /tmp/tcl-src-8.6.16 --strip-components=1
+cd /tmp/tcl-src-8.6.16/unix
+./configure --prefix=$TCL_INSTALL --enable-shared --disable-static \
+    CFLAGS="-O2 -fstack-protector-strong"
+make -j$(nproc) && make install
+
+# Step 2: Build expect
+curl -fsSL "https://sourceforge.net/projects/expect/files/Expect/5.45.4/expect5.45.4.tar.gz/download" \
+    -o /tmp/expect5.45.4.tar.gz
+mkdir -p /tmp/expect-src-5.45.4 && tar xzf /tmp/expect5.45.4.tar.gz -C /tmp/expect-src-5.45.4 --strip-components=1
+cd /tmp/expect-src-5.45.4
+
+# Apply exp_chan.c patch (see build-expect.sh for the embedded Python patcher)
+
+./configure \
+    --prefix=/tmp/expect-install-5.45.4 \
+    --with-tcl=$TCL_INSTALL/lib \
+    --with-tclinclude=$TCL_INSTALL/include \
+    CFLAGS="-O2 -fstack-protector-strong -Wno-implicit-int -Wno-implicit-function-declaration -Wno-return-type -Wno-incompatible-pointer-types"
+make -j$(nproc) && make install
+```
+
+**Binary location quirk:** `make install` puts the `expect` binary in the **Tcl prefix**
+(`$TCL_INSTALL/bin/expect`), not in the expect `--prefix`. Always pick it up from there.
+
+**Packaging:**
+```bash
+# expect binary (from TCL prefix, not expect prefix)
+cp $TCL_INSTALL/bin/expect /tmp/expect_work
+/usr/bin/strip /tmp/expect_work
+~/.local/bin/patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' /tmp/expect_work
+bzip2 -k /tmp/expect_work
+cp /tmp/expect_work.bz2 pre_built/el8.x86_64.glibc2p28/bin/expect.bz2
+
+# libtcl8.6.so (from Tcl staging install)
+cp $TCL_INSTALL/lib/libtcl8.6.so /tmp/libtcl86_work
+/usr/bin/strip /tmp/libtcl86_work
+~/.local/bin/patchelf --set-rpath '$ORIGIN' /tmp/libtcl86_work
+bzip2 -k /tmp/libtcl86_work
+cp /tmp/libtcl86_work.bz2 pre_built/el8.x86_64.glibc2p28/lib64/libtcl8.6.so.bz2
+```
+
+Max glibc symbol: GLIBC_2.17 — well within EL8's 2.28 ceiling.
+
+See `pre_built/build_scripts/build-expect.sh` for the full recipe (includes the
+exp_chan.c patcher and automatic packages.json version update).
