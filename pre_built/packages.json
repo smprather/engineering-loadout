@@ -1577,6 +1577,60 @@
       ],
       "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers"
     },
+    "pygwalker": {
+      "kind": "python-tool",
+      "bins": [],
+      "wheels": [
+        "pygwalker",
+        "anywidget",
+        "appdirs",
+        "astor",
+        "cachetools",
+        "duckdb",
+        "gw_dsl_parser",
+        "ipylab",
+        "ipywidgets",
+        "widgetsnbextension",
+        "jupyterlab_widgets",
+        "kanaries_track",
+        "pandas",
+        "pyarrow",
+        "pydantic",
+        "pydantic_core",
+        "annotated_types",
+        "pytz",
+        "python_dateutil",
+        "segment_analytics_python",
+        "sqlalchemy",
+        "sqlglot",
+        "arrow",
+        "ipython",
+        "jinja2",
+        "numpy",
+        "packaging",
+        "psutil",
+        "requests",
+        "traitlets",
+        "typing_extensions"
+      ],
+      "uv_tool": "pygwalker",
+      "version": "0.5.0.1",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "data",
+        "visualization",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`)"
+    },
     "portable-python": {
       "kind": "python-base",
       "archive": "pre_built/PLATFORM/portable-python-*.tar.bz2",
@@ -2184,7 +2238,8 @@
       "members": [
         "visidata",
         "jupyterlab",
-        "time-plot"
+        "time-plot",
+        "pygwalker"
       ],
       "description": "Optional Python tools installed via uv tool install"
     },

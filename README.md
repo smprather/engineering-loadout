@@ -92,7 +92,7 @@ and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
-| **Pre-built binaries** | 52 default + 13 optional modern CLI tools, zero internet required — see table below |
+| **Pre-built binaries** | 52 default + 15 optional modern CLI tools, zero internet required — see table below |
 | **Nerd Fonts** | 7 font families, split-archive support for GitHub's 50 MB limit |
 
 ---
@@ -218,6 +218,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 | [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (`urxvt`/`urxvtc`/`urxvtd`; perl extensions disabled) |
 | [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal with [undercurl patch](https://st.suckless.org/patches/undercurl/) (`UNDERCURL_CURLY` style for LSP/spell-check diagnostics) |
 | [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
+| [pygwalker](https://github.com/Kanaries/pygwalker) | 0.5.0.1 | Interactive Tableau-style data explorer for pandas DataFrames — runs in Jupyter notebooks or standalone (`pygwalker serve file.csv`) |
 | [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs (SSH logins, serial consoles, legacy interactive utilities); bundled with `libtcl8.6.so` |
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
