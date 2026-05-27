@@ -49,11 +49,11 @@ export HOME=$(getent passwd $USER | cut -d: -f6)
 source $BASH_CONFIG_ROOT_DIR/functions.sh
 
 # I could do the layering in a function, but I like to use 'gf' in nvim for easy exploration.
-# Source in order of precedence: global->corp->site->project->user
+# Source in order of precedence: global->corp->site->team->project->user
 #layered_preference_source() {
 #    local bash_file=""
 #    local layer=""
-#    for layer in global corp site project user; do
+#    for layer in global corp site team project user; do
 #        bash_file="$BASH_CONFIG_ROOT_DIR/$layer/$1"
 #        [[ -s "$bash_file" ]] && source "$bash_file"
 #    done
@@ -65,6 +65,7 @@ source $BASH_CONFIG_ROOT_DIR/functions.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/global/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/corp/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/site/config.sh
+source_if_exists $BASH_CONFIG_ROOT_DIR/team/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/project/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
 
@@ -81,10 +82,11 @@ if [[ $- == *i* && -n "${LOADOUT_CFG_PREFERRED_BASH:-}" && -x "${LOADOUT_CFG_PRE
 fi
 
 # PATH to common linux tools should be established by now
-# More PATH can be added by Environment Modules in corp/site/project/user layers.
+# More PATH can be added by Environment Modules in corp/site/team/project/user layers.
 source_if_exists $BASH_CONFIG_ROOT_DIR/global/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/corp/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/site/bashrc
+source_if_exists $BASH_CONFIG_ROOT_DIR/team/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/project/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/bashrc
 

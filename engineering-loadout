@@ -100,9 +100,9 @@ FONT_EXCLUDES = (
     "*.woff2",
 )
 
-BASH_LAYERS = ("corp", "site", "project", "user")
+BASH_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
-NVIM_LAYERS = ("corp", "site", "project", "user")
+NVIM_LAYERS = ("corp", "site", "team", "project", "user")
 
 
 def _load_tool_registry(repo_dir):

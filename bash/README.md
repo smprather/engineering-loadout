@@ -18,13 +18,14 @@ bash/
     grc/          - Generic Colorizer binaries and configs
   corp/           - Corp-level overrides (user-created, not committed here)
   site/           - Site-level overrides (user-created)
+  team/           - Team-level overrides (user-created)
   project/        - Project-level overrides (user-created)
   user/           - Personal overrides (user-created)
 ```
 
 ## Loading Order
 
-Files are sourced lowest-to-highest precedence: `global → corp → site → project → user`.
+Files are sourced lowest-to-highest precedence: `global → corp → site → team → project → user`.
 Each later layer overrides the previous.
 
 ```
@@ -33,12 +34,14 @@ bashrc
   └── global/config.sh                 # LOADOUT_CFG_* defaults
   └── corp/config.sh                   # (if exists) LOADOUT_CFG_* overrides
   └── site/config.sh                   # ...
+  └── team/config.sh                   # ...
   └── project/config.sh
   └── user/config.sh
   └── [exec into LOADOUT_CFG_PREFERRED_BASH]  # if set, executable, and not already running it
   └── global/bashrc                    # PATH, aliases, completions (exits if non-interactive)
   └── corp/bashrc                      # (if exists)
   └── site/bashrc
+  └── team/bashrc                      # (if exists)
   └── project/bashrc
   └── user/bashrc
   └── unset_bashrc_local_vars          # clears all _* locals
@@ -70,4 +73,4 @@ files in `<layer>/global_hooks/`:
 | `6.sh` | After bash completions loaded |
 | `7.sh` | Late / final                  |
 
-Example: `bash/corp/global_hooks/3.sh` — inject PATH entries after global PATH is set.
+Example: `bash/team/global_hooks/3.sh` — inject shared team PATH entries after global PATH is set.

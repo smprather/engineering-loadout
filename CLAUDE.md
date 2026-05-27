@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Offline-first pkg mgr + dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/project/user layer hierarchy). `./engineering-loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
+Offline-first pkg mgr + dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./engineering-loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
 
 ## Key Commands
 
@@ -15,7 +15,7 @@ Offline-first pkg mgr + dotfiles bundle for **Electrical Engineering work enviro
 # Skip the existing-dotfile backup
 ./engineering-loadout --no-backup
 
-# Run an explicit corp/site/user installer after global install steps
+# Run an explicit corp/site/team/user installer after global install steps
 ./engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh
 
 # Subcommands: list, describe, resolve, doctor, restore-backup
@@ -66,11 +66,12 @@ bash/
     grc/                    - Generic Colorizer binaries and configs
   corp/                     - Corporation-level overrides (user-created)
   site/                     - Site-level overrides (user-created)
+  team/                     - Team-level overrides (user-created)
   project/                  - Project-level overrides (user-created)
   user/                     - Personal overrides (user-created)
 
 nvim/
-  init.lua                  - Thin layer dispatcher (loads global→corp→site→project→user)
+  init.lua                  - Thin layer dispatcher (loads global→corp→site→team→project→user)
   lazy-lock.json            - Locked plugin versions
   lsp/                      - LSP server configs
   lua/global/               - Global layer (bundled, repo-managed)
@@ -80,6 +81,7 @@ nvim/
     utils.lua               - Shared helpers (buf_smaller_than)
   lua/corp/                 - Corporation-level overrides (user-created, not bundled)
   lua/site/                 - Site-level overrides (user-created)
+  lua/team/                 - Team-level overrides (user-created)
   lua/project/              - Project-level overrides (user-created)
   lua/user/                 - Personal overrides (user-created)
   after/ftplugin/           - Filetype overrides (tcl, yaml)
@@ -290,7 +292,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 ### Layer System
 
-Files sourced in order: `global → corp → site → project → user`. Each layer overrides previous. Layer dirs (`bash/corp/`, `bash/site/`, `bash/project/`, `bash/user/`) user-created, not bundled.
+Files sourced in order: `global → corp → site → team → project → user`. Each layer overrides previous. Layer dirs (`bash/corp/`, `bash/site/`, `bash/team/`, `bash/project/`, `bash/user/`) user-created, not bundled.
 
 **Loading sequence** (see `bash/bashrc`):
 1. Sources `bash/functions.sh` (shared utilities, available to all layers)
@@ -454,7 +456,7 @@ Optional features:
 
 Existing `%USERPROFILE%\loadout_keys.toml` files with legacy plugin IDs remain accepted by installer and mapped onto flat-script feature flags.
 
-**Layer architecture** (analogous to bash `global→corp→site→project→user`): `nvim/init.lua` thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are defaults; later layers override. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` false when lazy.nvim bootstrap fails offline — core editor still starts cleanly.
+**Layer architecture** (analogous to bash `global→corp→site→team→project→user`): `nvim/init.lua` thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are defaults; later layers override. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` false when lazy.nvim bootstrap fails offline — core editor still starts cleanly.
 
 Snacks dashboard provides no-argument `nvim` startup screen (`filetype=snacks_dashboard`). `mini.trailspace` highlights trailing whitespace with window-local matches, so dashboard cleanup must disable `vim.b.minitrailspace_disable`, turn off local `list`, delete existing `MiniTrailspace` matches on dashboard open/update.
 

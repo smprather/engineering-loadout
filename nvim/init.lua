@@ -4,7 +4,7 @@ vim.g.maplocalleader = " "
 vim.g.loaded_netrw       = 1
 vim.g.loaded_netrwPlugin = 1
 
-local LAYERS = { "global", "corp", "site", "project", "user" }
+local LAYERS = { "global", "corp", "site", "team", "project", "user" }
 
 local function layer_dir(layer)
     return vim.fn.stdpath("config") .. "/lua/" .. layer

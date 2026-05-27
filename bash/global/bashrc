@@ -297,7 +297,7 @@ if declare -F _comp_complete_minimal >/dev/null; then
     complete -r -D 2>/dev/null
     complete -D -F _comp_complete_minimal
 fi
-for _layer in global corp site project user; do
+for _layer in global corp site team project user; do
     for _comp_file in $BASH_CONFIG_ROOT_DIR/$_layer/completions/*.bash; do
         # Must check for exist since no-glob-match in bash resolves to the whole glob string with the * in it
         source_if_exists $_comp_file

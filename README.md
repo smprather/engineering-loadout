@@ -106,7 +106,7 @@ compatible-ABI build is used when an exact match is absent.
 **Layered.** Configuration flows from lowest to highest precedence:
 
 ```
-Global → Corp → Site → Project → User
+Global → Corp → Site → Team → Project → User
 ```
 
 Each layer overrides the previous without touching upstream files. Corp secrets, site-specific
@@ -314,7 +314,7 @@ restore, and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 
 ## Bash Configuration
 
-Five-layer override chain (`global → corp → site → project → user`), `LOADOUT_CFG_*` knobs, 7 startup hook-injection points, and a curated alias set (`b/bb/…` directory hopping, `g/f` for `rg`/`fd` with fallbacks, `gs/gc/gp` git shortcuts, etc.). [Details](docs/BASH.md)
+Six-layer override chain (`global → corp → site → team → project → user`), `LOADOUT_CFG_*` knobs, 7 startup hook-injection points, and a curated alias set (`b/bb/…` directory hopping, `g/f` for `rg`/`fd` with fallbacks, `gs/gc/gp` git shortcuts, etc.). [Details](docs/BASH.md)
 
 ---
 
