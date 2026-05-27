@@ -16,7 +16,6 @@ sha256  512752d0f88e67d62ab5f2b3a06ceecaea759af4955ca7d8efec0205ef2c29dc  pre_bu
 sha256  37e9d4f5302f6bf1b954af0162c86dbff63f24ea6128d104553cd7cdb7a3065d  pre_built/el8.x86_64.glibc2p28/bin/clang-tidy.bz2
 sha256  59aafe0aa26ea8edf7b5fcce3887da39227351b70621d41a9370fc5809e139a6  pre_built/el8.x86_64.glibc2p28/bin/clang.bz2
 sha256  215c9b779e33277908f51da9bb623ff5ee2f8fe4e08c447e9210d167d21ab4ca  pre_built/el8.x86_64.glibc2p28/bin/clangd.bz2
-sha256  03ef338e62490c648e26dca649a59f6ce540437bc168cddcfffb33b174336197  pre_built/el8.x86_64.glibc2p28/bin/coreutils.bz2
 sha256  99ad4db62c375e036c22cb86f6c5c710804a12247c3b7dcd17275befeca43aa6  pre_built/el8.x86_64.glibc2p28/bin/dasel.bz2
 sha256  f3b4c35c63b00c56ac298ce4d385172285bba7e30e7a17f5ac43b0300f095564  pre_built/el8.x86_64.glibc2p28/bin/delta.bz2
 sha256  49e8479000bee36225dae5bb1aecd7cb3a6f906128c470af7637c2f38d1b5386  pre_built/el8.x86_64.glibc2p28/bin/duf.bz2

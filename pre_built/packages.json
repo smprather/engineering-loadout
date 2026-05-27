@@ -875,12 +875,26 @@
       ],
       "description": "Fast Python type checker (Astral)"
     },
-    "uutils-coreutils": {
+    "gnu-coreutils": {
       "kind": "bin",
       "bins": [
-        "coreutils"
+        "ls", "cp", "mv", "rm", "mkdir", "rmdir", "ln", "touch", "stat",
+        "chmod", "chown", "chgrp", "install",
+        "cat", "head", "tail", "sort", "uniq", "cut", "tr", "wc", "tee",
+        "paste", "join", "comm", "od", "expand", "unexpand", "tac", "nl",
+        "fmt", "fold", "pr", "split", "csplit",
+        "echo", "printf", "yes", "true", "false",
+        "date", "uname", "hostname", "whoami", "id", "groups", "nproc",
+        "uptime", "df", "du", "env", "sync", "stty",
+        "seq", "shuf", "numfmt", "factor",
+        "realpath", "basename", "dirname", "readlink", "mktemp", "logname",
+        "sleep", "timeout", "nohup", "nice", "stdbuf",
+        "dd", "truncate", "shred", "sum", "cksum",
+        "md5sum", "sha1sum", "sha224sum", "sha256sum", "sha384sum", "sha512sum",
+        "expr", "test", "tty", "link", "unlink", "mkfifo", "mknod",
+        "base32", "base64", "basenc", "tsort", "ptx"
       ],
-      "version": "0.8.0",
+      "version": "",
       "platforms": [
         "linux"
       ],
@@ -890,7 +904,7 @@
         "core",
         "compat"
       ],
-      "description": "Rust reimplementation of GNU coreutils \u2014 single multi-call binary (coreutils ls, coreutils cat, \u2026)"
+      "description": "GNU coreutils \u2014 individual binaries (ls, cp, mv, etc.) built from source on EL8"
     },
     "uv": {
       "kind": "bin",
