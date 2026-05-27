@@ -78,6 +78,7 @@ import json
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import tarfile
 import tempfile
@@ -870,6 +871,25 @@ def is_wsl():
         with open("/proc/version", "r") as fh:
             return re.search(r"microsoft|wsl", fh.read(), re.IGNORECASE) is not None
     except IOError:
+        return False
+
+
+def _is_online(timeout=2.0):
+    """Return True if we appear to have internet access.
+
+    Checks LOADOUT_ONLINE env var first (set by bash loadout_detect_online).
+    Falls back to a direct TCP probe to github.com:443.
+    """
+    env_val = os.environ.get("LOADOUT_ONLINE", "")
+    if env_val == "1":
+        return True
+    if env_val == "0":
+        return False
+    try:
+        conn = socket.create_connection(("github.com", 443), timeout=timeout)
+        conn.close()
+        return True
+    except OSError:
         return False
 
 
@@ -2386,6 +2406,30 @@ def install_nvim_catalog_plugins(repo_dir, home, selected_tools=None):
     print(f"  Installed: {archive} -> {dest}/")
 
 
+def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
+    """When online, run headless nvim to bootstrap lazy.nvim and sync all plugins."""
+    if selected_tools is not None and "env-nvim" not in selected_tools:
+        skipped("Neovim Lazy sync (env-nvim not selected)", "")
+        record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
+        return
+    nvim_bin = os.path.join(home, ".local", "bin", "nvim")
+    if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
+        skipped("Neovim Lazy sync (nvim binary not found)", f"install nvim first")
+        record_result("Neovim Lazy sync", "SKIP", "nvim binary not found")
+        return
+    if not _is_online():
+        skipped("Neovim Lazy sync (offline)", "run :Lazy sync manually when online")
+        record_result("Neovim Lazy sync", "SKIP", "offline")
+        return
+    print("  Running nvim --headless '+Lazy! sync' (this may take a minute) ...")
+    try:
+        run([nvim_bin, "--headless", "+Lazy! sync", "+qa"])
+        record_result("Neovim Lazy sync", "yes", "plugins installed/updated")
+    except subprocess.CalledProcessError as exc:
+        warn(f"Neovim Lazy sync exited rc={exc.returncode}; run :Lazy sync manually")
+        record_result("Neovim Lazy sync", "no", f"Lazy sync rc={exc.returncode}")
+
+
 def restore_backup(backup_path, home):
     if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
         tmp_dir = tempfile.mkdtemp(prefix="loadout_restore_", dir="/tmp")
@@ -2630,8 +2674,7 @@ def _install_env_nvim(repo_dir, home):
     ensure_dir(os.path.join(nvim_config, "after", "lsp"), "Neovim config")
     ensure_dir(os.path.join(nvim_config, "after", "ftplugin"), "Neovim config")
     ensure_dir(os.path.join(nvim_config, "lsp"), "Neovim config")
-    for rel in ("init.lua", "lazy-lock.json"):
-        install_path(os.path.join(nvim_src, rel), os.path.join(nvim_config, rel), False)
+    install_path(os.path.join(nvim_src, "init.lua"), os.path.join(nvim_config, "init.lua"), False)
     install_path(os.path.join(nvim_src, "lua", "global"), os.path.join(nvim_config, "lua", "global"), False)
     rsync_dir(os.path.join(nvim_src, "lsp"), os.path.join(nvim_config, "lsp"), delete=True)
     rsync_dir(os.path.join(nvim_src, "after", "ftplugin"), os.path.join(nvim_config, "after", "ftplugin"), delete=True)
@@ -3463,6 +3506,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True
     )
     run_install_step("nvim catalog plugins", install_nvim_catalog_plugins, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, home, selected_tools)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
     if hooks:
         run_install_step("post-install hooks", run_post_install_hooks, hooks, repo_dir, home, args, backup_dir)

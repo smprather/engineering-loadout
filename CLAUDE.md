@@ -1,5 +1,15 @@
 # CLAUDE.md
 
+## Build Machine Mandate
+
+**ALL developers working on this project are MANDATED to be on an EL8 machine.**
+Claude Code runs on **AlmaLinux 8.10 WSL2** (`uname -r: 6.6.87.2-microsoft-standard-WSL2`).
+This IS the EL8 build machine — glibc 2.28, gcc-toolset-14 at `/opt/rh/gcc-toolset-14/enable`.
+There is no "separate EL8 machine" to SSH into. All build commands run in the current session.
+**Never frame build steps as requiring a separate or remote system.**
+
+---
+
 Offline-first pkg mgr + dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./engineering-loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
 
 ## Key Commands
