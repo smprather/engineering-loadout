@@ -38,7 +38,7 @@ In other words, it does basic package-management stuff.
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
-| **Pre-built binaries** | 52 default + 9 optional modern CLI tools, zero internet required — see table below |
+| **Pre-built binaries** | 52 default + 13 optional modern CLI tools, zero internet required — see table below |
 | **Nerd Fonts** | 7 font families, split-archive support for GitHub's 50 MB limit |
 
 ---
@@ -167,7 +167,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 | [pigz](https://zlib.net/pigz/) | 2.8 | Parallel gzip — multi-core `gzip`/`gunzip` replacement |
 | [procs](https://github.com/dalance/procs) | 0.14.11 | `ps` replacement with colors and process tree |
 | [pv](https://www.ivarch.com/programs/pv.shtml) | 1.6.6 | Monitor progress of data through a pipe |
-| [resize](https://invisible-island.net/xterm/) | 331 | XTerm terminal resize utility — fixes `$COLUMNS`/`$LINES` |
+| [resize](https://invisible-island.net/xterm/) | 410 | XTerm terminal resize utility — fixes `$COLUMNS`/`$LINES` |
 | [rg](https://github.com/BurntSushi/ripgrep) | 15.1.0 | ripgrep — recursive search that respects `.gitignore` |
 | [rsync](https://rsync.samba.org) | 3.4.1 | Fast, incremental file transfer |
 | [ruff](https://github.com/astral-sh/ruff) | 0.15.12 | Extremely fast Python linter and formatter, written in Rust |
@@ -183,7 +183,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 | [uv](https://github.com/astral-sh/uv) | 0.11.13 | Extremely fast Python package installer and resolver |
 | [vim](https://www.vim.org) | 9.2 | Vim 9.2 pre-built binary + shell wrapper |
 | [xsel](https://github.com/kfish/xsel) | 1.2.0 | X11 clipboard command-line access tool |
-| [xterm](https://invisible-island.net/xterm/) | 331 | X Window System terminal emulator |
+| [xterm](https://invisible-island.net/xterm/) | 410 | X Window System terminal emulator |
 | [yank](https://github.com/mptre/yank) | 1.3.0 | Select terminal output and copy to clipboard |
 | [yara](https://virustotal.github.io/yara/) | 4.5.5 | Malware pattern matching and classification |
 | [yq](https://github.com/mikefarah/yq) | 4.53.2 | `jq` for YAML, JSON, XML, CSV, TOML, and properties files |
@@ -207,6 +207,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 | [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (`urxvt`/`urxvtc`/`urxvtd`; perl extensions disabled) |
 | [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal with [undercurl patch](https://st.suckless.org/patches/undercurl/) (`UNDERCURL_CURLY` style for LSP/spell-check diagnostics) |
 | [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
+| [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs (SSH logins, serial consoles, legacy interactive utilities); bundled with `libtcl8.6.so` |
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 
@@ -289,6 +290,13 @@ cd engineering-loadout
 Single Python 3.6-compatible executable. Re-run with a new release tarball to update
 (idempotent; unchanged files skip the install step). Reload your shell with
 `exec bash` afterward.
+
+**Symlink handling.** If your home directory has existing symlinks where the loadout needs
+to create directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default behaviour
+removes the symlink and installs the loadout's directory. Use
+`--install-follows-symlinks=yes` to write into the symlink target instead, or `=auto`
+to follow only if the target is writable. The displaced symlink is backed up and can be
+restored with `./engineering-loadout restore-backup`.
 
 ### Windows
 
