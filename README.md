@@ -5,21 +5,75 @@ A self-contained, offline-first package manager + dotfiles bundle for **Engineer
 - Limited, or no, internet access
 - No sudo/root
 - Built from 30+ years of Electrical Engineering workflow experience
-- All built on AlmaLinux8.10 (Redhat 8.10 clone), GLIBC2.28
-  - Compatible with RHEL9.X and beyond
-  - Redhat7 is EoL. If you see any Redhat7 zombies 🧟 walking around, please stab them in the head 🔪.
+- All built on AlmaLinux 8.10 (RHEL 8 clone), glibc 2.28
+  - Compatible with RHEL 9.x and beyond
+  - RHEL 7 is EoL. If you see any RHEL 7 zombies 🧟 walking around, please stab them in the head 🔪.
 
-If you can get the singular tar file into your work environment (an sftp pipeline is usually available),
-then you can start working with modern Linux tools and "sane" configurations.
+If you can get the release tarball into your work environment (an sftp pipeline is usually
+available), you can start working with modern Linux tools and "sane" configurations.
 "Sane" as defined by me of course :smiley:.
 
-The Loadout is a typed package registry (`pre_built/packages.json`, `schema_version: 2`) that
-names every installable thing — binary, library bundle, runtime archive,
-config bundle, font, data cache. Packages declare dependencies; groups
-bundle them; a built-in resolver walks the graph; the CLI gives you
-`list` / `describe` / `resolve` / `doctor` subcommands and `--add` /
-`--skip` / `--only` selection flags.
-In other words, it does basic package-management stuff.
+---
+
+## Installation
+
+### Linux
+
+Download **Source code (tar.gz)** from the
+[latest release](https://github.com/smprather/engineering-loadout/releases/latest),
+then extract and run:
+
+```bash
+tar xzf engineering-loadout-v*.tar.gz
+cd engineering-loadout-v*/
+./engineering-loadout
+```
+
+Or, if `curl` and the GitHub API are reachable from the target machine:
+
+```bash
+curl -fsSL \
+  "$(curl -fsSL https://api.github.com/repos/smprather/engineering-loadout/releases/latest \
+     | python3 -c 'import sys,json; print(json.load(sys.stdin)["tarball_url"])')" \
+  | tar xz --one-top-level=engineering-loadout --strip-components=1
+cd engineering-loadout
+./engineering-loadout
+```
+
+Single Python 3.6-compatible executable. Re-run with a new release tarball to update
+(idempotent; unchanged files skip the install step). Reload your shell with `exec bash`.
+
+**Selecting packages.** The default install includes 52 CLI tools, editors, fonts, and
+config bundles. To add or remove:
+
+```bash
+./engineering-loadout --add octave              # add an optional tool
+./engineering-loadout --add @gui-suite          # add a group
+./engineering-loadout --skip @fonts-all         # skip all fonts
+./engineering-loadout list                      # browse all packages
+./engineering-loadout list --tag editor         # filter by tag
+./engineering-loadout describe gvim             # full package info
+./engineering-loadout --dry-run --add octave    # preview without installing
+```
+
+**Symlink handling.** If your home directory has existing symlinks where the loadout needs
+to create directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default behaviour
+removes the symlink and installs the loadout's directory. Use
+`--install-follows-symlinks=yes` to write into the symlink target instead, or `=auto`
+to follow only if the target is writable. The displaced symlink is backed up and can be
+restored with `./engineering-loadout restore-backup`.
+
+### Windows
+
+```powershell
+.\engineering-loadout.ps1                  # PowerShell 7+
+.\engineering-loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
+```
+
+No elevation required.
+
+Full subcommand reference, install destinations, post-install hooks, backup/restore,
+and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 
 ---
 
@@ -27,13 +81,13 @@ In other words, it does basic package-management stuff.
 
 | Component | Description |
 |-----------|-------------|
-| **Package manager** | `./engineering-loadout` — typed registry, group expansion, depends/recommends resolver, kind-dispatched install (`bin`/`lib-bundle`/`runtime`/`env`/`font`/`data`/...) |
-| **[Bash](https://www.gnu.org/software/bash/)** | Layered config (global→corp→site→project→user), 100+ power aliases, fzf/zoxide/eza/bat integration |
-| **[Neovim](https://neovim.io)** | Kickstart.nvim base, Lazy.nvim, LSP, 326 offline Tree-sitter parsers, locked plugin versions |
+| **Package manager** | `./engineering-loadout` — installs exactly what you need, offline, no root |
+| **[Bash](https://www.gnu.org/software/bash/)** | Layered config (global→corp→site→team→project→user), 100+ power aliases, fzf/zoxide/eza/bat integration |
+| **[Neovim](https://neovim.io)** | Lazy.nvim, LSP, 326 offline Tree-sitter parsers, locked plugin versions |
 | **[Vim](https://www.vim.org)** | Bundled plugins (NERDTree, SimpylFold, vim-liberty), vendored runtime, pre-built binary |
 | **[Tmux](https://github.com/tmux/tmux)** | Bundled plugins (resurrect, continuum, better-mouse-mode), `Ctrl-\` prefix |
 | **[Helix](https://helix-editor.com)** | Vendored runtime archive, ready to run offline |
-| **[Starship](https://starship.rs)** | Cross-shell prompt, `starship/starship.linux.toml` and `starship/starship.windows.toml` |
+| **[Starship](https://starship.rs)** | Cross-shell prompt, Linux and Windows configs |
 | **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
@@ -49,49 +103,6 @@ All binaries shipped in this repo pass a three-layer scan (ClamAV + YARA-Forge +
 
 ---
 
-## Package Manager
-
-`./engineering-loadout` reads `pre_built/packages.json` (`schema_version: 2`)
-and resolves a selection into a flat install set.
-
-**Package kinds** (`kind` field): `bin`, `lib-bundle`, `runtime`, `typelib`,
-`python-base`, `python-tool`, `env`, `font`, `data`, `group`. Every package
-also has `default: true|false`, `platforms: [...]`, optional `tags`, and per-kind
-artifact fields (`bins` / `libs` / `archive` / `source` / `wheels` / etc.).
-
-**Groups** are entries whose names start with `@` and carry a `members` list.
-They expand recursively with cycle detection. The synthetic `@default` group
-expands at runtime to every `default: true` package.
-
-**Dependencies** are declared per package:
-
-- `depends` — hard. Skipping one while a depender is selected raises `ResolverError`
-  unless `--no-deps` or `--force`.
-- `recommends` — soft. Auto-pulled when available; silently dropped if skipped or
-  unknown.
-
-**Resolution order** (`resolve_tool_selection`): parse `--skip` → build initial set
-from `@default` ∪ `--add` (or `--only`) → subtract `--skip` → walk hard `depends`
-→ walk soft `recommends` → filter by current platform.
-
-```bash
-./engineering-loadout list                     # every package
-./engineering-loadout list --groups            # every @-group + member count
-./engineering-loadout list --tag editor        # filter by tag
-./engineering-loadout describe gvim            # full metadata + reverse-deps + group memberships
-./engineering-loadout describe @core-cli       # group members
-./engineering-loadout resolve gvim             # dry-run resolver; prints set grouped by kind
-./engineering-loadout doctor                   # platform + registry integrity check
-./engineering-loadout --dry-run --add octave   # resolve + print; no writes
-./engineering-loadout --add @gui-suite         # add a group
-./engineering-loadout --skip @fonts-all        # drop all font packages
-./engineering-loadout --profile engineering-loadout   # alias for --only @engineering-loadout
-```
-
-See the full CLI surface under [Installation → Subcommands & options](#installation) below.
-
----
-
 ## Design Goals
 
 **Offline-first.** Plugins, parsers, fonts, and binaries are all bundled. Nothing is fetched at
@@ -99,9 +110,8 @@ install time. Ship it to an air-gapped EDA workstation and it just works.
 
 **No root.** Everything lands in `$HOME`. No package manager, no `sudo`, no IT ticket.
 
-**Multi-platform.** RedHat 7/8/9, Suse, x86_64/ARM/PowerPC, and Windows. Platform directories
-(`el8.x86_64.glibc2p28`) select binaries by OS family, architecture, and glibc version. A
-compatible-ABI build is used when an exact match is absent.
+**Multi-platform.** RedHat 7/8/9, Suse, x86_64/ARM/PowerPC, and Windows. A compatible-ABI
+build is used when an exact platform match is absent.
 
 **Layered.** Configuration flows from lowest to highest precedence:
 
@@ -197,6 +207,7 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 |--------|---------|-------------|
 | [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim — `gvim.bin` (stripped binary) + `gvim` wrapper setting VIM/VIMRUNTIME |
 | [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit — single self-contained binary, no runtime files |
+| [nvim-qt](https://github.com/equalsraf/neovim-qt) | 0.2.19 | Qt5 GUI frontend for Neovim |
 | [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing (~163 MB uncompressed; see notes below) |
 | [gui\_libs](https://github.com/smprather/engineering-loadout) | — | ~80 bundled Qt5/GTK3/xcb/Wayland shared libs for headless farm nodes |
 | [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV/TSV/JSON/NDJSON data |
@@ -243,7 +254,7 @@ build metadata. Build your own or refresh with `./treesitter/build_parsers`.
 
 ## Nerd Fonts
 
-Six font families bundled and installed to `~/.local/share/fonts`:
+Seven font families bundled and installed to `~/.local/share/fonts`:
 
 | Font | Notes |
 |------|-------|
@@ -259,56 +270,6 @@ Large archives are split into `*.zip.part-*` chunks (≤ 45 MiB) to stay below
 GitHub's 50 MB file warning. The installer rejoins them in `/tmp` before
 extracting. Use `./engineering-loadout --skip @fonts-all` to skip every font, or
 `--skip font-firacode` to skip a single family.
-
----
-
-## Installation
-
-### Linux
-
-Download **Source code (tar.gz)** from the
-[latest release](https://github.com/smprather/engineering-loadout/releases/latest),
-then extract and run:
-
-```bash
-tar xzf engineering-loadout-v*.tar.gz
-cd engineering-loadout-v*/
-./engineering-loadout
-```
-
-Or, if `curl` and the GitHub API are reachable from the target machine:
-
-```bash
-curl -fsSL \
-  "$(curl -fsSL https://api.github.com/repos/smprather/engineering-loadout/releases/latest \
-     | python3 -c 'import sys,json; print(json.load(sys.stdin)["tarball_url"])')" \
-  | tar xz --one-top-level=engineering-loadout --strip-components=1
-cd engineering-loadout
-./engineering-loadout
-```
-
-Single Python 3.6-compatible executable. Re-run with a new release tarball to update
-(idempotent; unchanged files skip the install step). Reload your shell with
-`exec bash` afterward.
-
-**Symlink handling.** If your home directory has existing symlinks where the loadout needs
-to create directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default behaviour
-removes the symlink and installs the loadout's directory. Use
-`--install-follows-symlinks=yes` to write into the symlink target instead, or `=auto`
-to follow only if the target is writable. The displaced symlink is backed up and can be
-restored with `./engineering-loadout restore-backup`.
-
-### Windows
-
-```powershell
-.\engineering-loadout.ps1                  # PowerShell 7+
-.\engineering-loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
-```
-
-No elevation required.
-
-Full subcommand reference, install destinations, post-install hooks, backup
-restore, and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 
 ---
 
