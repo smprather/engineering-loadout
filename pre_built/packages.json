@@ -273,7 +273,7 @@
       "libs": [
         "libtcl8.6.so"
       ],
-      "version": "",
+      "version": "5.45.4",
       "version_url": "https://sourceforge.net/projects/expect/rss?path=/Expect",
       "version_pattern": "/Expect/([0-9]+\\.[0-9]+\\.[0-9]+)/",
       "platforms": [

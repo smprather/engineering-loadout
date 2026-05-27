@@ -137,23 +137,74 @@ fi
 
 rm -rf "$EXPECT_INSTALL"
 
+# GCC 14 made -Wimplicit-int, -Wimplicit-function-declaration, and
+# -Wincompatible-pointer-types errors. expect 5.45.4 configure generates
+# C89-style test code that trips these, causing PTY detection to fail.
+# Suppress them so autoconf tests pass and configure picks the right pty_ file.
+#
+# exp_chan.c uses the old Tcl_ChannelType field order where blockModeProc
+# occupied the second slot (now reserved for TCL_CHANNEL_VERSION_*). Patch
+# it to insert TCL_CHANNEL_VERSION_4 and move blockModeProc to position 12.
+COMPAT_CFLAGS="-O2 -fstack-protector-strong -Wno-implicit-int -Wno-implicit-function-declaration -Wno-return-type -Wno-incompatible-pointer-types"
+
 ./configure \
     --prefix="$EXPECT_INSTALL" \
     --with-tcl="$TCL_INSTALL/lib" \
     --with-tclinclude="$TCL_INSTALL/include" \
-    CFLAGS="-O2 -fstack-protector-strong"
+    CFLAGS="$COMPAT_CFLAGS"
+
+# Patch exp_chan.c: modern Tcl requires TCL_CHANNEL_VERSION_4 in the second
+# field; old expect put blockModeProc there directly.
+EXP_CHAN="$EXPECT_SRCDIR/exp_chan.c"
+if grep -q 'ExpBlockModeProc.*\* Version' "$EXP_CHAN" 2>/dev/null || \
+   grep -q '"exp".*ExpBlockModeProc' "$EXP_CHAN" 2>/dev/null || \
+   ! grep -q 'TCL_CHANNEL_VERSION' "$EXP_CHAN" 2>/dev/null; then
+    python3 - "$EXP_CHAN" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+src = open(path).read()
+# Replace the Tcl_ChannelType initializer block
+old = re.search(
+    r'(Tcl_ChannelType\s+expChannelType\s*=\s*\{[^}]+\})\s*;',
+    src, re.DOTALL)
+if old:
+    replacement = '''Tcl_ChannelType expChannelType = {
+    "exp",                      /* Type name. */
+    TCL_CHANNEL_VERSION_4,      /* Version. */
+    ExpCloseProc,               /* Close proc. */
+    ExpInputProc,               /* Input proc. */
+    ExpOutputProc,              /* Output proc. */
+    NULL,                       /* Seek proc. */
+    NULL,                       /* Set option proc. */
+    NULL,                       /* Get option proc. */
+    ExpWatchProc,               /* Initialize notifier. */
+    ExpGetHandleProc,           /* Get OS handles out of channel. */
+    NULL,                       /* Close2 proc */
+    ExpBlockModeProc,           /* Set blocking/nonblocking mode.*/
+}'''
+    src = src[:old.start()] + replacement + src[old.end()-1:]
+    open(path, 'w').write(src)
+    print("exp_chan.c: patched Tcl_ChannelType initializer for modern Tcl")
+else:
+    print("exp_chan.c: pattern not found — may already be patched or different version")
+PYEOF
+fi
 
 make -j"$(nproc 2>/dev/null || echo 8)"
 make install
 
+# expect's Makefile installs the binary into the Tcl prefix dir, not --prefix.
+EXPECT_BIN="$TCL_INSTALL/bin/expect"
+[ -f "$EXPECT_BIN" ] || EXPECT_BIN="$EXPECT_INSTALL/bin/expect"
+
 echo ""
-echo "Build complete: $("$EXPECT_INSTALL/bin/expect" -v 2>&1 | head -1)"
+echo "Build complete: $("$EXPECT_BIN" -v 2>&1 | head -1)"
 echo ""
 
 # ── package expect binary ─────────────────────────────────────────────────────
 
 WORK="/tmp/expect_work_${tag}"
-cp "$EXPECT_INSTALL/bin/expect" "$WORK"
+cp "$EXPECT_BIN" "$WORK"
 strip "$WORK"
 "$PATCHELF" --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' "$WORK"
 bzip2 -kf "$WORK"

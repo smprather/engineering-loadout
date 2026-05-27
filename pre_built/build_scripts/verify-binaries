@@ -127,6 +127,7 @@ _SKIP_REASONS = {
     "agent-deck": "no public binary release",
     "bash": "built from source",
     "bzip2": "built from source",
+    "expect": "built from source (source-only SourceForge release; requires Tcl 8.6 + GCC 14 compat patches)",
     "gnuplot": "built from source",
     "gvim": "custom GTK3 build",
     "htop": "built from source",
