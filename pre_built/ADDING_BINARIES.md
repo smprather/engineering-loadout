@@ -597,3 +597,77 @@ Max glibc symbol: GLIBC_2.17 — well within EL8's 2.28 ceiling.
 
 See `pre_built/build_scripts/build-expect.sh` for the full recipe (includes the
 exp_chan.c patcher and automatic packages.json version update).
+
+---
+
+## Python wheel packaging notes
+
+### manylinux platform flag for pip download
+
+**Always use `--platform manylinux_2_28_x86_64`** when downloading wheels for the EL8 bundle:
+
+```bash
+PIP_REQUIRE_VIRTUALENV=0 pip3.14 download <pkg> \
+  --platform manylinux_2_28_x86_64 \
+  --python-version 3.14 \
+  --only-binary :all: \
+  -d pre_built/el8.x86_64.glibc2p28/wheels/
+```
+
+`manylinux_2_28_x86_64` accepts all wheels with minimum glibc ≤ 2.28:
+manylinux1 (2.5) → manylinux2010 (2.12) → manylinux2014/manylinux_2_17 → ... → manylinux_2_28.
+It does NOT pull manylinux_2_29+ wheels (those require RHEL9/glibc 2.29+, won't run on EL8).
+
+**Do NOT use `--platform manylinux2014_x86_64`** — that is equivalent to manylinux_2_17 and
+will miss wheels tagged manylinux_2_18 through manylinux_2_28 (e.g. numpy 2.x for cp314
+ships as manylinux_2_27 minimum; `--platform manylinux2014_x86_64` won't find it).
+
+If `pip download` fails even with `manylinux_2_28_x86_64 --only-binary :all:`, the package
+has no pre-built cp314 wheel compatible with EL8 and must be built from source (see below).
+
+### duckdb — pending cp314 wheel (blocker for pygwalker)
+
+**Status:** duckdb ≥ 1.1 does not ship cp314 (Python 3.14) wheels on PyPI as of 2026-05.
+Only cp313 and earlier are available. This blocks `pygwalker` installation (duckdb is
+a hard dep of pygwalker).
+
+**Resolution path A — wait for upstream:**
+duckdb is actively maintained. Check for cp314 wheels in new releases:
+```bash
+pip3.14 download duckdb --platform manylinux_2_28_x86_64 --python-version 3.14 \
+  --only-binary :all: -d /tmp/test-wheels/
+```
+Once a cp314 wheel appears, run the full pygwalker wheel download and commit.
+
+**Resolution path B — build duckdb wheel from source on EL8:**
+duckdb uses a bundled CMake build that links nothing from the system (self-contained).
+The resulting wheel will be tagged `linux_x86_64` (not manylinux), which uv accepts
+for local install via `--find-links`:
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+sudo dnf install -y cmake ninja-build python3-devel
+
+# Clone at latest stable tag
+git clone --depth 1 --branch v1.3.0 https://github.com/duckdb/duckdb.git
+cd duckdb
+
+# Build Python extension
+pip3.14 install build
+python3.14 -m build --wheel
+
+# Resulting wheel in dist/
+ls dist/duckdb-*.whl   # tagged cp314-cp314-linux_x86_64
+
+# Verify glibc requirement (should be ≤ 2.28):
+readelf -V dist/duckdb-*.whl | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1
+
+cp dist/duckdb-*.whl pre_built/el8.x86_64.glibc2p28/wheels/
+./strip_all_elf_binaries
+git add pre_built/ .strip-manifest
+git commit -m "feat(pygwalker): bundle duckdb cp314 wheel (source build)"
+```
+
+Note: `python3.14 -m build` builds against the current environment's glibc (2.28).
+The wheel will NOT be portable to glibc < 2.28 systems, but all EL8 systems have glibc 2.28
+exactly, so this is fine for the loadout's fleet target.
