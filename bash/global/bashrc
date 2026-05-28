@@ -228,6 +228,9 @@ if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux_path_sto
     eval $(tmux_path_store --bash)
 fi
 
+# Environment Modules (loadout-local install at ~/.local/lib/modulecmd.tcl)
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
+
 ### Prompt ###
 /bin/stty sane
 # Disable ctrl-s terminal pausing

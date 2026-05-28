@@ -73,6 +73,7 @@ BUILD_SCRIPTS = {
     "jq": {"script": "build-jq.sh"},
     "kak": {"script": "build-kakoune.sh"},
     "micro": {"script": "build-micro.sh"},
+    "modules": {"script": "build-modules.sh", "runtime": "modules.tar.bz2"},
     "ncdu": {"script": "build-ncdu.sh"},
     "nedit-ng": {"script": "build-nedit-ng.sh"},
     "nvim": {"script": "build-nvim.sh", "runtime": "nvim.tar.bz2"},

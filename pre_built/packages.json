@@ -2192,6 +2192,21 @@
       ],
       "description": "Source Code Pro Nerd Font (2-part split archive)"
     },
+    "modules": {
+      "kind": "runtime",
+      "archive": "pre_built/PLATFORM/runtime/modules.tar.bz2",
+      "version": "",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "shell",
+        "hpc"
+      ],
+      "description": "Environment Modules \u2014 module load/unload for shell environment management (HPC-style)"
+    },
     "@core-cli": {
       "kind": "group",
       "members": [

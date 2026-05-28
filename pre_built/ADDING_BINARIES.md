@@ -637,3 +637,60 @@ pip3.14 download duckdb --platform manylinux_2_28_x86_64 --python-version 3.14 \
 ```
 
 No source build required. pygwalker's duckdb dep is not a blocker.
+
+## Environment Modules (modules)
+
+**Package name:** `modules`  **Kind:** `runtime`  **Version:** 5.6.1  
+**Source:** https://github.com/envmodules/modules/releases/tag/v5.6.1
+
+Pure Tcl — no compiled binary, no ELF, no patchelf needed.  The key artifact is
+`modulecmd.tcl`, a self-contained Tcl script.  It derives MODULESHOME at runtime from
+`[info script]` so the build prefix is irrelevant once deployed.
+
+### Prerequisites (EL8)
+
+```bash
+sudo dnf install tcl-devel autoconf make
+```
+
+### Build
+
+```bash
+./pre_built/build_scripts/build-modules.sh --tag v5.6.1
+```
+
+The script:
+1. Downloads the release tarball from GitHub
+2. `./configure --prefix=/tmp/inst --libexecdir=/tmp/inst/lib --without-x --without-tclx --without-docs --disable-versioning --with-tclsh=/usr/bin/tclsh`
+3. `make && make install`
+4. Packs `modulecmd.tcl` + empty `share/modulefiles/` + `etc/modulespath` into `modules.tar.bz2`
+
+The `etc/modulespath` file contains:
+```
+~/modulefiles
+~/privatemodules
+```
+
+### Post-build
+
+```bash
+./strip_all_elf_binaries   # no-op for pure Tcl; updates .strip-manifest
+# Update packages.json version field for modules
+git add pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2 .strip-manifest packages.json
+git commit -m 'feat(modules): add Environment Modules 5.6.1'
+```
+
+### Shell integration
+
+Shell integration lives in `bash/global/modules-init.bash` (sourced by `bashrc` if present).
+It runs `modulecmd.tcl bash autoinit` via eval, which defines `module()`, `ml()`,
+sets `MODULESHOME`, `MODULEPATH`, `LOADEDMODULES`, etc.  Requires `/usr/bin/tclsh`.
+
+### Install
+
+```bash
+./engineering-loadout --add modules
+```
+
+Extracts `~/.local/lib/modulecmd.tcl`, `~/.local/share/modulefiles/`, `~/.local/etc/modulespath`.
+On next bash start (or `exec bash`), the `module` function becomes available.
