@@ -229,7 +229,9 @@ if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux_path_sto
 fi
 
 # Environment Modules (loadout-local install at ~/.local/lib/modulecmd.tcl)
-source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
+if is_truthy "$LOADOUT_CFG_USE_LOADOUT_MODULES"; then
+    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
+fi
 
 ### Prompt ###
 /bin/stty sane

@@ -348,6 +348,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) — propagate to c
 | `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` | `auto` | Online mode: `auto` (parallel TCP probe on startup) \| `1` (force online) \| `0` (force offline). Exports `LOADOUT_ONLINE=1/0` inherited by child shells/tmux panes |
 | `LOADOUT_CFG_ONLINE_DETECT_TIMEOUT` | `0.15` | Per-host TCP connect timeout in seconds (GNU `timeout`; decimal OK). Total wall time ≈ this value |
 | `LOADOUT_CFG_ONLINE_DETECT_HOSTS` | `github.com:443 raw.githubusercontent.com:443 pypi.org:443` | Space-separated `host:port` pairs probed in parallel. Override in `user/config.sh` to use corporate mirror hosts |
+| `LOADOUT_CFG_USE_LOADOUT_MODULES` | `0` | Source `modules-init.bash` on shell startup (enables `module`/`ml` commands from loadout-bundled Environment Modules). Off by default — opt-in per user/site layer |
 
 ### Key Functions (`bash/functions.sh`)
 

@@ -15,6 +15,11 @@ export LOADOUT_CFG_ENABLE_ZOXIDE="0"
 export LOADOUT_CFG_ENABLE_GRC="1"
 export LOADOUT_CFG_ENABLE_STARSHIP="1"
 export LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT=""
-export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"  # auto | 1 | 0
-export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"  # seconds per host (GNU timeout; decimal ok)
-export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"  # space-separated host:port
+# LOADOUT_CFG_ENABLE_ONLINE_UPDATES -> auto | 1 | 0
+export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"
+# LOADOUT_CFG_ONLINE_DETECT_TIMEOUT -> seconds per host (GNU timeout; decimal ok)
+export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"
+# LOADOUT_CFG_ONLINE_DETECT_HOSTS -> space-separated host:port
+export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"
+# LOADOUT_CFG_USE_LOADOUT_MODULES -> 0 | 1  (source modules-init.bash; opt-in)
+export LOADOUT_CFG_USE_LOADOUT_MODULES="0"
