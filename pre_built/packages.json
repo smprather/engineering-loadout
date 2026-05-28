@@ -1499,6 +1499,26 @@
       "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
       "description": "Fish shell \u2014 friendly interactive shell with autosuggestions and syntax highlighting"
     },
+    "tcl": {
+      "kind": "bin",
+      "bins": [
+        "tclsh"
+      ],
+      "libs": [
+        "libtcl9.0.so"
+      ],
+      "version": "9.0.3",
+      "version_url": "https://github.com/tcltk/tcl",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "lang"
+      ],
+      "description": "Tcl scripting language \u2014 tclsh interpreter and runtime library"
+    },
     "nodejs": {
       "kind": "bin",
       "bins": [
@@ -2195,7 +2215,7 @@
     "modules": {
       "kind": "runtime",
       "archive": "pre_built/PLATFORM/runtime/modules.tar.bz2",
-      "version": "",
+      "version": "5.6.1",
       "platforms": [
         "linux"
       ],
@@ -2205,7 +2225,10 @@
         "shell",
         "hpc"
       ],
-      "description": "Environment Modules \u2014 module load/unload for shell environment management (HPC-style)"
+      "description": "Environment Modules \u2014 module load/unload for shell environment management (HPC-style)",
+      "recommends": [
+        "tcl"
+      ]
     },
     "@core-cli": {
       "kind": "group",

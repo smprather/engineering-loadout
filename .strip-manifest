@@ -77,6 +77,7 @@ sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  pre_bu
 sha256  1697a092d738bad2f27e694118403ba08694f7218796676e1510d342a2ebaad8  pre_built/el8.x86_64.glibc2p28/bin/st.bz2
 sha256  2feae3d70a546f8f578658ab19a8443476d9f2f0dd9eaa5c5a3a3ae04f50ade1  pre_built/el8.x86_64.glibc2p28/bin/starship.bz2
 sha256  ea8663a62529908ee65ac75c41adc1874f13c98bd6a2887d9192ddc62810794a  pre_built/el8.x86_64.glibc2p28/bin/stylua.bz2
+sha256  14fcf3a2596e833b711aa3e20496c2f85e87284f3bb0cb406ac54a9aca7ce394  pre_built/el8.x86_64.glibc2p28/bin/tclsh.bz2
 sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  pre_built/el8.x86_64.glibc2p28/bin/tkdiff.bz2
 sha256  8d0227bcb09fb3f9f8af4dd7c23dc0dae64995de05f6440b2f0981b16354d5a2  pre_built/el8.x86_64.glibc2p28/bin/tldr.bz2
 sha256  ad5daa8d43dbce8cfdc48d672f2e6e51a57b4603d88ead0230e7d840923c97ee  pre_built/el8.x86_64.glibc2p28/bin/tmux.bz2
@@ -203,6 +204,7 @@ sha256  9ea5784449435270e00e4b9fa4d2d21164ad38f63d507d7f3b3227df24c9eb70  pre_bu
 sha256  e76944616977591dfb6b9e1d87ba5298d9432153d4279c7e7d1f43e28f3d4877  pre_built/el8.x86_64.glibc2p28/lib64/libsz.so.2.bz2
 sha256  183b4775ba8c76e33698a1705ebd4998a4e18910b5493e1c8b0ec56730a232f2  pre_built/el8.x86_64.glibc2p28/lib64/libtbb.so.2.bz2
 sha256  a88d0e847c3e88edcbcb6b0362129a1a5e51f4fd785f07bd7662caa0147057a4  pre_built/el8.x86_64.glibc2p28/lib64/libtcl8.6.so.bz2
+sha256  7f49099319943591362520a3468b8c6e07b7fa96a6642acdb77ba5cac0abdfb4  pre_built/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2
 sha256  59480c07c06f6a1cb9841488d309cc7c49f39e21ffed748d2ce45da5ab85b8c8  pre_built/el8.x86_64.glibc2p28/lib64/libthai.so.0.bz2
 sha256  69f08bca4e473c90774ea233699877bf60a6519bb9230d58421ae6ef3cfb5130  pre_built/el8.x86_64.glibc2p28/lib64/libtinfo.so.6.bz2
 sha256  bb715e1a61dbccd00f689a900083989edfd375200c516afc44297337d685e3bc  pre_built/el8.x86_64.glibc2p28/lib64/libumfpack.so.5.bz2
@@ -235,6 +237,7 @@ tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2996129  1779747334  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
+tar-meta  129443  1779982870  pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  38695258  1779735528  pre_built/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  5952  1779649520  pre_built/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
 tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2

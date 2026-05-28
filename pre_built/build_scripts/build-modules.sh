@@ -5,10 +5,9 @@
 # directory.  No ELF binaries — the archive is pure Tcl and is effectively
 # platform-independent, but lives alongside other EL8 runtimes by convention.
 #
-# modules requires Tcl 8.5+; EL8 ships tcl-8.6 via the base repos.
-# All shell integration (module/ml functions) is handled by the loadout's
-# bash/global/modules-init.bash which uses $HOME-relative paths, so the
-# archive is re-usable across usernames.
+# modules requires Tcl 8.5+.  Build against the loadout-bundled Tcl when available
+# (pass --with-tcl to the tclConfig.sh dir from a prior build-tcl.sh run), or fall
+# back to system tclsh for the pure-Tcl build (--disable-libtclenvmodules).
 #
 # modulecmd.tcl derives its MODULESHOME at runtime from [info script] — the
 # directory containing modulecmd.tcl.  Building with any temp prefix therefore
@@ -18,18 +17,17 @@
 #   https://github.com/envmodules/modules/releases
 # Tags are prefixed with "v", e.g. v5.6.1.
 #
-# Prerequisites on the build machine (EL8):
-#   sudo dnf install tcl-devel autoconf make
-#   # gcc-toolset-14 optional (not strictly needed; modules is pure Tcl)
-#
 # Usage (run from any directory):
 #   ./pre_built/build_scripts/build-modules.sh --tag v5.6.1
+#   ./pre_built/build_scripts/build-modules.sh --tag v5.6.1 \
+#       --with-tcl /tmp/loadout-tcl-instdir-9.0.3/lib
 
 set -eu
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 RUNTIME_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/runtime"
 TAG=""
+WITH_TCL=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -37,6 +35,11 @@ while [ "$#" -gt 0 ]; do
             shift
             [ "$#" -gt 0 ] || { echo "missing value for --tag" >&2; exit 2; }
             TAG="$1"
+            ;;
+        --with-tcl)
+            shift
+            [ "$#" -gt 0 ] || { echo "missing value for --with-tcl" >&2; exit 2; }
+            WITH_TCL="$1"
             ;;
         -h|--help)
             sed -n '2,/^$/p' "$0"
@@ -72,8 +75,40 @@ need() {
     }
 }
 
-need tclsh
 need make
+
+# Determine tclsh and configure flags for libtclenvmodules C extension
+if [ -n "$WITH_TCL" ]; then
+    if [ ! -f "$WITH_TCL/tclConfig.sh" ]; then
+        echo "ERROR: tclConfig.sh not found in $WITH_TCL" >&2
+        exit 1
+    fi
+    TCLSH="$(grep '^TCL_EXEC_PREFIX=' "$WITH_TCL/tclConfig.sh" | cut -d= -f2 | tr -d "'")/bin/tclsh"
+    # Try versioned name too
+    [ -x "$TCLSH" ] || TCLSH="$(find "$(dirname "$TCLSH")" -name 'tclsh[0-9]*' | sort -V | tail -1)"
+    CONFIGURE_TCL="--with-tcl=$WITH_TCL"
+    echo "==> Using provided Tcl: tclConfig.sh from $WITH_TCL"
+else
+    # Auto-detect: prefer loadout-bundled, fall back to system
+    TCLSH=""
+    for candidate in \
+        "$HOME/.local/bin/tclsh" \
+        /usr/bin/tclsh \
+        /usr/local/bin/tclsh; do
+        if [ -x "$candidate" ]; then
+            TCLSH="$candidate"
+            break
+        fi
+    done
+    if [ -z "$TCLSH" ]; then
+        echo "ERROR: tclsh not found; provide --with-tcl or ensure tclsh is on PATH" >&2
+        exit 1
+    fi
+    echo "==> Using tclsh: $TCLSH (no --with-tcl provided; building pure-Tcl)"
+    CONFIGURE_TCL="--disable-libtclenvmodules"
+fi
+
+echo "    tclsh: $TCLSH"
 
 WORK_DIR=$(mktemp -d /tmp/build-modules-XXXXXX)
 INST_DIR=$(mktemp -d /tmp/inst-modules-XXXXXX)
@@ -93,11 +128,9 @@ echo "==> Configuring ..."
 ./configure \
     --prefix="$INST_DIR" \
     --libexecdir="$INST_DIR/lib" \
-    --without-x \
-    --without-tclx \
-    --without-docs \
     --disable-versioning \
-    --with-tclsh=/usr/bin/tclsh
+    --with-tclsh="$TCLSH" \
+    $CONFIGURE_TCL
 
 echo "==> Building ..."
 make -j"$(nproc 2>/dev/null || echo 2)"
@@ -112,14 +145,14 @@ if [ ! -f "$MODULECMD" ]; then
 fi
 
 echo "==> Verifying modulecmd.tcl ..."
-if /usr/bin/tclsh "$MODULECMD" --version 2>&1 | grep -qi "modules"; then
+if "$TCLSH" "$MODULECMD" --version 2>&1 | grep -qi "modules"; then
     echo "  OK: modulecmd.tcl responds to --version"
 else
     echo "  WARNING: unexpected --version output (continuing)"
 fi
 
 echo "==> Packaging ..."
-mkdir -p "$REPO/pre_built/el8.x86_64.glibc2p28/runtime"
+mkdir -p "$RUNTIME_DIR"
 
 STAGE=$(mktemp -d /tmp/modules-stage-XXXXXX)
 trap 'rm -rf "$WORK_DIR" "$INST_DIR" "$STAGE"' EXIT
@@ -136,10 +169,28 @@ ARCHIVE="$RUNTIME_DIR/modules.tar.bz2"
 tar cjf "$ARCHIVE" -C "$STAGE" .
 echo "  Wrote: $ARCHIVE ($(wc -c < "$ARCHIVE" | tr -d ' ') bytes)"
 
+# Update packages.json version
+python3 -c "
+import re, sys, json
+path, ver = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+pkgs = data['packages']
+if 'modules' in pkgs:
+    pkgs['modules']['version'] = ver
+    print(f'packages.json: modules version -> {ver}')
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+" "$REPO/pre_built/packages.json" "$VERSION"
+
+echo "==> Running strip_all_elf_binaries ..."
+"$REPO/strip_all_elf_binaries"
+
 echo ""
-echo "Done.  Next steps:"
-echo "  cd $REPO"
-echo "  ./strip_all_elf_binaries    # no-op for pure Tcl but updates manifest"
-echo "  # Update packages.json version to ${VERSION}"
-echo "  git add pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2 .strip-manifest packages.json"
-echo "  git commit -m 'feat(modules): add Environment Modules ${VERSION}'"
+echo "Done."
+echo ""
+echo "Commit with:"
+echo "  git add pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2 \\"
+echo "          .strip-manifest pre_built/packages.json"
+echo "  git commit -m 'feat(pre_built): environment modules ${VERSION} EL8 build'"

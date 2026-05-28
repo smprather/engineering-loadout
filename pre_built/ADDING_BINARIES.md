@@ -694,3 +694,68 @@ sets `MODULESHOME`, `MODULEPATH`, `LOADEDMODULES`, etc.  Requires `/usr/bin/tcls
 
 Extracts `~/.local/lib/modulecmd.tcl`, `~/.local/share/modulefiles/`, `~/.local/etc/modulespath`.
 On next bash start (or `exec bash`), the `module` function becomes available.
+
+---
+
+## Tcl 9.0.3
+
+**Build script:** `pre_built/build_scripts/build-tcl.sh --tag core-9-0-3`
+
+### Note on tag format
+
+Tcl upstream uses tag format `core-MAJOR-MINOR-PATCH` (e.g. `core-9-0-3`).
+The build script derives the version (`9.0.3`) and tarball name (`tcl9.0.3-src.tar.gz`)
+from the tag automatically.
+
+### Prerequisites
+
+```bash
+# EL8 base packages — usually already installed
+dnf install gcc make
+```
+
+No `tcl-devel` needed — builds only the runtime (no C extension).
+
+### Build output
+
+- `pre_built/el8.x86_64.glibc2p28/bin/tclsh.bz2` — tclsh binary (15 KB stub; thin shim that calls into libtcl9.0.so)
+- `pre_built/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2` — shared library (contains ALL of Tcl including stdlib)
+
+**No runtime archive needed.** Tcl 9.x embeds its entire standard library (`init.tcl`, `auto.tcl`, etc.)
+inside `libtcl9.0.so` via zipfs (a built-in virtual filesystem).  At startup, the shared library mounts
+its embedded zip as `//zipfs:/lib/tcl/tcl_library` — no filesystem path required.  This is a fundamental
+change from Tcl 8.6 (which required a separate `lib/tcl8.6/` directory).
+
+### Standard library self-location
+
+Tcl 9.0 stdlib is embedded in `libtcl9.0.so`. The `tclsh` stub finds it automatically via the
+shared library — no `TCL_LIBRARY` env var needed, no separate directory to deploy.
+
+### patchelf layout
+
+- `tclsh`: RPATH `$ORIGIN/../lib64` (finds bundled `libtcl9.0.so`)
+- `libtcl9.0.so`: RPATH `$ORIGIN`
+
+### tclConfig.sh for downstream builds
+
+The install dir is left at `/tmp/loadout-tcl-instdir-<version>` after build so that
+`build-modules.sh` can use `tclConfig.sh` for the C extension:
+
+```bash
+./pre_built/build_scripts/build-tcl.sh --tag core-9-0-3
+./pre_built/build_scripts/build-modules.sh --tag v5.6.1 \
+    --with-tcl /tmp/loadout-tcl-instdir-9.0.3/lib
+```
+
+### glibc
+
+Built with gcc on EL8; max glibc symbol verified at GLIBC_2.17 or lower.
+
+### Install
+
+```bash
+./engineering-loadout --add tcl
+```
+
+Installs tclsh to `~/.local/bin/`, `libtcl9.0.so` to `~/.local/lib64/`.
+No separate standard library directory — stdlib is embedded in libtcl9.0.so.
