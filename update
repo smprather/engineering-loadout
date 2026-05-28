@@ -60,6 +60,10 @@ AUTOMATED = {
         "git_paths": ["tmux/vendor/plugins/"],
         "desc": "Vendored tmux plugins (tmux/vendor/plugins/)",
     },
+    "env-nvim": {
+        "git_paths": ["nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2", ".strip-manifest"],
+        "desc": "Neovim plugin catalog offline bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2)",
+    },
 }
 
 # Build-script: requires EL8 build machine.  script lives in BUILD/.
@@ -360,6 +364,57 @@ def _run_tmux_plugins(dry_run=False):
     return ok
 
 
+def _run_env_nvim(dry_run=False):
+    """Update nvim plugins via Lazy and repack the offline catalog archive."""
+    lazy_dir = os.path.expanduser("~/.local/share/nvim/lazy")
+    catalog_archive = os.path.join(REPO, "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
+    nvim_bin = os.path.expanduser("~/.local/bin/nvim")
+
+    if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
+        print("ERROR: nvim not found at {} — run ./engineering-loadout first".format(nvim_bin))
+        return False
+
+    # Step 1: update plugins via Lazy
+    cmd = [nvim_bin, "--headless", "+Lazy! update", "+qa"]
+    print("Updating plugins: {}".format(" ".join(cmd)))
+    if not dry_run:
+        rc = subprocess.call(cmd)
+        if rc != 0:
+            print("WARNING: Lazy! update exited rc={} — continuing with repack".format(rc))
+
+    if not os.path.isdir(lazy_dir):
+        print("ERROR: lazy plugin dir not found at {}".format(lazy_dir))
+        return False
+
+    # Step 2: repack catalog archive with relative paths (./PluginName/...)
+    # Use -C so archive entries are relative to lazy_dir, not absolute filesystem paths.
+    print("Repacking {} ...".format(catalog_archive))
+    os.makedirs(os.path.dirname(catalog_archive), exist_ok=True)
+    tmp = catalog_archive + ".tmp"
+    if dry_run:
+        print("$ tar cjf {} -C {} .".format(catalog_archive, lazy_dir))
+        print("$ ./strip_all_elf_binaries")
+        return True
+
+    rc = subprocess.call(["tar", "cjf", tmp, "-C", lazy_dir, "."])
+    if rc != 0:
+        print("ERROR: tar failed rc={}".format(rc))
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return False
+
+    os.replace(tmp, catalog_archive)
+    size_mb = os.path.getsize(catalog_archive) // 1024 // 1024
+    print("  {}M -> {}".format(size_mb, catalog_archive))
+
+    # Step 3: strip ELF payloads inside the archive
+    rc = subprocess.call([os.path.join(REPO, "strip_all_elf_binaries")], cwd=REPO)
+    if rc != 0:
+        print("WARNING: strip_all_elf_binaries exited rc={}".format(rc))
+
+    return True
+
+
 def _run_automated(name, dry_run=False, tag=None):
     _sep(name)
     if name == "yara-rules":
@@ -381,6 +436,8 @@ def _run_automated(name, dry_run=False, tag=None):
         return _run_tldr_data(dry_run=dry_run)
     elif name == "tmux-plugins":
         return _run_tmux_plugins(dry_run=dry_run)
+    elif name == "env-nvim":
+        return _run_env_nvim(dry_run=dry_run)
     else:
         print("ERROR: no runner for automated package '{}'".format(name))
         return False
@@ -469,7 +526,7 @@ def cmd_list(outdated_only=False):
     latest_map = _fetch_latest_map()
     rows = []
 
-    for name in ("yara-rules", "nodejs", "tldr-data", "tmux-plugins"):
+    for name in AUTOMATED:
         tag_note = " (--tag)" if AUTOMATED[name].get("supports_tag") else ""
         rows.append((name, "automated" + tag_note, _pkg_version(name)))
 
