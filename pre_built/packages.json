@@ -431,7 +431,7 @@
         "system",
         "disk"
       ],
-      "description": "NCurses disk usage — interactive disk space analyzer (Zig v2)"
+      "description": "NCurses disk usage \u2014 interactive disk space analyzer (Zig v2)"
     },
     "jq": {
       "kind": "bin",
@@ -878,21 +878,97 @@
     "gnu-coreutils": {
       "kind": "bin",
       "bins": [
-        "ls", "cp", "mv", "rm", "mkdir", "rmdir", "ln", "touch", "stat",
-        "chmod", "chown", "chgrp", "install",
-        "cat", "head", "tail", "sort", "uniq", "cut", "tr", "wc", "tee",
-        "paste", "join", "comm", "od", "expand", "unexpand", "tac", "nl",
-        "fmt", "fold", "pr", "split", "csplit",
-        "echo", "printf", "yes", "true", "false",
-        "date", "uname", "hostname", "whoami", "id", "groups", "nproc",
-        "uptime", "df", "du", "env", "sync", "stty",
-        "seq", "shuf", "numfmt", "factor",
-        "realpath", "basename", "dirname", "readlink", "mktemp", "logname",
-        "sleep", "timeout", "nohup", "nice", "stdbuf",
-        "dd", "truncate", "shred", "sum", "cksum",
-        "md5sum", "sha1sum", "sha224sum", "sha256sum", "sha384sum", "sha512sum",
-        "expr", "test", "tty", "link", "unlink", "mkfifo", "mknod",
-        "base32", "base64", "basenc", "tsort", "ptx"
+        "ls",
+        "cp",
+        "mv",
+        "rm",
+        "mkdir",
+        "rmdir",
+        "ln",
+        "touch",
+        "stat",
+        "chmod",
+        "chown",
+        "chgrp",
+        "install",
+        "cat",
+        "head",
+        "tail",
+        "sort",
+        "uniq",
+        "cut",
+        "tr",
+        "wc",
+        "tee",
+        "paste",
+        "join",
+        "comm",
+        "od",
+        "expand",
+        "unexpand",
+        "tac",
+        "nl",
+        "fmt",
+        "fold",
+        "pr",
+        "split",
+        "csplit",
+        "echo",
+        "printf",
+        "yes",
+        "true",
+        "false",
+        "date",
+        "uname",
+        "hostname",
+        "whoami",
+        "id",
+        "groups",
+        "nproc",
+        "uptime",
+        "df",
+        "du",
+        "env",
+        "sync",
+        "stty",
+        "seq",
+        "shuf",
+        "numfmt",
+        "factor",
+        "realpath",
+        "basename",
+        "dirname",
+        "readlink",
+        "mktemp",
+        "logname",
+        "sleep",
+        "timeout",
+        "nohup",
+        "nice",
+        "stdbuf",
+        "dd",
+        "truncate",
+        "shred",
+        "sum",
+        "cksum",
+        "md5sum",
+        "sha1sum",
+        "sha224sum",
+        "sha256sum",
+        "sha384sum",
+        "sha512sum",
+        "expr",
+        "test",
+        "tty",
+        "link",
+        "unlink",
+        "mkfifo",
+        "mknod",
+        "base32",
+        "base64",
+        "basenc",
+        "tsort",
+        "ptx"
       ],
       "version": "",
       "platforms": [
@@ -2287,6 +2363,86 @@
       ],
       "description": "Every Linux/macOS config bundle"
     },
+    "font-cascadiacode": {
+      "kind": "font",
+      "archive": "fonts/CascadiaCode.zip.part-*",
+      "install_to": "~/.local/share/fonts/CascadiaCode",
+      "version": "3.4.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "default": false,
+      "tags": [
+        "font"
+      ],
+      "description": "Cascadia Code Nerd Font (Microsoft)"
+    },
+    "font-meslolg": {
+      "kind": "font",
+      "archive": "fonts/Meslo.zip.part-*",
+      "install_to": "~/.local/share/fonts/Meslo",
+      "version": "3.4.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "default": false,
+      "tags": [
+        "font"
+      ],
+      "description": "Meslo LG Nerd Font (powerlevel10k default)"
+    },
+    "font-ubuntumono": {
+      "kind": "font",
+      "archive": "fonts/UbuntuMono.zip",
+      "install_to": "~/.local/share/fonts/UbuntuMono",
+      "version": "3.4.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "default": false,
+      "tags": [
+        "font"
+      ],
+      "description": "Ubuntu Mono Nerd Font"
+    },
+    "font-robotomono": {
+      "kind": "font",
+      "archive": "fonts/RobotoMono.zip.part-*",
+      "install_to": "~/.local/share/fonts/RobotoMono",
+      "version": "3.4.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "default": false,
+      "tags": [
+        "font"
+      ],
+      "description": "Roboto Mono Nerd Font (Google)"
+    },
+    "font-dejavusansmono": {
+      "kind": "font",
+      "archive": "fonts/DejaVuSansMono.zip",
+      "install_to": "~/.local/share/fonts/DejaVuSansMono",
+      "version": "3.4.0",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "default": false,
+      "tags": [
+        "font"
+      ],
+      "description": "DejaVu Sans Mono Nerd Font"
+    },
     "@fonts-default": {
       "kind": "group",
       "members": [
@@ -2303,7 +2459,12 @@
         "font-hack",
         "font-inconsolata",
         "font-iosevkaterm",
-        "font-sourcecodepro"
+        "font-sourcecodepro",
+        "font-cascadiacode",
+        "font-meslolg",
+        "font-ubuntumono",
+        "font-robotomono",
+        "font-dejavusansmono"
       ],
       "description": "All bundled Nerd Font families"
     },
