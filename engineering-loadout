@@ -2182,6 +2182,38 @@ def install_fish_runtime(repo_dir, home, selected_tools):
         record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
 
 
+def install_ngspice_runtime(repo_dir, home, selected_tools):
+    if selected_tools is not None and "ngspice" not in selected_tools:
+        skipped("ngspice runtime (ngspice not selected)", "")
+        record_result("ngspice runtime", "SKIP", "ngspice not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "ngspice.tar.bz2"))
+    if archive is None:
+        skipped(
+            "ngspice runtime (no ngspice.tar.bz2 in pre_built/<platform>/runtime/)",
+            "ngspice binary will be installed but spinit/code models may be missing",
+        )
+        record_result("ngspice runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    # Archive contains ./share/ngspice/... relative to ~/.local
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "ngspice runtime")
+
+    pv_extract_tar(archive, local_dir)
+
+    sentinel = os.path.join(local_dir, "share", "ngspice", "scripts", "spinit")
+    if os.path.isfile(sentinel):
+        record_result("ngspice runtime", "yes", f"spinit -> {sentinel}")
+        print(f"  Installed: {archive} -> {local_dir}/share/ngspice/")
+    else:
+        warn(f"ngspice runtime archive did not install spinit at {sentinel}")
+        record_result("ngspice runtime", "FAIL", "archive extracted but spinit not found")
+
+
 def install_modules_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "modules" not in selected_tools:
         skipped("Environment Modules runtime (modules not selected)", "")
@@ -3530,6 +3562,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step("ngspice runtime", install_ngspice_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Modules runtime", install_modules_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Lua LS runtime", install_lua_ls_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Node.js runtime", install_nodejs_runtime, repo_dir, home, selected_tools, silent=True)

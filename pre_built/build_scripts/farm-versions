@@ -479,6 +479,12 @@ TOOLS = [
         strategy_flag(["--version"], r"GNU Octave, version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "ngspice",
+        "ngspice",
+        "https://sourceforge.net/projects/ngspice/",
+        strategy_flag(["--version"], r"ngspice-([0-9]+(?:\.[0-9]+)*)"),
+    ),
+    (
         "ls",
         "gnu-coreutils",
         "https://www.gnu.org/software/coreutils/",

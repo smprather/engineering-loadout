@@ -759,3 +759,68 @@ Built with gcc on EL8; max glibc symbol verified at GLIBC_2.17 or lower.
 
 Installs tclsh to `~/.local/bin/`, `libtcl9.0.so` to `~/.local/lib64/`.
 No separate standard library directory — stdlib is embedded in libtcl9.0.so.
+
+---
+
+## ngspice 46
+
+**Build script:** `pre_built/build_scripts/build-ngspice.sh --tag ngspice-46`
+
+ngspice releases live on SourceForge, not GitHub. The build script downloads from:
+`https://sourceforge.net/projects/ngspice/files/ng-spice-rework/46/ngspice-46.tar.gz/download`
+
+### Prerequisites
+
+```bash
+dnf install readline-devel ncurses-devel fftw-devel gcc gcc-c++ make bison flex
+# gcc-toolset-14 enabled automatically if present
+```
+
+### Build flags
+
+```
+./configure --with-readline=yes --without-x \
+    --enable-xspice --enable-cider --enable-predictor \
+    --disable-debug CFLAGS="-O2 -pipe"
+```
+
+- `--without-x`: no X11 Athena widget plot window; batch + interactive text work on headless nodes
+- `--enable-xspice`: XSPICE code models (behavioral elements like A-devices)
+- `--enable-cider`: CIDER numerical device simulation
+- Built with KLU sparse solver (bundled in ngspice itself, no external SuiteSparse needed)
+
+### Build output
+
+- `pre_built/el8.x86_64.glibc2p28/bin/ngspice.bz2` (2.6 MB compressed)
+- `pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2` — `./share/ngspice/scripts/` (spinit, codemodels)
+
+ngspice looks for `spinit` and code model scripts in `share/ngspice/scripts/` relative to
+its install prefix. Archive extracts to `~/.local/share/ngspice/` so ngspice finds them
+from `~/.local/bin/ngspice` at runtime.
+
+### Runtime library requirements
+
+| Library | Source | Action |
+|---------|--------|--------|
+| `libfftw3.so.3` | Bundled (octave) | RPATH `$ORIGIN/../lib64` picks it up |
+| `libreadline.so.7` | EL8 base package | Always available |
+| `libncurses.so.6` / `libtinfo.so.6` | EL8 base | Always available |
+| `libgomp.so.1` | EL8 gcc package | Always available when gcc installed |
+| `libstdc++.so.6` | EL8 system | Never bundle (per policy); GLIBCXX_3.4 only |
+| `libgcc_s.so.1` | EL8 system | Never bundle (per policy) |
+
+### patchelf
+
+Binary: RPATH `$ORIGIN/../lib64` (finds bundled libfftw3.so.3 from octave bundle).
+
+### glibc
+
+Max symbol: `GLIBC_2.14`. Max C++ ABI: `GLIBCXX_3.4` (GCC 3.4 era base ABI). Compatible with all EL8 machines.
+
+### Install
+
+```bash
+./engineering-loadout --add ngspice
+```
+
+Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scripts/`.

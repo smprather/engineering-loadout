@@ -1398,6 +1398,29 @@
       ],
       "description": "GNU scientific computing language (MATLAB-compatible)"
     },
+    "ngspice": {
+      "kind": "bin",
+      "bins": [
+        "ngspice"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/ngspice.tar.bz2",
+      "version": "46",
+      "version_url": "https://sourceforge.net/projects/ngspice/",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "eda",
+        "spice",
+        "simulator"
+      ],
+      "recommends": [
+        "octave"
+      ],
+      "description": "ngspice \u2014 open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build)"
+    },
     "visidata": {
       "kind": "python-tool",
       "bins": [],

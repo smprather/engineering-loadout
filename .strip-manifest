@@ -58,6 +58,7 @@ sha256  7baba7cb340fb4e19746d916fedcd601e8e02ee47a4c95c0e70814a38fc21216  pre_bu
 sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  pre_built/el8.x86_64.glibc2p28/bin/micro.bz2
 sha256  cff9472b7bd266ee6df1161c7d3201b7a21963dd0e62642e2aec2f42547f23dc  pre_built/el8.x86_64.glibc2p28/bin/mlr.bz2
 sha256  7fa7cf9ee4e94a292cfa2f1f56b7f613c0bb231edb80d378e0739aac136bd77a  pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
+sha256  d49e01980bcbba22bd05e6cae92c90cf9f20e10552aafdf7d63c1e419f354d95  pre_built/el8.x86_64.glibc2p28/bin/ngspice.bz2
 sha256  28b783c26131237e12d373b9923f2f43f6c95cffc24d67c79258f5c2f75dfc4c  pre_built/el8.x86_64.glibc2p28/bin/ninja.bz2
 sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  pre_built/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
 sha256  17713656c0d5ce6eb6dd885997a01f6589ea29ca19d503a85630034e445a4db2  pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2
@@ -238,6 +239,7 @@ tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar
 tar-meta  2996129  1779747334  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  129443  1779982870  pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
+tar-meta  19409  1780066812  pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
 tar-meta  38695258  1779735528  pre_built/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  5952  1779649520  pre_built/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
 tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
