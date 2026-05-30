@@ -466,6 +466,12 @@ TOOLS = [
         strategy_flag(["--version"], r"Python ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "7za",
+        "p7zip",
+        "https://sourceforge.net/projects/p7zip/files/p7zip/",
+        strategy_flag(["i"], r"p7zip Version ([0-9]+\.[0-9]+)"),
+    ),
+    (
         "bzip2",
         "bzip2",
         "https://sourceware.org/bzip2/",

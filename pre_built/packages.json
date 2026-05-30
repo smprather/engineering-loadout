@@ -138,6 +138,23 @@
       ],
       "description": "Resource monitor with graphs and mouse support"
     },
+    "p7zip": {
+      "kind": "bin",
+      "bins": [
+        "7za"
+      ],
+      "version": "16.02",
+      "version_url": "https://sourceforge.net/projects/p7zip/files/p7zip/",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "compress"
+      ],
+      "description": "p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.)"
+    },
     "bzip2": {
       "kind": "bin",
       "bins": [
@@ -2346,6 +2363,7 @@
     "@compression": {
       "kind": "group",
       "members": [
+        "p7zip",
         "bzip2",
         "pigz",
         "pv"

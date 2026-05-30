@@ -824,3 +824,72 @@ Max symbol: `GLIBC_2.14`. Max C++ ABI: `GLIBCXX_3.4` (GCC 3.4 era base ABI). Com
 ```
 
 Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scripts/`.
+
+---
+
+## p7zip 16.02
+
+**Tool:** p7zip — Unix port of 7-Zip; standalone `7za` binary  
+**Version:** 16.02 (latest stable; SourceForge project stalled here)  
+**Source:** https://sourceforge.net/projects/p7zip/files/p7zip/16.02/  
+**Built:** 2026-05-30
+
+### Prerequisites
+
+```bash
+dnf install gcc gcc-c++ make
+```
+
+gcc-toolset-14 works (with GCC 14 compat patches applied by build script).
+
+### Build
+
+```bash
+./pre_built/build_scripts/build-p7zip.sh --tag 16.02
+```
+
+Three GCC 14 compat patches applied inline by the script:
+
+1. **`makefile.machine` OPTFLAGS**: add `-Wno-narrowing` — suppresses narrowing
+   warnings from HRESULT enum constants (`E_OUTOFMEMORY`, `E_INVALIDARG`) in
+   `ErrorMsg.cpp`. GCC ≥ 7 treats these as errors.
+
+2. **`CPP/7zip/Archive/7z/7zUpdate.cpp:817`**: change `file.Open(ui.Name)` to
+   `file.Open(us2fs(ui.Name))`. `CInFile::Open()` takes `CFSTR` (i.e., `const char*`)
+   but `ui.Name` is `UString` (wchar_t-based). The implicit conversion was accepted
+   by older GCC but rejected by GCC 14.
+
+3. **`CPP/7zip/Common/FileStreams.h`**: add `SetTime`/`SetMTime` no-op stubs inside
+   `#else` of `#ifdef USE_WIN_FILE`. Called unconditionally from
+   `ArchiveExtractCallback.cpp` and `Update.cpp`, but only defined under
+   `USE_WIN_FILE`. When building `7za`, `makefile.list` defines `UNIX_USE_WIN_FILE`
+   which activates `USE_WIN_FILE`, so the real implementations are used and the stubs
+   are dead code. Stubs guard the `\!USE_WIN_FILE` case (other bundle targets).
+
+**CRITICAL:** Do NOT pass `LOCAL_FLAGS=` on the make command line — it overrides the
+definition in `CPP/7zip/Bundles/Alone/makefile.list` which sets `-DUNIX_USE_WIN_FILE`,
+`-DENV_UNIX`, `-DBREAK_HANDLER`, `-DUNICODE`, etc. All extra flags go in `makefile.machine`'s `OPTFLAGS`.
+
+### Runtime library requirements
+
+| Library | Source | Notes |
+|---------|--------|-------|
+| `libpthread.so.0` | EL8 glibc | Always available |
+| `libstdc++.so.6` | EL8 system | Never bundle (per policy) |
+| `libm.so.6` | EL8 glibc | Always available |
+| `libgcc_s.so.1` | EL8 system | Never bundle (per policy) |
+| `libc.so.6` | EL8 glibc | Always available |
+
+No RPATH needed (zero bundled libs).
+
+### glibc
+
+Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
+
+### Install
+
+```bash
+./engineering-loadout --add p7zip
+```
+
+Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
