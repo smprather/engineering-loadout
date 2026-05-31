@@ -229,14 +229,16 @@ def _ver_tuple(v):
     return tuple(out)
 
 
-def status_of(current, latest):
+def status_of(current, latest, pin_reason=""):
     if not current:
         return "?"
     if not latest:
         return "?"
     if current == latest:
         return "current"
-    return "outdated" if _ver_tuple(current) < _ver_tuple(latest) else "ahead"
+    if _ver_tuple(current) < _ver_tuple(latest):
+        return "pinned" if pin_reason else "outdated"
+    return "ahead"
 
 
 # ------------------------------------------------------------------- output
@@ -256,9 +258,14 @@ def render_text(rows, include_na):
     )
     print(header)
     print("  " + "-" * (len(header) - 2))
-    for r in sorted(rows, key=lambda r: (r["status"] != "outdated", r["name"])):
+    for r in sorted(rows, key=lambda r: (r["status"] not in ("outdated", "pinned"), r["name"])):
         latest = r["latest"] or "-"
-        note = " ({})".format(r["error"]) if r["error"] else ""
+        if r.get("pin_reason"):
+            note = " (pinned: {})".format(r["pin_reason"])
+        elif r["error"]:
+            note = " ({})".format(r["error"])
+        else:
+            note = ""
         print(
             "  {:<{nw}}  {:<{cw}}  {:<{lw}}  {:<{sw}}  {}{}".format(
                 r["name"],
@@ -277,11 +284,17 @@ def render_text(rows, include_na):
 
 def render_tsv(rows, include_na):
     rows = [r for r in rows if include_na or r["source"] != "n/a"]
-    print("name\tcurrent\tlatest\tsource\tstatus\terror")
+    print("name\tcurrent\tlatest\tsource\tstatus\tpin_reason\terror")
     for r in sorted(rows, key=lambda r: r["name"]):
         print(
-            "{}\t{}\t{}\t{}\t{}\t{}".format(
-                r["name"], r["current"], r["latest"], r["source"], r["status"], r["error"] or ""
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}".format(
+                r["name"],
+                r["current"],
+                r["latest"],
+                r["source"],
+                r["status"],
+                r.get("pin_reason", ""),
+                r["error"] or "",
             )
         )
 
@@ -297,7 +310,7 @@ def render_json(rows, include_na):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--format", choices=("text", "tsv", "json"), default="text")
-    ap.add_argument("--outdated-only", action="store_true")
+    ap.add_argument("--outdated-only", action="store_true", help="show only outdated and pinned packages")
     ap.add_argument("--include-na", action="store_true", help="include packages with no upstream API (default: hide)")
     ap.add_argument("--offline", action="store_true", help="skip network lookups; just print current versions")
     ap.add_argument("--jobs", type=int, default=12, help="concurrent upstream queries (default 12)")
@@ -323,6 +336,7 @@ def main():
                     "latest": "",
                     "source": "(offline)",
                     "status": "?",
+                    "pin_reason": entry.get("pin_reason", ""),
                     "error": None,
                 }
             )
@@ -330,12 +344,14 @@ def main():
 
         def task(name, entry):
             source, latest, err = upstream_for(name, entry, homepages)
+            pin_reason = entry.get("pin_reason", "")
             return {
                 "name": name,
                 "current": entry["version"],
                 "latest": latest,
                 "source": source,
-                "status": status_of(entry["version"], latest),
+                "status": status_of(entry["version"], latest, pin_reason),
+                "pin_reason": pin_reason,
                 "error": err,
             }
 
@@ -345,7 +361,7 @@ def main():
                 rows.append(f.result())
 
     if args.outdated_only:
-        rows = [r for r in rows if r["status"] == "outdated"]
+        rows = [r for r in rows if r["status"] in ("outdated", "pinned")]
 
     if args.format == "text":
         render_text(rows, args.include_na)
