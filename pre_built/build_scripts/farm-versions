@@ -466,6 +466,12 @@ TOOLS = [
         strategy_flag(["--version"], r"Python ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "pdftotext",
+        "pdftotext (poppler)",
+        "https://poppler.freedesktop.org/releases.html",
+        strategy_flag(["-v"], r"pdftotext version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "7za",
         "p7zip",
         "https://sourceforge.net/projects/p7zip/files/p7zip/",

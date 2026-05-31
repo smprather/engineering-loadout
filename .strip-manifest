@@ -65,6 +65,7 @@ sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  pre_bu
 sha256  17713656c0d5ce6eb6dd885997a01f6589ea29ca19d503a85630034e445a4db2  pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  eacb73a3e57af3b2d3399f3785aab8305fcd1fa743bc08d7500ac15f19f3577d  pre_built/el8.x86_64.glibc2p28/bin/octave.bz2
 sha256  32fefa25d1f8378cfd840f49ca2b9a16a8b7c44a4f7ecbd0a13d6fc1496308a5  pre_built/el8.x86_64.glibc2p28/bin/patchelf.bz2
+sha256  5b01a86b707ff16e3f308ca7ecff254e661be86d261b02b04af58e8a280d5e05  pre_built/el8.x86_64.glibc2p28/bin/pdftotext.bz2
 sha256  993bd8d0fe6bf3b006cc5ac4ae70958bbfda6a8d92201e0b1fac6b144c8aa9c0  pre_built/el8.x86_64.glibc2p28/bin/perf2bolt.bz2
 sha256  9f067987f751cef72283d71f05c319153098ffe27443072d6689dd2032d1a2d1  pre_built/el8.x86_64.glibc2p28/bin/pigz.bz2
 sha256  093a8a46eede8e941363d2f12766a92ce644402bf5d846d9587b881ff99f4b4c  pre_built/el8.x86_64.glibc2p28/bin/procs.bz2
@@ -177,6 +178,7 @@ sha256  0e62eea5e4dd4b0b1d8955b250ee1c9185242a5798850f2cfecdf4dcadd63a8f  pre_bu
 sha256  b019d5a39952a2d0e1e14e861e76e5c48cd91bfcde77eb00d2943d5ecfc09d37  pre_built/el8.x86_64.glibc2p28/lib64/libjq.so.1.0.4.bz2
 sha256  b019d5a39952a2d0e1e14e861e76e5c48cd91bfcde77eb00d2943d5ecfc09d37  pre_built/el8.x86_64.glibc2p28/lib64/libjq.so.1.bz2
 sha256  b019d5a39952a2d0e1e14e861e76e5c48cd91bfcde77eb00d2943d5ecfc09d37  pre_built/el8.x86_64.glibc2p28/lib64/libjq.so.bz2
+sha256  20555a81f47b03b12df884f63468829fd0b7df45f44bf496c7f3214b704bacec  pre_built/el8.x86_64.glibc2p28/lib64/liblcms2.so.2.bz2
 sha256  18049d34d4322ddeee3f76ec571248601e8806d2f4d37de348da2f9d2bcf69ad  pre_built/el8.x86_64.glibc2p28/lib64/libncurses.so.6.bz2
 sha256  f9d6ea6d545ec44647f946ed24bba902fbf14e6524a00618662b44a63d4c89db  pre_built/el8.x86_64.glibc2p28/lib64/liboctave.so.13.bz2
 sha256  bfd0f8ef48c86b76d3126750cee38540cb525660c737787a8baa38f7131e349a  pre_built/el8.x86_64.glibc2p28/lib64/liboctinterp.so.15.bz2
@@ -185,6 +187,7 @@ sha256  8550816ffaad1998677664228c881161dbf71d4b198b4af6181949b20613bb38  pre_bu
 sha256  f7368c7c919bdad61d0fea3f865dd5404f9961a14914b51ab46253202132c22e  pre_built/el8.x86_64.glibc2p28/lib64/libonig.so.5.bz2
 sha256  e64593964749cfdd12c2291ec43324ebc0a70762a13e8402148f6acdb02e281c  pre_built/el8.x86_64.glibc2p28/lib64/libopenblas.so.0.bz2
 sha256  6b627259720077c3d98f3c9fb279e77709036269283d822e37889944d1706587  pre_built/el8.x86_64.glibc2p28/lib64/libopenblasp.so.0.bz2
+sha256  49a5f807aa356a684d4112761710cb6ca909ace2f3f08381e317b6eece40e0f7  pre_built/el8.x86_64.glibc2p28/lib64/libopenjp2.so.7.bz2
 sha256  89a8bcf0bf24197b1d5811ea9aba5d8a439a4ec2b8fe0419734b0166d8e39cdd  pre_built/el8.x86_64.glibc2p28/lib64/libpango-1.0.so.0.bz2
 sha256  6a24e36af7d4b1b15468a7d69ab99ae5bcccf13964da8a523197f4b59f4b6e69  pre_built/el8.x86_64.glibc2p28/lib64/libpangocairo-1.0.so.0.bz2
 sha256  c7f7db63fa9a62acb5d7e9882361206a75d447960c2190aa65d01e031243d382  pre_built/el8.x86_64.glibc2p28/lib64/libpangoft2-1.0.so.0.bz2

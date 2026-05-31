@@ -66,7 +66,7 @@ if loadout_plugins_enabled then
         performance = {
             rtp = {
                 disabled_plugins = {
-                    "gzip", "matchit", "matchparen", "netrwPlugin",
+                    "matchit", "matchparen", "netrwPlugin",
                     "tarPlugin", "tohtml", "tutor", "zipPlugin",
                 },
             },

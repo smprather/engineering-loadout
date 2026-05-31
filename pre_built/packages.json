@@ -138,6 +138,28 @@
       ],
       "description": "Resource monitor with graphs and mouse support"
     },
+    "pdftotext": {
+      "kind": "bin",
+      "bins": [
+        "pdftotext"
+      ],
+      "libs": [
+        "liblcms2.so.2",
+        "libopenjp2.so.7"
+      ],
+      "version": "22.12.0",
+      "version_url": "https://poppler.freedesktop.org/releases.html",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "document",
+        "text"
+      ],
+      "description": "pdftotext (poppler-utils) \u2014 extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2"
+    },
     "p7zip": {
       "kind": "bin",
       "bins": [
@@ -153,7 +175,7 @@
       "tags": [
         "compress"
       ],
-      "description": "p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.)"
+      "description": "p7zip \u2014 Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.)"
     },
     "bzip2": {
       "kind": "bin",

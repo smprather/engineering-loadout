@@ -893,3 +893,90 @@ Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
 ```
 
 Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
+
+---
+
+## pdftotext (poppler 22.12.0) — EL8 source build
+
+**Why 22.12.0, not latest**: poppler ≥ 23.01.0 requires Freetype ≥ 2.10; EL8 ships Freetype 2.9.1. Version 22.12.0 is the latest release requiring only Freetype 2.8. When EL8 advances its Freetype, rebuild with a newer poppler tag.
+
+### Prerequisites
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+# powertools repo must be enabled for lcms2-devel + openjpeg2-devel
+sudo dnf install -y cmake gcc-c++ pkg-config \
+    fontconfig-devel freetype-devel libjpeg-turbo-devel libpng-devel \
+    libtiff-devel zlib-devel lcms2-devel openjpeg2-devel
+```
+
+### Build
+
+```bash
+./pre_built/build_scripts/build-pdftotext.sh --tag 22.12.0
+```
+
+Source: `https://poppler.freedesktop.org/poppler-22.12.0.tar.xz`
+
+### Key CMake flags
+
+| Flag | Value | Reason |
+|------|-------|--------|
+| `BUILD_SHARED_LIBS` | OFF | Static libpoppler → single self-contained binary |
+| `ENABLE_UTILS` | ON | Build pdftotext and other utils |
+| `ENABLE_GLIB` | OFF | No GLib/GObject bindings needed; avoids glib ≥ 2.88 dep |
+| `ENABLE_QT5/QT6` | OFF | No Qt bindings needed |
+| `ENABLE_NSS3` | OFF | No PDF encryption support; avoids NSS dep |
+| `ENABLE_LIBCURL` | OFF | No remote PDF URI support; avoids libcurl and transitive SSL deps |
+| `ENABLE_LIBOPENJPEG` | openjpeg2 | JPEG2000 support (bundles libopenjp2.so.7) |
+| `ENABLE_CPP` | OFF | No C++ wrapper lib; only utils needed |
+| `ENABLE_BOOST` | OFF | No Boost dep |
+
+### Runtime library table
+
+| Library | Source | On EL8 base? |
+|---------|--------|--------------|
+| libfreetype.so.6 | EL8 system | ✓ always |
+| libfontconfig.so.1 | EL8 system | ✓ always |
+| libjpeg.so.62 | EL8 system | ✓ always |
+| libpng16.so.16 | EL8 system | ✓ always |
+| libtiff.so.5 | EL8 system | ✓ almost always |
+| libpthread.so.0 | EL8 system (glibc) | ✓ always |
+| libm.so.6, libc.so.6 | EL8 system (glibc) | ✓ always |
+| libbz2.so.1 | EL8 system | ✓ always |
+| libz.so.1 | EL8 system | ✓ always |
+| libexpat.so.1 | EL8 system | ✓ always |
+| libuuid.so.1 | EL8 system | ✓ always |
+| libjbig.so.2.1 | EL8 system (libtiff dep) | ✓ with libtiff |
+| libgcc_s.so.1, libstdc++.so.6 | EL8 system | ✓ always |
+| **liblcms2.so.2** | **bundled** | ✗ powertools only |
+| **libopenjp2.so.7** | **bundled** | ✗ powertools only |
+
+Max glibc symbol: **GLIBC_2.14** — compatible with all EL8 machines.
+
+### Packaging
+
+Build script:
+1. Builds libpoppler.a statically (no companion `.so` needed)
+2. Builds pdftotext binary linking against static libpoppler + system shared libs
+3. Bundles `liblcms2.so.2` and `libopenjp2.so.7` from the EL8 build machine
+4. `strip` → `patchelf --set-rpath '$ORIGIN/../lib64'` → `bzip2 -kf` → copy to `pre_built/el8.x86_64.glibc2p28/bin/pdftotext.bz2`
+5. Companion libs stripped → `bzip2 -kf` → copy to `pre_built/el8.x86_64.glibc2p28/lib64/`
+6. RPATH `$ORIGIN/../lib64` lets the binary find bundled liblcms2/libopenjp2 when installed at `~/.local/bin/`
+
+### Install
+
+```bash
+./engineering-loadout --add pdftotext
+```
+
+Installs `pdftotext` to `~/.local/bin/`, `liblcms2.so.2` and `libopenjp2.so.7` to `~/.local/lib64/`.
+
+### Usage
+
+```bash
+pdftotext file.pdf                  # stdout, best-effort encoding
+pdftotext -layout file.pdf -        # preserve column layout, stdout
+pdftotext -f 3 -l 5 file.pdf -     # pages 3-5 only
+pdftotext file.pdf out.txt          # write to file
+```
