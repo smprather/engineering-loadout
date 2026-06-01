@@ -1934,37 +1934,75 @@ def pv_extract_tar(archive_path, dest_dir):
         p.stop()
 
 
-def install_helix_runtime(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "hx" not in selected_tools:
-        skipped("Helix runtime (hx not selected)", "")
-        record_result("Helix runtime", "SKIP", "hx not in selected tools")
-        return
-    archive = None
+def install_runtime_archives(repo_dir, home, selected_tools, registry):
+    """Generic runtime archive installer driven by packages.json metadata.
+
+    Handles packages where 'sentinel' + 'install_to' are set, following the
+    standard pattern: find runtime/<archive_name>.tar.bz2, extract to
+    install_to, verify sentinel path.
+
+    Optional fields per package entry:
+      archive_name: filename override (default: "<pkg_name>.tar.bz2")
+      remove_before_extract: str or list of paths (relative to install_to) to
+                             remove before extracting (avoids stale files)
+      chmod_sentinel: bool — chmod 755 on sentinel file after extraction
+      missing_hint: str — shown when archive not found
+
+    Packages with non-trivial post-extract logic stay in dedicated functions:
+      vim (rename step), meld (multi-remove+chmod), nvim-qt (shim copy).
+    """
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "helix.tar.bz2"))
-    if archive is None:
-        archive = _bz2.resolve(os.path.join(repo_dir, "helix", "helix_runtime.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Helix runtime (no helix.tar.bz2 in pre_built/<platform>/runtime/ or helix/)",
-            "hx will NOT have the vendored runtime at ~/.config/helix/runtime",
-        )
-        record_result("Helix runtime", "SKIP", "no bundled runtime archive")
+    if not platform_dir:
+        warn("No pre-built platform directory found; skipping runtime archives")
         return
 
-    helix_config_dir = os.path.join(home, ".config", "helix")
-    runtime_dir = os.path.join(helix_config_dir, "runtime")
-    ensure_dir(helix_config_dir, "Helix runtime")
-    remove_if_exists(runtime_dir)
+    for pkg_name, entry in registry.items():
+        if pkg_name.startswith("@"):
+            continue
+        sentinel_rel = entry.get("sentinel", "")
+        install_to_raw = entry.get("install_to", "")
+        if not sentinel_rel or not install_to_raw:
+            continue
 
-    pv_extract_tar(archive, helix_config_dir)
+        if selected_tools is not None and pkg_name not in selected_tools:
+            record_result("{} runtime".format(pkg_name), "SKIP", "not in selected tools")
+            continue
 
-    tutor = os.path.join(runtime_dir, "tutor")
-    if os.path.isfile(tutor):
-        print(f"  Installed: {archive} -> {runtime_dir}/")
-    else:
-        warn(f"Helix runtime archive did not install {runtime_dir}/tutor as expected")
+        archive_name = entry.get("archive_name", "{}.tar.bz2".format(pkg_name))
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", archive_name))
+        if archive is None:
+            hint = entry.get("missing_hint", "")
+            skipped(
+                "{} runtime (no {} in pre_built/<platform>/runtime/)".format(pkg_name, archive_name),
+                hint,
+            )
+            record_result("{} runtime".format(pkg_name), "SKIP", "no bundled {}".format(archive_name))
+            continue
+
+        install_to = install_to_raw.replace("~", home)
+        ensure_dir(install_to, "{} runtime".format(pkg_name))
+
+        rbe = entry.get("remove_before_extract")
+        if rbe:
+            if isinstance(rbe, str):
+                rbe = [rbe]
+            for rel in rbe:
+                remove_if_exists(os.path.join(install_to, rel))
+
+        pv_extract_tar(archive, install_to)
+
+        sentinel = os.path.join(install_to, sentinel_rel)
+        sentinel_ok = os.path.isfile(sentinel) or os.path.isdir(sentinel)
+
+        if entry.get("chmod_sentinel") and os.path.isfile(sentinel):
+            os.chmod(sentinel, 0o755)
+
+        if sentinel_ok:
+            record_result("{} runtime".format(pkg_name), "yes", "{} -> {}".format(archive, install_to))
+            print("  Installed: {} -> {}/".format(archive, install_to))
+        else:
+            warn("{} runtime: {} extracted but {} not found".format(pkg_name, archive_name, sentinel))
+            record_result("{} runtime".format(pkg_name), "FAIL", "sentinel not found at {}".format(sentinel))
 
 
 def install_vim_runtime(repo_dir, home, selected_tools=None):
@@ -2003,73 +2041,6 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
         print(f"  Installed: {archive} -> {vim92_dir}/")
     else:
         warn(f"Vim runtime archive did not install {sentinel} as expected")
-
-
-def install_nvim_runtime(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "nvim" not in selected_tools:
-        skipped("Neovim runtime (nvim not selected)", "")
-        record_result("Neovim runtime", "SKIP", "nvim not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "nvim.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Neovim runtime (no nvim.tar.bz2 in pre_built/<platform>/runtime/)",
-            "nvim will NOT have the vendored runtime at ~/.local/share/nvim/runtime",
-        )
-        record_result("Neovim runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    nvim_share_dir = os.path.join(home, ".local", "share", "nvim")
-    runtime_dir = os.path.join(nvim_share_dir, "runtime")
-    ensure_dir(nvim_share_dir, "Neovim runtime")
-    remove_if_exists(runtime_dir)
-
-    pv_extract_tar(archive, nvim_share_dir)
-
-    sentinel = os.path.join(runtime_dir, "filetype.lua")
-    if os.path.isfile(sentinel):
-        print(f"  Installed: {archive} -> {runtime_dir}/")
-    else:
-        warn(f"Neovim runtime archive did not install {sentinel} as expected")
-
-
-def install_octave_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "octave" not in selected_tools:
-        skipped("Octave runtime (octave not selected)", "")
-        record_result("Octave runtime", "SKIP", "octave not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "octave.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Octave runtime (no octave.tar.bz2 in pre_built/<platform>/runtime/)",
-            "octave will NOT have its standard library at ~/.local/share/octave/",
-        )
-        record_result("Octave runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "Octave runtime")
-    # Remove existing versioned dirs before re-extracting.
-    for stale in (
-        os.path.join(local_dir, "share", "octave", "11.1.0"),
-        os.path.join(local_dir, "lib", "octave", "11.1.0", "oct"),
-        os.path.join(local_dir, "libexec", "octave", "11.1.0"),
-    ):
-        remove_if_exists(stale)
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(local_dir, "share", "octave", "11.1.0", "m")
-    if os.path.isdir(sentinel):
-        print(f"  Installed: {archive} -> {local_dir}/")
-    else:
-        warn(f"Octave runtime archive did not install {local_dir}/share/octave/11.1.0/m as expected")
 
 
 def install_meld_runtime(repo_dir, home, selected_tools):
@@ -2114,235 +2085,6 @@ def install_meld_runtime(repo_dir, home, selected_tools):
     else:
         warn(f"Meld runtime archive did not install {local_dir}/lib/python3.6/site-packages/meld as expected")
         record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
-
-
-def install_st_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "st" not in selected_tools:
-        skipped("st runtime (st not selected)", "")
-        record_result("st runtime", "SKIP", "st not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "st.tar.bz2"))
-    if archive is None:
-        skipped(
-            "st runtime (no st.tar.bz2 in pre_built/<platform>/runtime/)",
-            "st-256color terminfo with Smulx/Setulc undercurl caps will NOT be installed",
-        )
-        record_result("st runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    # Archive contains ./.terminfo/s/* relative to $HOME so undercurl-aware
-    # apps (nvim, etc.) see Smulx + Setulc capabilities for TERM=st-256color.
-    ensure_dir(home, "st runtime")
-    pv_extract_tar(archive, home)
-
-    sentinel = os.path.join(home, ".terminfo", "s", "st-256color")
-    if os.path.isfile(sentinel):
-        record_result("st runtime", "yes", "st-256color terminfo -> ~/.terminfo/s/")
-        print("  Installed: {} -> {}/".format(archive, os.path.join(home, ".terminfo")))
-    else:
-        warn(f"st runtime archive did not install {sentinel} as expected")
-        record_result("st runtime", "FAIL", "archive extracted but st-256color terminfo not found")
-
-
-def install_fish_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "fish" not in selected_tools:
-        skipped("Fish runtime (fish not selected)", "")
-        record_result("Fish runtime", "SKIP", "fish not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "fish.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Fish runtime (no fish.tar.bz2 in pre_built/<platform>/runtime/)",
-            "fish standard library will NOT be installed",
-        )
-        record_result("Fish runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    # Archive contains ./share/fish/... relative to ~/.local, so extract to ~/.local.
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "Fish runtime")
-
-    fish_share = os.path.join(local_dir, "share", "fish")
-    remove_if_exists(fish_share)
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(fish_share, "functions", "fish_prompt.fish")
-    if os.path.isfile(sentinel):
-        record_result("Fish runtime", "yes", f"fish -> {fish_share}/")
-        print(f"  Installed: {archive} -> {fish_share}/")
-    else:
-        warn(f"Fish runtime archive did not install {fish_share}/functions/fish_prompt.fish as expected")
-        record_result("Fish runtime", "FAIL", "archive extracted but fish_prompt.fish not found")
-
-
-def install_ngspice_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "ngspice" not in selected_tools:
-        skipped("ngspice runtime (ngspice not selected)", "")
-        record_result("ngspice runtime", "SKIP", "ngspice not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "ngspice.tar.bz2"))
-    if archive is None:
-        skipped(
-            "ngspice runtime (no ngspice.tar.bz2 in pre_built/<platform>/runtime/)",
-            "ngspice binary will be installed but spinit/code models may be missing",
-        )
-        record_result("ngspice runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    # Archive contains ./share/ngspice/... relative to ~/.local
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "ngspice runtime")
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(local_dir, "share", "ngspice", "scripts", "spinit")
-    if os.path.isfile(sentinel):
-        record_result("ngspice runtime", "yes", f"spinit -> {sentinel}")
-        print(f"  Installed: {archive} -> {local_dir}/share/ngspice/")
-    else:
-        warn(f"ngspice runtime archive did not install spinit at {sentinel}")
-        record_result("ngspice runtime", "FAIL", "archive extracted but spinit not found")
-
-
-def install_modules_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "modules" not in selected_tools:
-        skipped("Environment Modules runtime (modules not selected)", "")
-        record_result("Modules runtime", "SKIP", "modules not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "modules.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Environment Modules runtime (no modules.tar.bz2 in pre_built/<platform>/runtime/)",
-            "run: pre_built/build_scripts/build-modules.sh --tag vX.Y.Z",
-        )
-        record_result("Modules runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    # Archive contains ./lib/modulecmd.tcl and ./share/modulefiles/ relative to ~/.local
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "Modules runtime")
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(local_dir, "lib", "modulecmd.tcl")
-    if os.path.isfile(sentinel):
-        record_result("Modules runtime", "yes", f"modulecmd.tcl -> {sentinel}")
-        print(f"  Installed: {archive} -> {local_dir}/")
-    else:
-        warn(f"Modules runtime archive did not install modulecmd.tcl at {sentinel}")
-        record_result("Modules runtime", "FAIL", "archive extracted but modulecmd.tcl not found")
-
-
-def install_bash_docs(repo_dir, home, selected_tools):
-    if selected_tools is not None and "bash-docs" not in selected_tools:
-        skipped("bash docs (bash-docs not selected)", "")
-        record_result("bash docs", "SKIP", "bash-docs not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "bash-docs.tar.bz2"))
-    if archive is None:
-        skipped(
-            "bash docs (no bash-docs.tar.bz2 in pre_built/<platform>/runtime/)",
-            "bash binary installs fine; man/info pages will be missing",
-        )
-        record_result("bash docs", "SKIP", "no bundled bash-docs archive")
-        return
-
-    # Archive contains ./share/man/man1/bash.1 and ./share/info/bash*.info relative to ~/.local
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "bash docs")
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(local_dir, "share", "man", "man1", "bash.1")
-    if os.path.isfile(sentinel):
-        record_result("bash docs", "yes", "bash.1 -> {}".format(sentinel))
-        print("  Installed: {} -> {}/share/man/man1/".format(archive, local_dir))
-    else:
-        warn("bash docs archive did not install bash.1 at {}".format(sentinel))
-        record_result("bash docs", "FAIL", "archive extracted but bash.1 not found")
-
-
-def install_lua_ls_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "lua-language-server" not in selected_tools:
-        skipped("Lua language server runtime (lua-language-server not selected)", "")
-        record_result("Lua LS runtime", "SKIP", "lua-language-server not in selected tools")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "lua-language-server.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Lua language server runtime (no lua-language-server.tar.bz2 in pre_built/<platform>/runtime/)",
-            "lua-language-server wrapper will be installed but binary data will be missing",
-        )
-        record_result("Lua LS runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    # Archive contains ./share/lua-language-server/... relative to ~/.local
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "Lua LS runtime")
-
-    lua_ls_share = os.path.join(local_dir, "share", "lua-language-server")
-    remove_if_exists(lua_ls_share)
-
-    pv_extract_tar(archive, local_dir)
-
-    sentinel = os.path.join(lua_ls_share, "bin", "lua-language-server")
-    if os.path.isfile(sentinel):
-        os.chmod(sentinel, 0o755)
-        record_result("Lua LS runtime", "yes", "lua-language-server -> {}/".format(lua_ls_share))
-        print("  Installed: {} -> {}/".format(archive, lua_ls_share))
-    else:
-        warn("Lua LS runtime archive did not install {}/bin/lua-language-server as expected".format(lua_ls_share))
-        record_result("Lua LS runtime", "FAIL", "archive extracted but binary not found")
-
-
-def install_nodejs_runtime(repo_dir, home, selected_tools):
-    if selected_tools is not None and "nodejs" not in selected_tools:
-        skipped("Node.js runtime (nodejs not selected)", "")
-        record_result("Node.js runtime", "SKIP", "nodejs not in selected packages")
-        return
-    archive = None
-    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
-    if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "node.tar.bz2"))
-    if archive is None:
-        skipped(
-            "Node.js runtime (no node.tar.bz2 in pre_built/<platform>/runtime/)",
-            "Run: ./pre_built/build_scripts/import-nodejs",
-        )
-        record_result("Node.js runtime", "SKIP", "no bundled runtime archive")
-        return
-
-    local_dir = os.path.join(home, ".local")
-    ensure_dir(local_dir, "Node.js runtime")
-
-    pv_extract_tar(archive, local_dir)
-
-    node_bin = os.path.join(local_dir, "bin", "node")
-    if os.path.isfile(node_bin):
-        record_result("Node.js runtime", "yes", "-> {}/bin/node".format(local_dir))
-        print("  Installed: {} -> {}/bin/node".format(archive, local_dir))
-    else:
-        warn("Node.js runtime archive extracted but bin/node not found at {}".format(node_bin))
-        record_result("Node.js runtime", "FAIL", "bin/node missing after extract")
 
 
 def install_nvim_qt_runtime(repo_dir, home, selected_tools):
@@ -3588,18 +3330,11 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
-    run_install_step("bash docs", install_bash_docs, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Helix runtime", install_helix_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step(
+        "runtime archives", install_runtime_archives, repo_dir, home, selected_tools, registry, silent=True
+    )
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Octave runtime", install_octave_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Fish runtime", install_fish_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("ngspice runtime", install_ngspice_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Modules runtime", install_modules_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Lua LS runtime", install_lua_ls_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Node.js runtime", install_nodejs_runtime, repo_dir, home, selected_tools, silent=True)
-    run_install_step("st runtime", install_st_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True

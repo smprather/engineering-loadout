@@ -76,7 +76,8 @@
         "core",
         "docs"
       ],
-      "description": "GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source"
+      "description": "GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source",
+      "sentinel": "share/man/man1/bash.1"
     },
     "bat": {
       "kind": "bin",
@@ -172,7 +173,7 @@
         "eda",
         "liberty"
       ],
-      "description": "liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only"
+      "description": "liberty-filter \u2014 strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only"
     },
     "liberty-tools": {
       "kind": "python-tool",
@@ -223,7 +224,7 @@
         "liberty",
         "python"
       ],
-      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
+      "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
     },
     "pdftotext": {
       "kind": "bin",
@@ -525,7 +526,12 @@
         "editor"
       ],
       "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2",
-      "description": "Modern modal text editor with tree-sitter and LSP"
+      "description": "Modern modal text editor with tree-sitter and LSP",
+      "sentinel": "runtime/tutor",
+      "install_to": "~/.config/helix",
+      "archive_name": "helix.tar.bz2",
+      "remove_before_extract": "runtime",
+      "missing_hint": "hx will NOT have the vendored runtime at ~/.config/helix/runtime"
     },
     "hyperfine": {
       "kind": "bin",
@@ -733,7 +739,11 @@
         "env-nvim",
         "treesitter-parsers"
       ],
-      "description": "Hyperextensible Vim-based text editor"
+      "description": "Hyperextensible Vim-based text editor",
+      "sentinel": "runtime/filetype.lua",
+      "install_to": "~/.local/share/nvim",
+      "remove_before_extract": "runtime",
+      "missing_hint": "nvim will NOT have the vendored runtime at ~/.local/share/nvim/runtime"
     },
     "patchelf": {
       "kind": "bin",
@@ -1398,7 +1408,10 @@
         "gui"
       ],
       "archive": "pre_built/PLATFORM/runtime/st.tar.bz2",
-      "description": "suckless st \u2014 minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)"
+      "description": "suckless st \u2014 minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)",
+      "sentinel": ".terminfo/s/st-256color",
+      "install_to": "~",
+      "missing_hint": "st-256color terminfo with undercurl caps will NOT be installed"
     },
     "yank": {
       "kind": "bin",
@@ -1524,7 +1537,15 @@
       "recommends": [
         "gnuplot"
       ],
-      "description": "GNU scientific computing language (MATLAB-compatible)"
+      "description": "GNU scientific computing language (MATLAB-compatible)",
+      "sentinel": "share/octave/11.1.0/m",
+      "install_to": "~/.local",
+      "remove_before_extract": [
+        "share/octave/11.1.0",
+        "lib/octave/11.1.0/oct",
+        "libexec/octave/11.1.0"
+      ],
+      "missing_hint": "octave will NOT have its standard library at ~/.local/share/octave/"
     },
     "ngspice": {
       "kind": "bin",
@@ -1547,7 +1568,10 @@
       "recommends": [
         "octave"
       ],
-      "description": "ngspice \u2014 open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build)"
+      "description": "ngspice \u2014 open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build)",
+      "sentinel": "share/ngspice/scripts/spinit",
+      "install_to": "~/.local",
+      "missing_hint": "ngspice spinit/code models will be missing"
     },
     "visidata": {
       "kind": "python-tool",
@@ -1648,7 +1672,11 @@
         "shell"
       ],
       "archive": "pre_built/PLATFORM/runtime/fish.tar.bz2",
-      "description": "Fish shell \u2014 friendly interactive shell with autosuggestions and syntax highlighting"
+      "description": "Fish shell \u2014 friendly interactive shell with autosuggestions and syntax highlighting",
+      "sentinel": "share/fish/functions/fish_prompt.fish",
+      "install_to": "~/.local",
+      "remove_before_extract": "share/fish",
+      "missing_hint": "fish standard library will NOT be installed"
     },
     "tcl": {
       "kind": "bin",
@@ -1689,7 +1717,11 @@
         "javascript"
       ],
       "archive": "pre_built/PLATFORM/runtime/node.tar.bz2",
-      "description": "Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling)"
+      "description": "Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling)",
+      "sentinel": "bin/node",
+      "install_to": "~/.local",
+      "archive_name": "node.tar.bz2",
+      "missing_hint": "Run: ./pre_built/build_scripts/import-nodejs"
     },
     "jupyterlab": {
       "kind": "python-tool",
@@ -2380,7 +2412,10 @@
       "description": "Environment Modules \u2014 module load/unload for shell environment management (HPC-style)",
       "recommends": [
         "tcl"
-      ]
+      ],
+      "sentinel": "lib/modulecmd.tcl",
+      "install_to": "~/.local",
+      "missing_hint": "Environment Modules will NOT be available"
     },
     "@core-cli": {
       "kind": "group",
@@ -2727,7 +2762,12 @@
         "lsp"
       ],
       "archive": "pre_built/PLATFORM/runtime/lua-language-server.tar.bz2",
-      "description": "Lua language server (LSP) \u2014 useful for nvim config and Lua tooling"
+      "description": "Lua language server (LSP) \u2014 useful for nvim config and Lua tooling",
+      "sentinel": "share/lua-language-server/bin/lua-language-server",
+      "install_to": "~/.local",
+      "remove_before_extract": "share/lua-language-server",
+      "chmod_sentinel": true,
+      "missing_hint": "lua-language-server wrapper will be installed but binary data will be missing"
     },
     "pyright": {
       "kind": "python-tool",
