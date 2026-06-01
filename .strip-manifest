@@ -40,6 +40,7 @@ sha256  c2a48210651d17f2a0b0199b1b79be437352281d485bed86b19ebcdaf6391960  pre_bu
 sha256  d0c8d6dfa510955b3672b3dde155b8c3b3b22e581320c7f853efcce60406fa5c  pre_built/el8.x86_64.glibc2p28/bin/kak.bz2
 sha256  aa8c6a7cf7d89a30950836ecdd8f10f1407f4c5e082b0d2d8187372aef03e6c8  pre_built/el8.x86_64.glibc2p28/bin/lazygit.bz2
 sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  pre_built/el8.x86_64.glibc2p28/bin/ld.lld.bz2
+sha256  79b3c88361566e8b4c473a6b35ebf88381b86e1d822fb64c5ecd71d32b3519b8  pre_built/el8.x86_64.glibc2p28/bin/liberty_filter.bz2
 sha256  30e6e28149d99d6fc2fe00a24d314d0145699fcc1f5d75cd00f30c67d60000a7  pre_built/el8.x86_64.glibc2p28/bin/lld.bz2
 sha256  b8d9f943a59c836e40c12e0f4f7d63f7ac3432d9551f00bb5e97776ba742877f  pre_built/el8.x86_64.glibc2p28/bin/llvm-ar.bz2
 sha256  84f6cb5da4538258a83f104956b2c33d57e3b7afe1b5ff70b6a6a6667191025e  pre_built/el8.x86_64.glibc2p28/bin/llvm-bolt.bz2
@@ -238,6 +239,7 @@ sha256  85bd2183970e7184f9c56ea68f014cbc07a1db8f44ac0590b95ae4569ebe3a88  pre_bu
 sha256  762794ca28d4da4d557bdf6593eb44f1bf1cfb637fd1de9873af58a6b1b0e831  pre_built/el8.x86_64.glibc2p28/lib64/libxkbcommon.so.0.bz2
 sha256  fcf47e453dd59a265b921a1f73b523343383fa654110cc8dde2c1def45c70cbe  pre_built/el8.x86_64.glibc2p28/lib64/libxxhash.so.0.bz2
 sha256  08ace58677105a879ee6c45dccfa797c169cc027752e023bb826db78f5f66c0a  pre_built/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2
+tar-meta  289188  1780341242  pre_built/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2
 tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2996129  1779747334  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2

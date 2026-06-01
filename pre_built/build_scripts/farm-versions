@@ -38,7 +38,7 @@ def _run(cmd, timeout=5):
             timeout=timeout,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return ""
 
 
@@ -52,7 +52,7 @@ def _strings(path):
             timeout=10,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return ""
 
 
@@ -98,7 +98,7 @@ def strategy_stdin(script, pattern=r"([0-9]+\.[0-9]+[\w.\-]*)"):
                 timeout=5,
             )
             out = proc.stdout.decode("utf-8", "replace")
-        except (OSError, subprocess.TimeoutExpired):
+        except OSError, subprocess.TimeoutExpired:
             return None
         m = re.search(pattern, out)
         return m.group(1).strip() if m else None
@@ -464,6 +464,12 @@ TOOLS = [
         "Python",
         "https://www.python.org",
         strategy_flag(["--version"], r"Python ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "liberty_filter",
+        "liberty-filter",
+        "",
+        strategy_flag(["--help"], r"liberty-filter ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
         "pdftotext",

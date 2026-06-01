@@ -408,7 +408,7 @@ def _bz2_matches_dest(bz2_file, dest_file):
                     return False
                 if not a:
                     return True
-    except (OSError, EOFError):
+    except OSError, EOFError:
         return False
 
 
@@ -662,7 +662,7 @@ def _log(msg):
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         _RUN_LOG_FILE.write(f"[{ts}] {msg}\n")
         _RUN_LOG_FILE.flush()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         pass
 
 
@@ -685,7 +685,7 @@ class _TeeStream:
                 ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 _RUN_LOG_FILE.write(f"[{ts}] [{self._kind}] {line}\n")
                 _RUN_LOG_FILE.flush()
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pass
 
     def flush(self):
@@ -693,7 +693,7 @@ class _TeeStream:
         if _RUN_LOG_FILE is not None:
             try:
                 _RUN_LOG_FILE.flush()
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pass
 
     def __getattr__(self, name):
@@ -744,7 +744,7 @@ def _close_run_log(exit_code):
         _RUN_LOG_FILE.write(f"# exit:    {exit_code}\n")
         _RUN_LOG_FILE.flush()
         _RUN_LOG_FILE.close()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         pass
     _RUN_LOG_FILE = None
 
@@ -1055,7 +1055,7 @@ def _pending_lock():
     lock_path = os.path.join(_PENDING_DIR, "pending.lock")
     try:
         fh = open(lock_path, "w")
-    except (IOError, OSError):
+    except IOError, OSError:
         yield  # Can't open lock file; proceed without lock (best-effort).
         return
     try:
@@ -1074,7 +1074,7 @@ def _read_pending_state():
         ops = {op["dest"]: op for op in data.get("ops", []) if "dest" in op}
         last_activity = data.get("last_activity", "")
         return ops, last_activity
-    except (IOError, OSError, ValueError):
+    except IOError, OSError, ValueError:
         return {}, ""
 
 
@@ -1166,7 +1166,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         os.kill(pid, 0)
         print(f"  pending-ops daemon already running (pid {pid})")
         return
-    except (IOError, OSError, ValueError):
+    except IOError, OSError, ValueError:
         pass
 
     log_file = os.path.join(_PENDING_DIR, "daemon.log")
@@ -2246,6 +2246,38 @@ def install_modules_runtime(repo_dir, home, selected_tools):
         record_result("Modules runtime", "FAIL", "archive extracted but modulecmd.tcl not found")
 
 
+def install_bash_docs(repo_dir, home, selected_tools):
+    if selected_tools is not None and "bash-docs" not in selected_tools:
+        skipped("bash docs (bash-docs not selected)", "")
+        record_result("bash docs", "SKIP", "bash-docs not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "bash-docs.tar.bz2"))
+    if archive is None:
+        skipped(
+            "bash docs (no bash-docs.tar.bz2 in pre_built/<platform>/runtime/)",
+            "bash binary installs fine; man/info pages will be missing",
+        )
+        record_result("bash docs", "SKIP", "no bundled bash-docs archive")
+        return
+
+    # Archive contains ./share/man/man1/bash.1 and ./share/info/bash*.info relative to ~/.local
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "bash docs")
+
+    pv_extract_tar(archive, local_dir)
+
+    sentinel = os.path.join(local_dir, "share", "man", "man1", "bash.1")
+    if os.path.isfile(sentinel):
+        record_result("bash docs", "yes", "bash.1 -> {}".format(sentinel))
+        print("  Installed: {} -> {}/share/man/man1/".format(archive, local_dir))
+    else:
+        warn("bash docs archive did not install bash.1 at {}".format(sentinel))
+        record_result("bash docs", "FAIL", "archive extracted but bash.1 not found")
+
+
 def install_lua_ls_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "lua-language-server" not in selected_tools:
         skipped("Lua language server runtime (lua-language-server not selected)", "")
@@ -2721,7 +2753,7 @@ def _nvim_migration_notice(nvim_config):
                     f"Old path preserved: {custom_init}"
                 )
                 return
-        except (IOError, OSError):
+        except IOError, OSError:
             pass
     shutil.rmtree(custom, ignore_errors=True)
 
@@ -3556,6 +3588,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
+    run_install_step("bash docs", install_bash_docs, repo_dir, home, selected_tools, silent=True)
     run_install_step("Helix runtime", install_helix_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Neovim runtime", install_nvim_runtime, repo_dir, home, selected_tools, silent=True)

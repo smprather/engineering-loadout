@@ -49,6 +49,9 @@
       "version": "5.3.9",
       "version_url": "https://ftp.gnu.org/gnu/bash/?C=M&O=D",
       "version_pattern": "bash-([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\\.tar",
+      "recommends": [
+        "bash-docs"
+      ],
       "platforms": [
         "linux"
       ],
@@ -58,6 +61,22 @@
         "core"
       ],
       "description": "Portable GNU Bash ahead of EL8 system version"
+    },
+    "bash-docs": {
+      "kind": "runtime",
+      "archive": "pre_built/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2",
+      "install_to": "~/.local",
+      "version": "5.3.9",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "shell",
+        "core",
+        "docs"
+      ],
+      "description": "GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source"
     },
     "bat": {
       "kind": "bin",
@@ -137,6 +156,74 @@
         "monitor"
       ],
       "description": "Resource monitor with graphs and mouse support"
+    },
+    "liberty-filter": {
+      "kind": "bin",
+      "bins": [
+        "liberty_filter"
+      ],
+      "version": "0.1.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "eda",
+        "liberty"
+      ],
+      "description": "liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only"
+    },
+    "liberty-tools": {
+      "kind": "python-tool",
+      "bins": [
+        "liberty_format",
+        "liberty_view"
+      ],
+      "wheels": [
+        "liberty-tools",
+        "annotated-doc",
+        "annotated-types",
+        "anyio",
+        "click",
+        "fastapi",
+        "h11",
+        "httptools",
+        "idna",
+        "markdown-it-py",
+        "mdurl",
+        "polars",
+        "polars-runtime-32",
+        "polars-runtime-64",
+        "polars-runtime-compat",
+        "pydantic",
+        "pydantic-core",
+        "pygments",
+        "python-dotenv",
+        "pyyaml",
+        "rich",
+        "rich-click",
+        "starlette",
+        "typing-extensions",
+        "typing-inspection",
+        "uvicorn",
+        "uvloop",
+        "watchfiles",
+        "websockets"
+      ],
+      "uv_tool": "liberty-tools",
+      "version": "0.1.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "eda",
+        "liberty",
+        "python"
+      ],
+      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
     },
     "pdftotext": {
       "kind": "bin",
