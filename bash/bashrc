@@ -70,11 +70,18 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/project/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
 
 # Allow user home-dir override in case using a shared bash config installation.
-source_if_exists $HOME/.config/bash/corp/config.sh
-source_if_exists $HOME/.config/bash/site/config.sh
-source_if_exists $HOME/.config/bash/team/config.sh
-source_if_exists $HOME/.config/bash/project/config.sh
-source_if_exists $HOME/.config/bash/user/config.sh
+# Only when the config root is NOT already ~/.config/bash — otherwise these are
+# the same files just sourced above, and re-sourcing them runs any non-idempotent
+# user-layer logic twice. Compare resolved paths (handles trailing slash/symlink).
+_cfg_root_real=$(realpath "$BASH_CONFIG_ROOT_DIR" 2>/dev/null || echo "$BASH_CONFIG_ROOT_DIR")
+_home_bash_real=$(realpath "$HOME/.config/bash" 2>/dev/null || echo "$HOME/.config/bash")
+if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
+    source_if_exists $HOME/.config/bash/corp/config.sh
+    source_if_exists $HOME/.config/bash/site/config.sh
+    source_if_exists $HOME/.config/bash/team/config.sh
+    source_if_exists $HOME/.config/bash/project/config.sh
+    source_if_exists $HOME/.config/bash/user/config.sh
+fi
 
 # Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
 # Set LOADOUT_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
@@ -98,11 +105,15 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/project/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/bashrc
 
 # Allow user home-dir override in case using a shared bash config installation.
-source_if_exists $HOME/.config/bash/corp/bashrc
-source_if_exists $HOME/.config/bash/site/bashrc
-source_if_exists $HOME/.config/bash/team/bashrc
-source_if_exists $HOME/.config/bash/project/bashrc
-source_if_exists $HOME/.config/bash/user/bashrc
+# Guarded by the same root != ~/.config/bash check as the config.sh block above
+# (_cfg_root_real / _home_bash_real computed there; cleared by unset_bashrc_local_vars).
+if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
+    source_if_exists $HOME/.config/bash/corp/bashrc
+    source_if_exists $HOME/.config/bash/site/bashrc
+    source_if_exists $HOME/.config/bash/team/bashrc
+    source_if_exists $HOME/.config/bash/project/bashrc
+    source_if_exists $HOME/.config/bash/user/bashrc
+fi
 
 unset_bashrc_local_vars
 
