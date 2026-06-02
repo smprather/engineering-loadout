@@ -408,7 +408,7 @@ def _bz2_matches_dest(bz2_file, dest_file):
                     return False
                 if not a:
                     return True
-    except OSError, EOFError:
+    except (OSError, EOFError):  # fmt: skip
         return False
 
 
@@ -662,7 +662,7 @@ def _log(msg):
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         _RUN_LOG_FILE.write(f"[{ts}] {msg}\n")
         _RUN_LOG_FILE.flush()
-    except OSError, ValueError:
+    except (OSError, ValueError):  # fmt: skip
         pass
 
 
@@ -685,7 +685,7 @@ class _TeeStream:
                 ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 _RUN_LOG_FILE.write(f"[{ts}] [{self._kind}] {line}\n")
                 _RUN_LOG_FILE.flush()
-            except OSError, ValueError:
+            except (OSError, ValueError):  # fmt: skip
                 pass
 
     def flush(self):
@@ -693,7 +693,7 @@ class _TeeStream:
         if _RUN_LOG_FILE is not None:
             try:
                 _RUN_LOG_FILE.flush()
-            except OSError, ValueError:
+            except (OSError, ValueError):  # fmt: skip
                 pass
 
     def __getattr__(self, name):
@@ -744,7 +744,7 @@ def _close_run_log(exit_code):
         _RUN_LOG_FILE.write(f"# exit:    {exit_code}\n")
         _RUN_LOG_FILE.flush()
         _RUN_LOG_FILE.close()
-    except OSError, ValueError:
+    except (OSError, ValueError):  # fmt: skip
         pass
     _RUN_LOG_FILE = None
 
@@ -1055,7 +1055,7 @@ def _pending_lock():
     lock_path = os.path.join(_PENDING_DIR, "pending.lock")
     try:
         fh = open(lock_path, "w")
-    except IOError, OSError:
+    except (IOError, OSError):  # fmt: skip
         yield  # Can't open lock file; proceed without lock (best-effort).
         return
     try:
@@ -1074,7 +1074,7 @@ def _read_pending_state():
         ops = {op["dest"]: op for op in data.get("ops", []) if "dest" in op}
         last_activity = data.get("last_activity", "")
         return ops, last_activity
-    except IOError, OSError, ValueError:
+    except (IOError, OSError, ValueError):  # fmt: skip
         return {}, ""
 
 
@@ -1166,7 +1166,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         os.kill(pid, 0)
         print(f"  pending-ops daemon already running (pid {pid})")
         return
-    except IOError, OSError, ValueError:
+    except (IOError, OSError, ValueError):  # fmt: skip
         pass
 
     log_file = os.path.join(_PENDING_DIR, "daemon.log")
@@ -2495,7 +2495,7 @@ def _nvim_migration_notice(nvim_config):
                     f"Old path preserved: {custom_init}"
                 )
                 return
-        except IOError, OSError:
+        except (IOError, OSError):  # fmt: skip
             pass
     shutil.rmtree(custom, ignore_errors=True)
 
