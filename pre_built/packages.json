@@ -163,7 +163,7 @@
       "bins": [
         "liberty_filter"
       ],
-      "version": "0.1.0",
+      "version": "1.0.1",
       "platforms": [
         "linux"
       ],
@@ -213,7 +213,7 @@
         "websockets"
       ],
       "uv_tool": "liberty-tools",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "platforms": [
         "linux"
       ],
