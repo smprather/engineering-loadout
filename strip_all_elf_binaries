@@ -26,6 +26,10 @@ ARCHIVE_SUFFIXES = (
 # Archives whose ELF payloads must not be stripped (e.g. LLVM BOLT-optimized binaries).
 NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-",)
 
+# Files larger than this are split into .part-NNN chunks so no single file
+# exceeds GitHub's 50 MB hard limit or the 40 MB soft recommendation.
+CHUNK_THRESHOLD = 40 * 1024 * 1024  # 40 MiB
+
 
 def eprint(*args):
     print(*args, file=sys.stderr)
@@ -77,7 +81,7 @@ def is_tar_path(path):
         return False
     try:
         return tarfile.is_tarfile(path)
-    except (tarfile.TarError, IOError):
+    except tarfile.TarError, IOError:
         return False
 
 
@@ -281,9 +285,68 @@ def add_tree_to_tar(tf, source_dir):
             tf.add(path, arcname=arcname, recursive=False)
 
 
+def split_large_file(path, chunk_size=CHUNK_THRESHOLD):
+    """Split path into path.part-000, path.part-001, … and remove original.
+
+    Returns the number of chunks created, or 0 if the file is within threshold.
+    Caller is responsible for updating any manifest entry after splitting.
+    """
+    if os.path.getsize(path) <= chunk_size:
+        return 0
+    i = 0
+    with open(path, "rb") as f:
+        while True:
+            data = f.read(chunk_size)
+            if not data:
+                break
+            with open(f"{path}.part-{i:03d}", "wb") as pf:
+                pf.write(data)
+            i += 1
+    os.unlink(path)
+    return i
+
+
+def chunk_large_pre_built(repo_dir, dry_run=False):
+    """Split any file >CHUNK_THRESHOLD under pre_built/ that is not already chunked.
+
+    Handles non-bz2 large files (wheels, etc.) that strip_all_elf_binaries does
+    not otherwise process.  Skips NOSTRIP archives and existing chunk files.
+    Returns the number of files split.
+    """
+    pre_built = os.path.join(repo_dir, "pre_built")
+    if not os.path.isdir(pre_built):
+        return 0
+    chunked = 0
+    for root, _dirs, files in os.walk(pre_built):
+        for name in sorted(files):
+            if ".part-" in name:
+                continue
+            if any(name.startswith(p) for p in NOSTRIP_ARCHIVE_PREFIXES):
+                continue
+            path = os.path.join(root, name)
+            if os.path.getsize(path) <= CHUNK_THRESHOLD:
+                continue
+            if dry_run:
+                print(f"would chunk: {path}")
+                chunked += 1
+                continue
+            n = split_large_file(path)
+            if n:
+                mb = CHUNK_THRESHOLD // (1024 * 1024)
+                print(f"  chunked: {path} -> {n} x {mb} MiB parts")
+                chunked += 1
+    return chunked
+
+
 def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats):
     out_path = tar_bz2_path(tar_path)
     out_rel = repo_rel(repo_dir, out_path)
+    # Already processed and chunked — first part stands in for the whole archive.
+    chunk0 = out_path + ".part-000"
+    if os.path.isfile(chunk0) and manifest.tar_hit(out_rel + ".part-000", chunk0):
+        print(f"manifest hit (already processed tar): {out_path}")
+        stats["skipped_manifest"] += 1
+        return
     if os.path.isfile(out_path) and manifest.tar_hit(out_rel, out_path):
         print(f"manifest hit (already processed tar): {out_path}")
         stats["skipped_manifest"] += 1
@@ -323,7 +386,14 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
     )
     stats["rewritten_tar"] += 1
     stats["stripped"] += tar_stripped
-    manifest.record_tar(out_rel, out_path)
+    # Auto-chunk if the output exceeds the GitHub size threshold.
+    n_chunks = split_large_file(out_path)
+    if n_chunks:
+        mb = CHUNK_THRESHOLD // (1024 * 1024)
+        print(f"  chunked: {out_path} -> {n_chunks} x {mb} MiB parts")
+        manifest.record_tar(out_rel + ".part-000", out_path + ".part-000")
+    else:
+        manifest.record_tar(out_rel, out_path)
     shutil.rmtree(work_dir)
 
 
@@ -337,20 +407,32 @@ def parse_args(argv):
   Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
   .git is skipped.""",
     )
-    parser.add_argument("--dry-run", action="store_true", help="show what would be stripped")
+    parser.add_argument("--dry-run", action="store_true", help="show what would be stripped/chunked")
     parser.add_argument("--strip", default=os.environ.get("STRIP", "strip"), help="strip executable path")
     parser.add_argument("--no-manifest", action="store_true", help="ignore manifest and strip unconditionally")
+    parser.add_argument(
+        "--chunk-only",
+        action="store_true",
+        help="only split large files (>40 MiB) into chunks; skip all ELF stripping",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv):
     args = parse_args(argv)
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if args.chunk_only:
+        n = chunk_large_pre_built(repo_dir, args.dry_run)
+        verb = "would chunk" if args.dry_run else "chunked"
+        print(f"{verb}: {n} file(s)")
+        return 0
+
     strip_bin = args.strip
     if not command_exists(strip_bin):
         eprint(f"Error: strip executable not found: {strip_bin}")
         return 1
 
-    repo_dir = os.path.dirname(os.path.abspath(__file__))
     manifest = Manifest(repo_dir, not args.no_manifest)
     manifest.load()
     tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir=os.environ.get("TMPDIR", "/tmp"))
@@ -380,6 +462,9 @@ def main(argv):
                 continue
             if is_elf_file(path):
                 process_raw_elf(repo_dir, manifest, strip_bin, path, args.dry_run, stats)
+
+        # Chunk any remaining large files (wheels, etc.) not handled by the strip passes.
+        chunk_large_pre_built(repo_dir, args.dry_run)
 
         manifest.save(args.dry_run)
     finally:

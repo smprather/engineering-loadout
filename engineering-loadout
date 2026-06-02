@@ -504,6 +504,51 @@ class _Bz2Store(object):
 _bz2 = _Bz2Store()
 
 
+def _prepare_wheels_dir(wheels_dir):
+    """Return a directory where all wheels are available as whole (non-chunked) files.
+
+    If wheels_dir contains any *.whl.part-000 chunk files, a temp directory is
+    created, all wheels (chunked or whole) are assembled there, and its path is
+    returned alongside a cleanup callable.  If no chunks exist, returns the
+    original wheels_dir directly with a no-op cleanup.
+
+    Usage::
+
+        effective_dir, cleanup = _prepare_wheels_dir(wheels_dir)
+        try:
+            # pass effective_dir to uv --find-links
+        finally:
+            cleanup()
+    """
+    import glob as _glob_mod
+
+    chunked = _glob_mod.glob(os.path.join(wheels_dir, "*.whl.part-000"))
+    if not chunked:
+        return wheels_dir, lambda: None
+
+    tmp_dir = tempfile.mkdtemp(prefix="loadout-wheels.")
+
+    # Copy whole wheels directly.
+    for whl in _glob_mod.glob(os.path.join(wheels_dir, "*.whl")):
+        shutil.copy2(whl, tmp_dir)
+
+    # Rejoin chunked wheels.
+    for part0 in chunked:
+        base = part0[: -len(".part-000")]  # logical .whl path
+        dest = os.path.join(tmp_dir, os.path.basename(base))
+        parts = sorted(_glob_mod.glob(base + ".part-*"))
+        print(f"  Rejoining: {os.path.basename(base)} ({len(parts)} parts)")
+        with open(dest, "wb") as out:
+            for part in parts:
+                with open(part, "rb") as inp:
+                    shutil.copyfileobj(inp, out)
+
+    def _cleanup():
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return tmp_dir, _cleanup
+
+
 FINAL_NOTICES = []
 INSTALL_RESULTS = []
 _SILENT_AREAS = set()  # area names whose non-FAIL results are omitted from install results table
@@ -1546,53 +1591,62 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no uv_tool entries selected")
         return
 
+    # Rejoin any chunked wheels into a temp dir so uv can find whole files.
+    effective_wheels_dir, _wheels_cleanup = _prepare_wheels_dir(wheels_dir)
+
     installed = []
     failed = []
     skipped_tools = []
-    for tool_name, pkg_name in tools_to_install:
-        # Check if a wheel for this package exists in wheels_dir before attempting install
-        import glob as _glob
+    try:
+        for tool_name, pkg_name in tools_to_install:
+            # Check if a wheel for this package exists (whole or chunked) before install.
+            import glob as _glob
 
-        norm = pkg_name.lower().replace("-", "_").replace(".", "_")
-        matches = _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl")) + _glob.glob(
-            os.path.join(wheels_dir, norm + "-*.whl")
-        )
-        if not matches:
-            warn(f"skipping {pkg_name} — no wheel found in {wheels_dir}")
-            skipped_tools.append(tool_name)
-            continue
-        cmd = [
-            uv_bin,
-            "tool",
-            "install",
-            pkg_name,
-            "--python",
-            python_bin,
-            "--no-index",
-            "--find-links",
-            wheels_dir,
-            "--no-cache",
-        ]
-        # Force uv to install into the destination root (matters for --dest-dir runs;
-        # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
-        _env = os.environ.copy()
-        _env["HOME"] = home
-        _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
-        _env["XDG_BIN_HOME"] = os.path.join(home, ".local", "bin")
-        print("  running: {}".format(" ".join(cmd)))
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=_env)
-        out = proc.stdout.decode("utf-8", "replace")
-        err = proc.stderr.decode("utf-8", "replace")
-        for line in out.splitlines():
-            print(f"  {line}")
-        if proc.returncode != 0:
-            for line in err.splitlines():
-                eprint(f"  {line}")
-            warn(f"uv tool install {pkg_name} exited {proc.returncode}")
-            failed.append(tool_name)
-        else:
-            installed.append(tool_name)
-            print(f"  Installed Python tool: {tool_name} -> ~/.local/bin/")
+            norm = pkg_name.lower().replace("-", "_").replace(".", "_")
+            matches = (
+                _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl"))
+                + _glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
+                + _glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl.part-000"))
+                + _glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
+            )
+            if not matches:
+                warn(f"skipping {pkg_name} — no wheel found in {wheels_dir}")
+                skipped_tools.append(tool_name)
+                continue
+            cmd = [
+                uv_bin,
+                "tool",
+                "install",
+                pkg_name,
+                "--python",
+                python_bin,
+                "--no-index",
+                "--find-links",
+                effective_wheels_dir,
+                "--no-cache",
+            ]
+            # Force uv to install into the destination root (matters for --dest-dir runs;
+            # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
+            _env = os.environ.copy()
+            _env["HOME"] = home
+            _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
+            _env["XDG_BIN_HOME"] = os.path.join(home, ".local", "bin")
+            print("  running: {}".format(" ".join(cmd)))
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=_env)
+            out = proc.stdout.decode("utf-8", "replace")
+            err = proc.stderr.decode("utf-8", "replace")
+            for line in out.splitlines():
+                print(f"  {line}")
+            if proc.returncode != 0:
+                for line in err.splitlines():
+                    eprint(f"  {line}")
+                warn(f"uv tool install {pkg_name} exited {proc.returncode}")
+                failed.append(tool_name)
+            else:
+                installed.append(tool_name)
+                print(f"  Installed Python tool: {tool_name} -> ~/.local/bin/")
+    finally:
+        _wheels_cleanup()
 
     if failed:
         record_result("Python tools", "FAIL", "failed: {}".format(", ".join(failed)))
@@ -1748,27 +1802,27 @@ def install_fonts(repo_dir, home, selected_tools=None):
 
     tmp_dir = None
     try:
+        seen_zips = set()
         for name in sorted(os.listdir(vendor_fonts_dir)):
-            if not name.endswith(".zip.part-000"):
+            # Accept both whole zips and chunked zips (.zip.part-000 sentinel).
+            if name.endswith(".zip"):
+                zip_logical = os.path.join(vendor_fonts_dir, name)
+            elif name.endswith(".zip.part-000"):
+                zip_logical = os.path.join(vendor_fonts_dir, name[: -len(".part-000")])
+            else:
                 continue
-            if tmp_dir is None:
-                tmp_dir = tempfile.mkdtemp(prefix="loadout-fonts.", dir="/tmp")
-            first_part = os.path.join(vendor_fonts_dir, name)
-            split_base = first_part[: -len(".part-000")]
-            rejoined_zip = os.path.join(tmp_dir, os.path.basename(split_base))
-            print(f"  Rejoining: {split_base}.part-* -> {rejoined_zip}")
-            require_writable_parent(rejoined_zip, "fonts")
-            with open(rejoined_zip, "wb") as dest:
-                for part in sorted(
-                    os.path.join(vendor_fonts_dir, x)
-                    for x in fnmatch.filter(os.listdir(vendor_fonts_dir), os.path.basename(split_base) + ".part-*")
-                ):
-                    with open(part, "rb") as src:
-                        shutil.copyfileobj(src, dest)
-            extract_font_zip(rejoined_zip, user_fonts_dir)
+            if zip_logical in seen_zips:
+                continue
+            seen_zips.add(zip_logical)
+            # _bz2.resolve() transparently rejoins chunks to a temp file if needed.
+            zip_path = _bz2.resolve(zip_logical)
+            if zip_path is None:
+                continue
+            if zip_logical != zip_path:
+                print(f"  Rejoining: {zip_logical}.part-* -> (temp)")
+            extract_font_zip(zip_path, user_fonts_dir)
     finally:
-        if tmp_dir:
-            shutil.rmtree(tmp_dir)
+        pass  # _bz2 temp files are cleaned up at process exit
 
     for name, path in (("mkfontscale", "/usr/bin/mkfontscale"), ("mkfontdir", "/usr/bin/mkfontdir")):
         tool = _find_tool(path)

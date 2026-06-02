@@ -112,4 +112,39 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
     fi
 fi
 
+# --- 4. Auto-chunk large staged files in pre_built/ ---
+
+_staged_large_prebuilt=$(
+    git diff --cached --name-only --diff-filter=ACM |
+        grep "^pre_built/" |
+        while IFS= read -r _f; do
+            [[ -z "$_f" ]] && continue
+            [[ "$_f" == *".part-"* ]] && continue  # already a chunk
+            [[ -f "$_f" ]] || continue
+            _sz=$(stat -c%s "$_f" 2>/dev/null || echo 0)
+            [[ "$_sz" -gt $((40 * 1024 * 1024)) ]] && echo "$_f"
+        done || true
+)
+
+if [[ -n "$_staged_large_prebuilt" ]]; then
+    echo "Pre-commit: Chunking large pre_built/ files (>40 MiB)..."
+    while IFS= read -r _lf; do
+        [[ -z "$_lf" ]] && continue
+        echo "  Chunking: $_lf"
+        "$script_dir/strip_all_elf_binaries" --chunk-only 2>/dev/null || true
+        # strip_all_elf_binaries --chunk-only processes all of pre_built/ at once;
+        # run once then break — the loop is just to print which file triggered it.
+        break
+    done <<< "$_staged_large_prebuilt"
+    # Re-stage: remove original large files, add new chunk files.
+    while IFS= read -r _lf; do
+        [[ -z "$_lf" ]] && continue
+        if [[ ! -f "$_lf" && -f "${_lf}.part-000" ]]; then
+            git rm --cached -- "$_lf" 2>/dev/null || true
+            git add -- "${_lf}.part-"* 2>/dev/null || true
+        fi
+    done <<< "$_staged_large_prebuilt"
+    echo "✓ Large files chunked and re-staged"
+fi
+
 exit 0
