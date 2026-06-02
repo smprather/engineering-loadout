@@ -80,6 +80,26 @@ while IFS= read -r _f; do
 done <<< "$_staged_all"
 
 if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
+    # Python 3.6 syntax check (EL8 /usr/bin/python3) — catches py2 except syntax,
+    # f-string issues, and anything that would break the installer shebang path.
+    if [[ -x /usr/bin/python3 ]]; then
+        echo "Pre-commit: Checking Python 3.6 syntax (/usr/bin/python3)..."
+        _py36_ok=1
+        for _f in "${_staged_py_files[@]}"; do
+            if ! /usr/bin/python3 -m py_compile "$_f" 2>/tmp/py36-check-err; then
+                echo "  SYNTAX ERROR under /usr/bin/python3: $_f" >&2
+                cat /tmp/py36-check-err >&2
+                _py36_ok=0
+            fi
+        done
+        if [[ "$_py36_ok" == "1" ]]; then
+            echo "✓ Python 3.6 syntax OK"
+        else
+            echo "ERROR: Fix syntax errors above before committing." >&2
+            exit 1
+        fi
+    fi
+
     echo "Pre-commit: Formatting Python files with ruff..."
     if ! command -v ruff >/dev/null; then
         echo "  WARNING: 'ruff' not found in PATH — skipping format." >&2

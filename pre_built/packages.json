@@ -2520,7 +2520,8 @@
       "kind": "group",
       "members": [
         "gnuplot",
-        "octave"
+        "octave",
+        "ngspice"
       ],
       "description": "Scientific computing (octave is opt-in)"
     },
