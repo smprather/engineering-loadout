@@ -1872,7 +1872,6 @@
     },
     "pygwalker": {
       "kind": "python-tool",
-      "pin_reason": "duckdb (hard dep) has no cp314 wheels; install blocked until duckdb ships cp314",
       "bins": [],
       "wheels": [
         "pygwalker",
