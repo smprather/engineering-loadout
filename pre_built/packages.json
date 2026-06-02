@@ -2710,7 +2710,10 @@
         "@scientific",
         "@python-tools-extra",
         "@fonts-all",
-        "@shells-optional"
+        "@shells-optional",
+        "nodejs",
+        "modules",
+        "lua-language-server"
       ],
       "description": "Full loadout \u2014 every bundled package and group"
     },
