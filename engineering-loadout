@@ -57,6 +57,27 @@ def _progress(description, total):
     return p, task
 
 
+def _show_cursor():
+    """Re-emit the DECTCEM show-cursor sequence (ESC[?25h) on exit.
+
+    Rich's transient Progress hides the cursor (ESC[?25l) on .start() and
+    restores it on .stop(). On laggy remote terminals (ThinLinc/VNC/SSH) the
+    restore can be dropped or reordered across many rapid Progress cycles, and
+    an exception mid-extract skips .stop() entirely — either way the cursor is
+    left invisible after the installer exits ('reset' fixes it). Registered via
+    atexit so it fires on every normal exit and on sys.exit() (incl. the SIGINT
+    handler). Writes to the REAL terminal (sys.__stdout__, not the tee wrapper);
+    no-op when that is not a TTY (piped/teed/redirected output).
+    """
+    try:
+        f = sys.__stdout__
+        if f is not None and f.isatty():
+            f.write("\x1b[?25h")
+            f.flush()
+    except Exception:
+        pass
+
+
 def _section(title):
     """Print a section heading. Rich: styled bold; plain: plain print."""
     if _RICH:
@@ -67,6 +88,7 @@ def _section(title):
 
 
 import argparse
+import atexit
 import bz2
 import contextlib
 import datetime
@@ -1976,16 +1998,20 @@ def pv_extract_tar(archive_path, dest_dir):
 
         p, task = _progress("  " + os.path.basename(archive_path), len(members))
         assert p is not None
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
-            for member in members:
-                if _TAR_SUPPORTS_FILTER:
-                    tf.extract(member, dest_dir, filter="data")
-                else:
-                    tf.extract(member, dest_dir)
+        # try/finally: a raised tf.extract must still stop the Progress, else its
+        # cursor-hide (ESC[?25l) is never restored and the terminal cursor vanishes.
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has changed.*")
+                for member in members:
+                    if _TAR_SUPPORTS_FILTER:
+                        tf.extract(member, dest_dir, filter="data")
+                    else:
+                        tf.extract(member, dest_dir)
+                    p.advance(task)
                 p.advance(task)
-            p.advance(task)
-        p.stop()
+        finally:
+            p.stop()
 
 
 def install_runtime_archives(repo_dir, home, selected_tools, registry):
@@ -3414,6 +3440,9 @@ def main(argv):
         return 1
 
     signal.signal(signal.SIGINT, _sigint_handler)
+    # Guarantee the terminal cursor is restored on exit — Rich transient progress
+    # bars can leave it hidden on remote terminals (see _show_cursor docstring).
+    atexit.register(_show_cursor)
 
     args = parse_args(argv)
     repo_dir = os.path.dirname(os.path.abspath(__file__))
