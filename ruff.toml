@@ -1,5 +1,11 @@
 line-length = 120
 
+# Installer + helper scripts must run under EL8 /usr/bin/python3 (Python 3.6).
+# ruff's floor is py37 — the closest we can target. Critically, this keeps ruff
+# from applying py314 PEP 758 rewrites (e.g. `except (A, B):` → `except A, B:`)
+# and makes it flag py3.8+ syntax that would break on 3.6.
+target-version = "py37"
+
 [lint]
 select = ["I"]
 
