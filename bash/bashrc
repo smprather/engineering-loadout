@@ -69,6 +69,13 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/team/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/project/config.sh
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
 
+# Allow user home-dir override in case using a shared bash config installation.
+source_if_exists $HOME/.config/bash/corp/config.sh
+source_if_exists $HOME/.config/bash/site/config.sh
+source_if_exists $HOME/.config/bash/team/config.sh
+source_if_exists $HOME/.config/bash/project/config.sh
+source_if_exists $HOME/.config/bash/user/config.sh
+
 # Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
 # Set LOADOUT_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
 # Silently skipped if the binary doesn't exist or isn't executable.
@@ -89,6 +96,13 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/site/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/team/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/project/bashrc
 source_if_exists $BASH_CONFIG_ROOT_DIR/user/bashrc
+
+# Allow user home-dir override in case using a shared bash config installation.
+source_if_exists $HOME/.config/bash/corp/bashrc
+source_if_exists $HOME/.config/bash/site/bashrc
+source_if_exists $HOME/.config/bash/team/bashrc
+source_if_exists $HOME/.config/bash/project/bashrc
+source_if_exists $HOME/.config/bash/user/bashrc
 
 unset_bashrc_local_vars
 
