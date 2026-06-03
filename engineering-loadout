@@ -1305,6 +1305,23 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         _bin_bz2_files = sorted(f for f in _bz2.find(bin_dir) if _bin_selected(os.path.basename(f)[:-4]))
         _max_bin_name = max((len(os.path.basename(f[:-4])) for f in _bin_bz2_files), default=0)
         _bins_unchanged = 0
+
+        # Don't silently "succeed" when a selected package has no built artifact.
+        # Only flag genuine bin packages: skip those whose bins come from a runtime
+        # archive (e.g. nodejs → node.tar.bz2) and python-tools (uv launchers).
+        if selected_tools is not None:
+            _present_stems = {os.path.basename(f)[:-4] for f in _bz2.find(bin_dir)}
+            for _pname in sorted(selected_tools):
+                _e = _registry.get(_pname, {})
+                if _e.get("kind") != "bin" or _e.get("archive") or "uv_tool" in _e:
+                    continue
+                _claimed = _e.get("bins", [])
+                if _claimed and not any(b in _present_stems for b in _claimed):
+                    warn(
+                        "selected '{}' has no bundled artifact (none of {} present in bin/) — not installed".format(
+                            _pname, "/".join(_claimed[:3]) + ("…" if len(_claimed) > 3 else "")
+                        )
+                    )
         _progress_ctx = (
             _RichProgress(
                 TextColumn("[cyan]{task.description}"),
@@ -1583,6 +1600,21 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no matching platform")
         return
 
+    # Compute the selected uv_tool set FIRST — if nothing needs Python tools, this
+    # is a clean SKIP, not a FAIL for a missing uv/python the caller never asked for.
+    tools_to_install = []
+    for name, info in registry.items():
+        if "uv_tool" not in info:
+            continue
+        if selected_tools is not None and name not in selected_tools:
+            continue
+        tools_to_install.append((name, info["uv_tool"]))
+
+    if not tools_to_install:
+        skipped("Python tools (no selected tools require uv_tool)", "")
+        record_result("Python tools", "SKIP", "no uv_tool entries selected")
+        return
+
     wheels_dir = os.path.join(platform_dir, "wheels")
     if not os.path.isdir(wheels_dir):
         skipped("Python tools (no wheels/ in platform dir)", "")
@@ -1598,19 +1630,6 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     if not os.path.isfile(python_bin):
         warn(f"python3.14 not found at {python_bin} — Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "python3.14 not installed")
-        return
-
-    tools_to_install = []
-    for name, info in registry.items():
-        if "uv_tool" not in info:
-            continue
-        if selected_tools is not None and name not in selected_tools:
-            continue
-        tools_to_install.append((name, info["uv_tool"]))
-
-    if not tools_to_install:
-        skipped("Python tools (no selected tools require uv_tool)", "")
-        record_result("Python tools", "SKIP", "no uv_tool entries selected")
         return
 
     # Rejoin any chunked wheels into a temp dir so uv can find whole files.
@@ -1787,12 +1806,31 @@ def extract_font_zip(zip_path, user_fonts_dir):
                 shutil.copyfileobj(src, out)
 
 
-def install_fonts(repo_dir, home, selected_tools=None):
+def _logical_zip_name(archive):
+    """fonts/Hack.zip -> 'Hack.zip'; fonts/IosevkaTerm.zip.part-* -> 'IosevkaTerm.zip'."""
+    b = os.path.basename(archive or "")
+    i = b.find(".zip")
+    return b[: i + 4] if i != -1 else b
+
+
+def install_fonts(repo_dir, home, selected_tools=None, registry=None):
+    # Which specific font archives to install. selected_tools=None → install all
+    # (non-selective). When a selection is given, map each selected font-* package
+    # to its archive basename and install ONLY those — otherwise --only font-hack
+    # would still install every font.
+    selected_zip_names = None
     if selected_tools is not None:
-        if not any(n.startswith("font-") for n in selected_tools):
+        font_pkgs = [n for n in selected_tools if n.startswith("font-")]
+        if not font_pkgs:
             skipped("fonts (no font-* packages selected)", "")
             record_result("fonts", "SKIP", "no font-* packages in selected set")
             return
+        selected_zip_names = set()
+        for n in font_pkgs:
+            entry = (registry or {}).get(n, {})
+            archive = entry.get("archive", "")
+            if archive:
+                selected_zip_names.add(_logical_zip_name(archive))
     vendor_fonts_dir = os.path.join(repo_dir, "fonts")
     user_fonts_dir = os.path.join(home, ".local", "share", "fonts")
 
@@ -1818,33 +1856,29 @@ def install_fonts(repo_dir, home, selected_tools=None):
         shutil.move(user_fonts_dir, backup_path)
     ensure_dir(user_fonts_dir, "fonts")
 
+    # Single extraction pass. Handles whole zips and chunked zips (.zip.part-000
+    # sentinel, rejoined transparently by _bz2.resolve). Filter to the selected
+    # font archives when a selection was given.
+    seen_zips = set()
     for name in sorted(os.listdir(vendor_fonts_dir)):
         if name.endswith(".zip"):
-            extract_font_zip(os.path.join(vendor_fonts_dir, name), user_fonts_dir)
-
-    tmp_dir = None
-    try:
-        seen_zips = set()
-        for name in sorted(os.listdir(vendor_fonts_dir)):
-            # Accept both whole zips and chunked zips (.zip.part-000 sentinel).
-            if name.endswith(".zip"):
-                zip_logical = os.path.join(vendor_fonts_dir, name)
-            elif name.endswith(".zip.part-000"):
-                zip_logical = os.path.join(vendor_fonts_dir, name[: -len(".part-000")])
-            else:
-                continue
-            if zip_logical in seen_zips:
-                continue
-            seen_zips.add(zip_logical)
-            # _bz2.resolve() transparently rejoins chunks to a temp file if needed.
-            zip_path = _bz2.resolve(zip_logical)
-            if zip_path is None:
-                continue
-            if zip_logical != zip_path:
-                print(f"  Rejoining: {zip_logical}.part-* -> (temp)")
-            extract_font_zip(zip_path, user_fonts_dir)
-    finally:
-        pass  # _bz2 temp files are cleaned up at process exit
+            zip_logical = os.path.join(vendor_fonts_dir, name)
+        elif name.endswith(".zip.part-000"):
+            zip_logical = os.path.join(vendor_fonts_dir, name[: -len(".part-000")])
+        else:
+            continue
+        if zip_logical in seen_zips:
+            continue
+        seen_zips.add(zip_logical)
+        if selected_zip_names is not None and os.path.basename(zip_logical) not in selected_zip_names:
+            continue
+        # _bz2.resolve() transparently rejoins chunks to a temp file if needed.
+        zip_path = _bz2.resolve(zip_logical)
+        if zip_path is None:
+            continue
+        if zip_logical != zip_path:
+            print(f"  Rejoining: {zip_logical}.part-* -> (temp)")
+        extract_font_zip(zip_path, user_fonts_dir)
 
     for name, path in (("mkfontscale", "/usr/bin/mkfontscale"), ("mkfontdir", "/usr/bin/mkfontdir")):
         tool = _find_tool(path)
@@ -2526,6 +2560,8 @@ def backup_existing(home, repo_dir):
             ".config/starship",
             ".config/editorconfig",
             ".config/helix/runtime",
+            ".config/helix/config.toml",
+            ".config/pip/pip.conf",
         ]:
             path = os.path.join(home, rel)
             if not (os.path.exists(path) or os.path.islink(path)):
@@ -3354,6 +3390,43 @@ def cmd_doctor(args, registry, repo_dir):
         print(f"All {checked} runtime/data/font/python-base archives present.")
     print()
 
+    # Bin/lib artifact check. doctor previously only validated runtime archives, so a
+    # registry entry whose bin/*.bz2 or lib64/*.bz2 was never built passed silently —
+    # and --only <pkg> "succeeded" while installing nothing. Verify them here.
+    def _artifact_present(sub, stem):
+        if not platform_dir:
+            return True  # can't verify without a platform dir; not this check's job
+        base = os.path.join(platform_dir, sub, stem + ".bz2")
+        return os.path.exists(base) or os.path.exists(base + ".part-000")
+
+    missing_artifacts = []
+    for name in sorted(registry):
+        entry = registry[name]
+        kind = entry.get("kind")
+        # bins are bin/*.bz2 ONLY for bin-kind packages that are not python-tools
+        # (uv-created launchers) and do not unpack from a runtime archive (e.g.
+        # nodejs node/npm live inside node.tar.bz2, already checked above).
+        if kind == "bin" and not entry.get("archive"):
+            for b in entry.get("bins", []):
+                if not _artifact_present("bin", b):
+                    missing_artifacts.append((name, "bin/" + b + ".bz2"))
+        # libs are real lib64/*.bz2 artifacts regardless of kind.
+        for lib in entry.get("libs", []):
+            if not _artifact_present("lib64", lib):
+                missing_artifacts.append((name, "lib64/" + lib + ".bz2"))
+    if missing_artifacts:
+        bypkg = {}
+        for n, art in missing_artifacts:
+            bypkg.setdefault(n, []).append(art)
+        print("Missing bin/lib artifacts ({} files across {} packages):".format(len(missing_artifacts), len(bypkg)))
+        for n in sorted(bypkg):
+            items = bypkg[n]
+            shown = ", ".join(items[:6]) + (" … (+{})".format(len(items) - 6) if len(items) > 6 else "")
+            print(f"  {n}: {shown}")
+    else:
+        print("All bin/lib artifacts present.")
+    print()
+
     # Registry sanity
     unknown_deps = []
     for n, e in registry.items():
@@ -3443,7 +3516,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
     run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools, registry)
-    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools)
+    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)

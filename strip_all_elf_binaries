@@ -346,6 +346,31 @@ def chunk_large_pre_built(repo_dir, dry_run=False):
     return chunked
 
 
+def safe_extractall(tf, dest_dir):
+    """tarfile.extractall with a path-traversal guard.
+
+    Rejects members whose resolved path escapes dest_dir (absolute paths, '..'
+    components, or symlink/hardlink targets pointing outside). Mirrors the
+    installer's tar safety so a malicious/new upstream archive cannot path-escape
+    during maintenance. Raises ValueError on the first unsafe member.
+    """
+    dest_real = os.path.realpath(dest_dir)
+
+    def _within(path):
+        full = os.path.realpath(os.path.join(dest_real, path))
+        return full == dest_real or full.startswith(dest_real + os.sep)
+
+    for m in tf.getmembers():
+        if os.path.isabs(m.name) or not _within(m.name):
+            raise ValueError("unsafe tar member path: %r in %s" % (m.name, tf.name))
+        if m.issym() or m.islnk():
+            # link target resolved relative to the link's own directory
+            link_dir = os.path.dirname(m.name)
+            if os.path.isabs(m.linkname) or not _within(os.path.join(link_dir, m.linkname)):
+                raise ValueError("unsafe tar link target: %r -> %r" % (m.name, m.linkname))
+    tf.extractall(dest_dir)
+
+
 def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats):
     out_path = tar_bz2_path(tar_path)
     out_rel = repo_rel(repo_dir, out_path)
@@ -373,7 +398,7 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
     with tarfile.open(tar_path, "r:*") as tf:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has been changed.*")
-            tf.extractall(work_dir)
+            safe_extractall(tf, work_dir)
 
     tar_stripped = 0
     for member in walk_files(work_dir):
