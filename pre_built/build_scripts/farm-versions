@@ -38,7 +38,7 @@ def _run(cmd, timeout=5):
             timeout=timeout,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except OSError, subprocess.TimeoutExpired:
+    except (OSError, subprocess.TimeoutExpired):
         return ""
 
 
@@ -52,7 +52,7 @@ def _strings(path):
             timeout=10,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except OSError, subprocess.TimeoutExpired:
+    except (OSError, subprocess.TimeoutExpired):
         return ""
 
 
@@ -98,7 +98,7 @@ def strategy_stdin(script, pattern=r"([0-9]+\.[0-9]+[\w.\-]*)"):
                 timeout=5,
             )
             out = proc.stdout.decode("utf-8", "replace")
-        except OSError, subprocess.TimeoutExpired:
+        except (OSError, subprocess.TimeoutExpired):
             return None
         m = re.search(pattern, out)
         return m.group(1).strip() if m else None
@@ -177,6 +177,12 @@ TOOLS = [
         "choose",
         "https://github.com/theryangeary/choose",
         strategy_flag(["--version"], r"choose ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "cloc",
+        "cloc",
+        "https://github.com/AlDanial/cloc",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+)"),
     ),
     (
         "delta",

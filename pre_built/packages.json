@@ -334,6 +334,22 @@
       ],
       "description": "LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link)"
     },
+    "cloc": {
+      "kind": "bin",
+      "bins": [
+        "cloc"
+      ],
+      "version": "2.08",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "data"
+      ],
+      "description": "Count Lines of Code by language (blank/comment/code). Self-contained Perl script; runs on EL8 system perl, no deps"
+    },
     "dasel": {
       "kind": "bin",
       "bins": [

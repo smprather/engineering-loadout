@@ -980,3 +980,35 @@ pdftotext -layout file.pdf -        # preserve column layout, stdout
 pdftotext -f 3 -l 5 file.pdf -     # pages 3-5 only
 pdftotext file.pdf out.txt          # write to file
 ```
+
+---
+
+## cloc 2.08 — Count Lines of Code (Perl script, not a build)
+
+cloc is a single self-contained Perl script — NOT a compiled binary. EL8 ships
+perl 5.26.3 (`/usr/bin/perl`), and cloc embeds the few non-core modules it needs
+(Regexp::Common, Algorithm::Diff) inside the script itself, so it runs with bare
+system perl and zero CPAN deps.
+
+### Add/update
+
+```bash
+VER=2.08
+curl -fsSL -o cloc \
+  "https://github.com/AlDanial/cloc/releases/download/v${VER}/cloc-${VER}.pl"
+/usr/bin/perl cloc --version          # sanity: prints the bare version, e.g. 2.08
+bzip2 -kf cloc
+cp cloc.bz2 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
+./strip_all_elf_binaries              # records cloc.bz2 as a non-ELF payload, skips stripping
+```
+
+- Shebang is `#\!/usr/bin/env perl` — resolves to EL8's `/usr/bin/perl` at runtime.
+- No patchelf, no bundled libs, no RPATH — it's a script. `strip_all_elf_binaries`
+  decompresses, sees a non-ELF payload, records the sha in `.strip-manifest`, and
+  skips it on later runs (same handling as the `vim.bz2` shell wrapper).
+- packages.json: `kind: bin`, `default: true`, `tags: ["dev","data"]`, no `libs`.
+- farm-versions: `strategy_flag(["--version"], r"([0-9]+\.[0-9]+)")` (cloc prints a
+  bare two-part version). check-versions resolves latest from the GitHub homepage.
+
+Install: `./engineering-loadout --add cloc` (or it's in the default set).
