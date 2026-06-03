@@ -5,7 +5,12 @@ release: smoke-test all pre-built binaries, then create a GitHub release.
 Usage:
     ./release                  # tag today's date, create release
     ./release --tag v2026.05.12
-    ./release --dry-run        # smoke-test only, no tag or GitHub release
+    ./release --dry-run        # scan + smoke-test only, no tag or GitHub release
+    ./release --skip-scan      # skip the malware scan (NOT recommended; for a
+                               # known yara false positive only)
+
+Every release runs the YARA malware scan (scan_for_malware) FIRST and aborts on
+any detection. Then it smoke-tests all binaries before tagging.
 
 Requires: gh (GitHub CLI) authenticated, git repo with remote set.
 """
@@ -26,14 +31,33 @@ def run(cmd, **kwargs):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--tag", default=None, help="release tag (default: v<today YYYY.MM.DD>)")
-    p.add_argument("--dry-run", action="store_true", help="smoke-test only; skip tagging and GitHub release")
+    p.add_argument("--dry-run", action="store_true", help="scan + smoke-test only; skip tagging and GitHub release")
+    p.add_argument(
+        "--skip-scan",
+        action="store_true",
+        help="skip the YARA malware scan (NOT recommended; only for a known false positive)",
+    )
     args = p.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     smoke_test = os.path.join(script_dir, "pre_built", "build_scripts", "test-prebuilt-binaries")
     farm_versions = os.path.join(script_dir, "pre_built", "build_scripts", "farm-versions")
+    malware_scan = os.path.join(script_dir, "scan_for_malware")
 
     print("=" * 60)
+    print("Step 0: Scanning bundled binaries for malware (YARA-Forge)")
+    print("=" * 60)
+    if args.skip_scan:
+        print("SKIPPED via --skip-scan (not recommended).")
+    else:
+        result = run([malware_scan])
+        if result.returncode != 0:
+            print("\nRelease blocked: malware scan reported detections (or failed).", file=sys.stderr)
+            print("Investigate every hit before releasing. Override with --skip-scan only", file=sys.stderr)
+            print("if you have confirmed it is a YARA false positive.", file=sys.stderr)
+            return 1
+
+    print("\n" + "=" * 60)
     print("Step 1: Smoke-testing pre-built binaries")
     print("=" * 60)
     result = run([smoke_test])
