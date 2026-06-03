@@ -258,6 +258,14 @@ def process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats):
         stats["skipped_manifest"] += 1
         return
 
+    # Same patchelf guard as process_bzip2/process_tar: a raw ELF with an
+    # RPATH/RUNPATH was already patchelf'd+stripped; re-stripping corrupts it.
+    if elf_has_rpath(path):
+        print(f"skip patchelf'd raw ELF (RPATH set): {path}")
+        stats["skipped_nonelf"] += 1
+        manifest.record_sha(rel, path)
+        return
+
     stats["processed"] += 1
     if dry_run:
         print(f"would strip: {path}")
@@ -369,9 +377,18 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
 
     tar_stripped = 0
     for member in walk_files(work_dir):
-        if is_elf_file(member):
-            strip_file(strip_bin, member)
-            tar_stripped += 1
+        if not is_elf_file(member):
+            continue
+        # CRITICAL: never strip an ELF that already carries an RPATH/RUNPATH — it
+        # was patchelf'd (and stripped first) in its build script. Stripping AFTER
+        # patchelf corrupts .dynstr/.gnu.version placement, producing "no version
+        # information available" / "undefined symbol: , version" at runtime. This is
+        # the same guard process_bzip2 applies; runtime tars (node, octave .oct libs,
+        # lua-language-server, nvim-qt, …) are full of patchelf'd binaries.
+        if elf_has_rpath(member):
+            continue
+        strip_file(strip_bin, member)
+        tar_stripped += 1
 
     tmp_out = out_path + ".tmp"
     with tarfile.open(tmp_out, "w:bz2") as tf:

@@ -364,7 +364,7 @@
         "dev",
         "data"
       ],
-      "description": "Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps"
+      "description": "Sloc, Cloc and Code \u2014 fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps"
     },
     "tokei": {
       "kind": "bin",
