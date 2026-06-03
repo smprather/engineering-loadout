@@ -350,6 +350,38 @@
       ],
       "description": "Count Lines of Code by language (blank/comment/code). Self-contained Perl script; runs on EL8 system perl, no deps"
     },
+    "scc": {
+      "kind": "bin",
+      "bins": [
+        "scc"
+      ],
+      "version": "3.7.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "data"
+      ],
+      "description": "Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps"
+    },
+    "tokei": {
+      "kind": "bin",
+      "bins": [
+        "tokei"
+      ],
+      "version": "14.0.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": true,
+      "tags": [
+        "dev",
+        "data"
+      ],
+      "description": "Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28"
+    },
     "dasel": {
       "kind": "bin",
       "bins": [

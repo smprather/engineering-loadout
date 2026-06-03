@@ -185,6 +185,18 @@ TOOLS = [
         strategy_flag(["--version"], r"([0-9]+\.[0-9]+)"),
     ),
     (
+        "scc",
+        "scc",
+        "https://github.com/boyter/scc",
+        strategy_flag(["--version"], r"scc version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "tokei",
+        "tokei",
+        "https://github.com/XAMPPRocky/tokei",
+        strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "delta",
         "delta",
         "https://github.com/dandavison/delta",

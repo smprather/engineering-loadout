@@ -1012,3 +1012,54 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
   bare two-part version). check-versions resolves latest from the GitHub homepage.
 
 Install: `./engineering-loadout --add cloc` (or it's in the default set).
+
+---
+
+## scc 3.7.0 — Sloc Cloc and Code (Go static prebuilt)
+
+scc is a Go binary; official releases are statically linked. Just download and
+package — no glibc concern, no patchelf, no libs.
+
+```bash
+curl -fsSL -o scc.tgz \
+  "https://github.com/boyter/scc/releases/download/v3.7.0/scc_Linux_x86_64.tar.gz"
+tar xzf scc.tgz                       # yields ./scc
+file scc                              # ELF ... version 1 (SYSV) → statically linked
+bzip2 -kf scc
+cp scc.bz2 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
+./strip_all_elf_binaries
+```
+
+packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
+farm-versions: `strategy_flag(["--version"], r"scc version ([0-9]+\.[0-9]+\.[0-9]+)")`.
+
+## tokei 14.0.0 — code counter (Rust, EL8 SOURCE build)
+
+tokei's latest stable tag (v14.0.0) ships **no prebuilt binaries**, and v13 is an
+alpha (excluded by the stable-only policy). The older v12.1.2 has an official musl
+static, but to stay on the latest stable we build v14.0.0 from source on EL8 — which
+also yields a native glibc-2.28 binary. cargo (1.95) is available; crates.io is not in
+the sandbox allowlist, so the build needs network outside the sandbox.
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+git clone --depth 1 --branch v14.0.0 https://github.com/XAMPPRocky/tokei.git
+cd tokei
+cargo build --release                 # ~25s; pulls crates from crates.io
+TOK=target/release/tokei
+readelf -V "$TOK" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1   # GLIBC_2.28 ✓
+ldd "$TOK"                             # libgcc_s, libpthread, libdl, libc — all EL8 base
+strip "$TOK"
+bzip2 -kf "$TOK"
+cp "$TOK.bz2" pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2   # (copy the stripped+bz2'd file)
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2
+./strip_all_elf_binaries
+```
+
+- System libs only → no bundling, no RPATH. Max glibc 2.28 (native EL8 build).
+- packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
+- farm-versions: `strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)")`.
+- When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
+
+Install both: `./engineering-loadout --add scc,tokei` (both in the default set).
