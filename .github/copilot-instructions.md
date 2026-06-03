@@ -205,7 +205,9 @@ The Helix runtime lives at `pre_built/<platform>/runtime/helix.tar.bz2`; the
 installer extracts it to `~/.config/helix/runtime`; `runtime/tutor` is the
 sentinel file. The Vim runtime lives at `pre_built/<platform>/runtime/vim92.tar.bz2`;
 the installer extracts it to `~/.local/share/vim/vim92`; `filetype.vim` is the
-sentinel file. The Neovim runtime lives at `pre_built/<platform>/runtime/nvim.tar.bz2`;
+sentinel file. Vim/GVim wrappers derive default runtime paths from installed
+`bin/..`, not `$HOME`, so `--dest-dir` installs work with fake `HOME`. The
+Neovim runtime lives at `pre_built/<platform>/runtime/nvim.tar.bz2`;
 the installer extracts it to `~/.local/share/nvim/runtime`; `filetype.lua` is
 the sentinel file.
 

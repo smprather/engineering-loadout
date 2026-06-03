@@ -60,7 +60,7 @@ sha256  e831fc837c259f399a55e973d9ec8df773ddadabeae33b8f34244a6a15dbd85f  pre_bu
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  pre_built/el8.x86_64.glibc2p28/bin/groups.bz2
 sha256  c1b896060541f23075a624dddf79bb7bca06a875aa8007c2c0d4fc73e138a666  pre_built/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
-sha256  9eee474d758bcd51967391e38d57234223b0a1afd0049f15cddfe1ab0fc388a0  pre_built/el8.x86_64.glibc2p28/bin/gvim.bz2
+sha256  34b84a2d85fcbf841318c7b84857d968f0b02eefd0339a2abcf9662836558fee  pre_built/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  pre_built/el8.x86_64.glibc2p28/bin/head.bz2
 sha256  4f2692788e73b3b5c0370fd155109fd3cb3200f37b02e1fb6ae16e3bfb64c449  pre_built/el8.x86_64.glibc2p28/bin/htop.bz2
 sha256  188029470d1efb3e66d1af90da078c9a5abe107767343972e08d017663867d8d  pre_built/el8.x86_64.glibc2p28/bin/hx.bz2
@@ -184,7 +184,7 @@ sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  pre_bu
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  pre_built/el8.x86_64.glibc2p28/bin/urxvtd.bz2
 sha256  58abf90523d435592de72aab7b610bfb070d23266a25587a631c08381b5420fa  pre_built/el8.x86_64.glibc2p28/bin/uv.bz2
 sha256  7f9b3a1ef3e92cf8b5aab85b31ca5dc4f2860b37429e7c5ba2610bd337070893  pre_built/el8.x86_64.glibc2p28/bin/vim.bin.bz2
-sha256  10b2d44db847e2d6bbdb387bb62af10729330941d23215285a989f5187c36db0  pre_built/el8.x86_64.glibc2p28/bin/vim.bz2
+sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  pre_built/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  pre_built/el8.x86_64.glibc2p28/bin/wc.bz2
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  pre_built/el8.x86_64.glibc2p28/bin/whoami.bz2
 sha256  93a1e62221255a524a18a84e9f4537888192b5daa24dbb07027351b1fa1292b7  pre_built/el8.x86_64.glibc2p28/bin/xsel.bz2
@@ -339,7 +339,7 @@ tar-meta  289188  1780341242  pre_built/el8.x86_64.glibc2p28/runtime/bash-docs.t
 tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2996378  1780474049  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
-tar-meta  414750  1779253268  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
+tar-meta  414887  1780521340  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  129443  1779982870  pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  19409  1780066812  pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
 tar-meta  38690906  1780474060  pre_built/el8.x86_64.glibc2p28/runtime/node.tar.bz2

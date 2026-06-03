@@ -191,7 +191,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) | 0.26.8 | Parser generator tool and incremental parsing library |
 | [ty](https://github.com/astral-sh/ty) | 0.0.35 | Extremely fast Python type checker by Astral |
 | [uv](https://github.com/astral-sh/uv) | 0.11.13 | Extremely fast Python package installer and resolver |
-| [vim](https://www.vim.org) | 9.2 | Vim 9.2 pre-built binary + shell wrapper |
+| [vim](https://www.vim.org) | 9.2 | Vim 9.2 pre-built binary + prefix-aware shell wrapper |
 | [xsel](https://github.com/kfish/xsel) | 1.2.0 | X11 clipboard command-line access tool |
 | [xterm](https://invisible-island.net/xterm/) | 410 | X Window System terminal emulator |
 | [yank](https://github.com/mptre/yank) | 1.3.0 | Select terminal output and copy to clipboard |
@@ -205,13 +205,13 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 
 | Binary | Version | Description |
 |--------|---------|-------------|
-| [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim — `gvim.bin` (stripped binary) + `gvim` wrapper setting VIM/VIMRUNTIME |
+| [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim — `gvim.bin` (stripped binary) + `gvim` wrapper setting VIM/VIMRUNTIME from installed prefix |
 | [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit — single self-contained binary, no runtime files |
 | [nvim-qt](https://github.com/equalsraf/neovim-qt) | 0.2.19 | Qt5 GUI frontend for Neovim |
 | [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing (~163 MB uncompressed; see notes below) |
 | [gui\_libs](https://github.com/smprather/engineering-loadout) | — | ~80 bundled Qt5/GTK3/xcb/Wayland shared libs for headless farm nodes |
 | [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV/TSV/JSON/NDJSON data |
-| [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + PyGObject) |
+| [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool (prefix-aware shanghai bundle — system py3.6 + PyGObject) |
 | [zsh](https://www.zsh.org) | — | Z shell — advanced tab completion, powerful scripting |
 | [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
 | [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (Python via `uv tool`, opens in browser) |
