@@ -442,6 +442,26 @@
       ],
       "description": "du replacement with visual bar chart"
     },
+    "flameshot": {
+      "kind": "bin",
+      "bins": [
+        "flameshot"
+      ],
+      "depends": [
+        "gui_libs"
+      ],
+      "version": "13.3.0",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "screenshot",
+        "gui"
+      ],
+      "description": "Flameshot \u2014 powerful GUI screenshot tool. flameshot 13.3.0 back-ported to Qt5 for EL8 (upstream is Qt6-only); needs gui_libs (Qt5/X11) + DISPLAY"
+    },
     "expect": {
       "kind": "bin",
       "bins": [
@@ -2583,7 +2603,8 @@
         "xsel",
         "yank",
         "urxvt",
-        "st"
+        "st",
+        "flameshot"
       ],
       "description": "Full GUI stack for headless EE farm GUI forwarding"
     },

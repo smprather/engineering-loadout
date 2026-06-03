@@ -227,6 +227,12 @@ TOOLS = [
     ("eza", "eza", "https://github.com/eza-community/eza", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
     ("fd", "fd", "https://github.com/sharkdp/fd", strategy_flag(["--version"], r"fd ([0-9]+\.[0-9]+\.[0-9]+)")),
     (
+        "flameshot",
+        "flameshot",
+        "https://github.com/flameshot-org/flameshot",
+        strategy_flag(["--version"], r"Flameshot v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "fzf",
         "fzf",
         "https://github.com/junegunn/fzf",

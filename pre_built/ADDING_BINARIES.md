@@ -1063,3 +1063,50 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2
 - When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
 
 Install both: `./engineering-loadout --add scc,tokei` (both in the default set).
+
+---
+
+## flameshot 13.3.0 — GUI screenshot tool (Qt6→Qt5 EL8 back-port)
+
+flameshot >=13.0 is **Qt6-only upstream**, and NO prebuilt channel ships a
+glibc<=2.28 binary (fc41/42 = 2.38/2.40, deb = 2.35/2.36/2.39, **AppImage = 2.34**).
+EL8 has only Qt5 5.15 (what gui_libs bundles) and no Qt6. So we back-port the
+current release to Qt5 with a small, stable patch set and build natively → glibc 2.27.
+
+**This is a MAINTAINED FORK-PATCH.** `build-flameshot.sh` applies the patches via a
+Python block that **fails loudly if any target string is missing** — so a breaking
+upstream change surfaces at build time. Re-derive on each flameshot bump.
+
+### Build
+
+```bash
+sudo dnf install -y cmake qt5-qtbase-devel qt5-qtsvg-devel qt5-qttools-devel libxcb-devel
+./pre_built/build_scripts/build-flameshot.sh --tag v13.3.0
+```
+
+### The Qt6→Qt5 patch set (all stock idioms)
+
+| File | Qt6 → Qt5 |
+|------|-----------|
+| `src/CMakeLists.txt` | `qt6_{create,add}_translation` → `qt5_…` (command names can't be `-D`-parameterized) |
+| `src/config/generalconf.cpp` | `QStringDecoder/Encoder(System)` → `QString::fromLocal8Bit / toLocal8Bit` (both versions) |
+| `notifierbox.{h,cpp}`, `pinwidget.{h,cpp}` | `enterEvent(QEnterEvent*)` → `QEvent*` (guarded `#if QT_VERSION >= 6`) |
+| `draggablewidgetmaker.cpp` | `QMouseEvent::globalPosition()` → `globalPos()` |
+| `capturewidget.cpp` | `QList<QPair> << std::pair(` → `qMakePair(` (Qt6 made `QPair`==`std::pair`) |
+| `tools/text/textconfig.cpp` | `QFontDatabase::families()` (static) → `QFontDatabase().families()` (instance) |
+| `main.cpp` | `QLibraryInfo::path` → `location`; add `#include <QDebug>` |
+
+### CMake flags (set by the script)
+
+`-DQT_VERSION_MAJOR=5 -DQT_DEFAULT_MAJOR_VERSION=5` (flameshot's own CMake is
+parameterized by `Qt${QT_VERSION_MAJOR}`), `-DUSE_KDSINGLEAPPLICATION=OFF` (its
+find_package is hardcoded `-qt6`; this only loses single-instance enforcement),
+`-DUSE_WAYLAND_CLIPBOARD=OFF` (needs KF6GuiAddons, absent on EL8).
+
+### Packaging / runtime
+
+GUI tool, links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb — **all from gui_libs**.
+strip → `patchelf --set-rpath '$ORIGIN/../lib64'` → bzip2. `depends: ["gui_libs"]`,
+`default: false`, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
+
+Install: `./engineering-loadout --add gui_libs,flameshot`

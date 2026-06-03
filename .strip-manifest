@@ -26,6 +26,7 @@ sha256  e729951978acfd55ffd01fed653df6b9b3bfcfba3d2816a89ab3412baff8f303  pre_bu
 sha256  cfaf4bf343cea07f168e1af1609c7c0be928a80ca49b6e3ae27ea8dc238cdc1b  pre_built/el8.x86_64.glibc2p28/bin/eza.bz2
 sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  pre_built/el8.x86_64.glibc2p28/bin/fd.bz2
 sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
+sha256  2365eb19a164711291d447b6bcde4f4e1814b98721d3769fdfef84c71bc73302  pre_built/el8.x86_64.glibc2p28/bin/flameshot.bz2
 sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  pre_built/el8.x86_64.glibc2p28/bin/fresh.bz2
 sha256  fd06bb9f7938718bb4aa03bc00b6114978cd99ed9e2ce6ea38c78fca5db9d993  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
