@@ -1,5 +1,10 @@
 approval_policy = "never"
-developer_instructions = "Use caveman mode at full intensity by default. Keep technical accuracy."
+developer_instructions = """
+- Use caveman mode at full intensity by default. Keep technical accuracy.
+- For review requests, run full-auto read-only until done: inspect broadly, make reasonable assumptions,
+do not ask questions unless truly blocked, run non-mutating verification where feasible, and report
+findings with file/line references. Do not edit code, docs, config, or git state during review unless user explicitly approves fixes. For fix/implementation requests, make necessary edits, run relevant verification, and report results. Never perform destructive git operations without explicit user request.
+"""
 [sandbox_workspace_write]
 network_access = true
 writable_roots = ["/home/mylesp/dotfiles/.git"]

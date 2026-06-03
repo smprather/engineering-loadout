@@ -99,6 +99,15 @@ if [ ! -f configure ]; then
     autoreconf -fi || autoconf
 fi
 
+# Patch: zsh 5.9 Src/Modules/termcap.c declares local `boolcodes`/`numcodes`
+# arrays that conflict with the `const char * const []` declarations in modern
+# ncurses term.h (GCC: "conflicting types"). zsh already renamed strcodes ->
+# zstrcodes for the same reason but missed these two. Rename them to match.
+if grep -q 'static char \*boolcodes\[\]' Src/Modules/termcap.c 2>/dev/null; then
+    echo "Patching termcap.c (boolcodes/numcodes ncurses const conflict)..."
+    sed -i 's/\bboolcodes\b/zboolcodes/g; s/\bnumcodes\b/znumcodes/g' Src/Modules/termcap.c
+fi
+
 rm -rf "$INSTALL_PREFIX"
 
 # Build without PCRE to avoid bundling libpcre.so.1.
@@ -115,7 +124,10 @@ rm -rf "$INSTALL_PREFIX"
     CFLAGS="-O2 -fstack-protector-strong"
 
 make -j"$(nproc 2>/dev/null || echo 8)"
-make install
+# Install only what we package (binary + modules + shell functions). Skip
+# install.man / install.info — zsh's man pages need `yodl` (absent on EL8) and
+# we bundle only the self-contained binary anyway.
+make install.bin install.modules install.fns
 
 echo ""
 echo "Build complete: $("$INSTALL_PREFIX/bin/zsh" --version)"
