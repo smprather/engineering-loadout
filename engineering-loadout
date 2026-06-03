@@ -2412,8 +2412,18 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         record_result("Neovim Lazy sync", "SKIP", "offline")
         return
     print("  Running nvim --headless '+Lazy! sync' (this may take a minute) ...")
+    # Point HOME + all XDG base dirs at the install target so the headless nvim
+    # reads/writes the STAGED config/data (~/.config/nvim, lazy/, lazy-lock.json),
+    # not the real user's ~/.config/nvim. For a normal install home == $HOME, so
+    # this is a no-op; for --dest-dir it keeps the staged install self-contained.
+    _env = os.environ.copy()
+    _env["HOME"] = home
+    _env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
+    _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
+    _env["XDG_STATE_HOME"] = os.path.join(home, ".local", "state")
+    _env["XDG_CACHE_HOME"] = os.path.join(home, ".cache")
     try:
-        run([nvim_bin, "--headless", "+Lazy! sync", "+qa"])
+        run([nvim_bin, "--headless", "+Lazy! sync", "+qa"], env=_env)
         record_result("Neovim Lazy sync", "yes", "plugins installed/updated")
     except subprocess.CalledProcessError as exc:
         warn(f"Neovim Lazy sync exited rc={exc.returncode}; run :Lazy sync manually")
