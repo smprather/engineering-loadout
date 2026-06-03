@@ -72,11 +72,29 @@ echo "==> Installing ..."
 make install
 
 echo "==> Packaging binaries ..."
-SKIP_BINS="chcon chroot dir dircolors hostid install pathchk pinky printenv ptx runcon stty tty uptime users vdir who"
+# The registry is the single source of truth for which coreutils programs we ship.
+# coreutils builds ~106 programs; we curate a subset (e.g. excluding builtin-shadowing
+# kill/pwd/[/printenv and rarely-wanted chroot/pinky/...). Read packages.json
+# gnu-coreutils.bins and copy ONLY those — so the build output always equals the
+# registry, with no hand-maintained skip list to drift.
+WANTED_BINS="$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))['packages']['gnu-coreutils']
+print(' '.join(d.get('bins', [])))
+" "$REPO_ROOT/pre_built/packages.json")"
+if [ -z "$WANTED_BINS" ]; then
+    echo "ERROR: gnu-coreutils.bins empty in packages.json — refusing to ship the full set" >&2
+    exit 1
+fi
 
 for bin in "$INSTALL_DIR/bin/"*; do
     name="$(basename "$bin")"
-    # Skip non-ELF (scripts) and bins not useful for the loadout
+    # Ship only registry-listed programs.
+    case " $WANTED_BINS " in
+        *" $name "*) : ;;
+        *) echo "  skip (not in registry): $name"; continue ;;
+    esac
+    # Skip non-ELF (scripts).
     file_type="$(file "$bin" | grep -o 'ELF\|shell script\|Python')"
     if [ "$file_type" != "ELF" ]; then
         echo "  skip (not ELF): $name"
