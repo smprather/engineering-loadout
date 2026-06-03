@@ -2,6 +2,11 @@
 
 All binaries shipped in this repo pass a three-layer scan before each release.
 
+**Automated:** `./scan_for_malware` runs both engines (YARA-Forge + ClamAV) over
+every decompressed payload, and `./release` runs it as a mandatory Step 0 that
+aborts on any detection. The commands below document what that script does and
+how to run each engine by hand. Refresh ClamAV signatures first: `sudo freshclam`.
+
 ## Steps taken
 
 **1 — Decompress.** All `.bz2` blobs are extracted to a temp directory (raw ELF
