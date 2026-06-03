@@ -201,6 +201,13 @@ assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser/python.so
 assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/queries/python/highlights.scm"
 assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser-info/python.lua"
 
+# Active plugin bundle is seeded into lazy/ (with .git intact) so plugins work
+# offline; lazy.nvim itself is seeded too, making init.lua's bootstrap a no-op.
+if [[ -f "$repo_dir/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2" ]]; then
+    assert_exists "$test_home/.local/share/nvim/lazy/lazy.nvim/.git"
+    assert_exists "$test_home/.local/share/nvim/lazy/snacks.nvim/.git"
+fi
+
 nvim_bin=""
 if [[ -x "$test_home/.local/bin/nvim" ]]; then
     nvim_bin="$test_home/.local/bin/nvim"

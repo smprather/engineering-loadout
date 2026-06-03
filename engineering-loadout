@@ -2303,25 +2303,63 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
     print(f"  Installed: {src_root}/ -> {dest_root}/")
 
 
-def install_nvim_catalog_plugins(repo_dir, home, selected_tools=None):
+def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
+    """Seed the bundled active nvim plugins into ~/.local/share/nvim/lazy/.
+
+    The bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2) is a snapshot of
+    the active default plugin set — including lazy.nvim itself — each with its .git
+    intact. Extracting into lazy/<name> lets lazy.nvim treat them as already
+    installed, so plugins work on a fully offline box, while remaining real git
+    repos that `:Lazy sync` updates when online (and seeding lazy/lazy.nvim makes
+    init.lua's bootstrap a no-op offline).
+
+    Each plugin is seeded only when lazy/<name> is absent, so re-running the
+    installer never clobbers a plugin the user has updated via `:Lazy update`.
+    """
     if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("nvim catalog plugins (env-nvim not selected)", "")
-        record_result("nvim catalog plugins", "SKIP", "env-nvim not in selected packages")
+        skipped("nvim plugin bundle (env-nvim not selected)", "")
+        record_result("nvim plugin bundle", "SKIP", "env-nvim not in selected packages")
         return
     archive = os.path.join(repo_dir, "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
     if not os.path.isfile(archive):
         skipped(
-            "nvim catalog plugins (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2 not found)",
-            "Catalog plugins will NOT be available offline; users must run :Lazy sync online.",
+            "nvim plugin bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2 not found)",
+            "Active plugins will NOT be available offline; users must run :Lazy sync online.",
         )
-        record_result("nvim catalog plugins", "SKIP", "no catalog archive")
+        record_result("nvim plugin bundle", "SKIP", "no bundle archive")
         return
-    dest = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor", "catalog-plugins")
-    ensure_dir(dest, "nvim catalog plugins")
-    with tarfile.open(archive, "r:bz2") as tf:
-        safe_extract_tar(tf, dest)
-    record_result("nvim catalog plugins", "yes", f"-> {dest}")
-    print(f"  Installed: {archive} -> {dest}/")
+
+    nvim_share = os.path.join(home, ".local", "share", "nvim")
+    lazy_dir = os.path.join(nvim_share, "lazy")
+    ensure_dir(lazy_dir, "nvim plugin bundle")
+    # Extract under the same filesystem as lazy/ so the per-plugin moves are renames.
+    tmp = tempfile.mkdtemp(prefix=".loadout-nvim-bundle.", dir=nvim_share)
+    seeded, kept = [], []
+    try:
+        with tarfile.open(archive, "r:bz2") as tf:
+            safe_extract_tar(tf, tmp)
+        for name in sorted(os.listdir(tmp)):
+            # '.cloning' is lazy's interrupted-clone temp suffix — a stray artifact
+            # in the bundle, not a real plugin. Never seed it.
+            if name.endswith(".cloning"):
+                continue
+            src = os.path.join(tmp, name)
+            if not os.path.isdir(src):
+                continue
+            dst = os.path.join(lazy_dir, name)
+            if os.path.exists(dst):
+                kept.append(name)
+                continue
+            shutil.move(src, dst)
+            seeded.append(name)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    detail = "seeded {} into lazy/".format(len(seeded))
+    if kept:
+        detail += "; {} already present, kept".format(len(kept))
+    record_result("nvim plugin bundle", "yes", detail)
+    print("  Seeded {} plugin(s) -> {}/ ({} kept existing)".format(len(seeded), lazy_dir, len(kept)))
 
 
 def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
@@ -3419,7 +3457,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True
     )
-    run_install_step("nvim catalog plugins", install_nvim_catalog_plugins, repo_dir, home, selected_tools, silent=True)
+    run_install_step("nvim plugin bundle", install_nvim_plugin_bundle, repo_dir, home, selected_tools, silent=True)
     run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, home, selected_tools)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
     if hooks:
