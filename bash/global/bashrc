@@ -488,7 +488,21 @@ alias rs='rsync --archive --info=progress2 --info=name0 --no-inc-recursive --exc
 alias du='du --block-size=G -s * | sort -r -n -k 1'
 alias dum='/bin/du --block-size=M -s * | sort -r -n -k 1'
 alias df='colourify df --block-size=G'
-alias pl='echo $PATH | tr ":" "\n" | nl'
+pl() {
+    if [[ $# -eq 0 ]]; then
+        echo "$PATH" | tr ":" "\n" | nl
+        return
+    fi
+
+    echo "$PATH" | tr ":" "\n" | while IFS= read -r path_entry; do
+        for pattern in "$@"; do
+            if [[ ${path_entry,,} == *${pattern,,}* ]]; then
+                printf '%s\n' "$path_entry"
+                break
+            fi
+        done
+    done | nl
+}
 alias ncdu='ncdu --graph-style hash --color dark'
 alias less='less --incsearch --use-color +X'
 alias tx='tar -xvf'
