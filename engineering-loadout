@@ -97,6 +97,11 @@ import fcntl
 import fnmatch
 import inspect
 import json
+
+try:
+    import pwd
+except ImportError:  # pragma: no cover - Linux installer path has pwd.
+    pwd = None
 import re
 import shutil
 import signal
@@ -573,6 +578,7 @@ def _prepare_wheels_dir(wheels_dir):
 
 FINAL_NOTICES = []
 INSTALL_RESULTS = []
+INSTALL_BLOCKERS = []
 _SILENT_AREAS = set()  # area names whose non-FAIL results are omitted from install results table
 
 
@@ -689,6 +695,23 @@ def run_install_step(thing, func, *args, **kwargs):
         _INTERRUPT_REQUESTED = True
         result = None
     except (OSError, subprocess.CalledProcessError) as exc:
+        if isinstance(exc, OSError) and exc.errno == errno.ETXTBSY:
+            path = _os_error_path(exc)
+            artifact = os.path.basename(os.path.normpath(path)) if path else thing
+            record_in_use_blocker(thing, artifact, path)
+            detail = f"{thing} failed: in use"
+            if path:
+                detail += f": {path}"
+            warn(detail)
+            record_result(thing, "FAIL", detail)
+            result = None
+            if _INTERRUPT_REQUESTED:
+                eprint(f"Stopping after '{thing}' step due to Ctrl-C.")
+                print_install_results()
+                print_install_blockers()
+                _close_run_log(130)
+                sys.exit(130)
+            return result
         detail = f"{thing} failed: {exc}"
         warn(detail)
         traceback.print_exc()
@@ -697,6 +720,7 @@ def run_install_step(thing, func, *args, **kwargs):
     if _INTERRUPT_REQUESTED:
         eprint(f"Stopping after '{thing}' step due to Ctrl-C.")
         print_install_results()
+        print_install_blockers()
         _close_run_log(130)
         sys.exit(130)
     return result
@@ -971,6 +995,7 @@ _CP = _find_tool("/usr/bin/cp")
 def _exes_by_path(path):
     """Return list of PIDs whose /proc/<pid>/exe resolves to path."""
     pids = []
+    path = os.path.realpath(path)
     try:
         for entry in os.listdir("/proc"):
             if not entry.isdigit():
@@ -985,6 +1010,82 @@ def _exes_by_path(path):
     except OSError:
         pass
     return pids
+
+
+def _pid_owner(pid):
+    try:
+        with open(f"/proc/{pid}/status", "r") as fh:
+            for line in fh:
+                if line.startswith("Uid:"):
+                    uid = int(line.split()[1])
+                    if pwd is not None:
+                        try:
+                            return pwd.getpwuid(uid).pw_name
+                        except KeyError:
+                            pass
+                    return str(uid)
+    except (IOError, OSError, ValueError):
+        pass
+    return "unknown"
+
+
+def _pid_command(pid):
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            raw = fh.read().rstrip(b"\0")
+        if raw:
+            cmd = raw.replace(b"\0", b" ").decode("utf-8", "replace")
+            return cmd if len(cmd) <= 180 else cmd[:177] + "..."
+    except (IOError, OSError):
+        pass
+    try:
+        with open(f"/proc/{pid}/comm", "r") as fh:
+            return fh.read().strip()
+    except (IOError, OSError):
+        return "unknown"
+
+
+def _process_records_for_path(path):
+    records = []
+    for pid in _exes_by_path(path):
+        records.append({"pid": str(pid), "owner": _pid_owner(pid), "command": _pid_command(pid)})
+    if not records:
+        records.append({"pid": "unknown", "owner": "unknown", "command": "process exited or hidden"})
+    return records
+
+
+def _install_blocker_key(row):
+    return (row["area"], row["artifact"], row["path"], row["pid"], row["command"])
+
+
+def record_in_use_blocker(area, artifact, path):
+    """Record processes blocking an install path. Tmux is reported separately."""
+    path = os.path.normpath(path) if path else ""
+    if artifact == "tmux" or os.path.basename(path) == "tmux":
+        return
+
+    seen = {_install_blocker_key(row) for row in INSTALL_BLOCKERS}
+    records = (
+        _process_records_for_path(path) if path else [{"pid": "unknown", "owner": "unknown", "command": "unknown"}]
+    )
+    for rec in records:
+        row = {
+            "area": area,
+            "artifact": artifact,
+            "path": path,
+            "reason": "in use",
+            "pid": rec.get("pid", "unknown"),
+            "owner": rec.get("owner", "unknown"),
+            "command": rec.get("command", "unknown"),
+        }
+        key = _install_blocker_key(row)
+        if key not in seen:
+            INSTALL_BLOCKERS.append(row)
+            seen.add(key)
+
+
+def _os_error_path(exc):
+    return getattr(exc, "filename", None) or getattr(exc, "filename2", None) or ""
 
 
 def uname(flag):
@@ -1274,8 +1375,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         record_result("pre-built binaries", "SKIP", "no matching platform")
         return set()
 
-    # blocked_deferred: bash/tmux detected running by exe path → staged for daemon.
-    # blocked_failed: other binaries still busy after 10s retry → name → "PID,…" string.
+    # blocked_deferred: tmux detected running by exe path → staged for daemon.
+    # blocked_failed: other binaries still in use after 10s retry → name → "PID,…" string.
     blocked_deferred = set()
     blocked_failed = {}
 
@@ -1414,7 +1515,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     pids = _exes_by_path(dest_file)
                     pid_str = ", ".join(str(p) for p in pids) if pids else "unknown"
                     blocked_failed[name] = pid_str
-                    warn(f"could not replace {dest_file} after 10s (PIDs: {pid_str})")
+                    record_in_use_blocker("pre-built binaries", name, dest_file)
+                    warn(f"could not replace {dest_file} after 10s: in use (PIDs: {pid_str})")
                     if _progress_ctx is not None:
                         _progress_ctx.advance(_progress_task)
                     continue
@@ -1479,7 +1581,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     if blocked_deferred:
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
     if blocked_all:
-        record_result("pre-built binaries", "FAIL", "busy: {}".format(", ".join(sorted(blocked_all))))
+        record_result("pre-built binaries", "FAIL", "in use: {}".format(", ".join(sorted(blocked_all))))
     return blocked_deferred, blocked_failed
 
 
@@ -1736,7 +1838,7 @@ def add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed):
         )
     for name, pid_str in sorted(blocked_failed.items()):
         FINAL_NOTICES.append(
-            f"{name} was not installed: binary held by running process(es) {pid_str} "
+            f"{name} was not installed: binary in use by process(es) {pid_str} "
             "— kill or wait for them to exit, then re-run the installer."
         )
 
@@ -1785,6 +1887,47 @@ def print_install_results():
     print("  {}  {}  {}".format("-" * widths[0], "-" * widths[1], "-" * widths[2]))
     for thing, success, detail in rows:
         print("  {:{}}  {:{}}  {:{}}".format(thing, widths[0], success, widths[1], detail, widths[2]))
+
+
+def print_install_blockers():
+    if not INSTALL_BLOCKERS:
+        return
+    rows = sorted(INSTALL_BLOCKERS, key=lambda r: (r["area"], r["path"], r["pid"]))
+
+    if _RICH:
+        t = _RichTable(title="Processes Blocking Installation", show_lines=False, highlight=False)
+        t.add_column("Area", style="cyan", no_wrap=True)
+        t.add_column("Artifact", no_wrap=True)
+        t.add_column("Reason", no_wrap=True)
+        t.add_column("Owner", no_wrap=True)
+        t.add_column("PID", justify="right", no_wrap=True)
+        t.add_column("Path", style="dim")
+        t.add_column("Command", style="dim")
+        for row in rows:
+            t.add_row(
+                row["area"],
+                row["artifact"],
+                row["reason"],
+                row["owner"],
+                row["pid"],
+                row["path"],
+                row["command"],
+            )
+        assert _console is not None
+        _console.print()
+        _console.print(t)
+        return
+
+    print("")
+    print("Processes Blocking Installation")
+    headers = ("Area", "Artifact", "Reason", "Owner", "PID", "Path", "Command")
+    data = [(r["area"], r["artifact"], r["reason"], r["owner"], r["pid"], r["path"], r["command"]) for r in rows]
+    widths = [max(len(headers[i]), *(len(row[i]) for row in data)) for i in range(len(headers))]
+    fmt = "  ".join("{:<" + str(w) + "}" for w in widths)
+    print(fmt.format(*headers))
+    print(fmt.format(*("-" * w for w in widths)))
+    for row in data:
+        print(fmt.format(*row))
 
 
 def font_member(name):
@@ -3552,6 +3695,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         run_install_step("compress backup", compress_backup, backup_dir)
     print_final_notices()
     print_install_results()
+    print_install_blockers()
     return 0
 
 
