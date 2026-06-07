@@ -43,6 +43,39 @@ cd engineering-loadout
 Single Python 3.6-compatible executable. Re-run with a new release tarball to update
 (idempotent; unchanged files skip the install step). Reload your shell with `exec bash`.
 
+**Shared/read-only deployments.** For a single install shared by many users, do not
+mutate the live tree in place. Install each release into a versioned directory and
+atomically move a stable symlink only after the new tree is complete:
+
+```text
+/opt/engineering-loadout/releases/2026-06-04.1/
+/opt/engineering-loadout/releases/2026-06-04.2/
+/opt/engineering-loadout/current -> /opt/engineering-loadout/releases/2026-06-04.2
+```
+
+```bash
+ln -s /opt/engineering-loadout/releases/2026-06-04.2 /opt/engineering-loadout/.current.new
+mv -Tf /opt/engineering-loadout/.current.new /opt/engineering-loadout/current
+```
+
+This avoids `Text file busy` failures from users running old binaries while an update
+is unpacked. Existing processes keep their old inodes; new shells resolve the new
+`current` target. Keep the previous release for rollback and delete old releases only
+after no users still need them. `tmux` remains a special case because clients and the
+server must agree on protocol/version; restart the tmux server before switching users
+to a tmux update.
+
+Neovim catalog plugin source can live in the shared release tree instead of every
+user's `~/.local/share/nvim`. Keep it read-only, for example:
+
+```bash
+export LOADOUT_CFG_NVIM_PLUGIN_CATALOG_DIR=/opt/engineering-loadout/current/share/nvim/catalog-plugins
+```
+
+Users still enable catalog plugins in their Neovim user layer; this setting only
+changes where lazy.nvim reads plugin source from. Plugins with build steps must be
+prebuilt in the release tree or kept disabled from the shared catalog.
+
 **Selecting packages.** The default install includes 52 CLI tools, editors, fonts, and
 config bundles. To add or remove:
 
@@ -217,9 +250,20 @@ Not installed by default. Add with `./engineering-loadout --add <name>` or view 
 | [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (Python via `uv tool`, opens in browser) |
 | [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (`urxvt`/`urxvtc`/`urxvtd`; perl extensions disabled) |
 | [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal with [undercurl patch](https://st.suckless.org/patches/undercurl/) (`UNDERCURL_CURLY` style for LSP/spell-check diagnostics) |
-| [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
+| [liberty-tools](https://github.com/smprather/liberty-tools) | 1.0.1.dev0 (rolling) | Fast Rust-backed Liberty `.lib` parser/query tools with `liberty_format` and browser-based `liberty_view` |
+| [time-plot](https://github.com/smprather/time-plot) | 0.1.0 (rolling) | Plot arbitrary data vs. zero-based time with pluggable file-parser plugins (uPlot HTML output) |
+| [text-serdes](https://github.com/smprather/text-serdes) | 0.1.1 (rolling) | Short-lived encrypted text transport for copy/paste workflows with `enc` and `dec` |
 | [pygwalker](https://github.com/Kanaries/pygwalker) | 0.5.0.1 | Interactive Tableau-style data explorer for pandas DataFrames — runs in Jupyter notebooks or standalone (`pygwalker serve file.csv`) |
 | [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs (SSH logins, serial consoles, legacy interactive utilities); bundled with `libtcl8.6.so` |
+
+**Rolling first-party tools.** Tools marked *(rolling)* are first-party projects
+(github.com/smprather/…) bundled as wheels built fresh from source rather than pinned
+to a tagged release. Tag a project by adding `"rolling_git": "<clone-url>"` to its
+`packages.json` entry; `./update <name>` (or bare `./update`) then re-clones the source,
+rebuilds the wheel with `uv build`, prunes the previous wheel, and stamps the
+`packages.json` version from `git describe --tags --always --dirty`. It only rebuilds
+when the upstream commit changed (`--rebuild` forces). The version shown above is the
+project's declared version; the bundled wheel always tracks the latest commit.
 
 **gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 

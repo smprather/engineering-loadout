@@ -4,6 +4,8 @@
 Usage:
   ./update                        run all automated packages (no commit)
   ./update nodejs yara-rules      run specific automated packages
+  ./update liberty-tools          rebuild a rolling-git wheel from fresh source
+  ./update liberty-tools --rebuild  force rebuild even if commit is unchanged
   ./update nvim bat rg            show update guidance for those packages
   ./update --list                 table: package | kind | version | latest
   ./update --list-outdated        same table, only packages where latest > version
@@ -16,6 +18,7 @@ from __future__ import print_function
 
 import argparse
 import bz2
+import glob
 import json
 import os
 import re
@@ -170,6 +173,14 @@ def _load_packages():
 
 PACKAGES = _load_packages()
 
+# Rolling-git packages: built fresh from source on every ./update.  Tagged in
+# packages.json with "rolling_git": "<clone-url>".  The wheel is rebuilt only
+# when the source commit differs from the recorded version; the version stamped
+# back into packages.json is `git describe --tags --always --dirty` of HEAD.
+ROLLING_GIT = {
+    name: info["rolling_git"] for name, info in PACKAGES.items() if isinstance(info, dict) and info.get("rolling_git")
+}
+
 
 def _pkg_version(name):
     # Dev-artifact versions live outside packages.json.
@@ -191,6 +202,8 @@ def _pkg_desc(name):
 
 
 def _classify(name):
+    if name in ROLLING_GIT:
+        return "rolling"
     if name in AUTOMATED:
         return "automated"
     if name in BUILD_SCRIPTS:
@@ -444,6 +457,170 @@ def _run_automated(name, dry_run=False, tag=None):
         return False
 
 
+# ── rolling-git wheels ──────────────────────────────────────────────────────────
+
+
+def _git(args, cwd=None):
+    return subprocess.check_output(["git"] + args, cwd=cwd, stderr=subprocess.DEVNULL).decode("utf-8").strip()
+
+
+def _find_uv():
+    for cand in (os.path.expanduser("~/.local/bin/uv"), shutil.which("uv")):
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def _platform_wheels_dir():
+    """Return the pre_built/<platform>/wheels dir (prefer el8 when several)."""
+    candidates = sorted(glob.glob(os.path.join(REPO, "pre_built", "*", "wheels")))
+    if not candidates:
+        return None
+    for c in candidates:
+        if "el8" in os.path.basename(os.path.dirname(c)):
+            return c
+    return candidates[0]
+
+
+def _remote_head_short(url):
+    """Short SHA of remote HEAD via ls-remote (no clone). '' on failure."""
+    try:
+        out = _git(["ls-remote", url, "HEAD"])
+    except Exception:
+        return ""
+    return out.split()[0][:7] if out else ""
+
+
+def _build_backend(clone):
+    """PEP517 build-backend declared in the clone's pyproject.toml ('' if none)."""
+    try:
+        with open(os.path.join(clone, "pyproject.toml")) as fh:
+            txt = fh.read()
+    except IOError:
+        return ""
+    m = re.search(r'build-backend\s*=\s*"([^"]+)"', txt)
+    return m.group(1) if m else ""
+
+
+def _set_pkg_version(name, version):
+    """Surgically replace the version value inside one package block (minimal diff)."""
+    path = os.path.join(REPO, "pre_built", "packages.json")
+    with open(path) as fh:
+        txt = fh.read()
+    i = txt.find('"{}": {{'.format(name))
+    if i < 0:
+        raise KeyError("package {} not found in packages.json".format(name))
+    # Walk from the package's opening brace to its matching close.
+    depth = 0
+    j = txt.index("{", i)
+    while j < len(txt):
+        if txt[j] == "{":
+            depth += 1
+        elif txt[j] == "}":
+            depth -= 1
+            if depth == 0:
+                j += 1
+                break
+        j += 1
+    block = txt[i:j]
+    new_block, n = re.subn(
+        r'("version"\s*:\s*")([^"]*)(")',
+        lambda m: m.group(1) + version + m.group(3),
+        block,
+        count=1,
+    )
+    if n != 1:
+        raise KeyError("version key not found for {}".format(name))
+    with open(path, "w") as fh:
+        fh.write(txt[:i] + new_block + txt[j:])
+
+
+def _run_rolling(name, dry_run=False, force=False):
+    _sep(name)
+    url = ROLLING_GIT[name]
+    wheels_dir = _platform_wheels_dir()
+    if not wheels_dir:
+        print("ERROR: no pre_built/<platform>/wheels dir found")
+        return False
+
+    current = _pkg_version(name)
+    remote_short = _remote_head_short(url)
+    if not force and remote_short and remote_short in (current or "") and not dry_run:
+        print("Already at {} (remote HEAD {}) — nothing to build.".format(current, remote_short))
+        return True
+
+    if dry_run:
+        print("$ git clone --filter=blob:none {} <tmp>".format(url))
+        print("$ git -C <tmp> describe --tags --always --dirty")
+        print("$ uv build --wheel --out-dir <tmp> <tmp>")
+        print("$ (prune old <dist>-*.whl, copy new wheel into {})".format(os.path.relpath(wheels_dir, REPO)))
+        print("$ (stamp packages.json version for {})".format(name))
+        return True
+
+    uv = _find_uv()
+    if not uv:
+        print("ERROR: uv not found — required to build rolling-git wheels")
+        return False
+
+    tmp = tempfile.mkdtemp(prefix="rolling-{}-".format(name))
+    try:
+        clone = os.path.join(tmp, "src")
+        print("Cloning {} ...".format(url))
+        rc = subprocess.call(["git", "clone", "--filter=blob:none", "--quiet", url, clone])
+        if rc != 0:
+            print("  partial clone failed; retrying full clone")
+            shutil.rmtree(clone, ignore_errors=True)
+            rc = subprocess.call(["git", "clone", "--quiet", url, clone])
+        if rc != 0:
+            print("ERROR: git clone failed for {}".format(url))
+            return False
+
+        try:
+            version = _git(["describe", "--tags", "--always", "--dirty"], cwd=clone)
+        except Exception:
+            version = _git(["rev-parse", "--short", "HEAD"], cwd=clone)
+        print("  source version: {}".format(version))
+        if version == current and not force:
+            print("Already at {} — source unchanged, skipping rebuild.".format(version))
+            return True
+
+        out_dir = os.path.join(tmp, "wheels")
+        os.makedirs(out_dir)
+        env = os.environ.copy()
+        if "maturin" in _build_backend(clone):
+            # Under PEP517, maturin tags a bare linux_x86_64 wheel; force a
+            # portable manylinux_2_28 build (EL8 glibc floor) to match the
+            # repo's wheel-compat policy.  maturin reads MATURIN_PEP517_ARGS
+            # when invoked by a build frontend (uv/pip/build).
+            env["MATURIN_PEP517_ARGS"] = "--compatibility manylinux_2_28"
+        print("Building wheel via uv ...")
+        rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, clone], env=env)
+        if rc != 0:
+            print("ERROR: uv build failed for {}".format(name))
+            return False
+
+        built = [f for f in os.listdir(out_dir) if f.endswith(".whl")]
+        if not built:
+            print("ERROR: no wheel produced for {}".format(name))
+            return False
+        wheel = built[0]
+        dist = wheel.split("-")[0]  # normalized dist name, e.g. liberty_tools
+
+        removed = [f for f in os.listdir(wheels_dir) if f.endswith(".whl") and f.split("-")[0] == dist and f != wheel]
+        for f in removed:
+            os.remove(os.path.join(wheels_dir, f))
+        shutil.copy2(os.path.join(out_dir, wheel), os.path.join(wheels_dir, wheel))
+        for f in removed:
+            print("  removed old {}".format(f))
+        print("  installed {}".format(wheel))
+
+        _set_pkg_version(name, version)
+        print("  packages.json version -> {}".format(version))
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 # ── guidance printers ─────────────────────────────────────────────────────────
 
 
@@ -525,7 +702,11 @@ def _fetch_latest_map():
 
 def cmd_list(outdated_only=False):
     latest_map = _fetch_latest_map()
+    rolling_latest = {n: _remote_head_short(u) for n, u in ROLLING_GIT.items()}
     rows = []
+
+    for name in sorted(ROLLING_GIT):
+        rows.append((name, "rolling-git", _pkg_version(name)))
 
     for name in AUTOMATED:
         tag_note = " (--tag)" if AUTOMATED[name].get("supports_tag") else ""
@@ -549,22 +730,42 @@ def cmd_list(outdated_only=False):
     print(hdr)
     print("─" * 72)
     for name, kind, ver in rows:
-        raw_latest = latest_map.get(name, "")
-        if outdated_only and (not raw_latest or raw_latest == ver):
-            continue
+        if name in ROLLING_GIT:
+            raw_latest = rolling_latest.get(name, "")
+            up_to_date = bool(raw_latest) and raw_latest in (ver or "")
+            if outdated_only and (not raw_latest or up_to_date):
+                continue
+            lstr = raw_latest or "-"
+        else:
+            raw_latest = latest_map.get(name, "")
+            if outdated_only and (not raw_latest or raw_latest == ver):
+                continue
+            lstr = raw_latest.lstrip("v") if raw_latest else "-"
         vstr = ver or "-"
-        lstr = raw_latest.lstrip("v") if raw_latest else "-"
         print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
 
 
 # ── git commit ────────────────────────────────────────────────────────────────
 
 
+def _git_paths_for(name):
+    if name in AUTOMATED:
+        return AUTOMATED[name].get("git_paths", [])
+    if name in ROLLING_GIT:
+        wheels = _platform_wheels_dir()
+        paths = ["pre_built/packages.json"]
+        if wheels:
+            paths.append(os.path.relpath(wheels, REPO))
+        return paths
+    return []
+
+
 def git_commit(succeeded, dry_run=False):
     paths = []
     for name in succeeded:
-        for p in AUTOMATED[name].get("git_paths", []):
-            if os.path.exists(os.path.join(REPO, p)):
+        for p in _git_paths_for(name):
+            full = os.path.join(REPO, p)
+            if os.path.exists(full) and p not in paths:
                 paths.append(p)
 
     if not paths:
@@ -601,6 +802,7 @@ ALL_KNOWN = (
     set(AUTOMATED)
     | set(BUILD_SCRIPTS)
     | set(IMPORT_SCRIPTS)
+    | set(ROLLING_GIT)
     | DOWNLOAD_ONLY
     | {n for n, p in PACKAGES.items() if not n.startswith("@") and p.get("kind") == "bin"}
 )
@@ -621,6 +823,9 @@ def main():
     ap.add_argument("--list", action="store_true", help="table: package | kind | version | latest")
     ap.add_argument("--list-outdated", action="store_true", help="same as --list but only outdated packages")
     ap.add_argument("--commit", action="store_true", help="stage + commit automated output (default: no commit)")
+    ap.add_argument(
+        "--rebuild", action="store_true", help="rolling-git: rebuild even if the source commit is unchanged"
+    )
     ap.add_argument("--dry-run", action="store_true", help="print commands without executing")
     ap.add_argument(
         "--tag", default=None, metavar="VERSION", help="version hint for nodejs and yara (e.g. v26.3.0 or 20260517)"
@@ -631,7 +836,7 @@ def main():
         cmd_list(outdated_only=args.list_outdated)
         return
 
-    packages = args.packages if args.packages else list(AUTOMATED)
+    packages = args.packages if args.packages else list(AUTOMATED) + sorted(ROLLING_GIT)
 
     unknown = [p for p in packages if p not in ALL_KNOWN]
     if unknown:
@@ -642,7 +847,13 @@ def main():
 
     for name in packages:
         kind = _classify(name)
-        if kind == "automated":
+        if kind == "rolling":
+            ok = _run_rolling(name, dry_run=args.dry_run, force=args.rebuild)
+            if ok:
+                auto_succeeded.append(name)
+            else:
+                all_ok = False
+        elif kind == "automated":
             ok = _run_automated(name, dry_run=args.dry_run, tag=args.tag)
             if ok:
                 auto_succeeded.append(name)

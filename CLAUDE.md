@@ -167,7 +167,7 @@ hooks/
 engineering-loadout         - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
 engineering-loadout.ps1                 - Windows installation script (PowerShell)
 engineering-loadout-pwsh-bootstrap.ps1 - Windows PowerShell 5.1 bootstrapper for pwsh via winget
-update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; guidance for build/download packages)
+update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; rolling-git first-party wheels; guidance for build/download packages)
 strip_all_elf_binaries      - Python 3.6-compatible helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2
 tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fresh-user smoke testing
 ```
@@ -263,6 +263,8 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 **Zsh binary behavior**: `zsh` optional pre-built binary (`optional: true` in `packages.json` — opt in with `./engineering-loadout --add zsh`). No runtime archive needed; binary self-contained. Links against `libncurses.so.6` and `libreadline.so.7` (both always-installed bundled libs). Built from source on EL8 with `--disable-pcre` (avoids bundling `libpcre.so.1`); POSIX ERE regex still works via zsh `regex` module. Build with `pre_built/build_scripts/build-zsh.sh --tag <version>`. Tag format: bare version number, e.g. `5.9` (no `v` prefix — zsh upstream convention).
 
 **Fish runtime behavior**: `fish` optional pre-built binary (`optional: true` — opt in with `./engineering-loadout --add fish`). Binary requires standard library (functions, completions, themes) shipped as `pre_built/<platform>/runtime/fish.tar.bz2`. Archive contains `./share/fish/...`, extracts to `~/.local/` so standard library lands at `~/.local/share/fish/`. Installer function: `install_fish_runtime()`. Binary links against `libncurses.so.6` and `libpcre2-8.so.0` (both bundled — `libpcre2-8.so.0` owned by `gui_libs` but installed as lib64 dep). fish 4.x written in Rust; build with cmake+cargo via `pre_built/build_scripts/build-fish.sh --tag <version>`.
+
+**Rolling-git wheel behavior**: First-party `python-tool` packages can be tagged `"rolling_git": "<clone-url>"` in `packages.json` (currently `liberty-tools`, `text-serdes`, `time-plot`). `./update <name>` (and bare `./update`, which now includes all rolling pkgs) rebuilds these from source instead of using a hand-bundled wheel: cheap `git ls-remote` skip-check → fresh `git clone --filter=blob:none` (keeps tags so `describe` works; falls back to full clone) → `uv build --wheel` (handles maturin **and** hatchling backends) → prune previous `<dist>-*.whl` → copy new wheel into `pre_built/<platform>/wheels/` → surgically stamp the package's `version` to `git describe --tags --always --dirty`. Rebuild happens **only when the source commit changed**; `./update <name> --rebuild` forces. `./update --list[-outdated]` shows rolling rows with latest = remote HEAD sha. **maturin gotcha:** under PEP517 maturin tags a bare `linux_x86_64` wheel; `update` sets `MATURIN_PEP517_ARGS="--compatibility manylinux_2_28"` for maturin backends so the wheel is portable + auditwheel-checked. Builds need network + `~/.cache/uv` write (run on the EL8 build machine). Add a 4th rolling project by adding the `rolling_git` field — `./update` discovers it automatically. To add a new third-party (pinned) Python tool instead, see *Python tool behavior* below.
 
 **JupyterLab Python tool behavior**: `jupyterlab` optional `uv_tool` (`optional: true` — opt in with `./engineering-loadout --add jupyterlab`). Installed via `uv tool install jupyterlab` using bundled wheels. After install, `jupyter` and `jupyter-lab` launchers at `~/.local/bin/`. Users run `jupyter lab`; JupyterLab opens in system browser. Requires accessible browser (WSL2: Windows browser via WSL interop; headless farm nodes: point `BROWSER` to VNC-accessible browser or use `--no-browser --port=8888` with port forwarding). Wheels must be downloaded with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download jupyterlab --platform manylinux_2_28_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/` — JupyterLab has ~80 dependency packages.
 
@@ -505,6 +507,8 @@ bash/corp/global_hooks/5.sh  # hook injection at point 5
 ### Stable-release policy for bundled binaries
 
 All bundled tools must come from **stable tagged releases** — never from git HEAD, nightly branches, or dev builds. Tagged releases have known changelogs, upstream testing, verifiable provenance.
+
+**Exception — first-party rolling-git tools.** Projects we own (currently `liberty-tools`, `text-serdes`, `time-plot` under github.com/smprather) may be tagged `"rolling_git"` in `packages.json` and built fresh from source HEAD by `./update` (see *Rolling-git wheel behavior*). Their `packages.json` version is a `git describe` string, not a release tag. The stable-release rules below apply only to third-party bundled tools.
 
 **Rules:**
 - All `build_scripts/build-*.sh` scripts require `--tag vX.Y.Z` (enforced at runtime).

@@ -213,7 +213,8 @@
         "websockets"
       ],
       "uv_tool": "liberty-tools",
-      "version": "0.1.1",
+      "rolling_git": "https://github.com/smprather/liberty-tools.git",
+      "version": "v2026.06.01.1-29-ga48ea14",
       "platforms": [
         "linux"
       ],
@@ -223,6 +224,10 @@
         "eda",
         "liberty",
         "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
       ],
       "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
     },
@@ -1919,7 +1924,8 @@
         "mdurl"
       ],
       "uv_tool": "time-plot",
-      "version": "0.1.0",
+      "rolling_git": "https://github.com/smprather/time-plot.git",
+      "version": "2a1c077",
       "platforms": [
         "linux"
       ],
@@ -1935,6 +1941,44 @@
         "uv"
       ],
       "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers"
+    },
+    "text-serdes": {
+      "kind": "python-tool",
+      "bins": [
+        "enc",
+        "dec"
+      ],
+      "wheels": [
+        "text-serdes",
+        "base91",
+        "cryptography",
+        "cffi",
+        "pycparser",
+        "click",
+        "rich-click",
+        "rich",
+        "markdown-it-py",
+        "mdurl",
+        "pygments"
+      ],
+      "uv_tool": "text-serdes",
+      "rolling_git": "https://github.com/smprather/text-serdes.git",
+      "version": "c9e83b7",
+      "platforms": [
+        "linux"
+      ],
+      "default": false,
+      "optional": true,
+      "tags": [
+        "clipboard",
+        "text",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "text-serdes \u2014 short-lived encrypted text transport for copy/paste workflows (enc/dec)"
     },
     "pygwalker": {
       "kind": "python-tool",
@@ -2622,7 +2666,9 @@
         "visidata",
         "jupyterlab",
         "time-plot",
-        "pygwalker"
+        "text-serdes",
+        "pygwalker",
+        "liberty-tools"
       ],
       "description": "Optional Python tools installed via uv tool install"
     },
