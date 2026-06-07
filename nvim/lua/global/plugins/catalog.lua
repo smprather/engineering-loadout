@@ -3,13 +3,13 @@
 --   return {{ "folke/flash.nvim", enabled = true, keys = { ... } }}
 --
 -- Offline bundling: when the installer has extracted catalog tarballs, specs
--- use the local dir (same pattern as treesitter.lua).  When bundled dir is
--- absent, lazy falls back to the GitHub source on first online sync.
+-- use vim.g.cfg_nvim_plugin_catalog_dir.  When bundled dir is absent, lazy
+-- falls back to the GitHub source on first online sync.
 
 -- Flip to true to download / re-bundle, then flip back.
 local _CATALOG_ENABLED = false
 
-local _vendor = vim.fn.stdpath("data") .. "/loadout/vendor/catalog-plugins"
+local _vendor = vim.g.cfg_nvim_plugin_catalog_dir
 local function cat_dir(name)
     local d = _vendor .. "/" .. name
     return vim.uv.fs_stat(d) and d or nil

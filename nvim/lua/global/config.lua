@@ -12,6 +12,11 @@ vim.g.have_nerd_font  = true
 -- Editor behavior
 vim.g.cfg_tab_width = 4
 
+-- Shared source locations
+vim.g.cfg_nvim_plugin_catalog_dir =
+    os.getenv("LOADOUT_CFG_NVIM_PLUGIN_CATALOG_DIR")
+    or (vim.fn.stdpath("data") .. "/loadout/vendor/catalog-plugins")
+
 -- DPC (read-only/offline machine) detection via /proc/mounts anvil_release overlay
 vim.g.cfg_dpc = (function()
     local file = io.open("/proc/mounts", "r")
