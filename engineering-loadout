@@ -1405,6 +1405,14 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     _allowed_bins, _registered_bins = _tool_bin_sets(selected_tools, _registry)
     _allowed_libs, _registered_libs = _tool_lib_sets(selected_tools, _registry)
 
+    if selected_tools is not None and not _allowed_bins and not _allowed_libs:
+        # Selection contributes no binary or shared library (e.g. an env-only
+        # install) — don't touch ~/.local/bin or ~/.local/lib64 at all, not even
+        # the always-on base libs that only exist to support binaries.
+        skipped("pre-built binaries (no binaries or libraries selected)", "")
+        record_result("pre-built binaries", "SKIP", "no bin/lib packages selected")
+        return set()
+
     def _bin_selected(stem):
         # Unregistered stems (not claimed by any tool) are always installed.
         return stem not in _registered_bins or stem in _allowed_bins
@@ -2488,9 +2496,9 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
 
 
 def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "treesitter-parsers" not in selected_tools and "env-nvim" not in selected_tools:
-        skipped("vendored nvim-treesitter (no treesitter packages or env-nvim selected)", "")
-        record_result("nvim-treesitter vendor", "SKIP", "no treesitter packages or env-nvim selected")
+    if selected_tools is not None and "treesitter-parsers" not in selected_tools:
+        skipped("vendored nvim-treesitter (treesitter-parsers not selected)", "")
+        record_result("nvim-treesitter vendor", "SKIP", "treesitter-parsers not in selected packages")
         return
     src_root = os.path.join(repo_dir, "treesitter", "vendor")
     dest_root = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor")
@@ -2534,9 +2542,9 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
     Each plugin is seeded only when lazy/<name> is absent, so re-running the
     installer never clobbers a plugin the user has updated via `:Lazy update`.
     """
-    if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("nvim plugin bundle (env-nvim not selected)", "")
-        record_result("nvim plugin bundle", "SKIP", "env-nvim not in selected packages")
+    if selected_tools is not None and "nvim-catalog-plugins" not in selected_tools:
+        skipped("nvim plugin bundle (nvim-catalog-plugins not selected)", "")
+        record_result("nvim plugin bundle", "SKIP", "nvim-catalog-plugins not in selected packages")
         return
     archive = os.path.join(repo_dir, "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
     if not os.path.isfile(archive):
@@ -2582,9 +2590,9 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
 
 def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
     """When online, run headless nvim to bootstrap lazy.nvim and sync all plugins."""
-    if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("Neovim Lazy sync (env-nvim not selected)", "")
-        record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
+    if selected_tools is not None and "nvim-catalog-plugins" not in selected_tools:
+        skipped("Neovim Lazy sync (nvim-catalog-plugins not selected)", "")
+        record_result("Neovim Lazy sync", "SKIP", "nvim-catalog-plugins not in selected packages")
         return
     nvim_bin = os.path.join(home, ".local", "bin", "nvim")
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):

@@ -219,7 +219,9 @@ Installer dispatches on first non-flag arg (defaulting to `install`):
 
 ### Per-phase selection gating
 
-Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tldr_cache`, `install_typelibs`, `install_portable_python`, `install_treesitter_parsers`, `install_nvim_treesitter_vendor`, `install_*_runtime`, `install_python_tools`) receives `selected_tools` and short-circuits with `SKIP` install-results row when its package(s) not in selected set. `--skip @fonts-all` short-circuits `install_fonts`; `--skip tldr-data` short-circuits `install_tldr_cache`; etc.
+Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tldr_cache`, `install_typelibs`, `install_portable_python`, `install_treesitter_parsers`, `install_nvim_treesitter_vendor`, `install_*_runtime`, `install_python_tools`) receives `selected_tools` and short-circuits when its package(s) not in selected set. `--skip @fonts-all` short-circuits `install_fonts`; `--skip tldr-data` short-circuits `install_tldr_cache`; etc.
+
+**env packages install config only.** An env-only selection (e.g. `--only @envs`) writes nothing but `~/.config`/dotfile text — no binaries, libs, or nvim data. `install_prebuilt_binaries` skips entirely (including the always-on base libs) when the selection contributes no `bin`/`lib` (`_allowed_bins` and `_allowed_libs` both empty). The nvim plugin/parser phases are driven by their own **data** packages, not `env-nvim`: `install_nvim_plugin_bundle` and `install_nvim_lazy_update` gate on `nvim-catalog-plugins`; `install_nvim_treesitter_vendor` gates on `treesitter-parsers`. Both data packages are `default: true`, so a normal install still seeds plugins/parsers; only selective installs that exclude them skip.
 
 **Destination mode** (`--dest-dir <dir>`): Installs into alternate root instead of `$HOME`. Used by tests, useful for staging.
 
