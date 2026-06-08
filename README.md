@@ -45,18 +45,20 @@ Single Python 3.6-compatible executable. Re-run with a new release tarball to up
 
 **Shared/read-only deployments.** For a single install shared by many users, do not
 mutate the live tree in place. Install only the shared artifacts — every package except
-the per-user `env` config bundles — with the synthetic `@shared` group, skipping its
-`@envs` complement so tool config recommends don't get written into the shared tree:
+the per-user `env` config bundles — with the synthetic `@shared` group:
 
 ```bash
 ./engineering-loadout --dest-dir /opt/engineering-loadout/releases/2026-06-04.2 \
-  --only @shared --skip @envs
+  --only @shared
 ```
 
 `@shared` = all non-`env` packages (binaries, libs, runtimes, fonts, data, python tools);
-`@envs` = the config bundles each user installs into their own `$HOME` later. Preview the
-set with `./engineering-loadout resolve @shared --skip @envs`. Install each release into a
-versioned directory and atomically move a stable symlink only after the new tree is complete:
+its complement `@envs` = the config bundles each user installs into their own `$HOME`
+later with `./engineering-loadout --only @envs`. Tools and config bundles are fully
+decoupled (no cross-`recommends`), so `@shared` and `@envs` need no extra `--skip`/`--no-deps`
+flags. Preview either set with `./engineering-loadout resolve @shared` / `resolve @envs`.
+Install each release into a versioned directory and atomically move a stable symlink only
+after the new tree is complete:
 
 ```text
 /opt/engineering-loadout/releases/2026-06-04.1/

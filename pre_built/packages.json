@@ -690,9 +690,6 @@
       "tags": [
         "editor"
       ],
-      "recommends": [
-        "env-kak"
-      ],
       "description": "Modal editor with multiple simultaneous selections"
     },
     "lazygit": {
@@ -809,7 +806,6 @@
       ],
       "archive": "pre_built/PLATFORM/runtime/nvim.tar.bz2",
       "recommends": [
-        "env-nvim",
         "treesitter-parsers"
       ],
       "description": "Hyperextensible Vim-based text editor",
@@ -976,9 +972,6 @@
         "shell",
         "prompt"
       ],
-      "recommends": [
-        "env-starship"
-      ],
       "description": "Cross-shell customizable minimal prompt"
     },
     "stylua": {
@@ -1048,9 +1041,6 @@
       "default": true,
       "tags": [
         "terminal"
-      ],
-      "recommends": [
-        "env-tmux"
       ],
       "description": "Terminal multiplexer with session management"
     },
@@ -1223,9 +1213,6 @@
         "editor"
       ],
       "archive": "pre_built/PLATFORM/runtime/vim92.tar.bz2",
-      "recommends": [
-        "env-vim"
-      ],
       "description": "Vi IMproved text editor"
     },
     "gvim": {
@@ -1249,7 +1236,6 @@
         "vim"
       ],
       "recommends": [
-        "env-vim",
         "font-firacode"
       ],
       "description": "GTK3 GUI Vim with clipboard and font rendering"
@@ -2147,11 +2133,7 @@
         "shell"
       ],
       "recommends": [
-        "bash",
-        "starship",
-        "env-starship",
-        "fzf",
-        "zoxide"
+        "env-starship"
       ],
       "description": "Bash 5-layer config (system \u2192 corp \u2192 site \u2192 project \u2192 user) with prompt, aliases, completions"
     },
@@ -2174,10 +2156,6 @@
       "tags": [
         "env",
         "editor"
-      ],
-      "recommends": [
-        "nvim",
-        "treesitter-parsers"
       ],
       "description": "Neovim layer dispatcher (lazy.nvim plugin specs + LSP configs across all layers)"
     },
@@ -2219,9 +2197,6 @@
         "env",
         "editor"
       ],
-      "recommends": [
-        "vim"
-      ],
       "description": "Vim 9 config + bundled native pack/vendor plugins"
     },
     "env-tmux": {
@@ -2247,9 +2222,6 @@
         "env",
         "terminal"
       ],
-      "recommends": [
-        "tmux"
-      ],
       "description": "tmux config + bundled tpm/resurrect/continuum plugins"
     },
     "env-helix": {
@@ -2266,9 +2238,6 @@
         "env",
         "editor"
       ],
-      "recommends": [
-        "hx"
-      ],
       "description": "Helix editor user config"
     },
     "env-kak": {
@@ -2283,9 +2252,6 @@
       "tags": [
         "env",
         "editor"
-      ],
-      "recommends": [
-        "kak"
       ],
       "description": "Kakoune kakrc (copied only if not already present)"
     },
@@ -2307,9 +2273,6 @@
       "tags": [
         "env",
         "prompt"
-      ],
-      "recommends": [
-        "starship"
       ],
       "description": "Starship prompt config (Linux/macOS variant)"
     },
