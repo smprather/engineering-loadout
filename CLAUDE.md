@@ -194,7 +194,7 @@ When installer runs, `resolve_tool_selection(args, registry)` performs:
 5. Walk soft `recommends` — silently drop skipped/unknown.
 6. Filter by current platform (`linux`/`macos`/`windows`).
 
-Group expansion (`expand_groups`) recursive, cycle-detected. Synthetic `@default` group expands at runtime to every `default: true` package.
+Group expansion (`expand_groups`) recursive, cycle-detected. Synthetic groups expand at runtime (not stored in `packages.json`): `@default` → every `default: true` package; `@shared` → every non-group package whose `kind != env` (everything for a shared/read-only tree); `@envs` → its complement (every `kind == env` config bundle). env packages are only ever soft `recommends`, so a shared install is `--only @shared --skip @envs` — the skipped env recommends drop silently, leaving zero per-user config in the shared tree.
 
 ### Subcommands
 

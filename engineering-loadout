@@ -220,6 +220,10 @@ def expand_groups(names, registry, _stack=None):
     """Expand @group references recursively into leaf package names.
 
     @default is special: it expands to every package marked default=true.
+    @shared is special: every non-group package except per-user "env" config
+    bundles — i.e. everything you install into a shared/read-only tree. @envs
+    is its complement (every "env" package); pair them as
+    `--only @shared --skip @envs` to keep env recommends out of a shared tree.
     Cycles in the group graph raise ResolverError.
     Unknown package names produce a warning and are dropped.
     """
@@ -232,6 +236,12 @@ def expand_groups(names, registry, _stack=None):
             continue
         if name == "@default":
             out |= {n for n, e in registry.items() if not n.startswith("@") and _is_default_pkg(e)}
+            continue
+        if name == "@shared":
+            out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") != "env"}
+            continue
+        if name == "@envs":
+            out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") == "env"}
             continue
         if name.startswith("@"):
             if name in _stack:
@@ -3586,7 +3596,7 @@ def cmd_doctor(args, registry, repo_dir):
         for field in ("depends", "recommends"):
             for ref in e.get(field, []):
                 if ref.startswith("@"):
-                    if ref not in registry and ref != "@default":
+                    if ref not in registry and ref not in ("@default", "@shared", "@envs"):
                         unknown_deps.append((n, field, ref))
                 elif ref not in registry:
                     unknown_deps.append((n, field, ref))
