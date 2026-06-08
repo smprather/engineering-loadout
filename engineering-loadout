@@ -216,6 +216,16 @@ def _parse_namelist(raw):
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+# Synthetic groups are computed at runtime (not stored in packages.json).
+# expand_groups() special-cases each name below; the descriptions here drive
+# `list --groups` and `describe`.
+_SYNTHETIC_GROUPS = {
+    "@default": "Every package marked default: true (the standard install set).",
+    "@shared": "Every non-env package — install set for a shared/read-only tree.",
+    "@envs": "Every per-user env config bundle (the complement of @shared).",
+}
+
+
 def expand_groups(names, registry, _stack=None):
     """Expand @group references recursively into leaf package names.
 
@@ -3386,6 +3396,9 @@ def cmd_list(args, registry):
             entry = registry[n]
             members = entry.get("members", [])
             rows.append((n, str(len(members)), entry.get("description", "")))
+        for n, desc in _SYNTHETIC_GROUPS.items():
+            rows.append((n, str(len(expand_groups([n], registry))), desc + " (synthetic)"))
+        rows.sort(key=lambda r: r[0])
         _list_table(
             rows,
             [
@@ -3439,6 +3452,16 @@ def cmd_describe(args, registry):
         eprint("Usage: ./engineering-loadout describe <package-or-@group>")
         return 1
     name = args.positional[0]
+    if name in _SYNTHETIC_GROUPS:
+        members = sorted(expand_groups([name], registry))
+        print(name)
+        print("=" * len(name))
+        print("kind:        group (synthetic)")
+        print("description: {}".format(_SYNTHETIC_GROUPS[name]))
+        print(f"members ({len(members)}):")
+        for m in members:
+            print(f"  - {m}")
+        return 0
     entry = registry.get(name)
     if entry is None:
         eprint(f"Unknown package: {name}")
