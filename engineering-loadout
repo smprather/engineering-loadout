@@ -3055,6 +3055,7 @@ def install_copy_mode(repo_dir, home, selected_pkgs=None, registry=None):
         if selected_pkgs is not None and pkg_name not in selected_pkgs:
             continue
         ENV_HANDLERS[pkg_name](repo_dir, home)
+        record_result(pkg_name, "yes", "")
 
     if selected_pkgs is None or registry is None:
         return
@@ -3067,6 +3068,7 @@ def install_copy_mode(repo_dir, home, selected_pkgs=None, registry=None):
             continue
         if _install_env_generic(pkg_name, entry, repo_dir, home):
             handled.add(pkg_name)
+            record_result(pkg_name, "yes", "")
 
 
 def glob_paths(path):
@@ -3092,11 +3094,17 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
 
 
 def run_layer_install_scripts(home):
+    ran = []
     for layer in BASH_LAYERS:
         install_script = os.path.join(home, ".config", "bash", layer, "install.sh")
         if os.path.isfile(install_script) and os.access(install_script, os.R_OK):
             print(f"Sourcing '{install_script}' ...")
             run(["/bin/bash", "-c", 'source "$1"', "/bin/bash", install_script])
+            ran.append(layer)
+    if ran:
+        record_result("layer install scripts", "yes", "ran: {}".format(", ".join(ran)))
+    else:
+        record_result("layer install scripts", "SKIP", "no layer install.sh present")
 
 
 SUBCOMMANDS = ("install", "list", "describe", "resolve", "doctor", "restore-backup")
@@ -3729,7 +3737,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
-    run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools, registry)
+    run_install_step("dotfiles", install_copy_mode, repo_dir, home, selected_tools, registry, silent=True)
     run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
