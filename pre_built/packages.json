@@ -214,7 +214,7 @@
       ],
       "uv_tool": "liberty-tools",
       "rolling_git": "https://github.com/smprather/liberty-tools.git",
-      "version": "v2026.06.01.1-29-ga48ea14",
+      "version": "v2026.06.01.1-30-g1611412",
       "platforms": [
         "linux"
       ],
