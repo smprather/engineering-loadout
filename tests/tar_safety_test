@@ -4,12 +4,13 @@ tar_safety_test — focused test for safe_extract_tar's path-traversal,
 symlink-escape, hardlink-escape, and safe-relative-symlink behavior.
 
 Builds synthetic tarballs in memory, runs them through
-engineering-loadout's safe_extract_tar (via SourceFileLoader so the file
+loadout's safe_extract_tar (via SourceFileLoader so the file
 without a .py extension can still be imported as a module), and asserts
 the expected accept/reject outcome.
 
 Exits 0 if all cases pass, 1 otherwise.
 """
+
 import importlib.machinery
 import importlib.util
 import io
@@ -19,14 +20,13 @@ import sys
 import tarfile
 import tempfile
 
-
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ELOADOUT = os.path.join(REPO, "engineering-loadout")
+LOADOUT_PATH = os.path.join(REPO, "loadout")
 
 
-def load_eloadout():
-    loader = importlib.machinery.SourceFileLoader("eloadout", ELOADOUT)
-    spec = importlib.util.spec_from_loader("eloadout", loader)
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
@@ -34,7 +34,7 @@ def load_eloadout():
 
 def make_tar(members):
     """members: list of (name, kind, content_or_linkname)
-       kind: 'file' | 'symlink' | 'hardlink' | 'dir'"""
+    kind: 'file' | 'symlink' | 'hardlink' | 'dir'"""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
         for name, kind, payload in members:
@@ -65,13 +65,13 @@ def make_tar(members):
 
 def run_case(name, members, expect_reject):
     """Returns True if behavior matched expectation."""
-    eloadout = load_eloadout()
+    loadout = load_loadout()
     dest = tempfile.mkdtemp(prefix="tar_safety_")
     rejected = False
     err = ""
     try:
         with tarfile.open(fileobj=make_tar(members), mode="r") as tf:
-            eloadout.safe_extract_tar(tf, dest)
+            loadout.safe_extract_tar(tf, dest)
     except RuntimeError as e:
         rejected = True
         err = str(e)
@@ -98,35 +98,27 @@ def main():
     print("")
     cases = [
         # 1. Plain file inside extraction root — must succeed.
-        ("safe regular file",
-            [("foo.txt", "file", "hello")],
-            False),
+        ("safe regular file", [("foo.txt", "file", "hello")], False),
         # 2. Absolute member path — reject.
-        ("absolute member path",
-            [("/etc/passwd", "file", "evil")],
-            True),
+        ("absolute member path", [("/etc/passwd", "file", "evil")], True),
         # 3. .. escape in member name — reject.
-        ("dotdot escape in name",
-            [("../escape.txt", "file", "evil")],
-            True),
+        ("dotdot escape in name", [("../escape.txt", "file", "evil")], True),
         # 4. Safe relative symlink inside extraction tree — must succeed.
-        ("safe relative symlink inside tree",
-            [("subdir", "dir", None),
-             ("subdir/target.txt", "file", "ok"),
-             ("subdir/link.txt", "symlink", "target.txt")],
-            False),
+        (
+            "safe relative symlink inside tree",
+            [
+                ("subdir", "dir", None),
+                ("subdir/target.txt", "file", "ok"),
+                ("subdir/link.txt", "symlink", "target.txt"),
+            ],
+            False,
+        ),
         # 5. Symlink whose target escapes via .. — reject.
-        ("symlink escape via dotdot",
-            [("bad_link", "symlink", "../../etc/passwd")],
-            True),
+        ("symlink escape via dotdot", [("bad_link", "symlink", "../../etc/passwd")], True),
         # 6. Symlink to absolute path — reject.
-        ("symlink escape via absolute",
-            [("bad_link", "symlink", "/etc/passwd")],
-            True),
+        ("symlink escape via absolute", [("bad_link", "symlink", "/etc/passwd")], True),
         # 7. Hardlink to a path outside root — reject.
-        ("hardlink escape",
-            [("bad_hardlink", "hardlink", "../../etc/passwd")],
-            True),
+        ("hardlink escape", [("bad_hardlink", "hardlink", "../../etc/passwd")], True),
     ]
 
     passed = 0

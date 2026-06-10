@@ -1,9 +1,9 @@
 #!/bin/sh
-# dev-onboard — bring a base AlmaLinux 8.10 machine up to engineering-loadout
+# dev-onboard — bring a base AlmaLinux 8.10 machine up to loadout
 # development level.
 #
 # Prereqs: assumes the user has already cloned the repo and run a full
-# `./engineering-loadout --profile engineering-loadout` so every bundled
+# `./loadout install @engineering-loadout` so every bundled
 # tool is in ~/.local/bin and ~/.local/lib64. This script only installs
 # what's needed *to build and release the loadout itself* — system
 # packages (compilers, dev headers, scanning tools) and per-user
@@ -17,11 +17,11 @@
 #   ./dev-onboard --yes      # non-interactive
 #   ./dev-onboard --check    # print what would happen, change nothing
 #
-# Logs to /tmp/engineering-loadout-dev-onboard.log
+# Logs to /tmp/loadout-dev-onboard.log
 
 set -eu
 
-LOG=/tmp/engineering-loadout-dev-onboard.log
+LOG=/tmp/loadout-dev-onboard.log
 : > "$LOG"
 
 YES=0
@@ -195,7 +195,7 @@ say "Phase 6 — Sanity check"
 cat <<'EOF' | tee -a "$LOG"
 
   Verification commands to run next:
-    ./engineering-loadout doctor
+    ./loadout doctor
     pre_built/build_scripts/check-versions --outdated-only
     pre_built/build_scripts/verify-binaries
     ./release --dry-run                  # full release smoke

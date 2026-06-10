@@ -178,7 +178,7 @@ Key rules:
   other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted — they are
   always installed regardless of tool selection.
 - `default: false` — if the tool should NOT be installed by default (e.g. large optional tools
-  like `octave`). Users opt in with `./engineering-loadout --add mytool`. The legacy
+  like `octave`). Users opt in with `./loadout install mytool`. The legacy
   `optional: true` field still works but `default` is preferred.
 - `platforms` — list from `linux`, `macos`, `windows`. Resolver filters by current platform.
 - `tags` — free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
@@ -379,7 +379,7 @@ cp /tmp/nedit_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
 ```
 
 nedit-ng is `optional: true` in `packages.json` because it requires `gui_libs`. Install together:
-`./engineering-loadout --add gui_libs,nedit-ng`.
+`./loadout install gui_libs,nedit-ng`.
 
 Binary sizes: 3.8 MB unstripped → 3.1 MB stripped → ~1.1 MB bzip2.
 See `pre_built/build_scripts/build-nedit-ng.sh` for the full recipe.
@@ -689,7 +689,7 @@ sets `MODULESHOME`, `MODULEPATH`, `LOADEDMODULES`, etc.  Requires `/usr/bin/tcls
 ### Install
 
 ```bash
-./engineering-loadout --add modules
+./loadout install modules
 ```
 
 Extracts `~/.local/lib/modulecmd.tcl`, `~/.local/share/modulefiles/`, `~/.local/etc/modulespath`.
@@ -754,7 +754,7 @@ Built with gcc on EL8; max glibc symbol verified at GLIBC_2.17 or lower.
 ### Install
 
 ```bash
-./engineering-loadout --add tcl
+./loadout install tcl
 ```
 
 Installs tclsh to `~/.local/bin/`, `libtcl9.0.so` to `~/.local/lib64/`.
@@ -820,7 +820,7 @@ Max symbol: `GLIBC_2.14`. Max C++ ABI: `GLIBCXX_3.4` (GCC 3.4 era base ABI). Com
 ### Install
 
 ```bash
-./engineering-loadout --add ngspice
+./loadout install ngspice
 ```
 
 Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scripts/`.
@@ -889,7 +889,7 @@ Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
 ### Install
 
 ```bash
-./engineering-loadout --add p7zip
+./loadout install p7zip
 ```
 
 Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
@@ -967,7 +967,7 @@ Build script:
 ### Install
 
 ```bash
-./engineering-loadout --add pdftotext
+./loadout install pdftotext
 ```
 
 Installs `pdftotext` to `~/.local/bin/`, `liblcms2.so.2` and `libopenjp2.so.7` to `~/.local/lib64/`.
@@ -1011,7 +1011,7 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
 - farm-versions: `strategy_flag(["--version"], r"([0-9]+\.[0-9]+)")` (cloc prints a
   bare two-part version). check-versions resolves latest from the GitHub homepage.
 
-Install: `./engineering-loadout --add cloc` (or it's in the default set).
+Install: `./loadout install cloc` (or it's in the default set).
 
 ---
 
@@ -1062,7 +1062,7 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2
 - farm-versions: `strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)")`.
 - When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
 
-Install both: `./engineering-loadout --add scc,tokei` (both in the default set).
+Install both: `./loadout install scc,tokei` (both in the default set).
 
 ---
 
@@ -1109,4 +1109,4 @@ GUI tool, links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb — **all from
 strip → `patchelf --set-rpath '$ORIGIN/../lib64'` → bzip2. `depends: ["gui_libs"]`,
 `default: false`, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
 
-Install: `./engineering-loadout --add gui_libs,flameshot`
+Install: `./loadout install gui_libs,flameshot`

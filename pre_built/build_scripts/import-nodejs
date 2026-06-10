@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-import-nodejs: bundle a Node.js installation into the dotfiles pre_built tree.
+import-nodejs: bundle a Node.js installation into the loadout pre_built tree.
 
 Usage:
     ./import-nodejs                             # nvm install --lts, bundle latest LTS
@@ -359,7 +359,7 @@ def update_packages_json(packages_json_path, version, dry_run):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Bundle a Node.js installation into dotfiles pre_built/.",
+        description="Bundle a Node.js installation into loadout pre_built/.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(

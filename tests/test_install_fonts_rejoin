@@ -16,7 +16,7 @@ import tempfile
 import zipfile
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INSTALL_PATH = os.path.join(REPO_DIR, "engineering-loadout")
+INSTALL_PATH = os.path.join(REPO_DIR, "loadout")
 LOADER = importlib.machinery.SourceFileLoader("loadout_install", INSTALL_PATH)
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 install = importlib.util.module_from_spec(SPEC)

@@ -1,40 +1,42 @@
 # Copilot Instructions
 
-Engineering-loadout: offline-first, no-root package manager + dotfiles bundle for
+Engineering-loadout: offline-first, no-root package manager for
 Electrical Engineering work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), layered configuration (global → corp → site → project → user).
-The installer is `./engineering-loadout` (Python 3.6+, shebang `#!/usr/bin/python3`),
-driven by `pre_built/packages.json` (`schema_version: 2`).
+The installer is `./loadout` (Python 3.6+, shebang `#!/usr/bin/python3`),
+driven by `pre_built/packages.json` (`schema_version: 3`).
 
 ## Key Commands
 
 ```bash
 # Linux install (copies files — no repo references remain)
-./engineering-loadout
+# Bare 'install' errors (dnf/apt style); always name packages or groups.
+./loadout install @engineering-loadout
 
-# Subcommands
-./engineering-loadout list                            # all packages
-./engineering-loadout list --groups                   # all @-groups
-./engineering-loadout list --tag editor               # filter by tag
-./engineering-loadout describe gvim                   # full metadata + reverse-deps
-./engineering-loadout describe @core-cli              # group members
-./engineering-loadout resolve gvim                    # dry-run resolver
-./engineering-loadout --dry-run --add gvim            # resolve + print, no writes
-./engineering-loadout doctor                          # platform + registry sanity check
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
+# Subcommands (dnf/apt verbs)
+./loadout list                                  # all packages
+./loadout list --groups                         # all @-groups
+./loadout list --tag editor                     # filter by tag
+./loadout search vim                            # name/desc/tag substring search
+./loadout info gvim                             # metadata + reverse-deps
+./loadout info @core-cli                        # group members
+./loadout resolve gvim                          # dry-run resolver
+./loadout install gvim --dry-run                # resolve + print, no writes
+./loadout doctor                                # platform + registry sanity check
+./loadout snapshot list
+./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
 # Stage an install into a temp/test root
-./engineering-loadout --dest-dir /tmp/loadout-home
+./loadout --dest-dir /tmp/loadout-home install @engineering-loadout
 
-# Selection
-./engineering-loadout --add octave              # add package(s); deps auto-pulled
-./engineering-loadout --add @gui-suite          # add a group; expands recursively
-./engineering-loadout --skip @fonts-all         # skip every font package
-./engineering-loadout --skip tldr-data          # skip the tldr cache
-./engineering-loadout --only @core-cli,vim      # exact set, bypass defaults
-./engineering-loadout --profile engineering-loadout    # alias for --only @engineering-loadout
-./engineering-loadout --no-deps --add gvim      # install verbatim, no dep walk
-./engineering-loadout --force --skip gui_libs --add gvim  # warn on conflict, continue
+# Selection (positional packages/@groups, plus --skip)
+./loadout install octave                        # single package; deps auto-pulled
+./loadout install @gui-suite                    # group; expands recursively
+./loadout install @engineering-loadout --skip @fonts-all   # full set minus fonts
+./loadout install @engineering-loadout --skip tldr-data
+./loadout install @core-cli vim                 # exact set
+./loadout install gvim --no-deps                # install verbatim, no dep walk
+./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
 
 # Reload bash after changes
 exec bash
@@ -48,10 +50,10 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 ```powershell
 # Windows install (copies files, no elevation required)
-.\engineering-loadout.ps1
+.\loadout.ps1
 ```
 
-Use `python3 -m py_compile engineering-loadout` and `bash -n bash/global/bashrc`
+Use `python3 -m py_compile loadout` and `bash -n bash/global/bashrc`
 after installer or shell edits. `./tests/install_linux_tmp_home` runs the Linux
 installer against a temp `HOME` with temp XDG cache/state dirs from `/tmp`, then
 smoke-tests offline Tree-sitter with headless Neovim.
@@ -60,11 +62,10 @@ smoke-tests offline Tree-sitter with headless Neovim.
 
 ### Package registry (`pre_built/packages.json`)
 
-`schema_version: 2`. Every installable thing is a named package with:
+`schema_version: 3`. Every installable thing is a named package with:
 
 - `kind` — `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`,
   `env`, `font`, `data`, or `group`.
-- `default: true|false` — whether installed when no selection flags given.
 - `platforms` — list from `linux`, `macos`, `windows`. Resolver filters.
 - `tags` — free-form labels for filtering.
 - `depends` — hard-dependency package names (or `@group` refs). Resolver auto-pulls.
@@ -74,16 +75,18 @@ smoke-tests offline Tree-sitter with headless Neovim.
   `archive`, `install_to`, `source`, `extra_links`, `supports_layers`, `members`.
 
 Groups (`@`-prefixed keys) have a `members` list and expand recursively with
-cycle detection. The synthetic `@default` group expands at runtime to every
-`default: true` package.
+cycle detection. Synthetic runtime groups: `@shared` (every non-env package),
+`@envs` (every env config bundle); the bare keyword `all` also resolves to every
+non-group package. There is no "default install"; users always name packages or
+groups explicitly (dnf/apt style).
 
 ### Resolver
 
-`resolve_tool_selection(args, registry)` in `engineering-loadout` performs:
+`resolve_tool_selection(args, registry)` in `loadout` performs:
 
 1. Parse `--skip` (groups expanded).
-2. Build initial set: `--only X,@Y,…` (groups expanded; bypasses defaults), or
-   `@default ∪ --add …`.
+2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,…`,
+   groups expanded). Bare `install` errors with non-zero exit.
 3. Subtract `--skip`.
 4. Walk hard `depends` — `ResolverError` if a depended-upon package was skipped,
    unless `--no-deps` or `--force`.
@@ -130,7 +133,7 @@ Each layer can inject code into `global/bashrc` via numbered files in
 
 ### Install behavior
 
-- **Default** (no flags): copies files; re-run `./engineering-loadout` to pick up
+- **Default** (no flags): copies files; re-run `./loadout` to pick up
   repo changes.
 - **`--dest-dir <dir>`**: install into an alternate root instead of `$HOME`;
   used by installer tests and staging.
@@ -305,7 +308,7 @@ Handles distro naming differences: `batcat` (Debian) vs `bat` (RedHat),
 
 ### Windows
 
-Files are **copied**, not symlinked. Re-run `.\engineering-loadout.ps1` after
+Files are **copied**, not symlinked. Re-run `.\loadout.ps1` after
 repo changes. AutoHotKey (`AutoHotkey64.exe`) is extracted to
 `%USERPROFILE%\AutoHotkey_*\` rather than installed system-wide (avoids
 SentinelOne flagging); if no such directory exists, the installer
@@ -315,5 +318,5 @@ byte-patcher that changes an exe's DOS stub string to alter its hash, useful
 as a SentinelOne bypass for flagged binaries like AHK.
 
 The AHK feature config lives at `%USERPROFILE%\loadout_keys.toml` (created if
-missing). `.\engineering-loadout.ps1` patches feature-flag booleans in
+missing). `.\loadout.ps1` patches feature-flag booleans in
 `%USERPROFILE%\autohotkey\hotkeys.ahk` based on the enabled feature list.

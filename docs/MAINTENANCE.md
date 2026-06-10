@@ -67,7 +67,7 @@ git commit
 ## Repo development
 
 The repo is the source of truth; editing a file there and re-running
-`./engineering-loadout` is the canonical workflow. Most install steps are
+`./loadout install @engineering-loadout` is the canonical workflow. Most install steps are
 idempotent (rsync, atomic bz2 decompress, byte-compare skip) so a re-run
 finishes quickly.
 

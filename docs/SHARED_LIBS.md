@@ -36,7 +36,7 @@ Runtime dependencies vendored alongside binaries — no system library assumptio
 
 ## `gui_libs` optional package (~80 libs)
 
-Opt in with `./engineering-loadout --add gui_libs`. Targets headless EE farm/LSF
+Opt in with `./loadout install gui_libs`. Targets headless EE farm/LSF
 nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded
 back to a workstation. All patchelf'd with `$ORIGIN` RPATH so they find each
 other in `~/.local/lib64/`.

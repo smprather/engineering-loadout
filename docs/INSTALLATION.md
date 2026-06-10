@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/smprather/engineering-loadout.git
 cd engineering-loadout
-./engineering-loadout
+./loadout install @engineering-loadout
 ```
 
 Single Python 3.6-compatible executable. Can be invoked from any working
@@ -14,28 +14,29 @@ directory — it resolves the repo from the script path.
 ### Subcommands & options
 
 ```bash
-./engineering-loadout                                     # default: install everything in @default
-./engineering-loadout list                                # show all packages
-./engineering-loadout list --groups                       # show all @groups
-./engineering-loadout list --tag editor                   # filter packages by tag
-./engineering-loadout describe gvim                       # full package metadata + reverse-deps
-./engineering-loadout describe @core-cli                  # group membership
-./engineering-loadout resolve gvim                        # dry-run resolver, prints set by kind
-./engineering-loadout doctor                              # platform + registry integrity check
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
+./loadout install @engineering-loadout        # install the full bundled set
+./loadout list                                # show all packages
+./loadout list --groups                       # show all @groups
+./loadout list --tag editor                   # filter packages by tag
+./loadout search vim                          # case-insensitive substring search
+./loadout info gvim                           # full package metadata + reverse-deps
+./loadout info @core-cli                      # group membership
+./loadout resolve gvim                        # dry-run resolver, prints set by kind
+./loadout doctor                              # platform + registry integrity check
+./loadout snapshot list
+./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
-./engineering-loadout --dest-dir /tmp/test-home           # stage install into alternate root
-./engineering-loadout --no-backup                         # skip backup of existing files
-./engineering-loadout --post-install-hook ~/corp/install.sh
-./engineering-loadout --add octave                        # add package(s); deps auto-pulled
-./engineering-loadout --add @gui-suite                    # add a group; expands recursively
-./engineering-loadout --skip @fonts-all                   # skip every font
-./engineering-loadout --skip tldr-data                    # skip the tldr cache
-./engineering-loadout --skip gnuplot,kak                  # remove package(s) from defaults
-./engineering-loadout --only vim,nvim,rg,tmux             # install exactly this set
-./engineering-loadout --profile engineering-loadout       # alias for --only @engineering-loadout
-./engineering-loadout --no-deps --add gvim                # install gvim verbatim, no dep walk
-./engineering-loadout --dry-run --add gvim                # resolve + print; no writes
+./loadout --dest-dir /tmp/test-home install @engineering-loadout
+./loadout install @engineering-loadout --no-backup
+./loadout install @engineering-loadout --post-install-hook ~/corp/install.sh
+./loadout install octave                      # single package; deps auto-pulled
+./loadout install @gui-suite                  # group; expands recursively
+./loadout install @engineering-loadout --skip @fonts-all   # full set minus fonts
+./loadout install @engineering-loadout --skip tldr-data
+./loadout install @engineering-loadout --skip gnuplot,kak
+./loadout install vim nvim rg tmux            # install exactly this set
+./loadout install gvim --no-deps              # install gvim verbatim, no dep walk
+./loadout install gvim --dry-run              # resolve + print; no writes
 ```
 
 ### What gets installed
@@ -78,7 +79,7 @@ Simulate a completely fresh user environment:
 ### Corporate / site add-ons
 
 ```bash
-./engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh \
+./loadout --post-install-hook ~/corp-dotfiles/install.sh \
            --post-install-hook ~/site-dotfiles/install.sh
 ```
 
@@ -88,34 +89,36 @@ Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
 ### Restore a backup
 
 ```bash
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
+./loadout snapshot restore loadout_backups/backup.1.tar.bz2
+./loadout snapshot list                          # browse existing snapshots
+./loadout snapshot create my-baseline            # take a snapshot without installing
 ```
 
 Numbered backups are created in `loadout_backups/backup.N/` before each
 install (numbering always starts at `.1`). At the end of a successful run
 the backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and
-the uncompressed dir is removed. `restore-backup` accepts either the
+the uncompressed dir is removed. `snapshot restore` accepts either the
 uncompressed dir or the `.tar.bz2` archive. Font files are excluded from
-backups (large and reproducible).
+snapshots (large and reproducible).
 
 ## Windows
 
 **PowerShell 7+ (recommended):**
 
 ```powershell
-.\engineering-loadout.ps1
+.\loadout.ps1
 ```
 
 **Starting from Windows PowerShell 5.1:**
 
 ```powershell
-.\engineering-loadout-pwsh-bootstrap.ps1   # installs pwsh via winget
+.\loadout-pwsh-bootstrap.ps1   # installs pwsh via winget
 # then reopen as pwsh:
-.\engineering-loadout.ps1
+.\loadout.ps1
 ```
 
 No elevation required. Files are copied, not symlinked — re-run
-`.\engineering-loadout.ps1` after repo updates.
+`.\loadout.ps1` after repo updates.
 
 ### Windows destinations
 

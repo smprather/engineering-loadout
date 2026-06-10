@@ -1,6 +1,6 @@
 # Engineering Loadout
 
-A self-contained, offline-first package manager + dotfiles bundle for **Engineering work environments**.
+A self-contained, offline-first package manager for **Engineering work environments**.
 - Old Linux distro versions
 - Limited, or no, internet access
 - No sudo/root
@@ -26,7 +26,7 @@ then extract and run:
 ```bash
 tar xzf engineering-loadout-v*.tar.gz
 cd engineering-loadout-v*/
-./engineering-loadout
+./loadout install @engineering-loadout
 ```
 
 Or, if `curl` and the GitHub API are reachable from the target machine:
@@ -37,7 +37,7 @@ curl -fsSL \
      | python3 -c 'import sys,json; print(json.load(sys.stdin)["tarball_url"])')" \
   | tar xz --one-top-level=engineering-loadout --strip-components=1
 cd engineering-loadout
-./engineering-loadout
+./loadout install @engineering-loadout
 ```
 
 Single Python 3.6-compatible executable. Re-run with a new release tarball to update
@@ -48,15 +48,15 @@ mutate the live tree in place. Install only the shared artifacts — every packa
 the per-user `env` config bundles — with the synthetic `@shared` group:
 
 ```bash
-./engineering-loadout --dest-dir /opt/engineering-loadout/releases/2026-06-04.2 \
-  --only @shared
+./loadout --dest-dir /opt/engineering-loadout/releases/2026-06-04.2 \
+  install @shared
 ```
 
 `@shared` = all non-`env` packages (binaries, libs, runtimes, fonts, data, python tools);
 its complement `@envs` = the config bundles each user installs into their own `$HOME`
-later with `./engineering-loadout --only @envs`. Tools and config bundles are fully
+later with `./loadout install @envs`. Tools and config bundles are fully
 decoupled (no cross-`recommends`), so `@shared` and `@envs` need no extra `--skip`/`--no-deps`
-flags. Preview either set with `./engineering-loadout resolve @shared` / `resolve @envs`.
+flags. Preview either set with `./loadout resolve @shared` / `loadout resolve @envs`.
 Install each release into a versioned directory and atomically move a stable symlink only
 after the new tree is complete:
 
@@ -89,17 +89,20 @@ Users still enable catalog plugins in their Neovim user layer; this setting only
 changes where lazy.nvim reads plugin source from. Plugins with build steps must be
 prebuilt in the release tree or kept disabled from the shared catalog.
 
-**Selecting packages.** The default install includes 52 CLI tools, editors, fonts, and
-config bundles. To add or remove:
+**Selecting packages.** The full bundled set (`@engineering-loadout`) includes 100+
+CLI tools, editors, fonts, and config bundles. There is no "default install" — name
+packages or groups explicitly (dnf/apt style). To install a subset or add to a baseline:
 
 ```bash
-./engineering-loadout --add octave              # add an optional tool
-./engineering-loadout --add @gui-suite          # add a group
-./engineering-loadout --skip @fonts-all         # skip all fonts
-./engineering-loadout list                      # browse all packages
-./engineering-loadout list --tag editor         # filter by tag
-./engineering-loadout describe gvim             # full package info
-./engineering-loadout --dry-run --add octave    # preview without installing
+./loadout install @engineering-loadout                    # full bundled set
+./loadout install octave                                  # single package
+./loadout install @gui-suite                              # group; expands recursively
+./loadout install @engineering-loadout --skip @fonts-all  # full set minus fonts
+./loadout list                                            # browse all packages
+./loadout list --tag editor                               # filter by tag
+./loadout search vim                                      # substring search
+./loadout info gvim                                       # full package info
+./loadout install octave --dry-run                        # preview without installing
 ```
 
 **Symlink handling.** If your home directory has existing symlinks where the loadout needs
@@ -107,13 +110,13 @@ to create directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default 
 removes the symlink and installs the loadout's directory. Use
 `--install-follows-symlinks=yes` to write into the symlink target instead, or `=auto`
 to follow only if the target is writable. The displaced symlink is backed up and can be
-restored with `./engineering-loadout restore-backup`.
+restored with `./loadout snapshot restore`.
 
 ### Windows
 
 ```powershell
-.\engineering-loadout.ps1                  # PowerShell 7+
-.\engineering-loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
+.\loadout.ps1                  # PowerShell 7+
+.\loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
 ```
 
 No elevation required.
@@ -127,7 +130,7 @@ and Windows AHK feature flags: [Details](docs/INSTALLATION.md)
 
 | Component | Description |
 |-----------|-------------|
-| **Package manager** | `./engineering-loadout` — installs exactly what you need, offline, no root |
+| **Package manager** | `./loadout` — installs exactly what you need, offline, no root |
 | **[Bash](https://www.gnu.org/software/bash/)** | Layered config (global→corp→site→team→project→user), 100+ power aliases, fzf/zoxide/eza/bat integration |
 | **[Neovim](https://neovim.io)** | Lazy.nvim, LSP, 326 offline Tree-sitter parsers, locked plugin versions |
 | **[Vim](https://www.vim.org)** | Bundled plugins (NERDTree, SimpylFold, vim-liberty), vendored runtime, pre-built binary |
@@ -247,7 +250,7 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 
 ### Optional Tools
 
-Not installed by default. Add with `./engineering-loadout --add <name>` or view all with `./engineering-loadout list`.
+Not part of `@engineering-loadout`. Install individually with `./loadout install <name>` or view all with `./loadout list`.
 
 | Binary | Version | Description |
 |--------|---------|-------------|
@@ -282,9 +285,9 @@ project's declared version; the bundled wheel always tracks the latest commit.
 
 ```bash
 # Install GUI editors — gui_libs + vim92-runtime are auto-pulled as dependencies.
-./engineering-loadout --no-backup --skip @fonts-all,tldr-data --add gvim,nedit-ng
+./loadout install gvim nedit-ng --no-backup --skip @fonts-all,tldr-data
 # Or use the bundled group:
-./engineering-loadout --no-backup --add @gui-suite
+./loadout install @gui-suite --no-backup
 ```
 
 **WSLg note:** Qt5's XCB backend corrupts XWayland's global cursor state (all X11 apps in the session lose their cursor). Fix: add `export QT_QPA_PLATFORM=wayland` to `~/.config/bash/user/bashrc`. The Wayland backend (included in gui_libs) routes cursor management through the compositor directly, bypassing XWayland.
@@ -326,7 +329,7 @@ Seven font families bundled and installed to `~/.local/share/fonts`:
 
 Large archives are split into `*.zip.part-*` chunks (≤ 45 MiB) to stay below
 GitHub's 50 MB file warning. The installer rejoins them in `/tmp` before
-extracting. Use `./engineering-loadout --skip @fonts-all` to skip every font, or
+extracting. Use `./loadout install … --skip @fonts-all` to skip every font, or
 `--skip font-firacode` to skip a single family.
 
 ---
@@ -349,7 +352,7 @@ Recipes for adding/updating pre-built binaries (strip → patchelf → bzip2), i
 
 ### Onboarding a new developer
 
-After extracting a release and running `./engineering-loadout` to install the runtime, run `./dev-onboard` once to add the system-level packages, dev headers, and per-user toolchains required to rebuild any bundled tool from source. Six phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers (X11/Qt5/GTK3/ncurses/Octave) → release/CI (gh, docker) → per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent; `--check` for dry-run, `--yes` for non-interactive.
+After extracting a release and running `./loadout install @engineering-loadout` to install the runtime, run `./dev-onboard` once to add the system-level packages, dev headers, and per-user toolchains required to rebuild any bundled tool from source. Six phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers (X11/Qt5/GTK3/ncurses/Octave) → release/CI (gh, docker) → per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent; `--check` for dry-run, `--yes` for non-interactive.
 
 ---
 

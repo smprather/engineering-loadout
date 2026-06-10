@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""update — per-package updater for engineering-loadout.
+"""update — per-package updater for loadout.
 
 Usage:
   ./update                        run all automated packages (no commit)
@@ -240,16 +240,14 @@ def _run(cmd, dry_run=False):
 
 
 def _fetch_json(url):
-    req = Request(
-        url, headers={"User-Agent": "engineering-loadout-update/1.0", "Accept": "application/vnd.github+json"}
-    )
+    req = Request(url, headers={"User-Agent": "loadout-update/1.0", "Accept": "application/vnd.github+json"})
     with urlopen(req, timeout=60) as r:
         return json.loads(r.read())
 
 
 def _download_file(url, dest):
     print("  GET {}".format(url))
-    req = Request(url, headers={"User-Agent": "engineering-loadout-update/1.0"})
+    req = Request(url, headers={"User-Agent": "loadout-update/1.0"})
     with urlopen(req, timeout=120) as r:
         with open(dest, "wb") as f:
             while True:
@@ -385,7 +383,7 @@ def _run_env_nvim(dry_run=False):
     nvim_bin = os.path.expanduser("~/.local/bin/nvim")
 
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
-        print("ERROR: nvim not found at {} — run ./engineering-loadout first".format(nvim_bin))
+        print("ERROR: nvim not found at {} — run ./loadout install nvim first".format(nvim_bin))
         return False
 
     # Step 1: update plugins via Lazy

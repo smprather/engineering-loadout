@@ -10,47 +10,49 @@ There is no "separate EL8 machine" to SSH into. All build commands run in the cu
 
 ---
 
-Offline-first pkg mgr + dotfiles bundle for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./engineering-loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 2`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
+Offline-first package manager for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 3`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
 
 ## Key Commands
 
 **Linux:**
 ```bash
-# Install engineering-loadout (copies everything — no repo references remain)
-./engineering-loadout
+# Install the full bundled set (bare 'install' errors — name what you want)
+./loadout install @engineering-loadout
 
 # Stage an install into a temp or test root instead of $HOME
-./engineering-loadout --dest-dir /tmp/loadout-home
+./loadout --dest-dir /tmp/loadout-home install @engineering-loadout
 
-# Skip the existing-dotfile backup
-./engineering-loadout --no-backup
+# Skip the pre-install snapshot
+./loadout install @engineering-loadout --no-backup
 
 # Run an explicit corp/site/team/user installer after global install steps
-./engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh
+./loadout install @engineering-loadout --post-install-hook ~/corp-dotfiles/install.sh
 
-# Subcommands: list, describe, resolve, doctor, restore-backup
-./engineering-loadout list                            # show all packages
-./engineering-loadout list --groups                   # show all groups with member counts
-./engineering-loadout list --tag editor               # filter by tag
-./engineering-loadout describe gvim                   # full package metadata + reverse deps
-./engineering-loadout describe @core-cli              # group membership
-./engineering-loadout resolve gvim                    # dry-run resolver; prints set by kind
-./engineering-loadout --dry-run --add gvim            # resolve + print only, no install
-./engineering-loadout doctor                          # platform + registry integrity check
-./engineering-loadout restore-backup loadout_backups/backup.1.tar.bz2
+# Subcommands (dnf/apt verbs): install, reinstall, upgrade, list, search, info,
+# resolve, doctor, snapshot {create|restore|list}, clean
+./loadout list                                        # show all packages
+./loadout list --groups                               # show all groups with member counts
+./loadout list --tag editor                           # filter by tag
+./loadout search vim                                  # case-insensitive substring search
+./loadout info gvim                                   # full package metadata + reverse deps
+./loadout info @core-cli                              # group membership
+./loadout resolve gvim                                # dry-run resolver; prints set by kind
+./loadout install gvim --dry-run                      # resolve + print only, no install
+./loadout doctor                                      # platform + registry integrity check
+./loadout snapshot list
+./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
 # Package selection (names + groupings defined in pre_built/packages.json)
-./engineering-loadout --add octave                    # add package(s); deps (octave-runtime) auto-pulled
-./engineering-loadout --add @gui-suite                # add a group; expands recursively
-./engineering-loadout --add gvim,@fonts-all           # mix packages and @groups
-./engineering-loadout --skip @fonts-all               # remove every font package
-./engineering-loadout --skip tldr-data                # skip the tldr cache install
-./engineering-loadout --skip @fonts-all,gnuplot,kak   # remove package(s) and group(s) from defaults
-./engineering-loadout --only @core-cli,vim,nvim       # exact set (bypass defaults; still walks deps)
-./engineering-loadout --only @engineering-loadout     # install everything
-./engineering-loadout --profile engineering-loadout   # alias for --only @engineering-loadout
-./engineering-loadout --no-deps --only gvim           # install gvim without walking depends/recommends
-./engineering-loadout --force --skip gui_libs --add gvim  # WARN on conflict, continue
+./loadout install octave                              # single package; deps auto-pulled
+./loadout install @gui-suite                          # group; expands recursively
+./loadout install gvim @fonts-all                     # mix packages and @groups
+./loadout install @engineering-loadout --skip @fonts-all               # full set minus fonts
+./loadout install @engineering-loadout --skip tldr-data                # skip the tldr cache
+./loadout install @engineering-loadout --skip @fonts-all,gnuplot,kak   # multiple skips
+./loadout install @core-cli vim nvim                  # exact set (deps still walked)
+./loadout install @engineering-loadout                # install everything bundled
+./loadout install gvim --no-deps                      # install gvim without walking depends/recommends
+./loadout install gvim --skip gui_libs --force        # WARN on conflict, continue
 
 # Manually install repo-development git hooks
 cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
@@ -58,8 +60,8 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 **Windows** (no elevation required — copies files):
 ```powershell
-.\engineering-loadout-pwsh-bootstrap.ps1   # if starting from Windows PowerShell 5.1
-.\engineering-loadout.ps1
+.\loadout-pwsh-bootstrap.ps1   # if starting from Windows PowerShell 5.1
+.\loadout.ps1
 ```
 
 ## Repository Structure
@@ -164,9 +166,9 @@ autohotkey/
 hooks/
   pre-commit                - Removes embedded .git dirs before commits. Manual install only: cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
-engineering-loadout         - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
-engineering-loadout.ps1                 - Windows installation script (PowerShell)
-engineering-loadout-pwsh-bootstrap.ps1 - Windows PowerShell 5.1 bootstrapper for pwsh via winget
+loadout                     - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
+loadout.ps1                 - Windows installation script (PowerShell)
+loadout-pwsh-bootstrap.ps1  - Windows PowerShell 5.1 bootstrapper for pwsh via winget
 update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; rolling-git first-party wheels; guidance for build/download packages)
 strip_all_elf_binaries      - Python 3.6-compatible helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2
 tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fresh-user smoke testing
@@ -174,54 +176,54 @@ tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fres
 
 ## Installation Details
 
-**Default install** (no flags): Copies files from repo — no symlinks remain. Re-run `./engineering-loadout` after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. `./engineering-loadout` checks Python version before running.
+**Install behavior**: `./loadout install <PKG…>` copies files from repo — no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. `./loadout` checks Python version before running. There is no "default install" — users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set).
 
 ### Package registry (pre_built/packages.json)
 
-Installer driven by typed pkg registry at `pre_built/packages.json` (`schema_version: 2`). Every installable thing — binary, lib bundle, runtime archive, config bundle ("env"), font, data archive — is named package with `kind`. Packages declare hard deps (`depends`) and soft deps (`recommends`); groups (keys starting with `@`) bundle related packages.
+Installer driven by typed pkg registry at `pre_built/packages.json` (`schema_version: 3`). Every installable thing — binary, lib bundle, runtime archive, config bundle ("env"), font, data archive — is named package with `kind`. Packages declare hard deps (`depends`) and soft deps (`recommends`); groups (keys starting with `@`) bundle related packages.
 
-Package kinds: `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`, `env`, `font`, `data`, `group`. Every package also has `default: true/false`, `platforms: [...]`, optional `tags`, legacy fields (`bins`, `libs`, `wheels`, etc.) for current install handlers.
+Package kinds: `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`, `env`, `font`, `data`, `group`. Each package also has `platforms: [...]`, optional `tags`, and per-kind artifact fields (`bins`, `libs`, `wheels`, `archive`, etc.). There is no "default install" — the user always names packages or groups explicitly (dnf/apt style).
 
 ### Resolver and CLI selection
 
 When installer runs, `resolve_tool_selection(args, registry)` performs:
 1. Parse `--skip` (groups expanded).
-2. Build initial set:
-   - `--only X,@Y,…` → exactly those (groups expanded; bypasses defaults).
-   - default (every `default: true` package) ∪ `--add …` (groups expanded).
+2. Build initial set from `--only X,@Y,…` (groups expanded). At least one of `--only` or `--add` must be non-empty; bare `install` errors.
 3. Subtract `--skip`.
 4. Walk hard `depends` — if depended-upon pkg was skipped, raise `ResolverError` (unless `--no-deps` or `--force`).
 5. Walk soft `recommends` — silently drop skipped/unknown.
 6. Filter by current platform (`linux`/`macos`/`windows`).
 
-Group expansion (`expand_groups`) recursive, cycle-detected. Synthetic groups expand at runtime (not stored in `packages.json`): `@default` → every `default: true` package; `@shared` → every non-group package whose `kind != env` (everything for a shared/read-only tree); `@envs` → its complement (every `kind == env` config bundle). Tools and env config bundles are **fully decoupled** — no cross-`recommends` in either direction (a tool never recommends its env bundle, an env bundle never recommends its tool) — so `--only @shared` (shared tree) and `--only @envs` (per-user config) are clean complements needing no `--skip`/`--no-deps`. env packages are all `default: true`, so a normal install still gets them via defaults. All three synthetic groups surface in `list --groups` and `describe <@group>` (driven by `_SYNTHETIC_GROUPS`) despite not being registry entries.
+Group expansion (`expand_groups`) recursive, cycle-detected. Synthetic groups expand at runtime (not stored in `packages.json`): `@shared` → every non-group package whose `kind != env` (everything for a shared/read-only tree); `@envs` → its complement (every `kind == env` config bundle). `all` is also accepted as a name and expands to every non-group package. Tools and env config bundles are **fully decoupled** — no cross-`recommends` in either direction (a tool never recommends its env bundle, an env bundle never recommends its tool) — so `--only @shared` (shared tree) and `--only @envs` (per-user config) are clean complements needing no `--skip`/`--no-deps`. Both synthetic groups surface in `list --groups` and `describe <@group>` (driven by `_SYNTHETIC_GROUPS`) despite not being registry entries.
 
 ### Subcommands
 
-Installer dispatches on first non-flag arg (defaulting to `install`):
+Installer uses argparse subparsers (dnf/apt verbs). Bare `loadout` and bare `loadout install` both print usage and exit non-zero.
 
-- `./engineering-loadout` — default; full install pipeline.
-- `./engineering-loadout list` — package table. `--groups` switches to group table. `--tag T` filters.
-- `./engineering-loadout describe <pkg|@group>` — kind, version, platforms, deps, recommends, reverse-deps, file lists, group memberships, full metadata dump.
-- `./engineering-loadout resolve [<pkg>...]` — runs resolver, prints resolved set grouped by `kind`. Positional args treated as `--add`.
-- `./engineering-loadout --dry-run` — resolve + print; no writes. Combine with selection flags.
-- `./engineering-loadout doctor` — platform/registry sanity check; verifies archive paths for every `runtime`/`data`/`font`/`python-base` pkg; flags unresolved `depends`/`recommends`.
-- `./engineering-loadout restore-backup <dir-or-tar.bz2>` — restore dotfiles from numbered backup (uncompressed dir or `.tar.bz2` archive).
+- `./loadout install <PKG…>` — resolve + install the named packages/`@groups`.
+- `./loadout reinstall <PKG…>` — today identical to install; reserved for once persisted state lands.
+- `./loadout upgrade <PKG…>` (alias `update`) — targeted re-extract from the current checkout.
+- `./loadout list` — package table. `--groups` switches to group table. `--tag T` filters.
+- `./loadout search <PATTERN>` — case-insensitive substring search across name, description, tags.
+- `./loadout info <pkg|@group>` (alias `describe`) — kind, version, platforms, deps, recommends, reverse-deps, file lists, group memberships, full metadata dump.
+- `./loadout resolve <PKG…>` — runs resolver, prints resolved set grouped by `kind`.
+- `./loadout doctor` — platform/registry sanity check; verifies archive paths for every `runtime`/`data`/`font`/`python-base` pkg; flags unresolved `depends`/`recommends`.
+- `./loadout snapshot {create|restore|list}` — manage destination snapshots (uncompressed dir or `.tar.bz2` archive).
+- `./loadout clean [--logs|--pending|--all]` — remove stale `/tmp/loadout*` state.
 
-### Selection flags (apply to `install`, `resolve`, `--dry-run`)
+### Selection flags (apply to `install`, `reinstall`, `upgrade`, `resolve`)
 
-- `--only NAMES` — install exactly listed packages/`@groups` (still walks deps unless `--no-deps`). `all` = every non-group package.
-- `--add NAMES` — add packages/`@groups` to default install set.
+- Positional `PKG…` — install exactly these packages/`@groups` (deps still walked unless `--no-deps`). `all` = every non-group package.
 - `--skip NAMES` — remove packages/`@groups` from install set.
-- `--profile NAME` — alias for `--only @NAME` (e.g. `--profile engineering-loadout`).
 - `--no-deps` — install named set verbatim; no `depends`/`recommends` walk.
 - `--force` — continue past resolver errors (e.g. hard dep in skip set), printing `WARNING:` row instead of erroring.
+- `--dry-run` — resolve + print; no writes.
 
 ### Per-phase selection gating
 
 Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tldr_cache`, `install_typelibs`, `install_portable_python`, `install_treesitter_parsers`, `install_nvim_treesitter_vendor`, `install_*_runtime`, `install_python_tools`) receives `selected_tools` and short-circuits when its package(s) not in selected set. `--skip @fonts-all` short-circuits `install_fonts`; `--skip tldr-data` short-circuits `install_tldr_cache`; etc.
 
-**env packages install config only.** An env-only selection (e.g. `--only @envs`) writes nothing but `~/.config`/dotfile text — no binaries, libs, or nvim data. `install_prebuilt_binaries` skips entirely (including the always-on base libs) when the selection contributes no `bin`/`lib` (`_allowed_bins` and `_allowed_libs` both empty). The nvim plugin/parser phases are driven by their own **data** packages, not `env-nvim`: `install_nvim_plugin_bundle` and `install_nvim_lazy_update` gate on `nvim-catalog-plugins`; `install_nvim_treesitter_vendor` gates on `treesitter-parsers`. Both data packages are `default: true`, so a normal install still seeds plugins/parsers; only selective installs that exclude them skip.
+**env packages install config only.** An env-only selection (e.g. `--only @envs`) writes nothing but `~/.config` and shell-rc text — no binaries, libs, or nvim data. `install_prebuilt_binaries` skips entirely (including the always-on base libs) when the selection contributes no `bin`/`lib` (`_allowed_bins` and `_allowed_libs` both empty). The nvim plugin/parser phases are driven by their own **data** packages, not `env-nvim`: `install_nvim_plugin_bundle` and `install_nvim_lazy_update` gate on `nvim-catalog-plugins`; `install_nvim_treesitter_vendor` gates on `treesitter-parsers`. Both data packages ship in `@engineering-loadout`, so the full-bundle install seeds plugins/parsers; selections that exclude them skip the corresponding phases.
 
 **Destination mode** (`--dest-dir <dir>`): Installs into alternate root instead of `$HOME`. Used by tests, useful for staging.
 
@@ -250,9 +252,9 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Neovim runtime behavior**: Installer looks for `nvim.tar.bz2` in `pre_built/<platform>/runtime/`. Extracts to `~/.local/share/nvim/`, replaces existing `~/.local/share/nvim/runtime`, verifies `runtime/filetype.lua` present. Release smoke gate runs installed `nvim` headless with `--clean`, asserts this runtime on `runtimepath`. Neovim config bootstraps `lazy.nvim` when available; if `lazy.nvim` missing and `git` cannot clone it, plugin layer disabled cleanly so core editor config still starts on locked-down machines.
 
-**Octave runtime behavior**: Installer looks for `octave.tar.bz2` in `pre_built/<platform>/runtime/` only when `octave` in selected tools (`optional: true` in `packages.json` — opt in with `./engineering-loadout --add octave`). Archive contains `./share/octave/11.1.0/` (m-files, fonts, data; doc excluded) and `./lib/octave/11.1.0/oct/` (.oct compiled plugins, patchelf'd to RPATH `$ORIGIN/../../../../../lib64`). Extracts into `~/.local/`, verifying `~/.local/share/octave/11.1.0/m/` present. Three octave core libs (`liboctave.so.13`, `liboctinterp.so.15`, `liboctmex.so.1`) bundled separately as `lib64/*.bz2` with RPATH `$ORIGIN`. Main binary `octave` is thin 16K launcher with RPATH `$ORIGIN/../lib64`. Total uncompressed ~163 MB, dominated by libopenblas + libopenblasp (~110 MB combined). Build with `pre_built/build_scripts/build-octave.sh` from extracted source tarball.
+**Octave runtime behavior**: Installer looks for `octave.tar.bz2` in `pre_built/<platform>/runtime/` only when `octave` in selected tools (`optional: true` in `packages.json` — opt in with `./loadout install octave`). Archive contains `./share/octave/11.1.0/` (m-files, fonts, data; doc excluded) and `./lib/octave/11.1.0/oct/` (.oct compiled plugins, patchelf'd to RPATH `$ORIGIN/../../../../../lib64`). Extracts into `~/.local/`, verifying `~/.local/share/octave/11.1.0/m/` present. Three octave core libs (`liboctave.so.13`, `liboctinterp.so.15`, `liboctmex.so.1`) bundled separately as `lib64/*.bz2` with RPATH `$ORIGIN`. Main binary `octave` is thin 16K launcher with RPATH `$ORIGIN/../lib64`. Total uncompressed ~163 MB, dominated by libopenblas + libopenblasp (~110 MB combined). Build with `pre_built/build_scripts/build-octave.sh` from extracted source tarball.
 
-**gui_libs behavior**: `gui_libs` optional pkg (`"optional": true` in `packages.json`) bundling ~80 shared libs covering Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, glib2, xcb extensions, xkbcommon, Wayland client, X11 client libs. Install with `./engineering-loadout --add gui_libs` (often `--add gui_libs,gvim,nedit-ng`). Targets **headless EE farm/LSF nodes** lacking GUI libs but running GUI tools with `DISPLAY` forwarding. All gui_libs `.so` files patchelf'd with RPATH `$ORIGIN` (not `$ORIGIN/../lib64`). Qt5 XCB and Wayland platform plugins (`libqxcb.so`, `libqwayland-generic.so`) stored **flat in `~/.local/lib64/`**. `bash/global/bashrc` sets `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` when `libqxcb.so` present — Qt finds platform plugin there directly. **WSLg / XWayland cursor corruption**: Qt5 XCB backend sends blank/null cursor on window entry, corrupting XWayland's global cursor state for all subsequent X11 apps. Fix: set `QT_QPA_PLATFORM=wayland` in `~/.config/bash/user/bashrc`. Routes Qt5 through Wayland compositor, bypassing XWayland for cursor management. Wayland backend requires `libqwayland-generic.so` + `libQt5WaylandClient.so.5`, both in gui_libs.
+**gui_libs behavior**: `gui_libs` optional pkg (`"optional": true` in `packages.json`) bundling ~80 shared libs covering Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, glib2, xcb extensions, xkbcommon, Wayland client, X11 client libs. Install with `./loadout install gui_libs` (often `--add gui_libs,gvim,nedit-ng`). Targets **headless EE farm/LSF nodes** lacking GUI libs but running GUI tools with `DISPLAY` forwarding. All gui_libs `.so` files patchelf'd with RPATH `$ORIGIN` (not `$ORIGIN/../lib64`). Qt5 XCB and Wayland platform plugins (`libqxcb.so`, `libqwayland-generic.so`) stored **flat in `~/.local/lib64/`**. `bash/global/bashrc` sets `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` when `libqxcb.so` present — Qt finds platform plugin there directly. **WSLg / XWayland cursor corruption**: Qt5 XCB backend sends blank/null cursor on window entry, corrupting XWayland's global cursor state for all subsequent X11 apps. Fix: set `QT_QPA_PLATFORM=wayland` in `~/.config/bash/user/bashrc`. Routes Qt5 through Wayland compositor, bypassing XWayland for cursor management. Wayland backend requires `libqwayland-generic.so` + `libQt5WaylandClient.so.5`, both in gui_libs.
 
 **Portable Python behavior**: Installer looks for `portable-python-*.tar.bz2` in platform dir. If found, extracts to temp dir under `/tmp` via `safe_extract_tar`, runs bundled `install.sh --prefix ~/.local --force --no-test`. Generic `python3`/`pip3` links left in place, so `python3` on PATH resolves to 3.14. Base-install protection: `python/pip.conf` installed to `~/.config/pip/pip.conf` with `require-virtualenv = true`, `PIP_REQUIRE_VIRTUALENV=1` exported from `bash/global/bashrc` — guard against accidental `pip install` to base env. Use `python3.14` and `pip3.14` for this build. Archive must never run through `strip_all_elf_binaries` (BOLT-optimized). To add/update portable Python: `pre_built/build_scripts/import-portable-python <portable-dir>`.
 
@@ -260,15 +262,15 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **GObject typelib behavior**: Installer copies `*.typelib` files from `pre_built/<platform>/typelibs/` to `~/.local/lib/girepository-1.0/`. `bash/global/bashrc` exports `GI_TYPELIB_PATH=$HOME/.local/lib/girepository-1.0` when that dir exists, allowing Python tools using `import gi` (PyGObject) to find bundled typelibs. Required typelibs documented in `"typelibs"` key of `packages.json` entries (reference only — installer copies all typelibs unconditionally). Typelib files from EL8 RPMs: `gobject-introspection` (GLib/GObject/Gio/GIRepository), `gtk3` (Gtk/Gdk/GdkPixbuf), `gtksourceview3` (GtkSource-3.0). Plain files, no strip/patchelf needed.
 
-**Meld runtime behavior (shanghai bundle)**: Meld 3.20.4 bundled as "shanghai" — extracted from system-installed EL8 package, repacked into `pre_built/<platform>/runtime/meld.tar.bz2`. Uses **system Python 3.6** (`/usr/bin/python3.6`) with bundled PyGObject 3.28.3 (gi) and pycairo 1.16.3. Bundle extracts to `~/.local/` and installs: `lib/python3.6/site-packages/{gi,cairo,meld,meld3}/`, `share/meld/`, `bin/meld` (Python 3.6 launcher). Launcher derives its local prefix from installed `bin/meld`, exports `LOADOUT_LOCAL_PREFIX`, and sets `sys.path`, `GI_TYPELIB_PATH`, `LD_LIBRARY_PATH` before `import gi` — `LD_LIBRARY_PATH` must be set before `import gi` so `dlopen()` for `_gi.cpython-36m.so` finds installed `lib64/libgirepository-1.0.so.1`. Bundled `meld/conf.py` has DATADIR patched to `LOADOUT_LOCAL_PREFIX/share/meld` (was `/usr/share/meld`; fallback remains `~/.local/share/meld` only for direct import outside the launcher). Exclusively-owned libs: `libgirepository-1.0.so.1`, `libgtksourceview-3.0.so.1` (both patchelf'd RPATH `$ORIGIN`). Installer function: `install_meld_runtime()`. Typically installed with gui_libs: `./engineering-loadout --add gui_libs,meld`. Installer warns if meld selected without gui_libs (GTK3/Qt5/X11 libs all from gui_libs). To update meld: re-`yum install meld` on EL8 build machine, re-run shanghai extract steps (copy gi/cairo/meld packages + data files into bundle dir, patch conf.py, create tar.bz2, bzip2 new libs if version changed, update packages.json version), run `./strip_all_elf_binaries`, commit. **Why shanghai instead of PyPI wheels**: PyGObject has no binary wheels on PyPI (source-only, requires gobject-introspection headers). EL8 ships GLib 2.56.4; PyGObject ≥ 3.36 requires GLib ≥ 2.62; PyGObject ≤ 3.30 (works with GLib 2.56) incompatible with Python 3.14 (`Py_TYPE()` assignment removed). System Python 3.6 sidesteps all of this.
+**Meld runtime behavior (shanghai bundle)**: Meld 3.20.4 bundled as "shanghai" — extracted from system-installed EL8 package, repacked into `pre_built/<platform>/runtime/meld.tar.bz2`. Uses **system Python 3.6** (`/usr/bin/python3.6`) with bundled PyGObject 3.28.3 (gi) and pycairo 1.16.3. Bundle extracts to `~/.local/` and installs: `lib/python3.6/site-packages/{gi,cairo,meld,meld3}/`, `share/meld/`, `bin/meld` (Python 3.6 launcher). Launcher derives its local prefix from installed `bin/meld`, exports `LOADOUT_LOCAL_PREFIX`, and sets `sys.path`, `GI_TYPELIB_PATH`, `LD_LIBRARY_PATH` before `import gi` — `LD_LIBRARY_PATH` must be set before `import gi` so `dlopen()` for `_gi.cpython-36m.so` finds installed `lib64/libgirepository-1.0.so.1`. Bundled `meld/conf.py` has DATADIR patched to `LOADOUT_LOCAL_PREFIX/share/meld` (was `/usr/share/meld`; fallback remains `~/.local/share/meld` only for direct import outside the launcher). Exclusively-owned libs: `libgirepository-1.0.so.1`, `libgtksourceview-3.0.so.1` (both patchelf'd RPATH `$ORIGIN`). Installer function: `install_meld_runtime()`. Typically installed with gui_libs: `./loadout install gui_libs,meld`. Installer warns if meld selected without gui_libs (GTK3/Qt5/X11 libs all from gui_libs). To update meld: re-`yum install meld` on EL8 build machine, re-run shanghai extract steps (copy gi/cairo/meld packages + data files into bundle dir, patch conf.py, create tar.bz2, bzip2 new libs if version changed, update packages.json version), run `./strip_all_elf_binaries`, commit. **Why shanghai instead of PyPI wheels**: PyGObject has no binary wheels on PyPI (source-only, requires gobject-introspection headers). EL8 ships GLib 2.56.4; PyGObject ≥ 3.36 requires GLib ≥ 2.62; PyGObject ≤ 3.30 (works with GLib 2.56) incompatible with Python 3.14 (`Py_TYPE()` assignment removed). System Python 3.6 sidesteps all of this.
 
-**Zsh binary behavior**: `zsh` optional pre-built binary (`optional: true` in `packages.json` — opt in with `./engineering-loadout --add zsh`). No runtime archive needed; binary self-contained. Links against `libncurses.so.6` and `libreadline.so.7` (both always-installed bundled libs). Built from source on EL8 with `--disable-pcre` (avoids bundling `libpcre.so.1`); POSIX ERE regex still works via zsh `regex` module. Build with `pre_built/build_scripts/build-zsh.sh --tag <version>`. Tag format: bare version number, e.g. `5.9` (no `v` prefix — zsh upstream convention).
+**Zsh binary behavior**: `zsh` optional pre-built binary (`optional: true` in `packages.json` — opt in with `./loadout install zsh`). No runtime archive needed; binary self-contained. Links against `libncurses.so.6` and `libreadline.so.7` (both always-installed bundled libs). Built from source on EL8 with `--disable-pcre` (avoids bundling `libpcre.so.1`); POSIX ERE regex still works via zsh `regex` module. Build with `pre_built/build_scripts/build-zsh.sh --tag <version>`. Tag format: bare version number, e.g. `5.9` (no `v` prefix — zsh upstream convention).
 
-**Fish runtime behavior**: `fish` optional pre-built binary (`optional: true` — opt in with `./engineering-loadout --add fish`). Binary requires standard library (functions, completions, themes) shipped as `pre_built/<platform>/runtime/fish.tar.bz2`. Archive contains `./share/fish/...`, extracts to `~/.local/` so standard library lands at `~/.local/share/fish/`. Installer function: `install_fish_runtime()`. Binary links against `libncurses.so.6` and `libpcre2-8.so.0` (both bundled — `libpcre2-8.so.0` owned by `gui_libs` but installed as lib64 dep). fish 4.x written in Rust; build with cmake+cargo via `pre_built/build_scripts/build-fish.sh --tag <version>`.
+**Fish runtime behavior**: `fish` optional pre-built binary (`optional: true` — opt in with `./loadout install fish`). Binary requires standard library (functions, completions, themes) shipped as `pre_built/<platform>/runtime/fish.tar.bz2`. Archive contains `./share/fish/...`, extracts to `~/.local/` so standard library lands at `~/.local/share/fish/`. Installer function: `install_fish_runtime()`. Binary links against `libncurses.so.6` and `libpcre2-8.so.0` (both bundled — `libpcre2-8.so.0` owned by `gui_libs` but installed as lib64 dep). fish 4.x written in Rust; build with cmake+cargo via `pre_built/build_scripts/build-fish.sh --tag <version>`.
 
 **Rolling-git wheel behavior**: First-party `python-tool` packages can be tagged `"rolling_git": "<clone-url>"` in `packages.json` (currently `liberty-tools`, `text-serdes`, `time-plot`). `./update <name>` (and bare `./update`, which now includes all rolling pkgs) rebuilds these from source instead of using a hand-bundled wheel: cheap `git ls-remote` skip-check → fresh `git clone --filter=blob:none` (keeps tags so `describe` works; falls back to full clone) → `uv build --wheel` (handles maturin **and** hatchling backends) → prune previous `<dist>-*.whl` → copy new wheel into `pre_built/<platform>/wheels/` → surgically stamp the package's `version` to `git describe --tags --always --dirty`. Rebuild happens **only when the source commit changed**; `./update <name> --rebuild` forces. `./update --list[-outdated]` shows rolling rows with latest = remote HEAD sha. **maturin gotcha:** under PEP517 maturin tags a bare `linux_x86_64` wheel; `update` sets `MATURIN_PEP517_ARGS="--compatibility manylinux_2_28"` for maturin backends so the wheel is portable + auditwheel-checked. Builds need network + `~/.cache/uv` write (run on the EL8 build machine). Add a 4th rolling project by adding the `rolling_git` field — `./update` discovers it automatically. To add a new third-party (pinned) Python tool instead, see *Python tool behavior* below.
 
-**JupyterLab Python tool behavior**: `jupyterlab` optional `uv_tool` (`optional: true` — opt in with `./engineering-loadout --add jupyterlab`). Installed via `uv tool install jupyterlab` using bundled wheels. After install, `jupyter` and `jupyter-lab` launchers at `~/.local/bin/`. Users run `jupyter lab`; JupyterLab opens in system browser. Requires accessible browser (WSL2: Windows browser via WSL interop; headless farm nodes: point `BROWSER` to VNC-accessible browser or use `--no-browser --port=8888` with port forwarding). Wheels must be downloaded with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download jupyterlab --platform manylinux_2_28_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/` — JupyterLab has ~80 dependency packages.
+**JupyterLab Python tool behavior**: `jupyterlab` optional `uv_tool` (`optional: true` — opt in with `./loadout install jupyterlab`). Installed via `uv tool install jupyterlab` using bundled wheels. After install, `jupyter` and `jupyter-lab` launchers at `~/.local/bin/`. Users run `jupyter lab`; JupyterLab opens in system browser. Requires accessible browser (WSL2: Windows browser via WSL interop; headless farm nodes: point `BROWSER` to VNC-accessible browser or use `--no-browser --port=8888` with port forwarding). Wheels must be downloaded with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download jupyterlab --platform manylinux_2_28_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/` — JupyterLab has ~80 dependency packages.
 
 **Backup behavior**: Numbered backups in `loadout_backups/backup.N/` (always starts at `.1`; never bare `backup`). Skips files already pointing to repo. Never overwrites existing backups. At end of successful install, backup dir compressed to `loadout_backups/backup.N.tar.bz2`, uncompressed dir removed; numbering checks both `backup.N/` and `backup.N.tar.bz2` when picking next N. Post-install hooks (receive `LOADOUT_BACKUP_DIR`) run before compression. `restore-backup` accepts uncompressed dir or `.tar.bz2` archive (extracts to `/tmp`, restores). Backups exclude font files (`*.ttf`, `*.otf`, `*.pcf`, `*.bdf`, `*.woff`, `*.woff2`, etc.) — large and reproducible.
 
@@ -290,14 +292,14 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `~/.local/share/nvim/runtime/` ← `repo/pre_built/<platform>/runtime/nvim.tar.bz2`
 - `~/.local/bin/python3.14` etc. ← `repo/pre_built/<platform>/portable-python-*.tar.bz2` (via install.sh)
 
-**Windows copy destinations** (files copied, not symlinked — re-run `.\engineering-loadout.ps1` after repo changes):
+**Windows copy destinations** (files copied, not symlinked — re-run `.\loadout.ps1` after repo changes):
 - `%LOCALAPPDATA%\nvim` ← `repo/nvim`
 - `%USERPROFILE%\.config\wezterm\wezterm.lua` ← `repo/wezterm/wezterm.lua`
 - `%USERPROFILE%\.config\starship\starship.toml` ← `repo/starship/starship.windows.toml`
 - `%USERPROFILE%\.editorconfig` ← `repo/editorconfig/editorconfig`
 - `%USERPROFILE%\autohotkey\hotkeys.ahk` ← `repo/autohotkey/hotkeys.ahk`
 - `%USERPROFILE%\loadout_keys.toml` — user-local AHK feature selection config (created if missing)
-- `engineering-loadout.ps1` patches feature flags in `%USERPROFILE%\autohotkey\hotkeys.ahk` based on enabled feature list
+- `loadout.ps1` patches feature flags in `%USERPROFILE%\autohotkey\hotkeys.ahk` based on enabled feature list
 - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\hotkeys.lnk` — `.lnk` shortcut pointing to `AutoHotkey64.exe "%USERPROFILE%\autohotkey\hotkeys.ahk"` (AHK not system-wide to avoid SentinelOne flagging). AHK extracted to `%USERPROFILE%\AutoHotkey_*\`; if none exists, installer downloads latest stable from GitHub, removes `AutoHotkey32.exe`.
 - `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` ← `repo/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
 - `%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` ← same (PS 7+)
@@ -453,7 +455,7 @@ coreutils wrappers (via Git for Windows path): `rm`, `cp`, `mv`, `diff`, `rmdir`
 
 ### AutoHotKey (`autohotkey/hotkeys.ahk`)
 
-Requires AHKv2. `hotkeys.ahk` single flat script. `engineering-loadout.ps1` copies to `%USERPROFILE%\autohotkey\hotkeys.ahk`, patches feature-flag booleans from `%USERPROFILE%\loadout_keys.toml`.
+Requires AHKv2. `hotkeys.ahk` single flat script. `loadout.ps1` copies to `%USERPROFILE%\autohotkey\hotkeys.ahk`, patches feature-flag booleans from `%USERPROFILE%\loadout_keys.toml`.
 
 Key hotkeys:
 - `Ctrl+Alt+R` → reload script

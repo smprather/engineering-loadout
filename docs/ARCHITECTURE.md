@@ -7,7 +7,7 @@ For installation and usage, see the [README](../README.md).
 
 ## Package Registry
 
-The installer is driven by `pre_built/packages.json` (`schema_version: 2`) — a typed
+The installer is driven by `pre_built/packages.json` (`schema_version: 3`) — a typed
 registry that names every installable thing: binary, library bundle, runtime archive,
 config bundle, font, data cache, Python tool.
 
@@ -21,13 +21,12 @@ config bundle, font, data cache, Python tool.
 | `typelib` | GObject `.typelib` file → `~/.local/lib/girepository-1.0/` |
 | `python-base` | Portable Python archive, installed via bundled `install.sh` |
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
-| `env` | Config bundle (dotfiles, editor configs) |
+| `env` | Per-user config bundle (shell rc, editor configs) |
 | `font` | Font archive → `~/.local/share/fonts/` |
 | `data` | Data archive (tldr pages, YARA rules, etc.) |
 | `group` | Virtual group — no artifacts; just a `members` list |
 
 Every package also declares:
-- `default: true|false` — included in default install set or not
 - `platforms: [linux|macos|windows]` — resolver filters by current platform
 - `tags: [...]` — free-form labels for `list --tag T`
 - Per-kind artifact fields: `bins`, `libs`, `archive`, `wheels`, `uv_tool`, etc.
@@ -35,11 +34,14 @@ Every package also declares:
 - Optional upstream version tracking: `version_url`, `version_pattern`,
   `version_url_accept`, `version_url_ua`
 
+There is no "default install" — the user always names packages or groups explicitly.
+
 ### Groups
 
 Entries whose keys start with `@` carry a `members` list and expand recursively
-with cycle detection. The synthetic `@default` group expands at runtime to every
-`default: true` package.
+with cycle detection. Synthetic groups computed at runtime: `@shared` (every non-env
+package), `@envs` (every env config bundle). The bare keyword `all` also resolves to
+every non-group package.
 
 ### Dependencies
 
@@ -55,9 +57,9 @@ with cycle detection. The synthetic `@default` group expands at runtime to every
 `resolve_tool_selection(args, registry)` runs at install time:
 
 1. Parse `--skip` (expand groups).
-2. Build initial set:
-   - `--only X,@Y,…` → exactly those packages (bypass defaults).
-   - Default: every `default: true` package ∪ `--add` packages.
+2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,…`,
+   groups expanded). At least one package or group must be named; bare `install`
+   errors with a non-zero exit code.
 3. Subtract `--skip`.
 4. Walk hard `depends` — raise `ResolverError` on skipped hard dep
    (unless `--no-deps` or `--force`).
@@ -68,24 +70,25 @@ with cycle detection. The synthetic `@default` group expands at runtime to every
 
 ```bash
 # Inspect the registry
-./engineering-loadout list                            # all packages
-./engineering-loadout list --groups                   # all @-groups + member counts
-./engineering-loadout list --tag editor               # filter by tag
-./engineering-loadout describe gvim                   # metadata + reverse-deps + group memberships
-./engineering-loadout describe @core-cli              # group members
-./engineering-loadout resolve gvim                    # dry-run; prints resolved set by kind
-./engineering-loadout doctor                          # platform + registry integrity check
+./loadout list                                  # all packages
+./loadout list --groups                         # all @-groups + member counts
+./loadout list --tag editor                     # filter by tag
+./loadout search vim                            # case-insensitive substring search
+./loadout info gvim                             # metadata + reverse-deps + group memberships
+./loadout info @core-cli                        # group members
+./loadout resolve gvim                          # dry-run; prints resolved set by kind
+./loadout doctor                                # platform + registry integrity check
 
-# Selection flags (apply to install, resolve, --dry-run)
-./engineering-loadout --add octave                    # add to default set
-./engineering-loadout --add @gui-suite                # add a group (expands recursively)
-./engineering-loadout --skip @fonts-all               # drop all font packages
-./engineering-loadout --skip tldr-data                # skip tldr cache install
-./engineering-loadout --only @core-cli,vim            # exact set (bypasses defaults)
-./engineering-loadout --profile engineering-loadout   # alias for --only @engineering-loadout
-./engineering-loadout --no-deps --only gvim           # skip dep walking entirely
-./engineering-loadout --force --skip gui_libs --add gvim  # warn on conflict, continue
-./engineering-loadout --dry-run --add octave          # resolve + print; no writes
+# Selection (positional PKG args + --skip)
+./loadout install octave                        # single package; deps auto-pulled
+./loadout install @gui-suite                    # group; expands recursively
+./loadout install @engineering-loadout          # full bundled set
+./loadout install @engineering-loadout --skip @fonts-all      # drop all font packages
+./loadout install @engineering-loadout --skip tldr-data       # skip tldr cache install
+./loadout install @core-cli vim                 # exact set (deps still walked)
+./loadout install gvim --no-deps                # skip dep walking
+./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
+./loadout install octave --dry-run              # resolve + print; no writes
 ```
 
 ---
@@ -169,7 +172,7 @@ Layer dirs live at `~/.config/nvim/lua/<layer>/` — user-created, never committ
 
 ## Installer Internals
 
-`./engineering-loadout` — single Python 3.6-compatible executable (shebang
+`./loadout` — single Python 3.6-compatible executable (shebang
 `#!/usr/bin/python3`). All subprocess calls use absolute paths resolved at startup
 (`_LDD`, `_UNAME`, `_GETCONF` via `_find_tool()`) to avoid accidentally picking up
 binaries being installed.

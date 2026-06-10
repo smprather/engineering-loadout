@@ -1,7 +1,7 @@
 # Files and directories excluded from "git archive" and GitHub's auto-generated
 # source archives (Source code .tar.gz / .zip on releases).
-# These are dev/build/AI tooling — end users do not need them to run ./engineering-loadout
-# or .\engineering-loadout.ps1.
+# These are dev/build/AI tooling — end users do not need them to run ./loadout
+# or .\loadout.ps1.
 
 # AI / agent instructions
 /AGENTS.md                      export-ignore

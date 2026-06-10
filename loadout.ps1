@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs engineering-loadout on Windows by copying files into their expected locations.
+    Installs loadout on Windows by copying files into their expected locations.
 .DESCRIPTION
     Copies WezTerm, Starship, Neovim, PowerShell profile, AutoHotKey, and
     EditorConfig configs. To update after repo changes, re-run this script.
@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Warning "This installer requires PowerShell 7+."
-    Write-Warning "Run .\engineering-loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\engineering-loadout.ps1 from pwsh."
+    Write-Warning "Run .\loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\loadout.ps1 from pwsh."
     exit 1
 }
 
@@ -66,7 +66,7 @@ function New-LoadoutKeysConfig {
         'version = 1',
         '',
         '# This file is user-local and not shared from the repo.',
-        '# engineering-loadout.ps1 patches feature flags in hotkeys.ahk from this list.',
+        '# loadout.ps1 patches feature flags in hotkeys.ahk from this list.',
         '# Legacy [autohotkey.plugins] entries are still accepted for existing installs.',
         '',
         '[autohotkey]',
@@ -212,7 +212,7 @@ function Set-AhkFeatureFlags {
 }
 
 $repoDir = $PSScriptRoot
-Write-Host "Dotfiles repo: $repoDir"
+Write-Host "Loadout repo: $repoDir"
 Write-Host ""
 
 Write-Host "Neovim..."

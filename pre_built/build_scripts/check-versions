@@ -41,7 +41,7 @@ FARM_VERSIONS = os.path.join(REPO_DIR, "pre_built", "build_scripts", "farm-versi
 
 GITHUB_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/#?]+)")
 HTTP_TIMEOUT = 10
-USER_AGENT = "engineering-loadout-check-versions"
+USER_AGENT = "loadout-check-versions"
 
 
 # --------------------------------------------------------------------- loaders

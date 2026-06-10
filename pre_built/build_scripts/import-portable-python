@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """
 import-portable-python: package a portable Python build directory into the
-dotfiles pre_built tree.
+loadout pre_built tree.
 
 Usage:
     ./import-portable-python <portable-dir> [--platform PLATFORM] [--dry-run]
@@ -42,7 +42,7 @@ def die(msg):
 
 
 # ---------------------------------------------------------------------------
-# Platform detection (mirrors logic in dotfiles/install)
+# Platform detection (mirrors logic in the loadout installer)
 # ---------------------------------------------------------------------------
 
 
@@ -198,7 +198,7 @@ def make_archive(portable_dir, dest_path, dry_run):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Package a portable Python build dir into dotfiles pre_built/.",
+        description="Package a portable Python build dir into loadout pre_built/.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("portable_dir", help="path to the portable-python-X.Y.Z-... directory")

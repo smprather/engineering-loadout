@@ -11,7 +11,7 @@
 # string is missing, so a breaking upstream change is obvious at build time.
 #
 # Runtime: GUI tool. Links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb — ALL
-# provided by gui_libs. Install with: ./engineering-loadout --add gui_libs,flameshot
+# provided by gui_libs. Install with: ./loadout install gui_libs flameshot
 # RPATH $ORIGIN/../lib64 lets it find the bundled Qt5 in ~/.local/lib64.
 #
 # KDSingleApplication is DISABLED (its find_package is hardcoded -qt6 and it's only
@@ -191,4 +191,4 @@ echo "==> Running strip_all_elf_binaries ..."
 
 echo ""
 echo "Done. Produced: $BIN_DIR/flameshot.bz2 (flameshot ${VERSION}, Qt5, glibc ${MAX_GLIBC})"
-echo "Install: ./engineering-loadout --add gui_libs,flameshot"
+echo "Install: ./loadout install gui_libs flameshot"

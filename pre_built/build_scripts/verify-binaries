@@ -41,7 +41,7 @@ from urllib.request import Request, urlopen
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PREBUILT_DIR = os.path.dirname(_SCRIPT_DIR)  # pre_built/
-_REPO_DIR = os.path.dirname(_PREBUILT_DIR)  # dotfiles/
+_REPO_DIR = os.path.dirname(_PREBUILT_DIR)  # loadout/
 _PLATFORM = "el8.x86_64.glibc2p28"
 _BIN_DIR = os.path.join(_PREBUILT_DIR, _PLATFORM, "bin")
 _TOOLS_JSON = os.path.join(_PREBUILT_DIR, "packages.json")
@@ -198,7 +198,7 @@ def _sha256_file(path):
 def _download(url, dest, verbose):
     if verbose:
         print(f"    GET {url}", flush=True)
-    req = Request(url, headers={"User-Agent": "dotfiles-verify-binaries/1.0"})
+    req = Request(url, headers={"User-Agent": "loadout-verify-binaries/1.0"})
     with urlopen(req, timeout=120) as resp:
         with open(dest, "wb") as f:
             while True:
@@ -399,7 +399,7 @@ def main():
         print("Known: {}".format(", ".join(sorted(registry.keys()))), file=sys.stderr)
         sys.exit(1)
 
-    tmpdir = tempfile.mkdtemp(prefix="dotfiles-verify.")
+    tmpdir = tempfile.mkdtemp(prefix="loadout-verify.")
     if args.verbose:
         print(f"Temp dir: {tmpdir}")
 

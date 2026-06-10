@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Fast installer sanity checks — runs in seconds, no temp HOME needed.
-# Run before commits touching engineering-loadout or packages.json.
+# Run before commits touching the loadout installer or packages.json.
 #
 # Checks:
 #   1. Python 3.6 syntax (EL8 /usr/bin/python3) — catches py2 except syntax etc.
 #   2. doctor — registry integrity, archive presence, dep resolution
-#   3. dry-run (default) — resolver sanity, verify key packages resolve
-#   4. dry-run (--profile engineering-loadout) — full profile completeness
+#   3. dry-run (@core-cli) — resolver sanity, verify key core packages resolve
+#   4. dry-run (@engineering-loadout) — full bundled-set completeness
+#   5. bare 'install' must error (no "default install" anymore)
 #
 # Usage:
 #   ./tests/check_installer
@@ -14,7 +15,7 @@
 set -euo pipefail
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-INSTALLER="$REPO_DIR/engineering-loadout"
+INSTALLER="$REPO_DIR/loadout"
 FAILURES=0
 
 fail() {
@@ -34,9 +35,9 @@ SYS_PY3=/usr/bin/python3
 if [[ -x "$SYS_PY3" ]]; then
     PY36_VER=$("$SYS_PY3" --version 2>&1)
     if "$SYS_PY3" -m py_compile "$INSTALLER" 2>/dev/null; then
-        pass "engineering-loadout compiles under $SYS_PY3 ($PY36_VER)"
+        pass "loadout compiles under $SYS_PY3 ($PY36_VER)"
     else
-        fail "engineering-loadout has syntax error under $SYS_PY3 ($PY36_VER)"
+        fail "loadout has syntax error under $SYS_PY3 ($PY36_VER)"
         "$SYS_PY3" -m py_compile "$INSTALLER" 2>&1 | head -5 >&2
     fi
 else
@@ -56,48 +57,50 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. dry-run (default) — resolver returns expected core packages
+# 3. dry-run @core-cli — resolver returns expected core packages
 # ---------------------------------------------------------------------------
-echo "--- 3. dry-run (default) ---"
-DRY_DEFAULT=$(cd /tmp && "$INSTALLER" --dry-run --no-backup --skip @fonts-all 2>&1)
-REQUIRED_DEFAULT=(nvim vim hx bash bat rg eza fd tmux jq uv)
-for pkg in "${REQUIRED_DEFAULT[@]}"; do
-    if echo "$DRY_DEFAULT" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
-        pass "default resolves: $pkg"
+echo "--- 3. dry-run @core-cli ---"
+DRY_CORE=$(cd /tmp && "$INSTALLER" install "@core-cli" --dry-run 2>&1)
+REQUIRED_CORE=(bat rg eza fd jq)
+for pkg in "${REQUIRED_CORE[@]}"; do
+    if echo "$DRY_CORE" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
+        pass "@core-cli resolves: $pkg"
     else
-        fail "default missing: $pkg"
+        fail "@core-cli missing: $pkg"
     fi
 done
 
-# Package count sanity
-COUNT=$(echo "$DRY_DEFAULT" | grep -oE 'Resolved [0-9]+' | grep -oE '[0-9]+' || echo 0)
-if [[ "$COUNT" -ge 50 ]]; then
-    pass "default resolves $COUNT packages (≥50)"
-else
-    fail "default resolves only $COUNT packages — expected ≥50"
-fi
-
 # ---------------------------------------------------------------------------
-# 4. dry-run (--profile engineering-loadout) — full profile completeness
+# 4. dry-run @engineering-loadout — full bundled-set completeness
 # ---------------------------------------------------------------------------
-echo "--- 4. dry-run (--profile engineering-loadout) ---"
-DRY_FULL=$(cd /tmp && "$INSTALLER" --profile engineering-loadout --dry-run --no-backup 2>&1)
+echo "--- 4. dry-run @engineering-loadout ---"
+DRY_FULL=$(cd /tmp && "$INSTALLER" install "@engineering-loadout" --dry-run 2>&1)
 
 # Packages that were previously orphaned / missing from the group
-REQUIRED_FULL=(nodejs modules lua-language-server octave fish ngspice)
+REQUIRED_FULL=(nodejs modules lua-language-server octave fish ngspice nvim vim bash tmux uv)
 for pkg in "${REQUIRED_FULL[@]}"; do
     if echo "$DRY_FULL" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
-        pass "full profile resolves: $pkg"
+        pass "full set resolves: $pkg"
     else
-        fail "full profile missing: $pkg — check @engineering-loadout group"
+        fail "full set missing: $pkg — check @engineering-loadout group"
     fi
 done
 
 FULL_COUNT=$(echo "$DRY_FULL" | grep -oE 'Resolved [0-9]+' | grep -oE '[0-9]+' || echo 0)
 if [[ "$FULL_COUNT" -ge 80 ]]; then
-    pass "full profile resolves $FULL_COUNT packages (≥80)"
+    pass "@engineering-loadout resolves $FULL_COUNT packages (≥80)"
 else
-    fail "full profile resolves only $FULL_COUNT packages — expected ≥80"
+    fail "@engineering-loadout resolves only $FULL_COUNT packages — expected ≥80"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. bare 'install' must error (strict CLI; no default install)
+# ---------------------------------------------------------------------------
+echo "--- 5. bare 'install' must error ---"
+if (cd /tmp && "$INSTALLER" install >/dev/null 2>&1); then
+    fail "bare 'install' succeeded (should error with exit 1)"
+else
+    pass "bare 'install' errors as expected"
 fi
 
 # ---------------------------------------------------------------------------

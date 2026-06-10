@@ -80,7 +80,7 @@ pkg-config --exists Qt5Widgets 2>/dev/null || {
 
 # ── source checkout ───────────────────────────────────────────────────────────
 
-# Run inside a dedicated clone dir under /tmp so we never dirty the dotfiles repo
+# Run inside a dedicated clone dir under /tmp so we never dirty the loadout repo
 SRCDIR="/tmp/nedit-ng-build-${tag}"
 
 if [ ! -d "$SRCDIR/.git" ]; then
