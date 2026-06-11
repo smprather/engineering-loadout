@@ -43,6 +43,26 @@ except Exception:
     _RICH = False
     _console = None
 
+# CLI: vendored click + rich-click (in installer_vendor/). rich-click is a drop-in
+# replacement for click that renders help text via Rich panels. If either fails to
+# import we surface a clear error at startup — the CLI cannot function without it.
+try:
+    import rich_click as click
+
+    click.rich_click.USE_RICH_MARKUP = True
+    click.rich_click.STYLE_OPTION = "bold cyan"
+    click.rich_click.STYLE_ARGUMENT = "bold cyan"
+    click.rich_click.STYLE_COMMAND = "bold cyan"
+    click.rich_click.STYLE_HELPTEXT = ""
+    click.rich_click.STYLE_HELPTEXT_FIRST_LINE = "bold"
+    click.rich_click.MAX_WIDTH = 100
+except ImportError as exc:
+    print(
+        f"Error: loadout requires vendored 'click' + 'rich-click' under {_VENDOR_DIR}. Import failed: {exc}",
+        file=sys.stderr,
+    )
+    raise SystemExit(1) from exc
+
 
 def _vprint(msg):
     """Print only when rich is unavailable (suppresses per-file noise when rich shows progress)."""
@@ -97,7 +117,6 @@ def _section(title):
         print(title)
 
 
-import argparse
 import atexit
 import bz2
 import contextlib
@@ -106,6 +125,7 @@ import errno
 import fcntl
 import fnmatch
 import json
+import types
 
 try:
     import pwd
@@ -3627,108 +3647,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     return 0
 
 
-def build_parser():
-    """Build the loadout argparse tree (subparsers, dnf/apt-style).
-
-    Python 3.6 caveat: subparsers(required=) is unavailable; we check for an
-    empty cmd in main() and print help + exit non-zero ourselves.
-    """
-    p = argparse.ArgumentParser(
-        prog="loadout",
-        description="Offline-first package manager. Installs bundled packages into the destination directory.",
-        add_help=False,
-    )
-    p.add_argument("--version", "-V", action="store_true")
-    p.add_argument("--verbose", action="store_true")
-    p.add_argument("--help", "-h", action="store_true")
-    p.add_argument("--dest-dir", default=None, dest="dest_dir", metavar="DIR")
-    sp = p.add_subparsers(dest="cmd")
-
-    def add_select(parser):
-        # nargs="*" (not "+") so we can produce dnf-style "no package specified"
-        # error with exit 1, instead of argparse's generic exit 2.
-        parser.add_argument("packages", nargs="*", metavar="PKG")
-        parser.add_argument("--skip", default=None, metavar="NAME,…")
-        parser.add_argument("--no-deps", action="store_true", dest="no_deps")
-        parser.add_argument("--force", action="store_true")
-
-    inst = sp.add_parser("install", help="Install packages.")
-    add_select(inst)
-    inst.add_argument("--dry-run", action="store_true", dest="dry_run")
-    inst.add_argument("--no-backup", action="store_true", dest="no_backup")
-    inst.add_argument(
-        "--install-follows-symlinks",
-        nargs="?",
-        const="yes",
-        default="no",
-        choices=("yes", "no", "auto"),
-        dest="install_follows_symlinks",
-    )
-    inst.add_argument("--post-install-hook", action="append", default=[], dest="post_install_hook")
-
-    rein = sp.add_parser("reinstall", help="Re-install packages (alias of install today).")
-    add_select(rein)
-    rein.add_argument("--dry-run", action="store_true", dest="dry_run")
-    rein.add_argument("--no-backup", action="store_true", dest="no_backup")
-    rein.add_argument(
-        "--install-follows-symlinks",
-        nargs="?",
-        const="yes",
-        default="no",
-        choices=("yes", "no", "auto"),
-        dest="install_follows_symlinks",
-    )
-    rein.add_argument("--post-install-hook", action="append", default=[], dest="post_install_hook")
-
-    upg = sp.add_parser("upgrade", aliases=["update"], help="Re-extract named packages from the current checkout.")
-    add_select(upg)
-    upg.add_argument("--dry-run", action="store_true", dest="dry_run")
-    upg.add_argument("--no-backup", action="store_true", dest="no_backup")
-    upg.add_argument(
-        "--install-follows-symlinks",
-        nargs="?",
-        const="yes",
-        default="no",
-        choices=("yes", "no", "auto"),
-        dest="install_follows_symlinks",
-    )
-    upg.add_argument("--post-install-hook", action="append", default=[], dest="post_install_hook")
-
-    lst = sp.add_parser("list", help="Show all packages (or groups with --groups).")
-    lst.add_argument("--groups", action="store_true", dest="list_groups")
-    lst.add_argument("--tag", default=None)
-    lst.add_argument("--installed", action="store_true", dest="installed")
-
-    src = sp.add_parser("search", help="Search packages by name, description, tags.")
-    src.add_argument("pattern")
-    src.add_argument("--tag", default=None)
-
-    inf = sp.add_parser("info", aliases=["describe"], help="Show package metadata.")
-    inf.add_argument("name")
-
-    res = sp.add_parser("resolve", help="Dry resolver: print the resolved package set.")
-    add_select(res)
-
-    sp.add_parser("doctor", help="Platform + registry sanity check.")
-
-    snap = sp.add_parser("snapshot", help="Manage destination snapshots.")
-    snap_sp = snap.add_subparsers(dest="snapshot_cmd")
-    sc = snap_sp.add_parser("create", help="Snapshot the destination without installing.")
-    sc.add_argument("name", nargs="?", default=None)
-    sr = snap_sp.add_parser("restore", help="Restore a snapshot.")
-    sr.add_argument("path")
-    snap_sp.add_parser("list", help="List existing snapshots.")
-
-    cln = sp.add_parser("clean", help="Remove stale /tmp/loadout* state.")
-    cln.add_argument("--logs", action="store_true")
-    cln.add_argument("--pending", action="store_true")
-    cln.add_argument("--all", action="store_true", dest="clean_all")
-
-    return p
-
-
 def _adapt_install_args(args):
-    """Map the new argparse Namespace onto fields the legacy install/resolve
+    """Map the click-built SimpleNamespace onto fields the legacy install/resolve
     handlers read directly (args.only, args.add, args.positional). Mutates in
     place; idempotent."""
     if not hasattr(args, "only"):
@@ -3970,6 +3890,307 @@ def _pending_daemon_alive():
     return True
 
 
+# Aliases (e.g. `update` → `upgrade`, `describe` → `info`) are declared on the
+# command itself via rich-click's native `aliases=[...]` kwarg — no custom Group
+# subclass needed.
+
+
+def _selection_options(f):
+    """Decorator stack: positional PKG list + dnf-style selection flags."""
+    f = click.option(
+        "--force",
+        is_flag=True,
+        help="Continue past resolver errors (record FAIL, keep going).",
+    )(f)
+    f = click.option(
+        "--no-deps",
+        "no_deps",
+        is_flag=True,
+        help="Do not walk depends/recommends.",
+    )(f)
+    f = click.option(
+        "--skip",
+        default=None,
+        metavar="NAME,…",
+        help="Remove packages or @groups from the install set.",
+    )(f)
+    f = click.argument("packages", nargs=-1, metavar="PKG...")(f)
+    return f
+
+
+def _install_options(f):
+    """Decorator stack: install-like verbs (install, reinstall, upgrade)."""
+    f = click.option(
+        "--post-install-hook",
+        "post_install_hook",
+        multiple=True,
+        metavar="FILE",
+        help="Run a corp/site/user hook after global install steps (repeatable).",
+    )(f)
+    f = click.option(
+        "--install-follows-symlinks",
+        "install_follows_symlinks",
+        type=click.Choice(["yes", "no", "auto"]),
+        default="no",
+        show_default=True,
+        help="How to handle existing directory symlinks during archive extraction.",
+    )(f)
+    f = click.option(
+        "--no-backup",
+        "no_backup",
+        is_flag=True,
+        help="Skip the pre-install snapshot.",
+    )(f)
+    f = click.option(
+        "--dry-run",
+        "dry_run",
+        is_flag=True,
+        help="Resolve and print the plan; no files written.",
+    )(f)
+    return f
+
+
+def _ctx_args(ctx, **extra):
+    """Build a SimpleNamespace from the top-level context + command-level kwargs.
+
+    The legacy handler functions (cmd_install_v2, cmd_list, cmd_describe, …) read
+    fields like args.packages, args.skip, args.dest_dir straight off the object;
+    this shim lets the click decorators feed them without rewriting every handler.
+    """
+    obj = ctx.obj or {}
+    ns = types.SimpleNamespace(dest_dir=obj.get("dest_dir"))
+    for k, v in extra.items():
+        setattr(ns, k, v)
+    return ns
+
+
+def _print_version_and_exit(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    click.echo(_get_version(repo_dir))
+    ctx.exit(0)
+
+
+@click.group(
+    invoke_without_command=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option(
+    "--version",
+    "-V",
+    is_flag=True,
+    expose_value=False,
+    is_eager=True,
+    callback=_print_version_and_exit,
+    help="Print version (git describe) and exit.",
+)
+@click.option("--verbose", is_flag=True, help="Verbose progress output.")
+@click.option(
+    "--dest-dir",
+    "dest_dir",
+    metavar="DIR",
+    default=None,
+    help="Install root (default: $HOME).",
+)
+@click.pass_context
+def cli(ctx, verbose, dest_dir):
+    """loadout — offline-first package manager.
+
+    Installs bundled packages into the destination directory. Bare 'loadout' and
+    bare 'loadout install' both print usage and exit non-zero (dnf parity); always
+    name packages or @groups explicitly. Use [bold]@engineering-loadout[/] for the
+    full bundled set.
+    """
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    home = os.path.abspath(dest_dir) if dest_dir else os.path.expanduser("~")
+    ctx.ensure_object(dict)
+    ctx.obj.update(
+        repo_dir=repo_dir,
+        home=home,
+        dest_dir=dest_dir,
+        verbose=verbose,
+        registry=None,
+    )
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit(1)
+    # Defer registry load + run-log setup until we know a real subcommand fired.
+    _setup_run_log(repo_dir, ["loadout"] + sys.argv[1:])
+    ctx.obj["registry"] = _load_tool_registry(repo_dir)
+
+
+@cli.command(name="install", short_help="Install packages.")
+@_selection_options
+@_install_options
+@click.pass_context
+def cli_install(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+    """Install the named packages or @groups.
+
+    Examples:
+
+      loadout install gvim
+
+      loadout install @core-cli vim nvim
+
+      loadout install @engineering-loadout --skip @fonts-all
+    """
+    args = _ctx_args(
+        ctx,
+        packages=list(packages),
+        skip=skip,
+        no_deps=no_deps,
+        force=force,
+        dry_run=dry_run,
+        no_backup=no_backup,
+        install_follows_symlinks=install_follows_symlinks,
+        post_install_hook=list(post_install_hook),
+    )
+    ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], ctx.obj["home"]))
+
+
+@cli.command(name="reinstall", short_help="Re-install packages (alias of install today).")
+@_selection_options
+@_install_options
+@click.pass_context
+def cli_reinstall(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+    """Re-install named packages. Today identical to `install`; will diverge once
+    persisted install state lands."""
+    ctx.invoke(
+        cli_install,
+        packages=packages,
+        skip=skip,
+        no_deps=no_deps,
+        force=force,
+        dry_run=dry_run,
+        no_backup=no_backup,
+        install_follows_symlinks=install_follows_symlinks,
+        post_install_hook=post_install_hook,
+    )
+
+
+@cli.command(name="upgrade", aliases=["update"], short_help="Targeted re-extract of named packages.")
+@_selection_options
+@_install_options
+@click.pass_context
+def cli_upgrade(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+    """Re-extract the named packages from the current checkout.
+
+    `update` is an alias for this command.
+    """
+    ctx.invoke(
+        cli_install,
+        packages=packages,
+        skip=skip,
+        no_deps=no_deps,
+        force=force,
+        dry_run=dry_run,
+        no_backup=no_backup,
+        install_follows_symlinks=install_follows_symlinks,
+        post_install_hook=post_install_hook,
+    )
+
+
+@cli.command(name="list", short_help="Show all packages (or groups with --groups).")
+@click.option("--groups", "list_groups", is_flag=True, help="Show groups instead of packages.")
+@click.option("--tag", default=None, help="Filter packages by tag.")
+@click.option(
+    "--installed",
+    is_flag=True,
+    help="Stub: warns and falls back to the normal listing (no persisted state yet).",
+)
+@click.pass_context
+def cli_list(ctx, list_groups, tag, installed):
+    """Print the package or @group table."""
+    args = _ctx_args(ctx, list_groups=list_groups, tag=tag, installed=installed)
+    ctx.exit(cmd_list(args, ctx.obj["registry"]))
+
+
+@cli.command(name="search", short_help="Search packages by name, description, tags.")
+@click.argument("pattern")
+@click.option("--tag", default=None, help="Filter results by tag.")
+@click.pass_context
+def cli_search(ctx, pattern, tag):
+    """Case-insensitive substring search across package name, description, and tags."""
+    args = _ctx_args(ctx, pattern=pattern, tag=tag)
+    ctx.exit(cmd_search(args, ctx.obj["registry"]))
+
+
+@cli.command(name="info", aliases=["describe"], short_help="Show package metadata.")
+@click.argument("name")
+@click.pass_context
+def cli_info(ctx, name):
+    """Show full metadata for a package or @group: kind, version, deps, reverse-deps,
+    file lists, group memberships."""
+    args = _ctx_args(ctx, name=name)
+    ctx.exit(cmd_info(args, ctx.obj["registry"]))
+
+
+@cli.command(name="resolve", short_help="Dry resolver: print the resolved package set.")
+@_selection_options
+@click.pass_context
+def cli_resolve(ctx, packages, skip, no_deps, force):
+    """Resolve the named packages/@groups and print the result grouped by kind."""
+    args = _ctx_args(ctx, packages=list(packages), skip=skip, no_deps=no_deps, force=force)
+    ctx.exit(cmd_resolve_v2(args, ctx.obj["registry"]))
+
+
+@cli.command(name="doctor", short_help="Platform + registry sanity check.")
+@click.pass_context
+def cli_doctor(ctx):
+    """Verify platform detection, registry integrity, archive presence, and env-handler
+    coverage. Exits 0 on a healthy tree; exits 2 if any check fails."""
+    args = _ctx_args(ctx)
+    ctx.exit(cmd_doctor(args, ctx.obj["registry"], ctx.obj["repo_dir"]))
+
+
+@cli.group(name="snapshot", cls=click.RichGroup, short_help="Manage destination snapshots.")
+def cli_snapshot():
+    """Manage snapshots of the destination directory (~/loadout_backups)."""
+
+
+@cli_snapshot.command(name="create", short_help="Snapshot the destination without installing.")
+@click.argument("name", required=False, default=None)
+@click.pass_context
+def cli_snapshot_create(ctx, name):
+    """Take a snapshot of the destination directory without performing an install."""
+    args = _ctx_args(ctx, snapshot_cmd="create", name=name)
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+
+
+@cli_snapshot.command(name="restore", short_help="Restore a snapshot.")
+@click.argument("path")
+@click.pass_context
+def cli_snapshot_restore(ctx, path):
+    """Restore a snapshot from a directory or a .tar.bz2 archive."""
+    args = _ctx_args(ctx, snapshot_cmd="restore", path=path)
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+
+
+@cli_snapshot.command(name="list", short_help="List existing snapshots.")
+@click.pass_context
+def cli_snapshot_list(ctx):
+    """List existing snapshots under ~/loadout_backups, newest first."""
+    args = _ctx_args(ctx, snapshot_cmd="list")
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+
+
+@cli.command(name="clean", short_help="Remove stale /tmp/loadout* state.")
+@click.option("--logs", is_flag=True, help="Delete /tmp/loadout.log.")
+@click.option(
+    "--pending",
+    is_flag=True,
+    help="Delete /tmp/loadout-pending/ (only when the pending-ops daemon is dead).",
+)
+@click.option("--all", "clean_all", is_flag=True, help="Delete logs + pending + stale loadout-* tempdirs.")
+@click.pass_context
+def cli_clean(ctx, logs, pending, clean_all):
+    """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/ and
+    refuses to clean /tmp/loadout-pending/ while the pending-ops daemon is alive."""
+    args = _ctx_args(ctx, logs=logs, pending=pending, clean_all=clean_all)
+    ctx.exit(cmd_clean(args))
+
+
 def main(argv):
     if not _RSYNC:
         eprint("Error: This script requires rsync (/usr/bin/rsync not found).")
@@ -3980,45 +4201,22 @@ def main(argv):
     # bars can leave it hidden on remote terminals (see _show_cursor docstring).
     atexit.register(_show_cursor)
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    repo_dir = os.path.dirname(os.path.abspath(__file__))
-
-    if args.help:
-        parser.print_help()
-        return 0
-    if args.version:
-        print(_get_version(repo_dir))
-        return 0
-    if args.cmd is None:
-        parser.print_help()
-        return 1
-
-    _setup_run_log(repo_dir, ["loadout"] + list(argv))
-    home = os.path.abspath(args.dest_dir) if args.dest_dir else os.path.expanduser("~")
-    registry = _load_tool_registry(repo_dir)
-
-    cmd = args.cmd
-    if cmd in ("install", "reinstall"):
-        return cmd_install_v2(args, registry, repo_dir, home)
-    if cmd in ("upgrade", "update"):
-        return cmd_install_v2(args, registry, repo_dir, home)
-    if cmd == "list":
-        return cmd_list(args, registry)
-    if cmd == "search":
-        return cmd_search(args, registry)
-    if cmd in ("info", "describe"):
-        return cmd_info(args, registry)
-    if cmd == "resolve":
-        return cmd_resolve_v2(args, registry)
-    if cmd == "doctor":
-        return cmd_doctor(args, registry, repo_dir)
-    if cmd == "snapshot":
-        return cmd_snapshot(args, repo_dir, home)
-    if cmd == "clean":
-        return cmd_clean(args)
-    eprint(f"Error: unknown subcommand: {cmd}")
-    return 2
+    try:
+        rc = cli.main(args=list(argv), prog_name="loadout", standalone_mode=False)
+    except click.exceptions.UsageError as exc:
+        exc.show()
+        return exc.exit_code or 2
+    except click.exceptions.Abort:
+        return 130
+    except click.exceptions.ClickException as exc:
+        exc.show()
+        return exc.exit_code or 1
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    # In non-standalone mode, click returns the exit code from ctx.exit(...);
+    # individual command callbacks return None (their work is the side effect),
+    # in which case 0 is success.
+    return rc if isinstance(rc, int) else 0
 
 
 if __name__ == "__main__":
