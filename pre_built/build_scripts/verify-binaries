@@ -133,7 +133,6 @@ _SKIP_REASONS = {
     "htop": "built from source",
     "bat": "bundled binary has different NEEDED libs than official release (libz.so.1 vs librt.so.1) — likely EL8 source build",
     "jq": "custom build with shared libjq.so.1 + libonig.so.5; official release is statically linked",
-    "kak": "built from source (date-tagged dev)",
     "nedit-ng": "custom Qt5 build",
     "nvim": "official prebuilts require GLIBC_2.34; EL8 has 2.28 — must source-build from stable tag (v0.12.2+) on EL8",
     "octave": "built from source",

@@ -33,7 +33,7 @@ directory — it resolves the repo from the script path.
 ./loadout install @gui-suite                  # group; expands recursively
 ./loadout install @engineering-loadout --skip @fonts-all   # full set minus fonts
 ./loadout install @engineering-loadout --skip tldr-data
-./loadout install @engineering-loadout --skip gnuplot,kak
+./loadout install @engineering-loadout --skip gnuplot,micro
 ./loadout install vim nvim rg tmux            # install exactly this set
 ./loadout install gvim --no-deps              # install gvim verbatim, no dep walk
 ./loadout install gvim --dry-run              # resolve + print; no writes

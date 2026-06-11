@@ -218,7 +218,6 @@ is pure decompress + chmod — no runtime `patchelf`, no `LD_LIBRARY_PATH` hacks
 | [hyperfine](https://github.com/sharkdp/hyperfine) | 1.20.0 | Command-line benchmarking tool with statistical output |
 | [jq](https://jqlang.github.io/jq/) | 1.8.1 | Lightweight and flexible command-line JSON processor |
 | [just](https://github.com/casey/just) | 1.50.0 | Command runner — sane `make` replacement for project tasks |
-| [kak](https://kakoune.org) | 2026.04.12 | Kakoune — selection-first modal editor |
 | [lazygit](https://github.com/jesseduffield/lazygit) | 0.61.1 | TUI git client for staging, committing, and rebasing |
 | [micro](https://micro-editor.github.io) | 2.0.15 | Modern, intuitive terminal text editor — Ctrl+S just works |
 | [miller](https://github.com/johnkerl/miller) | 6.18.1 | CSV/TSV/JSON/NDJSON/XML data processor (`mlr`) |

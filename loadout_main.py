@@ -2983,15 +2983,6 @@ def _install_env_helix(repo_dir, home):
     install_path(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), False)
 
 
-def _install_env_kak(repo_dir, home):
-    _kak_src = os.path.join(repo_dir, "kak", "kakrc")
-    _kak_dest = os.path.join(home, ".config", "kak", "kakrc")
-    if os.path.isfile(_kak_src) and not os.path.exists(_kak_dest):
-        ensure_dir(os.path.join(home, ".config", "kak"), "kakoune config")
-        shutil.copy2(_kak_src, _kak_dest)
-        print(f"  Installed default kakrc: {_kak_dest}")
-
-
 ENV_HANDLERS = {
     "env-bash": _install_env_bash,
     "env-nvim": _install_env_nvim,
@@ -3001,7 +2992,6 @@ ENV_HANDLERS = {
     "env-pip": _install_env_pip,
     "env-starship": _install_env_starship,
     "env-helix": _install_env_helix,
-    "env-kak": _install_env_kak,
 }
 
 
@@ -3015,7 +3005,6 @@ ENV_INSTALL_ORDER = (
     "env-pip",
     "env-starship",
     "env-helix",
-    "env-kak",
 )
 
 

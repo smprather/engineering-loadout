@@ -48,7 +48,7 @@ Offline-first package manager for **engineering / compute work environments**: m
 ./loadout install gvim @fonts-all                     # mix packages and @groups
 ./loadout install @engineering-loadout --skip @fonts-all               # full set minus fonts
 ./loadout install @engineering-loadout --skip tldr-data                # skip the tldr cache
-./loadout install @engineering-loadout --skip @fonts-all,gnuplot,kak   # multiple skips
+./loadout install @engineering-loadout --skip @fonts-all,gnuplot,micro   # multiple skips
 ./loadout install @core-cli vim nvim                  # exact set (deps still walked)
 ./loadout install @engineering-loadout                # install everything bundled
 ./loadout install gvim --no-deps                      # install gvim without walking depends/recommends
@@ -128,7 +128,6 @@ pre_built/
     import-portable-python  - Package a portable-python dir → pre_built/<platform>/*.tar.bz2
     farm-versions           - Query installed binary versions (json/tsv/text output)
     check-versions          - Compare bundled package versions against upstream (GitHub releases / PyPI)
-    build-kakoune.sh        - Build kakoune from source
     build-jq.sh             - Build jq from source
     build-ncdu.sh           - Build ncdu from source
     build-octave.sh         - Build GNU Octave from source (without Qt/Java/X11; gnuplot backend)
@@ -136,9 +135,6 @@ pre_built/
     build-nedit-ng.sh       - Build nedit-ng Qt5 NEdit rewrite from source (CMake, single binary)
     reproduce-llvm-build.sh - LLVM build reproduction script
   .strip-manifest           - sha256/tar-meta cache for strip_all_elf_binaries
-
-kak/
-  kakrc                     - Default kakoune config (copy of share/kak/kakrc from build); copied to ~/.config/kak/kakrc only if not already present
 
 helix/
   config.toml               - Helix editor config → ~/.config/helix/config.toml

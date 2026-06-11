@@ -14,7 +14,6 @@ Usage:
   ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
 """
 
-import argparse
 import bz2
 import glob
 import json
@@ -26,6 +25,16 @@ import sys
 import tempfile
 import zipfile
 from urllib.request import Request, urlopen
+
+# Make vendored click + rich-click importable. installer_vendor/ lives at the
+# repo root; walk up from this script's path to find it.
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 REPO = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(REPO, "pre_built", "build_scripts")
@@ -72,7 +81,6 @@ BUILD_SCRIPTS = {
     "fish": {"script": "build-fish.sh", "runtime": "fish.tar.bz2"},
     "gvim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
     "jq": {"script": "build-jq.sh"},
-    "kak": {"script": "build-kakoune.sh"},
     "micro": {"script": "build-micro.sh"},
     "modules": {"script": "build-modules.sh", "runtime": "modules.tar.bz2"},
     "ncdu": {"script": "build-ncdu.sh"},
@@ -804,39 +812,54 @@ ALL_KNOWN = (
 )
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        prog="update",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    ap.add_argument(
-        "packages",
-        nargs="*",
-        metavar="PACKAGE",
-        help="packages to update/show (default: run all automated)",
-    )
-    ap.add_argument("--list", action="store_true", help="table: package | kind | version | latest")
-    ap.add_argument("--list-outdated", action="store_true", help="same as --list but only outdated packages")
-    ap.add_argument("--commit", action="store_true", help="stage + commit automated output (default: no commit)")
-    ap.add_argument(
-        "--rebuild", action="store_true", help="rolling-git: rebuild even if the source commit is unchanged"
-    )
-    ap.add_argument("--dry-run", action="store_true", help="print commands without executing")
-    ap.add_argument(
-        "--tag", default=None, metavar="VERSION", help="version hint for nodejs and yara (e.g. v26.3.0 or 20260517)"
-    )
-    args = ap.parse_args()
+@click.command(
+    name="update",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("packages", nargs=-1, metavar="PACKAGE...")
+@click.option("--list", "show_list", is_flag=True, help="Table: package | kind | version | latest.")
+@click.option(
+    "--list-outdated",
+    "list_outdated",
+    is_flag=True,
+    help="Same as --list, but only packages where latest > current.",
+)
+@click.option("--commit", "do_commit", is_flag=True, help="Stage + commit automated output (default: no commit).")
+@click.option("--rebuild", is_flag=True, help="Rolling-git: rebuild even if the source commit is unchanged.")
+@click.option("--dry-run", "dry_run", is_flag=True, help="Print commands without executing.")
+@click.option(
+    "--tag",
+    default=None,
+    metavar="VERSION",
+    help="Version hint for nodejs and yara (e.g. v26.3.0 or 20260517).",
+)
+def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
+    """update — per-package updater for loadout.
 
-    if args.list or args.list_outdated:
-        cmd_list(outdated_only=args.list_outdated)
+    With no arguments, runs every automated package end-to-end without
+    committing. Pass package names to update specific items, or use the
+    listing/commit flags below.
+
+    Examples:
+
+      ./update                          # run all automated packages
+      ./update nodejs yara-rules        # update specific packages
+      ./update liberty-tools --rebuild  # force rebuild of a rolling-git wheel
+      ./update nvim bat rg              # show update guidance for those packages
+      ./update --list                   # table of every known package
+      ./update --list-outdated          # only outdated packages
+      ./update --commit                 # stage + commit automated output
+      ./update --tag v26.3.0 nodejs     # version hint for nodejs/yara
+    """
+    if show_list or list_outdated:
+        cmd_list(outdated_only=list_outdated)
         return
 
-    packages = args.packages if args.packages else list(AUTOMATED) + sorted(ROLLING_GIT)
+    packages = list(packages) if packages else list(AUTOMATED) + sorted(ROLLING_GIT)
 
     unknown = [p for p in packages if p not in ALL_KNOWN]
     if unknown:
-        ap.error("unknown package(s): {}".format(", ".join(unknown)))
+        raise click.UsageError("unknown package(s): {}".format(", ".join(unknown)))
 
     auto_succeeded = []
     all_ok = True
@@ -844,13 +867,13 @@ def main():
     for name in packages:
         kind = _classify(name)
         if kind == "rolling":
-            ok = _run_rolling(name, dry_run=args.dry_run, force=args.rebuild)
+            ok = _run_rolling(name, dry_run=dry_run, force=rebuild)
             if ok:
                 auto_succeeded.append(name)
             else:
                 all_ok = False
         elif kind == "automated":
-            ok = _run_automated(name, dry_run=args.dry_run, tag=args.tag)
+            ok = _run_automated(name, dry_run=dry_run, tag=tag)
             if ok:
                 auto_succeeded.append(name)
             else:
@@ -864,11 +887,11 @@ def main():
         else:
             print(f"WARNING: no handler for '{name}'")
 
-    if args.commit and auto_succeeded:
-        git_commit(auto_succeeded, dry_run=args.dry_run)
+    if do_commit and auto_succeeded:
+        git_commit(auto_succeeded, dry_run=dry_run)
 
     _sep()
-    if args.dry_run:
+    if dry_run:
         print("Dry-run complete.")
     elif all_ok:
         print("Done.")

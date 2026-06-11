@@ -632,20 +632,6 @@
       ],
       "description": "Command runner, ergonomic Makefile alternative"
     },
-    "kak": {
-      "kind": "bin",
-      "bins": [
-        "kak"
-      ],
-      "version": "2026.04.12",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "editor"
-      ],
-      "description": "Modal editor with multiple simultaneous selections"
-    },
     "lazygit": {
       "kind": "bin",
       "bins": [
@@ -2110,20 +2096,6 @@
       ],
       "description": "Helix editor user config"
     },
-    "env-kak": {
-      "kind": "env",
-      "source": "kak/kakrc",
-      "install_to": "~/.config/kak/kakrc",
-      "platforms": [
-        "linux",
-        "macos"
-      ],
-      "tags": [
-        "env",
-        "editor"
-      ],
-      "description": "Kakoune kakrc (copied only if not already present)"
-    },
     "env-starship": {
       "kind": "env",
       "source": "starship/starship.linux.toml",
@@ -2399,8 +2371,7 @@
         "vim",
         "nvim",
         "hx",
-        "micro",
-        "kak"
+        "micro"
       ],
       "description": "Terminal modal editors"
     },
@@ -2420,8 +2391,7 @@
         "@editor-cli",
         "env-vim",
         "env-nvim",
-        "env-helix",
-        "env-kak"
+        "env-helix"
       ],
       "description": "Editor binaries plus their config bundles"
     },

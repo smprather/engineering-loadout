@@ -51,7 +51,6 @@ NO_EXEC = {
 # Per-binary probe flags tried in order. First non-fatal result wins.
 PROBE_FLAGS = {
     "tmux": [["-V"]],
-    "kak": [["-version"]],
     "resize": [["--help"]],
     "bzip2": [["--help"]],
     "nvim": [["--version"]],

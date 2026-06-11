@@ -62,6 +62,6 @@ Three outcomes:
 - **SKIP**: source build, dev version, or no matching upstream binary release
 - **FAIL**: different shared library dependencies or significant size difference — warrants investigation
 
-Many tools (bash, rg, bat, jq, eza, fd, tmux, vim, gnuplot, rsync, htop, kak, octave, etc.)
+Many tools (bash, rg, bat, jq, eza, fd, tmux, vim, gnuplot, rsync, htop, octave, etc.)
 are intentionally built from source on EL8 targets rather than downloaded from GitHub releases,
 so they are SKIP in the hash verification step but covered by the ClamAV + YARA scans above.
