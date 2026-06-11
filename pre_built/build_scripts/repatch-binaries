@@ -11,13 +11,20 @@ Usage:
     pre_built/build_scripts/repatch-binaries [--dry-run]
 """
 
-import argparse
 import bz2
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
 
@@ -115,11 +122,19 @@ def repatch_bz2(bz2_path, patchelf, dry_run):
             os.unlink(tmp_bz2)
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--dry-run", action="store_true", help="show what would change without modifying files")
-    args = p.parse_args()
+@click.command(
+    name="repatch-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--dry-run", "dry_run", is_flag=True, help="Show what would change without modifying files.")
+def main(dry_run):
+    """Pre-bake RPATH=$ORIGIN/../lib64:$ORIGIN/../lib into every ELF binary
+    stored as .bz2 in pre_built/<platform>/bin/.
 
+    Run once when migrating from post-install patchelf to pre-patched bundles.
+    After this script completes, run ./strip_all_elf_binaries to update
+    .strip-manifest (manifest checksums change because the binaries change).
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_dir = os.path.dirname(os.path.dirname(script_dir))
     pre_built_dir = os.path.join(repo_dir, "pre_built")
@@ -140,16 +155,16 @@ def main():
         for fname in sorted(os.listdir(bin_dir)):
             if not fname.endswith(".bz2"):
                 continue
-            result = repatch_bz2(os.path.join(bin_dir, fname), patchelf, args.dry_run)
+            result = repatch_bz2(os.path.join(bin_dir, fname), patchelf, dry_run)
             counts[result] = counts.get(result, 0) + 1
 
     total_changed = counts["patched"] + counts["would-patch"]
     print(
         "\nDone: {} patched, {} skipped, {} errors".format(
-            counts["patched"] if not args.dry_run else counts["would-patch"], counts["skip"], counts["error"]
+            counts["patched"] if not dry_run else counts["would-patch"], counts["skip"], counts["error"]
         )
     )
-    if total_changed and not args.dry_run:
+    if total_changed and not dry_run:
         print("Next: run ./strip_all_elf_binaries to update .strip-manifest")
 
 

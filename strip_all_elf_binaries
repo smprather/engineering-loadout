@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import argparse
 import bz2
 import hashlib
 import os
@@ -11,6 +10,14 @@ import sys
 import tarfile
 import tempfile
 import warnings
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 ARCHIVE_SUFFIXES = (
     ".tar.gz",
@@ -437,43 +444,47 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
     shutil.rmtree(work_dir)
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(
-        description="Strip ELF payloads anywhere in this repository.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""Behavior:
-  Raw ELF files are stripped in place.
-  Standalone *.bz2 files are stripped if their decompressed payload is ELF.
-  Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
-  .git is skipped.""",
-    )
-    parser.add_argument("--dry-run", action="store_true", help="show what would be stripped/chunked")
-    parser.add_argument("--strip", default=os.environ.get("STRIP", "strip"), help="strip executable path")
-    parser.add_argument("--no-manifest", action="store_true", help="ignore manifest and strip unconditionally")
-    parser.add_argument(
-        "--chunk-only",
-        action="store_true",
-        help="only split large files (>40 MiB) into chunks; skip all ELF stripping",
-    )
-    return parser.parse_args(argv)
+@click.command(
+    name="strip_all_elf_binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--dry-run", "dry_run", is_flag=True, help="Show what would be stripped/chunked.")
+@click.option(
+    "--strip",
+    "strip_bin",
+    default=lambda: os.environ.get("STRIP", "strip"),
+    show_default="strip (or $STRIP)",
+    help="Path to the strip executable.",
+)
+@click.option("--no-manifest", "no_manifest", is_flag=True, help="Ignore manifest and strip unconditionally.")
+@click.option(
+    "--chunk-only",
+    "chunk_only",
+    is_flag=True,
+    help="Only split large files (>40 MiB) into chunks; skip all ELF stripping.",
+)
+def main(dry_run, strip_bin, no_manifest, chunk_only):
+    """Strip ELF payloads anywhere in this repository.
 
-
-def main(argv):
-    args = parse_args(argv)
+    Behaviour:
+      - Raw ELF files are stripped in place.
+      - Standalone *.bz2 files are stripped if their decompressed payload is ELF.
+      - Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
+      - .git is skipped.
+    """
     repo_dir = os.path.dirname(os.path.abspath(__file__))
 
-    if args.chunk_only:
-        n = chunk_large_pre_built(repo_dir, args.dry_run)
-        verb = "would chunk" if args.dry_run else "chunked"
+    if chunk_only:
+        n = chunk_large_pre_built(repo_dir, dry_run)
+        verb = "would chunk" if dry_run else "chunked"
         print(f"{verb}: {n} file(s)")
-        return 0
+        return
 
-    strip_bin = args.strip
     if not command_exists(strip_bin):
         eprint(f"Error: strip executable not found: {strip_bin}")
-        return 1
+        sys.exit(1)
 
-    manifest = Manifest(repo_dir, not args.no_manifest)
+    manifest = Manifest(repo_dir, not no_manifest)
     manifest.load()
     tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir=os.environ.get("TMPDIR", "/tmp"))
     stats = {
@@ -490,23 +501,23 @@ def main(argv):
                 if is_nostrip_archive(path):
                     print(f"skip nostrip archive: {path}")
                     continue
-                process_tar(repo_dir, manifest, strip_bin, path, tmp_dir, args.dry_run, stats)
+                process_tar(repo_dir, manifest, strip_bin, path, tmp_dir, dry_run, stats)
 
         for path in list(walk_files(repo_dir)):
             if path.endswith(".bz2") and not path.endswith(".tar.bz2"):
-                process_bzip2(repo_dir, manifest, strip_bin, path, tmp_dir, args.dry_run, stats)
+                process_bzip2(repo_dir, manifest, strip_bin, path, tmp_dir, dry_run, stats)
 
         manifest_names = {manifest.path, manifest.legacy_path}
         for path in list(walk_files(repo_dir)):
             if path in manifest_names or path.endswith(".bz2") or is_archive_name(path):
                 continue
             if is_elf_file(path):
-                process_raw_elf(repo_dir, manifest, strip_bin, path, args.dry_run, stats)
+                process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats)
 
         # Chunk any remaining large files (wheels, etc.) not handled by the strip passes.
-        chunk_large_pre_built(repo_dir, args.dry_run)
+        chunk_large_pre_built(repo_dir, dry_run)
 
-        manifest.save(args.dry_run)
+        manifest.save(dry_run)
     finally:
         shutil.rmtree(tmp_dir)
 
@@ -516,8 +527,7 @@ def main(argv):
             skipped=skipped, **stats
         )
     )
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    main()

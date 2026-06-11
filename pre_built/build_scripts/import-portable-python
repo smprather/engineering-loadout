@@ -22,12 +22,19 @@ Python version is read from <portable-dir>/local/bin/python3.x --version, or
 parsed from the directory name as a fallback.
 """
 
-import argparse
 import os
 import re
 import subprocess
 import sys
 import tarfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 
 def eprint(*args):
@@ -194,20 +201,32 @@ def make_archive(portable_dir, dest_path, dry_run):
 # ---------------------------------------------------------------------------
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Package a portable Python build dir into loadout pre_built/.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("portable_dir", help="path to the portable-python-X.Y.Z-... directory")
-    parser.add_argument("--platform", default=None, help="override platform string (default: auto-detect)")
-    parser.add_argument(
-        "--output", default=None, help="write archive to this path instead of the default repo location"
-    )
-    parser.add_argument("--dry-run", action="store_true", help="print what would be done without creating the archive")
-    args = parser.parse_args()
+@click.command(
+    name="import-portable-python",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("portable_dir", metavar="PORTABLE_DIR", type=click.Path())
+@click.option(
+    "--platform",
+    "platform_override",
+    default=None,
+    metavar="PLATFORM",
+    help="Override platform string (default: auto-detect).",
+)
+@click.option(
+    "--output",
+    default=None,
+    metavar="PATH",
+    help="Write archive to this path instead of the default repo location.",
+)
+@click.option("--dry-run", "dry_run", is_flag=True, help="Print what would be done without creating the archive.")
+def main(portable_dir, platform_override, output, dry_run):
+    """Package a portable Python build directory into the loadout pre_built tree.
 
-    portable_dir = os.path.abspath(args.portable_dir)
+    PORTABLE_DIR is a directory containing install.sh, README.md, and local/.
+    Example: portable-python-3.14.4-el8-clang23
+    """
+    portable_dir = os.path.abspath(portable_dir)
     if not os.path.isdir(portable_dir):
         die(f"not a directory: {portable_dir}")
     if not os.path.isfile(os.path.join(portable_dir, "install.sh")):
@@ -221,12 +240,12 @@ def main():
         eprint("warning: could not determine Python version; using directory name")
 
     # Platform
-    platform = args.platform or detect_platform()
+    platform = platform_override or detect_platform()
     print(f"platform   : {platform}")
 
     # Output path
-    if args.output:
-        dest_path = os.path.abspath(args.output)
+    if output:
+        dest_path = os.path.abspath(output)
     else:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(script_dir)  # pre_built/
@@ -234,9 +253,9 @@ def main():
         basename = os.path.basename(portable_dir)
         dest_path = os.path.join(repo_dir, "pre_built", platform, f"{basename}.tar.bz2")
 
-    make_archive(portable_dir, dest_path, args.dry_run)
+    make_archive(portable_dir, dest_path, dry_run)
 
-    if not args.dry_run:
+    if not dry_run:
         print()
         print("Next steps:")
         print("  cd <repo>")

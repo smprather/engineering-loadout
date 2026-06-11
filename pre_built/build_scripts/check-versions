@@ -23,7 +23,6 @@ lookups (just print current versions). Requires network for accurate output;
 fails individual queries gracefully with status=error.
 """
 
-import argparse
 import importlib.machinery
 import importlib.util
 import json
@@ -34,6 +33,14 @@ import sys
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PACKAGES_JSON = os.path.join(REPO_DIR, "pre_built", "packages.json")
@@ -129,7 +136,7 @@ def _http_get_json(url):
                     proc = _sp.run([gh, "auth", "token"], stdout=_sp.PIPE, stderr=_sp.DEVNULL, timeout=2)
                     if proc.returncode == 0:
                         token = proc.stdout.decode().strip() or None
-                except (OSError, _sp.TimeoutExpired):
+                except OSError, _sp.TimeoutExpired:
                     pass
         if token:
             headers["Authorization"] = "Bearer " + token
@@ -307,15 +314,39 @@ def render_json(rows, include_na):
 # ----------------------------------------------------------------------- main
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--format", choices=("text", "tsv", "json"), default="text")
-    ap.add_argument("--outdated-only", action="store_true", help="show only outdated and pinned packages")
-    ap.add_argument("--include-na", action="store_true", help="include packages with no upstream API (default: hide)")
-    ap.add_argument("--offline", action="store_true", help="skip network lookups; just print current versions")
-    ap.add_argument("--jobs", type=int, default=12, help="concurrent upstream queries (default 12)")
-    args = ap.parse_args()
+@click.command(
+    name="check-versions",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "tsv", "json"]),
+    default="text",
+    show_default=True,
+)
+@click.option("--outdated-only", "outdated_only", is_flag=True, help="Show only outdated and pinned packages.")
+@click.option(
+    "--include-na",
+    "include_na",
+    is_flag=True,
+    help="Include packages with no upstream API (default: hide).",
+)
+@click.option("--offline", is_flag=True, help="Skip network lookups; just print current versions.")
+@click.option(
+    "--jobs",
+    type=int,
+    default=12,
+    show_default=True,
+    help="Concurrent upstream queries.",
+)
+def main(fmt, outdated_only, include_na, offline, jobs):
+    """Compare bundled package versions against upstream releases.
 
+    Queries the GitHub releases API for each bundled tool, compares against the
+    version recorded in `pre_built/packages.json`, and prints a table of current
+    vs. latest. Pinned packages (`pin_reason` set) are flagged separately.
+    """
     packages = load_packages()
     homepages = load_homepages()
 
@@ -327,7 +358,7 @@ def main():
         work.append((name, entry))
 
     rows = []
-    if args.offline:
+    if offline:
         for name, entry in work:
             rows.append(
                 {
@@ -355,23 +386,21 @@ def main():
                 "error": err,
             }
 
-        with ThreadPoolExecutor(max_workers=args.jobs) as ex:
+        with ThreadPoolExecutor(max_workers=jobs) as ex:
             futs = [ex.submit(task, name, entry) for name, entry in work]
             for f in as_completed(futs):
                 rows.append(f.result())
 
-    if args.outdated_only:
+    if outdated_only:
         rows = [r for r in rows if r["status"] in ("outdated", "pinned")]
 
-    if args.format == "text":
-        render_text(rows, args.include_na)
-    elif args.format == "tsv":
-        render_tsv(rows, args.include_na)
+    if fmt == "text":
+        render_text(rows, include_na)
+    elif fmt == "tsv":
+        render_tsv(rows, include_na)
     else:
-        render_json(rows, args.include_na)
-
-    return 0
+        render_json(rows, include_na)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

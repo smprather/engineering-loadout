@@ -14,12 +14,19 @@ Formats:
     text  — aligned table suitable for copy-paste into a terminal
 """
 
-import argparse
 import json
 import os
 import re
 import subprocess
 import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Version strategies
@@ -579,22 +586,6 @@ TOOLS = [
 # ---------------------------------------------------------------------------
 
 
-def parse_args():
-    p = argparse.ArgumentParser(
-        description="Query installed pre-built binary versions.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    p.add_argument(
-        "--bin-dir",
-        default=os.path.expanduser("~/.local/bin"),
-        help="directory containing installed binaries (default: ~/.local/bin)",
-    )
-    p.add_argument("--format", choices=["json", "tsv", "text"], default="json", help="output format (default: json)")
-    p.add_argument("--missing-only", action="store_true", help="only show tools that could not be versioned")
-    return p.parse_args()
-
-
 def collect(bin_dir):
     results = []
     for binary_name, display_name, homepage, get_version in TOOLS:
@@ -658,20 +649,54 @@ def fmt_text(results):
     print(f"  {ok} versioned, {unknown} unknown, {missing} missing")
 
 
-def main():
-    args = parse_args()
-    results = collect(args.bin_dir)
+@click.command(
+    name="farm-versions",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option(
+    "--bin-dir",
+    "bin_dir",
+    default=lambda: os.path.expanduser("~/.local/bin"),
+    show_default="~/.local/bin",
+    metavar="DIR",
+    help="Directory containing installed binaries.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "tsv", "text"]),
+    default="json",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--missing-only",
+    "missing_only",
+    is_flag=True,
+    help="Only show tools that could not be versioned.",
+)
+def main(bin_dir, fmt, missing_only):
+    """Query installed pre-built binary versions.
 
-    if args.missing_only:
+    Output formats:
+
+      json — machine-readable; full record per tool
+
+      tsv  — tab-separated; suitable for piping into spreadsheets
+
+      text — aligned table suitable for copy-paste into a terminal
+    """
+    results = collect(bin_dir)
+
+    if missing_only:
         results = [r for r in results if r["status"] != "ok"]
 
     if not results:
         print("All tools versioned successfully.", file=sys.stderr)
-        return 0
+        return
 
-    {"json": fmt_json, "tsv": fmt_tsv, "text": fmt_text}[args.format](results)
-    return 0
+    {"json": fmt_json, "tsv": fmt_tsv, "text": fmt_text}[fmt](results)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

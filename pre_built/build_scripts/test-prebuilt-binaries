@@ -20,12 +20,19 @@ Usage:
     pre_built/build_scripts/test-prebuilt-binaries --keep   # don't delete tmpdir
 """
 
-import argparse
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 FATAL_EXIT_CODES = {127, 139}
 
@@ -222,14 +229,23 @@ def smoke_runtime_layout(tmpdir):
     return failures
 
 
-def main():
-    p = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    p.add_argument("--keep", action="store_true", help="keep the temp install dir after testing")
-    args = p.parse_args()
+@click.command(
+    name="test-prebuilt-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--keep", is_flag=True, help="Keep the temp install dir after testing.")
+def main(keep):
+    """Smoke-test installed binary and runtime payloads.
 
+    Runs `./loadout install @engineering-loadout --dest-dir /tmp/... --no-backup
+    --skip @fonts-all,tldr-data` to get a real deployment layout, then probes
+    each executable in <dest>/.local/bin/ for loader failures, signal crashes,
+    "symbol lookup error" / "undefined symbol" in output. Also checks runtime
+    sentinels for shipped editor payloads and runs Neovim headless against the
+    installed runtime.
+
+    Exit 0: all clean. Exit 1: failures detected (fails the pre-commit).
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_dir = os.path.dirname(os.path.dirname(script_dir))
     installer = os.path.join(repo_dir, "loadout")
@@ -255,12 +271,12 @@ def main():
         install_out = proc.stdout.decode("utf-8", "replace")
         if proc.returncode != 0:
             print(f"Install failed (exit {proc.returncode}):\n{install_out}")
-            return 1
+            sys.exit(1)
 
         bin_dir = os.path.join(tmpdir, ".local", "bin")
         if not os.path.isdir(bin_dir):
             print(f"ERROR: {bin_dir} not created by installer")
-            return 1
+            sys.exit(1)
 
         print(f"Smoke-testing binaries in {bin_dir} ...\n")
         failures = []
@@ -304,20 +320,19 @@ def main():
             print(f"FAILED: {len(failures)} smoke checks:")
             for name, msg in failures:
                 print(f"  {name}: {msg}")
-            return 1
+            sys.exit(1)
 
         print(f"All {tested} binaries OK ({skipped} non-ELF skipped); runtimes OK")
-        return 0
 
     except subprocess.TimeoutExpired:
         print("ERROR: installer timed out")
-        return 1
+        sys.exit(1)
     finally:
-        if not args.keep:
+        if not keep:
             shutil.rmtree(tmpdir, ignore_errors=True)
         else:
             print(f"Kept: {tmpdir}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

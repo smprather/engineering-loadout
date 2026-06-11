@@ -20,7 +20,6 @@ Options:
   -v/--verbose  Print each download/extract/strip step.
 """
 
-import argparse
 import bz2
 import gzip
 import hashlib
@@ -31,11 +30,20 @@ import shutil
 import stat
 import subprocess
 import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
 import tarfile
 import tempfile
 import zipfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import rich_click as click  # noqa: E402
 
 # ── paths ─────────────────────────────────────────────────────────────────
 
@@ -381,17 +389,24 @@ def _verify_one(name, entry, version, tmpdir, verbose):
 # ── main ───────────────────────────────────────────────────────────────────
 
 
-def main():
-    p = argparse.ArgumentParser(description="Verify bundled .bz2 binaries against upstream releases.")
-    p.add_argument("tools", nargs="*", metavar="TOOL", help="Tool(s) to verify. Default: all registered.")
-    p.add_argument("--keep", action="store_true", help="Keep temp directory after exit.")
-    p.add_argument("-v", "--verbose", action="store_true", help="Show download/extract/strip steps.")
-    args = p.parse_args()
+@click.command(
+    name="verify-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("tools", nargs=-1, metavar="TOOL...")
+@click.option("--keep", is_flag=True, help="Keep temp directory after exit.")
+@click.option("-v", "--verbose", is_flag=True, help="Show download/extract/strip steps.")
+def main(tools, keep, verbose):
+    """Verify bundled .bz2 binaries against upstream releases.
 
+    For each named tool (or all registered when none given), downloads the
+    upstream release archive, extracts the relevant binary, strips it, and
+    compares the hash + NEEDED libraries against the bundled .bz2 payload.
+    """
     registry = _load_tools_json()
-    sel_tools = args.tools if args.tools else sorted(registry.keys())
+    sel_tools = list(tools) if tools else sorted(registry.keys())
 
-    # Validate --tool names
+    # Validate names
     unknown = [t for t in sel_tools if t not in registry]
     if unknown:
         print("Unknown tool(s): {}".format(", ".join(unknown)), file=sys.stderr)
@@ -399,7 +414,7 @@ def main():
         sys.exit(1)
 
     tmpdir = tempfile.mkdtemp(prefix="loadout-verify.")
-    if args.verbose:
+    if verbose:
         print(f"Temp dir: {tmpdir}")
 
     # Column widths — at least as wide as the header label
@@ -440,10 +455,10 @@ def main():
             counts["SKIP"] += 1
             continue
 
-        if args.verbose:
+        if verbose:
             print("  [{}] {}".format(name, entry["url"].format(ver=version)))
 
-        status, detail = _verify_one(name, entry, version, tmpdir, args.verbose)
+        status, detail = _verify_one(name, entry, version, tmpdir, verbose)
         print(_row(status, detail))
         counts[status] += 1
         if status == "FAIL":
@@ -461,7 +476,7 @@ def main():
         print("Possible causes: wrong URL variant (gnu vs musl), source build,")
         print("or the bundled binary does not match the upstream release.")
 
-    if not args.keep:
+    if not keep:
         shutil.rmtree(tmpdir, ignore_errors=True)
     else:
         print(f"\nTemp dir kept: {tmpdir}")

@@ -15,28 +15,49 @@ any detection. Then it smoke-tests all binaries before tagging.
 Requires: gh (GitHub CLI) authenticated, git repo with remote set.
 """
 
-import argparse
 import datetime
 import os
 import subprocess
 import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 
 def run(cmd, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--tag", default=None, help="release tag (default: v<today YYYY.MM.DD>)")
-    p.add_argument("--dry-run", action="store_true", help="scan + smoke-test only; skip tagging and GitHub release")
-    p.add_argument(
-        "--skip-scan",
-        action="store_true",
-        help="skip the YARA malware scan (NOT recommended; only for a known false positive)",
-    )
-    args = p.parse_args()
+@click.command(
+    name="release",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--tag", default=None, metavar="TAG", help="Release tag (default: v<today YYYY.MM.DD>).")
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help="Scan + smoke-test only; skip tagging and GitHub release.",
+)
+@click.option(
+    "--skip-scan",
+    "skip_scan",
+    is_flag=True,
+    help="Skip the YARA malware scan (NOT recommended; only for a known false positive).",
+)
+def main(tag, dry_run, skip_scan):
+    """Smoke-test all pre-built binaries, then create a GitHub release.
 
+    Every release runs the YARA malware scan (`scan_for_malware`) FIRST and aborts
+    on any detection. Then it smoke-tests all binaries before tagging.
+
+    Requires: gh (GitHub CLI) authenticated, git repo with remote set.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     smoke_test = os.path.join(script_dir, "pre_built", "build_scripts", "test-prebuilt-binaries")
     farm_versions = os.path.join(script_dir, "pre_built", "build_scripts", "farm-versions")
@@ -45,7 +66,7 @@ def main():
     print("=" * 60)
     print("Step 0: Scanning bundled binaries for malware (YARA-Forge)")
     print("=" * 60)
-    if args.skip_scan:
+    if skip_scan:
         print("SKIPPED via --skip-scan (not recommended).")
     else:
         result = run([malware_scan])
@@ -53,7 +74,7 @@ def main():
             print("\nRelease blocked: malware scan reported detections (or failed).", file=sys.stderr)
             print("Investigate every hit before releasing. Override with --skip-scan only", file=sys.stderr)
             print("if you have confirmed it is a YARA false positive.", file=sys.stderr)
-            return 1
+            sys.exit(1)
 
     print("\n" + "=" * 60)
     print("Step 1: Smoke-testing pre-built binaries")
@@ -62,18 +83,18 @@ def main():
     if result.returncode != 0:
         print("\nRelease blocked: binary smoke test failed.", file=sys.stderr)
         print("Fix failing binaries before releasing.", file=sys.stderr)
-        return 1
+        sys.exit(1)
 
-    if args.dry_run:
+    if dry_run:
         print("\nDry run — smoke test passed. Skipping tag and GitHub release.")
-        return 0
+        return
 
-    tag = args.tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
+    tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
 
     print("\n" + "=" * 60)
     print("Step 2: Generating version table")
     print("=" * 60)
-    versions_proc = run([farm_versions, "--format", "tsv"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    versions_proc = run([farm_versions, "--format", "tsv"], capture_output=True)
     versions_tsv = versions_proc.stdout.decode("utf-8", "replace") if versions_proc.returncode == 0 else ""
 
     # Build markdown table from TSV
@@ -101,21 +122,20 @@ def main():
     result = run(["git", "tag", tag])
     if result.returncode != 0:
         print("git tag failed (tag already exists?)", file=sys.stderr)
-        return 1
+        sys.exit(1)
 
     result = run(["git", "push", "origin", tag])
     if result.returncode != 0:
         print("git push tag failed.", file=sys.stderr)
-        return 1
+        sys.exit(1)
 
     result = run(["gh", "release", "create", tag, "--title", tag, "--notes", notes])
     if result.returncode != 0:
         print("gh release create failed.", file=sys.stderr)
-        return 1
+        sys.exit(1)
 
     print(f"\nRelease {tag} created.")
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

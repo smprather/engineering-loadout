@@ -24,7 +24,6 @@ Bundle contents (headers/docs/src stripped):
 Extracts to ~/.local/ so bins land in ~/.local/bin/.
 """
 
-import argparse
 import json
 import os
 import re
@@ -33,6 +32,14 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
 
 
 def eprint(*args):
@@ -351,43 +358,48 @@ def update_packages_json(packages_json_path, version, dry_run):
 # ---------------------------------------------------------------------------
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Bundle a Node.js installation into loadout pre_built/.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "node_dir",
-        nargs="?",
-        default=None,
-        help="path to an existing nvm-installed node dir (default: run nvm install --lts)",
-    )
-    parser.add_argument(
-        "--tag",
-        default=None,
-        help="Node.js version tag to install via nvm (e.g. v26.2.0); ignored when node_dir given",
-    )
-    parser.add_argument(
-        "--platform",
-        default=None,
-        help="override platform string (default: auto-detect)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print what would be done without creating the archive",
-    )
-    args = parser.parse_args()
+@click.command(
+    name="import-nodejs",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("node_dir", required=False, default=None, metavar="NODE_DIR", type=click.Path())
+@click.option(
+    "--tag",
+    default=None,
+    metavar="VERSION",
+    help="Node.js version tag to install via nvm (e.g. v26.2.0); ignored when NODE_DIR given.",
+)
+@click.option(
+    "--platform",
+    "platform_override",
+    default=None,
+    metavar="PLATFORM",
+    help="Override platform string (default: auto-detect).",
+)
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help="Print what would be done without creating the archive.",
+)
+def main(node_dir, tag, platform_override, dry_run):
+    """Bundle a Node.js installation into the loadout pre_built tree.
 
+    Examples:
+
+      ./import-nodejs                                  # nvm install --lts, bundle latest
+      ./import-nodejs --tag v26.2.0                    # nvm install specific version
+      ./import-nodejs ~/.nvm/versions/node/v26.2.0     # bundle an existing nvm install
+    """
     # Resolve source dir
-    if args.node_dir:
-        src_dir = os.path.abspath(args.node_dir)
+    if node_dir:
+        src_dir = os.path.abspath(node_dir)
         if not os.path.isdir(src_dir):
             die(f"not a directory: {src_dir}")
         if not os.path.isfile(os.path.join(src_dir, "bin", "node")):
             die(f"bin/node not found in {src_dir}: does not look like a Node.js prefix dir")
     else:
-        src_dir = nvm_install(tag=args.tag)
+        src_dir = nvm_install(tag=tag)
 
     # Version
     node_version = detect_node_version(src_dir)
@@ -398,7 +410,7 @@ def main():
         node_version = "unknown"
 
     # Platform
-    platform = args.platform or detect_platform()
+    platform = platform_override or detect_platform()
     print(f"platform     : {platform}")
 
     # Locate repo root (script lives at pre_built/build_scripts/)
@@ -413,7 +425,7 @@ def main():
     # glibc audit
     audit_glibc(os.path.join(src_dir, "bin", "node"))
 
-    if args.dry_run:
+    if dry_run:
         print(f"[dry-run] would create {dest_archive}")
         return
 
