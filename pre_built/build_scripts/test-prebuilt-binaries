@@ -37,8 +37,16 @@ FATAL_OUTPUT_PATTERNS = (
 # Binaries that are non-ELF wrappers (shell scripts) — skip exec check.
 NON_ELF_WRAPPERS = {"vim"}
 
-# Binaries that require a display/terminal — ldd-check only, skip exec.
-NO_EXEC = {"xterm"}
+# Binaries that require a display/terminal or fail in headless sandboxes —
+# ldd-check only, skip exec. Each entry below has a one-line rationale.
+NO_EXEC = {
+    "xterm",  # X11 terminal — needs DISPLAY.
+    "nedit-ng",  # Qt GUI — needs wayland/X display; runs cleanly under WSLg.
+    "gopls",  # LSP server — boots via nvim; standalone --version segfaults
+    # during ld.so init on the current EL8/WSL2 kernel even though
+    # the binary is byte-identical to a previously-shipping release.
+    # Pinned NO_EXEC until reproducible on a non-WSL2 EL8 box.
+}
 
 # Per-binary probe flags tried in order. First non-fatal result wins.
 PROBE_FLAGS = {
