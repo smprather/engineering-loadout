@@ -20,7 +20,7 @@ Offline-first package manager for **engineering / compute work environments**: m
 ./loadout install @engineering-loadout
 
 # Stage an install into a temp or test root instead of $HOME
-./loadout --dest-dir /tmp/loadout-home install @engineering-loadout
+./loadout install @engineering-loadout --dest-dir /tmp/loadout-home
 
 # Skip the pre-install snapshot
 ./loadout install @engineering-loadout --no-backup
@@ -240,7 +240,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **env packages install config only.** An env-only selection (e.g. `--only @envs`) writes nothing but `~/.config` and shell-rc text — no binaries, libs, or nvim data. `install_prebuilt_binaries` skips entirely (including the always-on base libs) when the selection contributes no `bin`/`lib` (`_allowed_bins` and `_allowed_libs` both empty). The nvim plugin/parser phases are driven by their own **data** packages, not `env-nvim`: `install_nvim_plugin_bundle` and `install_nvim_lazy_update` gate on `nvim-catalog-plugins`; `install_nvim_treesitter_vendor` gates on `treesitter-parsers`. Both data packages ship in `@engineering-loadout`, so the full-bundle install seeds plugins/parsers; selections that exclude them skip the corresponding phases.
 
-**Destination mode** (`--dest-dir <dir>`): Installs into alternate root instead of `$HOME`. Used by tests, useful for staging.
+**Destination mode** (`--dest-dir <dir>`): per-verb option on `install` / `reinstall` / `upgrade` and the `snapshot` subcommands. Installs into alternate root instead of `$HOME`. Used by tests, useful for staging. Goes AFTER the subcommand: `./loadout install … --dest-dir /opt/loadout/2026.06.11`. Read-only verbs (`list`, `search`, `info`, `resolve`, `doctor`, `clean`) do not accept it.
 
 **No-backup mode** (`--no-backup`): Skips backup before installing. Useful for clean reinstalls or automated use.
 

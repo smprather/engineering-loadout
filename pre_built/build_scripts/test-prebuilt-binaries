@@ -233,10 +233,10 @@ def main():
         proc = subprocess.run(
             [
                 installer,
-                "--dest-dir",
-                tmpdir,
                 "install",
                 "@engineering-loadout",
+                "--dest-dir",
+                tmpdir,
                 "--no-backup",
                 "--skip",
                 "@fonts-all,tldr-data",

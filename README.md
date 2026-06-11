@@ -48,8 +48,8 @@ mutate the live tree in place. Install only the shared artifacts — every packa
 the per-user `env` config bundles — with the synthetic `@shared` group:
 
 ```bash
-./loadout --dest-dir /opt/engineering-loadout/releases/2026-06-04.2 \
-  install @shared
+./loadout install @shared \
+  --dest-dir /opt/engineering-loadout/releases/2026-06-04.2
 ```
 
 `@shared` = all non-`env` packages (binaries, libs, runtimes, fonts, data, python tools);

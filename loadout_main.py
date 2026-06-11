@@ -3955,17 +3955,30 @@ def _install_options(f):
 
 
 def _ctx_args(ctx, **extra):
-    """Build a SimpleNamespace from the top-level context + command-level kwargs.
+    """Build a SimpleNamespace from command-level kwargs.
 
     The legacy handler functions (cmd_install_v2, cmd_list, cmd_describe, …) read
     fields like args.packages, args.skip, args.dest_dir straight off the object;
     this shim lets the click decorators feed them without rewriting every handler.
+    Verbs that take --dest-dir pass it via **extra.
     """
-    obj = ctx.obj or {}
-    ns = types.SimpleNamespace(dest_dir=obj.get("dest_dir"))
-    for k, v in extra.items():
-        setattr(ns, k, v)
-    return ns
+    return types.SimpleNamespace(**extra)
+
+
+def _resolve_home(dest_dir):
+    """Resolve the install root from a --dest-dir option value (or default $HOME)."""
+    return os.path.abspath(dest_dir) if dest_dir else os.path.expanduser("~")
+
+
+def _dest_dir_option(f):
+    """Decorator: attach --dest-dir to verbs that act on the install destination."""
+    return click.option(
+        "--dest-dir",
+        "dest_dir",
+        metavar="DIR",
+        default=None,
+        help="Install root (default: $HOME).",
+    )(f)
 
 
 def _print_version_and_exit(ctx, param, value):
@@ -3990,32 +4003,23 @@ def _print_version_and_exit(ctx, param, value):
     help="Print version (git describe) and exit.",
 )
 @click.option("--verbose", is_flag=True, help="Verbose progress output.")
-@click.option(
-    "--dest-dir",
-    "dest_dir",
-    metavar="DIR",
-    default=None,
-    help="Install root (default: $HOME).",
-)
 @click.pass_context
-def cli(ctx, verbose, dest_dir):
+def cli(ctx, verbose):
     """loadout — offline-first package manager.
 
     Installs bundled packages into the destination directory. Bare 'loadout' and
     bare 'loadout install' both print usage and exit non-zero (dnf parity); always
     name packages or @groups explicitly. Use [bold]@engineering-loadout[/] for the
     full bundled set.
+
+    `--dest-dir` lives on the verbs that act on the install destination
+    (`install`, `reinstall`, `upgrade`, and the `snapshot` subcommands); read-only
+    verbs (`list`, `search`, `info`, `resolve`, `doctor`, `clean`) never touch the
+    destination.
     """
     repo_dir = os.path.dirname(os.path.abspath(__file__))
-    home = os.path.abspath(dest_dir) if dest_dir else os.path.expanduser("~")
     ctx.ensure_object(dict)
-    ctx.obj.update(
-        repo_dir=repo_dir,
-        home=home,
-        dest_dir=dest_dir,
-        verbose=verbose,
-        registry=None,
-    )
+    ctx.obj.update(repo_dir=repo_dir, verbose=verbose, registry=None)
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         ctx.exit(1)
@@ -4027,8 +4031,11 @@ def cli(ctx, verbose, dest_dir):
 @cli.command(name="install", short_help="Install packages.")
 @_selection_options
 @_install_options
+@_dest_dir_option
 @click.pass_context
-def cli_install(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+def cli_install(
+    ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook, dest_dir
+):
     """Install the named packages or @groups.
 
     Examples:
@@ -4038,6 +4045,8 @@ def cli_install(ctx, packages, skip, no_deps, force, dry_run, no_backup, install
       loadout install @core-cli vim nvim
 
       loadout install @engineering-loadout --skip @fonts-all
+
+      loadout install @engineering-loadout --dest-dir /opt/loadout/2026.06.11
     """
     args = _ctx_args(
         ctx,
@@ -4049,15 +4058,19 @@ def cli_install(ctx, packages, skip, no_deps, force, dry_run, no_backup, install
         no_backup=no_backup,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=list(post_install_hook),
+        dest_dir=dest_dir,
     )
-    ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], ctx.obj["home"]))
+    ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
 
 @cli.command(name="reinstall", short_help="Re-install packages (alias of install today).")
 @_selection_options
 @_install_options
+@_dest_dir_option
 @click.pass_context
-def cli_reinstall(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+def cli_reinstall(
+    ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook, dest_dir
+):
     """Re-install named packages. Today identical to `install`; will diverge once
     persisted install state lands."""
     ctx.invoke(
@@ -4070,14 +4083,18 @@ def cli_reinstall(ctx, packages, skip, no_deps, force, dry_run, no_backup, insta
         no_backup=no_backup,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=post_install_hook,
+        dest_dir=dest_dir,
     )
 
 
 @cli.command(name="upgrade", aliases=["update"], short_help="Targeted re-extract of named packages.")
 @_selection_options
 @_install_options
+@_dest_dir_option
 @click.pass_context
-def cli_upgrade(ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook):
+def cli_upgrade(
+    ctx, packages, skip, no_deps, force, dry_run, no_backup, install_follows_symlinks, post_install_hook, dest_dir
+):
     """Re-extract the named packages from the current checkout.
 
     `update` is an alias for this command.
@@ -4092,6 +4109,7 @@ def cli_upgrade(ctx, packages, skip, no_deps, force, dry_run, no_backup, install
         no_backup=no_backup,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=post_install_hook,
+        dest_dir=dest_dir,
     )
 
 
@@ -4155,28 +4173,31 @@ def cli_snapshot():
 
 @cli_snapshot.command(name="create", short_help="Snapshot the destination without installing.")
 @click.argument("name", required=False, default=None)
+@_dest_dir_option
 @click.pass_context
-def cli_snapshot_create(ctx, name):
+def cli_snapshot_create(ctx, name, dest_dir):
     """Take a snapshot of the destination directory without performing an install."""
-    args = _ctx_args(ctx, snapshot_cmd="create", name=name)
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+    args = _ctx_args(ctx, snapshot_cmd="create", name=name, dest_dir=dest_dir)
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
 
 @cli_snapshot.command(name="restore", short_help="Restore a snapshot.")
 @click.argument("path")
+@_dest_dir_option
 @click.pass_context
-def cli_snapshot_restore(ctx, path):
+def cli_snapshot_restore(ctx, path, dest_dir):
     """Restore a snapshot from a directory or a .tar.bz2 archive."""
-    args = _ctx_args(ctx, snapshot_cmd="restore", path=path)
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+    args = _ctx_args(ctx, snapshot_cmd="restore", path=path, dest_dir=dest_dir)
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
 
 @cli_snapshot.command(name="list", short_help="List existing snapshots.")
+@_dest_dir_option
 @click.pass_context
-def cli_snapshot_list(ctx):
-    """List existing snapshots under ~/loadout_backups, newest first."""
-    args = _ctx_args(ctx, snapshot_cmd="list")
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], ctx.obj["home"]))
+def cli_snapshot_list(ctx, dest_dir):
+    """List existing snapshots under <dest>/loadout_backups, newest first."""
+    args = _ctx_args(ctx, snapshot_cmd="list", dest_dir=dest_dir)
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
 
 @cli.command(name="clean", short_help="Remove stale /tmp/loadout* state.")

@@ -98,9 +98,9 @@ EOF
 chmod +x "$test_hooks/hook1.sh" "$test_hooks/hook2.py"
 
 install_args=(
-    --dest-dir "$test_home"
     install
     "@engineering-loadout"
+    --dest-dir "$test_home"
     --post-install-hook "$test_hooks/hook1.sh"
     --post-install-hook "$test_hooks/hook2.py"
 )

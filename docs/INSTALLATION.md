@@ -26,7 +26,7 @@ directory — it resolves the repo from the script path.
 ./loadout snapshot list
 ./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
-./loadout --dest-dir /tmp/test-home install @engineering-loadout
+./loadout install @engineering-loadout --dest-dir /tmp/test-home
 ./loadout install @engineering-loadout --no-backup
 ./loadout install @engineering-loadout --post-install-hook ~/corp/install.sh
 ./loadout install octave                      # single package; deps auto-pulled
