@@ -14,8 +14,6 @@ Usage:
   ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
 """
 
-from __future__ import print_function
-
 import argparse
 import bz2
 import glob
@@ -230,7 +228,7 @@ def _sep(title="", width=72):
 
 def _run(cmd, dry_run=False):
     display = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
-    print("$ {}".format(display))
+    print(f"$ {display}")
     if dry_run:
         return 0
     return subprocess.call(cmd, cwd=REPO)
@@ -246,7 +244,7 @@ def _fetch_json(url):
 
 
 def _download_file(url, dest):
-    print("  GET {}".format(url))
+    print(f"  GET {url}")
     req = Request(url, headers={"User-Agent": "loadout-update/1.0"})
     with urlopen(req, timeout=120) as r:
         with open(dest, "wb") as f:
@@ -264,31 +262,31 @@ def _run_yara_rules(dry_run=False, tag=None):
         print("Fetching latest YARA-Forge release...")
         meta = _fetch_json(_YARA_API_LATEST)
         resolved_tag = meta["tag_name"]
-        print("  Latest: {}".format(resolved_tag))
+        print(f"  Latest: {resolved_tag}")
 
     current_tag = ""
     if os.path.exists(_YARA_TAG_FILE):
         with open(_YARA_TAG_FILE) as f:
             current_tag = f.read().strip()
     if current_tag == resolved_tag:
-        print("Already at {} — nothing to do.".format(resolved_tag))
+        print(f"Already at {resolved_tag} — nothing to do.")
         return True
 
     zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
     if dry_run:
-        print("$ [download {} -> yara/]".format(zip_url))
+        print(f"$ [download {zip_url} -> yara/]")
         return True
 
     with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
         zip_path = os.path.join(tmp, "rules-full.zip")
-        print("Downloading {} rules...".format(resolved_tag))
+        print(f"Downloading {resolved_tag} rules...")
         _download_file(zip_url, zip_path)
 
-        print("  Extracting {}...".format(_YARA_ZIP_MEMBER))
+        print(f"  Extracting {_YARA_ZIP_MEMBER}...")
         with zipfile.ZipFile(zip_path) as zf:
             raw = zf.read(_YARA_ZIP_MEMBER)
 
-        print("  Rules size: {} MB uncompressed".format(len(raw) // 1024 // 1024))
+        print(f"  Rules size: {len(raw) // 1024 // 1024} MB uncompressed")
 
         os.makedirs(_YARA_DIR, exist_ok=True)
         bz2_tmp = _YARA_RULES_BZ2 + ".tmp"
@@ -300,7 +298,7 @@ def _run_yara_rules(dry_run=False, tag=None):
             f.write(resolved_tag + "\n")
 
     compressed_kb = os.path.getsize(_YARA_RULES_BZ2) // 1024
-    print("  Compressed: {} KB".format(compressed_kb))
+    print(f"  Compressed: {compressed_kb} KB")
     return True
 
 
@@ -312,16 +310,16 @@ def _run_tldr_data(dry_run=False):
 
     if dry_run:
         print("$ tldr --update")
-        print("$ tar cjf {} -C {} tldr-pages/".format(output, cache_dir))
+        print(f"$ tar cjf {output} -C {cache_dir} tldr-pages/")
         return True
 
     rc = subprocess.call(["tldr", "--update"])
     if rc != 0:
-        print("ERROR: tldr --update failed rc={}".format(rc))
+        print(f"ERROR: tldr --update failed rc={rc}")
         return False
 
     if not os.path.isdir(pages_dir):
-        print("ERROR: tldr-pages not found at {} after update".format(pages_dir))
+        print(f"ERROR: tldr-pages not found at {pages_dir} after update")
         return False
 
     os.makedirs(os.path.join(REPO, "tldr"), exist_ok=True)
@@ -329,14 +327,14 @@ def _run_tldr_data(dry_run=False):
     if os.path.exists(old_gz):
         os.remove(old_gz)
 
-    print("Bundling {} -> {}".format(pages_dir, output))
+    print(f"Bundling {pages_dir} -> {output}")
     rc = subprocess.call(["tar", "cjf", output, "-C", cache_dir, "tldr-pages/"])
     if rc != 0:
-        print("ERROR: tar failed rc={}".format(rc))
+        print(f"ERROR: tar failed rc={rc}")
         return False
 
     size_mb = os.path.getsize(output) // 1024 // 1024
-    print("Done: {}M written to {}".format(size_mb, output))
+    print(f"Done: {size_mb}M written to {output}")
     return True
 
 
@@ -360,15 +358,15 @@ def _run_tmux_plugins(dry_run=False):
     for plugin in plugins:
         name = os.path.basename(plugin)
         dest = os.path.join(plugin_dir, name)
-        url = "https://github.com/{}.git".format(plugin)
-        print("Updating {}...".format(plugin))
+        url = f"https://github.com/{plugin}.git"
+        print(f"Updating {plugin}...")
         if dry_run:
-            print("$ git clone --depth 1 {} {}".format(url, dest))
+            print(f"$ git clone --depth 1 {url} {dest}")
             continue
         shutil.rmtree(dest, ignore_errors=True)
         rc = subprocess.call(["git", "clone", "--depth", "1", url, dest])
         if rc != 0:
-            print("ERROR: git clone failed for {}".format(plugin))
+            print(f"ERROR: git clone failed for {plugin}")
             ok = False
             continue
         shutil.rmtree(os.path.join(dest, ".git"), ignore_errors=True)
@@ -383,7 +381,7 @@ def _run_env_nvim(dry_run=False):
     nvim_bin = os.path.expanduser("~/.local/bin/nvim")
 
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
-        print("ERROR: nvim not found at {} — run ./loadout install nvim first".format(nvim_bin))
+        print(f"ERROR: nvim not found at {nvim_bin} — run ./loadout install nvim first")
         return False
 
     # Step 1: update plugins via Lazy
@@ -392,37 +390,37 @@ def _run_env_nvim(dry_run=False):
     if not dry_run:
         rc = subprocess.call(cmd)
         if rc != 0:
-            print("WARNING: Lazy! update exited rc={} — continuing with repack".format(rc))
+            print(f"WARNING: Lazy! update exited rc={rc} — continuing with repack")
 
     if not os.path.isdir(lazy_dir):
-        print("ERROR: lazy plugin dir not found at {}".format(lazy_dir))
+        print(f"ERROR: lazy plugin dir not found at {lazy_dir}")
         return False
 
     # Step 2: repack catalog archive with relative paths (./PluginName/...)
     # Use -C so archive entries are relative to lazy_dir, not absolute filesystem paths.
-    print("Repacking {} ...".format(catalog_archive))
+    print(f"Repacking {catalog_archive} ...")
     os.makedirs(os.path.dirname(catalog_archive), exist_ok=True)
     tmp = catalog_archive + ".tmp"
     if dry_run:
-        print("$ tar cjf {} -C {} .".format(catalog_archive, lazy_dir))
+        print(f"$ tar cjf {catalog_archive} -C {lazy_dir} .")
         print("$ ./strip_all_elf_binaries")
         return True
 
     rc = subprocess.call(["tar", "cjf", tmp, "-C", lazy_dir, "."])
     if rc != 0:
-        print("ERROR: tar failed rc={}".format(rc))
+        print(f"ERROR: tar failed rc={rc}")
         if os.path.exists(tmp):
             os.remove(tmp)
         return False
 
     os.replace(tmp, catalog_archive)
     size_mb = os.path.getsize(catalog_archive) // 1024 // 1024
-    print("  {}M -> {}".format(size_mb, catalog_archive))
+    print(f"  {size_mb}M -> {catalog_archive}")
 
     # Step 3: strip ELF payloads inside the archive
     rc = subprocess.call([os.path.join(REPO, "strip_all_elf_binaries")], cwd=REPO)
     if rc != 0:
-        print("WARNING: strip_all_elf_binaries exited rc={}".format(rc))
+        print(f"WARNING: strip_all_elf_binaries exited rc={rc}")
 
     return True
 
@@ -437,12 +435,12 @@ def _run_automated(name, dry_run=False, tag=None):
             cmd += ["--tag", tag]
         rc = _run(cmd, dry_run)
         if rc != 0:
-            print("WARNING: {} exited rc={}".format(name, rc))
+            print(f"WARNING: {name} exited rc={rc}")
             return False
         print()
         rc2 = _run([os.path.join(REPO, "strip_all_elf_binaries")], dry_run)
         if rc2 != 0:
-            print("WARNING: strip_all_elf_binaries exited rc={}".format(rc2))
+            print(f"WARNING: strip_all_elf_binaries exited rc={rc2}")
         return True
     elif name == "tldr-data":
         return _run_tldr_data(dry_run=dry_run)
@@ -451,7 +449,7 @@ def _run_automated(name, dry_run=False, tag=None):
     elif name == "env-nvim":
         return _run_env_nvim(dry_run=dry_run)
     else:
-        print("ERROR: no runner for automated package '{}'".format(name))
+        print(f"ERROR: no runner for automated package '{name}'")
         return False
 
 
@@ -494,7 +492,7 @@ def _build_backend(clone):
     try:
         with open(os.path.join(clone, "pyproject.toml")) as fh:
             txt = fh.read()
-    except IOError:
+    except OSError:
         return ""
     m = re.search(r'build-backend\s*=\s*"([^"]+)"', txt)
     return m.group(1) if m else ""
@@ -505,9 +503,9 @@ def _set_pkg_version(name, version):
     path = os.path.join(REPO, "pre_built", "packages.json")
     with open(path) as fh:
         txt = fh.read()
-    i = txt.find('"{}": {{'.format(name))
+    i = txt.find(f'"{name}": {{')
     if i < 0:
-        raise KeyError("package {} not found in packages.json".format(name))
+        raise KeyError(f"package {name} not found in packages.json")
     # Walk from the package's opening brace to its matching close.
     depth = 0
     j = txt.index("{", i)
@@ -528,7 +526,7 @@ def _set_pkg_version(name, version):
         count=1,
     )
     if n != 1:
-        raise KeyError("version key not found for {}".format(name))
+        raise KeyError(f"version key not found for {name}")
     with open(path, "w") as fh:
         fh.write(txt[:i] + new_block + txt[j:])
 
@@ -544,15 +542,15 @@ def _run_rolling(name, dry_run=False, force=False):
     current = _pkg_version(name)
     remote_short = _remote_head_short(url)
     if not force and remote_short and remote_short in (current or "") and not dry_run:
-        print("Already at {} (remote HEAD {}) — nothing to build.".format(current, remote_short))
+        print(f"Already at {current} (remote HEAD {remote_short}) — nothing to build.")
         return True
 
     if dry_run:
-        print("$ git clone --filter=blob:none {} <tmp>".format(url))
+        print(f"$ git clone --filter=blob:none {url} <tmp>")
         print("$ git -C <tmp> describe --tags --always --dirty")
         print("$ uv build --wheel --out-dir <tmp> <tmp>")
-        print("$ (prune old <dist>-*.whl, copy new wheel into {})".format(os.path.relpath(wheels_dir, REPO)))
-        print("$ (stamp packages.json version for {})".format(name))
+        print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
+        print(f"$ (stamp packages.json version for {name})")
         return True
 
     uv = _find_uv()
@@ -560,26 +558,26 @@ def _run_rolling(name, dry_run=False, force=False):
         print("ERROR: uv not found — required to build rolling-git wheels")
         return False
 
-    tmp = tempfile.mkdtemp(prefix="rolling-{}-".format(name))
+    tmp = tempfile.mkdtemp(prefix=f"rolling-{name}-")
     try:
         clone = os.path.join(tmp, "src")
-        print("Cloning {} ...".format(url))
+        print(f"Cloning {url} ...")
         rc = subprocess.call(["git", "clone", "--filter=blob:none", "--quiet", url, clone])
         if rc != 0:
             print("  partial clone failed; retrying full clone")
             shutil.rmtree(clone, ignore_errors=True)
             rc = subprocess.call(["git", "clone", "--quiet", url, clone])
         if rc != 0:
-            print("ERROR: git clone failed for {}".format(url))
+            print(f"ERROR: git clone failed for {url}")
             return False
 
         try:
             version = _git(["describe", "--tags", "--always", "--dirty"], cwd=clone)
         except Exception:
             version = _git(["rev-parse", "--short", "HEAD"], cwd=clone)
-        print("  source version: {}".format(version))
+        print(f"  source version: {version}")
         if version == current and not force:
-            print("Already at {} — source unchanged, skipping rebuild.".format(version))
+            print(f"Already at {version} — source unchanged, skipping rebuild.")
             return True
 
         out_dir = os.path.join(tmp, "wheels")
@@ -594,12 +592,12 @@ def _run_rolling(name, dry_run=False, force=False):
         print("Building wheel via uv ...")
         rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, clone], env=env)
         if rc != 0:
-            print("ERROR: uv build failed for {}".format(name))
+            print(f"ERROR: uv build failed for {name}")
             return False
 
         built = [f for f in os.listdir(out_dir) if f.endswith(".whl")]
         if not built:
-            print("ERROR: no wheel produced for {}".format(name))
+            print(f"ERROR: no wheel produced for {name}")
             return False
         wheel = built[0]
         dist = wheel.split("-")[0]  # normalized dist name, e.g. liberty_tools
@@ -609,11 +607,11 @@ def _run_rolling(name, dry_run=False, force=False):
             os.remove(os.path.join(wheels_dir, f))
         shutil.copy2(os.path.join(out_dir, wheel), os.path.join(wheels_dir, wheel))
         for f in removed:
-            print("  removed old {}".format(f))
-        print("  installed {}".format(wheel))
+            print(f"  removed old {f}")
+        print(f"  installed {wheel}")
 
         _set_pkg_version(name, version)
-        print("  packages.json version -> {}".format(version))
+        print(f"  packages.json version -> {version}")
         return True
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -627,7 +625,7 @@ def _show_build(name):
     info = BUILD_SCRIPTS[name]
     ver = _pkg_version(name)
     if ver:
-        print("  current: v{}".format(ver))
+        print(f"  current: v{ver}")
     print()
     print("  On EL8 build machine:")
     print("    ./pre_built/build_scripts/{} --tag vX.Y.Z".format(info["script"]))
@@ -644,7 +642,7 @@ def _show_import(name):
     info = IMPORT_SCRIPTS[name]
     ver = _pkg_version(name)
     if ver:
-        print("  current: v{}".format(ver))
+        print(f"  current: v{ver}")
     print()
     print("  {}".format(info["cmd"]))
     print()
@@ -658,17 +656,17 @@ def _show_download(name):
     _sep(name)
     ver = _pkg_version(name)
     if ver:
-        print("  current: v{}".format(ver))
+        print(f"  current: v{ver}")
     print()
     print("  Find latest upstream version + URL:")
     print("    ./pre_built/build_scripts/check-versions --outdated-only")
     print()
     print("  On EL8 build machine:")
     print("  1. Download EL8/x86_64 binary from GitHub releases")
-    print("     objdump -T {n} | awk '/GLIBC/{{print $5}}' | sort -Vr | head -1".format(n=name))
-    print("     patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' {n}".format(n=name))
-    print("     bzip2 -k {n}".format(n=name))
-    print("  2. cp {n}.bz2 pre_built/el8.x86_64.glibc2p28/bin/".format(n=name))
+    print(f"     objdump -T {name} | awk '/GLIBC/{{print $5}}' | sort -Vr | head -1")
+    print(f"     patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' {name}")
+    print(f"     bzip2 -k {name}")
+    print(f"  2. cp {name}.bz2 pre_built/el8.x86_64.glibc2p28/bin/")
     print("  3. ./strip_all_elf_binaries")
     print("  4. git add pre_built/ .strip-manifest packages.json")
 
@@ -789,7 +787,7 @@ def git_commit(succeeded, dry_run=False):
     print()
     rc = _run(["git", "add"] + paths, dry_run)
     if rc != 0 and not dry_run:
-        print("WARNING: git add failed rc={}".format(rc))
+        print(f"WARNING: git add failed rc={rc}")
         return
     _run(["git", "commit", "-m", msg], dry_run)
 
@@ -864,7 +862,7 @@ def main():
         elif kind == "download":
             _show_download(name)
         else:
-            print("WARNING: no handler for '{}'".format(name))
+            print(f"WARNING: no handler for '{name}'")
 
     if args.commit and auto_succeeded:
         git_commit(auto_succeeded, dry_run=args.dry_run)

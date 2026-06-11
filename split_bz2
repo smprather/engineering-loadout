@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Split large .bz2 or .tar.bz2 files into .part-NNN chunks for git storage.
 
 GitHub warns on files > 50 MB; hard-blocks at 100 MB.  Default chunk size is
@@ -15,8 +15,6 @@ To reassemble manually:
     cat file.bz2.part-* > file.bz2
 """
 
-from __future__ import print_function
-
 import argparse
 import os
 import sys
@@ -27,11 +25,7 @@ DEFAULT_CHUNK_MB = 45
 def split_file(path, chunk_size):
     size = os.path.getsize(path)
     if size <= chunk_size:
-        print(
-            "{}: {:.1f} MB — no split needed (under {:.0f} MiB limit)".format(
-                path, size / 1024 / 1024, chunk_size / 1024 / 1024
-            )
-        )
+        print(f"{path}: {size / 1024 / 1024:.1f} MB — no split needed (under {chunk_size / 1024 / 1024:.0f} MiB limit)")
         return 0
 
     part = 0
@@ -40,14 +34,14 @@ def split_file(path, chunk_size):
             data = src.read(chunk_size)
             if not data:
                 break
-            part_path = "{}.part-{:03d}".format(path, part)
+            part_path = f"{path}.part-{part:03d}"
             with open(part_path, "wb") as dst:
                 dst.write(data)
-            print("  wrote {} ({:.1f} MB)".format(part_path, len(data) / 1024 / 1024))
+            print(f"  wrote {part_path} ({len(data) / 1024 / 1024:.1f} MB)")
             part += 1
 
     os.remove(path)
-    print("Removed {} — split into {} parts".format(path, part))
+    print(f"Removed {path} — split into {part} parts")
     return 0
 
 
@@ -59,7 +53,7 @@ def main(argv):
         type=int,
         default=DEFAULT_CHUNK_MB,
         metavar="N",
-        help="chunk size in MiB (default: {})".format(DEFAULT_CHUNK_MB),
+        help=f"chunk size in MiB (default: {DEFAULT_CHUNK_MB})",
     )
     args = ap.parse_args(argv)
 
@@ -67,11 +61,11 @@ def main(argv):
     rc = 0
     for path in args.files:
         if not os.path.isfile(path):
-            print("ERROR: {}: not a file".format(path), file=sys.stderr)
+            print(f"ERROR: {path}: not a file", file=sys.stderr)
             rc = 1
             continue
         if not (path.endswith(".bz2") or path.endswith(".tar.bz2")):
-            print("WARNING: {} does not end in .bz2 or .tar.bz2 — splitting anyway".format(path), file=sys.stderr)
+            print(f"WARNING: {path} does not end in .bz2 or .tar.bz2 — splitting anyway", file=sys.stderr)
         rc = rc or split_file(path, chunk_size)
     return rc
 

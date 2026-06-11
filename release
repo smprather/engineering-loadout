@@ -15,8 +15,6 @@ any detection. Then it smoke-tests all binaries before tagging.
 Requires: gh (GitHub CLI) authenticated, git repo with remote set.
 """
 
-from __future__ import print_function
-
 import argparse
 import datetime
 import os

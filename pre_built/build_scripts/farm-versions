@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 farm-versions: query installed pre-built binary versions.
 
@@ -13,8 +13,6 @@ Formats:
     tsv   — name<TAB>version<TAB>homepage  (one row per tool)
     text  — aligned table suitable for copy-paste into a terminal
 """
-
-from __future__ import print_function
 
 import argparse
 import json
@@ -38,7 +36,7 @@ def _run(cmd, timeout=5):
             timeout=timeout,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return ""
 
 
@@ -52,7 +50,7 @@ def _strings(path):
             timeout=10,
         )
         return proc.stdout.decode("utf-8", "replace")
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return ""
 
 
@@ -98,7 +96,7 @@ def strategy_stdin(script, pattern=r"([0-9]+\.[0-9]+[\w.\-]*)"):
                 timeout=5,
             )
             out = proc.stdout.decode("utf-8", "replace")
-        except (OSError, subprocess.TimeoutExpired):
+        except OSError, subprocess.TimeoutExpired:
             return None
         m = re.search(pattern, out)
         return m.group(1).strip() if m else None
@@ -392,7 +390,7 @@ TOOLS = [
         # "Vi IMproved 9.2" + "Included patches: 1-458" → "9.2.0458"
         lambda binary: (
             lambda out: (
-                lambda b, p: "{}.{:04d}".format(b.group(1), int(p.group(1))) if b and p else (b.group(1) if b else None)
+                lambda b, p: f"{b.group(1)}.{int(p.group(1)):04d}" if b and p else (b.group(1) if b else None)
             )(
                 re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
                 re.search(r"Included patches: 1-([0-9]+)", out or ""),
@@ -405,7 +403,7 @@ TOOLS = [
         "https://github.com/vim/vim",
         lambda binary: (
             lambda out: (
-                lambda b, p: "{}.{:04d}".format(b.group(1), int(p.group(1))) if b and p else (b.group(1) if b else None)
+                lambda b, p: f"{b.group(1)}.{int(p.group(1)):04d}" if b and p else (b.group(1) if b else None)
             )(
                 re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
                 re.search(r"Included patches: 1-([0-9]+)", out or ""),

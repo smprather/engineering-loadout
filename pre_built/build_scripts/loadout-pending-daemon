@@ -20,8 +20,6 @@ Pending state directory: /tmp/loadout-pending/
   daemon.log    - activity log (appended)
 """
 
-from __future__ import print_function
-
 import contextlib
 import datetime
 import errno
@@ -58,7 +56,7 @@ def _append_run_log(msg):
         with open(RUN_LOG_PATH, "a") as f:
             ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
             f.write(f"[{ts}] [daemon] {msg}\n")
-    except (IOError, OSError):
+    except OSError:
         pass
 
 
@@ -86,7 +84,7 @@ def _pending_lock():
     lock_path = os.path.join(PENDING_DIR, "pending.lock")
     try:
         fh = open(lock_path, "w")
-    except (IOError, OSError):
+    except OSError:
         yield
         return
     try:
@@ -103,7 +101,7 @@ def _parse_iso(s):
         dt = datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
         epoch = datetime.datetime(1970, 1, 1)
         return (dt - epoch).total_seconds()
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return 0.0
 
 
@@ -114,12 +112,12 @@ def _now_utc_iso():
 def read_pending_state():
     """Return (ops_by_dest, last_activity_iso). Caller must hold _pending_lock()."""
     try:
-        with open(PENDING_JSON, "r") as f:
+        with open(PENDING_JSON) as f:
             data = json.load(f)
         ops = {op["dest"]: op for op in data.get("ops", []) if "dest" in op}
         last_activity = data.get("last_activity", "")
         return ops, last_activity
-    except (IOError, OSError, ValueError):
+    except OSError, ValueError:
         return {}, ""
 
 
@@ -151,7 +149,7 @@ def check_block(block):
         pgrep = _find_pgrep()
         if not pgrep:
             return False
-        proc = subprocess.run([pgrep, "-x", name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.run([pgrep, "-x", name], capture_output=True)
         return proc.returncode != 0
     if btype == "proc_exe_absent":
         path = block.get("path", "")
@@ -220,13 +218,13 @@ def apply_op(op):
 
 def is_already_running():
     try:
-        with open(PID_FILE, "r") as f:
+        with open(PID_FILE) as f:
             pid = int(f.read().strip())
         if pid == os.getpid():
             return False
         os.kill(pid, 0)
         return True
-    except (IOError, OSError, ValueError):
+    except OSError, ValueError:
         return False
 
 

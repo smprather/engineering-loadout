@@ -3,7 +3,7 @@
 # Run before commits touching the loadout installer or packages.json.
 #
 # Checks:
-#   1. Python 3.6 syntax (EL8 /usr/bin/python3) — catches py2 except syntax etc.
+#   1. POSIX-sh syntax of the `loadout` shim + py3.14 syntax of loadout_main.py.
 #   2. doctor — registry integrity, archive presence, dep resolution
 #   3. dry-run (@core-cli) — resolver sanity, verify key core packages resolve
 #   4. dry-run (@engineering-loadout) — full bundled-set completeness
@@ -16,6 +16,7 @@ set -euo pipefail
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 INSTALLER="$REPO_DIR/loadout"
+INSTALLER_MAIN="$REPO_DIR/loadout_main.py"
 FAILURES=0
 
 fail() {
@@ -28,20 +29,31 @@ pass() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Python 3.6 syntax check
+# 1. Shim shell syntax + main py3.14 syntax
 # ---------------------------------------------------------------------------
-echo "--- 1. Python 3.6 syntax (EL8 /usr/bin/python3) ---"
-SYS_PY3=/usr/bin/python3
-if [[ -x "$SYS_PY3" ]]; then
-    PY36_VER=$("$SYS_PY3" --version 2>&1)
-    if "$SYS_PY3" -m py_compile "$INSTALLER" 2>/dev/null; then
-        pass "loadout compiles under $SYS_PY3 ($PY36_VER)"
+echo "--- 1. shim shell syntax + loadout_main.py py3.14 ---"
+if sh -n "$INSTALLER"; then
+    pass "loadout shim parses under /bin/sh"
+else
+    fail "loadout shim has shell syntax error"
+fi
+# loadout_main.py is the python body; the shim picks the right interpreter
+# at run time. For source-check we try the bootstrap-cache or installed
+# python3.14, falling back to system python3 (which may reject 3.14 syntax
+# — accept that as a soft fail).
+PY314=""
+for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14"; do
+    if [[ -x "$cand" ]]; then PY314="$cand"; break; fi
+done
+if [[ -n "$PY314" ]]; then
+    if "$PY314" -m py_compile "$INSTALLER_MAIN" 2>/dev/null; then
+        pass "loadout_main.py compiles under $($PY314 --version 2>&1)"
     else
-        fail "loadout has syntax error under $SYS_PY3 ($PY36_VER)"
-        "$SYS_PY3" -m py_compile "$INSTALLER" 2>&1 | head -5 >&2
+        fail "loadout_main.py has syntax error under $PY314"
+        "$PY314" -m py_compile "$INSTALLER_MAIN" 2>&1 | head -5 >&2
     fi
 else
-    echo "skip: $SYS_PY3 not found"
+    echo "skip: no python3.14 found (run ./loadout once to bootstrap)"
 fi
 
 # ---------------------------------------------------------------------------

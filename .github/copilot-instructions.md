@@ -3,7 +3,7 @@
 Engineering-loadout: offline-first, no-root package manager for
 Electrical Engineering work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), layered configuration (global → corp → site → project → user).
-The installer is `./loadout` (Python 3.6+, shebang `#!/usr/bin/python3`),
+`./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
 driven by `pre_built/packages.json` (`schema_version: 3`).
 
 ## Key Commands
@@ -201,8 +201,9 @@ backend avoids this.
 install, probes every binary, checks editor runtime sentinels, and runs
 installed `nvim` headless against its installed runtime before any tag is
 created. Portable Python keeps generic `python3`/`pip3` links in
-`~/.local/bin` so `python3` on PATH resolves to 3.14; tools that hard-require
-system Python 3.6 must invoke `/usr/bin/python3` explicitly.
+`~/.local/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
+holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
+PyGObject compatibility (independent of the loadout bootstrap).
 
 The Helix runtime lives at `pre_built/<platform>/runtime/helix.tar.bz2`; the
 installer extracts it to `~/.config/helix/runtime`; `runtime/tutor` is the
@@ -218,7 +219,7 @@ Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `nvim/init.lua` disables the plugin layer cleanly
 instead of erroring.
 
-Use the Python 3.6-compatible `./strip_all_elf_binaries` after adding vendored
+Use `./strip_all_elf_binaries` (Python 3.14) after adding vendored
 binaries, libraries, parser grammars, or tar archives. It walks the repo
 outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs

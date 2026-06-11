@@ -1,13 +1,13 @@
 line-length = 120
 
-# Installer + helper scripts must run under EL8 /usr/bin/python3 (Python 3.6).
-# ruff's floor is py37 — the closest we can target. Critically, this keeps ruff
-# from applying py314 PEP 758 rewrites (e.g. `except (A, B):` → `except A, B:`)
-# and makes it flag py3.8+ syntax that would break on 3.6.
-target-version = "py37"
+# Installer body and post-install scripts run under bundled Python 3.14
+# (via the POSIX-sh `loadout` shim and `~/.local/bin/python3.14` after
+# install). Meld's launcher (`bin/meld`) is the only py3.6 holdout — its
+# shanghai bundle is shipped pre-built and not source-managed here.
+target-version = "py314"
 
 [lint]
-select = ["I"]
+select = ["I", "UP"]
 
 exclude = [
     "installer_vendor/",

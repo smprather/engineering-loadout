@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import print_function
 
 import argparse
 import bz2
@@ -63,7 +62,7 @@ def is_elf_file(path):
     try:
         with open(path, "rb") as fh:
             return fh.read(4) == b"\x7fELF"
-    except IOError:
+    except OSError:
         return False
 
 
@@ -81,7 +80,7 @@ def is_tar_path(path):
         return False
     try:
         return tarfile.is_tarfile(path)
-    except (tarfile.TarError, IOError):
+    except OSError, tarfile.TarError:
         return False
 
 
@@ -104,7 +103,7 @@ def walk_files(repo_dir):
             yield os.path.join(root, name)
 
 
-class Manifest(object):
+class Manifest:
     def __init__(self, repo_dir, use_manifest):
         self.repo_dir = repo_dir
         self.use_manifest = use_manifest
@@ -121,7 +120,7 @@ class Manifest(object):
     def _load_file(self, path):
         if not os.path.isfile(path):
             return
-        with open(path, "r") as fh:
+        with open(path) as fh:
             for raw in fh:
                 line = raw.rstrip("\n")
                 if not line or line.startswith("#"):
@@ -188,8 +187,7 @@ def elf_has_rpath(path):
     try:
         proc = subprocess.run(
             ["/usr/bin/readelf", "-d", path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
         out = proc.stdout.decode("utf-8", "replace")
         return "(RPATH)" in out or "(RUNPATH)" in out
@@ -362,12 +360,12 @@ def safe_extractall(tf, dest_dir):
 
     for m in tf.getmembers():
         if os.path.isabs(m.name) or not _within(m.name):
-            raise ValueError("unsafe tar member path: %r in %s" % (m.name, tf.name))
+            raise ValueError(f"unsafe tar member path: {m.name!r} in {tf.name}")
         if m.issym() or m.islnk():
             # link target resolved relative to the link's own directory
             link_dir = os.path.dirname(m.name)
             if os.path.isabs(m.linkname) or not _within(os.path.join(link_dir, m.linkname)):
-                raise ValueError("unsafe tar link target: %r -> %r" % (m.name, m.linkname))
+                raise ValueError(f"unsafe tar link target: {m.name!r} -> {m.linkname!r}")
     tf.extractall(dest_dir)
 
 

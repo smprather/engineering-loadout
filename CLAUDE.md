@@ -10,7 +10,7 @@ There is no "separate EL8 machine" to SSH into. All build commands run in the cu
 
 ---
 
-Offline-first package manager for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./loadout` Python 3.6-compatible installer driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 3`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
+Offline-first package manager for **Electrical Engineering work environments**: multi-platform (RedHat 7/8/9, Suse, x86_64/ARM/PowerPC), offline (plugins/binaries bundled), no root, multi-org (global/corp/site/team/project/user layer hierarchy). `./loadout` is a POSIX-sh shim that self-bootstraps the bundled portable Python 3.14 (no system Python required) and execs `loadout_main.py` under it; the installer is driven by typed pkg registry (`pre_built/packages.json`, `schema_version: 3`) with named packages, `@`-prefixed groups, hard/soft deps, resolver. Installs Bash, Vim/Neovim, Tmux, Helix, Starship, 50+ pre-built CLI binaries, GUI lib bundles, runtime archives, fonts, data caches.
 
 ## Key Commands
 
@@ -166,17 +166,32 @@ autohotkey/
 hooks/
   pre-commit                - Removes embedded .git dirs before commits. Manual install only: cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
-loadout                     - Python 3.6-compatible Linux installer executable (shebang: #!/usr/bin/python3)
+loadout                     - POSIX-sh bootstrap shim; resolves portable Python 3.14 and execs loadout_main.py
+loadout_main.py             - Installer body (Python 3.14, shebang `#!/usr/bin/env python3.14`)
+.loadout-bootstrap/         - Per-clone Python 3.14 bootstrap cache (gitignored; created on first run when neither ~/.local nor a previous cache has python3.14)
 loadout.ps1                 - Windows installation script (PowerShell)
 loadout-pwsh-bootstrap.ps1  - Windows PowerShell 5.1 bootstrapper for pwsh via winget
 update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; rolling-git first-party wheels; guidance for build/download packages)
-strip_all_elf_binaries      - Python 3.6-compatible helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2
+strip_all_elf_binaries      - Helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2 (Python 3.14)
 tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fresh-user smoke testing
 ```
 
 ## Installation Details
 
-**Install behavior**: `./loadout install <PKG…>` copies files from repo — no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. `./loadout` checks Python version before running. There is no "default install" — users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set).
+### Python bootstrap
+
+`./loadout` is a **POSIX-sh shim** (~80 lines). It resolves a Python 3.14 interpreter in this order:
+1. `~/.local/bin/python3.14` — already installed via `loadout install portable-python`.
+2. `<repo>/.loadout-bootstrap/bin/python3.14` — warm bootstrap cache from a prior run.
+3. Cold bootstrap: decompresses `pre_built/<platform>/portable-python-*.tar.bz2` into `<repo>/.loadout-bootstrap/` and uses that. Requires `bzip2` + `tar` in PATH (both ship with every supported base system).
+
+Once an interpreter is found, the shim execs `loadout_main.py` under it. No system Python is required — fresh extractions of the GitHub release tarball boot cleanly because the portable-python tar.bz2 is already inside `pre_built/` (not export-ignored).
+
+`loadout_main.py` enforces Python ≥ 3.14 via a `sys.version_info` gate. The shim's bootstrap cache lives per-clone (alongside the script, not in `$HOME`) so the boot path never depends on `~/.local` existing yet. `.loadout-bootstrap/` is gitignored.
+
+**Meld's `bin/meld` launcher is the only py3.6 holdout** — it pins `/usr/bin/python3.6` because PyGObject ≤3.30 (the last GLib-2.56-compatible version) breaks under py3.14. Independent of the loadout bootstrap; not affected by this work.
+
+**Install behavior**: `./loadout install <PKG…>` copies files from repo — no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. There is no "default install" — users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set).
 
 ### Package registry (pre_built/packages.json)
 
@@ -237,7 +252,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Font behavior**: Extracts vendored fonts from top-level `fonts/*.zip` into `~/.local/share/fonts`. Large archives stored as split chunks `*.zip.part-000`, `*.zip.part-001`, etc.; use 45 MiB chunks to stay below GitHub's 50 MB warning. Installer rejoins under `/tmp/loadout-fonts.*` before extraction. Generates `fonts.scale`/`fonts.dir` when `mkfontscale`/`mkfontdir` present, refreshes fontconfig with `fc-cache`. Font discovery fontconfig-first for normal Linux desktop apps, WSLg, RHEL/Alma 8. Do not add `xset +fp` startup logic; X core font paths can fail when `$HOME` not traversable by X server. Windows Terminal reads fonts from Windows, not WSL fontconfig.
 
-**Pre-built binary behavior**: Installer selects `pre_built/<platform>/` based on OS family, architecture, libc. Preferred platform names exact and ABI-oriented, e.g. `el8.x86_64.glibc2p28`. Files under `bin/*.bz2` decompressed to `~/.local/bin`, marked executable. Files under `lib64/*.bz2` decompressed to `~/.local/lib64`. All bz2 decompression uses `write_bz2_atomic` (temp file in same dir + `os.rename`) — prevents SIGBUS when running Python has memory-mapped a shared lib being overwritten. RPATH (`$ORIGIN/../lib64:$ORIGIN/../lib`) pre-baked into each binary before bzip2 compression in repo (see `pre_built/build_scripts/repatch-binaries` and `ADDING_BINARIES.md`), no post-install patchelf needed — installer is pure decompress + chmod. `$ORIGIN` is runtime-relative token resolved by `ld.so` at load time, so baking it in repo is identical to setting it post-install. If running binary like `tmux` cannot be replaced, installer continues and prints final retry notice. Then runs `ldd` on installed binaries, warns about missing `.so` deps. If no exact platform exists, installer may use compatible same-arch glibc build whose glibc version not newer than host. Installer shebang `#!/usr/bin/python3`; all subprocess calls use absolute paths (`_LDD`, `_UNAME`, `_GETCONF` resolved at startup via `_find_tool()`) to prevent accidentally picking up binaries being installed. **Never bundle these libs:**
+**Pre-built binary behavior**: Installer selects `pre_built/<platform>/` based on OS family, architecture, libc. Preferred platform names exact and ABI-oriented, e.g. `el8.x86_64.glibc2p28`. Files under `bin/*.bz2` decompressed to `~/.local/bin`, marked executable. Files under `lib64/*.bz2` decompressed to `~/.local/lib64`. All bz2 decompression uses `write_bz2_atomic` (temp file in same dir + `os.rename`) — prevents SIGBUS when running Python has memory-mapped a shared lib being overwritten. RPATH (`$ORIGIN/../lib64:$ORIGIN/../lib`) pre-baked into each binary before bzip2 compression in repo (see `pre_built/build_scripts/repatch-binaries` and `ADDING_BINARIES.md`), no post-install patchelf needed — installer is pure decompress + chmod. `$ORIGIN` is runtime-relative token resolved by `ld.so` at load time, so baking it in repo is identical to setting it post-install. If running binary like `tmux` cannot be replaced, installer continues and prints final retry notice. Then runs `ldd` on installed binaries, warns about missing `.so` deps. If no exact platform exists, installer may use compatible same-arch glibc build whose glibc version not newer than host. The installer body (`loadout_main.py`) runs under bundled Python 3.14, resolved by the POSIX-sh `loadout` shim; all subprocess calls use absolute paths (`_LDD`, `_UNAME`, `_GETCONF` resolved at startup via `_find_tool()`) to prevent accidentally picking up binaries being installed. **Never bundle these libs:**
 - **glibc components** (`libc.so.6`, `libm.so.6`, `libpthread.so.0`, `libdl.so.2`, `librt.so.1`) — must match system's `ld-linux.so.2` exactly; version mismatch produces `undefined symbol: ..., version GLIBC_PRIVATE` crashes. Every EL8 target already has glibc 2.28.
 - **OpenGL dispatcher** (`libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0`) — must be system's display-driver-linked version; bundling causes crashes or wrong driver selection.
 - **C++ runtime** (`libstdc++.so.6`, `libgcc_s.so.1`) — present on all EL8 systems; version mismatches with C++ code subtle and hard to diagnose. Run `./strip_all_elf_binaries` after adding binaries, libs, parser grammars, or tar archives. Strips raw ELF files in place, strips ELF payloads inside standalone `.bz2`, rewrites tar archives as `.tar.bz2`; processed tarballs skipped on later runs when size and mtime match strip manifest. Non-ELF `.bz2` payloads (e.g. `vim.bz2` shell wrapper) recorded in `.strip-manifest` after first check, skipped as manifest hits subsequently. Archives matching `NOSTRIP_ARCHIVE_PREFIXES` (currently `portable-python-*`) completely skipped — BOLT-optimized binaries must not be touched.

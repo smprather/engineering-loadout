@@ -21,7 +21,7 @@ import tarfile
 import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOADOUT_PATH = os.path.join(REPO, "loadout")
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
 
 
 def load_loadout():

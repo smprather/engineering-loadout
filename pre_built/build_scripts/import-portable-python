@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 import-portable-python: package a portable Python build directory into the
 loadout pre_built tree.
@@ -21,8 +21,6 @@ Platform auto-detection (used when --platform is not given):
 Python version is read from <portable-dir>/local/bin/python3.x --version, or
 parsed from the directory name as a fallback.
 """
-
-from __future__ import print_function
 
 import argparse
 import os
@@ -59,7 +57,7 @@ _GETCONF = _find_tool("/usr/bin/getconf")
 
 
 def _run_output(*cmd):
-    proc = subprocess.run(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.run(list(cmd), capture_output=True)
     return proc.stdout.decode("utf-8", "replace").strip()
 
 
@@ -100,7 +98,7 @@ def read_os_release():
                     continue
                 key, value = line.split("=", 1)
                 data[key] = value.strip().strip('"')
-    except IOError:
+    except OSError:
         pass
     return data
 

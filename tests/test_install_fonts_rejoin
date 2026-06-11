@@ -5,8 +5,6 @@ Covers split-zip rejoining and fonts-dir preparation (symlink removal,
 directory backup) without requiring the real vendored font archives.
 """
 
-from __future__ import print_function
-
 import importlib.machinery
 import importlib.util
 import io
@@ -16,7 +14,7 @@ import tempfile
 import zipfile
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INSTALL_PATH = os.path.join(REPO_DIR, "loadout")
+INSTALL_PATH = os.path.join(REPO_DIR, "loadout_main.py")
 LOADER = importlib.machinery.SourceFileLoader("loadout_install", INSTALL_PATH)
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 install = importlib.util.module_from_spec(SPEC)
@@ -33,7 +31,7 @@ def make_split_font_zip(fonts_dir, base_name, chunk_size=20):
     i = 0
     offset = 0
     while offset < len(data):
-        part_path = os.path.join(fonts_dir, "{}.part-{:03d}".format(base_name, i))
+        part_path = os.path.join(fonts_dir, f"{base_name}.part-{i:03d}")
         with open(part_path, "wb") as fh:
             fh.write(data[offset : offset + chunk_size])
         offset += chunk_size
@@ -65,7 +63,7 @@ def test_split_zip_rejoin():
 
         ufd = user_fonts_dir(home)
         installed = os.listdir(ufd) if os.path.isdir(ufd) else []
-        assert "dummy.ttf" in installed, "Expected dummy.ttf in {}; got: {}".format(ufd, installed)
+        assert "dummy.ttf" in installed, f"Expected dummy.ttf in {ufd}; got: {installed}"
         print("PASS: split-zip rejoin -> dummy.ttf")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -110,7 +108,7 @@ def test_existing_dir_backed_up():
         install.install_fonts(repo_dir, home)
 
         backup = ufd + ".bak"
-        assert os.path.isdir(backup), "Old fonts dir should be backed up to {}".format(backup)
+        assert os.path.isdir(backup), f"Old fonts dir should be backed up to {backup}"
         assert os.path.exists(os.path.join(backup, "old-font.ttf")), "Sentinel file should be in backup"
         assert os.path.isdir(ufd), "Fresh fonts dir should exist"
         assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"

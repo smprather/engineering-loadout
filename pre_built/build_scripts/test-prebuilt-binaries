@@ -20,8 +20,6 @@ Usage:
     pre_built/build_scripts/test-prebuilt-binaries --keep   # don't delete tmpdir
 """
 
-from __future__ import print_function
-
 import argparse
 import os
 import shutil
@@ -57,7 +55,7 @@ def is_elf(path):
     try:
         with open(path, "rb") as fh:
             return fh.read(4) == b"\x7fELF"
-    except IOError:
+    except OSError:
         return False
 
 
@@ -68,12 +66,11 @@ def ldd_check(path):
     try:
         proc = subprocess.run(
             [ldd, path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=5,
         )
         return [line.strip() for line in proc.stdout.decode("utf-8", "replace").splitlines() if "not found" in line]
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return []
 
 

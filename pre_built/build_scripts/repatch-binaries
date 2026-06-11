@@ -11,8 +11,6 @@ Usage:
     pre_built/build_scripts/repatch-binaries [--dry-run]
 """
 
-from __future__ import print_function
-
 import argparse
 import bz2
 import os
@@ -51,8 +49,7 @@ def find_patchelf(repo_dir):
 def is_dynamic_elf(path, patchelf):
     proc = subprocess.run(
         [patchelf, "--print-interpreter", path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     return proc.returncode == 0
 
@@ -60,8 +57,7 @@ def is_dynamic_elf(path, patchelf):
 def get_rpath(path, patchelf):
     proc = subprocess.run(
         [patchelf, "--print-rpath", path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     return proc.stdout.decode("utf-8", "replace").strip()
 
@@ -92,12 +88,11 @@ def repatch_bz2(bz2_path, patchelf, dry_run):
 
         # Strip before patchelf: strip after patchelf can leave .dynstr outside
         # a PT_LOAD segment and corrupt the binary at load time.
-        subprocess.run(["/usr/bin/strip", tmp_elf], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(["/usr/bin/strip", tmp_elf], capture_output=True)
 
         proc = subprocess.run(
             [patchelf, "--set-rpath", RPATH, tmp_elf],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
         if proc.returncode != 0:
             print("  ERROR: patchelf failed on {}: {}".format(bz2_path, proc.stderr.decode("utf-8", "replace").strip()))

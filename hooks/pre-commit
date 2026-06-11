@@ -80,24 +80,31 @@ while IFS= read -r _f; do
 done <<< "$_staged_all"
 
 if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
-    # Python 3.6 syntax check (EL8 /usr/bin/python3) — catches py2 except syntax,
-    # f-string issues, and anything that would break the installer shebang path.
-    if [[ -x /usr/bin/python3 ]]; then
-        echo "Pre-commit: Checking Python 3.6 syntax (/usr/bin/python3)..."
-        _py36_ok=1
+    # Python 3.14 syntax check — the installer body and all post-install
+    # scripts run under bundled python3.14 (via the POSIX-sh loadout shim
+    # or ~/.local/bin/python3.14 after install).
+    _py314=""
+    for _cand in "$HOME/.local/bin/python3.14" "$script_dir/.loadout-bootstrap/bin/python3.14"; do
+        if [[ -x "$_cand" ]]; then _py314="$_cand"; break; fi
+    done
+    if [[ -n "$_py314" ]]; then
+        echo "Pre-commit: Checking Python 3.14 syntax ($_py314)..."
+        _py314_ok=1
         for _f in "${_staged_py_files[@]}"; do
-            if ! /usr/bin/python3 -m py_compile "$_f" 2>/tmp/py36-check-err; then
-                echo "  SYNTAX ERROR under /usr/bin/python3: $_f" >&2
-                cat /tmp/py36-check-err >&2
-                _py36_ok=0
+            if ! "$_py314" -m py_compile "$_f" 2>/tmp/py314-check-err; then
+                echo "  SYNTAX ERROR under $_py314: $_f" >&2
+                cat /tmp/py314-check-err >&2
+                _py314_ok=0
             fi
         done
-        if [[ "$_py36_ok" == "1" ]]; then
-            echo "✓ Python 3.6 syntax OK"
+        if [[ "$_py314_ok" == "1" ]]; then
+            echo "✓ Python 3.14 syntax OK"
         else
             echo "ERROR: Fix syntax errors above before committing." >&2
             exit 1
         fi
+    else
+        echo "Pre-commit: skipping py3.14 syntax check (no python3.14 found)"
     fi
 
     echo "Pre-commit: Formatting Python files with ruff..."

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-from __future__ import print_function
 
 import subprocess
-
 
 # tmux has a literal character list for select-word boundaries, not a Unicode
 # class or regex. Keep the base ASCII separators readable here, then append
@@ -11,8 +9,8 @@ BASE_SEPARATORS = " '\",=[]$*{}<>()^#!`;\t:"
 
 EMOJI_RANGES = (
     (0x1F000, 0x1FAFF),  # symbols, pictographs, emoticons, transport, supplemental symbols
-    (0x2600, 0x27BF),    # miscellaneous symbols, dingbats
-    (0x2B00, 0x2BFF),    # miscellaneous symbols and arrows
+    (0x2600, 0x27BF),  # miscellaneous symbols, dingbats
+    (0x2B00, 0x2BFF),  # miscellaneous symbols and arrows
 )
 
 EMOJI_EXTRAS = (
@@ -39,13 +37,15 @@ def main():
         emoji_chars.extend(chr(codepoint) for codepoint in range(start, end + 1))
     emoji_chars.extend(chr(codepoint) for codepoint in EMOJI_EXTRAS)
 
-    subprocess.call([
-        "tmux",
-        "set-option",
-        "-gq",
-        "word-separators",
-        BASE_SEPARATORS + "".join(emoji_chars),
-    ])
+    subprocess.call(
+        [
+            "tmux",
+            "set-option",
+            "-gq",
+            "word-separators",
+            BASE_SEPARATORS + "".join(emoji_chars),
+        ]
+    )
 
 
 if __name__ == "__main__":

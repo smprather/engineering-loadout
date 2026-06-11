@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 import-nodejs: bundle a Node.js installation into the loadout pre_built tree.
 
@@ -24,8 +24,6 @@ Bundle contents (headers/docs/src stripped):
 Extracts to ~/.local/ so bins land in ~/.local/bin/.
 """
 
-from __future__ import print_function
-
 import argparse
 import json
 import os
@@ -42,7 +40,7 @@ def eprint(*args):
 
 
 def die(msg):
-    eprint("error: {}".format(msg))
+    eprint(f"error: {msg}")
     sys.exit(1)
 
 
@@ -67,7 +65,7 @@ _STRIP = _find_tool("/usr/bin/strip")
 
 
 def _run_output(*cmd):
-    proc = subprocess.run(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.run(list(cmd), capture_output=True)
     return proc.stdout.decode("utf-8", "replace").strip()
 
 
@@ -108,7 +106,7 @@ def read_os_release():
                     continue
                 key, value = line.split("=", 1)
                 data[key] = value.strip().strip('"')
-    except IOError:
+    except OSError:
         pass
     return data
 
@@ -116,7 +114,7 @@ def read_os_release():
 def detect_platform():
     arch = detect_arch()
     if ldd_is_musl():
-        return "linux.{}.musl".format(arch)
+        return f"linux.{arch}.musl"
     glibc_ver = detect_glibc_version()
     glibc_id = "glibc{}".format(glibc_ver.replace(".", "p")) if glibc_ver else "glibc"
     osr = read_os_release()
@@ -132,8 +130,8 @@ def detect_platform():
     ):
         el_id = "el{}".format(version_id.split(".", 1)[0])
     if el_id:
-        return "{}.{}.{}".format(el_id, arch, glibc_id)
-    return "linux.{}.{}".format(arch, glibc_id)
+        return f"{el_id}.{arch}.{glibc_id}"
+    return f"linux.{arch}.{glibc_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +148,7 @@ def _nvm_bash(cmd):
     )
     proc = subprocess.run(
         ["/bin/bash", "-i", "-c", script],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     stdout = proc.stdout.decode("utf-8", "replace")
     stderr = proc.stderr.decode("utf-8", "replace")
@@ -162,7 +159,7 @@ def nvm_install(tag=None):
     """Use nvm to install Node.js; return the installed prefix dir."""
     if tag:
         ver_arg = tag.lstrip("v")  # nvm accepts both "v26.2.0" and "26.2.0"
-        install_cmd = "nvm install --latest-npm v{ver} && nvm which v{ver}".format(ver=ver_arg)
+        install_cmd = f"nvm install --latest-npm v{ver_arg} && nvm which v{ver_arg}"
     else:
         install_cmd = "nvm install --lts --latest-npm && nvm which current"
 
@@ -171,10 +168,10 @@ def nvm_install(tag=None):
 
     # Print stderr so user sees nvm install progress
     for line in stderr.splitlines():
-        print("  [nvm] {}".format(line))
+        print(f"  [nvm] {line}")
 
     if rc != 0:
-        die("nvm command failed (rc={}):\n{}".format(rc, stdout + stderr))
+        die(f"nvm command failed (rc={rc}):\n{stdout + stderr}")
 
     # Last non-empty line of stdout is the path from `nvm which`
     lines = [l.strip() for l in stdout.splitlines() if l.strip()]
@@ -183,11 +180,11 @@ def nvm_install(tag=None):
 
     node_bin = lines[-1]
     if not os.path.isfile(node_bin):
-        die("nvm which returned '{}' but that file does not exist".format(node_bin))
+        die(f"nvm which returned '{node_bin}' but that file does not exist")
 
     # node_bin is e.g. /home/user/.nvm/versions/node/v26.2.0/bin/node
     prefix = os.path.dirname(os.path.dirname(node_bin))  # strip /bin/node
-    print("nvm installed: {}".format(prefix))
+    print(f"nvm installed: {prefix}")
     return prefix
 
 
@@ -213,8 +210,7 @@ def audit_glibc(node_bin):
         return
     proc = subprocess.run(
         [_OBJDUMP, "-T", node_bin],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     highest = (0, 0)
     for line in proc.stdout.decode("utf-8", "replace").splitlines():
@@ -227,16 +223,14 @@ def audit_glibc(node_bin):
     if highest == (0, 0):
         print("glibc audit  : no GLIBC_* symbols found (static or unexpected format)")
         return
-    sym_str = "GLIBC_{}.{}".format(highest[0], highest[1])
-    target_str = "GLIBC_{}.{}".format(EL8_GLIBC[0], EL8_GLIBC[1])
+    sym_str = f"GLIBC_{highest[0]}.{highest[1]}"
+    target_str = f"GLIBC_{EL8_GLIBC[0]}.{EL8_GLIBC[1]}"
     if highest > EL8_GLIBC:
         print(
-            "WARNING: bin/node requires {} > {} (EL8 target). This node bundle may not work on EL8 machines.".format(
-                sym_str, target_str
-            )
+            f"WARNING: bin/node requires {sym_str} > {target_str} (EL8 target). This node bundle may not work on EL8 machines."
         )
     else:
-        print("glibc audit  : {} <= {} (EL8-compatible)".format(sym_str, target_str))
+        print(f"glibc audit  : {sym_str} <= {target_str} (EL8-compatible)")
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +254,7 @@ def assemble_bundle(src_dir, bundle_dir):
         src = os.path.join(src_dir, rel)
         dst = os.path.join(bundle_dir, rel)
         if not os.path.exists(src) and not os.path.islink(src):
-            eprint("warning: expected path not found in node dir: {}".format(rel))
+            eprint(f"warning: expected path not found in node dir: {rel}")
             continue
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if os.path.islink(src):
@@ -292,10 +286,10 @@ def strip_binary(path):
     before = os.path.getsize(path)
     rc = subprocess.call([_STRIP, "--strip-unneeded", path])
     if rc != 0:
-        eprint("warning: strip returned {} for {}".format(rc, path))
+        eprint(f"warning: strip returned {rc} for {path}")
         return
     after = os.path.getsize(path)
-    print("strip        : bin/node {} MB → {} MB".format(round(before / 1024 / 1024, 1), round(after / 1024 / 1024, 1)))
+    print(f"strip        : bin/node {round(before / 1024 / 1024, 1)} MB → {round(after / 1024 / 1024, 1)} MB")
 
 
 def patchelf_rpath(path):
@@ -305,9 +299,9 @@ def patchelf_rpath(path):
     rpath = "$ORIGIN/../lib64:$ORIGIN/../lib"
     rc = subprocess.call([_PATCHELF, "--set-rpath", rpath, path])
     if rc != 0:
-        eprint("warning: patchelf returned {} for {}".format(rc, path))
+        eprint(f"warning: patchelf returned {rc} for {path}")
     else:
-        print("patchelf     : bin/node RPATH = {}".format(rpath))
+        print(f"patchelf     : bin/node RPATH = {rpath}")
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +331,7 @@ def detect_node_version(src_dir):
 
 def update_packages_json(packages_json_path, version, dry_run):
     if dry_run:
-        print("[dry-run] would update packages.json nodejs.version to {}".format(version))
+        print(f"[dry-run] would update packages.json nodejs.version to {version}")
         return
     with open(packages_json_path) as fh:
         text = fh.read()
@@ -349,7 +343,7 @@ def update_packages_json(packages_json_path, version, dry_run):
     with open(packages_json_path, "w") as fh:
         json.dump(data, fh, indent=2)
         fh.write("\n")
-    print("packages.json: nodejs.version = {}".format(version))
+    print(f"packages.json: nodejs.version = {version}")
 
 
 # ---------------------------------------------------------------------------
@@ -389,23 +383,23 @@ def main():
     if args.node_dir:
         src_dir = os.path.abspath(args.node_dir)
         if not os.path.isdir(src_dir):
-            die("not a directory: {}".format(src_dir))
+            die(f"not a directory: {src_dir}")
         if not os.path.isfile(os.path.join(src_dir, "bin", "node")):
-            die("bin/node not found in {}: does not look like a Node.js prefix dir".format(src_dir))
+            die(f"bin/node not found in {src_dir}: does not look like a Node.js prefix dir")
     else:
         src_dir = nvm_install(tag=args.tag)
 
     # Version
     node_version = detect_node_version(src_dir)
     if node_version:
-        print("node version : v{}".format(node_version))
+        print(f"node version : v{node_version}")
     else:
         eprint("warning: could not determine Node.js version")
         node_version = "unknown"
 
     # Platform
     platform = args.platform or detect_platform()
-    print("platform     : {}".format(platform))
+    print(f"platform     : {platform}")
 
     # Locate repo root (script lives at pre_built/build_scripts/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -414,13 +408,13 @@ def main():
     dest_archive = os.path.join(repo_dir, "pre_built", platform, "runtime", "node.tar.bz2")
     packages_json = os.path.join(repo_dir, "pre_built", "packages.json")
 
-    print("archive      : {}".format(dest_archive))
+    print(f"archive      : {dest_archive}")
 
     # glibc audit
     audit_glibc(os.path.join(src_dir, "bin", "node"))
 
     if args.dry_run:
-        print("[dry-run] would create {}".format(dest_archive))
+        print(f"[dry-run] would create {dest_archive}")
         return
 
     # Assemble bundle in temp dir
@@ -455,7 +449,7 @@ def main():
                 os.unlink(tmp_archive)
 
     size_mb = os.path.getsize(dest_archive) / 1024 / 1024
-    print("created      : {} ({:.1f} MB)".format(dest_archive, size_mb))
+    print(f"created      : {dest_archive} ({size_mb:.1f} MB)")
 
     # Update packages.json
     if os.path.isfile(packages_json) and node_version != "unknown":
@@ -464,7 +458,7 @@ def main():
     print()
     print("Next steps:")
     print("  ./strip_all_elf_binaries")
-    print("  git add pre_built/{}/runtime/node.tar.bz2 pre_built/packages.json .strip-manifest".format(platform))
+    print(f"  git add pre_built/{platform}/runtime/node.tar.bz2 pre_built/packages.json .strip-manifest")
     print("  git commit")
 
 
