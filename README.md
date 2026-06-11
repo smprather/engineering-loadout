@@ -107,9 +107,10 @@ packages or groups explicitly (dnf/apt style). To install a subset or add to a b
 
 **Symlink handling.** If your home directory has existing symlinks where the loadout needs
 to create directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default behaviour
-removes the symlink and installs the loadout's directory. Use
-`--install-follows-symlinks=yes` to write into the symlink target instead, or `=auto`
-to follow only if the target is writable. The displaced symlink is backed up and can be
+(`--install-follows-symlinks=auto`) follows the symlink when its target is writable, and
+otherwise removes the symlink and creates a real directory in its place. Use
+`--install-follows-symlinks=yes` to always write into the symlink target, or `=no` to
+always replace it with a real directory. The displaced symlink is backed up and can be
 restored with `./loadout snapshot restore`.
 
 ### Windows

@@ -666,7 +666,7 @@ _INTERRUPT_REQUESTED = False
 _INTERRUPT_PHASE = None  # "backup" while backup_existing is running, else None
 _ACTIVE_BACKUP_DIR = None  # set by backup_existing for sigint cleanup
 _ACTIVE_SUBPROCESS = None  # set by run() so handler can SIGTERM child before cleanup
-_FOLLOW_SYMLINKS = "no"  # "yes"|"no"|"auto" — set by --install-follows-symlinks
+_FOLLOW_SYMLINKS = "auto"  # "yes"|"no"|"auto" — set by --install-follows-symlinks
 
 
 def _sigint_handler(signum, frame):
@@ -3585,7 +3585,7 @@ def glob_paths_glob(pattern):
 def cmd_install(args, registry, selected_tools, repo_dir, home):
     """The default install verb."""
     global _FOLLOW_SYMLINKS
-    _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", "no") or "no"
+    _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", "auto") or "auto"
 
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
@@ -3931,9 +3931,13 @@ def _install_options(f):
         "--install-follows-symlinks",
         "install_follows_symlinks",
         type=click.Choice(["yes", "no", "auto"]),
-        default="no",
+        default="auto",
         show_default=True,
-        help="How to handle existing directory symlinks during archive extraction.",
+        help=(
+            "How to handle existing directory symlinks during archive extraction. "
+            "auto: follow if the symlink target is writable, else replace with a real dir. "
+            "yes: always follow. no: always replace."
+        ),
     )(f)
     f = click.option(
         "--no-backup",
