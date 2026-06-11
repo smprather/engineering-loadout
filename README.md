@@ -4,7 +4,7 @@ A self-contained, offline-first package manager for **Engineering work environme
 - Old Linux distro versions
 - Limited, or no, internet access
 - No sudo/root
-- Built from 30+ years of Electrical Engineering workflow experience
+- Built from 30+ years of engineering workflow experience
 - All built on AlmaLinux 8.10 (RHEL 8 clone), glibc 2.28
   - Compatible with RHEL 9.x and beyond
   - RHEL 7 is EoL. If you see any RHEL 7 zombies 🧟 walking around, please stab them in the head 🔪.
@@ -281,7 +281,7 @@ rebuilds the wheel with `uv build`, prunes the previous wheel, and stamps the
 when the upstream commit changed (`--rebuild` forces). The version shown above is the
 project's declared version; the bundled wheel always tracks the latest commit.
 
-**gui_libs** targets headless EE farm/LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
+**gui_libs** targets headless compute farm / LSF nodes that have no GUI libraries but run GUI tools with `DISPLAY` forwarded back to a workstation. It includes Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, xcb extensions, xkbcommon, and Wayland client libs. All are patchelf'd with `$ORIGIN` RPATH so they find each other in `~/.local/lib64/`.
 
 ```bash
 # Install GUI editors — gui_libs + vim92-runtime are auto-pulled as dependencies.

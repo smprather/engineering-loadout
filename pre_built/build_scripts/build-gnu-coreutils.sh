@@ -8,7 +8,7 @@
 #   libc.so.6, libpthread.so.0 (glibc — always present)
 #
 # Configure skips acl, selinux, gmp to keep deps at glibc-only.
-# libacl/libselinux are NOT guaranteed on all EE fleet nodes.
+# libacl/libselinux are NOT guaranteed on all compute fleet nodes.
 #
 # Build-time deps (system, EL8):
 #   gcc (toolset-14 preferred), make, autoconf, automake

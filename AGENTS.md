@@ -20,7 +20,7 @@ code being committed.
 
 ## Cold Start
 
-This repository is engineering-loadout: an offline-first, no-root package manager for EE Linux/Windows environments. `./loadout` is a POSIX-sh shim that self-bootstraps the bundled portable Python 3.14 (no system Python required) and execs `loadout_main.py` under it. Driven by `pre_built/packages.json` (`schema_version: 3`). Prefer changes that preserve RedHat/Alma/RHEL 7/8/9, Suse, WSL, Windows PowerShell, and locked-down corporate machines.
+This repository is engineering-loadout: an offline-first, no-root package manager for Linux/Windows compute environments. `./loadout` is a POSIX-sh shim that self-bootstraps the bundled portable Python 3.14 (no system Python required) and execs `loadout_main.py` under it. Driven by `pre_built/packages.json` (`schema_version: 3`). Prefer changes that preserve RedHat/Alma/RHEL 7/8/9, Suse, WSL, Windows PowerShell, and locked-down corporate machines.
 
 Use `rg` first. Use `python3 -m py_compile loadout` and `bash -n bash/global/bashrc` after installer/shell edits. For Neovim config checks in this sandbox, use temporary writable state/cache dirs:
 

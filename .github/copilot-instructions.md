@@ -1,7 +1,7 @@
 # Copilot Instructions
 
 Engineering-loadout: offline-first, no-root package manager for
-Electrical Engineering work environments. Multi-platform (RedHat 7/8/9, Suse,
+engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), layered configuration (global → corp → site → project → user).
 `./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
 driven by `pre_built/packages.json` (`schema_version: 3`).

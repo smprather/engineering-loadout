@@ -1291,7 +1291,7 @@
         "gui",
         "library"
       ],
-      "description": "Qt5/GTK3/X11/Wayland shared library bundle (for headless EE farm GUI forwarding)"
+      "description": "Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding)"
     },
     "xsel": {
       "kind": "bin",
@@ -2465,7 +2465,7 @@
         "st",
         "flameshot"
       ],
-      "description": "Full GUI stack for headless EE farm GUI forwarding"
+      "description": "Full GUI stack for headless compute farm GUI forwarding"
     },
     "@python-stack": {
       "kind": "group",

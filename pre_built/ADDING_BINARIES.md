@@ -81,7 +81,7 @@ Before bundling 30 libs, check if the binary can be built with fewer features:
 - **Lua**: adds `liblua-5.3.so`; usually optional (`--without-lua`)
 
 For gnuplot specifically: `--without-qt --without-cairo --without-lua --with-x --with-readline=gnu`
-gives dumb, x11, svg, postscript, eps, epslatex — enough for EE plotting. Only 2 new libs
+gives dumb, x11, svg, postscript, eps, epslatex — enough for scientific plotting. Only 2 new libs
 (readline, ncurses).
 
 ### 4. Bundle the binary
@@ -287,7 +287,7 @@ See `pre_built/build_scripts/build-octave.sh` for the full bundling recipe.
 
 ## Disk quota considerations
 
-Home directory quotas on EE systems are typically small (~4–10 GB). Rough sizes after stripping:
+Home directory quotas on shared compute systems are typically small (~4–10 GB). Rough sizes after stripping:
 
 | Category                 | Example                          | Approx size (uncompressed) |
 |--------------------------|----------------------------------|---------------------------|

@@ -6,7 +6,7 @@
 # For graphical plots use: ngspice -b -r rawfile.raw && gnuplot (or nutmeg).
 #
 # XSPICE code models (behavioral elements) and CIDER numerical device
-# simulation are enabled -- both are standard for modern EE workflows.
+# simulation are enabled -- both are standard for modern circuit-simulation workflows.
 #
 # Runtime library requirements (all satisfied by system EL8 or existing bundles):
 #   libreadline.so.7    — EL8 system package (readline-7.0, always installed)
