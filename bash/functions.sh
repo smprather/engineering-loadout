@@ -389,8 +389,8 @@ join_by() {
     fi
 }
 
-verlte() { [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]; }
-verlt() { [ "$1" = "$2" ] && return 1 || verlte $1 $2; }
+verlte() { [ "$1" = "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" ]; }
+verlt() { [ "$1" = "$2" ] && return 1 || verlte "$1" "$2"; }
 ver_between() {
     # args: min, actual, max
     printf '%s\n' "$@" | sort -C -V

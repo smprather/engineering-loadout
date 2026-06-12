@@ -264,10 +264,6 @@ set_prompt() {
         fi
     }
 
-    # history -a: Always flush the latest command to the history file
-    #PROMPT_COMMAND="printf '$BOLD$BLUE'"'; history -a; echo $(realpath .); '"printf '$NORMAL'"
-    #PROMPT_COMMAND="printf '$BOLD$CYAN'"'; history -a; echo $(realpath .); '"printf '$NORMAL'"
-
     PS1="${PROMPT_YELLOW}\$(get_prompt_uid)${prompt_color}\$ ${PROMPT_WHITE}"
     export PROMPT_COMMAND="/bin/stty '$(stty -g)'"
 }
@@ -284,7 +280,6 @@ else
     set_prompt
 fi
 
-#export MANPAGER="/bin/sh -c '/bin/sed -u -e \"s/\\x1B\[[0-9;]*m//g; s/.\\x08//g\" | ${LOADOUT_CFG_PREFERRED_CAT} -p -l man'"
 export LESS_TERMCAP_mb=$'\e[1;32m'
 export LESS_TERMCAP_md=$'\e[1;32m'
 export LESS_TERMCAP_me=$'\e[0m'
@@ -589,7 +584,6 @@ alias bjobsv='export LSB_BJOBS_FORMAT="jobid:7 stat:5 user:12 queue:15 slots:3 p
 bq() {
     [[ $1 == "-l" ]] && bqueues -l $* || bqueues -u $(whoami) -o 'queue_name: status: njobs: pend: run:'
 }
-#alias bq="bqueues -u $_user -o 'queue_name: status: njobs: pend: run:'"
 alias bqs="bq"
 alias sbqueues='echo "QUEUE_NAME      PRIO STATUS          MAX JL/U JL/P JL/H NJOBS  PEND   RUN  SUSP  RSV PJOBS "; bqueues | grep hw_ | egrep "interactive|reg_batch|reg_user|cot|batch|biggermem|spot|reg_ci"'
 alias sbq='sbqueues'
