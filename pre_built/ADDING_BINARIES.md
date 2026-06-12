@@ -154,7 +154,7 @@ lambda binary: (lambda m: re.sub(r" patchlevel ", ".", m.group(1)) if m else Non
 
 ### 7. Register in packages.json
 
-Add an entry under `packages` in `pre_built/packages.json` (`schema_version: 2`):
+Add an entry under `packages` in `pre_built/packages.json` (`schema_version: 3`):
 
 ```json
 "mytool": {
@@ -163,11 +163,14 @@ Add an entry under `packages` in `pre_built/packages.json` (`schema_version: 2`)
   "libs": ["libnewdep.so.3"],
   "version": "X.Y.Z",
   "platforms": ["linux"],
-  "default": true,
   "tags": ["data"],
   "description": "One-line description"
 }
 ```
+
+If the tool should ship with the full bundled set, also add `"mytool"` to
+the `@engineering-loadout` group's `members` list. There is no `default`
+field in schema 3 — users always name packages or groups explicitly.
 
 Key rules:
 - `kind` — one of `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`,

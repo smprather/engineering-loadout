@@ -6,9 +6,13 @@
 bash/global/    ← upstream, managed here — do not modify locally
 bash/corp/      ← corporation-level overrides  (user-created)
 bash/site/      ← site-level overrides         (user-created)
+bash/team/      ← team-level overrides          (user-created)
 bash/project/   ← project-level overrides      (user-created)
 bash/user/      ← personal overrides            (user-created)
 ```
+
+Layer order (lowest → highest precedence):
+`global → corp → site → team → project → user`.
 
 Each layer sources `config.sh` (preferences) then `bashrc` (aliases/prompt).
 Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
@@ -33,6 +37,7 @@ Insert code at precise points in the shell startup sequence:
 | `global_hooks/4.sh` | Prompt configured |
 | `global_hooks/5.sh` | Before completions |
 | `global_hooks/6.sh` | Completions loaded |
+| `global_hooks/7.sh` | Late / final |
 
 Example — inject a site-specific EDA tool path at hook 3:
 

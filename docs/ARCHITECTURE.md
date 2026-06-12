@@ -172,9 +172,26 @@ Layer dirs live at `~/.config/nvim/lua/<layer>/` — user-created, never committ
 
 ## Installer Internals
 
-`./loadout` — single Python 3.6-compatible executable (shebang
-`#!/usr/bin/python3`). All subprocess calls use absolute paths resolved at startup
-(`_LDD`, `_UNAME`, `_GETCONF` via `_find_tool()`) to avoid accidentally picking up
+`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
+interpreter in this order:
+
+1. `~/.local/bin/python3.14` — already installed via
+   `loadout install portable-python`.
+2. `<repo>/.loadout-bootstrap/bin/python3.14` — warm bootstrap cache from a
+   prior run.
+3. Cold bootstrap: decompresses
+   `pre_built/<platform>/portable-python-*.tar.bz2` into
+   `<repo>/.loadout-bootstrap/` and uses that. Requires `bzip2` + `tar` in
+   `PATH` only — both ship with every supported base system.
+
+Once an interpreter is found, the shim execs `loadout_main.py` under it
+(shebang `#!/usr/bin/env python3.14`). `loadout_main.py` enforces
+Python ≥ 3.14 via a `sys.version_info` gate. The bootstrap cache is
+per-clone (alongside the script, not in `$HOME`), so the boot path never
+depends on `~/.local` existing yet. `.loadout-bootstrap/` is gitignored.
+
+All subprocess calls use absolute paths resolved at startup (`_LDD`,
+`_UNAME`, `_GETCONF` via `_find_tool()`) to avoid accidentally picking up
 binaries being installed.
 
 **Atomic writes:** All bz2 decompression uses `write_bz2_atomic` (write to temp file

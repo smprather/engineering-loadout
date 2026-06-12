@@ -2,7 +2,7 @@
 
 Engineering-loadout: offline-first, no-root package manager for
 engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
-x86_64/ARM/PowerPC), layered configuration (global → corp → site → project → user).
+x86_64/ARM/PowerPC), layered configuration (global → corp → site → team → project → user).
 `./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
 driven by `pre_built/packages.json` (`schema_version: 3`).
 
@@ -100,7 +100,7 @@ Resolver helpers: `expand_groups`, `walk_depends`, `walk_recommends`,
 
 `bash/bashrc` is the single entry point (symlinked to `~/.bashrc`,
 `~/.bash_profile`, `~/.bash_login`, and `~/.profile`). It sources files in layer
-order across five layers: `global → corp → site → project → user`. Each layer
+order across six layers: `global → corp → site → team → project → user`. Each layer
 directory lives under `~/.config/bash/` after install.
 
 Loading sequence (`bash/bashrc`):
@@ -113,8 +113,8 @@ Loading sequence (`bash/bashrc`):
 `source_if_exists <path>` is used throughout for safe optional sourcing.
 
 The `bash/global/` directory is the canonical upstream; the other layer dirs
-(`corp/`, `site/`, `project/`, `user/`) are user-created and not committed to
-this repo.
+(`corp/`, `site/`, `team/`, `project/`, `user/`) are user-created and not committed
+to this repo.
 
 ### Hook Injection Points
 

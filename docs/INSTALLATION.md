@@ -2,14 +2,23 @@
 
 ## Linux
 
+End users install from the release tarball:
+
 ```bash
-git clone https://github.com/smprather/engineering-loadout.git
-cd engineering-loadout
+tar xzf engineering-loadout-v*.tar.gz
+cd engineering-loadout-v*/
 ./loadout install @engineering-loadout
 ```
 
-Single Python 3.6-compatible executable. Can be invoked from any working
-directory — it resolves the repo from the script path.
+Repo developers can also `git clone` and run `./loadout` from a checkout —
+the script resolves the repo from its own path and works from any cwd.
+
+`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
+interpreter (`~/.local/bin/python3.14` → `<repo>/.loadout-bootstrap/bin/python3.14`
+→ cold-bootstrap from `pre_built/<platform>/portable-python-*.tar.bz2`) and
+execs `loadout_main.py` under it. No system Python is required — `bzip2` +
+`tar` (always present on EL8/Suse/Debian) are the only host prerequisites.
+`loadout_main.py` enforces Python ≥ 3.14 via a `sys.version_info` gate.
 
 ### Subcommands & options
 
@@ -75,6 +84,68 @@ Simulate a completely fresh user environment:
 ```bash
 ./tests/install_linux_tmp_home
 ```
+
+### Shared / read-only deployments
+
+For a single install shared by many users, do not mutate the live tree in
+place. Install only the shared artifacts — every package except the
+per-user `env` config bundles — with the synthetic `@shared` group:
+
+```bash
+./loadout install @shared \
+  --dest-dir /opt/engineering-loadout/releases/2026-06-04.2
+```
+
+`@shared` = all non-`env` packages (binaries, libs, runtimes, fonts, data,
+python tools); its complement `@envs` = the config bundles each user
+installs into their own `$HOME` with `./loadout install @envs`. Tools and
+config bundles are fully decoupled (no cross-`recommends`), so `@shared`
+and `@envs` need no extra `--skip` / `--no-deps` flags. Preview either set
+with `./loadout resolve @shared` / `./loadout resolve @envs`.
+
+Install each release into a versioned directory and atomically move a
+stable symlink only after the new tree is complete:
+
+```text
+/opt/engineering-loadout/releases/2026-06-04.1/
+/opt/engineering-loadout/releases/2026-06-04.2/
+/opt/engineering-loadout/current -> /opt/engineering-loadout/releases/2026-06-04.2
+```
+
+```bash
+ln -s /opt/engineering-loadout/releases/2026-06-04.2 /opt/engineering-loadout/.current.new
+mv -Tf /opt/engineering-loadout/.current.new /opt/engineering-loadout/current
+```
+
+This avoids `Text file busy` failures from users running old binaries while
+an update is unpacked. Existing processes keep their old inodes; new shells
+resolve the new `current` target. Keep the previous release for rollback
+and delete old releases only after no users still need them. `tmux` is a
+special case — clients and the server must agree on protocol / version, so
+restart the tmux server before switching users to a tmux update.
+
+Neovim catalog plugin source can live in the shared release tree instead of
+every user's `~/.local/share/nvim`. Keep it read-only:
+
+```bash
+export LOADOUT_CFG_NVIM_PLUGIN_CATALOG_DIR=/opt/engineering-loadout/current/share/nvim/catalog-plugins
+```
+
+Users still enable catalog plugins in their Neovim user layer; this setting
+only changes where `lazy.nvim` reads plugin source from. Plugins with build
+steps must be prebuilt in the release tree or kept disabled from the shared
+catalog.
+
+### Symlink handling
+
+If `$HOME` has existing symlinks where the loadout needs to create
+directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default
+(`--install-follows-symlinks=auto`) follows the symlink when its target is
+writable, and otherwise removes the symlink and creates a real directory in
+its place. Use `--install-follows-symlinks=yes` to always write into the
+symlink target, or `=no` to always replace it with a real directory. The
+displaced symlink is backed up and can be restored with
+`./loadout snapshot restore`.
 
 ### Corporate / site add-ons
 

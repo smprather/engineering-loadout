@@ -16,10 +16,12 @@ cp /tmp/mybinary_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/mybinary.bz2
 # 2. Update strip manifest
 ./strip_all_elf_binaries
 
-# 3. Register in the package registry (pre_built/packages.json)
+# 3. Register in the package registry (pre_built/packages.json, schema_version 3)
 #    {"mybinary": {"kind": "bin", "bins": ["mybinary"], "version": "X.Y.Z",
-#                  "platforms": ["linux"], "default": true,
+#                  "platforms": ["linux"], "tags": ["..."],
 #                  "description": "..."}}
+#    Add "mybinary" to the @engineering-loadout group's members list if it
+#    should ship in the full bundled set.
 
 # 4. Smoke-test and commit
 pre_built/build_scripts/test-prebuilt-binaries --keep   # or just ./release --dry-run
@@ -29,7 +31,7 @@ git commit
 
 See [`pre_built/ADDING_BINARIES.md`](../pre_built/ADDING_BINARIES.md) for the
 full workflow including dependency auditing, Go binary flags,
-`farm-versions` registration, and the schema-2 registry fields.
+`farm-versions` registration, and the `schema_version: 3` registry fields.
 
 ## Importing a new portable Python build
 
@@ -63,6 +65,17 @@ git commit
 git add treesitter/prebuilt/
 git commit
 ```
+
+## Onboarding a new developer
+
+After extracting a release and running
+`./loadout install @engineering-loadout` to install the runtime, run
+`./dev-onboard` once to add the system-level packages, dev headers, and
+per-user toolchains required to rebuild any bundled tool from source. Six
+phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers
+(X11 / Qt5 / GTK3 / ncurses / Octave) → release / CI (gh, docker) →
+per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent;
+`--check` for dry-run, `--yes` for non-interactive.
 
 ## Repo development
 
