@@ -30,9 +30,10 @@ cd engineering-loadout-v*/
 ./loadout install @engineering-loadout
 ```
 
-That installs the full bundled set — 100+ CLI tools, editors, fonts, and
-configuration — into `~/.local` and `~/.config`. Reload your shell with
-`exec bash` when it finishes.
+That installs the `@engineering-loadout` group — a curated set of
+command-line tools, editors, fonts, and configuration files — into
+`~/.local` and `~/.config`. Reload your shell with `exec bash` when it
+finishes.
 
 Re-run the same command against a newer release tarball to update.
 Unchanged files are skipped, so re-runs are quick.
@@ -68,17 +69,17 @@ No elevation required.
 
 | Component | Description |
 |-----------|-------------|
-| **[Bash](https://www.gnu.org/software/bash/)** | Layered config, 100+ power aliases, fzf / zoxide / eza / bat integration |
-| **[Neovim](https://neovim.io)** | Lazy.nvim, LSP, 326 offline Tree-sitter parsers, locked plugin versions |
-| **[Vim](https://www.vim.org)** | Bundled plugins (NERDTree, SimpylFold, vim-liberty), vendored runtime |
-| **[Tmux](https://github.com/tmux/tmux)** | Bundled plugins (resurrect, continuum, better-mouse-mode), `Ctrl-\` prefix |
+| **[Bash](https://www.gnu.org/software/bash/)** | Layered shell config, 100+ aliases, fzf / zoxide / eza / bat integration |
+| **[Neovim](https://neovim.io)** | LSP, 326 offline Tree-sitter parsers, curated plugin set |
+| **[Vim](https://www.vim.org)** | Vim 9.2 with NERDTree, SimpylFold, and vim-liberty bundled |
+| **[Tmux](https://github.com/tmux/tmux)** | Sessions that survive reboot (resurrect + continuum), `Ctrl-\` prefix |
 | **[Helix](https://helix-editor.com)** | Ready to run offline |
 | **[Starship](https://starship.rs)** | Cross-shell prompt, Linux and Windows configs |
-| **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf |
+| **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, Starship + zoxide integration |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
-| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, optional features via `loadout_keys.toml` |
+| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, feature flags via `loadout_keys.toml` |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
-| **CLI tools** | 50+ modern command-line tools, ready offline — see table below |
+| **Command-line tools** | Modern CLI utilities, ready offline — see table below |
 | **Nerd Fonts** | 7 font families |
 
 ---
@@ -89,8 +90,8 @@ No elevation required.
 is fetched at install time. Ship it to an air-gapped workstation and it just
 works.
 
-**No root.** Everything lands in `$HOME`. No package manager, no `sudo`, no
-IT ticket.
+**No root.** Everything lands in `$HOME` (or `--dest-dir`). No package
+manager, no `sudo`, no IT ticket.
 
 **Multi-platform.** RedHat 7 / 8 / 9, Suse, x86_64 / ARM / PowerPC, and
 Windows.
@@ -118,10 +119,16 @@ export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
 
 ---
 
-## CLI Tools
+## Bundled Packages
 
-| Binary | Version | Description |
-|--------|---------|-------------|
+Each row is a package you can install by name with
+`./loadout install <name>`. Groups (`@engineering-loadout`, `@gui-suite`,
+`@core-cli`, …) bundle related packages so you can install many at once.
+Run `./loadout list` to see every package and every group, or
+`./loadout list --groups` to see just the groups.
+
+| Package | Version | Description |
+|---------|---------|-------------|
 | [agent-deck](https://github.com/asheshgoplani/agent-deck) | 1.9.12 | TUI dashboard for AI agent orchestration |
 | [bash](https://www.gnu.org/software/bash/) | 5.3.9 | The GNU Bourne Again SHell |
 | [bat](https://github.com/sharkdp/bat) | 0.26.1 | `cat` with syntax highlighting and Git integration |
@@ -135,74 +142,67 @@ export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
 | [delta](https://github.com/dandavison/delta) | 0.19.2 | Git diff pager with syntax highlighting and line numbers |
 | [duf](https://github.com/muesli/duf) | 0.9.1 | `df` replacement with colored disk usage table |
 | [dust](https://github.com/bootandy/dust) | 1.2.4 | Intuitive `du` — shows disk usage by size, at a glance |
+| [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 | [eza](https://github.com/eza-community/eza) | 0.23.4 | Modern `ls` with color, icons, Git status, and tree view |
 | [fd](https://github.com/sharkdp/fd) | 10.4.2 | Fast, ergonomic `find` replacement |
+| [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
 | [fzf](https://github.com/junegunn/fzf) | 0.62.0 | Blazing-fast fuzzy finder for files, history, anything |
 | [gnuplot](http://www.gnuplot.info) | 6.0.2 | Portable command-line graphing utility |
 | [gping](https://github.com/orf/gping) | 1.20.1 | `ping` with a real-time ASCII graph |
+| [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim |
 | [htop](https://htop.dev) | 3.2.1 | Interactive process viewer — the original `top` upgrade |
 | [hx](https://helix-editor.com) | 25.07.1 | Helix modal editor — Kakoune-inspired, batteries included |
 | [hyperfine](https://github.com/sharkdp/hyperfine) | 1.20.0 | Command-line benchmarking tool with statistical output |
 | [jq](https://jqlang.github.io/jq/) | 1.8.1 | Lightweight and flexible command-line JSON processor |
+| [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (opens in browser) |
 | [just](https://github.com/casey/just) | 1.50.0 | Command runner — sane `make` replacement for project tasks |
 | [lazygit](https://github.com/jesseduffield/lazygit) | 0.61.1 | TUI git client for staging, committing, and rebasing |
+| [liberty-tools](https://github.com/smprather/liberty-tools) | 1.0.1 | Fast Liberty `.lib` parser and browser-based viewer |
+| [mate-terminal](https://github.com/mate-desktop/mate-terminal) | 1.26.1 | GTK3 terminal emulator |
+| [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool |
 | [micro](https://micro-editor.github.io) | 2.0.15 | Modern, intuitive terminal text editor — Ctrl+S just works |
 | [miller](https://github.com/johnkerl/miller) | 6.18.1 | CSV / TSV / JSON / NDJSON / XML data processor (`mlr`) |
+| [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit |
 | [nvim](https://neovim.io) | 0.12.2 | Hyperextensible Vim-based text editor |
+| [nvim-qt](https://github.com/equalsraf/neovim-qt) | 0.2.19 | Qt5 GUI frontend for Neovim |
+| [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing |
 | [pigz](https://zlib.net/pigz/) | 2.8 | Parallel gzip — multi-core `gzip` / `gunzip` replacement |
 | [procs](https://github.com/dalance/procs) | 0.14.11 | `ps` replacement with colors and process tree |
 | [pv](https://www.ivarch.com/programs/pv.shtml) | 1.6.6 | Monitor progress of data through a pipe |
+| [pygwalker](https://github.com/Kanaries/pygwalker) | 0.5.0.1 | Interactive Tableau-style data explorer for pandas DataFrames |
 | [rg](https://github.com/BurntSushi/ripgrep) | 15.1.0 | ripgrep — recursive search that respects `.gitignore` |
 | [rsync](https://rsync.samba.org) | 3.4.1 | Fast, incremental file transfer |
 | [ruff](https://github.com/astral-sh/ruff) | 0.15.12 | Extremely fast Python linter and formatter |
 | [sd](https://github.com/chmln/sd) | 1.0.0 | Intuitive `sed` replacement — `sd 'old' 'new'` just works |
 | [shfmt](https://github.com/mvdan/sh) | 3.13.1 | Shell script formatter (bash / sh / mksh / bats) |
+| [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal |
 | [starship](https://starship.rs) | 1.25.1 | Cross-shell prompt — fast, informative, configurable |
 | [stylua](https://github.com/JohnnyMorganz/StyLua) | 2.4.1 | Opinionated Lua code formatter |
 | [tealdeer / tldr](https://github.com/dbrgn/tealdeer) | 1.8.1 | Fast `tldr` client with offline page cache |
+| [text-serdes](https://github.com/smprather/text-serdes) | 0.1.1 | Short-lived encrypted text transport for copy/paste workflows |
+| [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time, uPlot HTML output |
 | [tkdiff](https://sourceforge.net/projects/tkdiff/) | 6.0 | Tcl/Tk visual diff and merge tool |
 | [tmux](https://github.com/tmux/tmux) | 3.6a | Terminal multiplexer |
 | [ty](https://github.com/astral-sh/ty) | 0.0.35 | Extremely fast Python type checker |
+| [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode and Xft |
 | [uv](https://github.com/astral-sh/uv) | 0.11.13 | Extremely fast Python package installer and resolver |
 | [vim](https://www.vim.org) | 9.2 | Vim 9.2 |
+| [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV / TSV / JSON / NDJSON data |
 | [xsel](https://github.com/kfish/xsel) | 1.2.0 | X11 clipboard command-line access tool |
 | [xterm](https://invisible-island.net/xterm/) | 410 | X Window System terminal emulator |
 | [yank](https://github.com/mptre/yank) | 1.3.0 | Select terminal output and copy to clipboard |
 | [yq](https://github.com/mikefarah/yq) | 4.53.2 | `jq` for YAML, JSON, XML, CSV, TOML, and properties files |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | 0.9.9 | Smarter `cd` — learns your most-used directories |
-
-### Optional tools
-
-Not part of `@engineering-loadout`. Install with `./loadout install <name>`.
-
-| Binary | Version | Description |
-|--------|---------|-------------|
-| [gvim](https://www.vim.org) | 9.2 | GTK3 GUI vim |
-| [nedit-ng](https://github.com/eteran/nedit-ng) | 2025.1 | Qt5 rewrite of NEdit |
-| [nvim-qt](https://github.com/equalsraf/neovim-qt) | 0.2.19 | Qt5 GUI frontend for Neovim |
-| [octave](https://www.gnu.org/software/octave/) | 11.1.0 | GNU Octave scientific computing |
-| [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV / TSV / JSON / NDJSON data |
-| [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool |
-| [mate-terminal](https://github.com/mate-desktop/mate-terminal) | 1.26.1 | GTK3 terminal emulator |
 | [zsh](https://www.zsh.org) | 5.9 | Z shell — advanced tab completion, powerful scripting |
-| [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
-| [jupyterlab](https://jupyter.org) | 4.5.7 | Web-based interactive notebooks (opens in browser) |
-| [urxvt](http://software.schmorp.de/pkg/rxvt-unicode.html) | 9.31 | rxvt-unicode — X11 terminal with Unicode and Xft |
-| [st](https://st.suckless.org) | 0.9.3 | suckless st — minimal X11 terminal |
-| [liberty-tools](https://github.com/smprather/liberty-tools) | 1.0.1 | Fast Liberty `.lib` parser and browser-based viewer |
-| [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time, uPlot HTML output |
-| [text-serdes](https://github.com/smprather/text-serdes) | 0.1.1 | Short-lived encrypted text transport for copy/paste workflows |
-| [pygwalker](https://github.com/Kanaries/pygwalker) | 0.5.0.1 | Interactive Tableau-style data explorer for pandas DataFrames |
-| [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 
-For GUI tools on headless compute farm / LSF nodes, install `gui_libs`
-alongside them — it provides the Qt5 / GTK3 / X11 / Wayland libraries those
-nodes don't ship:
+If your machine doesn't already have GTK3 / Qt5 / X11 / Wayland libraries
+installed (common on remote compute nodes), install `gui_libs` alongside
+any GUI application:
 
 ```bash
-./loadout install gvim nedit-ng --no-backup --skip @fonts-all,tldr-data
-# Or the bundled group:
-./loadout install @gui-suite --no-backup
+./loadout install gvim nedit-ng gui_libs
+# Or use the group, which pulls gui_libs for you:
+./loadout install @gui-suite
 ```
 
 ### Python
