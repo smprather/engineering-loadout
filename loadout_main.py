@@ -2685,6 +2685,17 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         skipped("Neovim Lazy sync (nvim-catalog-plugins not selected)", "")
         record_result("Neovim Lazy sync", "SKIP", "nvim-catalog-plugins not in selected packages")
         return
+    # Lazy sync requires the staged tree to contain a usable nvim config
+    # (init.lua + plugin specs). That config ships in the env-nvim package
+    # (`kind: env`). When env-nvim isn't in the selection — e.g. a `@shared`
+    # install into a shared release tree, where per-user configs land
+    # separately under `@envs` — there is no init.lua to define `:Lazy`, and
+    # the headless invocation fails. Skip cleanly in that case; per-user
+    # `:Lazy sync` runs later when each user installs their `@envs` set.
+    if selected_tools is not None and "env-nvim" not in selected_tools:
+        skipped("Neovim Lazy sync (env-nvim not selected)", "")
+        record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
+        return
     nvim_bin = os.path.join(home, ".local", "bin", "nvim")
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
         skipped("Neovim Lazy sync (nvim binary not found)", f"install nvim first")
