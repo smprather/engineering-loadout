@@ -154,7 +154,15 @@ cp "${WORK_BIN}.bz2" "$BIN_DIR/tclsh.bz2"
 echo "==> Packaging shared library ..."
 WORK_LIB="$WORK_DIR/${TCLLIB_NAME}"
 cp "$TCLLIB" "$WORK_LIB"
-strip "$WORK_LIB"
+# CRITICAL: do NOT strip libtcl9.0.so. Tcl 9.x appends its standard
+# library as a zipfs archive to the .so file's tail; strip truncates
+# trailing data and silently destroys the embedded zipfs, leaving
+# tclsh unable to find init.tcl at runtime ("Cannot find a usable
+# init.tcl in the following directories: ..."). patchelf alone
+# preserves the trailing zip data, so just patchelf for RPATH and
+# bzip2. strip_all_elf_binaries already skips patchelf'd payloads
+# (RPATH set), so the bundled .bz2 will not be re-stripped on
+# subsequent repo-wide strip passes.
 "$PATCHELF" --set-rpath '$ORIGIN' "$WORK_LIB"
 bzip2 -kf "$WORK_LIB"
 cp "${WORK_LIB}.bz2" "$LIB_DIR/${TCLLIB_NAME}.bz2"
