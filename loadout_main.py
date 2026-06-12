@@ -2774,7 +2774,6 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         ".config/editorconfig",
         ".config/starship",
         ".config/vim",
-        ".config/helix/runtime",
     ]:
         path = os.path.join(home, rel)
         if os.path.exists(path) or os.path.islink(path):
@@ -2863,7 +2862,6 @@ def backup_existing(home, repo_dir):
             ".config/tmux",
             ".config/starship",
             ".config/editorconfig",
-            ".config/helix/runtime",
             ".config/helix/config.toml",
             ".config/pip/pip.conf",
         ]:

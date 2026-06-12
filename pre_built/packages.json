@@ -549,7 +549,8 @@
     "hx": {
       "kind": "bin",
       "bins": [
-        "hx"
+        "hx",
+        "hx.bin"
       ],
       "version": "25.07.1",
       "platforms": [
@@ -561,10 +562,10 @@
       "archive": "pre_built/PLATFORM/runtime/helix.tar.bz2",
       "description": "Modern modal text editor with tree-sitter and LSP",
       "sentinel": "runtime/tutor",
-      "install_to": "~/.config/helix",
+      "install_to": "~/.local/share/helix",
       "archive_name": "helix.tar.bz2",
       "remove_before_extract": "runtime",
-      "missing_hint": "hx will NOT have the vendored runtime at ~/.config/helix/runtime"
+      "missing_hint": "hx will NOT have the vendored runtime at ~/.local/share/helix/runtime"
     },
     "hyperfine": {
       "kind": "bin",
