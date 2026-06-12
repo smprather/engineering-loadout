@@ -3678,8 +3678,17 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     os.chdir(home)
 
     backup_dir = ""
+    # Backups exist to protect user-owned config files in $HOME / $XDG_CONFIG_HOME
+    # that the env-* packages overwrite. If the selection contains no env-*
+    # package — e.g. a `@shared` install into a release tree, or a pure
+    # tool-only selection — nothing user-owned is touched, so there is
+    # nothing worth backing up. Skip cleanly and avoid creating an empty
+    # loadout_backups/ directory.
+    selecting_env_pkgs = any(registry.get(name, {}).get("kind") == "env" for name in (selected_tools or ()))
     if args.no_backup:
         warn("no backup taken (--no-backup): existing files will be overwritten")
+    elif not selecting_env_pkgs:
+        print("No env-* packages selected — skipping backup phase.")
     else:
         backup_dir = run_install_step("backup", backup_existing, home, repo_dir) or ""
 
