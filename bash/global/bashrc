@@ -143,11 +143,11 @@ if [[ ! -f "$HISTFILE" ]]; then
     # If not, then do this...
     if ps -f $PPID | grep -q bash; then
         # If this is a child bash, then inherit the history from the parent.
-        [[ -f "$XDG_RUNTIME_DIR/bash_history.$PPID" ]] && cp "$XDG_RUNTIME_DIR/bash_history.$PPID" "$HISTFILE"
+        [[ -f $XDG_RUNTIME_DIR/bash_history.$PPID ]] && cp $XDG_RUNTIME_DIR/bash_history.$PPID $HISTFILE
     else
         # Else, start the shell history with the contents of the most recently modified history.
-        if ls "$XDG_RUNTIME_DIR"/bash_history.* >&/dev/null; then
-            cp "$(/bin/ls -rt1 "$XDG_RUNTIME_DIR"/bash_history.* | tail -n 1)" "$HISTFILE"
+        if ls $XDG_RUNTIME_DIR/bash_history.* >&/dev/null; then
+            cp $(/bin/ls -rt1 $XDG_RUNTIME_DIR/bash_history.* | tail -n 1) $HISTFILE
         fi
     fi
 fi
@@ -390,8 +390,8 @@ alias cddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 2 | h
 alias cdddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 3 | head -n 1`'
 alias cddddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 4 | head -n 1`'
 alias cdddddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 5 | head -n 1`'
-alias p='pwd | tee "/tmp/p_dir.$USER"'
-alias cdp='cd "$(cat "/tmp/p_dir.$USER")"'
+alias p='pwd | tee /tmp/p_dir'
+alias cdp='cd $(cat /tmp/p_dir)'
 cds() {
     eval "$(cd-surfer "$@")"
 }

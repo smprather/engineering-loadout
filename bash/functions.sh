@@ -548,7 +548,7 @@ is_truthy() {
         ;;
     *)
         # For other non-empty strings, consider them truthy
-        if [[ -n "$1" ]]; then
+        if [[ -n "$value" ]]; then
             # True
             return 0
         else
