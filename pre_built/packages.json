@@ -2687,9 +2687,10 @@
       "kind": "python-tool",
       "uv_tool": "pyright",
       "wheels": [
-        "pyright"
+        "pyright",
+        "nodeenv"
       ],
-      "version": "",
+      "version": "1.1.410",
       "platforms": [
         "linux"
       ],
