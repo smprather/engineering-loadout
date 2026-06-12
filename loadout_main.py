@@ -2413,6 +2413,77 @@ def install_meld_runtime(repo_dir, home, selected_tools):
         record_result("Meld runtime", "FAIL", "archive extracted but meld/conf.py not found")
 
 
+def install_mate_terminal_runtime(repo_dir, home, selected_tools):
+    """Install the mate-terminal shanghai bundle.
+
+    Bundle (from `pre_built/<platform>/runtime/mate-terminal.tar.bz2`) contains:
+      bin/mate-terminal            POSIX-sh launcher (sets XDG_DATA_DIRS +
+                                    GSETTINGS_BACKEND=keyfile, then execs the ELF)
+      bin/mate-terminal.bin        the actual ELF, RPATH=$ORIGIN/../lib64
+      share/glib-2.0/schemas/      mate-terminal gsettings schema XML
+
+    After extraction we run `glib-compile-schemas` against the bundled schema
+    dir so GSettings can find the compiled file at runtime. The keyfile
+    backend means mate-terminal does not need dconf-service or a session bus
+    to launch — preferences persist to `~/.config/glib-2.0/settings/keyfile`.
+
+    The two non-gui_libs NEEDED libs (libvte-2.91.so.0, libdconf.so.1) ship
+    separately as `lib64/*.bz2` payloads listed in the package entry.
+    """
+    if selected_tools is not None and "mate-terminal" not in selected_tools:
+        skipped("mate-terminal runtime (mate-terminal not selected)", "")
+        record_result("mate-terminal runtime", "SKIP", "mate-terminal not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "mate-terminal.tar.bz2"))
+    if archive is None:
+        skipped(
+            "mate-terminal runtime (no mate-terminal.tar.bz2 in pre_built/<platform>/runtime/)",
+            "mate-terminal will NOT be installed",
+        )
+        record_result("mate-terminal runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "mate-terminal runtime")
+
+    # Remove stale bundle paths before re-extracting.
+    for stale in (
+        os.path.join(local_dir, "bin", "mate-terminal"),
+        os.path.join(local_dir, "bin", "mate-terminal.bin"),
+        os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.terminal.gschema.xml"),
+    ):
+        remove_if_exists(stale)
+
+    pv_extract_tar(archive, local_dir)
+
+    # Ensure launcher is executable.
+    mt_launcher = os.path.join(local_dir, "bin", "mate-terminal")
+    if os.path.isfile(mt_launcher):
+        os.chmod(mt_launcher, 0o755)
+
+    # Compile gsettings schemas. glib-compile-schemas ships with glib2 on every
+    # supported base system; without the compiled file mate-terminal aborts on
+    # startup with "Settings schema 'org.mate.terminal.window' is not installed".
+    schema_dir = os.path.join(local_dir, "share", "glib-2.0", "schemas")
+    glib_compile = _find_tool("/usr/bin/glib-compile-schemas")
+    if glib_compile and os.path.isdir(schema_dir):
+        try:
+            run([glib_compile, schema_dir])
+        except subprocess.CalledProcessError as exc:
+            warn(f"glib-compile-schemas failed for {schema_dir}: {exc}")
+
+    sentinel = os.path.join(local_dir, "bin", "mate-terminal.bin")
+    if os.path.isfile(sentinel):
+        record_result("mate-terminal runtime", "yes", f"mate-terminal 1.26.1 -> {local_dir}/")
+        print(f"  Installed: {archive} -> {local_dir}/")
+    else:
+        warn(f"mate-terminal runtime archive did not install {local_dir}/bin/mate-terminal.bin as expected")
+        record_result("mate-terminal runtime", "FAIL", "archive extracted but mate-terminal.bin not found")
+
+
 def install_nvim_qt_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "nvim-qt" not in selected_tools:
         skipped("nvim-qt runtime (nvim-qt not selected)", "")
@@ -3616,6 +3687,9 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     )
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("Meld runtime", install_meld_runtime, repo_dir, home, selected_tools, silent=True)
+    run_install_step(
+        "mate-terminal runtime", install_mate_terminal_runtime, repo_dir, home, selected_tools, silent=True
+    )
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True

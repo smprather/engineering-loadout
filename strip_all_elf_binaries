@@ -101,10 +101,19 @@ def tar_bz2_path(path):
     return path + ".tar.bz2"
 
 
+# Directories the walker must never descend into. `.git` is git plumbing;
+# `loadout_backups` is user-side snapshots of a previous install (not
+# repo-managed); `.loadout-bootstrap` is the per-clone portable-python
+# extraction (contains Python's own stdlib test archives with intentionally-
+# crafted special-file members that would crash safe extraction).
+_WALK_SKIP_DIRS = (".git", "loadout_backups", ".loadout-bootstrap", "agent_ignore")
+
+
 def walk_files(repo_dir):
     for root, dirs, files in os.walk(repo_dir):
-        if ".git" in dirs:
-            dirs.remove(".git")
+        for skip in _WALK_SKIP_DIRS:
+            if skip in dirs:
+                dirs.remove(skip)
         dirs[:] = sorted(dirs)
         for name in sorted(files):
             yield os.path.join(root, name)

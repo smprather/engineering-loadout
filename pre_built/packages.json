@@ -1580,6 +1580,27 @@
       ],
       "description": "GTK3 visual diff and merge tool (shanghai bundle \u2014 system py3.6 + bundled PyGObject/GtkSource)"
     },
+    "mate-terminal": {
+      "kind": "bin",
+      "bins": [],
+      "libs": [
+        "libvte-2.91.so.0",
+        "libdconf.so.1"
+      ],
+      "version": "1.26.1",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "terminal",
+        "gui"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/mate-terminal.tar.bz2",
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "MATE Terminal \u2014 GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed)"
+    },
     "zsh": {
       "kind": "bin",
       "bins": [
@@ -2433,6 +2454,7 @@
         "yank",
         "urxvt",
         "st",
+        "mate-terminal",
         "flameshot"
       ],
       "description": "Full GUI stack for headless compute farm GUI forwarding"

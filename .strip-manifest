@@ -70,7 +70,6 @@ sha256  6242ea1674a5bf13e6ada11c9088b60bb8f035f5107fbbc1869906d954b309f8  pre_bu
 sha256  4a0397c5823ee9dbed7191d4d1653293954cec86becc2587097fb315e46862d4  pre_built/el8.x86_64.glibc2p28/bin/join.bz2
 sha256  adb774eca668d2abbc24d2281861ce0a4f5bc0d8ffc64bae4618074b44682d1a  pre_built/el8.x86_64.glibc2p28/bin/jq.bz2
 sha256  c2a48210651d17f2a0b0199b1b79be437352281d485bed86b19ebcdaf6391960  pre_built/el8.x86_64.glibc2p28/bin/just.bz2
-sha256  d0c8d6dfa510955b3672b3dde155b8c3b3b22e581320c7f853efcce60406fa5c  pre_built/el8.x86_64.glibc2p28/bin/kak.bz2
 sha256  aa8c6a7cf7d89a30950836ecdd8f10f1407f4c5e082b0d2d8187372aef03e6c8  pre_built/el8.x86_64.glibc2p28/bin/lazygit.bz2
 sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  pre_built/el8.x86_64.glibc2p28/bin/ld.lld.bz2
 sha256  35a5ce9ea2ec6adcacb7be7f964a82f52c072ff863df8d5c701692e3e2e5878a  pre_built/el8.x86_64.glibc2p28/bin/liberty_filter.bz2
@@ -242,6 +241,7 @@ sha256  330ac601a526a3988fd6836bc905d391a259c8e91f422f159e1565e5c1d66e72  pre_bu
 sha256  327b9976759a6cdf2e55679a2901d9bce6a98b8135e71199d3520ec15c76fb12  pre_built/el8.x86_64.glibc2p28/lib64/libcxsparse.so.3.bz2
 sha256  e2f4f33451dbd91190ba31762415c616dd72cb2afaf5524744b0bf28495f1927  pre_built/el8.x86_64.glibc2p28/lib64/libdatrie.so.1.bz2
 sha256  751c6a32f5fde75b071cd71c769f88bcaee4a53fac74f56a5393cd8b042fed0b  pre_built/el8.x86_64.glibc2p28/lib64/libdbus-1.so.3.bz2
+sha256  786c3ae1cb57f1e1567bf2018e22438463b88c3fe68bcbc632710270a6b9ef94  pre_built/el8.x86_64.glibc2p28/lib64/libdconf.so.1.bz2
 sha256  d53dc13b94dab7b34358ec3eacd068b3a95ac5de476ee3dc9eb5887362de4405  pre_built/el8.x86_64.glibc2p28/lib64/libepoxy.so.0.bz2
 sha256  c0a7179cfbadd1796dee9afb069f784a678a4b1cc407886310ca836c546e21b1  pre_built/el8.x86_64.glibc2p28/lib64/libevent_core-2.1.so.6.bz2
 sha256  ec2163da3f16b0928c56d0f4c33c40988e7fc4cef265f41b517369087c6607ac  pre_built/el8.x86_64.glibc2p28/lib64/libexpat.so.1.bz2
@@ -313,6 +313,7 @@ sha256  bb715e1a61dbccd00f689a900083989edfd375200c516afc44297337d685e3bc  pre_bu
 sha256  d9101237e66c99e169a5562fa02094be79b8003e386ffa8fa3e47e981b2c08ff  pre_built/el8.x86_64.glibc2p28/lib64/libuuid.so.1.bz2
 sha256  fcae2f6842f1f5fc9959cd8b1e253d220b5138964c3653a4ee2de7c658e49e34  pre_built/el8.x86_64.glibc2p28/lib64/libvorbis.so.0.bz2
 sha256  ddb3824de94dfe971951b03717f91fd338fd4698bd958786b2eb0ba24190da98  pre_built/el8.x86_64.glibc2p28/lib64/libvorbisenc.so.2.bz2
+sha256  1f25d0c8cf29b7aecb1d5a771398db21f16080dd7266c44141b34e1233664f6f  pre_built/el8.x86_64.glibc2p28/lib64/libvte-2.91.so.0.bz2
 sha256  57322ee2333c0dceaaa878d1423c118b223f959b0d5d8a16f5b9dab99bfb2ee5  pre_built/el8.x86_64.glibc2p28/lib64/libwayland-client.so.0.bz2
 sha256  6891d4da44870e4e7b990a4d510c0fb6ecd5ba60068af0d0bd1c78f3e532655f  pre_built/el8.x86_64.glibc2p28/lib64/libwayland-cursor.so.0.bz2
 sha256  540a46127b88f51359ca7a3f23a1db3cf20fbf6d6b9c53017895fbba6c34fd3b  pre_built/el8.x86_64.glibc2p28/lib64/libwayland-egl.so.1.bz2
@@ -339,6 +340,7 @@ tar-meta  289188  1780341242  pre_built/el8.x86_64.glibc2p28/runtime/bash-docs.t
 tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2996378  1780474049  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
+tar-meta  169604  1781234797  pre_built/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
 tar-meta  414887  1780521340  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  129443  1779982870  pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  19409  1780066812  pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
