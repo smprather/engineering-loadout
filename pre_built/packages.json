@@ -2508,7 +2508,8 @@
         "@core-environments",
         "env-nvim",
         "env-vim",
-        "env-helix"
+        "env-helix",
+        "env-kak"
       ],
       "description": "Every Linux/macOS config bundle"
     },
