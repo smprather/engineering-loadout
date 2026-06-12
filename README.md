@@ -19,9 +19,10 @@ no installer, no admin, no internet.
 
 ### Linux
 
-Download **Source code (tar.gz)** from the
+Download the `.tar.gz` release archive from the
 [latest release](https://github.com/smprather/engineering-loadout/releases/latest),
-then extract and run:
+then extract and run — nothing is built or compiled, the archive ships every
+binary, library, font, and config file ready to install:
 
 ```bash
 tar xzf engineering-loadout-v*.tar.gz
@@ -38,8 +39,7 @@ Unchanged files are skipped, so re-runs are quick.
 
 ### Picking what to install
 
-There is no "default install" — you always name what you want, the same way
-`dnf` or `apt` works:
+Name packages or groups the same way `dnf` or `apt` works:
 
 ```bash
 ./loadout install @engineering-loadout                    # the full set
