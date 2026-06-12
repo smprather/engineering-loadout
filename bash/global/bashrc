@@ -76,12 +76,6 @@ if [[ ! -r $XDG_RUNTIME_DIR ]]; then
     mkdir -p "$XDG_RUNTIME_DIR"
 fi
 
-# ncurses does not search ~/.local/share/terminfo by default.
-# Make the bundled st (and any future terminfo we ship) discoverable
-# without forcing $HOME/.terminfo. path_prepend handles dedup and
-# the colon-list semantics shared with $PATH.
-path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
-export TERMINFO_DIRS
 export COLORTERM=truecolor
 
 # Compile python bytecode cache to fast /dev/shm filesystem
