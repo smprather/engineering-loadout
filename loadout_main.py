@@ -124,6 +124,7 @@ import datetime
 import errno
 import fcntl
 import fnmatch
+import getpass
 import json
 import types
 
@@ -825,12 +826,16 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
-_RUN_LOG_FIXED_PATH = "/tmp/loadout.log"
+# Per-user suffix on shared-/tmp state so concurrent users on one farm node
+# don't collide on (or fail to open) each other's log/pending files.
+_TMP_USER = getpass.getuser()
+
+_RUN_LOG_FIXED_PATH = f"/tmp/loadout.{_TMP_USER}.log"
 
 
 def _setup_run_log(repo_dir, argv):
     """If repo_dir is a git clone, append this run's activity to the single
-    rolling log file at /tmp/loadout.log."""
+    rolling per-user log file (see _RUN_LOG_FIXED_PATH)."""
     global _RUN_LOG_FILE, _RUN_LOG_PATH
     if not os.path.isdir(os.path.join(repo_dir, ".git")):
         return
@@ -856,7 +861,7 @@ def _setup_run_log(repo_dir, argv):
     # Replace stdio so all print/eprint output flows in.
     sys.stdout = _TeeStream(sys.stdout, "out")
     sys.stderr = _TeeStream(sys.stderr, "err")
-    # No "Run log: ..." print — path is fixed at /tmp/loadout.log.
+    # No "Run log: ..." print — path is fixed per user (_RUN_LOG_FIXED_PATH).
 
 
 def _close_run_log(exit_code):
@@ -942,10 +947,12 @@ def mkdirn(base_dir):
         target_dir = f"{base_dir}.{counter}"
         archive = target_dir + ".tar.bz2"
         if not os.path.exists(target_dir) and not os.path.exists(archive):
-            break
+            try:
+                os.makedirs(target_dir)
+                return target_dir
+            except FileExistsError:
+                pass  # concurrent run claimed this number — keep counting
         counter += 1
-    os.makedirs(target_dir)
-    return target_dir
 
 
 def rsync_dir(src, dest, delete=False, excludes=None):
@@ -1260,7 +1267,7 @@ def select_prebuilt_platform_dir(root_dir):
     return best_dir
 
 
-_PENDING_DIR = "/tmp/loadout-pending"
+_PENDING_DIR = f"/tmp/loadout-pending-{_TMP_USER}"
 _PENDING_TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
 
@@ -1393,6 +1400,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         pass
 
     log_file = os.path.join(_PENDING_DIR, "daemon.log")
+    log_fh = None
     try:
         log_fh = open(log_file, "a")
         proc = subprocess.Popen(
@@ -1405,6 +1413,9 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         print(f"  pending-ops daemon spawned (pid {proc.pid}), log: {log_file}")
     except OSError as exc:
         warn(f"could not spawn pending-ops daemon: {exc}")
+    finally:
+        if log_fh is not None:
+            log_fh.close()
 
 
 def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
@@ -3907,9 +3918,9 @@ def cmd_snapshot(args, repo_dir, home):
 def cmd_clean(args):
     """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/.
 
-    --logs    → delete /tmp/loadout.log
-    --pending → delete /tmp/loadout-pending/ (only if daemon PID is dead)
-    --all     → both, plus any stale /tmp/loadout-* tempdirs
+    --logs    → delete /tmp/loadout.<user>.log
+    --pending → delete /tmp/loadout-pending-<user>/ (only if daemon PID is dead)
+    --all     → both, plus any stale /tmp/loadout-* tempdirs owned by this user
     """
     do_logs = args.logs or args.clean_all
     do_pending = args.pending or args.clean_all
@@ -3940,6 +3951,11 @@ def cmd_clean(args):
         for name in os.listdir("/tmp"):
             if name.startswith("loadout-") and name != os.path.basename(_PENDING_DIR):
                 full = os.path.join("/tmp", name)
+                try:
+                    if os.lstat(full).st_uid != os.getuid():
+                        continue  # another user's state — not ours to clean
+                except OSError:
+                    continue
                 try:
                     if os.path.isdir(full):
                         shutil.rmtree(full)
@@ -4281,17 +4297,17 @@ def cli_snapshot_list(ctx, dest_dir):
 
 
 @cli.command(name="clean", short_help="Remove stale /tmp/loadout* state.")
-@click.option("--logs", is_flag=True, help="Delete /tmp/loadout.log.")
+@click.option("--logs", is_flag=True, help="Delete /tmp/loadout.<user>.log.")
 @click.option(
     "--pending",
     is_flag=True,
-    help="Delete /tmp/loadout-pending/ (only when the pending-ops daemon is dead).",
+    help="Delete /tmp/loadout-pending-<user>/ (only when the pending-ops daemon is dead).",
 )
 @click.option("--all", "clean_all", is_flag=True, help="Delete logs + pending + stale loadout-* tempdirs.")
 @click.pass_context
 def cli_clean(ctx, logs, pending, clean_all):
     """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/ and
-    refuses to clean /tmp/loadout-pending/ while the pending-ops daemon is alive."""
+    refuses to clean /tmp/loadout-pending-<user>/ while the pending-ops daemon is alive."""
     args = _ctx_args(ctx, logs=logs, pending=pending, clean_all=clean_all)
     ctx.exit(cmd_clean(args))
 

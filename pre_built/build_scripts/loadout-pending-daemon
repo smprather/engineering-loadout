@@ -12,7 +12,7 @@ while ops are outstanding updates last_activity and resets the clock. If
 the daemon has already exited due to timeout, re-running ./loadout spawns
 a fresh one.
 
-Pending state directory: /tmp/loadout-pending/
+Pending state directory: /tmp/loadout-pending-<user>/
   pending.json  - op list (written/updated by ./loadout on each run)
   pending.lock  - exclusive lock file for JSON read-modify-write
   files/        - staged decompressed binaries ready to install
@@ -24,6 +24,7 @@ import contextlib
 import datetime
 import errno
 import fcntl
+import getpass
 import json
 import os
 import shutil
@@ -32,7 +33,11 @@ import sys
 import tempfile
 import time
 
-PENDING_DIR = "/tmp/loadout-pending"
+# Must match the per-user paths the installer builds in loadout_main.py
+# (_PENDING_DIR / _RUN_LOG_FIXED_PATH).
+_TMP_USER = getpass.getuser()
+
+PENDING_DIR = f"/tmp/loadout-pending-{_TMP_USER}"
 PENDING_JSON = os.path.join(PENDING_DIR, "pending.json")
 PID_FILE = os.path.join(PENDING_DIR, "daemon.pid")
 LOG_FILE = os.path.join(PENDING_DIR, "daemon.log")
@@ -42,7 +47,7 @@ TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 # Mirror significant daemon events to the loadout dev-log if it
 # already exists. Heartbeats (idle polling status) are throttled to one per
 # hour so the log doesn't churn while waiting for tmux/bash to exit.
-RUN_LOG_PATH = "/tmp/loadout.log"
+RUN_LOG_PATH = f"/tmp/loadout.{_TMP_USER}.log"
 HEARTBEAT_INTERVAL = 3600  # seconds
 _last_heartbeat_ts = 0.0
 

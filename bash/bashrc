@@ -36,19 +36,8 @@ if [[ -z "${HOME:-}" ]]; then
     export HOME=$(getent passwd "$USER" | cut -d: -f6)
 fi
 
-# https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
-#_source_path="${BASH_SOURCE[0]}"
-#while [[ -L "$_source_path" ]]; do
-#    _symlink_dir="$(cd -P "$(dirname "$_source_path")" >/dev/null 2>&1 && pwd)"
-#    _source_path="$(readlink "$_source_path")"
-#    if [[ $_source_path != /* ]]; then
-#        _source_path="$_symlink_dir/$_source_path"
-#    fi
-#done
-#export BASH_CONFIG_ROOT_DIR="$(cd -P "$(dirname "$_source_path")" >/dev/null 2>&1 && pwd)"
-
 [[ -z "$BASH_CONFIG_ROOT_DIR" ]] && export BASH_CONFIG_ROOT_DIR="$HOME/.config/bash"
-source $BASH_CONFIG_ROOT_DIR/functions.sh
+source "$BASH_CONFIG_ROOT_DIR/functions.sh"
 
 # I could do the layering in a function, but I like to use 'gf' in nvim for easy exploration.
 # Source in order of precedence: global->corp->site->team->project->user
@@ -64,12 +53,12 @@ source $BASH_CONFIG_ROOT_DIR/functions.sh
 # Configuration must come first
 # Since getting PATH setup is critical to the rest of the startup process, do
 # PATH customization in these config files.
-source_if_exists $BASH_CONFIG_ROOT_DIR/global/config.sh
-source_if_exists $BASH_CONFIG_ROOT_DIR/corp/config.sh
-source_if_exists $BASH_CONFIG_ROOT_DIR/site/config.sh
-source_if_exists $BASH_CONFIG_ROOT_DIR/team/config.sh
-source_if_exists $BASH_CONFIG_ROOT_DIR/project/config.sh
-source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/site/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/team/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/project/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/user/config.sh"
 
 # Allow user home-dir override in case using a shared bash config installation.
 # Only when the config root is NOT already ~/.config/bash — otherwise these are
@@ -78,11 +67,11 @@ source_if_exists $BASH_CONFIG_ROOT_DIR/user/config.sh
 _cfg_root_real=$(realpath "$BASH_CONFIG_ROOT_DIR" 2>/dev/null || echo "$BASH_CONFIG_ROOT_DIR")
 _home_bash_real=$(realpath "$HOME/.config/bash" 2>/dev/null || echo "$HOME/.config/bash")
 if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
-    source_if_exists $HOME/.config/bash/corp/config.sh
-    source_if_exists $HOME/.config/bash/site/config.sh
-    source_if_exists $HOME/.config/bash/team/config.sh
-    source_if_exists $HOME/.config/bash/project/config.sh
-    source_if_exists $HOME/.config/bash/user/config.sh
+    source_if_exists "$HOME/.config/bash/corp/config.sh"
+    source_if_exists "$HOME/.config/bash/site/config.sh"
+    source_if_exists "$HOME/.config/bash/team/config.sh"
+    source_if_exists "$HOME/.config/bash/project/config.sh"
+    source_if_exists "$HOME/.config/bash/user/config.sh"
 fi
 
 # Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
@@ -99,22 +88,22 @@ fi
 
 # PATH to common linux tools should be established by now
 # More PATH can be added by Environment Modules in corp/site/team/project/user layers.
-source_if_exists $BASH_CONFIG_ROOT_DIR/global/bashrc
-source_if_exists $BASH_CONFIG_ROOT_DIR/corp/bashrc
-source_if_exists $BASH_CONFIG_ROOT_DIR/site/bashrc
-source_if_exists $BASH_CONFIG_ROOT_DIR/team/bashrc
-source_if_exists $BASH_CONFIG_ROOT_DIR/project/bashrc
-source_if_exists $BASH_CONFIG_ROOT_DIR/user/bashrc
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/site/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/team/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/project/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/user/bashrc"
 
 # Allow user home-dir override in case using a shared bash config installation.
 # Guarded by the same root != ~/.config/bash check as the config.sh block above
 # (_cfg_root_real / _home_bash_real computed there; cleared by unset_bashrc_local_vars).
 if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
-    source_if_exists $HOME/.config/bash/corp/bashrc
-    source_if_exists $HOME/.config/bash/site/bashrc
-    source_if_exists $HOME/.config/bash/team/bashrc
-    source_if_exists $HOME/.config/bash/project/bashrc
-    source_if_exists $HOME/.config/bash/user/bashrc
+    source_if_exists "$HOME/.config/bash/corp/bashrc"
+    source_if_exists "$HOME/.config/bash/site/bashrc"
+    source_if_exists "$HOME/.config/bash/team/bashrc"
+    source_if_exists "$HOME/.config/bash/project/bashrc"
+    source_if_exists "$HOME/.config/bash/user/bashrc"
 fi
 
 unset_bashrc_local_vars
