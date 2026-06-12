@@ -49,7 +49,8 @@ sha256  cfaf4bf343cea07f168e1af1609c7c0be928a80ca49b6e3ae27ea8dc238cdc1b  pre_bu
 sha256  db969b7f3972de6e6e9f253ca650b7c8b77cf472517a9523e2dcdb475c4986ff  pre_built/el8.x86_64.glibc2p28/bin/factor.bz2
 sha256  f0b7315442e816dc5869f13726cbc4102db5028e17b9cf4bff40716bcdb7a9aa  pre_built/el8.x86_64.glibc2p28/bin/false.bz2
 sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  pre_built/el8.x86_64.glibc2p28/bin/fd.bz2
-sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
+sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bin.bz2
+sha256  353498eb29e767e3eee973fdd0d7be950877a03fc35445f6c379638023a98988  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
 sha256  2365eb19a164711291d447b6bcde4f4e1814b98721d3769fdfef84c71bc73302  pre_built/el8.x86_64.glibc2p28/bin/flameshot.bz2
 sha256  71c69f9a5bcfd4e328674bf252d198b7ce3af6727b1f069c4a1dcf882d7e5088  pre_built/el8.x86_64.glibc2p28/bin/fmt.bz2
 sha256  ed02e52236b570b5cff3fd761dd404d44d082bf23134848befcc7cda497cf637  pre_built/el8.x86_64.glibc2p28/bin/fold.bz2

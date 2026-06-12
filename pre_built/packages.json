@@ -1619,7 +1619,8 @@
     "fish": {
       "kind": "bin",
       "bins": [
-        "fish"
+        "fish",
+        "fish.bin"
       ],
       "version": "4.7.1",
       "platforms": [
