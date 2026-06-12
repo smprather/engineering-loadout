@@ -22,6 +22,11 @@ for potential_bin_dir in \
     path_prepend_if_dir $potential_bin_dir
 done
 
+# ncurses does not search ~/.local/share/terminfo by default, and non-interactive
+# login shells return below before reaching the interactive terminfo block.
+path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
+export TERMINFO_DIRS
+
 # Exit here if not interactive
 if [[ $- != *i* ]]; then
     # Unset all bashrc local variables
@@ -71,8 +76,12 @@ if [[ ! -r $XDG_RUNTIME_DIR ]]; then
     mkdir -p "$XDG_RUNTIME_DIR"
 fi
 
-# Should work for all cases, but this terminfo stuff is always trying to fail.
-# When working correctly, you should see undercurl, italics, etc working in nvim.
+# ncurses does not search ~/.local/share/terminfo by default.
+# Make the bundled st (and any future terminfo we ship) discoverable
+# without forcing $HOME/.terminfo. path_prepend handles dedup and
+# the colon-list semantics shared with $PATH.
+path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
+export TERMINFO_DIRS
 export COLORTERM=truecolor
 
 # Compile python bytecode cache to fast /dev/shm filesystem
@@ -134,11 +143,11 @@ if [[ ! -f "$HISTFILE" ]]; then
     # If not, then do this...
     if ps -f $PPID | grep -q bash; then
         # If this is a child bash, then inherit the history from the parent.
-        [[ -f $XDG_RUNTIME_DIR/bash_history.$PPID ]] && cp $XDG_RUNTIME_DIR/bash_history.$PPID $HISTFILE
+        [[ -f "$XDG_RUNTIME_DIR/bash_history.$PPID" ]] && cp "$XDG_RUNTIME_DIR/bash_history.$PPID" "$HISTFILE"
     else
         # Else, start the shell history with the contents of the most recently modified history.
-        if ls $XDG_RUNTIME_DIR/bash_history.* >&/dev/null; then
-            cp $(/bin/ls -rt1 $XDG_RUNTIME_DIR/bash_history.* | tail -n 1) $HISTFILE
+        if ls "$XDG_RUNTIME_DIR"/bash_history.* >&/dev/null; then
+            cp "$(/bin/ls -rt1 "$XDG_RUNTIME_DIR"/bash_history.* | tail -n 1)" "$HISTFILE"
         fi
     fi
 fi
@@ -381,8 +390,8 @@ alias cddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 2 | h
 alias cdddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 3 | head -n 1`'
 alias cddddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 4 | head -n 1`'
 alias cdddddd='cd `find * -maxdepth 0 -type d | xargs /bin/ls -drt1 | tail -n 5 | head -n 1`'
-alias p='pwd | tee /tmp/p_dir'
-alias cdp='cd $(cat /tmp/p_dir)'
+alias p='pwd | tee "/tmp/p_dir.$USER"'
+alias cdp='cd "$(cat "/tmp/p_dir.$USER")"'
 cds() {
     eval "$(cd-surfer "$@")"
 }

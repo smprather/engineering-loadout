@@ -10,7 +10,15 @@ local function layer_dir(layer)
     return vim.fn.stdpath("config") .. "/lua/" .. layer
 end
 local function source_layer(layer, mod)
-    pcall(require, layer .. "." .. mod)
+    -- A missing layer module is normal (most layers are user-created); any
+    -- other failure is a broken layer file and must not vanish silently.
+    local name = layer .. "." .. mod
+    local ok, err = pcall(require, name)
+    if not ok and not tostring(err):find("module '" .. name .. "' not found", 1, true) then
+        vim.schedule(function()
+            vim.notify(("loadout layer '%s' failed to load:\n%s"):format(name, err), vim.log.levels.WARN)
+        end)
+    end
 end
 
 -- Phase 1: Config variables — global defaults, then corp/site/project/user override.

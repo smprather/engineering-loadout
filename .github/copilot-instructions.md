@@ -206,7 +206,7 @@ holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
 
 The Helix runtime lives at `pre_built/<platform>/runtime/helix.tar.bz2`; the
-installer extracts it to `~/.config/helix/runtime`; `runtime/tutor` is the
+installer extracts it to `~/.local/share/helix/runtime`; `runtime/tutor` is the
 sentinel file. The Vim runtime lives at `pre_built/<platform>/runtime/vim92.tar.bz2`;
 the installer extracts it to `~/.local/share/vim/vim92`; `filetype.vim` is the
 sentinel file. Vim/GVim wrappers derive default runtime paths from installed
@@ -215,7 +215,10 @@ does same for `__fish_data_dir`, `__fish_bin_dir`, and `__fish_sysconf_dir`,
 and must ensure `<prefix>/etc/fish` exists before execing `fish.bin`; fish
 only enters relocatable mode when both `<prefix>/share/fish` and
 `<prefix>/etc/fish` exist, otherwise it falls back to the baked
-`/tmp/fish-install-4.7.1` prefix. The Neovim runtime lives at `pre_built/<platform>/runtime/nvim.tar.bz2`;
+`/tmp/fish-install-4.7.1` prefix. `st.tar.bz2` extracts to
+`~/.local/share/terminfo`; `bash/global/bashrc` prepends that path to
+`TERMINFO_DIRS` so ncurses resolves `st-256color` for normal and `--dest-dir`
+installs instead of relying on implicit `~/.terminfo`. The Neovim runtime lives at `pre_built/<platform>/runtime/nvim.tar.bz2`;
 the installer extracts it to `~/.local/share/nvim/runtime`; `filetype.lua` is
 the sentinel file.
 

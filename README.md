@@ -93,6 +93,10 @@ works.
 **No root.** Everything lands in `$HOME` (or `--dest-dir`). No package
 manager, no `sudo`, no IT ticket.
 
+Shared-tree installs stay relocatable: bundled runtime/data assets live under
+`~/.local/share` (or the staged prefix) and shell init exports the paths
+needed for discovery, including `TERMINFO_DIRS` for bundled `st` terminfo.
+
 **Multi-platform.** RedHat 7 / 8 / 9, Suse, x86_64 / ARM / PowerPC, and
 Windows.
 

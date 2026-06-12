@@ -118,7 +118,8 @@ pre_built/
     bin/*.bz2               - Compressed binaries → ~/.local/bin
     lib64/*.bz2             - Compressed shared libs → ~/.local/lib64
     runtime/                - Runtime archives (platform-matched)
-      helix.tar.bz2         - Helix runtime → ~/.config/helix/runtime/
+      helix.tar.bz2         - Helix runtime → ~/.local/share/helix/runtime/
+      st.tar.bz2            - st terminfo entries → ~/.local/share/terminfo/
       vim92.tar.bz2         - Vim 9.2 runtime → ~/.local/share/vim/vim92/
       nvim.tar.bz2          - Neovim runtime → ~/.local/share/nvim/runtime/
       octave.tar.bz2        - Octave m-files + .oct plugins → ~/.local/share/octave/11.1.0/ + ~/.local/lib/octave/11.1.0/oct/
@@ -257,7 +258,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **tldr cache behavior**: `./update tldr-data` writes `tldr/tldr-pages.tar.bz2` for offline tealdeer. Installer accepts `.tar.bz2` and legacy `.tar.gz`, replaces existing `~/.cache/tealdeer/tldr-pages` unless `--skip tldr-data`, `./strip_all_elf_binaries` normalizes tar archives to bzip2.
 
-**Helix runtime behavior**: Installer looks for `helix.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `helix/helix_runtime.tar.bz2`. Safely extracts into `~/.config/helix/`, replacing existing `~/.config/helix/runtime`. Correct install has `~/.config/helix/runtime/tutor`. Archive contains `./runtime/...`, extracts directly to `~/.config/helix/`.
+**Helix runtime behavior**: Installer looks for `helix.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `helix/helix_runtime.tar.bz2`. Safely extracts into `~/.local/share/helix/`, replacing existing `~/.local/share/helix/runtime`. Correct install has `~/.local/share/helix/runtime/tutor`. Archive contains `./runtime/...`, extracts directly to `~/.local/share/helix/`.
 
 **Vim runtime behavior**: Installer looks for `vim92.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `vim/runtime.tar.bz2`. Extracts to `~/.local/share/vim/`, renames `runtime/` to `vim92/`, verifies `filetype.vim` present. Correct install has `~/.local/share/vim/vim92/filetype.vim`. Vim/GVim wrappers derive their default `VIM`/`VIMRUNTIME` from the installed launcher path (`bin/..` -> install prefix), not `$HOME`, while preserving explicit user overrides; this keeps `--dest-dir` installs runnable with fake `HOME`.
 
@@ -281,6 +282,8 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Fish runtime behavior**: `fish` optional pre-built binary (`optional: true` — opt in with `./loadout install fish`). Binary requires standard library (functions, completions, themes) shipped as `pre_built/<platform>/runtime/fish.tar.bz2`. Archive contains `./share/fish/...`, extracts to `~/.local/` so standard library lands at `~/.local/share/fish/`. Installed launcher is a small POSIX-sh wrapper (`bin/fish`) that derives its prefix from installed `bin/..`, ensures `<prefix>/etc/fish` exists so fish's relocatable-tree probe succeeds, exports `__fish_data_dir`, `__fish_bin_dir`, and `__fish_sysconf_dir`, then execs `bin/fish.bin`; explicit user overrides still win. This keeps `--dest-dir` installs and shared-tree deployments from falling back to fish's build-time prefix. Installer function: `install_fish_runtime()`. Binary links against `libncurses.so.6` and `libpcre2-8.so.0` (both bundled — `libpcre2-8.so.0` owned by `gui_libs` but installed as lib64 dep). fish 4.x written in Rust; build with cmake+cargo via `pre_built/build_scripts/build-fish.sh --tag <version>`.
 
+**st terminfo behavior**: `st` ships its terminfo entries as `pre_built/<platform>/runtime/st.tar.bz2`. Archive contains `./share/terminfo/...`, extracts to `~/.local/`, and installs `share/terminfo/s/st-256color` plus the sibling `st*` entries under `~/.local/share/terminfo/`. `bash/global/bashrc` prepends `$HOME/.local/share/terminfo` to `TERMINFO_DIRS` because Linux ncurses does not search that path by default; this keeps normal installs, `--dest-dir` staging, and shared-tree deploys able to resolve `st-256color` without relying on `~/.terminfo`.
+
 **Rolling-git wheel behavior**: First-party `python-tool` packages can be tagged `"rolling_git": "<clone-url>"` in `packages.json` (currently `liberty-tools`, `text-serdes`, `time-plot`). `./update <name>` (and bare `./update`, which now includes all rolling pkgs) rebuilds these from source instead of using a hand-bundled wheel: cheap `git ls-remote` skip-check → fresh `git clone --filter=blob:none` (keeps tags so `describe` works; falls back to full clone) → `uv build --wheel` (handles maturin **and** hatchling backends) → prune previous `<dist>-*.whl` → copy new wheel into `pre_built/<platform>/wheels/` → surgically stamp the package's `version` to `git describe --tags --always --dirty`. Rebuild happens **only when the source commit changed**; `./update <name> --rebuild` forces. `./update --list[-outdated]` shows rolling rows with latest = remote HEAD sha. **maturin gotcha:** under PEP517 maturin tags a bare `linux_x86_64` wheel; `update` sets `MATURIN_PEP517_ARGS="--compatibility manylinux_2_28"` for maturin backends so the wheel is portable + auditwheel-checked. Builds need network + `~/.cache/uv` write (run on the EL8 build machine). Add a 4th rolling project by adding the `rolling_git` field — `./update` discovers it automatically. To add a new third-party (pinned) Python tool instead, see *Python tool behavior* below.
 
 **JupyterLab Python tool behavior**: `jupyterlab` optional `uv_tool` (`optional: true` — opt in with `./loadout install jupyterlab`). Installed via `uv tool install jupyterlab` using bundled wheels. After install, `jupyter` and `jupyter-lab` launchers at `~/.local/bin/`. Users run `jupyter lab`; JupyterLab opens in system browser. Requires accessible browser (WSL2: Windows browser via WSL interop; headless farm nodes: point `BROWSER` to VNC-accessible browser or use `--no-browser --port=8888` with port forwarding). Wheels must be downloaded with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download jupyterlab --platform manylinux_2_28_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/` — JupyterLab has ~80 dependency packages.
@@ -300,7 +303,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `~/.editorconfig` → `~/.config/editorconfig/editorconfig`
 - `~/.config/starship/starship.toml` ← `repo/starship/starship.linux.toml`
 - `~/.config/starship/config-schema.json` ← `repo/starship/config-schema.json`
-- `~/.config/helix/runtime/` ← `repo/pre_built/<platform>/runtime/helix.tar.bz2`
+- `~/.local/share/helix/runtime/` ← `repo/pre_built/<platform>/runtime/helix.tar.bz2`
 - `~/.local/share/vim/vim92/` ← `repo/pre_built/<platform>/runtime/vim92.tar.bz2`
 - `~/.local/share/nvim/runtime/` ← `repo/pre_built/<platform>/runtime/nvim.tar.bz2`
 - `~/.local/bin/python3.14` etc. ← `repo/pre_built/<platform>/portable-python-*.tar.bz2` (via install.sh)

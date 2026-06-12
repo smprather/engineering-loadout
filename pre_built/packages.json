@@ -1362,8 +1362,8 @@
       ],
       "archive": "pre_built/PLATFORM/runtime/st.tar.bz2",
       "description": "suckless st \u2014 minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)",
-      "sentinel": ".terminfo/s/st-256color",
-      "install_to": "~",
+      "sentinel": "share/terminfo/s/st-256color",
+      "install_to": "~/.local",
       "missing_hint": "st-256color terminfo with undercurl caps will NOT be installed"
     },
     "yank": {
@@ -2508,8 +2508,7 @@
         "@core-environments",
         "env-nvim",
         "env-vim",
-        "env-helix",
-        "env-kak"
+        "env-helix"
       ],
       "description": "Every Linux/macOS config bundle"
     },
