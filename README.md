@@ -149,6 +149,7 @@ Run `./loadout list` to see every package and every group, or
 | [expect](https://core.tcl-lang.org/expect/) | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 | [eza](https://github.com/eza-community/eza) | 0.23.4 | Modern `ls` with color, icons, Git status, and tree view |
 | [fd](https://github.com/sharkdp/fd) | 10.4.2 | Fast, ergonomic `find` replacement |
+| [firefox](https://www.mozilla.org/firefox/) | 140.11.0 | Mozilla Firefox ESR — bundled with launcher + libxul, no system install required |
 | [fish](https://fishshell.com) | 4.7.1 | Fish shell — autosuggestions, syntax highlighting, no config needed |
 | [fzf](https://github.com/junegunn/fzf) | 0.62.0 | Blazing-fast fuzzy finder for files, history, anything |
 | [gnuplot](http://www.gnuplot.info) | 6.0.2 | Portable command-line graphing utility |

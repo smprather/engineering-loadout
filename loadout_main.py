@@ -2495,6 +2495,64 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
         record_result("mate-terminal runtime", "FAIL", "archive extracted but mate-terminal.bin not found")
 
 
+def install_firefox_runtime(repo_dir, home, selected_tools):
+    """Install the Firefox shanghai bundle.
+
+    Bundle (from `pre_built/<platform>/runtime/firefox.tar.bz2`, transparently
+    rejoined from `.part-NNN` chunks) contains:
+      bin/firefox                     thin POSIX-sh wrapper exec'ing firefox-bin
+      lib/firefox/                    the EL8 /usr/lib64/firefox/ tree
+                                       (libxul.so + libmoz*.so, RPATH=$ORIGIN)
+      share/applications/firefox.desktop   optional XDG menu entry
+
+    firefox-bin self-resolves all its bundled .so deps via $ORIGIN; only
+    system libs declared as gui_libs (GTK3/cairo/pango/X11/Wayland) plus the
+    EL8 base (NSS/NSPR, alsa-lib, freetype, fontconfig) are needed at runtime.
+    No glib-compile-schemas or RPATH fix-up needed at install time.
+    """
+    if selected_tools is not None and "firefox" not in selected_tools:
+        skipped("Firefox runtime (firefox not selected)", "")
+        record_result("Firefox runtime", "SKIP", "firefox not in selected tools")
+        return
+    archive = None
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, "pre_built"))
+    if platform_dir:
+        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "firefox.tar.bz2"))
+    if archive is None:
+        skipped(
+            "Firefox runtime (no firefox.tar.bz2 in pre_built/<platform>/runtime/)",
+            "firefox will NOT be installed",
+        )
+        record_result("Firefox runtime", "SKIP", "no bundled runtime archive")
+        return
+
+    local_dir = os.path.join(home, ".local")
+    ensure_dir(local_dir, "Firefox runtime")
+
+    # Remove stale bundle paths before re-extracting.
+    for stale in (
+        os.path.join(local_dir, "bin", "firefox"),
+        os.path.join(local_dir, "lib", "firefox"),
+        os.path.join(local_dir, "share", "applications", "firefox.desktop"),
+    ):
+        remove_if_exists(stale)
+
+    pv_extract_tar(archive, local_dir)
+
+    # Ensure launcher is executable.
+    ff_launcher = os.path.join(local_dir, "bin", "firefox")
+    if os.path.isfile(ff_launcher):
+        os.chmod(ff_launcher, 0o755)
+
+    sentinel = os.path.join(local_dir, "lib", "firefox", "firefox-bin")
+    if os.path.isfile(sentinel):
+        record_result("Firefox runtime", "yes", f"firefox -> {local_dir}/")
+        print(f"  Installed: {archive} -> {local_dir}/")
+    else:
+        warn(f"Firefox runtime archive did not install {local_dir}/lib/firefox/firefox-bin as expected")
+        record_result("Firefox runtime", "FAIL", "archive extracted but firefox-bin not found")
+
+
 def install_nvim_qt_runtime(repo_dir, home, selected_tools):
     if selected_tools is not None and "nvim-qt" not in selected_tools:
         skipped("nvim-qt runtime (nvim-qt not selected)", "")
@@ -3561,6 +3619,11 @@ def cmd_doctor(args, registry, repo_dir):
             full_path = os.path.join(repo_dir, resolved)
             matches = glob_paths_glob(full_path)
             if not matches:
+                # Large archives are auto-chunked into .part-NNN by
+                # strip_all_elf_binaries; the bare archive file disappears
+                # once that happens. Accept the chunks as a present archive.
+                matches = glob_paths_glob(full_path + ".part-*")
+            if not matches:
                 missing.append((name, kind, resolved))
     if missing:
         print(f"Missing archives ({len(missing)} of {checked} checked):")
@@ -3718,6 +3781,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step(
         "mate-terminal runtime", install_mate_terminal_runtime, repo_dir, home, selected_tools, silent=True
     )
+    run_install_step("Firefox runtime", install_firefox_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, silent=True)
     run_install_step(
         "nvim-treesitter vendor", install_nvim_treesitter_vendor, repo_dir, home, selected_tools, silent=True

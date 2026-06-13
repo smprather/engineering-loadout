@@ -1113,3 +1113,104 @@ strip → `patchelf --set-rpath '$ORIGIN/../lib64'` → bzip2. `depends: ["gui_l
 `default: false`, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
 
 Install: `./loadout install gui_libs,flameshot`
+
+## firefox 140.11.0 — Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS RPM)
+
+Mozilla Firefox does not get a source build — its Rust + autoconf +
+gn build chain is enormous and not in scope for this repo. Instead we
+shanghai the EL8 BaseOS RPM: refresh the system install to the freshest
+ESR, copy the runtime tree, and add a thin POSIX-sh launcher.
+
+### Build
+
+```bash
+sudo dnf upgrade -y firefox
+rpm -q firefox                # capture exact version, e.g. firefox-140.11.0-1.el8_10.alma.1.x86_64
+./pre_built/build_scripts/build-firefox.sh --tag 140.11.0
+```
+
+Script:
+- Verifies `rpm -q firefox` matches `--tag` so the bundled version
+  and the binaries can't drift.
+- Stages `/usr/lib64/firefox/` → `$STAGE/lib/firefox/` via `cp -a`.
+- Drops a thin POSIX-sh wrapper at `$STAGE/bin/firefox` that derives
+  prefix from `$0` and exec's `$prefix/lib/firefox/firefox-bin`.
+- Rewrites two absolute symlinks the RPM ships:
+  - `lib/firefox/dictionaries -> /usr/share/myspell` — deleted (the
+    built-in Firefox dictionaries still ship in the bundle; users
+    wanting Hunspell extras install hunspell on the host).
+  - `lib/firefox/browser/defaults/preferences -> /usr/lib64/firefox/defaults/preferences`
+    — replaced with a real directory containing a copy of the prefs.
+    Why not a relative symlink: `strip_all_elf_binaries`'s tar
+    re-creation step uses `os.walk(followlinks=False)` and silently
+    drops symlinks-to-directories on rewrite, so the symlink would
+    disappear from the bundled archive.
+- Copies `/usr/share/applications/firefox.desktop` (best-effort).
+- Wipes any stale `firefox.tar.bz2.part-*` chunks before tarring so
+  strip_all_elf's chunk0-sha manifest cache doesn't block a fresh
+  rewrite.
+- `tar cjf` to `runtime/firefox.tar.bz2`, updates `packages.json`
+  version, runs `./strip_all_elf_binaries` which strips ELFs inside
+  the archive and auto-chunks the final ~136 MB output into
+  `firefox.tar.bz2.part-NNN` shards (4 × ~40 MiB).
+
+### Bundle layout
+
+```
+./bin/firefox                            # POSIX-sh launcher
+./lib/firefox/                           # full /usr/lib64/firefox/ tree
+    firefox-bin                          # RPATH=$ORIGIN — finds bundled libmoz*.so
+    libxul.so                            # ~150 MB, all the Mozilla code
+    libmozsandbox.so, libgkcodecs.so, …  # bundled, $ORIGIN-resolved
+    omni.ja, browser/omni.ja             # packed JS/CSS/XUL frontend
+    browser/extensions/langpack-*.xpi    # bundled langpacks
+    browser/defaults/preferences/        # real dir (was symlink)
+./share/applications/firefox.desktop     # XDG menu entry
+```
+
+### Runtime libs assumed present on EL8 (NOT bundled)
+
+- glibc + libstdc++ + libgcc_s — policy
+- NSS / NSPR: `libnss3`, `libnssutil3`, `libsmime3`, `libssl3`,
+  `libnspr4`, `libplds4`, `libplc4` — every EL8 box has these
+  (yum/dnf/curl/openssh-tls all need them)
+- libasound2 — alsa-lib, present on every EL8 desktop/farm node
+- libfreetype, libfontconfig — already declared in gui_libs anyway
+
+`depends: ["gui_libs"]` pulls in the GTK3 / cairo / pango / X11 /
+Wayland stack libxul.so dlopens at runtime.
+
+### Packaging / runtime
+
+`kind: bin`, empty `bins` (launcher is inside the archive),
+`archive: pre_built/PLATFORM/runtime/firefox.tar.bz2`, `depends:
+["gui_libs"]`. In both `@gui-suite` (explicit member) and
+`@engineering-loadout` (via the `all` synthetic group). Installer
+function: `install_firefox_runtime()` in `loadout_main.py`. Needs
+`DISPLAY` or `WAYLAND_DISPLAY` for the GUI; `--headless` works too.
+
+The Fedora-shipped `/usr/bin/firefox` launcher is intentionally **not**
+carried forward. It hardcodes `/etc/gre.d/gre64.conf`, `/etc/fonts`,
+`/etc/firefox` langpack management, and SELinux `restorecon` paths
+that don't apply to a relocatable `$HOME` install. firefox-bin
+handles its own Wayland/X11 detection (`WAYLAND_DISPLAY` /
+`XDG_SESSION_TYPE` env).
+
+Install: `./loadout install gui_libs,firefox` (or just `firefox` —
+gui_libs is auto-pulled via depends).
+
+### Updating
+
+```bash
+sudo dnf upgrade -y firefox
+rpm -q firefox
+./pre_built/build_scripts/build-firefox.sh --tag <new-version>
+git add pre_built/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2.part-* \
+        .strip-manifest pre_built/packages.json
+git commit -m 'feat(pre_built): firefox <version> shanghai bundle'
+```
+
+The shanghai approach means the bundle is only as fresh as the EL8
+RPM. AlmaLinux tracks Firefox ESR closely — typically only a few
+days behind upstream ESR. No special action needed beyond
+`dnf upgrade`.

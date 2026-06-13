@@ -1602,6 +1602,23 @@
       ],
       "description": "MATE Terminal \u2014 GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed)"
     },
+    "firefox": {
+      "kind": "bin",
+      "bins": [],
+      "version": "140.11.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "browser",
+        "gui"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/firefox.tar.bz2",
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin)"
+    },
     "zsh": {
       "kind": "bin",
       "bins": [
@@ -2457,6 +2474,7 @@
         "urxvt",
         "st",
         "mate-terminal",
+        "firefox",
         "flameshot"
       ],
       "description": "Full GUI stack for headless compute farm GUI forwarding"
