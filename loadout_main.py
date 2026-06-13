@@ -1890,7 +1890,12 @@ def check_prebuilt_binary_dependencies(dest_bin_dir):
             warn(f"missing shared libraries for {binary} — this binary may not run")
             for line in out.splitlines():
                 if "not found" in line:
-                    eprint(f"    {line.split()[0]}")
+                    # Print the whole ldd line: handles both the missing-file
+                    # format ("libX.so => not found") and the version-mismatch
+                    # format ("<binary>: /path/lib.so: version `Z' not found
+                    # (required by ...)"), where split()[0] would wrongly print
+                    # the binary path instead of the offending library.
+                    eprint(f"    {line.strip()}")
     if not missing:
         print("  Shared library check OK")
 
