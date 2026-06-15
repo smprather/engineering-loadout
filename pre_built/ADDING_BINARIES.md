@@ -1168,12 +1168,53 @@ Script:
 ./share/applications/firefox.desktop     # XDG menu entry
 ```
 
-### Runtime libs assumed present on EL8 (NOT bundled)
+### NSS / NSPR are BUNDLED (the version-`NSS_3.107`-not-found trap)
+
+Firefox 140's `libxul.so` requires `NSS_3.107`. AlmaLinux 8.10 shipped
+`nss-3.90` at GA; the symbol only appears in `nss ≥ 3.107`. The build
+box happened to have `nss-3.112` **only because the firefox RPM pulled
+it in as a dep**, so `ldd`/`--version` looked clean here — classic
+build-box masking (same trap as the octave support libs). On an
+un-patched farm node firefox aborts at startup:
+
+```
+/lib64/libnss3.so: version `NSS_3.107' not found (required by .../libxul.so)
+Couldn't load XPCOM.
+```
+
+`firefox --version` then silently falls through to the 115-ESR
+`/usr/bin/firefox`, which *looks* like "the bundle didn't update."
+
+Fix = carry the full NSS runtime closure (13 `.so`) inside the bundle
+and force the loader to prefer it:
+
+- 7 NEEDED: `libnss3 libnssutil3 libsmime3 libssl3 libnspr4 libplc4 libplds4`
+- 6 dlopen plugins: `libsoftokn3 libfreebl3 libfreeblpriv3 libnssdbm3 libnssckbi libnsssysinit`
+
+The build script copies these from `/usr/lib64/` into `lib/firefox/`,
+`strip`s then `patchelf --set-rpath '$ORIGIN'` each (strip-before-
+patchelf per the ELF rule; the strip-script's `elf_has_rpath` guard
+then skips them).
+
+**RPATH alone is not enough.** The EL8 RPM's `firefox-bin` and
+`libxul.so` have **no RPATH/RUNPATH** — firefox-bin dlopens libxul by
+absolute path, but libxul's NEEDED libs (nss, libmoz*) get resolved by
+the loader with no app-dir on the search path. So the wrapper must
+`export LD_LIBRARY_PATH="$libdir:$LD_LIBRARY_PATH"` (mirrors the stock
+`/usr/bin/firefox` launcher). Verify after a build with:
+
+```bash
+env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
+  | grep 'libnss3.so' | grep 'calling init'
+# must print the BUNDLE path, not /lib64
+```
+
+### Runtime libs still assumed present on EL8 (NOT bundled)
 
 - glibc + libstdc++ + libgcc_s — policy
-- NSS / NSPR: `libnss3`, `libnssutil3`, `libsmime3`, `libssl3`,
-  `libnspr4`, `libplds4`, `libplc4` — every EL8 box has these
-  (yum/dnf/curl/openssh-tls all need them)
+- `libsqlite3.so.0` — softokn3 dep; EL8 base sqlite (3.26), identical on
+  build + dest, never security-bumped, so safe to leave external
+- `libtasn1.so.6` — nssckbi dep; EL8 base, stable
 - libasound2 — alsa-lib, present on every EL8 desktop/farm node
 - libfreetype, libfontconfig — already declared in gui_libs anyway
 

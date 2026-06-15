@@ -25,12 +25,21 @@
 # to a relocatable $HOME install.  firefox-bin handles its own
 # Wayland/X11 detection.
 #
-# System libs that must be present on the target machine (NOT bundled):
+# NSS / NSPR are BUNDLED into lib/firefox/ (co-located, RPATH=$ORIGIN).
+# Firefox 140's libxul.so requires NSS_3.107, newer than the NSS that
+# AlmaLinux 8.10 shipped at GA (3.90).  An un-patched farm node aborts with
+#   /lib64/libnss3.so: version `NSS_3.107' not found ... Couldn't load XPCOM
+# The build box only has nss-3.112 because the firefox RPM pulled it in,
+# which masked the gap until a dest node surfaced it (same build-box
+# masking trap as the octave support libs).  We therefore carry the full
+# NSS runtime closure (13 .so) inside the bundle; see the staging step.
+#
+# System libs still assumed present on the target (NOT bundled):
 #   - glibc (libc/libm/libpthread/libdl/librt) — policy
 #   - libstdc++ / libgcc_s — policy
-#   - NSS / NSPR (libnss3, libnssutil3, libsmime3, libssl3, libnspr4,
-#     libplds4, libplc4) — present on every EL8 box (used by
-#     yum/dnf, curl, openssh)
+#   - libsqlite3.so.0 — softokn3 dep; EL8 base sqlite (3.26), identical on
+#     build + dest, never security-bumped, so safe to leave external
+#   - libtasn1.so.6   — nssckbi dep; EL8 base, stable
 #   - libasound2 — alsa-lib, present on every EL8 desktop/farm node
 #   - libfreetype / libfontconfig — system; also in gui_libs
 #
@@ -161,6 +170,35 @@ if [ -n "$absolute_links" ]; then
     exit 1
 fi
 
+# --- Bundle the NSS / NSPR runtime closure into lib/firefox/ -------------
+# Firefox 140 needs NSS_3.107 (see header).  Co-locate the EL8 nss .so set
+# next to libxul.so; firefox-bin already runs with RPATH=$ORIGIN, and NSS
+# dlopen's its softoken/freebl/ckbi plugins from libnss3's own directory,
+# so stamping each with RPATH=$ORIGIN makes the closure self-resolving
+# regardless of the host's (possibly older) system NSS.  Strip-before-
+# patchelf per the repo ELF rule (nss RPM libs are already stripped, so
+# strip is a near no-op, but keep the order).
+PATCHELF="$HOME/.local/bin/patchelf"
+command -v "$PATCHELF" >/dev/null 2>&1 || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found (need it to stamp NSS RPATH)" >&2; exit 1; }
+
+NSS_LIBS="libnss3.so libnssutil3.so libsmime3.so libssl3.so libnspr4.so \
+libplc4.so libplds4.so libsoftokn3.so libfreebl3.so libfreeblpriv3.so \
+libnssdbm3.so libnssckbi.so libnsssysinit.so"
+echo "==> Bundling NSS/NSPR closure into lib/firefox/ ..."
+for nsslib in $NSS_LIBS; do
+    src=$(readlink -f "/usr/lib64/$nsslib" 2>/dev/null || true)
+    [ -n "$src" ] && [ -f "$src" ] || {
+        echo "ERROR: /usr/lib64/$nsslib missing — install nss/nspr first" >&2
+        exit 1
+    }
+    dst="$STAGE/lib/firefox/$nsslib"
+    cp "$src" "$dst"
+    /usr/bin/strip "$dst" 2>/dev/null || true
+    "$PATCHELF" --set-rpath '$ORIGIN' "$dst"
+    chmod 755 "$dst"
+done
+
 # Firefox auto-mounts plugins from MOZ_PLUGIN_PATH; not needed for the
 # default browser experience.  The optional system langpacks under
 # /usr/lib64/firefox/langpacks are already included by the cp -a above.
@@ -174,7 +212,18 @@ cat > "$STAGE/bin/firefox" <<'EOF'
 # release trees.
 bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
 prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
-exec "$prefix/lib/firefox/firefox-bin" "$@"
+libdir="$prefix/lib/firefox"
+# Firefox 140's libxul.so needs NSS_3.107; the matching NSS/NSPR .so set is
+# bundled in $libdir. firefox-bin loads libxul by absolute path but does NOT
+# add its own directory to the loader search path for libxul's NEEDED libs,
+# so without this libxul's libnss3 would resolve to the host's /lib64 copy
+# (older on un-patched EL8 nodes) and abort with
+#   "/lib64/libnss3.so: version `NSS_3.107' not found ... Couldn't load XPCOM".
+# Prepend $libdir so the bundled NSS (and every other bundled .so) wins; this
+# mirrors what the stock /usr/bin/firefox launcher does with LD_LIBRARY_PATH.
+LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH
+exec "$libdir/firefox-bin" "$@"
 EOF
 chmod 755 "$STAGE/bin/firefox"
 
