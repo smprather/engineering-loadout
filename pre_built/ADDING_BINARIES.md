@@ -1214,3 +1214,81 @@ The shanghai approach means the bundle is only as fresh as the EL8
 RPM. AlmaLinux tracks Firefox ESR closely — typically only a few
 days behind upstream ESR. No special action needed beyond
 `dnf upgrade`.
+
+## fio 3.42 — Flexible I/O tester (storage/filesystem benchmark, EL8 SOURCE build)
+
+fio measures storage and filesystem performance (random/sequential
+read/write, IOPS, bandwidth, latency) across many ioengines.
+
+Build script: `pre_built/build_scripts/build-fio.sh --tag fio-3.42`.
+
+### Prerequisites
+
+```bash
+sudo dnf install -y libaio-devel zlib-devel    # headers for the two linked libs
+. /opt/rh/gcc-toolset-14/enable
+```
+
+### Configure flags (the real ones)
+
+```bash
+./configure --disable-native --disable-http
+```
+
+- `--disable-native` — no `-march=native`; the binary must run on every
+  farm CPU generation, not just the build box.
+- `--disable-http` — **critical.** With curl-devel present, configure
+  auto-enables the `http` ioengine and links `libcurl.so.4`, dragging in
+  the entire `libssl/libcrypto/libnghttp2/libidn2/libssh/libpsl/krb5/ldap/
+  brotli/sasl` closure (~25 extra NEEDED libs) — heavy, not guaranteed on
+  a minimal node, and useless for a filesystem benchmark. Disabling it
+  cuts the closure down to libaio + zlib + glibc.
+
+zlib and libaio are auto-detected (both `-devel` installed) and kept —
+libaio is the realistic async-I/O engine; zlib is iolog compression.
+
+### Linked libs
+
+After `--disable-http`, `ldd fio` (non-glibc only):
+
+| lib | source | handling |
+|-----|--------|----------|
+| `libaio.so.1` | EL8 `libaio` RPM (`/usr/lib64/libaio.so.1`) | **bundled** → `lib64/libaio.so.1.bz2`, soname `libaio.so.1`, RPATH `$ORIGIN` |
+| `libz.so.1` | already bundled in `lib64/` | reused (declared in fio's `libs`) |
+
+Everything else (`librt`, `libpthread`, `libm`, `libmvec`, `libdl`,
+`libc`) is glibc 2.28 — present on every EL8 target, never bundled.
+
+> **Self-contained check (octave lesson):** the build box has
+> `libaio.so.1` in system `/lib64`, so a naive `ldd` on the build box
+> masks a missing RPATH. Always verify against an isolated tree:
+> decompress `bin/fio` + `lib64/{libaio,libz}.so.1` into
+> `/tmp/x/local/{bin,lib64}` and confirm `ldd` resolves both libs to the
+> bundle path, not `/lib64`.
+
+### Packaging
+
+The build script does strip → patchelf → bzip2 for both fio and libaio,
+then you run the strip normalizer (skips both via the RPATH guard):
+
+```bash
+./pre_built/build_scripts/build-fio.sh --tag fio-3.42
+./strip_all_elf_binaries
+git add pre_built/el8.x86_64.glibc2p28/bin/fio.bz2 \
+        pre_built/el8.x86_64.glibc2p28/lib64/libaio.so.1.bz2 \
+        .strip-manifest pre_built/packages.json \
+        pre_built/build_scripts/build-fio.sh \
+        pre_built/build_scripts/farm-versions \
+        pre_built/ADDING_BINARIES.md
+git commit -m 'feat(pre_built): fio 3.42 storage/filesystem benchmark'
+```
+
+### Install / usage
+
+```bash
+./loadout install fio
+fio --name=test --ioengine=libaio --rw=randread --size=1g --filename=./tf
+```
+
+`fio` is in `@engineering-loadout` automatically (the synthetic `all`
+expansion covers every non-group package).

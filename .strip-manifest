@@ -49,6 +49,7 @@ sha256  cfaf4bf343cea07f168e1af1609c7c0be928a80ca49b6e3ae27ea8dc238cdc1b  pre_bu
 sha256  db969b7f3972de6e6e9f253ca650b7c8b77cf472517a9523e2dcdb475c4986ff  pre_built/el8.x86_64.glibc2p28/bin/factor.bz2
 sha256  f0b7315442e816dc5869f13726cbc4102db5028e17b9cf4bff40716bcdb7a9aa  pre_built/el8.x86_64.glibc2p28/bin/false.bz2
 sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  pre_built/el8.x86_64.glibc2p28/bin/fd.bz2
+sha256  0a54580a36df9790a89a481cd6d87c1691963c6477b22e1548bd4fa248c4ffa4  pre_built/el8.x86_64.glibc2p28/bin/fio.bz2
 sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  pre_built/el8.x86_64.glibc2p28/bin/fish.bin.bz2
 sha256  353498eb29e767e3eee973fdd0d7be950877a03fc35445f6c379638023a98988  pre_built/el8.x86_64.glibc2p28/bin/fish.bz2
 sha256  2365eb19a164711291d447b6bcde4f4e1814b98721d3769fdfef84c71bc73302  pre_built/el8.x86_64.glibc2p28/bin/flameshot.bz2
@@ -227,6 +228,7 @@ sha256  b56f34d820c289e51964ee9d5e745f19fb795bc54e715f307e473649e4de152c  pre_bu
 sha256  d1104dba7715ef0336d9a307a2bce7f608b6710baf625eb76d088d08d8aac1a4  pre_built/el8.x86_64.glibc2p28/lib64/libXrender.so.1.bz2
 sha256  4008d80be12877256b6131a45d69186ad0ee7d4a8b57547d7f506f8a6ae4a951  pre_built/el8.x86_64.glibc2p28/lib64/libXt.so.6.bz2
 sha256  d5801d1ebb147580e27cd4cf9df92d0eb3ffd295b1a3b9305fb14467e7df1082  pre_built/el8.x86_64.glibc2p28/lib64/libaec.so.0.bz2
+sha256  29ceff62c97b5769ff06fdc21115ab29b8b71d841b24f35b29fc36b299032132  pre_built/el8.x86_64.glibc2p28/lib64/libaio.so.1.bz2
 sha256  f59a21e21baa47b9d6e58956e09d7f75d7e5325cdbe4e53c06909302c5150da9  pre_built/el8.x86_64.glibc2p28/lib64/libamd.so.2.bz2
 sha256  eb88ba1e34b795770629452a3f0d1555c25e6cdee6bd51053b6588201642cb9f  pre_built/el8.x86_64.glibc2p28/lib64/libarpack.so.2.bz2
 sha256  8618c9b29f68c6717816dc0f4c40027122fe1b344153221add53dff63f27671f  pre_built/el8.x86_64.glibc2p28/lib64/libasound.so.2.bz2

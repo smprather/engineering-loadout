@@ -486,6 +486,24 @@
       ],
       "description": "Fast and user-friendly find alternative"
     },
+    "fio": {
+      "kind": "bin",
+      "bins": [
+        "fio"
+      ],
+      "libs": [
+        "libaio.so.1",
+        "libz.so.1"
+      ],
+      "version": "3.42",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "benchmark"
+      ],
+      "description": "Flexible I/O tester \u2014 storage and filesystem performance benchmark"
+    },
     "fzf": {
       "kind": "bin",
       "bins": [
