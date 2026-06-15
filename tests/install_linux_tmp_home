@@ -179,57 +179,57 @@ if [[ -f "$repo_dir/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/tldr/tldr-pages.ta
     fi
 fi
 if [[ -d "$repo_dir/pre_built/el8.x86_64.glibc2p28" ]]; then
-    assert_exists "$test_home/.local/bin/fd"
-    assert_exists "$test_home/.local/bin/eza"
-    assert_exists "$test_home/.local/bin/tmux"
-    assert_exists "$test_home/.local/bin/choose"
-    assert_exists "$test_home/.local/bin/patchelf"
-    assert_exists "$test_home/.local/bin/nvim"
-    assert_exists "$test_home/.local/lib64/libevent_core-2.1.so.6"
-    rpath=$("$test_home/.local/bin/patchelf" --print-rpath "$test_home/.local/bin/tmux")
+    assert_exists "$test_home/local/bin/fd"
+    assert_exists "$test_home/local/bin/eza"
+    assert_exists "$test_home/local/bin/tmux"
+    assert_exists "$test_home/local/bin/choose"
+    assert_exists "$test_home/local/bin/patchelf"
+    assert_exists "$test_home/local/bin/nvim"
+    assert_exists "$test_home/local/lib64/libevent_core-2.1.so.6"
+    rpath=$("$test_home/local/bin/patchelf" --print-rpath "$test_home/local/bin/tmux")
     if [[ "$rpath" != *'$ORIGIN/../lib64'* ]]; then
         echo "Expected tmux RPATH to include vendored lib64 path, got: $rpath" >&2
         exit 1
     fi
 fi
 if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2" || -f "$repo_dir/vim/runtime.tar.bz2" ]]; then
-    assert_exists "$test_home/.local/share/vim/vim92/filetype.vim"
+    assert_exists "$test_home/local/share/vim/vim92/filetype.vim"
 fi
 if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" ]]; then
-    assert_exists "$test_home/.local/share/nvim/runtime/filetype.lua"
+    assert_exists "$test_home/local/share/nvim/runtime/filetype.lua"
 fi
 if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2" || -f "$repo_dir/helix/helix_runtime.tar.bz2" ]]; then
     assert_exists "$test_home/.config/helix/runtime/tutor"
 fi
-assert_exists "$test_home/.local/share/nvim/loadout/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua"
-assert_exists "$test_home/.local/share/nvim/loadout/vendor/treesitter-parser-registry/registry.json"
-assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser/python.so"
-assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/queries/python/highlights.scm"
-assert_exists "$test_home/.local/share/nvim/tree-sitter-parsers/parser-info/python.lua"
+assert_exists "$test_home/local/share/nvim/loadout/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua"
+assert_exists "$test_home/local/share/nvim/loadout/vendor/treesitter-parser-registry/registry.json"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/parser/python.so"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/queries/python/highlights.scm"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/parser-info/python.lua"
 
 # Active plugin bundle is seeded into lazy/ (with .git intact) so plugins work
 # offline; lazy.nvim itself is seeded too, making init.lua's bootstrap a no-op.
 if [[ -f "$repo_dir/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2" ]]; then
-    assert_exists "$test_home/.local/share/nvim/lazy/lazy.nvim/.git"
-    assert_exists "$test_home/.local/share/nvim/lazy/snacks.nvim/.git"
+    assert_exists "$test_home/local/share/nvim/lazy/lazy.nvim/.git"
+    assert_exists "$test_home/local/share/nvim/lazy/snacks.nvim/.git"
 fi
 
 nvim_bin=""
-if [[ -x "$test_home/.local/bin/nvim" ]]; then
-    nvim_bin="$test_home/.local/bin/nvim"
+if [[ -x "$test_home/local/bin/nvim" ]]; then
+    nvim_bin="$test_home/local/bin/nvim"
 elif command -v nvim >/dev/null; then
     nvim_bin=$(command -v nvim)
 fi
 
 if [[ -n "$nvim_bin" ]]; then
-    if [[ ! -d "$test_home/.local/share/nvim/lazy/lazy.nvim" ]]; then
+    if [[ ! -d "$test_home/local/share/nvim/lazy/lazy.nvim" ]]; then
         fake_git_dir="$test_home/fake-git-bin"
         mkdir -p "$fake_git_dir"
         printf '%s\n' '#!/usr/bin/env sh' 'exit 127' > "$fake_git_dir/git"
         chmod +x "$fake_git_dir/git"
         HOME="$test_home" \
             XDG_CONFIG_HOME="$test_home/.config" \
-            XDG_DATA_HOME="$test_home/.local/share" \
+            XDG_DATA_HOME="$test_home/local/share" \
             XDG_CACHE_HOME="$test_cache" \
             XDG_STATE_HOME="$test_state" \
             PATH="$fake_git_dir:$PATH" \
@@ -241,13 +241,13 @@ if [[ -n "$nvim_bin" ]]; then
     printf 'print("ok")\n' > "$test_home/tree-sitter-smoke.py"
     HOME="$test_home" \
         XDG_CONFIG_HOME="$test_home/.config" \
-        XDG_DATA_HOME="$test_home/.local/share" \
+        XDG_DATA_HOME="$test_home/local/share" \
         XDG_CACHE_HOME="$test_cache" \
         XDG_STATE_HOME="$test_state" \
         "$nvim_bin" --clean --headless -n "$test_home/tree-sitter-smoke.py" \
-        +"set runtimepath+=$test_home/.local/share/nvim/loadout/vendor/treesitter-parser-registry" \
-        +"set runtimepath+=$test_home/.local/share/nvim/loadout/vendor/nvim-treesitter" \
-        +"set runtimepath+=$test_home/.local/share/nvim/tree-sitter-parsers" \
+        +"set runtimepath+=$test_home/local/share/nvim/loadout/vendor/treesitter-parser-registry" \
+        +"set runtimepath+=$test_home/local/share/nvim/loadout/vendor/nvim-treesitter" \
+        +"set runtimepath+=$test_home/local/share/nvim/tree-sitter-parsers" \
         +'lua local expected = vim.env.HOME .. "/.local/share/nvim/runtime"; if not vim.o.runtimepath:find(expected, 1, true) then vim.api.nvim_err_writeln(vim.o.runtimepath); vim.cmd("cquit 1") end; if vim.fn.filereadable(expected .. "/filetype.lua") ~= 1 then vim.api.nvim_err_writeln(expected); vim.cmd("cquit 1") end' \
         +'lua local ok, err = pcall(function() require("nvim-treesitter").setup({ install_dir = vim.fn.stdpath("data") .. "/tree-sitter-parsers" }); vim.treesitter.start(0); vim.treesitter.get_parser(0, "python"):parse() end); if not ok then vim.api.nvim_err_writeln(err); vim.cmd("cquit 1") end; print("Tree-sitter smoke OK")' \
         +qa

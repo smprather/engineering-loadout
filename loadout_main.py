@@ -620,6 +620,42 @@ class InstallRefused(Exception):
     pass
 
 
+def _local_name(home):
+    """Name of the per-user tree under the install root: '.local' when the
+    root is the real $HOME, 'local' otherwise (an explicit --dest-dir tree).
+
+    Dot-hiding a 'local' dir only makes sense inside a user's HOME; a staged or
+    shared deployment under --dest-dir is a normal filesystem location (like
+    /usr/local), so it uses an un-dotted 'local'. '.config'/'.cache' are left
+    dotted regardless — they are only written for HOME installs.
+    """
+    try:
+        if os.path.realpath(home) == os.path.realpath(os.path.expanduser("~")):
+            return ".local"
+    except OSError:
+        return ".local"
+    return "local"
+
+
+def _resolve_install_to(raw, home):
+    """Anchor a packages.json 'install_to' (e.g. '~/.local/share/helix') to the
+    install root, mapping a leading '.local' component to _local_name(home).
+
+    Replaces the old crude `raw.replace('~', home)` so --dest-dir trees land
+    under 'local/...'. Absolute install_to values pass through unchanged.
+    """
+    if raw.startswith("~"):
+        rel = raw[1:].lstrip("/")
+    elif os.path.isabs(raw):
+        return raw
+    else:
+        rel = raw
+    parts = [p for p in rel.split("/") if p]
+    if parts and parts[0] == ".local":
+        parts[0] = _local_name(home)
+    return os.path.join(home, *parts)
+
+
 def display_name(path):
     home = os.path.expanduser("~")
     try:
@@ -1420,8 +1456,8 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
 
 def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     root_dir = os.path.join(repo_dir, "pre_built")
-    dest_bin_dir = os.path.join(home, ".local", "bin")
-    dest_lib64_dir = os.path.join(home, ".local", "lib64")
+    dest_bin_dir = os.path.join(home, _local_name(home), "bin")
+    dest_lib64_dir = os.path.join(home, _local_name(home), "lib64")
 
     if not os.path.isdir(root_dir):
         skipped(
@@ -1649,7 +1685,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     if _bins_unchanged_n or _libs_unchanged_n:
         _unchanged_note = f" ({_bins_unchanged_n} binaries + {_libs_unchanged_n} libraries already current, skipped)"
     print(
-        f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/.local/{_unchanged_note}"
+        f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/{_local_name(home)}/{_unchanged_note}"
     )
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
@@ -1702,7 +1738,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
             record_result("portable Python", "FAIL", "no install.sh")
             return
 
-        prefix = os.path.join(home, ".local")
+        prefix = os.path.join(home, _local_name(home))
         cmd = ["/bin/sh", installer, "--prefix", prefix, "--force", "--no-test"]
         print("  running: {}".format(" ".join(cmd)))
         proc = subprocess.run(cmd, capture_output=True)
@@ -1720,7 +1756,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         shutil.rmtree(tmp_dir)
 
     record_result("portable Python", "yes", "")
-    print(f"  Installed portable Python -> {home}/.local/")
+    print(f"  Installed portable Python -> {home}/{_local_name(home)}/")
 
 
 def install_typelibs(repo_dir, home, selected_tools=None):
@@ -1747,7 +1783,7 @@ def install_typelibs(repo_dir, home, selected_tools=None):
         record_result("GObject typelibs", "SKIP", "no typelib files")
         return
 
-    dest_dir = os.path.join(home, ".local", "lib", "girepository-1.0")
+    dest_dir = os.path.join(home, _local_name(home), "lib", "girepository-1.0")
     ensure_dir(dest_dir, "GObject typelibs")
 
     _p, _pt = _progress("GObject typelibs", len(typelib_files))
@@ -1797,8 +1833,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no wheels directory")
         return
 
-    uv_bin = os.path.join(home, ".local", "bin", "uv")
-    python_bin = os.path.join(home, ".local", "bin", "python3.14")
+    uv_bin = os.path.join(home, _local_name(home), "bin", "uv")
+    python_bin = os.path.join(home, _local_name(home), "bin", "python3.14")
     if not os.path.isfile(uv_bin):
         warn(f"uv not found at {uv_bin} — Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
@@ -1846,8 +1882,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
             _env = os.environ.copy()
             _env["HOME"] = home
-            _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
-            _env["XDG_BIN_HOME"] = os.path.join(home, ".local", "bin")
+            _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
+            _env["XDG_BIN_HOME"] = os.path.join(home, _local_name(home), "bin")
             print("  running: {}".format(" ".join(cmd)))
             proc = subprocess.run(cmd, capture_output=True, env=_env)
             out = proc.stdout.decode("utf-8", "replace")
@@ -2074,7 +2110,7 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None):
             if archive:
                 selected_zip_names.add(_logical_zip_name(archive))
     vendor_fonts_dir = os.path.join(repo_dir, "fonts")
-    user_fonts_dir = os.path.join(home, ".local", "share", "fonts")
+    user_fonts_dir = os.path.join(home, _local_name(home), "share", "fonts")
 
     if not os.path.isdir(vendor_fonts_dir):
         print("Installing fonts...")
@@ -2321,7 +2357,7 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
             record_result(f"{pkg_name} runtime", "SKIP", f"no bundled {archive_name}")
             continue
 
-        install_to = install_to_raw.replace("~", home)
+        install_to = _resolve_install_to(install_to_raw, home)
         ensure_dir(install_to, f"{pkg_name} runtime")
 
         rbe = entry.get("remove_before_extract")
@@ -2366,7 +2402,7 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
         record_result("Vim runtime", "SKIP", "no bundled runtime archive")
         return
 
-    vim_share_dir = os.path.join(home, ".local", "share", "vim")
+    vim_share_dir = os.path.join(home, _local_name(home), "share", "vim")
     runtime_dir = os.path.join(vim_share_dir, "runtime")
     vim92_dir = os.path.join(vim_share_dir, "vim92")
     ensure_dir(vim_share_dir, "Vim runtime")
@@ -2399,7 +2435,7 @@ def install_meld_runtime(repo_dir, home, selected_tools):
         record_result("Meld runtime", "SKIP", "no bundled runtime archive")
         return
 
-    local_dir = os.path.join(home, ".local")
+    local_dir = os.path.join(home, _local_name(home))
     ensure_dir(local_dir, "Meld runtime")
 
     # Remove stale meld-owned paths before re-extracting.
@@ -2462,7 +2498,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
         record_result("mate-terminal runtime", "SKIP", "no bundled runtime archive")
         return
 
-    local_dir = os.path.join(home, ".local")
+    local_dir = os.path.join(home, _local_name(home))
     ensure_dir(local_dir, "mate-terminal runtime")
 
     # Remove stale bundle paths before re-extracting.
@@ -2531,7 +2567,7 @@ def install_firefox_runtime(repo_dir, home, selected_tools):
         record_result("Firefox runtime", "SKIP", "no bundled runtime archive")
         return
 
-    local_dir = os.path.join(home, ".local")
+    local_dir = os.path.join(home, _local_name(home))
     ensure_dir(local_dir, "Firefox runtime")
 
     # Remove stale bundle paths before re-extracting.
@@ -2579,7 +2615,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
     # NVIM_QT_RUNTIME_PATH), then also copy the shim plugin directly into
     # ~/.local/share/nvim/site/plugin/ — that dir is on nvim's default runtimepath
     # unconditionally, which is more reliable than the NVIM_QT_RUNTIME_PATH env var.
-    nvim_qt_share = os.path.join(home, ".local", "share", "nvim-qt")
+    nvim_qt_share = os.path.join(home, _local_name(home), "share", "nvim-qt")
     ensure_dir(nvim_qt_share, "nvim-qt runtime")
     runtime_dir = os.path.join(nvim_qt_share, "runtime")
     remove_if_exists(runtime_dir)
@@ -2593,7 +2629,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
         return
 
     # Install shim into nvim site/plugin so it loads unconditionally in all nvim sessions.
-    site_plugin_dir = os.path.join(home, ".local", "share", "nvim", "site", "plugin")
+    site_plugin_dir = os.path.join(home, _local_name(home), "share", "nvim", "site", "plugin")
     ensure_dir(site_plugin_dir, "nvim-qt runtime (site plugin)")
     shim_dest = os.path.join(site_plugin_dir, "nvim_gui_shim.vim")
     shutil.copy2(shim_src, shim_dest)
@@ -2608,7 +2644,7 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         return
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, "treesitter", "prebuilt", platform)
-    dest_dir = os.path.join(home, ".local", "share", "nvim", "tree-sitter-parsers")
+    dest_dir = os.path.join(home, _local_name(home), "share", "nvim", "tree-sitter-parsers")
 
     if not os.path.isdir(os.path.join(src_dir, "parser")):
         skipped(
@@ -2666,7 +2702,7 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
         record_result("nvim-treesitter vendor", "SKIP", "treesitter-parsers not in selected packages")
         return
     src_root = os.path.join(repo_dir, "treesitter", "vendor")
-    dest_root = os.path.join(home, ".local", "share", "nvim", "loadout", "vendor")
+    dest_root = os.path.join(home, _local_name(home), "share", "nvim", "loadout", "vendor")
     if not (
         os.path.isdir(os.path.join(src_root, "nvim-treesitter"))
         and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))
@@ -2720,7 +2756,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
         record_result("nvim plugin bundle", "SKIP", "no bundle archive")
         return
 
-    nvim_share = os.path.join(home, ".local", "share", "nvim")
+    nvim_share = os.path.join(home, _local_name(home), "share", "nvim")
     lazy_dir = os.path.join(nvim_share, "lazy")
     ensure_dir(lazy_dir, "nvim plugin bundle")
     # Extract under the same filesystem as lazy/ so the per-plugin moves are renames.
@@ -2770,7 +2806,7 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         skipped("Neovim Lazy sync (env-nvim not selected)", "")
         record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
         return
-    nvim_bin = os.path.join(home, ".local", "bin", "nvim")
+    nvim_bin = os.path.join(home, _local_name(home), "bin", "nvim")
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
         skipped("Neovim Lazy sync (nvim binary not found)", f"install nvim first")
         record_result("Neovim Lazy sync", "SKIP", "nvim binary not found")
@@ -2787,8 +2823,8 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
     _env = os.environ.copy()
     _env["HOME"] = home
     _env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
-    _env["XDG_DATA_HOME"] = os.path.join(home, ".local", "share")
-    _env["XDG_STATE_HOME"] = os.path.join(home, ".local", "state")
+    _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
+    _env["XDG_STATE_HOME"] = os.path.join(home, _local_name(home), "state")
     _env["XDG_CACHE_HOME"] = os.path.join(home, ".cache")
     try:
         run([nvim_bin, "--headless", "+Lazy! sync", "+qa"], env=_env)

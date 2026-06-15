@@ -3,7 +3,7 @@
 test-prebuilt-binaries: smoke-test installed binary and runtime payloads.
 
 Runs ./loadout install @engineering-loadout --dest-dir /tmp/... --no-backup --skip @fonts-all,tldr-data to get
-a real deployment layout, then probes each executable in <dest>/.local/bin/ for:
+a real deployment layout, then probes each executable in <dest>/local/bin/ for:
   - exit 127  (loader failure / broken ELF)
   - exit 139  (SIGSEGV)
   - "symbol lookup error" / "undefined symbol" in output
@@ -153,7 +153,7 @@ def probe_binary(binary_path):
 
 def smoke_runtime_layout(tmpdir):
     failures = []
-    bin_dir = os.path.join(tmpdir, ".local", "bin")
+    bin_dir = os.path.join(tmpdir, "local", "bin")
 
     def has_bin(name):
         return os.path.exists(os.path.join(bin_dir, name))
@@ -162,18 +162,18 @@ def smoke_runtime_layout(tmpdir):
 
     if has_bin("nvim"):
         nvim = os.path.join(bin_dir, "nvim")
-        runtime = os.path.join(tmpdir, ".local", "share", "nvim", "runtime")
+        runtime = os.path.join(tmpdir, "local", "share", "nvim", "runtime")
         if require_path(os.path.join(runtime, "filetype.lua"), "nvim runtime", failures):
             env = os.environ.copy()
             env.update(
                 {
                     "HOME": tmpdir,
                     "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache", "nvim-smoke"),
-                    "XDG_STATE_HOME": os.path.join(tmpdir, ".local", "state", "nvim-smoke"),
+                    "XDG_STATE_HOME": os.path.join(tmpdir, "local", "state", "nvim-smoke"),
                 }
             )
             lua_check = (
-                "local expected = vim.env.HOME .. '/.local/share/nvim/runtime'; "
+                "local expected = vim.env.HOME .. '/local/share/nvim/runtime'; "
                 "local rtp = vim.o.runtimepath; "
                 "if not rtp:find(expected, 1, true) then "
                 "vim.api.nvim_err_writeln(rtp); vim.cmd('cquit 1'); end; "
@@ -205,19 +205,19 @@ def smoke_runtime_layout(tmpdir):
 
     if has_bin("vim") or has_bin("vim.bin"):
         require_path(
-            os.path.join(tmpdir, ".local", "share", "vim", "vim92", "filetype.vim"),
+            os.path.join(tmpdir, "local", "share", "vim", "vim92", "filetype.vim"),
             "vim runtime",
             failures,
         )
 
     if has_bin("hx"):
         require_path(
-            os.path.join(tmpdir, ".local", "share", "helix", "runtime", "tutor"),
+            os.path.join(tmpdir, "local", "share", "helix", "runtime", "tutor"),
             "helix runtime",
             failures,
         )
 
-    parsers = os.path.join(tmpdir, ".local", "share", "nvim", "tree-sitter-parsers")
+    parsers = os.path.join(tmpdir, "local", "share", "nvim", "tree-sitter-parsers")
     if os.path.isdir(parsers):
         require_path(os.path.join(parsers, "parser", "python.so"), "tree-sitter python parser", failures)
         require_path(os.path.join(parsers, "queries", "python", "highlights.scm"), "tree-sitter python query", failures)
@@ -239,7 +239,7 @@ def main(keep):
 
     Runs `./loadout install @engineering-loadout --dest-dir /tmp/... --no-backup
     --skip @fonts-all,tldr-data` to get a real deployment layout, then probes
-    each executable in <dest>/.local/bin/ for loader failures, signal crashes,
+    each executable in <dest>/local/bin/ for loader failures, signal crashes,
     "symbol lookup error" / "undefined symbol" in output. Also checks runtime
     sentinels for shipped editor payloads and runs Neovim headless against the
     installed runtime.
@@ -273,7 +273,7 @@ def main(keep):
             print(f"Install failed (exit {proc.returncode}):\n{install_out}")
             sys.exit(1)
 
-        bin_dir = os.path.join(tmpdir, ".local", "bin")
+        bin_dir = os.path.join(tmpdir, "local", "bin")
         if not os.path.isdir(bin_dir):
             print(f"ERROR: {bin_dir} not created by installer")
             sys.exit(1)
