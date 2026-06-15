@@ -212,7 +212,7 @@ def smoke_runtime_layout(tmpdir):
 
     if has_bin("hx"):
         require_path(
-            os.path.join(tmpdir, ".config", "helix", "runtime", "tutor"),
+            os.path.join(tmpdir, ".local", "share", "helix", "runtime", "tutor"),
             "helix runtime",
             failures,
         )
