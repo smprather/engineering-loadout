@@ -163,6 +163,38 @@
       ],
       "description": "liberty-filter \u2014 strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only"
     },
+    "lefdef-tools": {
+      "kind": "python-tool",
+      "bins": [
+        "lefdef-tools"
+      ],
+      "wheels": [
+        "lefdef-tools",
+        "click",
+        "rich-click",
+        "rich",
+        "markdown-it-py",
+        "mdurl",
+        "pygments"
+      ],
+      "uv_tool": "lefdef-tools",
+      "rolling_git": "https://github.com/smprather/lefdef-tools.git",
+      "version": "b9ac43e",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "lef",
+        "def",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "lefdef-tools \u2014 fast LEF/DEF parsing and query tools (Rust backend)"
+    },
     "liberty-tools": {
       "kind": "python-tool",
       "bins": [
@@ -2515,7 +2547,8 @@
         "time-plot",
         "text-serdes",
         "pygwalker",
-        "liberty-tools"
+        "liberty-tools",
+        "lefdef-tools"
       ],
       "description": "Optional Python tools installed via uv tool install"
     },
