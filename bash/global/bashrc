@@ -96,11 +96,11 @@ if [[ -f $HOME/.local/lib64/libqxcb.so ]]; then
     export QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64
 fi
 
-# Silence Mesa EGL loader "failed to get driver name" warnings — harmless noise
+# Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 export EGL_LOG_LEVEL=fatal
 
-# nvim-qt GUI shim runtime — enables :GuiFont, :GuiTabline, :GuiScrollBar, etc.
+# nvim-qt GUI shim runtime -- enables :GuiFont, :GuiTabline, :GuiScrollBar, etc.
 if [[ -d $HOME/.local/share/nvim-qt/runtime ]]; then
     export NVIM_QT_RUNTIME_PATH=$HOME/.local/share/nvim-qt/runtime
 fi

@@ -1,11 +1,11 @@
 #!/bin/sh
-# dev-onboard — bring a base AlmaLinux 8.10 machine up to loadout
+# dev-onboard -- bring a base AlmaLinux 8.10 machine up to loadout
 # development level.
 #
 # Prereqs: assumes the user has already cloned the repo and run a full
 # `./loadout install @engineering-loadout` so every bundled
 # tool is in ~/.local/bin and ~/.local/lib64. This script only installs
-# what's needed *to build and release the loadout itself* — system
+# what's needed *to build and release the loadout itself* -- system
 # packages (compilers, dev headers, scanning tools) and per-user
 # toolchains (rustup, nvm, gh auth) that the bundled tools can't ship.
 #
@@ -13,7 +13,7 @@
 # repos, already-installed toolchains.
 #
 # Usage:
-#   ./dev-onboard            # interactive — prompts before each phase
+#   ./dev-onboard            # interactive -- prompts before each phase
 #   ./dev-onboard --yes      # non-interactive
 #   ./dev-onboard --check    # print what would happen, change nothing
 #
@@ -50,7 +50,7 @@ ask()  {
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # ------------------------------------------------------------------ phase 1
-say "Phase 1 — Enable required dnf repos"
+say "Phase 1 -- Enable required dnf repos"
 
 if ! rpm -q epel-release >/dev/null 2>&1; then
     ask "Install epel-release?" && do_ "sudo dnf install -y epel-release"
@@ -81,7 +81,7 @@ if ! [ -f /etc/yum.repos.d/docker-ce.repo ]; then
 fi
 
 # ------------------------------------------------------------------ phase 2
-say "Phase 2 — Build toolchains (gcc, llvm, go, devtools)"
+say "Phase 2 -- Build toolchains (gcc, llvm, go, devtools)"
 
 if ask "Install Development Tools group + gcc-toolset-14?"; then
     do_ "sudo dnf groupinstall -y 'Development Tools'"
@@ -97,7 +97,7 @@ if ask "Install Go toolset module?"; then
 fi
 
 # ------------------------------------------------------------------ phase 3
-say "Phase 3 — Dev libraries (build headers for bundled tools)"
+say "Phase 3 -- Dev libraries (build headers for bundled tools)"
 
 # Group by purpose so re-runs only install missing pieces.
 CORE_DEV='autoconf automake bison byacc cmake ninja-build patchelf
@@ -135,10 +135,10 @@ fi
 if ask "Install X11 dev headers (vim/gvim/nedit-ng/urxvt/st/xterm)?"; then
     do_ "sudo dnf install -y $X11_DEV"
 fi
-if ask "Install GUI toolkit deps (GTK3, Qt5) — needed for gvim/nedit-ng/meld builds?"; then
+if ask "Install GUI toolkit deps (GTK3, Qt5) -- needed for gvim/nedit-ng/meld builds?"; then
     do_ "sudo dnf install -y $GUI_DEV"
 fi
-if ask "Install Octave build deps (large — ~50 -devel packages)?"; then
+if ask "Install Octave build deps (large -- ~50 -devel packages)?"; then
     do_ "sudo dnf install -y $OCTAVE_DEV"
 fi
 if ask "Install security scanners (clamav + yara) for release-gate scanning?"; then
@@ -147,7 +147,7 @@ if ask "Install security scanners (clamav + yara) for release-gate scanning?"; t
 fi
 
 # ------------------------------------------------------------------ phase 4
-say "Phase 4 — Release / CI tooling"
+say "Phase 4 -- Release / CI tooling"
 
 if ! have gh; then
     ask "Install gh CLI?" && do_ "sudo dnf install -y gh"
@@ -163,7 +163,7 @@ if ! have docker; then
 fi
 
 # ------------------------------------------------------------------ phase 5
-say "Phase 5 — Per-user toolchains (rust, node, uv tools)"
+say "Phase 5 -- Per-user toolchains (rust, node, uv tools)"
 
 if ! [ -x "$HOME/.cargo/bin/rustup" ]; then
     ask "Install Rust toolchain via rustup?" && {
@@ -180,7 +180,7 @@ if ! [ -d "$HOME/.nvm" ]; then
     }
 fi
 
-# uv ships with the loadout, but newer meson (>= 0.59) does not — needed
+# uv ships with the loadout, but newer meson (>= 0.59) does not -- needed
 # for foot/wayland-era builds. Install via uv tool so it sits in
 # ~/.local/share/uv/tools.
 if have uv && ! [ -x "$HOME/.local/share/uv/tools/meson/bin/meson" ]; then
@@ -190,7 +190,7 @@ if have uv && ! [ -x "$HOME/.local/share/uv/tools/meson/bin/meson" ]; then
 fi
 
 # ------------------------------------------------------------------ phase 6
-say "Phase 6 — Sanity check"
+say "Phase 6 -- Sanity check"
 
 cat <<'EOF' | tee -a "$LOG"
 

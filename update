@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""update — per-package updater for loadout.
+"""update -- per-package updater for loadout.
 
 Usage:
   ./update                        run all automated packages (no commit)
@@ -47,7 +47,7 @@ _YARA_ZIP_URL = "https://github.com/YARAHQ/yara-forge/releases/download/{tag}/ya
 _YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
 
 
-# ── package registry ──────────────────────────────────────────────────────────
+# -- package registry ----------------------------------------------------------
 
 # Fully automated: ./update runs end-to-end.
 # Dev-only repo artifacts (yara-rules, tldr-data, tmux-plugins) are not
@@ -100,7 +100,7 @@ BUILD_SCRIPTS = {
 IMPORT_SCRIPTS = {
     "portable-python": {
         "cmd": "./pre_built/build_scripts/import-portable-python <built-dir>",
-        "note": "DO NOT run strip_all_elf_binaries on the result — BOLT-optimized",
+        "note": "DO NOT run strip_all_elf_binaries on the result -- BOLT-optimized",
     },
 }
 
@@ -166,7 +166,7 @@ DOWNLOAD_ONLY = {
 }
 
 
-# ── packages.json helpers ─────────────────────────────────────────────────────
+# -- packages.json helpers -----------------------------------------------------
 
 
 def _load_packages():
@@ -223,15 +223,15 @@ def _classify(name):
     return None
 
 
-# ── output helpers ────────────────────────────────────────────────────────────
+# -- output helpers ------------------------------------------------------------
 
 
 def _sep(title="", width=72):
     if title:
         pad = max(0, width - len(title) - 4)
-        print("\n── {} {}".format(title, "─" * pad))
+        print("\n-- {} {}".format(title, "-" * pad))
     else:
-        print("─" * width)
+        print("-" * width)
 
 
 def _run(cmd, dry_run=False):
@@ -242,7 +242,7 @@ def _run(cmd, dry_run=False):
     return subprocess.call(cmd, cwd=REPO)
 
 
-# ── automated runners ─────────────────────────────────────────────────────────
+# -- automated runners ---------------------------------------------------------
 
 
 def _fetch_json(url):
@@ -277,7 +277,7 @@ def _run_yara_rules(dry_run=False, tag=None):
         with open(_YARA_TAG_FILE) as f:
             current_tag = f.read().strip()
     if current_tag == resolved_tag:
-        print(f"Already at {resolved_tag} — nothing to do.")
+        print(f"Already at {resolved_tag} -- nothing to do.")
         return True
 
     zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
@@ -389,7 +389,7 @@ def _run_env_nvim(dry_run=False):
     nvim_bin = os.path.expanduser("~/.local/bin/nvim")
 
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
-        print(f"ERROR: nvim not found at {nvim_bin} — run ./loadout install nvim first")
+        print(f"ERROR: nvim not found at {nvim_bin} -- run ./loadout install nvim first")
         return False
 
     # Step 1: update plugins via Lazy
@@ -398,7 +398,7 @@ def _run_env_nvim(dry_run=False):
     if not dry_run:
         rc = subprocess.call(cmd)
         if rc != 0:
-            print(f"WARNING: Lazy! update exited rc={rc} — continuing with repack")
+            print(f"WARNING: Lazy! update exited rc={rc} -- continuing with repack")
 
     if not os.path.isdir(lazy_dir):
         print(f"ERROR: lazy plugin dir not found at {lazy_dir}")
@@ -461,7 +461,7 @@ def _run_automated(name, dry_run=False, tag=None):
         return False
 
 
-# ── rolling-git wheels ──────────────────────────────────────────────────────────
+# -- rolling-git wheels ----------------------------------------------------------
 
 
 def _git(args, cwd=None):
@@ -550,7 +550,7 @@ def _run_rolling(name, dry_run=False, force=False):
     current = _pkg_version(name)
     remote_short = _remote_head_short(url)
     if not force and remote_short and remote_short in (current or "") and not dry_run:
-        print(f"Already at {current} (remote HEAD {remote_short}) — nothing to build.")
+        print(f"Already at {current} (remote HEAD {remote_short}) -- nothing to build.")
         return True
 
     if dry_run:
@@ -563,7 +563,7 @@ def _run_rolling(name, dry_run=False, force=False):
 
     uv = _find_uv()
     if not uv:
-        print("ERROR: uv not found — required to build rolling-git wheels")
+        print("ERROR: uv not found -- required to build rolling-git wheels")
         return False
 
     tmp = tempfile.mkdtemp(prefix=f"rolling-{name}-")
@@ -585,7 +585,7 @@ def _run_rolling(name, dry_run=False, force=False):
             version = _git(["rev-parse", "--short", "HEAD"], cwd=clone)
         print(f"  source version: {version}")
         if version == current and not force:
-            print(f"Already at {version} — source unchanged, skipping rebuild.")
+            print(f"Already at {version} -- source unchanged, skipping rebuild.")
             return True
 
         out_dir = os.path.join(tmp, "wheels")
@@ -625,7 +625,7 @@ def _run_rolling(name, dry_run=False, force=False):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-# ── guidance printers ─────────────────────────────────────────────────────────
+# -- guidance printers ---------------------------------------------------------
 
 
 def _show_build(name):
@@ -679,7 +679,7 @@ def _show_download(name):
     print("  4. git add pre_built/ .strip-manifest packages.json")
 
 
-# ── --list ────────────────────────────────────────────────────────────────────
+# -- --list --------------------------------------------------------------------
 
 
 def _fetch_latest_map():
@@ -732,7 +732,7 @@ def cmd_list(outdated_only=False):
     col = [20, 16, 12]
     hdr = "{:<{}} {:<{}} {:<{}} {}".format("PACKAGE", col[0], "KIND", col[1], "VERSION", col[2], "LATEST")
     print(hdr)
-    print("─" * 72)
+    print("-" * 72)
     for name, kind, ver in rows:
         if name in ROLLING_GIT:
             raw_latest = rolling_latest.get(name, "")
@@ -749,7 +749,7 @@ def cmd_list(outdated_only=False):
         print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
 
 
-# ── git commit ────────────────────────────────────────────────────────────────
+# -- git commit ----------------------------------------------------------------
 
 
 def _git_paths_for(name):
@@ -785,7 +785,7 @@ def git_commit(succeeded, dry_run=False):
         .strip()
     )
     if not status:
-        print("No changes detected — nothing to commit.")
+        print("No changes detected -- nothing to commit.")
         return
 
     msg = "chore: update {}\n\nUpdated by ./update:\n{}".format(
@@ -800,7 +800,7 @@ def git_commit(succeeded, dry_run=False):
     _run(["git", "commit", "-m", msg], dry_run)
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# -- main ----------------------------------------------------------------------
 
 ALL_KNOWN = (
     set(AUTOMATED)
@@ -834,7 +834,7 @@ ALL_KNOWN = (
     help="Version hint for nodejs and yara (e.g. v26.3.0 or 20260517).",
 )
 def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
-    """update — per-package updater for loadout.
+    """update -- per-package updater for loadout.
 
     With no arguments, runs every automated package end-to-end without
     committing. Pass package names to update specific items, or use the
@@ -896,7 +896,7 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
     elif all_ok:
         print("Done.")
     else:
-        print("Done (some automated items failed — see warnings above).")
+        print("Done (some automated items failed -- see warnings above).")
         sys.exit(1)
 
 

@@ -2,8 +2,8 @@
 # Build xterm from source for el8.x86_64.glibc2p28.
 #
 # Produces:
-#   - xterm   — X11 terminal emulator with Unicode, color, and Xft font support
-#   - resize  — terminal resize utility (shipped with xterm source tree)
+#   - xterm   -- X11 terminal emulator with Unicode, color, and Xft font support
+#   - resize  -- terminal resize utility (shipped with xterm source tree)
 #
 # Runtime deps (bundled in this repo's lib64/, pulled when xterm is selected):
 #   libXft, libXaw, libXmu, libXt, libX11, libXpm, libXrender, libICE,
@@ -51,7 +51,7 @@ done
 [ -n "$tag" ] || {
     echo "ERROR: --tag <version> required (e.g. --tag 410)" >&2
     echo "Stable tarballs: ${DIST_URL_BASE}/" >&2
-    echo "Policy: stable releases only — no git HEAD or dev builds." >&2
+    echo "Policy: stable releases only -- no git HEAD or dev builds." >&2
     exit 2
 }
 
@@ -62,7 +62,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -152,7 +152,7 @@ MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/xterm" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
         echo "WARNING: requires newer glibc than EL8 baseline" >&2 ;;
 esac

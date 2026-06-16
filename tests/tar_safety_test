@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tar_safety_test — focused test for safe_extract_tar's path-traversal,
+tar_safety_test -- focused test for safe_extract_tar's path-traversal,
 symlink-escape, hardlink-escape, and safe-relative-symlink behavior.
 
 Builds synthetic tarballs in memory, runs them through
@@ -94,16 +94,16 @@ def run_case(name, members, expect_reject):
 
 
 def main():
-    print("tar_safety_test — synthetic tarball safety checks")
+    print("tar_safety_test -- synthetic tarball safety checks")
     print("")
     cases = [
-        # 1. Plain file inside extraction root — must succeed.
+        # 1. Plain file inside extraction root -- must succeed.
         ("safe regular file", [("foo.txt", "file", "hello")], False),
-        # 2. Absolute member path — reject.
+        # 2. Absolute member path -- reject.
         ("absolute member path", [("/etc/passwd", "file", "evil")], True),
-        # 3. .. escape in member name — reject.
+        # 3. .. escape in member name -- reject.
         ("dotdot escape in name", [("../escape.txt", "file", "evil")], True),
-        # 4. Safe relative symlink inside extraction tree — must succeed.
+        # 4. Safe relative symlink inside extraction tree -- must succeed.
         (
             "safe relative symlink inside tree",
             [
@@ -113,11 +113,11 @@ def main():
             ],
             False,
         ),
-        # 5. Symlink whose target escapes via .. — reject.
+        # 5. Symlink whose target escapes via .. -- reject.
         ("symlink escape via dotdot", [("bad_link", "symlink", "../../etc/passwd")], True),
-        # 6. Symlink to absolute path — reject.
+        # 6. Symlink to absolute path -- reject.
         ("symlink escape via absolute", [("bad_link", "symlink", "/etc/passwd")], True),
-        # 7. Hardlink to a path outside root — reject.
+        # 7. Hardlink to a path outside root -- reject.
         ("hardlink escape", [("bad_hardlink", "hardlink", "../../etc/passwd")], True),
     ]
 

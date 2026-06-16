@@ -23,7 +23,7 @@ function Copy-Config {
     )
 
     if (-not (Test-Path $Source)) {
-        Write-Warning "  Skipping '$Dest' — source not found: $Source"
+        Write-Warning "  Skipping '$Dest' -- source not found: $Source"
         return
     }
 
@@ -290,7 +290,7 @@ if ($ahkDirs.Count -gt 1) {
     $ahkDir = $ahkDirs[0].FullName
     Write-Host "  Found existing AutoHotkey: $ahkDir"
 } else {
-    Write-Host "  No AutoHotkey found — downloading latest stable release..."
+    Write-Host "  No AutoHotkey found -- downloading latest stable release..."
     try {
         $release  = Invoke-RestMethod "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest" -UseBasicParsing
         $zipAsset = $release.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
@@ -316,7 +316,7 @@ if ($ahkDirs.Count -gt 1) {
 if ($ahkDir) {
     $ahkExe = Join-Path $ahkDir "AutoHotkey64.exe"
     if (-not (Test-Path $ahkExe)) {
-        Write-Warning "  AutoHotkey64.exe not found in $ahkDir — skipping."
+        Write-Warning "  AutoHotkey64.exe not found in $ahkDir -- skipping."
     } else {
         $oldAhk = "$startupDir\hotkeys.ahk"
         if (Test-Path $oldAhk) { Remove-Item $oldAhk -Force }

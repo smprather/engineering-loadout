@@ -149,9 +149,9 @@ MAX_GLIBC="$(readelf -V "$PDFTOTEXT_BIN" 2>/dev/null \
 echo "  Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "  OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "  OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo "==> Bundling companion shared libs not present in EL8 base ..."
@@ -162,7 +162,7 @@ OPENJP2_SO="$(ldconfig -p 2>/dev/null | grep 'libopenjp2\.so\.7' | awk '{print $
 
 for SOFILE in "$LCMS2_SO" "$OPENJP2_SO"; do
     if [ -z "$SOFILE" ] || [ ! -f "$SOFILE" ]; then
-        echo "  WARNING: could not locate $SOFILE — skipping bundle" >&2
+        echo "  WARNING: could not locate $SOFILE -- skipping bundle" >&2
         continue
     fi
     SONAME="$(basename "$SOFILE")"

@@ -16,7 +16,7 @@
 #   sudo dnf install cmake git gcc gcc-c++ patchelf bzip2 \
 #                    qt5-qtbase-devel qt5-qtsvg-devel
 #
-# Usage (run from any directory — script clones neovim-qt automatically):
+# Usage (run from any directory -- script clones neovim-qt automatically):
 #   /path/to/build-nvim-qt.sh --tag 0.2.19
 #   /path/to/build-nvim-qt.sh --tag 0.2.19 --clean   # wipe build/ first
 #
@@ -60,7 +60,7 @@ if [ -z "$tag" ]; then
     exit 1
 fi
 
-# ── toolchain setup ───────────────────────────────────────────────────────────
+# -- toolchain setup -----------------------------------------------------------
 
 if [ -r /opt/rh/gcc-toolset-14/enable ]; then
     # shellcheck disable=SC1091
@@ -69,7 +69,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -81,11 +81,11 @@ need patchelf 2>/dev/null || need "$PATCHELF"
 PATCHELF_BIN="$(command -v patchelf 2>/dev/null || echo "$PATCHELF")"
 
 pkg-config --exists Qt5Core 2>/dev/null || {
-    echo "Qt5Core not found via pkg-config — install qt5-qtbase-devel" >&2
+    echo "Qt5Core not found via pkg-config -- install qt5-qtbase-devel" >&2
     exit 1
 }
 
-# ── source checkout ───────────────────────────────────────────────────────────
+# -- source checkout -----------------------------------------------------------
 
 SRCDIR="/tmp/nvim-qt-build-${tag}"
 
@@ -98,7 +98,7 @@ cd "$SRCDIR"
 git fetch --tags
 git checkout "v${tag}"
 
-# ── build ─────────────────────────────────────────────────────────────────────
+# -- build ---------------------------------------------------------------------
 
 if [ "$clean" -eq 1 ] && [ -d build ]; then
     rm -rf build
@@ -116,7 +116,7 @@ echo "Build complete: $BIN"
 echo "Binary size:    $(ls -lh "$BIN" | awk '{print $5}') unstripped"
 echo ""
 
-# ── package ───────────────────────────────────────────────────────────────────
+# -- package -------------------------------------------------------------------
 
 WORK="/tmp/nvim-qt_tmp_${tag}"
 cp "$BIN" "$WORK"
@@ -134,7 +134,7 @@ cp "${WORK}.bz2" "$BIN_DIR/nvim-qt.bz2"
 echo ""
 echo "Installed: $BIN_DIR/nvim-qt.bz2"
 
-# ── update packages.json version ─────────────────────────────────────────────
+# -- update packages.json version ---------------------------------------------
 
 TOOLS_JSON="$REPO/pre_built/packages.json"
 python3 - "$TOOLS_JSON" "$tag" <<'PYEOF'
@@ -150,7 +150,7 @@ open(path, "w").write(txt)
 print("packages.json: nvim-qt version ->", ver)
 PYEOF
 
-# ── strip manifest ────────────────────────────────────────────────────────────
+# -- strip manifest ------------------------------------------------------------
 
 echo "Running strip_all_elf_binaries..."
 "$REPO/strip_all_elf_binaries"

@@ -151,7 +151,7 @@ def _nvm_bash(cmd):
     script = (
         'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"\n'
         '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"\n'
-        'command -v nvm >/dev/null 2>&1 || { echo "nvm not found — install nvm first"; exit 1; }\n' + cmd
+        'command -v nvm >/dev/null 2>&1 || { echo "nvm not found -- install nvm first"; exit 1; }\n' + cmd
     )
     proc = subprocess.run(
         ["/bin/bash", "-i", "-c", script],
@@ -204,7 +204,7 @@ EL8_GLIBC = (2, 28)
 
 
 def _parse_glibc_sym(sym):
-    """Parse 'GLIBC_2.17' → (2, 17) or None."""
+    """Parse 'GLIBC_2.17' -> (2, 17) or None."""
     m = re.match(r"GLIBC_([0-9]+)\.([0-9]+)", sym)
     if m:
         return (int(m.group(1)), int(m.group(2)))
@@ -296,7 +296,7 @@ def strip_binary(path):
         eprint(f"warning: strip returned {rc} for {path}")
         return
     after = os.path.getsize(path)
-    print(f"strip        : bin/node {round(before / 1024 / 1024, 1)} MB → {round(after / 1024 / 1024, 1)} MB")
+    print(f"strip        : bin/node {round(before / 1024 / 1024, 1)} MB -> {round(after / 1024 / 1024, 1)} MB")
 
 
 def patchelf_rpath(path):

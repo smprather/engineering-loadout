@@ -199,7 +199,7 @@ function Get-DefinitionPath {
 # =============================================================================
 
 # Replace PowerShell Unix-like aliases with real coreutils when available (e.g. Git for Windows).
-# sort/tee/kill/ps are intentionally skipped — they're used heavily in PS object pipelines.
+# sort/tee/kill/ps are intentionally skipped -- they're used heavily in PS object pipelines.
 # Find the coreutils directory once via a sentinel file (faster than per-command Get-Command calls).
 $__coreutilsDir = $env:PATH -split ';' |
     Where-Object { $_ -and (Test-Path (Join-Path $_ 'rm.exe')) } |
@@ -382,14 +382,14 @@ if ($profileCanUsePromptTools) {
     }
     $__initCache = "$env:LOCALAPPDATA\Microsoft\Windows\PowerShell\ProfileCache"
 
-    # zoxide (smarter cd — use 'z' and 'zi' for interactive)
+    # zoxide (smarter cd -- use 'z' and 'zi' for interactive)
     try {
         Invoke-CachedInit zoxide @('init', 'powershell') "$__initCache\zoxide.ps1"
     } catch {
         Write-Verbose "PowerShell profile: skipped zoxide initialization."
     }
 
-    # PSFzf — Ctrl+T file picker, Ctrl+R fuzzy history; falls back to built-in Ctrl+R if unavailable
+    # PSFzf -- Ctrl+T file picker, Ctrl+R fuzzy history; falls back to built-in Ctrl+R if unavailable
     if ($profileCanUsePSReadLine) {
         # Test-Path on each module dir is much faster than Get-Module -ListAvailable,
         # which walks and parses every module manifest on the system.

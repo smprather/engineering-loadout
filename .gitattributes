@@ -1,6 +1,6 @@
 # Files and directories excluded from "git archive" and GitHub's auto-generated
 # source archives (Source code .tar.gz / .zip on releases).
-# These are dev/build/AI tooling — end users do not need them to run ./loadout
+# These are dev/build/AI tooling -- end users do not need them to run ./loadout
 # or .\loadout.ps1.
 
 # AI / agent instructions
@@ -18,7 +18,7 @@
 /pre_built/build_scripts        export-ignore
 /pre_built/ADDING_BINARIES.md   export-ignore
 
-# Tree-sitter build tooling (prebuilt/ and vendor/ are kept — installer needs them)
+# Tree-sitter build tooling (prebuilt/ and vendor/ are kept -- installer needs them)
 /treesitter/build_parsers       export-ignore
 
 # Test harness

@@ -1,6 +1,6 @@
 # Vendored Shared Libraries
 
-Runtime dependencies vendored alongside binaries — no system library assumptions.
+Runtime dependencies vendored alongside binaries -- no system library assumptions.
 
 ## Always installed (core deps for default tools)
 

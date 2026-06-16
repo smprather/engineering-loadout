@@ -8,10 +8,10 @@ Reference for the build machine and the full workflow for adding a new binary.
 Platform directory: `el8.x86_64.glibc2p28`
 
 ```
-uname -r  → 6.6.87.2-microsoft-standard-WSL2
-ldd --version → ldd (GNU libc) 2.28
-gcc --version → gcc 14.2.1 (gcc-toolset-14, enabled in ~/.config/bash/user/bashrc)
-/usr/bin/gcc --version → gcc 8.5.0 (base system compiler, too old for most modern software)
+uname -r  -> 6.6.87.2-microsoft-standard-WSL2
+ldd --version -> ldd (GNU libc) 2.28
+gcc --version -> gcc 14.2.1 (gcc-toolset-14, enabled in ~/.config/bash/user/bashrc)
+/usr/bin/gcc --version -> gcc 8.5.0 (base system compiler, too old for most modern software)
 ```
 
 GCC 14 is sourced via `gcc-toolset-14` from the `appstream` repo:
@@ -31,7 +31,7 @@ uuid, zlib, libwebp, libtiff, libjpeg-turbo, glib2, harfbuzz, fribidi, pixman, p
 openssl, elfutils, libxml2, xxhash, lz4, zstd, libevent.
 
 **Not available anywhere** (not in appstream/baseos/epel/powertools):
-- `libgd-devel` — must build libgd from source if gd-based terminals needed
+- `libgd-devel` -- must build libgd from source if gd-based terminals needed
 
 ## Workflow
 
@@ -61,27 +61,27 @@ ldd /path/to/binary
 Compare against already-bundled libs in `lib64/`. Anything already there: free.
 Anything missing: decide whether to bundle or accept as system dependency.
 
-**NEVER bundle these — they must come from the system:**
+**NEVER bundle these -- they must come from the system:**
 
-- **glibc components**: `libc.so.6`, `libm.so.6`, `libpthread.so.0`, `libdl.so.2`, `librt.so.1` — must match the system's `ld-linux.so.2` exactly or you get `undefined symbol: _dl_audit_symbind_alt, version GLIBC_PRIVATE` crashes. Every EL8 system has glibc 2.28; never needed in the bundle.
-- **OpenGL dispatcher**: `libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` — must be the system's display-driver-linked version. Bundling causes crashes or wrong driver selection. Qt5 and GTK3 can be built without OpenGL (use `--no-opengl` or equivalent).
-- **C++ runtime**: `libstdc++.so.6`, `libgcc_s.so.1` — present on all EL8 systems; version mismatches with C++ exceptions are subtle.
+- **glibc components**: `libc.so.6`, `libm.so.6`, `libpthread.so.0`, `libdl.so.2`, `librt.so.1` -- must match the system's `ld-linux.so.2` exactly or you get `undefined symbol: _dl_audit_symbind_alt, version GLIBC_PRIVATE` crashes. Every EL8 system has glibc 2.28; never needed in the bundle.
+- **OpenGL dispatcher**: `libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` -- must be the system's display-driver-linked version. Bundling causes crashes or wrong driver selection. Qt5 and GTK3 can be built without OpenGL (use `--no-opengl` or equivalent).
+- **C++ runtime**: `libstdc++.so.6`, `libgcc_s.so.1` -- present on all EL8 systems; version mismatches with C++ exceptions are subtle.
 
 If any of these appear in `lib64/` from a previous mistake, remove them and purge from `~/.local/lib64` on deployed systems.
 
-**Safe to bundle**: everything else — libz, libpng, libX11, libreadline, libncurses, libfreetype, libfontconfig, libevent, libxxhash, Qt5, GTK3, glib2, ICU, pango, cairo, xcb extensions, xkbcommon, Wayland client libs. See `gui_libs` in `packages.json` as a worked example of a large GUI lib bundle.
+**Safe to bundle**: everything else -- libz, libpng, libX11, libreadline, libncurses, libfreetype, libfontconfig, libevent, libxxhash, Qt5, GTK3, glib2, ICU, pango, cairo, xcb extensions, xkbcommon, Wayland client libs. See `gui_libs` in `packages.json` as a worked example of a large GUI lib bundle.
 
 ### 3. Minimize the dep chain
 
 Before bundling 30 libs, check if the binary can be built with fewer features:
 
-- **Qt5**: brings ICU (~75 MB), SSL, kerberos, GL — never worth it for home-dir installs
+- **Qt5**: brings ICU (~75 MB), SSL, kerberos, GL -- never worth it for home-dir installs
 - **cairo + pango**: ~15 extra libs. Fine for a dedicated workstation, too heavy for ~4 GB quotas
 - **libgd**: not in any EL8 repo; if needed, build from source or skip gd-based terminals
 - **Lua**: adds `liblua-5.3.so`; usually optional (`--without-lua`)
 
 For gnuplot specifically: `--without-qt --without-cairo --without-lua --with-x --with-readline=gnu`
-gives dumb, x11, svg, postscript, eps, epslatex — enough for scientific plotting. Only 2 new libs
+gives dumb, x11, svg, postscript, eps, epslatex -- enough for scientific plotting. Only 2 new libs
 (readline, ncurses).
 
 ### 4. Bundle the binary
@@ -91,7 +91,7 @@ REPO=/path/to/engineering-loadout
 BIN_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/lib64"
 
-# Binary — order: strip → patchelf → compress. CRITICAL: always strip BEFORE patchelf.
+# Binary -- order: strip -> patchelf -> compress. CRITICAL: always strip BEFORE patchelf.
 # patchelf reorganizes ELF segments to fit the new RPATH string; strip after patchelf
 # sees .dynstr outside a PT_LOAD segment and corrupts the binary (symptom: "no version
 # information available" or symbol lookup errors at runtime).
@@ -105,10 +105,10 @@ bzip2 -k /tmp/mytool_tmp
 cp /tmp/mytool_tmp.bz2 "$BIN_DIR/mytool.bz2"
 chmod 644 "$BIN_DIR/mytool.bz2"   # bzip2 inherits source perms; normalize to 644
 
-# Shared lib — filename must be the SONAME (ldd shows "libfoo.so.3 => ...")
+# Shared lib -- filename must be the SONAME (ldd shows "libfoo.so.3 => ...")
 # Standalone libs (only needed by one binary with a fixed RPATH): no patchelf needed.
 # GUI libs that must find EACH OTHER (e.g. gui_libs group in lib64/): need RPATH $ORIGIN.
-# Order for libs that need patchelf: strip → patchelf → bzip2 (same rule as binaries).
+# Order for libs that need patchelf: strip -> patchelf -> bzip2 (same rule as binaries).
 cp /lib64/libfoo.so.3.x.y /tmp/libfoo_tmp
 /usr/bin/strip /tmp/libfoo_tmp
 # If this lib needs to find sibling libs in the same lib64/ dir:
@@ -118,7 +118,7 @@ cp /tmp/libfoo_tmp.bz2 "$LIB_DIR/libfoo.so.3.bz2"
 chmod 644 "$LIB_DIR/libfoo.so.3.bz2"
 ```
 
-The installer decompresses `bin/*.bz2` → `~/.local/bin` and `lib64/*.bz2` → `~/.local/lib64`.
+The installer decompresses `bin/*.bz2` -> `~/.local/bin` and `lib64/*.bz2` -> `~/.local/lib64`.
 RPATH is pre-baked into each binary in the repo (see above), so no post-install patchelf is needed.
 
 ### 5. Strip
@@ -128,7 +128,7 @@ RPATH is pre-baked into each binary in the repo (see above), so no post-install 
 ```
 
 Strips debug symbols from new `.bz2` payloads and records them in `.strip-manifest` so they're
-skipped on subsequent runs. Typical savings: 60–75% size reduction before compression.
+skipped on subsequent runs. Typical savings: 60-75% size reduction before compression.
 Never run on `portable-python-*.tar.bz2` (BOLT-optimized, in NOSTRIP list).
 
 ### 6. Update farm-versions
@@ -147,7 +147,7 @@ strategy_first(
     strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
 )
 
-# Custom extraction (e.g. gnuplot: "6.0 patchlevel 2" → "6.0.2")
+# Custom extraction (e.g. gnuplot: "6.0 patchlevel 2" -> "6.0.2")
 lambda binary: (lambda m: re.sub(r" patchlevel ", ".", m.group(1)) if m else None)(
     re.search(r"toolname ([0-9]+\.[0-9]+ patchlevel [0-9]+)", _run([binary, "--version"])))
 ```
@@ -170,25 +170,25 @@ Add an entry under `packages` in `pre_built/packages.json` (`schema_version: 3`)
 
 If the tool should ship with the full bundled set, also add `"mytool"` to
 the `@engineering-loadout` group's `members` list. There is no `default`
-field in schema 3 — users always name packages or groups explicitly.
+field in schema 3 -- users always name packages or groups explicitly.
 
 Key rules:
-- `kind` — one of `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`,
+- `kind` -- one of `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`,
   `python-tool`, `env`, `font`, `data`, `group`. For a normal pre-built binary use `bin`.
-- `bins` — every `bin/*.bz2` stem this build produces (e.g. `"vim"` lists `["vim", "vim.bin"]`,
+- `bins` -- every `bin/*.bz2` stem this build produces (e.g. `"vim"` lists `["vim", "vim.bin"]`,
   `"xterm"` lists `["xterm", "resize"]`).
-- `libs` — **only** lib64 stems that are *exclusively* owned by this tool (not needed by any
-  other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted — they are
+- `libs` -- **only** lib64 stems that are *exclusively* owned by this tool (not needed by any
+  other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted -- they are
   always installed regardless of tool selection.
-- `default: false` — if the tool should NOT be installed by default (e.g. large optional tools
+- `default: false` -- if the tool should NOT be installed by default (e.g. large optional tools
   like `octave`). Users opt in with `./loadout install mytool`. The legacy
   `optional: true` field still works but `default` is preferred.
-- `platforms` — list from `linux`, `macos`, `windows`. Resolver filters by current platform.
-- `tags` — free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
-- `depends` — list of hard-dep package names (or `@group` refs). Resolver auto-pulls them;
+- `platforms` -- list from `linux`, `macos`, `windows`. Resolver filters by current platform.
+- `tags` -- free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
+- `depends` -- list of hard-dep package names (or `@group` refs). Resolver auto-pulls them;
   skipping a hard dep raises `ResolverError` unless `--no-deps` or `--force`. Use for
   binary-needs-lib-bundle (e.g. `"gvim"` depends on `"gui_libs"` + `"vim92-runtime"`).
-- `recommends` — list of soft-dep package names. Silently dropped if skipped.
+- `recommends` -- list of soft-dep package names. Silently dropped if skipped.
 
 For a tool with a single binary, no exclusive libs, and no deps:
 `"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "default": true, "description": "..."}`.
@@ -229,10 +229,10 @@ sudo ninja -C build install
 ```
 
 All deps (libuv, tree-sitter, luajit, libvterm, etc.) are bundled statically by the build
-system. The resulting binary links only against glibc components — no libs to bundle.
+system. The resulting binary links only against glibc components -- no libs to bundle.
 
-Binary: 33 MB unstripped (RelWithDebInfo) → 5.9 MB stripped → 2.6 MB compressed.
-Runtime archive (`nvim.tar.bz2`): 27 MB uncompressed → 4.8 MB compressed.
+Binary: 33 MB unstripped (RelWithDebInfo) -> 5.9 MB stripped -> 2.6 MB compressed.
+Runtime archive (`nvim.tar.bz2`): 27 MB uncompressed -> 4.8 MB compressed.
 Installer extracts runtime to `~/.local/share/nvim/runtime/`.
 See `pre_built/build_scripts/build-nvim.sh` for the full rebuild recipe.
 
@@ -251,7 +251,7 @@ Built from source to avoid Qt5 dep chain. Configure flags used:
 ```
 
 New libs bundled: `libreadline.so.7`, `libncurses.so.6`.
-Runtime data (`share/gnuplot/6.0/`) not bundled — binary works without it for core terminals
+Runtime data (`share/gnuplot/6.0/`) not bundled -- binary works without it for core terminals
 (svg, postscript, x11, dumb all tested OK). If help or color palettes are needed later,
 package `share/gnuplot/` as `gnuplot-runtime.tar.bz2` and add installer support.
 
@@ -261,7 +261,7 @@ Built without Qt, Java, OpenGL, FLTK, or X11. Plots work via gnuplot backend (al
 RapidJSON disabled to avoid a GCC 14 read-only-member compile error.
 
 ```bash
-# Enable GCC 14 (required — GCC 8.5 from base is too old for Octave 11)
+# Enable GCC 14 (required -- GCC 8.5 from base is too old for Octave 11)
 . /opt/rh/gcc-toolset-14/enable
 
 ./configure \
@@ -279,10 +279,10 @@ make -j$(nproc) && make install
 See `pre_built/build_scripts/build-octave.sh` for the full bundling recipe.
 
 **Binary layout:**
-- `bin/octave.bz2` — thin 16K launcher (stripped), RPATH = `$ORIGIN/../lib64`
-- `lib64/liboctave.so.13.bz2`, `liboctinterp.so.15.bz2`, `liboctmex.so.1.bz2` — core libs, RPATH = `$ORIGIN`
+- `bin/octave.bz2` -- thin 16K launcher (stripped), RPATH = `$ORIGIN/../lib64`
+- `lib64/liboctave.so.13.bz2`, `liboctinterp.so.15.bz2`, `liboctmex.so.1.bz2` -- core libs, RPATH = `$ORIGIN`
 - 35 exclusive dep libs in `lib64/` (FFTW, HDF5, BLAS, SuiteSparse, GFortran, audio, GLPK, QHull, ...)
-- `runtime/octave.tar.bz2` — m-files (`share/octave/11.1.0/`) + compiled plugins (`lib/octave/11.1.0/oct/`, patchelf'd RPATH = `$ORIGIN/../../../../../lib64`)
+- `runtime/octave.tar.bz2` -- m-files (`share/octave/11.1.0/`) + compiled plugins (`lib/octave/11.1.0/oct/`, patchelf'd RPATH = `$ORIGIN/../../../../../lib64`)
 
 **What is NOT bundled:** doc (saves ~5.6 MB), Qt/FLTK/X11 (no display on headless machines).
 
@@ -290,16 +290,16 @@ See `pre_built/build_scripts/build-octave.sh` for the full bundling recipe.
 
 ## Disk quota considerations
 
-Home directory quotas on shared compute systems are typically small (~4–10 GB). Rough sizes after stripping:
+Home directory quotas on shared compute systems are typically small (~4-10 GB). Rough sizes after stripping:
 
 | Category                 | Example                          | Approx size (uncompressed) |
 |--------------------------|----------------------------------|---------------------------|
-| Rust/Go binaries         | rg, fd, bat, eza, starship       | 0.5–3 MB each             |
-| C binaries               | gnuplot, htop, tmux              | 0.3–1.5 MB each           |
+| Rust/Go binaries         | rg, fd, bat, eza, starship       | 0.5-3 MB each             |
+| C binaries               | gnuplot, htop, tmux              | 0.3-1.5 MB each           |
 | Qt5/GTK3 + xcb + Wayland | gui_libs optional package        | ~200 MB total             |
-|   └─ ICU data alone      | libicudata.so.60                 | ~26 MB                    |
-|   └─ Qt5 Core            | libQt5Core.so.5                  | ~14 MB                    |
-|   └─ GTK3                | libgtk-3.so.0                    | ~13 MB                    |
+|   `- ICU data alone      | libicudata.so.60                 | ~26 MB                    |
+|   `- Qt5 Core            | libQt5Core.so.5                  | ~14 MB                    |
+|   `- GTK3                | libgtk-3.so.0                    | ~13 MB                    |
 | Cairo+pango chain        | (subset of gui_libs)             | ~15 MB                    |
 | gvim (optional)          | GTK3 GUI vim 9.2                 | ~5 MB                     |
 | nedit-ng (optional)      | Qt5 NEdit rewrite                | ~8 MB                     |
@@ -307,8 +307,8 @@ Home directory quotas on shared compute systems are typically small (~4–10 GB)
 | Treesitter parsers       | all platforms                    | ~20 MB                    |
 | Octave (optional)        | octave 11.1.0                    | ~163 MB                   |
 
-Future: consider splitting pre_built into lightweight (→ `~/.local`) and heavyweight
-(→ shared filesystem, symlinked from `~/.local`). See memory file `project_prebuilt_bifurcation.md`.
+Future: consider splitting pre_built into lightweight (-> `~/.local`) and heavyweight
+(-> shared filesystem, symlinked from `~/.local`). See memory file `project_prebuilt_bifurcation.md`.
 
 ## gvim build notes (vim 9.2.458, added 2026-05-16)
 
@@ -337,7 +337,7 @@ make -j$(nproc)
 # Binary at src/vim
 ```
 
-**Packaging (strip → patchelf → bzip2):**
+**Packaging (strip -> patchelf -> bzip2):**
 ```bash
 cp src/vim /tmp/gvim_tmp
 /usr/bin/strip /tmp/gvim_tmp
@@ -346,14 +346,14 @@ bzip2 -k /tmp/gvim_tmp
 cp /tmp/gvim_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
 ```
 
-**gvim wrapper** (`gvim.bz2`): shell script that sets `VIM`/`VIMRUNTIME` and execs `gvim.bin -g "$@"` to force GUI mode regardless of argv[0]. Not an ELF — recorded in `.strip-manifest` as a non-ELF skip.
+**gvim wrapper** (`gvim.bz2`): shell script that sets `VIM`/`VIMRUNTIME` and execs `gvim.bin -g "$@"` to force GUI mode regardless of argv[0]. Not an ELF -- recorded in `.strip-manifest` as a non-ELF skip.
 
-Binary sizes: 4.5 MB unstripped → 1.9 MB stripped → ~740 KB bzip2.
+Binary sizes: 4.5 MB unstripped -> 1.9 MB stripped -> ~740 KB bzip2.
 See `pre_built/build_scripts/build-gvim.sh` for the full recipe.
 
 ## nedit-ng build notes (v2.0.1, commit 72661f5, added 2026-05-16)
 
-Qt5 CMake rewrite of NEdit. Single self-contained binary — Qt .qrc embeds all resources, no runtime files needed. Requires gcc-toolset-14 and Qt5 devel packages.
+Qt5 CMake rewrite of NEdit. Single self-contained binary -- Qt .qrc embeds all resources, no runtime files needed. Requires gcc-toolset-14 and Qt5 devel packages.
 
 **Prerequisites:**
 ```bash
@@ -373,7 +373,7 @@ cmake --build build -j$(nproc)
 # Binary at build/nedit-ng
 ```
 
-**Packaging (strip → bzip2, no patchelf — Qt5 libs already in lib64/):**
+**Packaging (strip -> bzip2, no patchelf -- Qt5 libs already in lib64/):**
 ```bash
 cp build/nedit-ng /tmp/nedit_tmp
 /usr/bin/strip /tmp/nedit_tmp
@@ -384,7 +384,7 @@ cp /tmp/nedit_tmp.bz2 pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
 nedit-ng is `optional: true` in `packages.json` because it requires `gui_libs`. Install together:
 `./loadout install gui_libs,nedit-ng`.
 
-Binary sizes: 3.8 MB unstripped → 3.1 MB stripped → ~1.1 MB bzip2.
+Binary sizes: 3.8 MB unstripped -> 3.1 MB stripped -> ~1.1 MB bzip2.
 See `pre_built/build_scripts/build-nedit-ng.sh` for the full recipe.
 
 ## gui_libs bundle notes (added 2026-05-16)
@@ -402,7 +402,7 @@ export QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64
 ```
 Qt finds plugins directly in that directory (no `platforms/` subdirectory needed).
 
-**Critical: never bundle** `libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` — these must be
+**Critical: never bundle** `libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` -- these must be
 the system's display-driver version. Qt5 and GTK3 work fine without them for non-OpenGL GUIs.
 
 **Transitive dep closure script** used to find all deps recursively:
@@ -414,7 +414,7 @@ See session history for the full `/tmp/dep_closure.sh` script.
 
 ## nvim-qt build notes (v0.2.19, added 2026-05-2x)
 
-Qt5 GUI frontend for Neovim. CMake build — no Rust, no GPU renderer. No Docker needed.
+Qt5 GUI frontend for Neovim. CMake build -- no Rust, no GPU renderer. No Docker needed.
 At runtime the binary resolves Qt5 from `~/.local/lib64` (gui_libs) via pre-baked RPATH,
 so users don't need a system Qt5 install.
 
@@ -438,7 +438,7 @@ cmake --build build -j$(nproc)
 # Binary at build/bin/nvim-qt
 ```
 
-**Packaging (strip → patchelf → bzip2):**
+**Packaging (strip -> patchelf -> bzip2):**
 ```bash
 cp build/bin/nvim-qt /tmp/nvim-qt_tmp
 /usr/bin/strip /tmp/nvim-qt_tmp
@@ -483,7 +483,7 @@ make -j$(nproc) && make install
 # Binaries at /tmp/xterm-install/bin/xterm and /tmp/xterm-install/bin/resize
 ```
 
-**Packaging (strip → patchelf → bzip2, both binaries):**
+**Packaging (strip -> patchelf -> bzip2, both binaries):**
 ```bash
 for b in xterm resize; do
     cp /tmp/xterm-install/bin/$b /tmp/${b}_tmp
@@ -508,7 +508,7 @@ so `libtcl8.6.so` can be bundled alongside `expect`.
 GCC 14 promotes `-Wimplicit-int`, `-Wimplicit-function-declaration`, and
 `-Wincompatible-pointer-types` to errors. expect's autoconf test code is C89-style and
 trips all three. Without this fix, the `struct termios` detection fails, PTY detection
-fails, and configure selects the wrong `pty_.c` — the build may succeed but expect won't
+fails, and configure selects the wrong `pty_.c` -- the build may succeed but expect won't
 work correctly.
 
 Add to CFLAGS for both Tcl and expect configure:
@@ -532,7 +532,7 @@ Tcl_ChannelType expChannelType = {
 /* Fixed: */
 Tcl_ChannelType expChannelType = {
     "exp",                      /* Type name. */
-    TCL_CHANNEL_VERSION_4,      /* Version. */         ← inserted
+    TCL_CHANNEL_VERSION_4,      /* Version. */         <- inserted
     ExpCloseProc,               /* Close proc. */
     ExpInputProc,               /* Input proc. */
     ExpOutputProc,              /* Output proc. */
@@ -542,7 +542,7 @@ Tcl_ChannelType expChannelType = {
     ExpWatchProc,               /* Initialize notifier. */
     ExpGetHandleProc,           /* Get OS handles out of channel. */
     NULL,                       /* Close2 proc */
-    ExpBlockModeProc,           /* Set blocking/nonblocking mode. */ ← moved to slot 12
+    ExpBlockModeProc,           /* Set blocking/nonblocking mode. */ <- moved to slot 12
 };
 ```
 
@@ -596,7 +596,7 @@ bzip2 -k /tmp/libtcl86_work
 cp /tmp/libtcl86_work.bz2 pre_built/el8.x86_64.glibc2p28/lib64/libtcl8.6.so.bz2
 ```
 
-Max glibc symbol: GLIBC_2.17 — well within EL8's 2.28 ceiling.
+Max glibc symbol: GLIBC_2.17 -- well within EL8's 2.28 ceiling.
 
 See `pre_built/build_scripts/build-expect.sh` for the full recipe (includes the
 exp_chan.c patcher and automatic packages.json version update).
@@ -617,21 +617,21 @@ PIP_REQUIRE_VIRTUALENV=0 pip3.14 download <pkg> \
   -d pre_built/el8.x86_64.glibc2p28/wheels/
 ```
 
-`manylinux_2_28_x86_64` accepts all wheels with minimum glibc ≤ 2.28:
-manylinux1 (2.5) → manylinux2010 (2.12) → manylinux2014/manylinux_2_17 → ... → manylinux_2_28.
+`manylinux_2_28_x86_64` accepts all wheels with minimum glibc <= 2.28:
+manylinux1 (2.5) -> manylinux2010 (2.12) -> manylinux2014/manylinux_2_17 -> ... -> manylinux_2_28.
 It does NOT pull manylinux_2_29+ wheels (those require RHEL9/glibc 2.29+, won't run on EL8).
 
-**Do NOT use `--platform manylinux2014_x86_64`** — that is equivalent to manylinux_2_17 and
+**Do NOT use `--platform manylinux2014_x86_64`** -- that is equivalent to manylinux_2_17 and
 will miss wheels tagged manylinux_2_18 through manylinux_2_28 (e.g. numpy 2.x for cp314
 ships as manylinux_2_27 minimum; `--platform manylinux2014_x86_64` won't find it).
 
 If `pip download` fails even with `manylinux_2_28_x86_64 --only-binary :all:`, the package
 has no pre-built cp314 wheel compatible with EL8 and must be built from source (see below).
 
-### duckdb cp314 status — resolved in 1.4.2
+### duckdb cp314 status -- resolved in 1.4.2
 
 **Status (verified 2026-05-27):** duckdb added Python 3.14 support in **v1.4.2** (November 2025,
-via duckdb/duckdb-python#116). cp314 wheels are available on PyPI for duckdb ≥ 1.4.2.
+via duckdb/duckdb-python#116). cp314 wheels are available on PyPI for duckdb >= 1.4.2.
 
 The standard `pip download` command works:
 ```bash
@@ -646,7 +646,7 @@ No source build required. pygwalker's duckdb dep is not a blocker.
 **Package name:** `modules`  **Kind:** `runtime`  **Version:** 5.6.1  
 **Source:** https://github.com/envmodules/modules/releases/tag/v5.6.1
 
-Pure Tcl — no compiled binary, no ELF, no patchelf needed.  The key artifact is
+Pure Tcl -- no compiled binary, no ELF, no patchelf needed.  The key artifact is
 `modulecmd.tcl`, a self-contained Tcl script.  It derives MODULESHOME at runtime from
 `[info script]` so the build prefix is irrelevant once deployed.
 
@@ -713,26 +713,26 @@ from the tag automatically.
 ### Prerequisites
 
 ```bash
-# EL8 base packages — usually already installed
+# EL8 base packages -- usually already installed
 dnf install gcc make
 ```
 
-No `tcl-devel` needed — builds only the runtime (no C extension).
+No `tcl-devel` needed -- builds only the runtime (no C extension).
 
 ### Build output
 
-- `pre_built/el8.x86_64.glibc2p28/bin/tclsh.bz2` — tclsh binary (15 KB stub; thin shim that calls into libtcl9.0.so)
-- `pre_built/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2` — shared library (contains ALL of Tcl including stdlib)
+- `pre_built/el8.x86_64.glibc2p28/bin/tclsh.bz2` -- tclsh binary (15 KB stub; thin shim that calls into libtcl9.0.so)
+- `pre_built/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2` -- shared library (contains ALL of Tcl including stdlib)
 
 **No runtime archive needed.** Tcl 9.x embeds its entire standard library (`init.tcl`, `auto.tcl`, etc.)
 inside `libtcl9.0.so` via zipfs (a built-in virtual filesystem).  At startup, the shared library mounts
-its embedded zip as `//zipfs:/lib/tcl/tcl_library` — no filesystem path required.  This is a fundamental
+its embedded zip as `//zipfs:/lib/tcl/tcl_library` -- no filesystem path required.  This is a fundamental
 change from Tcl 8.6 (which required a separate `lib/tcl8.6/` directory).
 
 ### Standard library self-location
 
 Tcl 9.0 stdlib is embedded in `libtcl9.0.so`. The `tclsh` stub finds it automatically via the
-shared library — no `TCL_LIBRARY` env var needed, no separate directory to deploy.
+shared library -- no `TCL_LIBRARY` env var needed, no separate directory to deploy.
 
 ### patchelf layout
 
@@ -761,7 +761,7 @@ Built with gcc on EL8; max glibc symbol verified at GLIBC_2.17 or lower.
 ```
 
 Installs tclsh to `~/.local/bin/`, `libtcl9.0.so` to `~/.local/lib64/`.
-No separate standard library directory — stdlib is embedded in libtcl9.0.so.
+No separate standard library directory -- stdlib is embedded in libtcl9.0.so.
 
 ---
 
@@ -795,7 +795,7 @@ dnf install readline-devel ncurses-devel fftw-devel gcc gcc-c++ make bison flex
 ### Build output
 
 - `pre_built/el8.x86_64.glibc2p28/bin/ngspice.bz2` (2.6 MB compressed)
-- `pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2` — `./share/ngspice/scripts/` (spinit, codemodels)
+- `pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2` -- `./share/ngspice/scripts/` (spinit, codemodels)
 
 ngspice looks for `spinit` and code model scripts in `share/ngspice/scripts/` relative to
 its install prefix. Archive extracts to `~/.local/share/ngspice/` so ngspice finds them
@@ -832,7 +832,7 @@ Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scr
 
 ## p7zip 16.02
 
-**Tool:** p7zip — Unix port of 7-Zip; standalone `7za` binary  
+**Tool:** p7zip -- Unix port of 7-Zip; standalone `7za` binary  
 **Version:** 16.02 (latest stable; SourceForge project stalled here)  
 **Source:** https://sourceforge.net/projects/p7zip/files/p7zip/16.02/  
 **Built:** 2026-05-30
@@ -853,9 +853,9 @@ gcc-toolset-14 works (with GCC 14 compat patches applied by build script).
 
 Three GCC 14 compat patches applied inline by the script:
 
-1. **`makefile.machine` OPTFLAGS**: add `-Wno-narrowing` — suppresses narrowing
+1. **`makefile.machine` OPTFLAGS**: add `-Wno-narrowing` -- suppresses narrowing
    warnings from HRESULT enum constants (`E_OUTOFMEMORY`, `E_INVALIDARG`) in
-   `ErrorMsg.cpp`. GCC ≥ 7 treats these as errors.
+   `ErrorMsg.cpp`. GCC >= 7 treats these as errors.
 
 2. **`CPP/7zip/Archive/7z/7zUpdate.cpp:817`**: change `file.Open(ui.Name)` to
    `file.Open(us2fs(ui.Name))`. `CInFile::Open()` takes `CFSTR` (i.e., `const char*`)
@@ -869,7 +869,7 @@ Three GCC 14 compat patches applied inline by the script:
    which activates `USE_WIN_FILE`, so the real implementations are used and the stubs
    are dead code. Stubs guard the `\!USE_WIN_FILE` case (other bundle targets).
 
-**CRITICAL:** Do NOT pass `LOCAL_FLAGS=` on the make command line — it overrides the
+**CRITICAL:** Do NOT pass `LOCAL_FLAGS=` on the make command line -- it overrides the
 definition in `CPP/7zip/Bundles/Alone/makefile.list` which sets `-DUNIX_USE_WIN_FILE`,
 `-DENV_UNIX`, `-DBREAK_HANDLER`, `-DUNICODE`, etc. All extra flags go in `makefile.machine`'s `OPTFLAGS`.
 
@@ -899,9 +899,9 @@ Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
 
 ---
 
-## pdftotext (poppler 22.12.0) — EL8 source build
+## pdftotext (poppler 22.12.0) -- EL8 source build
 
-**Why 22.12.0, not latest**: poppler ≥ 23.01.0 requires Freetype ≥ 2.10; EL8 ships Freetype 2.9.1. Version 22.12.0 is the latest release requiring only Freetype 2.8. When EL8 advances its Freetype, rebuild with a newer poppler tag.
+**Why 22.12.0, not latest**: poppler >= 23.01.0 requires Freetype >= 2.10; EL8 ships Freetype 2.9.1. Version 22.12.0 is the latest release requiring only Freetype 2.8. When EL8 advances its Freetype, rebuild with a newer poppler tag.
 
 ### Prerequisites
 
@@ -925,9 +925,9 @@ Source: `https://poppler.freedesktop.org/poppler-22.12.0.tar.xz`
 
 | Flag | Value | Reason |
 |------|-------|--------|
-| `BUILD_SHARED_LIBS` | OFF | Static libpoppler → single self-contained binary |
+| `BUILD_SHARED_LIBS` | OFF | Static libpoppler -> single self-contained binary |
 | `ENABLE_UTILS` | ON | Build pdftotext and other utils |
-| `ENABLE_GLIB` | OFF | No GLib/GObject bindings needed; avoids glib ≥ 2.88 dep |
+| `ENABLE_GLIB` | OFF | No GLib/GObject bindings needed; avoids glib >= 2.88 dep |
 | `ENABLE_QT5/QT6` | OFF | No Qt bindings needed |
 | `ENABLE_NSS3` | OFF | No PDF encryption support; avoids NSS dep |
 | `ENABLE_LIBCURL` | OFF | No remote PDF URI support; avoids libcurl and transitive SSL deps |
@@ -939,23 +939,23 @@ Source: `https://poppler.freedesktop.org/poppler-22.12.0.tar.xz`
 
 | Library | Source | On EL8 base? |
 |---------|--------|--------------|
-| libfreetype.so.6 | EL8 system | ✓ always |
-| libfontconfig.so.1 | EL8 system | ✓ always |
-| libjpeg.so.62 | EL8 system | ✓ always |
-| libpng16.so.16 | EL8 system | ✓ always |
-| libtiff.so.5 | EL8 system | ✓ almost always |
-| libpthread.so.0 | EL8 system (glibc) | ✓ always |
-| libm.so.6, libc.so.6 | EL8 system (glibc) | ✓ always |
-| libbz2.so.1 | EL8 system | ✓ always |
-| libz.so.1 | EL8 system | ✓ always |
-| libexpat.so.1 | EL8 system | ✓ always |
-| libuuid.so.1 | EL8 system | ✓ always |
-| libjbig.so.2.1 | EL8 system (libtiff dep) | ✓ with libtiff |
-| libgcc_s.so.1, libstdc++.so.6 | EL8 system | ✓ always |
-| **liblcms2.so.2** | **bundled** | ✗ powertools only |
-| **libopenjp2.so.7** | **bundled** | ✗ powertools only |
+| libfreetype.so.6 | EL8 system | OK always |
+| libfontconfig.so.1 | EL8 system | OK always |
+| libjpeg.so.62 | EL8 system | OK always |
+| libpng16.so.16 | EL8 system | OK always |
+| libtiff.so.5 | EL8 system | OK almost always |
+| libpthread.so.0 | EL8 system (glibc) | OK always |
+| libm.so.6, libc.so.6 | EL8 system (glibc) | OK always |
+| libbz2.so.1 | EL8 system | OK always |
+| libz.so.1 | EL8 system | OK always |
+| libexpat.so.1 | EL8 system | OK always |
+| libuuid.so.1 | EL8 system | OK always |
+| libjbig.so.2.1 | EL8 system (libtiff dep) | OK with libtiff |
+| libgcc_s.so.1, libstdc++.so.6 | EL8 system | OK always |
+| **liblcms2.so.2** | **bundled** | X powertools only |
+| **libopenjp2.so.7** | **bundled** | X powertools only |
 
-Max glibc symbol: **GLIBC_2.14** — compatible with all EL8 machines.
+Max glibc symbol: **GLIBC_2.14** -- compatible with all EL8 machines.
 
 ### Packaging
 
@@ -963,8 +963,8 @@ Build script:
 1. Builds libpoppler.a statically (no companion `.so` needed)
 2. Builds pdftotext binary linking against static libpoppler + system shared libs
 3. Bundles `liblcms2.so.2` and `libopenjp2.so.7` from the EL8 build machine
-4. `strip` → `patchelf --set-rpath '$ORIGIN/../lib64'` → `bzip2 -kf` → copy to `pre_built/el8.x86_64.glibc2p28/bin/pdftotext.bz2`
-5. Companion libs stripped → `bzip2 -kf` → copy to `pre_built/el8.x86_64.glibc2p28/lib64/`
+4. `strip` -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> `bzip2 -kf` -> copy to `pre_built/el8.x86_64.glibc2p28/bin/pdftotext.bz2`
+5. Companion libs stripped -> `bzip2 -kf` -> copy to `pre_built/el8.x86_64.glibc2p28/lib64/`
 6. RPATH `$ORIGIN/../lib64` lets the binary find bundled liblcms2/libopenjp2 when installed at `~/.local/bin/`
 
 ### Install
@@ -986,9 +986,9 @@ pdftotext file.pdf out.txt          # write to file
 
 ---
 
-## cloc 2.08 — Count Lines of Code (Perl script, not a build)
+## cloc 2.08 -- Count Lines of Code (Perl script, not a build)
 
-cloc is a single self-contained Perl script — NOT a compiled binary. EL8 ships
+cloc is a single self-contained Perl script -- NOT a compiled binary. EL8 ships
 perl 5.26.3 (`/usr/bin/perl`), and cloc embeds the few non-core modules it needs
 (Regexp::Common, Algorithm::Diff) inside the script itself, so it runs with bare
 system perl and zero CPAN deps.
@@ -1006,8 +1006,8 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
 ./strip_all_elf_binaries              # records cloc.bz2 as a non-ELF payload, skips stripping
 ```
 
-- Shebang is `#\!/usr/bin/env perl` — resolves to EL8's `/usr/bin/perl` at runtime.
-- No patchelf, no bundled libs, no RPATH — it's a script. `strip_all_elf_binaries`
+- Shebang is `#\!/usr/bin/env perl` -- resolves to EL8's `/usr/bin/perl` at runtime.
+- No patchelf, no bundled libs, no RPATH -- it's a script. `strip_all_elf_binaries`
   decompresses, sees a non-ELF payload, records the sha in `.strip-manifest`, and
   skips it on later runs (same handling as the `vim.bz2` shell wrapper).
 - packages.json: `kind: bin`, `default: true`, `tags: ["dev","data"]`, no `libs`.
@@ -1018,16 +1018,16 @@ Install: `./loadout install cloc` (or it's in the default set).
 
 ---
 
-## scc 3.7.0 — Sloc Cloc and Code (Go static prebuilt)
+## scc 3.7.0 -- Sloc Cloc and Code (Go static prebuilt)
 
 scc is a Go binary; official releases are statically linked. Just download and
-package — no glibc concern, no patchelf, no libs.
+package -- no glibc concern, no patchelf, no libs.
 
 ```bash
 curl -fsSL -o scc.tgz \
   "https://github.com/boyter/scc/releases/download/v3.7.0/scc_Linux_x86_64.tar.gz"
 tar xzf scc.tgz                       # yields ./scc
-file scc                              # ELF ... version 1 (SYSV) → statically linked
+file scc                              # ELF ... version 1 (SYSV) -> statically linked
 bzip2 -kf scc
 cp scc.bz2 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
 chmod 644 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
@@ -1037,11 +1037,11 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
 packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
 farm-versions: `strategy_flag(["--version"], r"scc version ([0-9]+\.[0-9]+\.[0-9]+)")`.
 
-## tokei 14.0.0 — code counter (Rust, EL8 SOURCE build)
+## tokei 14.0.0 -- code counter (Rust, EL8 SOURCE build)
 
 tokei's latest stable tag (v14.0.0) ships **no prebuilt binaries**, and v13 is an
 alpha (excluded by the stable-only policy). The older v12.1.2 has an official musl
-static, but to stay on the latest stable we build v14.0.0 from source on EL8 — which
+static, but to stay on the latest stable we build v14.0.0 from source on EL8 -- which
 also yields a native glibc-2.28 binary. cargo (1.95) is available; crates.io is not in
 the sandbox allowlist, so the build needs network outside the sandbox.
 
@@ -1051,8 +1051,8 @@ git clone --depth 1 --branch v14.0.0 https://github.com/XAMPPRocky/tokei.git
 cd tokei
 cargo build --release                 # ~25s; pulls crates from crates.io
 TOK=target/release/tokei
-readelf -V "$TOK" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1   # GLIBC_2.28 ✓
-ldd "$TOK"                             # libgcc_s, libpthread, libdl, libc — all EL8 base
+readelf -V "$TOK" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1   # GLIBC_2.28 OK
+ldd "$TOK"                             # libgcc_s, libpthread, libdl, libc -- all EL8 base
 strip "$TOK"
 bzip2 -kf "$TOK"
 cp "$TOK.bz2" pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2   # (copy the stripped+bz2'd file)
@@ -1060,7 +1060,7 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2
 ./strip_all_elf_binaries
 ```
 
-- System libs only → no bundling, no RPATH. Max glibc 2.28 (native EL8 build).
+- System libs only -> no bundling, no RPATH. Max glibc 2.28 (native EL8 build).
 - packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
 - farm-versions: `strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)")`.
 - When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
@@ -1069,15 +1069,15 @@ Install both: `./loadout install scc,tokei` (both in the default set).
 
 ---
 
-## flameshot 13.3.0 — GUI screenshot tool (Qt6→Qt5 EL8 back-port)
+## flameshot 13.3.0 -- GUI screenshot tool (Qt6->Qt5 EL8 back-port)
 
 flameshot >=13.0 is **Qt6-only upstream**, and NO prebuilt channel ships a
 glibc<=2.28 binary (fc41/42 = 2.38/2.40, deb = 2.35/2.36/2.39, **AppImage = 2.34**).
 EL8 has only Qt5 5.15 (what gui_libs bundles) and no Qt6. So we back-port the
-current release to Qt5 with a small, stable patch set and build natively → glibc 2.27.
+current release to Qt5 with a small, stable patch set and build natively -> glibc 2.27.
 
 **This is a MAINTAINED FORK-PATCH.** `build-flameshot.sh` applies the patches via a
-Python block that **fails loudly if any target string is missing** — so a breaking
+Python block that **fails loudly if any target string is missing** -- so a breaking
 upstream change surfaces at build time. Re-derive on each flameshot bump.
 
 ### Build
@@ -1087,17 +1087,17 @@ sudo dnf install -y cmake qt5-qtbase-devel qt5-qtsvg-devel qt5-qttools-devel lib
 ./pre_built/build_scripts/build-flameshot.sh --tag v13.3.0
 ```
 
-### The Qt6→Qt5 patch set (all stock idioms)
+### The Qt6->Qt5 patch set (all stock idioms)
 
-| File | Qt6 → Qt5 |
+| File | Qt6 -> Qt5 |
 |------|-----------|
-| `src/CMakeLists.txt` | `qt6_{create,add}_translation` → `qt5_…` (command names can't be `-D`-parameterized) |
-| `src/config/generalconf.cpp` | `QStringDecoder/Encoder(System)` → `QString::fromLocal8Bit / toLocal8Bit` (both versions) |
-| `notifierbox.{h,cpp}`, `pinwidget.{h,cpp}` | `enterEvent(QEnterEvent*)` → `QEvent*` (guarded `#if QT_VERSION >= 6`) |
-| `draggablewidgetmaker.cpp` | `QMouseEvent::globalPosition()` → `globalPos()` |
-| `capturewidget.cpp` | `QList<QPair> << std::pair(` → `qMakePair(` (Qt6 made `QPair`==`std::pair`) |
-| `tools/text/textconfig.cpp` | `QFontDatabase::families()` (static) → `QFontDatabase().families()` (instance) |
-| `main.cpp` | `QLibraryInfo::path` → `location`; add `#include <QDebug>` |
+| `src/CMakeLists.txt` | `qt6_{create,add}_translation` -> `qt5_...` (command names can't be `-D`-parameterized) |
+| `src/config/generalconf.cpp` | `QStringDecoder/Encoder(System)` -> `QString::fromLocal8Bit / toLocal8Bit` (both versions) |
+| `notifierbox.{h,cpp}`, `pinwidget.{h,cpp}` | `enterEvent(QEnterEvent*)` -> `QEvent*` (guarded `#if QT_VERSION >= 6`) |
+| `draggablewidgetmaker.cpp` | `QMouseEvent::globalPosition()` -> `globalPos()` |
+| `capturewidget.cpp` | `QList<QPair> << std::pair(` -> `qMakePair(` (Qt6 made `QPair`==`std::pair`) |
+| `tools/text/textconfig.cpp` | `QFontDatabase::families()` (static) -> `QFontDatabase().families()` (instance) |
+| `main.cpp` | `QLibraryInfo::path` -> `location`; add `#include <QDebug>` |
 
 ### CMake flags (set by the script)
 
@@ -1108,15 +1108,15 @@ find_package is hardcoded `-qt6`; this only loses single-instance enforcement),
 
 ### Packaging / runtime
 
-GUI tool, links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb — **all from gui_libs**.
-strip → `patchelf --set-rpath '$ORIGIN/../lib64'` → bzip2. `depends: ["gui_libs"]`,
+GUI tool, links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb -- **all from gui_libs**.
+strip -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> bzip2. `depends: ["gui_libs"]`,
 `default: false`, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
 
 Install: `./loadout install gui_libs,flameshot`
 
-## firefox 140.11.0 — Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS RPM)
+## firefox 140.11.0 -- Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS RPM)
 
-Mozilla Firefox does not get a source build — its Rust + autoconf +
+Mozilla Firefox does not get a source build -- its Rust + autoconf +
 gn build chain is enormous and not in scope for this repo. Instead we
 shanghai the EL8 BaseOS RPM: refresh the system install to the freshest
 ESR, copy the runtime tree, and add a thin POSIX-sh launcher.
@@ -1132,15 +1132,15 @@ rpm -q firefox                # capture exact version, e.g. firefox-140.11.0-1.e
 Script:
 - Verifies `rpm -q firefox` matches `--tag` so the bundled version
   and the binaries can't drift.
-- Stages `/usr/lib64/firefox/` → `$STAGE/lib/firefox/` via `cp -a`.
+- Stages `/usr/lib64/firefox/` -> `$STAGE/lib/firefox/` via `cp -a`.
 - Drops a thin POSIX-sh wrapper at `$STAGE/bin/firefox` that derives
   prefix from `$0` and exec's `$prefix/lib/firefox/firefox-bin`.
 - Rewrites two absolute symlinks the RPM ships:
-  - `lib/firefox/dictionaries -> /usr/share/myspell` — deleted (the
+  - `lib/firefox/dictionaries -> /usr/share/myspell` -- deleted (the
     built-in Firefox dictionaries still ship in the bundle; users
     wanting Hunspell extras install hunspell on the host).
   - `lib/firefox/browser/defaults/preferences -> /usr/lib64/firefox/defaults/preferences`
-    — replaced with a real directory containing a copy of the prefs.
+    -- replaced with a real directory containing a copy of the prefs.
     Why not a relative symlink: `strip_all_elf_binaries`'s tar
     re-creation step uses `os.walk(followlinks=False)` and silently
     drops symlinks-to-directories on rewrite, so the symlink would
@@ -1152,16 +1152,16 @@ Script:
 - `tar cjf` to `runtime/firefox.tar.bz2`, updates `packages.json`
   version, runs `./strip_all_elf_binaries` which strips ELFs inside
   the archive and auto-chunks the final ~136 MB output into
-  `firefox.tar.bz2.part-NNN` shards (4 × ~40 MiB).
+  `firefox.tar.bz2.part-NNN` shards (4 x ~40 MiB).
 
 ### Bundle layout
 
 ```
 ./bin/firefox                            # POSIX-sh launcher
 ./lib/firefox/                           # full /usr/lib64/firefox/ tree
-    firefox-bin                          # RPATH=$ORIGIN — finds bundled libmoz*.so
+    firefox-bin                          # RPATH=$ORIGIN -- finds bundled libmoz*.so
     libxul.so                            # ~150 MB, all the Mozilla code
-    libmozsandbox.so, libgkcodecs.so, …  # bundled, $ORIGIN-resolved
+    libmozsandbox.so, libgkcodecs.so, ...  # bundled, $ORIGIN-resolved
     omni.ja, browser/omni.ja             # packed JS/CSS/XUL frontend
     browser/extensions/langpack-*.xpi    # bundled langpacks
     browser/defaults/preferences/        # real dir (was symlink)
@@ -1171,9 +1171,9 @@ Script:
 ### NSS / NSPR are BUNDLED (the version-`NSS_3.107`-not-found trap)
 
 Firefox 140's `libxul.so` requires `NSS_3.107`. AlmaLinux 8.10 shipped
-`nss-3.90` at GA; the symbol only appears in `nss ≥ 3.107`. The build
+`nss-3.90` at GA; the symbol only appears in `nss >= 3.107`. The build
 box happened to have `nss-3.112` **only because the firefox RPM pulled
-it in as a dep**, so `ldd`/`--version` looked clean here — classic
+it in as a dep**, so `ldd`/`--version` looked clean here -- classic
 build-box masking (same trap as the octave support libs). On an
 un-patched farm node firefox aborts at startup:
 
@@ -1197,7 +1197,7 @@ patchelf per the ELF rule; the strip-script's `elf_has_rpath` guard
 then skips them).
 
 **RPATH alone is not enough.** The EL8 RPM's `firefox-bin` and
-`libxul.so` have **no RPATH/RUNPATH** — firefox-bin dlopens libxul by
+`libxul.so` have **no RPATH/RUNPATH** -- firefox-bin dlopens libxul by
 absolute path, but libxul's NEEDED libs (nss, libmoz*) get resolved by
 the loader with no app-dir on the search path. So the wrapper must
 `export LD_LIBRARY_PATH="$libdir:$LD_LIBRARY_PATH"` (mirrors the stock
@@ -1211,12 +1211,12 @@ env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
 
 ### Runtime libs still assumed present on EL8 (NOT bundled)
 
-- glibc + libstdc++ + libgcc_s — policy
-- `libsqlite3.so.0` — softokn3 dep; EL8 base sqlite (3.26), identical on
+- glibc + libstdc++ + libgcc_s -- policy
+- `libsqlite3.so.0` -- softokn3 dep; EL8 base sqlite (3.26), identical on
   build + dest, never security-bumped, so safe to leave external
-- `libtasn1.so.6` — nssckbi dep; EL8 base, stable
-- libasound2 — alsa-lib, present on every EL8 desktop/farm node
-- libfreetype, libfontconfig — already declared in gui_libs anyway
+- `libtasn1.so.6` -- nssckbi dep; EL8 base, stable
+- libasound2 -- alsa-lib, present on every EL8 desktop/farm node
+- libfreetype, libfontconfig -- already declared in gui_libs anyway
 
 `depends: ["gui_libs"]` pulls in the GTK3 / cairo / pango / X11 /
 Wayland stack libxul.so dlopens at runtime.
@@ -1237,7 +1237,7 @@ that don't apply to a relocatable `$HOME` install. firefox-bin
 handles its own Wayland/X11 detection (`WAYLAND_DISPLAY` /
 `XDG_SESSION_TYPE` env).
 
-Install: `./loadout install gui_libs,firefox` (or just `firefox` —
+Install: `./loadout install gui_libs,firefox` (or just `firefox` --
 gui_libs is auto-pulled via depends).
 
 ### Updating
@@ -1252,11 +1252,11 @@ git commit -m 'feat(pre_built): firefox <version> shanghai bundle'
 ```
 
 The shanghai approach means the bundle is only as fresh as the EL8
-RPM. AlmaLinux tracks Firefox ESR closely — typically only a few
+RPM. AlmaLinux tracks Firefox ESR closely -- typically only a few
 days behind upstream ESR. No special action needed beyond
 `dnf upgrade`.
 
-## fio 3.42 — Flexible I/O tester (storage/filesystem benchmark, EL8 SOURCE build)
+## fio 3.42 -- Flexible I/O tester (storage/filesystem benchmark, EL8 SOURCE build)
 
 fio measures storage and filesystem performance (random/sequential
 read/write, IOPS, bandwidth, latency) across many ioengines.
@@ -1276,16 +1276,16 @@ sudo dnf install -y libaio-devel zlib-devel    # headers for the two linked libs
 ./configure --disable-native --disable-http
 ```
 
-- `--disable-native` — no `-march=native`; the binary must run on every
+- `--disable-native` -- no `-march=native`; the binary must run on every
   farm CPU generation, not just the build box.
-- `--disable-http` — **critical.** With curl-devel present, configure
+- `--disable-http` -- **critical.** With curl-devel present, configure
   auto-enables the `http` ioengine and links `libcurl.so.4`, dragging in
   the entire `libssl/libcrypto/libnghttp2/libidn2/libssh/libpsl/krb5/ldap/
-  brotli/sasl` closure (~25 extra NEEDED libs) — heavy, not guaranteed on
+  brotli/sasl` closure (~25 extra NEEDED libs) -- heavy, not guaranteed on
   a minimal node, and useless for a filesystem benchmark. Disabling it
   cuts the closure down to libaio + zlib + glibc.
 
-zlib and libaio are auto-detected (both `-devel` installed) and kept —
+zlib and libaio are auto-detected (both `-devel` installed) and kept --
 libaio is the realistic async-I/O engine; zlib is iolog compression.
 
 ### Linked libs
@@ -1294,11 +1294,11 @@ After `--disable-http`, `ldd fio` (non-glibc only):
 
 | lib | source | handling |
 |-----|--------|----------|
-| `libaio.so.1` | EL8 `libaio` RPM (`/usr/lib64/libaio.so.1`) | **bundled** → `lib64/libaio.so.1.bz2`, soname `libaio.so.1`, RPATH `$ORIGIN` |
+| `libaio.so.1` | EL8 `libaio` RPM (`/usr/lib64/libaio.so.1`) | **bundled** -> `lib64/libaio.so.1.bz2`, soname `libaio.so.1`, RPATH `$ORIGIN` |
 | `libz.so.1` | already bundled in `lib64/` | reused (declared in fio's `libs`) |
 
 Everything else (`librt`, `libpthread`, `libm`, `libmvec`, `libdl`,
-`libc`) is glibc 2.28 — present on every EL8 target, never bundled.
+`libc`) is glibc 2.28 -- present on every EL8 target, never bundled.
 
 > **Self-contained check (octave lesson):** the build box has
 > `libaio.so.1` in system `/lib64`, so a naive `ldd` on the build box
@@ -1309,7 +1309,7 @@ Everything else (`librt`, `libpthread`, `libm`, `libmvec`, `libdl`,
 
 ### Packaging
 
-The build script does strip → patchelf → bzip2 for both fio and libaio,
+The build script does strip -> patchelf -> bzip2 for both fio and libaio,
 then you run the strip normalizer (skips both via the RPATH guard):
 
 ```bash

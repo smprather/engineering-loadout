@@ -1,5 +1,5 @@
 #!/usr/bin/env python3.14
-"""loadout — package-manager installer body.
+"""loadout -- package-manager installer body.
 
 Invoked via the POSIX-sh shim `loadout`, which resolves the bundled
 portable Python 3.14 and execs this module under it. Direct execution
@@ -9,7 +9,7 @@ under any other interpreter is rejected.
 import os
 import sys
 
-if sys.version_info < (3, 14):  # noqa: UP036 — defensive: direct invocation under wrong interpreter
+if sys.version_info < (3, 14):  # noqa: UP036 -- defensive: direct invocation under wrong interpreter
     version = ".".join(str(part) for part in sys.version_info[:3])
     print(
         f"Error: loadout_main.py requires Python >= 3.14; found {version}.\n"
@@ -45,7 +45,7 @@ except Exception:
 
 # CLI: vendored click + rich-click (in installer_vendor/). rich-click is a drop-in
 # replacement for click that renders help text via Rich panels. If either fails to
-# import we surface a clear error at startup — the CLI cannot function without it.
+# import we surface a clear error at startup -- the CLI cannot function without it.
 try:
     import rich_click as click
 
@@ -93,7 +93,7 @@ def _show_cursor():
     Rich's transient Progress hides the cursor (ESC[?25l) on .start() and
     restores it on .stop(). On laggy remote terminals (ThinLinc/VNC/SSH) the
     restore can be dropped or reordered across many rapid Progress cycles, and
-    an exception mid-extract skips .stop() entirely — either way the cursor is
+    an exception mid-extract skips .stop() entirely -- either way the cursor is
     left invisible after the installer exits ('reset' fixes it). Registered via
     atexit so it fires on every normal exit and on sys.exit() (incl. the SIGINT
     handler). Writes to the REAL terminal (sys.__stdout__, not the tee wrapper);
@@ -170,21 +170,21 @@ def _load_tool_registry(repo_dir):
         {"schema_version": 3, "packages": {name: entry, ...}, ...}
 
     Per-entry fields (all optional unless noted otherwise):
-      kind         — package type: 'bin', 'lib-bundle', 'runtime', 'typelib',
+      kind         -- package type: 'bin', 'lib-bundle', 'runtime', 'typelib',
                      'python-base', 'python-tool', 'env', 'font', 'data', 'group'.
                      Defaults to 'bin' when absent.
-      platforms    — list of platforms where the entry is valid: 'linux',
+      platforms    -- list of platforms where the entry is valid: 'linux',
                      'macos', 'windows'. Reserved for the resolver.
-      depends      — list of hard-dependency package names. Reserved for the
+      depends      -- list of hard-dependency package names. Reserved for the
                      resolver.
-      recommends   — list of soft-dependency package names. Reserved for the
+      recommends   -- list of soft-dependency package names. Reserved for the
                      resolver.
-      bins         — bin/*.bz2 stems exclusively owned by this entry.
-      libs         — lib64/*.bz2 stems exclusively owned by this entry.
+      bins         -- bin/*.bz2 stems exclusively owned by this entry.
+      libs         -- lib64/*.bz2 stems exclusively owned by this entry.
                      Omit or leave empty for libs shared by multiple tools.
-      typelibs     — typelibs/*.typelib files documented as required.
-      wheels       — Python wheel basenames bundled offline.
-      uv_tool      — package name passed to 'uv tool install'.
+      typelibs     -- typelibs/*.typelib files documented as required.
+      wheels       -- Python wheel basenames bundled offline.
+      uv_tool      -- package name passed to 'uv tool install'.
 
     Files not claimed by any entry are unregistered and always installed.
     """
@@ -237,7 +237,7 @@ def _parse_namelist(raw):
 # expand_groups() special-cases each name below; the descriptions here drive
 # `list --groups` and `describe`.
 _SYNTHETIC_GROUPS = {
-    "@shared": "Every non-env package — install set for a shared/read-only tree.",
+    "@shared": "Every non-env package -- install set for a shared/read-only tree.",
     "@envs": "Every per-user env config bundle (the complement of @shared).",
 }
 
@@ -246,7 +246,7 @@ def expand_groups(names, registry, _stack=None):
     """Expand @group references recursively into leaf package names.
 
     @shared is special: every non-group package except per-user "env" config
-    bundles — i.e. everything you install into a shared/read-only tree. @envs
+    bundles -- i.e. everything you install into a shared/read-only tree. @envs
     is its complement (every "env" package); pair them as
     `--only @shared --skip @envs` to keep env recommends out of a shared tree.
     Cycles in the group graph raise ResolverError.
@@ -370,7 +370,7 @@ def resolve_tool_selection(args, registry):
     When the registry is empty (legacy / missing JSON) returns None as before.
     """
     if not registry:
-        return None  # sentinel: no registry → install everything
+        return None  # sentinel: no registry -> install everything
 
     no_deps = bool(getattr(args, "no_deps", False))
     force = bool(getattr(args, "force", False))
@@ -402,8 +402,8 @@ def resolve_tool_selection(args, registry):
 def _tool_bin_sets(selected_tools, registry):
     """Return (allowed_bins, registered_bins) for install-time filtering.
 
-    allowed_bins    — bin stems that should be installed.
-    registered_bins — every bin stem claimed by any tool entry.
+    allowed_bins    -- bin stems that should be installed.
+    registered_bins -- every bin stem claimed by any tool entry.
 
     Bins that appear in no tool entry are unregistered and always installed.
     When selected_tools is None the registry is not consulted (install all).
@@ -478,7 +478,7 @@ def write_bz2_atomic(bz2_file, dest_file, mode):
 
     Writing through a temp file in the same directory means the rename is
     always on the same filesystem (no EXDEV) and the running process keeps
-    its mmap to the old inode — preventing SIGBUS when overwriting in-use
+    its mmap to the old inode -- preventing SIGBUS when overwriting in-use
     shared libraries.
     """
     dest_dir = os.path.dirname(dest_file)
@@ -627,7 +627,7 @@ def _local_name(home):
     Dot-hiding a 'local' dir only makes sense inside a user's HOME; a staged or
     shared deployment under --dest-dir is a normal filesystem location (like
     /usr/local), so it uses an un-dotted 'local'. '.config'/'.cache' are left
-    dotted regardless — they are only written for HOME installs.
+    dotted regardless -- they are only written for HOME installs.
     """
     try:
         if os.path.realpath(home) == os.path.realpath(os.path.expanduser("~")):
@@ -703,13 +703,13 @@ _INTERRUPT_REQUESTED = False
 _INTERRUPT_PHASE = None  # "backup" while backup_existing is running, else None
 _ACTIVE_BACKUP_DIR = None  # set by backup_existing for sigint cleanup
 _ACTIVE_SUBPROCESS = None  # set by run() so handler can SIGTERM child before cleanup
-_FOLLOW_SYMLINKS = "auto"  # "yes"|"no"|"auto" — set by --install-follows-symlinks
+_FOLLOW_SYMLINKS = "auto"  # "yes"|"no"|"auto" -- set by --install-follows-symlinks
 
 
 def _sigint_handler(signum, frame):
     global _INTERRUPT_REQUESTED
     if _INTERRUPT_PHASE == "backup":
-        eprint("\n^C during backup — removing partial backup and exiting.")
+        eprint("\n^C during backup -- removing partial backup and exiting.")
         # Kill any active subprocess (e.g. rsync still writing into the backup dir)
         # so cleanup doesn't race against its writes. Use os.kill rather than
         # proc.wait() since main thread is already blocked inside communicate().
@@ -729,7 +729,7 @@ def _sigint_handler(signum, frame):
                 eprint(f"Warning: could not remove {_ACTIVE_BACKUP_DIR}: {exc}")
         _close_run_log("interrupted-during-backup")
         # Silence any post-mortem death-rattle from dying subprocesses (e.g. rsync's
-        # "broken pipe" on stderr) — the install is already aborted, the noise is just noise.
+        # "broken pipe" on stderr) -- the install is already aborted, the noise is just noise.
         try:
             sys.stderr.flush()
             devnull = os.open(os.devnull, os.O_WRONLY)
@@ -739,18 +739,18 @@ def _sigint_handler(signum, frame):
             pass
         sys.exit(130)
     if _INTERRUPT_REQUESTED:
-        eprint("\n^C^C — force exit.")
+        eprint("\n^C^C -- force exit.")
         _close_run_log("interrupted-force")
         sys.exit(130)
     _INTERRUPT_REQUESTED = True
-    eprint("\n^C received — finishing current step then exiting. (Press Ctrl-C again to force quit.)")
+    eprint("\n^C received -- finishing current step then exiting. (Press Ctrl-C again to force quit.)")
 
 
 def run_install_step(thing, func, *args, **kwargs):
     silent = kwargs.pop("silent", False)
     if silent:
         _SILENT_AREAS.add(thing)
-    # No eager "Installing X..." banner — phases that do work print their own
+    # No eager "Installing X..." banner -- phases that do work print their own
     # concise line; phases that no-op stay silent (package-manager style).
     try:
         result = func(*args, **kwargs)
@@ -799,7 +799,7 @@ def run_install_step(thing, func, *args, **kwargs):
 
 def skipped(reason, consequence=None):
     # Intentionally silent. A phase that is not selected (or has no artifact to
-    # install) is not news — package managers don't announce what they skipped.
+    # install) is not news -- package managers don't announce what they skipped.
     # Genuine problems go through warn()/FAIL rows/the blockers table instead.
     return
 
@@ -882,7 +882,7 @@ def _setup_run_log(repo_dir, argv):
         sys.stderr.write(f"Note: could not open run-log {_RUN_LOG_PATH}: {exc}\n")
         _RUN_LOG_FILE = None
         return
-    # Per-run header — separator + metadata so successive runs are distinguishable
+    # Per-run header -- separator + metadata so successive runs are distinguishable
     # when grep-ing/tailing the rolling log.
     _RUN_LOG_FILE.write("\n")
     _RUN_LOG_FILE.write("================================================================\n")
@@ -897,7 +897,7 @@ def _setup_run_log(repo_dir, argv):
     # Replace stdio so all print/eprint output flows in.
     sys.stdout = _TeeStream(sys.stdout, "out")
     sys.stderr = _TeeStream(sys.stderr, "err")
-    # No "Run log: ..." print — path is fixed per user (_RUN_LOG_FIXED_PATH).
+    # No "Run log: ..." print -- path is fixed per user (_RUN_LOG_FIXED_PATH).
 
 
 def _close_run_log(exit_code):
@@ -987,7 +987,7 @@ def mkdirn(base_dir):
                 os.makedirs(target_dir)
                 return target_dir
             except FileExistsError:
-                pass  # concurrent run claimed this number — keep counting
+                pass  # concurrent run claimed this number -- keep counting
         counter += 1
 
 
@@ -1317,7 +1317,7 @@ def _now_utc_iso():
 
 @contextlib.contextmanager
 def _pending_lock():
-    """Exclusive flock on pending.lock — serialises installer and daemon JSON writes."""
+    """Exclusive flock on pending.lock -- serialises installer and daemon JSON writes."""
     lock_path = os.path.join(_PENDING_DIR, "pending.lock")
     try:
         fh = open(lock_path, "w")
@@ -1421,7 +1421,7 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
             warn(f"could not copy daemon script: {exc}")
             return
     elif not os.path.isfile(daemon_dst):
-        warn(f"daemon script not found at {daemon_src} — pending ops will not auto-apply")
+        warn(f"daemon script not found at {daemon_src} -- pending ops will not auto-apply")
         return
 
     # Check if daemon already running via pidfile.
@@ -1477,8 +1477,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         record_result("pre-built binaries", "SKIP", "no matching platform")
         return set()
 
-    # blocked_deferred: tmux detected running by exe path → staged for daemon.
-    # blocked_failed: other binaries still in use after 10s retry → name → "PID,…" string.
+    # blocked_deferred: tmux detected running by exe path -> staged for daemon.
+    # blocked_failed: other binaries still in use after 10s retry -> name -> "PID,..." string.
     blocked_deferred = set()
     blocked_failed = {}
 
@@ -1488,7 +1488,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
 
     if selected_tools is not None and not _allowed_bins and not _allowed_libs:
         # Selection contributes no binary or shared library (e.g. an env-only
-        # install) — don't touch ~/.local/bin or ~/.local/lib64 at all, not even
+        # install) -- don't touch ~/.local/bin or ~/.local/lib64 at all, not even
         # the always-on base libs that only exist to support binaries.
         skipped("pre-built binaries (no binaries or libraries selected)", "")
         record_result("pre-built binaries", "SKIP", "no bin/lib packages selected")
@@ -1508,9 +1508,9 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         # the pending-ops daemon so the user never has to manually re-run the installer.
         # tmux: server/client must be same version; NFS atomic rename still leaves old
         #       server running with the old inode while new clients exec the new binary.
-        # bash: safe to replace live — write_bz2_atomic uses os.rename (atomic inode swap),
+        # bash: safe to replace live -- write_bz2_atomic uses os.rename (atomic inode swap),
         #       so the running shell keeps its old inode and new shells get the new binary.
-        #       No bash→bash IPC, so no version-mismatch risk.
+        #       No bash->bash IPC, so no version-mismatch risk.
         _DEFERRED_BINARIES = {"tmux"}
 
         _bin_bz2_files = sorted(f for f in _bz2.find(bin_dir) if _bin_selected(os.path.basename(f)[:-4]))
@@ -1519,7 +1519,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
 
         # Don't silently "succeed" when a selected package has no built artifact.
         # Only flag genuine bin packages: skip those whose bins come from a runtime
-        # archive (e.g. nodejs → node.tar.bz2) and python-tools (uv launchers).
+        # archive (e.g. nodejs -> node.tar.bz2) and python-tools (uv launchers).
         if selected_tools is not None:
             _present_stems = {os.path.basename(f)[:-4] for f in _bz2.find(bin_dir)}
             for _pname in sorted(selected_tools):
@@ -1529,8 +1529,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 _claimed = _e.get("bins", [])
                 if _claimed and not any(b in _present_stems for b in _claimed):
                     warn(
-                        "selected '{}' has no bundled artifact (none of {} present in bin/) — not installed".format(
-                            _pname, "/".join(_claimed[:3]) + ("…" if len(_claimed) > 3 else "")
+                        "selected '{}' has no bundled artifact (none of {} present in bin/) -- not installed".format(
+                            _pname, "/".join(_claimed[:3]) + ("..." if len(_claimed) > 3 else "")
                         )
                     )
         _progress_ctx = (
@@ -1555,7 +1555,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             name = os.path.basename(dest_file)
             bz2_src = _bz2.resolve(bz2_file)
             if bz2_src is None:
-                warn(f"skipping {name} — bz2 or split parts missing at {bz2_file}")
+                warn(f"skipping {name} -- bz2 or split parts missing at {bz2_file}")
                 continue
 
             if _progress_ctx is not None:
@@ -1574,7 +1574,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                         continue
                     blocked_deferred.add(name)
                     warn(
-                        "skipping {} — running at {} (PIDs: {})".format(
+                        "skipping {} -- running at {} (PIDs: {})".format(
                             name, dest_file, ", ".join(str(p) for p in pids)
                         )
                     )
@@ -1604,7 +1604,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 if name in _DEFERRED_BINARIES:
                     # Proactive check passed but rename raced with a new exec; defer anyway.
                     blocked_deferred.add(name)
-                    warn(f"could not replace {dest_file} (ETXTBSY race) — deferring")
+                    warn(f"could not replace {dest_file} (ETXTBSY race) -- deferring")
                     if _progress_ctx is not None:
                         _progress_ctx.advance(_progress_task)
                     continue
@@ -1641,7 +1641,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     lib64_dir = os.path.join(src_dir, "lib64")
     if os.path.isdir(lib64_dir):
         ensure_dir(dest_lib64_dir, "pre-built libraries")
-        # Remove any previously deployed glibc libs — they must never be bundled because
+        # Remove any previously deployed glibc libs -- they must never be bundled because
         # they must match the system ld-linux.so.2 exactly; a mismatch causes GLIBC_PRIVATE
         # symbol lookup errors at runtime.
         _GLIBC_LIBS = ("libc.so.6", "libm.so.6", "libpthread.so.0", "libdl.so.2", "librt.so.1")
@@ -1657,7 +1657,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
             bz2_src = _bz2.resolve(bz2_file)
             if bz2_src is None:
-                warn(f"skipping {os.path.basename(dest_file)} — bz2 or split parts missing at {bz2_file}")
+                warn(f"skipping {os.path.basename(dest_file)} -- bz2 or split parts missing at {bz2_file}")
                 continue
             if _lp:
                 _lp.update(_lpt, description=f"  {os.path.basename(dest_file)}")
@@ -1812,7 +1812,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no matching platform")
         return
 
-    # Compute the selected uv_tool set FIRST — if nothing needs Python tools, this
+    # Compute the selected uv_tool set FIRST -- if nothing needs Python tools, this
     # is a clean SKIP, not a FAIL for a missing uv/python the caller never asked for.
     tools_to_install = []
     for name, info in registry.items():
@@ -1836,11 +1836,11 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     uv_bin = os.path.join(home, _local_name(home), "bin", "uv")
     python_bin = os.path.join(home, _local_name(home), "bin", "python3.14")
     if not os.path.isfile(uv_bin):
-        warn(f"uv not found at {uv_bin} — Python tools will NOT be installed")
+        warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
         return
     if not os.path.isfile(python_bin):
-        warn(f"python3.14 not found at {python_bin} — Python tools will NOT be installed")
+        warn(f"python3.14 not found at {python_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "python3.14 not installed")
         return
 
@@ -1863,7 +1863,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 + _glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
             )
             if not matches:
-                warn(f"skipping {pkg_name} — no wheel found in {wheels_dir}")
+                warn(f"skipping {pkg_name} -- no wheel found in {wheels_dir}")
                 skipped_tools.append(tool_name)
                 continue
             cmd = [
@@ -1911,7 +1911,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
 
 def check_prebuilt_binary_dependencies(dest_bin_dir):
     if not _LDD:
-        warn("ldd is not available — shared library dependency check skipped")
+        warn("ldd is not available -- shared library dependency check skipped")
         return
 
     missing = False
@@ -1923,7 +1923,7 @@ def check_prebuilt_binary_dependencies(dest_bin_dir):
         out = proc.stdout.decode("utf-8", "replace")
         if "not found" in out:
             missing = True
-            warn(f"missing shared libraries for {binary} — this binary may not run")
+            warn(f"missing shared libraries for {binary} -- this binary may not run")
             for line in out.splitlines():
                 if "not found" in line:
                     # Print the whole ldd line: handles both the missing-file
@@ -1937,7 +1937,7 @@ def check_prebuilt_binary_dependencies(dest_bin_dir):
 
 
 def add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed):
-    # Per-tool deferred messages — shown even when the daemon was already running,
+    # Per-tool deferred messages -- shown even when the daemon was already running,
     # because the user needs to know what will happen and when.
     if "tmux" in blocked_deferred:
         FINAL_NOTICES.append(
@@ -1954,7 +1954,7 @@ def add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed):
     for name, pid_str in sorted(blocked_failed.items()):
         FINAL_NOTICES.append(
             f"{name} was not installed: binary in use by process(es) {pid_str} "
-            "— kill or wait for them to exit, then re-run the installer."
+            "-- kill or wait for them to exit, then re-run the installer."
         )
 
 
@@ -1968,7 +1968,7 @@ def print_final_notices():
 
 
 def print_install_results():
-    # Report what was actually done and any failures — not what was skipped.
+    # Report what was actually done and any failures -- not what was skipped.
     if not INSTALL_RESULTS:
         return
     rows = []
@@ -1979,7 +1979,7 @@ def print_install_results():
             if thing in _SILENT_AREAS:
                 continue
             rows.append((thing, "done", detail or ""))
-        # SKIP (and anything else) is omitted — a not-selected phase is not news.
+        # SKIP (and anything else) is omitted -- a not-selected phase is not news.
     n_fail = sum(1 for r in rows if r[1] == "FAILED")
 
     def _final(line, error):
@@ -2019,7 +2019,7 @@ def print_install_results():
             print("  {:{}}  {:{}}  {:{}}".format(thing, widths[0], result, widths[1], detail, widths[2]))
 
     if n_fail:
-        _final(f"Completed with {n_fail} problem(s) — see above.", error=True)
+        _final(f"Completed with {n_fail} problem(s) -- see above.", error=True)
     else:
         _final("Complete.", error=False)
 
@@ -2092,9 +2092,9 @@ def _logical_zip_name(archive):
 
 
 def install_fonts(repo_dir, home, selected_tools=None, registry=None):
-    # Which specific font archives to install. selected_tools=None → install all
+    # Which specific font archives to install. selected_tools=None -> install all
     # (non-selective). When a selection is given, map each selected font-* package
-    # to its archive basename and install ONLY those — otherwise --only font-hack
+    # to its archive basename and install ONLY those -- otherwise --only font-hack
     # would still install every font.
     selected_zip_names = None
     if selected_tools is not None:
@@ -2163,16 +2163,16 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None):
         if tool:
             proc = subprocess.run([tool, user_fonts_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if proc.returncode != 0:
-                warn(f"{name} failed for {user_fonts_dir} — font metrics may be incomplete")
+                warn(f"{name} failed for {user_fonts_dir} -- font metrics may be incomplete")
 
     fc_cache = _find_tool("/usr/bin/fc-cache")
     if fc_cache:
         proc = subprocess.run([fc_cache, "-f", user_fonts_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if proc.returncode != 0:
-            warn(f"fc-cache failed for {user_fonts_dir} — fontconfig cache may be stale")
+            warn(f"fc-cache failed for {user_fonts_dir} -- fontconfig cache may be stale")
     else:
         warn(
-            "fc-cache is not available — fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually"
+            "fc-cache is not available -- fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually"
         )
 
     if is_wsl():
@@ -2228,11 +2228,11 @@ def _validate_tar_members(members, dest_real):
          also stays inside dest_real (otherwise the planted link itself
          is fine but follow-on writes can escape).
       3. Reject device, FIFO, and char-special members on the legacy
-         (no-filter) extraction path — we never legitimately ship these.
+         (no-filter) extraction path -- we never legitimately ship these.
     """
     for member in members:
         # Use normpath (not realpath) so pre-existing symlinks in dest don't cause false
-        # positives — e.g. ~/.terminfo -> /usr/share/terminfo would fail realpath but the
+        # positives -- e.g. ~/.terminfo -> /usr/share/terminfo would fail realpath but the
         # member name ./.terminfo is safe. normpath still catches absolute paths and .. escapes.
         target_norm = os.path.normpath(os.path.join(dest_real, member.name))
         if not (target_norm == dest_real or target_norm.startswith(dest_real + os.sep)):
@@ -2258,9 +2258,9 @@ def _remove_symlinks_blocking_dirs(members, dest_dir):
     so a directory member by that name can be created in its place.
 
     Behaviour controlled by --install-follows-symlinks:
-      no (default) — always unlink, replace with real dir.
-      yes           — never unlink, follow all symlinks.
-      auto          — follow only if the symlink target is writable by the
+      no (default) -- always unlink, replace with real dir.
+      yes           -- never unlink, follow all symlinks.
+      auto          -- follow only if the symlink target is writable by the
                       current user; otherwise unlink and replace.
     """
     if _FOLLOW_SYMLINKS == "yes":
@@ -2272,7 +2272,7 @@ def _remove_symlinks_blocking_dirs(members, dest_dir):
         dest_norm = os.path.normpath(dest_path)
         if os.path.islink(dest_norm):
             if _FOLLOW_SYMLINKS == "auto" and os.access(dest_norm, os.W_OK):
-                continue  # writable target — follow
+                continue  # writable target -- follow
             os.unlink(dest_norm)
 
 
@@ -2323,8 +2323,8 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
       archive_name: filename override (default: "<pkg_name>.tar.bz2")
       remove_before_extract: str or list of paths (relative to install_to) to
                              remove before extracting (avoids stale files)
-      chmod_sentinel: bool — chmod 755 on sentinel file after extraction
-      missing_hint: str — shown when archive not found
+      chmod_sentinel: bool -- chmod 755 on sentinel file after extraction
+      missing_hint: str -- shown when archive not found
 
     Packages with non-trivial post-extract logic stay in dedicated functions:
       vim (rename step), meld (multi-remove+chmod), nvim-qt (shim copy).
@@ -2477,7 +2477,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
     After extraction we run `glib-compile-schemas` against the bundled schema
     dir so GSettings can find the compiled file at runtime. The keyfile
     backend means mate-terminal does not need dconf-service or a session bus
-    to launch — preferences persist to `~/.config/glib-2.0/settings/keyfile`.
+    to launch -- preferences persist to `~/.config/glib-2.0/settings/keyfile`.
 
     The two non-gui_libs NEEDED libs (libvte-2.91.so.0, libdconf.so.1) ship
     separately as `lib64/*.bz2` payloads listed in the package entry.
@@ -2613,7 +2613,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools):
 
     # Extract archive to ~/.local/share/nvim-qt/ (keeps runtime/ available for
     # NVIM_QT_RUNTIME_PATH), then also copy the shim plugin directly into
-    # ~/.local/share/nvim/site/plugin/ — that dir is on nvim's default runtimepath
+    # ~/.local/share/nvim/site/plugin/ -- that dir is on nvim's default runtimepath
     # unconditionally, which is more reliable than the NVIM_QT_RUNTIME_PATH env var.
     nvim_qt_share = os.path.join(home, _local_name(home), "share", "nvim-qt")
     ensure_dir(nvim_qt_share, "nvim-qt runtime")
@@ -2734,7 +2734,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
     """Seed the bundled active nvim plugins into ~/.local/share/nvim/lazy/.
 
     The bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2) is a snapshot of
-    the active default plugin set — including lazy.nvim itself — each with its .git
+    the active default plugin set -- including lazy.nvim itself -- each with its .git
     intact. Extracting into lazy/<name> lets lazy.nvim treat them as already
     installed, so plugins work on a fully offline box, while remaining real git
     repos that `:Lazy sync` updates when online (and seeding lazy/lazy.nvim makes
@@ -2766,7 +2766,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
         with tarfile.open(archive, "r:bz2") as tf:
             safe_extract_tar(tf, tmp)
         for name in sorted(os.listdir(tmp)):
-            # '.cloning' is lazy's interrupted-clone temp suffix — a stray artifact
+            # '.cloning' is lazy's interrupted-clone temp suffix -- a stray artifact
             # in the bundle, not a real plugin. Never seed it.
             if name.endswith(".cloning"):
                 continue
@@ -2797,9 +2797,9 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         return
     # Lazy sync requires the staged tree to contain a usable nvim config
     # (init.lua + plugin specs). That config ships in the env-nvim package
-    # (`kind: env`). When env-nvim isn't in the selection — e.g. a `@shared`
+    # (`kind: env`). When env-nvim isn't in the selection -- e.g. a `@shared`
     # install into a shared release tree, where per-user configs land
-    # separately under `@envs` — there is no init.lua to define `:Lazy`, and
+    # separately under `@envs` -- there is no init.lua to define `:Lazy`, and
     # the headless invocation fails. Skip cleanly in that case; per-user
     # `:Lazy sync` runs later when each user installs their `@envs` set.
     if selected_tools is not None and "env-nvim" not in selected_tools:
@@ -3054,7 +3054,7 @@ def _nvim_migration_notice(nvim_config):
                 content = f.read().strip()
             if content and content != "return {}":
                 warn(
-                    "lua/custom/plugins/init.lua has user content — migrate it to "
+                    "lua/custom/plugins/init.lua has user content -- migrate it to "
                     "~/.config/nvim/lua/user/plugins/ (the new user layer). "
                     f"Old path preserved: {custom_init}"
                 )
@@ -3202,7 +3202,7 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
 
     Reuses install_path() (rsync for dirs, atomic copy for files). Lets
     new single-file or simple-tree env entries land without writing a
-    bespoke handler each time. Custom handlers (env-bash, env-nvim, …)
+    bespoke handler each time. Custom handlers (env-bash, env-nvim, ...)
     still take precedence because the caller checks ENV_HANDLERS first.
     """
     source = pkg_entry.get("source", "")
@@ -3362,9 +3362,9 @@ def _list_table(rows, columns):
     sep = 2
     term_cols = shutil.get_terminal_size(fallback=(160, 24)).columns
 
-    # ── Width computation ──────────────────────────────────────────────────
+    # -- Width computation --------------------------------------------------
     # Fixed cols: natural width (capped by max_width when set).
-    # Elastic cols: those with a "wrap" key — share remaining terminal space.
+    # Elastic cols: those with a "wrap" key -- share remaining terminal space.
     elastic_indices = [i for i, c in enumerate(columns) if c.get("wrap")]
     fixed_indices = [i for i in range(n) if i not in elastic_indices]
 
@@ -3383,8 +3383,8 @@ def _list_table(rows, columns):
     # Optimise elastic col widths by minimising total output lines.
     #
     # Search bounds (content-derived, not terminal-derived):
-    #   min_g  = longest single group item — a group that won't fit in less
-    #   max_g  = longest full groups string — beyond this GROUPS never wraps,
+    #   min_g  = longest single group item -- a group that won't fit in less
+    #   max_g  = longest full groups string -- beyond this GROUPS never wraps,
     #            only DESCRIPTION gets squeezed; no benefit to going wider
     # Stop early once total_lines stops improving.
     if len(elastic_indices) == 2:
@@ -3399,7 +3399,7 @@ def _list_table(rows, columns):
             len(columns[gi]["name"]),
         )
         min_d = max(columns[di].get("min_width", 20), len(columns[di]["name"]))
-        # Natural ceiling: widest groups string — no wrap savings beyond this
+        # Natural ceiling: widest groups string -- no wrap savings beyond this
         natural_g = max((len(str(r[gi])) for r in rows), default=min_g)
         max_g = min(natural_g, available - min_d)
 
@@ -3429,7 +3429,7 @@ def _list_table(rows, columns):
 
     widths = {i: fixed_widths.get(i, elastic_widths.get(i, 0)) for i in range(n)}
 
-    # ── Pre-wrap all cells ─────────────────────────────────────────────────
+    # -- Pre-wrap all cells -------------------------------------------------
     # Each cell becomes a list of lines.
     def _cell_lines(r, i):
         s = str(r[i])
@@ -3437,7 +3437,7 @@ def _list_table(rows, columns):
             return wrap_fns[i](s, widths[i])
         return [s]
 
-    # ── Render ────────────────────────────────────────────────────────────
+    # -- Render ------------------------------------------------------------
     if _RICH and _console is not None:
         t = _RichTable(
             box=None,
@@ -3619,7 +3619,7 @@ def cmd_resolve(args, registry):
         eprint(f"Resolver error: {_err}")
         return 1
     if selected is None:
-        print("(empty registry; resolver returned None → install-everything sentinel)")
+        print("(empty registry; resolver returned None -> install-everything sentinel)")
         return 0
     print(f"Resolved {len(selected)} packages:")
     by_kind = {}
@@ -3675,7 +3675,7 @@ def cmd_doctor(args, registry, repo_dir):
     print()
 
     # Bin/lib artifact check. doctor previously only validated runtime archives, so a
-    # registry entry whose bin/*.bz2 or lib64/*.bz2 was never built passed silently —
+    # registry entry whose bin/*.bz2 or lib64/*.bz2 was never built passed silently --
     # and --only <pkg> "succeeded" while installing nothing. Verify them here.
     def _artifact_present(sub, stem):
         if not platform_dir:
@@ -3705,7 +3705,7 @@ def cmd_doctor(args, registry, repo_dir):
         print(f"Missing bin/lib artifacts ({len(missing_artifacts)} files across {len(bypkg)} packages):")
         for n in sorted(bypkg):
             items = bypkg[n]
-            shown = ", ".join(items[:6]) + (f" … (+{len(items) - 6})" if len(items) > 6 else "")
+            shown = ", ".join(items[:6]) + (f" ... (+{len(items) - 6})" if len(items) > 6 else "")
             print(f"  {n}: {shown}")
     else:
         print("All bin/lib artifacts present.")
@@ -3724,7 +3724,7 @@ def cmd_doctor(args, registry, repo_dir):
     if unknown_deps:
         print("Unresolved references:")
         for n, f, r in unknown_deps:
-            print(f"  {n} → {f} → {r}")
+            print(f"  {n} -> {f} -> {r}")
     else:
         print("All depends/recommends resolve to known packages.")
     print()
@@ -3791,8 +3791,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     backup_dir = ""
     # Backups exist to protect user-owned config files in $HOME / $XDG_CONFIG_HOME
     # that the env-* packages overwrite. When the selection contains no
-    # env-* package — e.g. a `@shared` install into a release tree, or a
-    # pure tool-only selection — nothing user-owned is touched, so the
+    # env-* package -- e.g. a `@shared` install into a release tree, or a
+    # pure tool-only selection -- nothing user-owned is touched, so the
     # backup phase has nothing to protect and the --no-backup warning
     # ("existing files will be overwritten") has nothing to warn about.
     # Skip both silently in that case.
@@ -3861,7 +3861,7 @@ def _adapt_install_args(args):
 
 
 def cmd_install_v2(args, registry, repo_dir, home):
-    """Thin shim: adapt new-CLI args → legacy cmd_install."""
+    """Thin shim: adapt new-CLI args -> legacy cmd_install."""
     pkgs = list(getattr(args, "packages", None) or [])
     if not pkgs:
         eprint("Error: no package specified")
@@ -4023,9 +4023,9 @@ def cmd_snapshot(args, repo_dir, home):
 def cmd_clean(args):
     """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/.
 
-    --logs    → delete /tmp/loadout.<user>.log
-    --pending → delete /tmp/loadout-pending-<user>/ (only if daemon PID is dead)
-    --all     → both, plus any stale /tmp/loadout-* tempdirs owned by this user
+    --logs    -> delete /tmp/loadout.<user>.log
+    --pending -> delete /tmp/loadout-pending-<user>/ (only if daemon PID is dead)
+    --all     -> both, plus any stale /tmp/loadout-* tempdirs owned by this user
     """
     do_logs = args.logs or args.clean_all
     do_pending = args.pending or args.clean_all
@@ -4058,7 +4058,7 @@ def cmd_clean(args):
                 full = os.path.join("/tmp", name)
                 try:
                     if os.lstat(full).st_uid != os.getuid():
-                        continue  # another user's state — not ours to clean
+                        continue  # another user's state -- not ours to clean
                 except OSError:
                     continue
                 try:
@@ -4091,8 +4091,8 @@ def _pending_daemon_alive():
     return True
 
 
-# Aliases (e.g. `update` → `upgrade`, `describe` → `info`) are declared on the
-# command itself via rich-click's native `aliases=[...]` kwarg — no custom Group
+# Aliases (e.g. `update` -> `upgrade`, `describe` -> `info`) are declared on the
+# command itself via rich-click's native `aliases=[...]` kwarg -- no custom Group
 # subclass needed.
 
 
@@ -4112,7 +4112,7 @@ def _selection_options(f):
     f = click.option(
         "--skip",
         default=None,
-        metavar="NAME,…",
+        metavar="NAME,...",
         help="Remove packages or @groups from the install set.",
     )(f)
     f = click.argument("packages", nargs=-1, metavar="PKG...")(f)
@@ -4158,7 +4158,7 @@ def _install_options(f):
 def _ctx_args(ctx, **extra):
     """Build a SimpleNamespace from command-level kwargs.
 
-    The legacy handler functions (cmd_install_v2, cmd_list, cmd_describe, …) read
+    The legacy handler functions (cmd_install_v2, cmd_list, cmd_describe, ...) read
     fields like args.packages, args.skip, args.dest_dir straight off the object;
     this shim lets the click decorators feed them without rewriting every handler.
     Verbs that take --dest-dir pass it via **extra.
@@ -4206,7 +4206,7 @@ def _print_version_and_exit(ctx, param, value):
 @click.option("--verbose", is_flag=True, help="Verbose progress output.")
 @click.pass_context
 def cli(ctx, verbose):
-    """loadout — offline-first package manager.
+    """loadout -- offline-first package manager.
 
     Installs bundled packages into the destination directory. Bare 'loadout' and
     bare 'loadout install' both print usage and exit non-zero (dnf parity); always
@@ -4423,7 +4423,7 @@ def main(argv):
         return 1
 
     signal.signal(signal.SIGINT, _sigint_handler)
-    # Guarantee the terminal cursor is restored on exit — Rich transient progress
+    # Guarantee the terminal cursor is restored on exit -- Rich transient progress
     # bars can leave it hidden on remote terminals (see _show_cursor docstring).
     atexit.register(_show_cursor)
 

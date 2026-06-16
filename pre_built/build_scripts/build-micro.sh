@@ -1,6 +1,6 @@
 #!/bin/sh
 # Package micro (terminal text editor) from official GitHub release for
-# el8.x86_64.glibc2p28.  Downloads the pre-built linux64 tarball — no Go
+# el8.x86_64.glibc2p28.  Downloads the pre-built linux64 tarball -- no Go
 # toolchain needed.
 #
 # Policy: always use a stable tagged release. See stable tags at:
@@ -81,7 +81,7 @@ echo ""
 echo "Installed: $BIN_DIR/micro.bz2"
 echo "Version:   $(file "$BIN" | head -1)"
 
-# ── update packages.json ─────────────────────────────────────────────────────────
+# -- update packages.json ---------------------------------------------------------
 
 TOOLS_JSON="$REPO/pre_built/packages.json"
 python3 -c "
@@ -97,7 +97,7 @@ open(path, 'w').write(txt)
 print('packages.json: micro version -> ' + ver)
 " "$TOOLS_JSON" "$ver"
 
-# ── strip manifest ────────────────────────────────────────────────────────────
+# -- strip manifest ------------------------------------------------------------
 
 echo "Running strip_all_elf_binaries..."
 "$REPO/strip_all_elf_binaries"

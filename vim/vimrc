@@ -114,7 +114,7 @@ if !has('nvim')
         set guicursor=i:block
         set mouse=a
         set clipboard=unnamed,unnamedplus
-        " Mouse-drag → auto-copy to clipboard + return cursor to pre-click position.
+        " Mouse-drag -> auto-copy to clipboard + return cursor to pre-click position.
         " <LeftMouse> fires before vim moves the cursor so we capture the original pos.
         let g:pre_mouse_pos = [0, 1, 1, 0]
         nnoremap <silent> <LeftMouse> :let g:pre_mouse_pos = getpos('.')<CR><LeftMouse>

@@ -3,7 +3,7 @@
 #
 # Targets a Release build with bundled deps (luajit, luv, libuv,
 # tree-sitter, etc.) so the resulting binary links only against
-# system glibc ≤ 2.28 — no bundled libs needed.
+# system glibc <= 2.28 -- no bundled libs needed.
 #
 # Note: official Neovim prebuilts require GLIBC_2.34+. EL8 provides
 # glibc 2.28, so source builds from stable tags are required permanently.
@@ -20,7 +20,7 @@
 #                    gettext gettext-devel
 #   # gcc-toolset-14 optional but recommended for consistent ABI
 #
-# Usage (run from any directory — script clones neovim automatically):
+# Usage (run from any directory -- script clones neovim automatically):
 #   /path/to/build-nvim.sh --tag v0.12.2
 #   /path/to/build-nvim.sh --tag v0.12.2 --clean   # wipe build dirs first
 
@@ -63,7 +63,7 @@ if [ -z "$tag" ]; then
     exit 1
 fi
 
-# ── prerequisite checks ───────────────────────────────────────────────────────
+# -- prerequisite checks -------------------------------------------------------
 
 if [ -r /opt/rh/gcc-toolset-14/enable ]; then
     # shellcheck disable=SC1091
@@ -72,7 +72,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -82,7 +82,7 @@ need ninja
 need gcc
 need g++
 
-# ── source checkout ───────────────────────────────────────────────────────────
+# -- source checkout -----------------------------------------------------------
 
 SRCDIR="/tmp/neovim-src-${tag}"
 
@@ -95,15 +95,15 @@ cd "$SRCDIR"
 git fetch --tags
 git checkout "$tag"
 
-# ── clean ─────────────────────────────────────────────────────────────────────
+# -- clean ---------------------------------------------------------------------
 
 if [ "$clean" -eq 1 ]; then
     rm -rf .deps build
 fi
 
-# ── build bundled deps ────────────────────────────────────────────────────────
+# -- build bundled deps --------------------------------------------------------
 # Must build deps before main build so bundled luajit is used as both
-# compiler and runtime — system luajit may have incompatible bytecode format.
+# compiler and runtime -- system luajit may have incompatible bytecode format.
 
 echo "Building bundled deps..."
 "$CMAKE" -S cmake.deps -B .deps -DCMAKE_BUILD_TYPE=Release
@@ -111,9 +111,9 @@ echo "Building bundled deps..."
 
 BUNDLED_LUAJIT="$(pwd)/.deps/usr/bin/luajit"
 
-# ── build nvim ────────────────────────────────────────────────────────────────
+# -- build nvim ----------------------------------------------------------------
 
-# Install into /tmp prefix — no sudo needed, runtime lands in a predictable path.
+# Install into /tmp prefix -- no sudo needed, runtime lands in a predictable path.
 INSTALL_PREFIX="/tmp/nvim-install-${tag}"
 rm -rf "$INSTALL_PREFIX"
 
@@ -133,7 +133,7 @@ echo ""
 echo "Build complete: $(./build/bin/nvim --version | head -1)"
 echo ""
 
-# ── package ───────────────────────────────────────────────────────────────────
+# -- package -------------------------------------------------------------------
 
 echo "Packaging binary..."
 WORK="/tmp/nvim_work_${tag}"
@@ -159,23 +159,23 @@ echo "Installed: $BIN_DIR/nvim.bz2"
 echo "Runtime:   $RUNTIME_DIR/nvim.tar.bz2"
 echo ""
 
-# ── glibc check ──────────────────────────────────────────────────────────────
+# -- glibc check --------------------------------------------------------------
 
 MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/nvim" 2>/dev/null \
     | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1)"
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
-# ── update packages.json ─────────────────────────────────────────────────────────
+# -- update packages.json ---------------------------------------------------------
 
 ver="${tag#v}"
 TOOLS_JSON="$REPO/pre_built/packages.json"
-# Use Python (guaranteed available — it's in pre_built) for reliable JSON field update
+# Use Python (guaranteed available -- it's in pre_built) for reliable JSON field update
 python3 -c "
 import re, sys
 path = sys.argv[1]; ver = sys.argv[2]
@@ -189,7 +189,7 @@ open(path, 'w').write(txt)
 print('packages.json: nvim version -> ' + ver)
 " "$TOOLS_JSON" "$ver"
 
-# ── strip manifest ────────────────────────────────────────────────────────────
+# -- strip manifest ------------------------------------------------------------
 
 echo "Running strip_all_elf_binaries..."
 "$REPO/strip_all_elf_binaries"

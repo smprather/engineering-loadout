@@ -4,13 +4,13 @@
 # flameshot >=13.0 is Qt6-only upstream, but EL8 has only Qt5 5.15 (what gui_libs
 # bundles) and NO prebuilt channel ships a glibc<=2.28 binary (fc/deb/AppImage are
 # all glibc 2.34+). So we back-port the current release to Qt5 with a small, stable
-# patch set (all stock Qt6->Qt5 idioms) and build natively on EL8 → glibc 2.27.
+# patch set (all stock Qt6->Qt5 idioms) and build natively on EL8 -> glibc 2.27.
 #
 # This is a MAINTAINED FORK-PATCH: each new flameshot release may need these
 # re-applied. The patches are idempotent-ish (guarded) and fail loudly if a target
 # string is missing, so a breaking upstream change is obvious at build time.
 #
-# Runtime: GUI tool. Links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb — ALL
+# Runtime: GUI tool. Links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb -- ALL
 # provided by gui_libs. Install with: ./loadout install gui_libs flameshot
 # RPATH $ORIGIN/../lib64 lets it find the bundled Qt5 in ~/.local/lib64.
 #
@@ -22,7 +22,7 @@
 #   sudo dnf install -y cmake qt5-qtbase-devel qt5-qtsvg-devel qt5-qttools-devel \
 #       qt5-qtbase-private-devel libxcb-devel
 #   # FetchContent pulls QtColorWidgets (gitlab) + QHotkey (github) at configure time
-#   # → needs network (not in the sandbox allowlist).
+#   # -> needs network (not in the sandbox allowlist).
 #
 # Usage (run from any directory):
 #   ./pre_built/build_scripts/build-flameshot.sh --tag v13.3.0
@@ -80,7 +80,7 @@ def patch(rel, replacements, required=True):
     for old, new in replacements:
         if old not in s:
             if required:
-                sys.exit("PATCH TARGET MISSING in %s:\n  %r\nUpstream changed — re-derive the Qt5 back-port." % (rel, old))
+                sys.exit("PATCH TARGET MISSING in %s:\n  %r\nUpstream changed -- re-derive the Qt5 back-port." % (rel, old))
             continue
         s = s.replace(old, new)
     with open(p, "w") as f:
@@ -158,7 +158,7 @@ readelf -d "$FLAMESHOT_BIN" 2>/dev/null | grep -iE "NEEDED.*Qt5" | sed 's/.*\[/ 
 MAX_GLIBC="$(readelf -V "$FLAMESHOT_BIN" 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1)"
 echo "  Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
-    GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9]) echo "  OK — EL8 compatible" ;;
+    GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9]) echo "  OK -- EL8 compatible" ;;
     *) echo "  WARNING: $MAX_GLIBC > GLIBC_2.28" >&2 ;;
 esac
 

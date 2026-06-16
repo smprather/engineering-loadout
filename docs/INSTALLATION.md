@@ -1,4 +1,4 @@
-# Installation — Details
+# Installation -- Details
 
 ## Linux
 
@@ -10,15 +10,15 @@ cd engineering-loadout-v*/
 ./loadout install @engineering-loadout
 ```
 
-Repo developers can also `git clone` and run `./loadout` from a checkout —
+Repo developers can also `git clone` and run `./loadout` from a checkout --
 the script resolves the repo from its own path and works from any cwd.
 
 `./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
-interpreter (`~/.local/bin/python3.14` → `<repo>/.loadout-bootstrap/bin/python3.14`
-→ cold-bootstrap from `pre_built/<platform>/portable-python-*.tar.bz2`) and
-execs `loadout_main.py` under it. No system Python is required — `bzip2` +
+interpreter (`~/.local/bin/python3.14` -> `<repo>/.loadout-bootstrap/bin/python3.14`
+-> cold-bootstrap from `pre_built/<platform>/portable-python-*.tar.bz2`) and
+execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 `tar` (always present on EL8/Suse/Debian) are the only host prerequisites.
-`loadout_main.py` enforces Python ≥ 3.14 via a `sys.version_info` gate.
+`loadout_main.py` enforces Python >= 3.14 via a `sys.version_info` gate.
 
 ### Subcommands & options
 
@@ -52,7 +52,7 @@ execs `loadout_main.py` under it. No system Python is required — `bzip2` +
 
 | Destination | Source |
 |-------------|--------|
-| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | → `bash/bashrc` |
+| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | -> `bash/bashrc` |
 | `~/.config/bash/` | Layered bash config |
 | `~/.vimrc` | `vim/vimrc` |
 | `~/.vim/` | `vim/vim/` |
@@ -88,8 +88,8 @@ Simulate a completely fresh user environment:
 ### Shared / read-only deployments
 
 For a single install shared by many users, do not mutate the live tree in
-place. Install only the shared artifacts — every package except the
-per-user `env` config bundles — with the synthetic `@shared` group:
+place. Install only the shared artifacts -- every package except the
+per-user `env` config bundles -- with the synthetic `@shared` group:
 
 ```bash
 ./loadout install @shared \
@@ -121,7 +121,7 @@ This avoids `Text file busy` failures from users running old binaries while
 an update is unpacked. Existing processes keep their old inodes; new shells
 resolve the new `current` target. Keep the previous release for rollback
 and delete old releases only after no users still need them. `tmux` is a
-special case — clients and the server must agree on protocol / version, so
+special case -- clients and the server must agree on protocol / version, so
 restart the tmux server before switching users to a tmux update.
 
 Neovim catalog plugin source can live in the shared release tree instead of
@@ -139,7 +139,7 @@ catalog.
 ### Symlink handling
 
 If `$HOME` has existing symlinks where the loadout needs to create
-directories (e.g. `~/.terminfo → /usr/share/terminfo`), the default
+directories (e.g. `~/.terminfo -> /usr/share/terminfo`), the default
 (`--install-follows-symlinks=auto`) follows the symlink when its target is
 writable, and otherwise removes the symlink and creates a real directory in
 its place. Use `--install-follows-symlinks=yes` to always write into the
@@ -188,7 +188,7 @@ snapshots (large and reproducible).
 .\loadout.ps1
 ```
 
-No elevation required. Files are copied, not symlinked — re-run
+No elevation required. Files are copied, not symlinked -- re-run
 `.\loadout.ps1` after repo updates.
 
 ### Windows destinations
@@ -200,7 +200,7 @@ No elevation required. Files are copied, not symlinked — re-run
 | `%USERPROFILE%\.config\starship\starship.toml` | `starship/starship.windows.toml` |
 | `%USERPROFILE%\.editorconfig` | `editorconfig/editorconfig` |
 | `%USERPROFILE%\autohotkey\hotkeys.ahk` | `autohotkey/hotkeys.ahk` (feature-patched) |
-| `%USERPROFILE%\loadout_keys.toml` | Created if missing — choose AHK features |
+| `%USERPROFILE%\loadout_keys.toml` | Created if missing -- choose AHK features |
 | PowerShell profile (5.1 + 7+) | `powershell/Microsoft.PowerShell_profile.ps1` |
 
 ### AutoHotKey feature flags

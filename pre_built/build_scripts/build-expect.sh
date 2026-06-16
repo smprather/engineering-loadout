@@ -61,7 +61,7 @@ done
 [ -n "$tag" ] || {
     echo "ERROR: --tag <version> required (e.g. --tag 5.45.4)" >&2
     echo "Stable tarballs: https://sourceforge.net/projects/expect/files/Expect/" >&2
-    echo "Policy: stable releases only — no git HEAD or dev builds." >&2
+    echo "Policy: stable releases only -- no git HEAD or dev builds." >&2
     exit 2
 }
 
@@ -72,7 +72,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -82,7 +82,7 @@ need make
 need curl
 need bzip2
 
-# ── Tcl 8.6 ──────────────────────────────────────────────────────────────────
+# -- Tcl 8.6 ------------------------------------------------------------------
 
 TCL_INSTALL="/tmp/tcl-install-${tcl_version}"
 TCL_SRCDIR="/tmp/tcl-src-${tcl_version}"
@@ -112,11 +112,11 @@ if [ ! -f "$TCL_INSTALL/lib/libtcl8.6.so" ]; then
     echo "Tcl ${tcl_version} built: ${TCL_INSTALL}"
 fi
 
-# ── expect ────────────────────────────────────────────────────────────────────
+# -- expect --------------------------------------------------------------------
 
 EXPECT_SRCDIR="/tmp/expect-src-${tag}"
 EXPECT_INSTALL="/tmp/expect-install-${tag}"
-# expect tarball name differs from version string: expect5.45.4 → expect5.45.4.tar.gz
+# expect tarball name differs from version string: expect5.45.4 -> expect5.45.4.tar.gz
 EXPECT_NAME="expect${tag}"
 EXPECT_TARBALL="/tmp/${EXPECT_NAME}.tar.gz"
 EXPECT_URL="https://sourceforge.net/projects/expect/files/Expect/${tag}/${EXPECT_NAME}.tar.gz/download"
@@ -186,7 +186,7 @@ if old:
     open(path, 'w').write(src)
     print("exp_chan.c: patched Tcl_ChannelType initializer for modern Tcl")
 else:
-    print("exp_chan.c: pattern not found — may already be patched or different version")
+    print("exp_chan.c: pattern not found -- may already be patched or different version")
 PYEOF
 fi
 
@@ -201,7 +201,7 @@ echo ""
 echo "Build complete: $("$EXPECT_BIN" -v 2>&1 | head -1)"
 echo ""
 
-# ── package expect binary ─────────────────────────────────────────────────────
+# -- package expect binary -----------------------------------------------------
 
 WORK="/tmp/expect_work_${tag}"
 cp "$EXPECT_BIN" "$WORK"
@@ -212,7 +212,7 @@ cp "${WORK}.bz2" "$BIN_DIR/expect.bz2"
 rm -f "$WORK" "${WORK}.bz2"
 echo "Installed: $BIN_DIR/expect.bz2"
 
-# ── package libtcl8.6.so ─────────────────────────────────────────────────────
+# -- package libtcl8.6.so -----------------------------------------------------
 
 TCL_LIB="$TCL_INSTALL/lib/libtcl8.6.so"
 LIBWORK="/tmp/libtcl8.6_work_${tcl_version}"
@@ -224,7 +224,7 @@ cp "${LIBWORK}.bz2" "$LIB_DIR/libtcl8.6.so.bz2"
 rm -f "$LIBWORK" "${LIBWORK}.bz2"
 echo "Installed: $LIB_DIR/libtcl8.6.so.bz2"
 
-# ── update packages.json version ─────────────────────────────────────────────
+# -- update packages.json version ---------------------------------------------
 
 TOOLS_JSON="$REPO/pre_built/packages.json"
 python3 -c "
@@ -241,7 +241,7 @@ open(path, 'w').write(new)
 print('packages.json: expect version -> ' + ver)
 " "$TOOLS_JSON" "$tag"
 
-# ── strip manifest + glibc check ─────────────────────────────────────────────
+# -- strip manifest + glibc check ---------------------------------------------
 
 echo "Running strip_all_elf_binaries..."
 "$REPO/strip_all_elf_binaries"
@@ -251,7 +251,7 @@ MAX_GLIBC="$(readelf -V "$EXPECT_INSTALL/bin/expect" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
         echo "WARNING: requires newer glibc than EL8 baseline" >&2 ;;
 esac

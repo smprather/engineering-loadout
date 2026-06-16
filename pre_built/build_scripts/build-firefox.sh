@@ -16,7 +16,7 @@
 #        STAGE/bin/firefox    <- thin wrapper exec'ing firefox-bin
 #   4. tar+bzip into pre_built/<plat>/runtime/firefox.tar.bz2 and let
 #      strip_all_elf_binaries auto-chunk it into .part-NNN shards
-#      (firefox is ~329 MB uncompressed / ~110 MB compressed — well
+#      (firefox is ~329 MB uncompressed / ~110 MB compressed -- well
 #      above the 40 MiB chunking threshold).
 #
 # The Fedora-shipped /usr/bin/firefox launcher is intentionally NOT
@@ -35,13 +35,13 @@
 # NSS runtime closure (13 .so) inside the bundle; see the staging step.
 #
 # System libs still assumed present on the target (NOT bundled):
-#   - glibc (libc/libm/libpthread/libdl/librt) — policy
-#   - libstdc++ / libgcc_s — policy
-#   - libsqlite3.so.0 — softokn3 dep; EL8 base sqlite (3.26), identical on
+#   - glibc (libc/libm/libpthread/libdl/librt) -- policy
+#   - libstdc++ / libgcc_s -- policy
+#   - libsqlite3.so.0 -- softokn3 dep; EL8 base sqlite (3.26), identical on
 #     build + dest, never security-bumped, so safe to leave external
-#   - libtasn1.so.6   — nssckbi dep; EL8 base, stable
-#   - libasound2 — alsa-lib, present on every EL8 desktop/farm node
-#   - libfreetype / libfontconfig — system; also in gui_libs
+#   - libtasn1.so.6   -- nssckbi dep; EL8 base, stable
+#   - libasound2 -- alsa-lib, present on every EL8 desktop/farm node
+#   - libfreetype / libfontconfig -- system; also in gui_libs
 #
 # gui_libs (declared as a depends in packages.json) covers the GTK3 /
 # cairo / pango / X11 / Wayland stack libxul.so dlopens at runtime.
@@ -98,7 +98,7 @@ SRC_DIR=/usr/lib64/firefox
 SRC_BIN="$SRC_DIR/firefox-bin"
 
 if [ ! -d "$SRC_DIR" ]; then
-    echo "ERROR: $SRC_DIR not found — install/upgrade firefox first:" >&2
+    echo "ERROR: $SRC_DIR not found -- install/upgrade firefox first:" >&2
     echo "  sudo dnf upgrade -y firefox" >&2
     exit 1
 fi
@@ -138,7 +138,7 @@ mkdir -p "$STAGE/bin" "$STAGE/lib"
 # Both are rewritten below so the bundled tree is fully self-contained.
 cp -a "$SRC_DIR" "$STAGE/lib/firefox"
 
-# The Hunspell dictionaries symlink points outside the bundle.  Drop it —
+# The Hunspell dictionaries symlink points outside the bundle.  Drop it --
 # firefox still ships its own built-in spell data; users who want extra
 # Hunspell dictionaries can install hunspell-* on the host and re-create
 # the symlink in their $HOME profile.
@@ -189,7 +189,7 @@ echo "==> Bundling NSS/NSPR closure into lib/firefox/ ..."
 for nsslib in $NSS_LIBS; do
     src=$(readlink -f "/usr/lib64/$nsslib" 2>/dev/null || true)
     [ -n "$src" ] && [ -f "$src" ] || {
-        echo "ERROR: /usr/lib64/$nsslib missing — install nss/nspr first" >&2
+        echo "ERROR: /usr/lib64/$nsslib missing -- install nss/nspr first" >&2
         exit 1
     }
     dst="$STAGE/lib/firefox/$nsslib"
@@ -227,7 +227,7 @@ exec "$libdir/firefox-bin" "$@"
 EOF
 chmod 755 "$STAGE/bin/firefox"
 
-# Optional XDG desktop entry — copied unmodified.  Users with a desktop
+# Optional XDG desktop entry -- copied unmodified.  Users with a desktop
 # session pick it up via XDG_DATA_DIRS=$HOME/.local/share:...; the .desktop
 # file's Exec= line points at /usr/bin/firefox, which still works on EL8
 # workstations as a fallback but the bundled wrapper is the intended path.
@@ -241,7 +241,7 @@ mkdir -p "$RUNTIME_DIR"
 ARCHIVE="$RUNTIME_DIR/firefox.tar.bz2"
 # Wipe any stale chunked output from a prior build so strip_all_elf_binaries
 # does not mistake yesterday's chunks for the current archive (manifest-hit
-# is keyed by chunk0's sha — stale chunks block reprocessing).
+# is keyed by chunk0's sha -- stale chunks block reprocessing).
 rm -f "$ARCHIVE" "$ARCHIVE".part-*
 tar cjf "$ARCHIVE" -C "$STAGE" .
 echo "  Wrote: $ARCHIVE ($(wc -c < "$ARCHIVE" | tr -d ' ') bytes)"
@@ -257,7 +257,7 @@ if 'firefox' in pkgs:
     pkgs['firefox']['version'] = ver
     print(f'packages.json: firefox version -> {ver}')
 else:
-    print('WARNING: firefox not in packages.json — add the entry manually')
+    print('WARNING: firefox not in packages.json -- add the entry manually')
 with open(path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')

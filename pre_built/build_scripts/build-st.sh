@@ -79,7 +79,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -148,7 +148,7 @@ if stub in src:
     p.write_text(src)
     print("fixup 2: removed duplicate SGR 58 stub")
 else:
-    print("fixup 2: skipped (stub not found — patch layout may have changed)")
+    print("fixup 2: skipped (stub not found -- patch layout may have changed)")
 PYEDIT
 
     # UNDERCURL_STYLE = CURLY (project default; edit if you want SPIKY/CAPPED).
@@ -233,7 +233,7 @@ echo ""
 echo "Build complete: $(./st -v 2>&1 | head -1 || echo "st $tag built ($(stat -c%s st) bytes)")"
 echo ""
 
-# Strip → patchelf → bzip2 (order critical: stripping after patchelf corrupts
+# Strip -> patchelf -> bzip2 (order critical: stripping after patchelf corrupts
 # .dynstr placement; see project_elf_bundling memory).
 WORK="/tmp/st_work_${tag}"
 cp st "$WORK"
@@ -288,7 +288,7 @@ MAX_GLIBC="$(readelf -V "$SRCDIR/st" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
         echo "WARNING: requires newer glibc than EL8 baseline" >&2 ;;
 esac

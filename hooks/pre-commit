@@ -22,9 +22,9 @@ if [[ -n "$embedded_gits" ]]; then
     done <<< "$embedded_gits"
     echo "Re-staging affected files..."
     git add -A
-    echo "✓ Cleaned up embedded git repositories"
+    echo "OK Cleaned up embedded git repositories"
 else
-    echo "✓ No embedded git repositories found"
+    echo "OK No embedded git repositories found"
 fi
 
 # --- 2. Strip repo binaries and binary archives ---
@@ -39,7 +39,7 @@ if [[ -n "$staged_strip_candidates" ]]; then
     echo "Pre-commit: Stripping repo binaries and archives..."
 
     if ! command -v strip >/dev/null; then
-        echo "  WARNING: 'strip' not found in PATH — skipping ELF stripping." >&2
+        echo "  WARNING: 'strip' not found in PATH -- skipping ELF stripping." >&2
         echo "  Run ./strip_all_elf_binaries manually before committing binary/archive changes." >&2
     else
         "$script_dir/strip_all_elf_binaries"
@@ -62,7 +62,7 @@ if [[ -n "$staged_strip_candidates" ]]; then
         done <<< "$staged_strip_candidates"
         [[ -f .strip-manifest ]] && git add .strip-manifest
         [[ -f pre_built/.strip-manifest ]] && git add pre_built/.strip-manifest
-        echo "✓ Repo binaries and archives stripped and staged"
+        echo "OK Repo binaries and archives stripped and staged"
     fi
 fi
 
@@ -85,7 +85,7 @@ while IFS= read -r _f; do
 done <<< "$_staged_all"
 
 if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
-    # Python 3.14 syntax check — the installer body and all post-install
+    # Python 3.14 syntax check -- the installer body and all post-install
     # scripts run under bundled python3.14 (via the POSIX-sh loadout shim
     # or ~/.local/bin/python3.14 after install).
     _py314=""
@@ -103,7 +103,7 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
             fi
         done
         if [[ "$_py314_ok" == "1" ]]; then
-            echo "✓ Python 3.14 syntax OK"
+            echo "OK Python 3.14 syntax OK"
         else
             echo "ERROR: Fix syntax errors above before committing." >&2
             exit 1
@@ -114,13 +114,13 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
 
     echo "Pre-commit: Formatting Python files with ruff..."
     if ! command -v ruff >/dev/null; then
-        echo "  WARNING: 'ruff' not found in PATH — skipping format." >&2
+        echo "  WARNING: 'ruff' not found in PATH -- skipping format." >&2
         echo "  Run 'ruff format <files>' && 'ruff check --fix <files>' manually before committing Python changes." >&2
     else
         ruff format "${_staged_py_files[@]}"
         ruff check --fix "${_staged_py_files[@]}"
         git add -- "${_staged_py_files[@]}"
-        echo "✓ Python files formatted and imports sorted"
+        echo "OK Python files formatted and imports sorted"
     fi
 fi
 
@@ -145,7 +145,7 @@ if [[ -n "$_staged_large_prebuilt" ]]; then
         echo "  Chunking: $_lf"
         "$script_dir/strip_all_elf_binaries" --chunk-only 2>/dev/null || true
         # strip_all_elf_binaries --chunk-only processes all of pre_built/ at once;
-        # run once then break — the loop is just to print which file triggered it.
+        # run once then break -- the loop is just to print which file triggered it.
         break
     done <<< "$_staged_large_prebuilt"
     # Re-stage: remove original large files, add new chunk files.
@@ -156,7 +156,7 @@ if [[ -n "$_staged_large_prebuilt" ]]; then
             git add -- "${_lf}.part-"* 2>/dev/null || true
         fi
     done <<< "$_staged_large_prebuilt"
-    echo "✓ Large files chunked and re-staged"
+    echo "OK Large files chunked and re-staged"
 fi
 
 exit 0

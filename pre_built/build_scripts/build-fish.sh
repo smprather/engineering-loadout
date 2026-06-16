@@ -69,7 +69,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -159,9 +159,9 @@ MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/fish" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo ""

@@ -122,17 +122,17 @@ echo "Temp HOME: $test_home"
 ) 2>&1 | tee "$install_log"
 
 # Header: Rich prints "Install Results" (no colon, embedded in box-drawing),
-# plain fallback prints "Install results:" — match either.
+# plain fallback prints "Install results:" -- match either.
 if ! grep -Eq "Install [Rr]esults" "$install_log"; then
     echo "Expected final install results table" >&2
     exit 1
 fi
-# Per-row checks tolerate both Rich (│ name │ status │) and plain whitespace.
-if ! grep -Eq "config files[[:space:]│|]+yes" "$install_log"; then
+# Per-row checks tolerate both Rich (| name | status |) and plain whitespace.
+if ! grep -Eq "config files[[:space:]||]+yes" "$install_log"; then
     echo "Expected 'config files' success row in install results table" >&2
     exit 1
 fi
-if ! grep -Eq "fonts[[:space:]│|]+skip[[:space:]│|]+no font-\* packages" "$install_log"; then
+if ! grep -Eq "fonts[[:space:]||]+skip[[:space:]||]+no font-\* packages" "$install_log"; then
     echo "Expected fonts skip row in install results table" >&2
     exit 1
 fi

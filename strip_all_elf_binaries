@@ -239,7 +239,7 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
     if elf_has_rpath(payload):
         # RPATH present means patchelf already ran; strip must precede patchelf
         # (strip after patchelf corrupts .dynstr placement). Binary was already
-        # stripped as part of the bundle workflow — do not strip again.
+        # stripped as part of the bundle workflow -- do not strip again.
         print(f"skip patchelf'd payload (RPATH set): {bz2_path}")
         stats["skipped_nonelf"] += 1
         os.unlink(payload)
@@ -308,7 +308,7 @@ def add_tree_to_tar(tf, source_dir):
 
 
 def split_large_file(path, chunk_size=CHUNK_THRESHOLD):
-    """Split path into path.part-000, path.part-001, … and remove original.
+    """Split path into path.part-000, path.part-001, ... and remove original.
 
     Returns the number of chunks created, or 0 if the file is within threshold.
     Caller is responsible for updating any manifest entry after splitting.
@@ -388,7 +388,7 @@ def safe_extractall(tf, dest_dir):
 def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats):
     out_path = tar_bz2_path(tar_path)
     out_rel = repo_rel(repo_dir, out_path)
-    # Already processed and chunked — first part stands in for the whole archive.
+    # Already processed and chunked -- first part stands in for the whole archive.
     chunk0 = out_path + ".part-000"
     if os.path.isfile(chunk0) and manifest.tar_hit(out_rel + ".part-000", chunk0):
         print(f"manifest hit (already processed tar): {out_path}")
@@ -418,12 +418,12 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
     for member in walk_files(work_dir):
         if not is_elf_file(member):
             continue
-        # CRITICAL: never strip an ELF that already carries an RPATH/RUNPATH — it
+        # CRITICAL: never strip an ELF that already carries an RPATH/RUNPATH -- it
         # was patchelf'd (and stripped first) in its build script. Stripping AFTER
         # patchelf corrupts .dynstr/.gnu.version placement, producing "no version
         # information available" / "undefined symbol: , version" at runtime. This is
         # the same guard process_bzip2 applies; runtime tars (node, octave .oct libs,
-        # lua-language-server, nvim-qt, …) are full of patchelf'd binaries.
+        # lua-language-server, nvim-qt, ...) are full of patchelf'd binaries.
         if elf_has_rpath(member):
             continue
         strip_file(strip_bin, member)

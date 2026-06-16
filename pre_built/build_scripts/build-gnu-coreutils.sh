@@ -5,7 +5,7 @@
 #   pre_built/el8.x86_64.glibc2p28/bin/<name>.bz2
 #
 # Runtime deps (system on all EL8, never bundled):
-#   libc.so.6, libpthread.so.0 (glibc — always present)
+#   libc.so.6, libpthread.so.0 (glibc -- always present)
 #
 # Configure skips acl, selinux, gmp to keep deps at glibc-only.
 # libacl/libselinux are NOT guaranteed on all compute fleet nodes.
@@ -75,7 +75,7 @@ echo "==> Packaging binaries ..."
 # The registry is the single source of truth for which coreutils programs we ship.
 # coreutils builds ~106 programs; we curate a subset (e.g. excluding builtin-shadowing
 # kill/pwd/[/printenv and rarely-wanted chroot/pinky/...). Read packages.json
-# gnu-coreutils.bins and copy ONLY those — so the build output always equals the
+# gnu-coreutils.bins and copy ONLY those -- so the build output always equals the
 # registry, with no hand-maintained skip list to drift.
 WANTED_BINS="$(python3 -c "
 import json, sys
@@ -83,7 +83,7 @@ d = json.load(open(sys.argv[1]))['packages']['gnu-coreutils']
 print(' '.join(d.get('bins', [])))
 " "$REPO_ROOT/pre_built/packages.json")"
 if [ -z "$WANTED_BINS" ]; then
-    echo "ERROR: gnu-coreutils.bins empty in packages.json — refusing to ship the full set" >&2
+    echo "ERROR: gnu-coreutils.bins empty in packages.json -- refusing to ship the full set" >&2
     exit 1
 fi
 
@@ -101,11 +101,11 @@ for bin in "$INSTALL_DIR/bin/"*; do
         continue
     fi
 
-    # Check glibc max symbol — must be ≤ 2.28
+    # Check glibc max symbol -- must be <= 2.28
     max_glibc="$(readelf -V "$bin" 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1)"
     echo "  $name: max glibc=$max_glibc"
 
-    # Strip → compress (no patchelf needed — links only against libc which is system)
+    # Strip -> compress (no patchelf needed -- links only against libc which is system)
     /usr/bin/strip "$bin"
     bzip2 -k "$bin"
     cp "${bin}.bz2" "$BIN_DIR/${name}.bz2"

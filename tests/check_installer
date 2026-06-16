@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Fast installer sanity checks — runs in seconds, no temp HOME needed.
+# Fast installer sanity checks -- runs in seconds, no temp HOME needed.
 # Run before commits touching the loadout installer or packages.json.
 #
 # Checks:
 #   1. POSIX-sh syntax of the `loadout` shim + py3.14 syntax of loadout_main.py.
-#   2. doctor — registry integrity, archive presence, dep resolution
-#   3. dry-run (@core-cli) — resolver sanity, verify key core packages resolve
-#   4. dry-run (@engineering-loadout) — full bundled-set completeness
+#   2. doctor -- registry integrity, archive presence, dep resolution
+#   3. dry-run (@core-cli) -- resolver sanity, verify key core packages resolve
+#   4. dry-run (@engineering-loadout) -- full bundled-set completeness
 #   5. bare 'install' must error (no "default install" anymore)
 #
 # Usage:
@@ -40,7 +40,7 @@ fi
 # loadout_main.py is the python body; the shim picks the right interpreter
 # at run time. For source-check we try the bootstrap-cache or installed
 # python3.14, falling back to system python3 (which may reject 3.14 syntax
-# — accept that as a soft fail).
+# -- accept that as a soft fail).
 PY314=""
 for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14"; do
     if [[ -x "$cand" ]]; then PY314="$cand"; break; fi
@@ -57,7 +57,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. doctor — registry integrity
+# 2. doctor -- registry integrity
 # ---------------------------------------------------------------------------
 echo "--- 2. doctor ---"
 DOCTOR_OUT=$(cd /tmp && "$INSTALLER" doctor 2>&1)
@@ -69,7 +69,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. dry-run @core-cli — resolver returns expected core packages
+# 3. dry-run @core-cli -- resolver returns expected core packages
 # ---------------------------------------------------------------------------
 echo "--- 3. dry-run @core-cli ---"
 DRY_CORE=$(cd /tmp && "$INSTALLER" install "@core-cli" --dry-run 2>&1)
@@ -83,7 +83,7 @@ for pkg in "${REQUIRED_CORE[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# 4. dry-run @engineering-loadout — full bundled-set completeness
+# 4. dry-run @engineering-loadout -- full bundled-set completeness
 # ---------------------------------------------------------------------------
 echo "--- 4. dry-run @engineering-loadout ---"
 DRY_FULL=$(cd /tmp && "$INSTALLER" install "@engineering-loadout" --dry-run 2>&1)
@@ -94,15 +94,15 @@ for pkg in "${REQUIRED_FULL[@]}"; do
     if echo "$DRY_FULL" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
         pass "full set resolves: $pkg"
     else
-        fail "full set missing: $pkg — check @engineering-loadout group"
+        fail "full set missing: $pkg -- check @engineering-loadout group"
     fi
 done
 
 FULL_COUNT=$(echo "$DRY_FULL" | grep -oE 'Resolved [0-9]+' | grep -oE '[0-9]+' || echo 0)
 if [[ "$FULL_COUNT" -ge 80 ]]; then
-    pass "@engineering-loadout resolves $FULL_COUNT packages (≥80)"
+    pass "@engineering-loadout resolves $FULL_COUNT packages (>=80)"
 else
-    fail "@engineering-loadout resolves only $FULL_COUNT packages — expected ≥80"
+    fail "@engineering-loadout resolves only $FULL_COUNT packages -- expected >=80"
 fi
 
 # ---------------------------------------------------------------------------

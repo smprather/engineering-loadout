@@ -79,7 +79,7 @@ log_into_corp_vpn()
     if (!g_corp_mode || g_idle || !g_autologin)
         return
 
-    ; Don't try to reconnect while the workstation is locked — there's
+    ; Don't try to reconnect while the workstation is locked -- there's
     ; likely no network, and we'd just pile up error dialogs.
     if (ProcessExist("LogonUI.exe"))
         return
@@ -90,7 +90,7 @@ log_into_corp_vpn()
     ; Start with a cooldown so Cisco's own auto-connect (e.g. after a
     ; reboot) has time to finish before we try clicking Connect.
     static last_action_ms := A_TickCount
-    ; Exponential backoff when server is unreachable — starts at 30 s,
+    ; Exponential backoff when server is unreachable -- starts at 30 s,
     ; doubles each consecutive failure, caps at ~16 min.
     static fail_backoff_ms := 0
     static last_fail_ms := 0
@@ -125,7 +125,7 @@ log_into_corp_vpn()
             return
         }
 
-        ; Cooldown after any Connect click — prevents clicking Connect again
+        ; Cooldown after any Connect click -- prevents clicking Connect again
         ; while a connection attempt is still being processed.
         if (A_TickCount - last_action_ms < 5000) {
             SetTitleMatchMode(2)
@@ -221,7 +221,7 @@ handle_thinlinc()
     g_thinlinc_ticks += 1
 
     try {
-        ; --- Case 1: "Connection error" dialog → dismiss so tlclient restarts ---
+        ; --- Case 1: "Connection error" dialog -> dismiss so tlclient restarts ---
         SetTitleMatchMode(3)
         if (WinExist("Connection error ahk_exe tlclient.exe")) {
             g_thinlinc_last_seen := "case1: dismissing 'Connection error'"
@@ -235,18 +235,18 @@ handle_thinlinc()
 
         server := EnvGet("THINLINC_SERVER")
         if (server = "") {
-            g_thinlinc_last_seen := "THINLINC_SERVER env var is empty — nothing to do"
+            g_thinlinc_last_seen := "THINLINC_SERVER env var is empty -- nothing to do"
             SetTitleMatchMode(2)
             return
         }
 
-        ; --- Case 2: Main ThinLinc client window → fill creds + Connect ---
+        ; --- Case 2: Main ThinLinc client window -> fill creds + Connect ---
         if (WinExist("ThinLinc client ahk_exe tlclient.exe")) {
             SetTitleMatchMode(2)
 
-            ; Rate-limit only the fill/connect path — guards against credential
+            ; Rate-limit only the fill/connect path -- guards against credential
             ; hammering if Connect keeps failing. Does not delay the initial
-            ; reconnect cycle (dismiss → relaunch → first fill).
+            ; reconnect cycle (dismiss -> relaunch -> first fill).
             if (A_TickCount - last_fill_ms < 10000) {
                 g_thinlinc_last_seen := "case2: rate-limited (" . ((A_TickCount - last_fill_ms) // 1000) . "s since last fill)"
                 return
@@ -275,7 +275,7 @@ handle_thinlinc()
                 Send("+{Tab}")
             Sleep(50)
 
-            ; Server → Username → Password (Tab between them).
+            ; Server -> Username -> Password (Tab between them).
             Send("^a{Delete}")
             SendText(server)
             Send("{Tab}")
@@ -294,7 +294,7 @@ handle_thinlinc()
         }
         SetTitleMatchMode(2)
 
-        ; --- Case 3: tlclient not running → only relaunch if we just dismissed an error ---
+        ; --- Case 3: tlclient not running -> only relaunch if we just dismissed an error ---
         if (ProcessExist("tlclient.exe")) {
             g_thinlinc_last_seen := "case3: tlclient.exe running, no main window match (connecting?)"
             return
@@ -336,7 +336,7 @@ thinlinc_server_reachable(host)
 ; ! = Alt
 
 /*
-; Diagnostic hotkey: Ctrl+Alt+D — scans visible top-level windows and shows any
+; Diagnostic hotkey: Ctrl+Alt+D -- scans visible top-level windows and shows any
 ; whose title or EXE matches a regex. Kept commented for future targeting work;
 ; uncomment (and tweak the `needles` pattern) when identifying a new app's dialogs.
 ^!d::
@@ -396,7 +396,7 @@ thinlinc_server_reachable(host)
     Reload
 }
 
-; Toggle all hotkeys on/off — exempt from suspension so it always works.
+; Toggle all hotkeys on/off -- exempt from suspension so it always works.
 ; Saves/restores g_autologin so VPN auto-login resumes its prior state on unpause.
 #SuspendExempt
 ^!a::
@@ -429,7 +429,7 @@ thinlinc_server_reachable(host)
 #HotIf
 
 #HotIf cfg_feature_thinlinc_reconnect
-; Ctrl+Alt+T — dump handle_thinlinc() state, env vars, window matches, and a live ping.
+; Ctrl+Alt+T -- dump handle_thinlinc() state, env vars, window matches, and a live ping.
 ^!t::
 {
     global cfg_feature_thinlinc_reconnect, g_thinlinc_ticks, g_thinlinc_last_seen, g_thinlinc_relaunch_pending

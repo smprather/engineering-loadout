@@ -2,7 +2,7 @@
 # Build ncdu (Zig v2) from source for el8.x86_64.glibc2p28.
 #
 # ncdu v2 is a full rewrite in Zig; v1 (C) is unmaintained.
-# Binary is fully self-contained — no bundled libs needed.
+# Binary is fully self-contained -- no bundled libs needed.
 #
 # Policy: always build from a stable tagged release. See tags at:
 #   https://code.blicky.net/yorhel/ncdu/tags

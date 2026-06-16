@@ -2,7 +2,7 @@
 # Build zsh from source for el8.x86_64.glibc2p28.
 #
 # Produces a statically-linked ncurses zsh binary that links only against
-# system glibc 2.28 — no bundled libs needed at runtime.
+# system glibc 2.28 -- no bundled libs needed at runtime.
 #
 # Deps bundled from this repo: libncurses.so.6, libreadline.so.7
 # PCRE support is disabled to avoid bundling libpcre.so.1; zsh regex
@@ -68,7 +68,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -125,7 +125,7 @@ rm -rf "$INSTALL_PREFIX"
 
 make -j"$(nproc 2>/dev/null || echo 8)"
 # Install only what we package (binary + modules + shell functions). Skip
-# install.man / install.info — zsh's man pages need `yodl` (absent on EL8) and
+# install.man / install.info -- zsh's man pages need `yodl` (absent on EL8) and
 # we bundle only the self-contained binary anyway.
 make install.bin install.modules install.fns
 
@@ -168,9 +168,9 @@ MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/zsh" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo ""

@@ -2,7 +2,7 @@
 
 ## Adding a new pre-built binary
 
-Order matters: always **strip → patchelf → bzip2**. Stripping after patchelf
+Order matters: always **strip -> patchelf -> bzip2**. Stripping after patchelf
 corrupts `.dynstr`.
 
 ```bash
@@ -72,9 +72,9 @@ After extracting a release and running
 `./loadout install @engineering-loadout` to install the runtime, run
 `./dev-onboard` once to add the system-level packages, dev headers, and
 per-user toolchains required to rebuild any bundled tool from source. Six
-phases: dnf repos → toolchains (gcc-toolset-14, llvm, go) → dev headers
-(X11 / Qt5 / GTK3 / ncurses / Octave) → release / CI (gh, docker) →
-per-user (rustup, nvm, uv tool meson) → sanity checks. Idempotent;
+phases: dnf repos -> toolchains (gcc-toolset-14, llvm, go) -> dev headers
+(X11 / Qt5 / GTK3 / ncurses / Octave) -> release / CI (gh, docker) ->
+per-user (rustup, nvm, uv tool meson) -> sanity checks. Idempotent;
 `--check` for dry-run, `--yes` for non-interactive.
 
 ## Repo development
@@ -92,7 +92,7 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 Provides:
 
-- **pre-commit** — strips ELF payloads from newly staged binaries and archives,
+- **pre-commit** -- strips ELF payloads from newly staged binaries and archives,
   normalizes tarballs to `.tar.bz2`, updates `.strip-manifest`. Removes any
   embedded `.git` dirs from vendored plugins.
 

@@ -47,7 +47,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -56,7 +56,7 @@ need gcc
 need make
 need pkg-config
 pkg-config --exists gtk+-3.0 || {
-    echo "gtk+-3.0 not found via pkg-config — install gtk3-devel" >&2
+    echo "gtk+-3.0 not found via pkg-config -- install gtk3-devel" >&2
     exit 1
 }
 
@@ -86,7 +86,7 @@ echo ""
 src/vim --version | grep "^Compilation:"
 src/vim --version | grep "^Linking:"
 echo ""
-echo "Sanity check — must show +gui_gtk3 and +X11:"
+echo "Sanity check -- must show +gui_gtk3 and +X11:"
 src/vim --version | grep -E "gui_gtk|X11|clipboard"
 echo ""
 echo "Binary size: $(ls -lh src/vim | awk '{print $5}') unstripped"
@@ -94,7 +94,7 @@ echo ""
 
 echo "=== Packaging (run from the vim source directory) ===>"
 echo ""
-echo "  # Binary: strip -> bzip2  (no patchelf needed — all system libs)"
+echo "  # Binary: strip -> bzip2  (no patchelf needed -- all system libs)"
 echo "  cp src/vim /tmp/gvim.bin_tmp"
 echo "  strip /tmp/gvim.bin_tmp"
 echo "  ls -lh /tmp/gvim.bin_tmp"

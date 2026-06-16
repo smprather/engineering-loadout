@@ -4,13 +4,13 @@
 # fio is a storage/filesystem performance benchmark. We build it with the
 # libaio ioengine and zlib (iolog compression) but DISABLE the http ioengine,
 # which would otherwise drag in libcurl's whole krb5/ldap/brotli/nghttp2
-# closure — heavy deps not guaranteed on a minimal farm node and useless for a
+# closure -- heavy deps not guaranteed on a minimal farm node and useless for a
 # filesystem performance checker.
 #
 # Resulting non-glibc NEEDED libs (both bundled):
 #   libaio.so.1   -> lib64/libaio.so.1.bz2  (copied from EL8 libaio RPM, RPATH $ORIGIN)
 #   libz.so.1     -> already bundled in lib64/
-# Everything else (librt/libpthread/libm/libmvec/libdl/libc) is glibc 2.28 —
+# Everything else (librt/libpthread/libm/libmvec/libdl/libc) is glibc 2.28 --
 # present on every EL8 target, never bundled.
 #
 # Policy: always build from a stable tagged release.

@@ -6,7 +6,7 @@
 # alongside ~/.local/bin at runtime.
 #
 # Build-time deps (system, headers): libevent-devel, ncurses-devel
-#   (build links against /usr/lib64/libevent_core.so → SONAME
+#   (build links against /usr/lib64/libevent_core.so -> SONAME
 #    libevent_core-2.1.so.6, which is ABI-compatible with the bundled
 #    libevent_core-2.1.so.6 the installer drops into ~/.local/lib64).
 # Runtime deps (bundled in this repo's lib64/): libevent_core-2.1.so.6
@@ -68,7 +68,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -120,7 +120,7 @@ echo ""
 echo "Build complete: $("$INSTALL_PREFIX/bin/tmux" -V)"
 echo ""
 
-# Package the binary: strip first, then patchelf (order matters — stripping
+# Package the binary: strip first, then patchelf (order matters -- stripping
 # after patchelf corrupts .dynstr placement and crashes the binary at runtime).
 WORK="/tmp/tmux_work_${tag}"
 cp "$INSTALL_PREFIX/bin/tmux" "$WORK"
@@ -158,7 +158,7 @@ MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/tmux" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
         echo "WARNING: requires newer glibc than EL8 baseline" >&2 ;;
 esac

@@ -1,7 +1,7 @@
 # Environment Modules shell integration (loadout-local install)
 #
 # Sourced from bash/global/bashrc when ~/.local/lib/modulecmd.tcl is present.
-# Uses $HOME-relative paths — portable across usernames.
+# Uses $HOME-relative paths -- portable across usernames.
 #
 # module() and ml() are defined via `modulecmd.tcl bash autoinit`, which also
 # sets MODULESHOME, MODULEPATH, and all other modules env vars.  The autoinit

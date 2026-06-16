@@ -2,14 +2,14 @@
 
 Engineering-loadout: offline-first, no-root package manager for
 engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
-x86_64/ARM/PowerPC), layered configuration (global → corp → site → team → project → user).
+x86_64/ARM/PowerPC), layered configuration (global -> corp -> site -> team -> project -> user).
 `./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
 driven by `pre_built/packages.json` (`schema_version: 3`).
 
 ## Key Commands
 
 ```bash
-# Linux install (copies files — no repo references remain)
+# Linux install (copies files -- no repo references remain)
 # Bare 'install' errors (dnf/apt style); always name packages or groups.
 ./loadout install @engineering-loadout
 
@@ -64,12 +64,12 @@ smoke-tests offline Tree-sitter with headless Neovim.
 
 `schema_version: 3`. Every installable thing is a named package with:
 
-- `kind` — `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`,
+- `kind` -- `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`,
   `env`, `font`, `data`, or `group`.
-- `platforms` — list from `linux`, `macos`, `windows`. Resolver filters.
-- `tags` — free-form labels for filtering.
-- `depends` — hard-dependency package names (or `@group` refs). Resolver auto-pulls.
-- `recommends` — soft-dependency package names. Auto-pulled when available, silently
+- `platforms` -- list from `linux`, `macos`, `windows`. Resolver filters.
+- `tags` -- free-form labels for filtering.
+- `depends` -- hard-dependency package names (or `@group` refs). Resolver auto-pulls.
+- `recommends` -- soft-dependency package names. Auto-pulled when available, silently
   dropped when skipped or unknown.
 - Per-kind artifact fields: `bins`, `libs`, `wheels`, `uv_tool`, `typelibs`,
   `archive`, `install_to`, `source`, `extra_links`, `supports_layers`, `members`.
@@ -85,12 +85,12 @@ groups explicitly (dnf/apt style).
 `resolve_tool_selection(args, registry)` in `loadout` performs:
 
 1. Parse `--skip` (groups expanded).
-2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,…`,
+2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,...`,
    groups expanded). Bare `install` errors with non-zero exit.
 3. Subtract `--skip`.
-4. Walk hard `depends` — `ResolverError` if a depended-upon package was skipped,
+4. Walk hard `depends` -- `ResolverError` if a depended-upon package was skipped,
    unless `--no-deps` or `--force`.
-5. Walk soft `recommends` — silently drop conflicts.
+5. Walk soft `recommends` -- silently drop conflicts.
 6. Filter by current platform.
 
 Resolver helpers: `expand_groups`, `walk_depends`, `walk_recommends`,
@@ -100,7 +100,7 @@ Resolver helpers: `expand_groups`, `walk_depends`, `walk_recommends`,
 
 `bash/bashrc` is the single entry point (symlinked to `~/.bashrc`,
 `~/.bash_profile`, `~/.bash_login`, and `~/.profile`). It sources files in layer
-order across six layers: `global → corp → site → team → project → user`. Each layer
+order across six layers: `global -> corp -> site -> team -> project -> user`. Each layer
 directory lives under `~/.config/bash/` after install.
 
 Loading sequence (`bash/bashrc`):
@@ -170,19 +170,19 @@ continue when possible, and the run ends with an install results table.
 
 Pre-built Linux binaries live under `pre_built/<platform>/`, using names like
 `el8.x86_64.glibc2p28`. `RPATH=$ORIGIN/../lib64:$ORIGIN/../lib` is pre-baked
-into each binary in the repo before bzip2 compression — the installer is pure
+into each binary in the repo before bzip2 compression -- the installer is pure
 decompress + chmod, no runtime patchelf step. Installer runs `ldd` to warn
 about missing `.so` dependencies. If a running binary cannot be replaced,
 installer continues and prints a retry notice.
 
-**Binary bundling order: strip → patchelf → bzip2.** Never strip after patchelf;
+**Binary bundling order: strip -> patchelf -> bzip2.** Never strip after patchelf;
 it corrupts `.dynstr` and causes segfaults or "undefined symbol" at runtime.
 **Libs that must find each other** (e.g. the `gui_libs` group): patchelf with
-`$ORIGIN` (not `$ORIGIN/../lib64`) — they install flat into `~/.local/lib64/`
+`$ORIGIN` (not `$ORIGIN/../lib64`) -- they install flat into `~/.local/lib64/`
 alongside each other.
 
 **Never bundle**: glibc (`libc.so.6`, `libm.so.6`, etc.), OpenGL dispatcher
-(`libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` — must match display
+(`libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` -- must match display
 driver), C++ runtime (`libstdc++.so.6`, `libgcc_s.so.1`). Everything else is
 safe to bundle.
 
@@ -190,7 +190,7 @@ safe to bundle.
 `~/.local/lib64/`; `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` set in
 `bash/global/bashrc` when present.
 
-**WSLg cursor fix**: `QT_QPA_PLATFORM=wayland` in user bashrc — Qt5 XCB backend
+**WSLg cursor fix**: `QT_QPA_PLATFORM=wayland` in user bashrc -- Qt5 XCB backend
 corrupts XWayland global cursor state for all X11 apps in the session; Wayland
 backend avoids this.
 
@@ -240,9 +240,9 @@ accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
 
 Tmux and Vim plugins are vendored in-tree (no internet required):
 
-- `tmux/vendor/plugins/` — tpm, resurrect, continuum, better-mouse-mode
-- `vim/vim/pack/vendor/start/` — nerdtree, SimpylFold, vim-liberty (auto-loaded)
-- `vim/vim/pack/vendor/opt/` — optional plugins
+- `tmux/vendor/plugins/` -- tpm, resurrect, continuum, better-mouse-mode
+- `vim/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
+- `vim/vim/pack/vendor/opt/` -- optional plugins
 
 Run `./update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
 hook strips `.git` dirs on the next commit).
@@ -294,7 +294,7 @@ use `./release --dry-run`, not the pre-commit hook.
 
 ### Overriding Configuration
 
-Create layer files that will be automatically picked up — no changes to
+Create layer files that will be automatically picked up -- no changes to
 `bash/global/` needed:
 
 ```bash
@@ -307,9 +307,9 @@ bash/corp/global_hooks/3.sh  # inject code after PATH setup
 
 The bash config gracefully degrades when modern tools are absent:
 
-- `eza` → `lsd` → `ls`
-- `bat` → `cat`
-- `fd` / `fdfind` → `find`
+- `eza` -> `lsd` -> `ls`
+- `bat` -> `cat`
+- `fd` / `fdfind` -> `find`
 
 Handles distro naming differences: `batcat` (Debian) vs `bat` (RedHat),
 `fdfind` vs `fd`.
@@ -321,7 +321,7 @@ repo changes. AutoHotKey (`AutoHotkey64.exe`) is extracted to
 `%USERPROFILE%\AutoHotkey_*\` rather than installed system-wide (avoids
 SentinelOne flagging); if no such directory exists, the installer
 auto-downloads the latest stable release from GitHub and removes
-`AutoHotkey32.exe`. The PowerShell profile includes `Invoke-PatchDOSStub` — a
+`AutoHotkey32.exe`. The PowerShell profile includes `Invoke-PatchDOSStub` -- a
 byte-patcher that changes an exe's DOS stub string to alter its hash, useful
 as a SentinelOne bypass for flagged binaries like AHK.
 

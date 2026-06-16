@@ -1,5 +1,5 @@
 #!/bin/sh
-# loadout — POSIX-sh bootstrap for the loadout package manager.
+# loadout -- POSIX-sh bootstrap for the loadout package manager.
 #
 # Resolves a bundled Python 3.14 interpreter and execs loadout_main.py
 # under it. Search order:
@@ -64,7 +64,7 @@ echo "loadout: bootstrapping Python 3.14 from $(basename "$archive") ..." >&2
 mkdir -p "$boot_dir"
 # Extract only the "local/" subtree, strip the two leading components
 # ("portable-python-X/local/") so the result is $boot_dir/bin/python3.14
-# directly. The archive's install.sh is intentionally NOT executed —
+# directly. The archive's install.sh is intentionally NOT executed --
 # we use the python interpreter in-place; loadout_main.py later installs
 # the real copy into ~/.local via the existing install_portable_python
 # phase.

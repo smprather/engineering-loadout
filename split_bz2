@@ -5,7 +5,7 @@ GitHub warns on files > 50 MB; hard-blocks at 100 MB. Default chunk size is
 45 MiB so each part stays comfortably below the warning threshold.
 
 After splitting, the original file is removed. The installer transparently
-rejoins parts at install time — no user action required.
+rejoins parts at install time -- no user action required.
 
 To reassemble manually:
     cat file.bz2.part-* > file.bz2
@@ -28,7 +28,7 @@ DEFAULT_CHUNK_MB = 45
 def split_file(path, chunk_size):
     size = os.path.getsize(path)
     if size <= chunk_size:
-        print(f"{path}: {size / 1024 / 1024:.1f} MB — no split needed (under {chunk_size / 1024 / 1024:.0f} MiB limit)")
+        print(f"{path}: {size / 1024 / 1024:.1f} MB -- no split needed (under {chunk_size / 1024 / 1024:.0f} MiB limit)")
         return 0
 
     part = 0
@@ -44,7 +44,7 @@ def split_file(path, chunk_size):
             part += 1
 
     os.remove(path)
-    print(f"Removed {path} — split into {part} parts")
+    print(f"Removed {path} -- split into {part} parts")
     return 0
 
 
@@ -79,7 +79,7 @@ def main(files, chunk_mb):
             rc = 1
             continue
         if not (path.endswith(".bz2") or path.endswith(".tar.bz2")):
-            print(f"WARNING: {path} does not end in .bz2 or .tar.bz2 — splitting anyway", file=sys.stderr)
+            print(f"WARNING: {path} does not end in .bz2 or .tar.bz2 -- splitting anyway", file=sys.stderr)
         rc = rc or split_file(path, chunk_size)
     sys.exit(rc)
 

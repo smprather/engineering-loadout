@@ -11,7 +11,7 @@ It also checks runtime sentinels for shipped editor payloads and runs Neovim
 headless against the installed runtime.
 
 Any other outcome (including "bad option" exit 1/2, or timeout on an interactive
-binary) counts as OK — the binary loaded and ran.
+binary) counts as OK -- the binary loaded and ran.
 
 Exit 0: all clean.  Exit 1: failures detected (fails the pre-commit).
 
@@ -41,15 +41,15 @@ FATAL_OUTPUT_PATTERNS = (
     "undefined symbol",
 )
 
-# Binaries that are non-ELF wrappers (shell scripts) — skip exec check.
+# Binaries that are non-ELF wrappers (shell scripts) -- skip exec check.
 NON_ELF_WRAPPERS = {"vim"}
 
-# Binaries that require a display/terminal or fail in headless sandboxes —
+# Binaries that require a display/terminal or fail in headless sandboxes --
 # ldd-check only, skip exec. Each entry below has a one-line rationale.
 NO_EXEC = {
-    "xterm",  # X11 terminal — needs DISPLAY.
-    "nedit-ng",  # Qt GUI — needs wayland/X display; runs cleanly under WSLg.
-    "gopls",  # LSP server — boots via nvim; standalone --version segfaults
+    "xterm",  # X11 terminal -- needs DISPLAY.
+    "nedit-ng",  # Qt GUI -- needs wayland/X display; runs cleanly under WSLg.
+    "gopls",  # LSP server -- boots via nvim; standalone --version segfaults
     # during ld.so init on the current EL8/WSL2 kernel even though
     # the binary is byte-identical to a previously-shipping release.
     # Pinned NO_EXEC until reproducible on a non-WSL2 EL8 box.
@@ -140,7 +140,7 @@ def probe_binary(binary_path):
             return True, first_line or f"(exit {proc.returncode})"
 
         except subprocess.TimeoutExpired:
-            return True, "(interactive — timeout counts as OK)"
+            return True, "(interactive -- timeout counts as OK)"
         except OSError as exc:
             return False, f"OSError: {exc}"
 
@@ -148,7 +148,7 @@ def probe_binary(binary_path):
         if pat in last_out:
             return False, last_out[:200].strip()
     code_str = f"signal {-last_code}" if last_code is not None and last_code < 0 else f"exit {last_code}"
-    return False, f"{code_str} — {last_out[:200].strip()}"
+    return False, f"{code_str} -- {last_out[:200].strip()}"
 
 
 def smoke_runtime_layout(tmpdir):

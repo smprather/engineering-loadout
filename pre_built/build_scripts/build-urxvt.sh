@@ -2,9 +2,9 @@
 # Build rxvt-unicode (urxvt) from source for el8.x86_64.glibc2p28.
 #
 # Produces:
-#   - urxvt        — main terminal binary
-#   - urxvtc       — client for the urxvt daemon
-#   - urxvtd       — terminal daemon (one process for many windows)
+#   - urxvt        -- main terminal binary
+#   - urxvtc       -- client for the urxvt daemon
+#   - urxvtd       -- terminal daemon (one process for many windows)
 #
 # Runtime deps (bundled in this repo's lib64/, pulled when urxvt is selected):
 #   libX11, libXft, libXt, libXmu, libXrender, libxcb, libfontconfig,
@@ -75,7 +75,7 @@ fi
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
-        echo "missing required command: $1 — install the prerequisite packages listed in this script's header" >&2
+        echo "missing required command: $1 -- install the prerequisite packages listed in this script's header" >&2
         exit 1
     }
 }
@@ -162,7 +162,7 @@ for bin in urxvt urxvtc urxvtd; do
     echo "Installed: $BIN_DIR/$bin.bz2"
 done
 
-# libptytty.so.0 — patchelf RPATH $ORIGIN (finds siblings in ~/.local/lib64/),
+# libptytty.so.0 -- patchelf RPATH $ORIGIN (finds siblings in ~/.local/lib64/),
 # strip, bzip2, drop into the repo's lib64 dir.
 LIBPTYTTY_WORK="/tmp/libptytty_work_${LIBPTYTTY_VERSION}"
 cp "$LIBPTYTTY_PREFIX/lib64/libptytty.so.0" "$LIBPTYTTY_WORK"
@@ -201,7 +201,7 @@ MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/urxvt" 2>/dev/null \
 echo "Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
         echo "WARNING: requires newer glibc than EL8 baseline" >&2 ;;
 esac

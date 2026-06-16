@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-verify-binaries — compare bundled .bz2 binaries against official upstream releases.
+verify-binaries -- compare bundled .bz2 binaries against official upstream releases.
 
 Downloads each tool's official release binary, applies our bundling transformation
-(strip → patchelf RPATH for dynamic ELFs), and compares SHA-256 against the
+(strip -> patchelf RPATH for dynamic ELFs), and compares SHA-256 against the
 decompressed bundled binary.
 
 PASS  = byte-for-byte match with upstream release (after strip + patchelf)
-FAIL  = hash mismatch — investigate; could be wrong variant or tampering
+FAIL  = hash mismatch -- investigate; could be wrong variant or tampering
 SKIP  = no public binary release (source builds, dev versions, custom builds)
 ERROR = download failed or archive extraction error
 
@@ -45,7 +45,7 @@ from urllib.request import Request, urlopen
 
 import rich_click as click  # noqa: E402
 
-# ── paths ─────────────────────────────────────────────────────────────────
+# -- paths -----------------------------------------------------------------
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PREBUILT_DIR = os.path.dirname(_SCRIPT_DIR)  # pre_built/
@@ -59,7 +59,7 @@ _STRIP = shutil.which("strip") or "/usr/bin/strip"
 _PATCHELF = shutil.which("patchelf") or os.path.join(_PREBUILT_DIR, _PLATFORM, "bin", "patchelf")
 _BIN_RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"  # standard RPATH for ~/.local/bin/ binaries
 
-# ── upstream release registry ─────────────────────────────────────────────
+# -- upstream release registry ---------------------------------------------
 # Key matches packages.json entry name.
 # url: {ver} replaced with packages.json version string.
 # bin: binary name to extract from the archive (searched by basename).
@@ -139,10 +139,10 @@ _SKIP_REASONS = {
     "gnuplot": "built from source",
     "gvim": "custom GTK3 build",
     "htop": "built from source",
-    "bat": "bundled binary has different NEEDED libs than official release (libz.so.1 vs librt.so.1) — likely EL8 source build",
+    "bat": "bundled binary has different NEEDED libs than official release (libz.so.1 vs librt.so.1) -- likely EL8 source build",
     "jq": "custom build with shared libjq.so.1 + libonig.so.5; official release is statically linked",
     "nedit-ng": "custom Qt5 build",
-    "nvim": "official prebuilts require GLIBC_2.34; EL8 has 2.28 — must source-build from stable tag (v0.12.2+) on EL8",
+    "nvim": "official prebuilts require GLIBC_2.34; EL8 has 2.28 -- must source-build from stable tag (v0.12.2+) on EL8",
     "octave": "built from source",
     "patchelf": "built from source",
     "pigz": "built from source",
@@ -155,39 +155,39 @@ _SKIP_REASONS = {
     "xterm": "built from source",
     "yank": "built from source",
     "yara": "built from source (no Linux prebuilt in official releases)",
-    "rg": "GNU ABI; ripgrep ships musl-only for Linux releases — EL8 RPM or source build",
-    "eza": "NEEDED libs differ from official release (libz.so.1 vs librt.so.1) — EL8 source build",
-    "fd": "NEEDED libs differ from official release — EL8 source build",
-    "zoxide": "GNU ABI; zoxide ships musl-only for Linux — source build",
+    "rg": "GNU ABI; ripgrep ships musl-only for Linux releases -- EL8 RPM or source build",
+    "eza": "NEEDED libs differ from official release (libz.so.1 vs librt.so.1) -- EL8 source build",
+    "fd": "NEEDED libs differ from official release -- EL8 source build",
+    "zoxide": "GNU ABI; zoxide ships musl-only for Linux -- source build",
     "tmux": "built from source (long upstream release cycle; intentionally kept as latest stable source build)",
-    # EL8 source builds — old Rust toolchain links libpthread.so.0/libdl.so.2 separately;
-    # official releases use newer Rust (≥1.62) where these are folded into glibc.
-    "broot": "EL8 source build — dynamic with libz.so.1+libpthread (old Rust); official release is static",
-    "btm": "EL8 source build — extra libdl.so.2+libpthread vs official gnu release (old Rust)",
-    "btop": "EL8 source build — dynamic GNU; official musl release is static",
-    "choose": "EL8 source build — extra libpthread.so.0 vs official (old Rust)",
-    "dust": "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
-    "fzf": "EL8 source build — dynamic with libpthread (old Go); official release is static",
-    "gping": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "hx": "EL8 source build — extra libpthread+libdl vs official gnu release (old Rust)",
-    "hyperfine": "EL8 source build — NEEDED libs differ from official gnu release (old Rust)",
-    "sd": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "stylua": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "tree-sitter": "EL8 source build — extra libpthread+libdl vs official (old Rust)",
-    "yq": "EL8 source build — dynamic with libpthread+libdl (old Go); official release is static",
-    # Go binaries built on EL8 with older Go toolchain — static but different binary layout
-    "dasel": "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "just": "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
-    "lazygit": "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "shfmt": "EL8 Go source build — static but different binary layout from official (older Go version)",
-    "tldr": "EL8 source build — dynamic with libpthread+libdl (old Rust); official release is static musl",
+    # EL8 source builds -- old Rust toolchain links libpthread.so.0/libdl.so.2 separately;
+    # official releases use newer Rust (>=1.62) where these are folded into glibc.
+    "broot": "EL8 source build -- dynamic with libz.so.1+libpthread (old Rust); official release is static",
+    "btm": "EL8 source build -- extra libdl.so.2+libpthread vs official gnu release (old Rust)",
+    "btop": "EL8 source build -- dynamic GNU; official musl release is static",
+    "choose": "EL8 source build -- extra libpthread.so.0 vs official (old Rust)",
+    "dust": "EL8 source build -- NEEDED libs differ from official gnu release (old Rust)",
+    "fzf": "EL8 source build -- dynamic with libpthread (old Go); official release is static",
+    "gping": "EL8 source build -- extra libpthread+libdl vs official (old Rust)",
+    "hx": "EL8 source build -- extra libpthread+libdl vs official gnu release (old Rust)",
+    "hyperfine": "EL8 source build -- NEEDED libs differ from official gnu release (old Rust)",
+    "sd": "EL8 source build -- extra libpthread+libdl vs official (old Rust)",
+    "stylua": "EL8 source build -- extra libpthread+libdl vs official (old Rust)",
+    "tree-sitter": "EL8 source build -- extra libpthread+libdl vs official (old Rust)",
+    "yq": "EL8 source build -- dynamic with libpthread+libdl (old Go); official release is static",
+    # Go binaries built on EL8 with older Go toolchain -- static but different binary layout
+    "dasel": "EL8 Go source build -- static but different binary layout from official (older Go version)",
+    "just": "EL8 source build -- dynamic with libpthread+libdl (old Rust); official release is static musl",
+    "lazygit": "EL8 Go source build -- static but different binary layout from official (older Go version)",
+    "shfmt": "EL8 Go source build -- static but different binary layout from official (older Go version)",
+    "tldr": "EL8 source build -- dynamic with libpthread+libdl (old Rust); official release is static musl",
     # Optional-only tools with no bins to check
     "gui_libs": "shared library bundle, no top-level binary",
     "meld": "Python uv tool, no standalone binary",
     "visidata": "Python uv tool, no standalone binary",
 }
 
-# ── helpers ────────────────────────────────────────────────────────────────
+# -- helpers ----------------------------------------------------------------
 
 
 def _sha256_bytes(data):
@@ -270,12 +270,12 @@ def _strip(path, verbose):
     if verbose:
         print(f"    strip {os.path.basename(path)}", flush=True)
     r = subprocess.run([_STRIP, path], capture_output=True)
-    # strip exits non-zero on already-stripped or non-ELF files — that's fine
+    # strip exits non-zero on already-stripped or non-ELF files -- that's fine
     return r.returncode
 
 
 def _patchelf_rpath(path, verbose):
-    """Apply standard bin/ RPATH — matches our pre-commit bundling step."""
+    """Apply standard bin/ RPATH -- matches our pre-commit bundling step."""
     if not _PATCHELF or not os.path.exists(_PATCHELF):
         return False
     if verbose:
@@ -310,7 +310,7 @@ def _load_tools_json():
     return {k: v for k, v in pkgs.items() if not k.startswith("_") and not k.startswith("@")}
 
 
-# ── verification ───────────────────────────────────────────────────────────
+# -- verification -----------------------------------------------------------
 
 
 def _verify_one(name, entry, version, tmpdir, verbose):
@@ -342,7 +342,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
     except Exception as e:
         return "ERROR", f"extract: {e}"
 
-    # Reproduce our bundling transformation: strip → patchelf (for dynamic ELFs)
+    # Reproduce our bundling transformation: strip -> patchelf (for dynamic ELFs)
     # Order matters: strip must come before patchelf or .dynstr gets corrupted.
     _strip(extracted, verbose)
     if _is_dynamic_elf(extracted):
@@ -352,7 +352,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
     upstream_hash = _sha256_file(extracted)
     bundled_data = _bundled_bytes(want)
     if bundled_data is None:
-        # Try the tool name as stem too (e.g. miller→mlr)
+        # Try the tool name as stem too (e.g. miller->mlr)
         bundled_data = _bundled_bytes(name)
     if bundled_data is None:
         return "ERROR", f"bundled .bz2 not found for '{want}' or '{name}'"
@@ -373,7 +373,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
         bnd_needed = _needed_libs(bundled_tmp)
         up_sz = os.path.getsize(extracted)
         bnd_sz = len(bundled_data)
-        # Allow up to 0.5% size drift — patchelf restructures the ELF when adding/replacing
+        # Allow up to 0.5% size drift -- patchelf restructures the ELF when adding/replacing
         # RPATH entries, which can shift section boundaries for large binaries.
         size_tolerance = max(8192, int(max(up_sz, bnd_sz) * 0.005))
         if up_needed == bnd_needed and abs(up_sz - bnd_sz) < size_tolerance:
@@ -386,7 +386,7 @@ def _verify_one(name, entry, version, tmpdir, verbose):
     return "FAIL", "upstream={} bundled={}".format(upstream_hash[:16] + "...", bundled_hash[:16] + "...")
 
 
-# ── main ───────────────────────────────────────────────────────────────────
+# -- main -------------------------------------------------------------------
 
 
 @click.command(
@@ -417,7 +417,7 @@ def main(tools, keep, verbose):
     if verbose:
         print(f"Temp dir: {tmpdir}")
 
-    # Column widths — at least as wide as the header label
+    # Column widths -- at least as wide as the header label
     w_name = max(4, max(len(t) for t in sel_tools))
     w_ver = max(7, max((len(registry[t].get("version", "")) for t in sel_tools), default=0))
     w_status = 6

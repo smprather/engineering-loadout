@@ -2,14 +2,14 @@
 # Build Environment Modules (envmodules/modules) from source for el8.x86_64.glibc2p28.
 #
 # Produces a runtime archive containing modulecmd.tcl and a default modulefiles
-# directory.  No ELF binaries — the archive is pure Tcl and is effectively
+# directory.  No ELF binaries -- the archive is pure Tcl and is effectively
 # platform-independent, but lives alongside other EL8 runtimes by convention.
 #
 # modules requires Tcl 8.5+.  Build against the loadout-bundled Tcl when available
 # (pass --with-tcl to the tclConfig.sh dir from a prior build-tcl.sh run), or fall
 # back to system tclsh for the pure-Tcl build (--disable-libtclenvmodules).
 #
-# modulecmd.tcl derives its MODULESHOME at runtime from [info script] — the
+# modulecmd.tcl derives its MODULESHOME at runtime from [info script] -- the
 # directory containing modulecmd.tcl.  Building with any temp prefix therefore
 # produces a fully portable script once deployed to ~/.local/lib/.
 #

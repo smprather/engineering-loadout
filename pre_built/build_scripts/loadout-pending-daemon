@@ -69,12 +69,12 @@ def log(msg):
     line = f"[loadout-pending-daemon] {msg}\n"
     sys.stdout.write(line)
     sys.stdout.flush()
-    # Significant event — always mirror to dev-log.
+    # Significant event -- always mirror to dev-log.
     _append_run_log(msg)
 
 
 def heartbeat(msg):
-    """Throttled status log — emits to dev-log at most once per HEARTBEAT_INTERVAL.
+    """Throttled status log -- emits to dev-log at most once per HEARTBEAT_INTERVAL.
     Stdout is unchanged so daemon's normal log stream isn't affected."""
     global _last_heartbeat_ts
     now = time.time()
@@ -173,7 +173,7 @@ def check_block(block):
         except OSError:
             return False  # /proc unreadable: be conservative
         return True
-    log(f"WARNING: unknown block type {btype!r} — leaving op pending")
+    log(f"WARNING: unknown block type {btype!r} -- leaving op pending")
     return False
 
 
@@ -306,7 +306,7 @@ def main():
                     # Re-read under lock: the installer may have staged a newer
                     # binary (different version) for the same dest while we were
                     # applying the old one. Only remove an entry if it still
-                    # matches what we applied — if the installer replaced it,
+                    # matches what we applied -- if the installer replaced it,
                     # leave the new entry so the daemon applies it next cycle.
                     current, last_activity = read_pending_state()
                     for dest in list(ops_by_dest.keys()):

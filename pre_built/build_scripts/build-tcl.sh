@@ -6,7 +6,7 @@
 #   pre_built/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2   (or libtcl8.X.so.bz2)
 #
 # NOTE: Tcl 9.x embeds its standard library (init.tcl etc.) inside libtcl9.0.so via
-# zipfs — there is NO separate runtime archive to deploy.  The binary + shared lib
+# zipfs -- there is NO separate runtime archive to deploy.  The binary + shared lib
 # are self-sufficient.
 #
 # The install dir is intentionally left at /tmp/loadout-tcl-instdir-<version>
@@ -198,9 +198,9 @@ MAX_GLIBC="$(readelf -V "$TCLSH_BIN" 2>/dev/null \
 echo "  Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "  OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "  OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo ""
@@ -209,7 +209,7 @@ echo ""
 echo "Produced:"
 echo "  $BIN_DIR/tclsh.bz2"
 echo "  $LIB_DIR/${TCLLIB_NAME}.bz2"
-echo "  (No runtime archive — Tcl 9.x stdlib is embedded in ${TCLLIB_NAME} via zipfs)"
+echo "  (No runtime archive -- Tcl 9.x stdlib is embedded in ${TCLLIB_NAME} via zipfs)"
 echo ""
 echo "Install dir left at: $INST_DIR"
 echo "  tclConfig.sh: $INST_DIR/lib/tclConfig.sh"

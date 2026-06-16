@@ -9,9 +9,9 @@ Usage:
     ./farm-versions [--bin-dir DIR] [--format json|tsv|text] [--missing-only]
 
 Formats:
-    json  — {"name": "bat", "version": "0.26.1", "homepage": "..."}  (default)
-    tsv   — name<TAB>version<TAB>homepage  (one row per tool)
-    text  — aligned table suitable for copy-paste into a terminal
+    json  -- {"name": "bat", "version": "0.26.1", "homepage": "..."}  (default)
+    tsv   -- name<TAB>version<TAB>homepage  (one row per tool)
+    text  -- aligned table suitable for copy-paste into a terminal
 """
 
 import json
@@ -388,7 +388,7 @@ TOOLS = [
         "vim.bin",
         "vim",
         "https://github.com/vim/vim",
-        # "Vi IMproved 9.2" + "Included patches: 1-458" → "9.2.0458"
+        # "Vi IMproved 9.2" + "Included patches: 1-458" -> "9.2.0458"
         lambda binary: (
             lambda out: (
                 lambda b, p: f"{b.group(1)}.{int(p.group(1)):04d}" if b and p else (b.group(1) if b else None)
@@ -630,7 +630,7 @@ def fmt_tsv(results):
 
 def fmt_text(results):
     col_b = max(len(r["binary"]) for r in results)
-    col_v = max(len(r["version"] or "—") for r in results)
+    col_v = max(len(r["version"] or "--") for r in results)
     col_s = max(len(r["status"]) for r in results)
     fmt = "  {:<{b}}  {:<{v}}  {:<{s}}  {}"
     header = fmt.format("BINARY", "VERSION", "STATUS", "HOMEPAGE", b=col_b, v=col_v, s=col_s)
@@ -640,7 +640,7 @@ def fmt_text(results):
         print(
             fmt.format(
                 r["binary"],
-                r["version"] or "—",
+                r["version"] or "--",
                 r["status"],
                 r["homepage"],
                 b=col_b,
@@ -686,11 +686,11 @@ def main(bin_dir, fmt, missing_only):
 
     Output formats:
 
-      json — machine-readable; full record per tool
+      json -- machine-readable; full record per tool
 
-      tsv  — tab-separated; suitable for piping into spreadsheets
+      tsv  -- tab-separated; suitable for piping into spreadsheets
 
-      text — aligned table suitable for copy-paste into a terminal
+      text -- aligned table suitable for copy-paste into a terminal
     """
     results = collect(bin_dir)
 

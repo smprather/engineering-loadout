@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build p7zip (Unix port of 7-Zip) from source for el8.x86_64.glibc2p28.
 #
-# Produces the standalone `7za` binary — no shared-lib plugin (.so) needed.
+# Produces the standalone `7za` binary -- no shared-lib plugin (.so) needed.
 # 7za includes LZMA/LZMA2, Deflate, BZip2, PPMD, 7z, zip, gzip, bzip2, tar,
 # cab, arj, etc. It links only against system libs (libc, libm, libstdc++,
 # libgcc_s, libpthread) that are always present on EL8.
@@ -15,7 +15,7 @@
 #   2. CPP/7zip/Archive/7z/7zUpdate.cpp: us2fs(ui.Name) for CInFile::Open arg
 #   3. CPP/7zip/Common/FileStreams.h: add SetTime/SetMTime stubs for !USE_WIN_FILE
 #
-# Note: do NOT pass LOCAL_FLAGS on the make command line — it overrides the
+# Note: do NOT pass LOCAL_FLAGS on the make command line -- it overrides the
 # makefile.list definition that includes -DUNIX_USE_WIN_FILE and other required
 # defines. All flags belong in makefile.machine's OPTFLAGS instead.
 #
@@ -91,19 +91,19 @@ cd "$WORK_DIR/p7zip_${VERSION}"
 
 echo "==> Selecting platform config (linux_amd64, no yasm required) ..."
 # makefile.machine is included by makefile.common; platform-specific settings go here.
-# Use linux_amd64 (non-ASM) — yasm not in base EL8 and ASM gives no significant benefit.
+# Use linux_amd64 (non-ASM) -- yasm not in base EL8 and ASM gives no significant benefit.
 # Add -Wno-narrowing: HRESULT enum constants produce narrowing warnings with GCC >= 7.
 cp makefile.linux_amd64 makefile.machine
 sed -i 's/^OPTFLAGS=-O -s$/OPTFLAGS=-O -s -Wno-narrowing/' makefile.machine
 
 echo "==> Applying GCC 14 compatibility patches ..."
 
-# Patch 1: 7zUpdate.cpp — CInFile::Open() takes CFSTR (const char*) but ui.Name
+# Patch 1: 7zUpdate.cpp -- CInFile::Open() takes CFSTR (const char*) but ui.Name
 # is UString (wchar_t-based). Was implicit-convertible in older GCC, rejected in GCC14.
 sed -i 's/if (file\.Open(ui\.Name))/if (file.Open(us2fs(ui.Name)))/' \
     CPP/7zip/Archive/7z/7zUpdate.cpp
 
-# Patch 2: FileStreams.h — SetTime/SetMTime are #ifdef USE_WIN_FILE but called
+# Patch 2: FileStreams.h -- SetTime/SetMTime are #ifdef USE_WIN_FILE but called
 # unconditionally. When UNIX_USE_WIN_FILE is defined (makefile.list sets it for 7za)
 # USE_WIN_FILE is active and these are already defined; the stubs handle the !WIN case
 # (e.g. if building without UNIX_USE_WIN_FILE).
@@ -134,7 +134,7 @@ new = (
     '  #endif'
 )
 if old not in content:
-    print('WARNING: FileStreams.h patch target not found — may already be patched or source changed')
+    print('WARNING: FileStreams.h patch target not found -- may already be patched or source changed')
     sys.exit(0)
 content = content.replace(old, new)
 with open(path, 'w') as f:
@@ -143,7 +143,7 @@ print('FileStreams.h patched')
 PYEOF
 
 echo "==> Building 7za (standalone binary) ..."
-# Do NOT pass LOCAL_FLAGS= here — doing so overrides makefile.list's LOCAL_FLAGS
+# Do NOT pass LOCAL_FLAGS= here -- doing so overrides makefile.list's LOCAL_FLAGS
 # which contains -DUNIX_USE_WIN_FILE and other required defines for the 7za bundle.
 make -j"$(nproc 2>/dev/null || echo 2)" 7za
 
@@ -169,9 +169,9 @@ MAX_GLIBC="$(readelf -V "$P7ZA_BIN" 2>/dev/null \
 echo "  Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "  OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "  OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo "==> Packaging binary ..."

@@ -9,15 +9,15 @@
 # simulation are enabled -- both are standard for modern circuit-simulation workflows.
 #
 # Runtime library requirements (all satisfied by system EL8 or existing bundles):
-#   libreadline.so.7    — EL8 system package (readline-7.0, always installed)
-#   libncurses.so.6     — EL8 system package (always installed)
-#   libfftw3.so.3       — bundled (pre_built/lib64/libfftw3.so.3.bz2) from octave
-#   libfftw3_threads    — bundled (same as above)
-#   libc.so.6 / libm    — glibc, always present
+#   libreadline.so.7    -- EL8 system package (readline-7.0, always installed)
+#   libncurses.so.6     -- EL8 system package (always installed)
+#   libfftw3.so.3       -- bundled (pre_built/lib64/libfftw3.so.3.bz2) from octave
+#   libfftw3_threads    -- bundled (same as above)
+#   libc.so.6 / libm    -- glibc, always present
 #
 # ngspice releases are distributed via SourceForge (not GitHub):
 #   https://sourceforge.net/projects/ngspice/files/ng-spice-rework/
-# Tags: numeric, e.g. ngspice-44 → version "44".
+# Tags: numeric, e.g. ngspice-44 -> version "44".
 #
 # Policy: always build from a stable tagged release.
 #
@@ -142,9 +142,9 @@ MAX_GLIBC="$(readelf -V "$NGSPICE_BIN" 2>/dev/null \
 echo "  Max glibc symbol: $MAX_GLIBC (target: GLIBC_2.28)"
 case "$MAX_GLIBC" in
     GLIBC_2.2[0-8]|GLIBC_2.1[0-9]|GLIBC_2.[0-9])
-        echo "  OK — binary compatible with EL8 glibc 2.28" ;;
+        echo "  OK -- binary compatible with EL8 glibc 2.28" ;;
     *)
-        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 — binary may not run on EL8" >&2 ;;
+        echo "  WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
 
 echo "==> Packaging binary ..."
@@ -165,7 +165,7 @@ if [ -d "$SHARE_DIR" ]; then
         "./share/ngspice"
     echo "  Wrote: $RUNTIME_DIR/ngspice.tar.bz2 ($(wc -c < "$RUNTIME_DIR/ngspice.tar.bz2" | tr -d ' ') bytes)"
 else
-    echo "  WARNING: $SHARE_DIR not found — ngspice may not find spinit at runtime"
+    echo "  WARNING: $SHARE_DIR not found -- ngspice may not find spinit at runtime"
 fi
 
 echo "==> Updating packages.json ..."

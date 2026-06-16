@@ -86,7 +86,7 @@ def main(tag, dry_run, skip_scan):
         sys.exit(1)
 
     if dry_run:
-        print("\nDry run — smoke test passed. Skipping tag and GitHub release.")
+        print("\nDry run -- smoke test passed. Skipping tag and GitHub release.")
         return
 
     tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))

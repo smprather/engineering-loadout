@@ -41,7 +41,7 @@ auto_attach_to_tmux() {
 }
 
 # Use a leading _ char for bashrc local vars that should go away at the end of env setup.
-# LOADOUT_CFG_* vars are exported scalars — they survive into child processes intentionally.
+# LOADOUT_CFG_* vars are exported scalars -- they survive into child processes intentionally.
 unset_bashrc_local_vars() {
     # Unset all local variables that start with '_'.
     for var in $(compgen -v _); do
