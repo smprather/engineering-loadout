@@ -133,6 +133,7 @@ try:
 except ImportError:  # pragma: no cover - Linux installer path has pwd.
     pwd = None
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -2199,9 +2200,9 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
         record_result("tldr cache", "SKIP", "no bundled cache archive")
         return
 
-    cache_home = os.path.join(home, ".cache")
-    dest_dir = os.path.join(cache_home, "tealdeer", "tldr-pages")
-    ensure_dir(os.path.join(cache_home, "tealdeer"), "tldr cache")
+    cache_dir = _resolve_install_to("~/.local/share/tealdeer/cache", home)
+    dest_dir = os.path.join(cache_dir, "tldr-pages")
+    ensure_dir(cache_dir, "tldr cache")
     if os.path.lexists(dest_dir):
         require_writable_parent(dest_dir, "tldr cache")
         if os.path.isdir(dest_dir) and not os.path.islink(dest_dir):
@@ -2210,7 +2211,7 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
         else:
             os.unlink(dest_dir)
 
-    pv_extract_tar(archive, os.path.join(cache_home, "tealdeer"))
+    pv_extract_tar(archive, cache_dir)
     print(f"  tldr page cache installed to {dest_dir}")
 
 
@@ -2972,6 +2973,7 @@ def backup_existing(home, repo_dir):
             ".config/editorconfig",
             ".config/helix/config.toml",
             ".config/pip/pip.conf",
+            ".config/tealdeer/config.toml",
         ]:
             path = os.path.join(home, rel)
             if not (os.path.exists(path) or os.path.islink(path)):
@@ -3064,10 +3066,80 @@ def _nvim_migration_notice(nvim_config):
     shutil.rmtree(custom, ignore_errors=True)
 
 
+def _mirror_shared_prefix(home):
+    """Bake $LOADOUT_CFG_SHARED_PREFIX into the installed global/config.sh.
+
+    The shared/read-only tree is installed separately (`loadout install @shared
+    --dest-dir /foo/bar`), by a different run -- often a different user -- than the
+    per-user `loadout install @envs`. Nothing else carries that path across, so the
+    @envs run reads LOADOUT_CFG_SHARED_PREFIX from its own environment and stamps
+    it into the per-user config.sh, where the shell (PATH/TERMINFO_DIRS/tealdeer)
+    can derive from it.
+
+    Only the installed copy is stamped; the repo source keeps an empty default.
+    Setting it is install-time state: re-running @envs without the env var resets
+    it to empty. No-op when unset.
+    """
+    val = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not val:
+        return
+    val = os.path.abspath(os.path.expanduser(val))
+    if not os.path.isdir(val):
+        eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX={val} is not a directory (baking anyway)")
+    cfg = os.path.join(home, ".config", "bash", "global", "config.sh")
+    # Edit only a real installed file -- never follow a symlink back into the repo.
+    if not os.path.isfile(cfg) or os.path.islink(cfg):
+        return
+    with open(cfg) as f:
+        text = f.read()
+    new_text, n = re.subn(
+        r"^export LOADOUT_CFG_SHARED_PREFIX=.*$",
+        "export LOADOUT_CFG_SHARED_PREFIX=" + shlex.quote(val),
+        text,
+        count=1,
+        flags=re.M,
+    )
+    if not n:
+        eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX line not found in {cfg}; not baked")
+        return
+    with open(cfg, "w") as f:
+        f.write(new_text)
+    print(f"  LOADOUT_CFG_SHARED_PREFIX baked into config.sh: {val}")
+
+
+def install_tealdeer_config(repo_dir, home):
+    src = os.path.join(repo_dir, "tealdeer", "config.toml")
+    if not os.path.isfile(src):
+        return
+    cfg_dir = os.path.join(home, ".config", "tealdeer")
+    ensure_dir(cfg_dir, "tealdeer config")
+    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if prefix:
+        cache_dir = os.path.join(prefix, "share", "tealdeer", "cache")
+    else:
+        # Match install_tldr_cache's target so the config and the extracted pages
+        # agree in both HOME (.local) and --dest-dir (un-dotted local) layouts.
+        cache_dir = _resolve_install_to("~/.local/share/tealdeer/cache", home)
+    cache_dir = os.path.abspath(os.path.expanduser(cache_dir))
+    with open(src) as f:
+        text = f.read()
+    text = re.sub(r"(?ms)^\[directories\]\n.*?(?=^\[|\Z)", "", text).rstrip()
+    text = f"{text}\n\n[directories]\ncache_dir = {json.dumps(cache_dir)}\n"
+    dest = os.path.join(cfg_dir, "config.toml")
+    require_writable_parent(dest, "tealdeer config")
+    if os.path.exists(dest) or os.path.islink(dest):
+        require_writable_dir(dest, "tealdeer config")
+    with open(dest, "w") as f:
+        f.write(text)
+    print(f"  tealdeer config installed to {dest}")
+
+
 def _install_env_bash(repo_dir, home):
     for entrypoint in BASH_ENTRYPOINTS:
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
+    _mirror_shared_prefix(home)
+    install_tealdeer_config(repo_dir, home)
 
 
 def _install_env_nvim(repo_dir, home):

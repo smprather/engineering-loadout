@@ -109,8 +109,8 @@ if [[ "$with_fonts" != "1" ]]; then
 fi
 
 if [[ -f "$repo_dir/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/tldr/tldr-pages.tar.gz" ]]; then
-    mkdir -p "$test_home/.cache/tealdeer/tldr-pages"
-    touch "$test_home/.cache/tealdeer/tldr-pages/stale-before-install"
+    mkdir -p "$test_home/local/share/tealdeer/cache/tldr-pages"
+    touch "$test_home/local/share/tealdeer/cache/tldr-pages/stale-before-install"
 fi
 
 echo "Temp HOME: $test_home"
@@ -172,9 +172,15 @@ assert_exists "$test_home/.config/nvim/after/lsp/ty.lua"
 assert_exists "$test_home/.config/tmux/tmux.conf"
 assert_exists "$test_home/.config/starship/starship.toml"
 if [[ -f "$repo_dir/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/tldr/tldr-pages.tar.gz" ]]; then
-    assert_exists "$test_home/.cache/tealdeer/tldr-pages"
-    if [[ -e "$test_home/.cache/tealdeer/tldr-pages/stale-before-install" ]]; then
+    assert_exists "$test_home/local/share/tealdeer/cache/tldr-pages"
+    if [[ -e "$test_home/local/share/tealdeer/cache/tldr-pages/stale-before-install" ]]; then
         echo "Expected tldr cache install to replace existing cache" >&2
+        exit 1
+    fi
+    assert_exists "$test_home/.config/tealdeer/config.toml"
+    if ! grep -q "cache_dir = \"$test_home/local/share/tealdeer/cache\"" "$test_home/.config/tealdeer/config.toml"; then
+        echo "Expected tealdeer config cache_dir to point at the installed cache" >&2
+        cat "$test_home/.config/tealdeer/config.toml" >&2
         exit 1
     fi
 fi

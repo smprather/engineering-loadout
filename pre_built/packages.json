@@ -2050,7 +2050,7 @@
     "tldr-data": {
       "kind": "data",
       "archive": "tldr/tldr-pages.tar.bz2",
-      "install_to": "~/.cache/tealdeer/tldr-pages",
+      "install_to": "~/.local/share/tealdeer/cache/tldr-pages",
       "version": "",
       "platforms": [
         "linux",

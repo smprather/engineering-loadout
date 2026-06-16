@@ -18,13 +18,18 @@ for potential_bin_dir in \
     ~/.opencode/bin \
     ~/node_modules/.bin \
     ~/go/bin \
+    "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" \
     ~/.local/bin; do
-    path_prepend_if_dir $potential_bin_dir
+    path_prepend_if_dir "$potential_bin_dir"
 done
 
 # ncurses does not search ~/.local/share/terminfo by default, and non-interactive
 # login shells return below before reaching the interactive terminfo block.
 path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
+# Shared installs can provide terminfo under the configured local-root.
+if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
+    path_prepend TERMINFO_DIRS "$LOADOUT_CFG_SHARED_PREFIX/share/terminfo"
+fi
 export TERMINFO_DIRS
 
 # Exit here if not interactive

@@ -69,7 +69,7 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 | `~/.local/bin/python3.14` | `pre_built/<platform>/portable-python-*.tar.bz2` |
 | `~/.local/share/fonts/` | `fonts/*.zip` (Nerd Font archives) |
 | `~/.local/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
-| `~/.cache/tealdeer/tldr-pages/` | `tldr/tldr-pages.tar.bz2` |
+| `~/.local/share/tealdeer/cache/tldr-pages/` | `tldr/tldr-pages.tar.bz2` |
 
 After install, reload your shell:
 

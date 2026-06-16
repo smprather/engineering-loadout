@@ -1,5 +1,11 @@
 # Full path to preferred bash binary; re-execs at startup if set
 export LOADOUT_CFG_PREFERRED_BASH=""
+# Local-root directory for a separately-installed shared/read-only loadout tree.
+# It directly contains bin/, share/, and lib64/; for `loadout install @shared
+# --dest-dir /foo/bar`, set this to /foo/bar/local. Empty means the user's own
+# ~/.local. PATH, TERMINFO_DIRS, and the tealdeer cache resolve against
+# ${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}.
+export LOADOUT_CFG_SHARED_PREFIX=""
 # Valid values for LOADOUT_CFG_PREFERRED_LS: eza, lsd, ls
 export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"
