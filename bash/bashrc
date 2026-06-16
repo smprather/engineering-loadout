@@ -6,13 +6,13 @@
 ####################################################################################################
 ###################################       Debug        #############################################
 ####################################################################################################
+# Defensive: kill any xtrace inherited from a parent shell or a leaked prior
+# source, so a double-sourced login shell can never get stuck tracing. The
+# startup-trace ENABLE block lives BELOW the LOADOUT_BASHRC_SOURCED guard: a
+# login shell sources this file twice (.bash_profile + .bashrc), and enabling
+# `set -x` above the guard would leave xtrace stuck on after the guard's early
+# return, before the teardown could run `set +x`. See the block further down.
 set +x
-### Try this first. Can catch most stuff.
-#PS4='+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}: '
-#set -x
-### Capture all set -x to a log file for really hard to catch stuff.
-#exec 2> ~/bashrc.log
-#exec 1> ~/bashrc.log
 
 if [[ "${LOADOUT_BASHRC_SOURCED:-0}" == "1" ]]; then
     return 0 2>/dev/null || exit 0
@@ -30,6 +30,71 @@ if [[ -z "${PATH:-}" ]]; then
 fi
 unalias -a
 unset -f $(declare -F | awk '{print $3}')
+
+# ===========================================================================
+# Startup debugging -- BOTH default OFF, placed AFTER the double-source guard
+# above so a login shell's second source (.bash_profile + .bashrc) can never
+# leave xtrace stuck on. Two independent, composable tools:
+#
+#   DEBUG_BASH_STARTUP=1             Full `set -x` xtrace of startup to
+#                                    ~/bashrc.log (heavy; deep dives only).
+#                                    Goes to its own fd via BASH_XTRACEFD so
+#                                    the prompt (bash writes it to stderr)
+#                                    stays on the tty.
+#
+#   BASHRC_STARTUP_TRACE_VARS="X Y"  Watch named vars; print to stdout ONLY
+#                                    when one changes, tagged with the
+#                                    file:line that changed it, plus ENTER/
+#                                    LEAVE lines as each sourced layer file is
+#                                    entered/left. Cheap -- this is the one for
+#                                    chasing a variable's life cycle.
+#
+# Enable by exporting in your environment, or uncomment a line here.
+# ===========================================================================
+#export DEBUG_BASH_STARTUP=1
+if [[ ${DEBUG_BASH_STARTUP:-0} == "1" ]]; then
+    exec {BASH_XTRACEFD}>>~/bashrc.log
+    PS4='+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}: '
+    set -x
+fi
+
+#BASHRC_STARTUP_TRACE_VARS="PATH"
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
+    # State/function use non "_" names so unset_bashrc_local_vars (which wipes
+    # _* just before teardown) can't clear them mid-run.
+    declare -A BASHRC_TRACE_PREV=()
+    BASHRC_TRACE_SRC=
+    BASHRC_TRACE_LOC="(init)"
+    bashrc_trace_watch() {
+        local _rc=$? _v _cur _src _x=          # preserve caller $? (fires pre-cmd)
+        [[ $- == *x* ]] && { _x=1; set +x; }   # keep this fn out of the xtrace log
+        _src=${BASH_SOURCE[1]:-?}
+        # var changes: attribute to the command that just ran (the previous
+        # fire's location), since the DEBUG trap fires BEFORE the next command.
+        for _v in $BASHRC_STARTUP_TRACE_VARS; do
+            _cur=${!_v-<unset>}
+            if [[ ${BASHRC_TRACE_PREV[$_v]+s} != s || ${BASHRC_TRACE_PREV[$_v]} != "$_cur" ]]; then
+                printf 'VAR   %s  %s=%s\n' "$BASHRC_TRACE_LOC" "$_v" "$_cur"
+                BASHRC_TRACE_PREV[$_v]=$_cur
+            fi
+        done
+        # file enter/leave as the active source file changes
+        if [[ $_src != "$BASHRC_TRACE_SRC" ]]; then
+            [[ -n $BASHRC_TRACE_SRC ]] && printf 'LEAVE %s\n' "$BASHRC_TRACE_SRC"
+            printf 'ENTER %s\n' "$_src"
+            BASHRC_TRACE_SRC=$_src
+        fi
+        BASHRC_TRACE_LOC="${_src}:${BASH_LINENO[0]:-?}"
+        [[ $_x ]] && set -x
+        return $_rc
+    }
+    trap 'bashrc_trace_watch' DEBUG
+    # functrace: without this the DEBUG trap fires ONLY for top-level commands
+    # in this file. The layer files are sourced inside source_if_exists (a
+    # function), so -T is required to see changes + ENTER/LEAVE inside
+    # functions.sh, global/bashrc, the config.sh layers, path_prepend, etc.
+    set -T
+fi
 
 export USER=$(whoami)
 if [[ -z "${HOME:-}" ]]; then
@@ -61,7 +126,7 @@ source_if_exists "$BASH_CONFIG_ROOT_DIR/project/config.sh"
 source_if_exists "$BASH_CONFIG_ROOT_DIR/user/config.sh"
 
 # Allow user home-dir override in case using a shared bash config installation.
-# Only when the config root is NOT already ~/.config/bash — otherwise these are
+# Only when the config root is NOT already ~/.config/bash -- otherwise these are
 # the same files just sourced above, and re-sourcing them runs any non-idempotent
 # user-layer logic twice. Compare resolved paths (handles trailing slash/symlink).
 _cfg_root_real=$(realpath "$BASH_CONFIG_ROOT_DIR" 2>/dev/null || echo "$BASH_CONFIG_ROOT_DIR")
@@ -111,4 +176,16 @@ unset_bashrc_local_vars
 # Clean up any PATH dupe dirs that may have crept in
 path_trim PATH
 
+# Tear down startup debugging -- each tool independently (they are decoupled).
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
+    set +T
+    trap - DEBUG
+    unset -f bashrc_trace_watch 2>/dev/null
+    unset BASHRC_TRACE_PREV BASHRC_TRACE_SRC BASHRC_TRACE_LOC BASHRC_STARTUP_TRACE_VARS
+fi
+if [[ ${DEBUG_BASH_STARTUP:-0} == "1" ]]; then
+    set +x
+    [[ -n ${BASH_XTRACEFD:-} ]] && exec {BASH_XTRACEFD}>&-
+    unset BASH_XTRACEFD
+fi
 # vim: ft=bash ts=4
