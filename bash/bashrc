@@ -52,7 +52,7 @@ unset -f $(declare -F | awk '{print $3}')
 # Enable by exporting in your environment, or uncomment a line here.
 # ===========================================================================
 #export BASHRC_STARTUP_TRACE=1
-if [[ ${BASHRC_STARTUP_TRACE:-0} == "1" ]]; then
+if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
     exec {BASH_XTRACEFD}>>~/bashrc.log
     PS4='+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}: '
     set -x
@@ -175,7 +175,7 @@ if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
     unset -f bashrc_trace_watch 2>/dev/null
     unset BASHRC_TRACE_PREV BASHRC_TRACE_SRC BASHRC_TRACE_LOC BASHRC_STARTUP_TRACE_VARS
 fi
-if [[ ${BASHRC_STARTUP_TRACE:-0} == "1" ]]; then
+if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
     set +x
     [[ -n ${BASH_XTRACEFD:-} ]] && exec {BASH_XTRACEFD}>&-
     unset BASH_XTRACEFD
