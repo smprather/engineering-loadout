@@ -7,3 +7,17 @@ __pycache__/
 bash/corp
 vendor/fonts.scale
 resume_claude.sh
+
+# /dev/null char-device shadows the command sandbox plants over sensitive
+# dotfiles when cwd is the repo (they show up as untracked, are not real files).
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.gitmodules
+.ripgreprc
+.mcp.json
+.idea/
+.vscode/
