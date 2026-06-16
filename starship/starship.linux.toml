@@ -1,7 +1,14 @@
 "$schema" = "./config-schema.json"
 
 add_newline = false
-scan_timeout = 100
+
+# How long Starship spends looking for directory context (like Git repos or package files) to determine the prompt's layout
+scan_timeout = 2000
+
+# How long Starship waits for a specific module to execute a script or system command (like finding a Node.js version)
+# before giving up and aborting it. [1]
+command_timeout = 2000
+
 format = """
 (${custom.username}${custom.lsf}$git_branch$git_status$cmd_duration$python\n)$directory
 $character"""
@@ -30,8 +37,10 @@ style = "bold blue"
 [git_status]
 style = "bold yellow"
 
+# A threshold for the previous command you ran. It dictates how fast a command must execute before the terminal
+# displays a timer indicating how long it took.
 [cmd_duration]
-min_time = 2000
+min_time = 5000
 style = "bold violet"
 format = "[took $duration]($style) "
 
