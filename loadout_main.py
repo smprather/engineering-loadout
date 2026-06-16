@@ -3912,6 +3912,15 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     print_final_notices()
     print_install_results()
     print_install_blockers()
+    # When a shared tree (non-env content) lands in a --dest-dir, tell the admin
+    # the exact prefix to export so per-user `@envs` installs resolve against it.
+    if getattr(args, "dest_dir", None) and any(
+        registry.get(name, {}).get("kind") not in ("env", "group") for name in (selected_tools or ())
+    ):
+        shared_root = _resolve_install_to("~/.local", home)
+        print("")
+        print("Shared tree installed. For per-user shells, run each user's env install with:")
+        print(f"  LOADOUT_CFG_SHARED_PREFIX={shared_root} loadout install @envs")
     return 0
 
 
@@ -4320,6 +4329,16 @@ def cli_install(
       loadout install @engineering-loadout --skip @fonts-all
 
       loadout install @engineering-loadout --dest-dir /opt/loadout/2026.06.11
+
+    Environment:
+
+      LOADOUT_CFG_SHARED_PREFIX -- set in the environment of an `@envs` install
+      to the local-root of a separately-installed shared/read-only tree (the dir
+      holding bin/share/lib64, e.g. /foo/bar/local for `@shared --dest-dir
+      /foo/bar`). It is baked into the user's config.sh so PATH, TERMINFO_DIRS,
+      and the tealdeer cache resolve against it. Example:
+
+      LOADOUT_CFG_SHARED_PREFIX=/foo/bar/local loadout install @envs
     """
     args = _ctx_args(
         ctx,
