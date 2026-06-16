@@ -113,6 +113,7 @@ sha256  7e23b9702a7f02f2be8dca5cdacceb417d76fa30deafb315fecaeb8cd597baca  pre_bu
 sha256  c67127a51d1190afd3ce56cbb7e3aa1327c00eb62cc1f8ba1c79373838980959  pre_built/el8.x86_64.glibc2p28/bin/nohup.bz2
 sha256  b07a55cf07829ef22189172b0e58ca92cbca62ec48ca5c7a9703c2ec0b31d16e  pre_built/el8.x86_64.glibc2p28/bin/nproc.bz2
 sha256  20970dc40eddcfc2a99385a163ebdf8b4c346915c608c8dd234fa0a50ce78cb6  pre_built/el8.x86_64.glibc2p28/bin/numfmt.bz2
+sha256  67b185548a4286b6434c03882f2feb2408ea961684c9247a7fed051195f8f945  pre_built/el8.x86_64.glibc2p28/bin/numr.bz2
 sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  pre_built/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
 sha256  17713656c0d5ce6eb6dd885997a01f6589ea29ca19d503a85630034e445a4db2  pre_built/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  eacb73a3e57af3b2d3399f3785aab8305fcd1fa743bc08d7500ac15f19f3577d  pre_built/el8.x86_64.glibc2p28/bin/octave.bz2

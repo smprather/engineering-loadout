@@ -19,5 +19,5 @@ resume_claude.sh
 .gitmodules
 .ripgreprc
 .mcp.json
-.idea/
-.vscode/
+.idea
+.vscode

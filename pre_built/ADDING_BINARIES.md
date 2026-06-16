@@ -1333,3 +1333,56 @@ fio --name=test --ioengine=libaio --rw=randread --size=1g --filename=./tf
 
 `fio` is in `@engineering-loadout` automatically (the synthetic `all`
 expansion covers every non-group package).
+
+---
+
+## numr 0.5.5 -- text calculator with vim-style TUI (Rust, EL8 SOURCE build)
+
+numr is a cargo workspace (`crates/numr-{core,cli,editor,tui}`). The headline
+command is the TUI binary `numr`, built from `crates/numr-tui`. It ships no
+official EL8 prebuilt (Homebrew/AUR/`cargo install` only), so we build from the
+latest stable tag on EL8, which also yields a native glibc-2.28 binary. cargo
+(1.95) is available; crates.io is not in the sandbox allowlist, so the build
+needs network outside the sandbox.
+
+The whole thing is one self-contained binary -- **no runtime data files**, so
+unlike fish there is no runtime tarball.
+
+**TLS/openssl trap (avoided):** numr-tui pulls numr-core with the `fetch`
+feature for live currency rates. `fetch` uses reqwest, which would normally drag
+in openssl (-> `libssl`/`libcrypto` NEEDED, neither bundled). But the workspace
+manifest pins `reqwest = { default-features = false, features = ["json",
+"rustls-tls"] }`, so TLS is pure-Rust rustls and the binary has **no openssl
+NEEDED entry**. Confirmed below. Live rates simply no-op offline; all other math
+(units, variables, static conversions) needs no network.
+
+```bash
+pre_built/build_scripts/build-numr.sh --tag v0.5.5
+```
+
+What the script does (run from any cwd):
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+git clone --filter=blob:none https://github.com/nasedkinpv/numr.git
+cd numr && git checkout v0.5.5
+cargo build --release -p numr-tui          # produces target/release/numr
+N=target/release/numr
+readelf -V "$N" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1   # GLIBC_2.28 OK
+readelf -d "$N" | grep NEEDED              # libgcc_s, libpthread, libm, libdl, libc -- all EL8 base
+strip "$N"
+patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' "$N"
+bzip2 -kf "$N"
+cp "$N.bz2" pre_built/el8.x86_64.glibc2p28/bin/numr.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/numr.bz2
+./strip_all_elf_binaries
+```
+
+- System libs only (glibc + libgcc_s) -> no bundling. RPATH set anyway, harmless.
+- `numr --version` prints `numr-tui 0.5.5` (the package name, not `numr`) --
+  farm-versions regex must allow the suffix: `r"numr(?:-tui)? ([0-9]+\.[0-9]+\.[0-9]+)"`.
+- packages.json `kind: bin`, `tags: [tui,math]`, no libs; member of `@core-cli`.
+- The TUI opens when run with no FILE arg; `numr <file>` opens/persists a sheet.
+
+Install: `./loadout install numr` (also pulled by `@core-cli` and the full
+`@engineering-loadout` bundle).

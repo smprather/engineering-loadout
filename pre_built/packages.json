@@ -759,6 +759,21 @@
       ],
       "description": "Fast build system used by CMake and LLVM"
     },
+    "numr": {
+      "kind": "bin",
+      "bins": [
+        "numr"
+      ],
+      "version": "0.5.5",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "tui",
+        "math"
+      ],
+      "description": "Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables)"
+    },
     "fresh": {
       "kind": "bin",
       "bins": [
@@ -2422,7 +2437,8 @@
         "choose",
         "sd",
         "tldr",
-        "broot"
+        "broot",
+        "numr"
       ],
       "description": "Small, fast, daily-use CLI tools"
     },

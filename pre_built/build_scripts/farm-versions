@@ -171,6 +171,12 @@ TOOLS = [
         strategy_flag(["--version"], r"broot ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "numr",
+        "numr",
+        "https://github.com/nasedkinpv/numr",
+        strategy_flag(["--version"], r"numr(?:-tui)? ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "btm",
         "bottom",
         "https://github.com/ClementTsang/bottom",
