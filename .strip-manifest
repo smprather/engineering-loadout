@@ -145,6 +145,7 @@ sha256  84ec6600d50311a61ebdce15733a8c664eb926b0e97d7124e4b6e80a0397a352  pre_bu
 sha256  d2a14da37822ff8da826d249c2cd7c5f253724225ad8136e36f7c2fabf333a33  pre_built/el8.x86_64.glibc2p28/bin/sha256sum.bz2
 sha256  4b8d42821be501da992d112a9de04c82005caf65a852ffaccaa60509b20c3436  pre_built/el8.x86_64.glibc2p28/bin/sha384sum.bz2
 sha256  b2e0e43fad03d4da61b25d3aa11d8dea173c43187a1d05e04b47ac13ea4f6ea9  pre_built/el8.x86_64.glibc2p28/bin/sha512sum.bz2
+sha256  674d50920d6fa503da5413dc82662e9c41d24980c0fbd9de1d7f04d44c089dc5  pre_built/el8.x86_64.glibc2p28/bin/shellcheck.bz2
 sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  pre_built/el8.x86_64.glibc2p28/bin/shfmt.bz2
 sha256  dbbf84790650147c89ed1160b76649ee9e15f287a819a84b68ffcf373235ae7f  pre_built/el8.x86_64.glibc2p28/bin/shred.bz2
 sha256  48e98433780fd89d0c37675a2e008daebde3596c5da61ebeff935a65a3473a2f  pre_built/el8.x86_64.glibc2p28/bin/shuf.bz2

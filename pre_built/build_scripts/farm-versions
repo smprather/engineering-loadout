@@ -359,6 +359,12 @@ TOOLS = [
     ("sd", "sd", "https://github.com/chmln/sd", strategy_flag(["--version"], r"sd ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("shfmt", "shfmt", "https://github.com/mvdan/sh", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
     (
+        "shellcheck",
+        "shellcheck",
+        "https://github.com/koalaman/shellcheck",
+        strategy_flag(["--version"], r"version:\s*([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "starship",
         "starship",
         "https://github.com/starship/starship",

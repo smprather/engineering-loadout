@@ -945,6 +945,21 @@
       ],
       "description": "Shell script formatter and parser"
     },
+    "shellcheck": {
+      "kind": "bin",
+      "bins": [
+        "shellcheck"
+      ],
+      "version": "0.11.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "shell",
+        "lint"
+      ],
+      "description": "Static analysis linter for shell scripts"
+    },
     "starship": {
       "kind": "bin",
       "bins": [
@@ -2463,6 +2478,7 @@
         "lazygit",
         "delta",
         "shfmt",
+        "shellcheck",
         "stylua",
         "ruff",
         "ty",

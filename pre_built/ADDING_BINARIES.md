@@ -1386,3 +1386,33 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/numr.bz2
 
 Install: `./loadout install numr` (also pulled by `@core-cli` and the full
 `@engineering-loadout` bundle).
+
+---
+
+## shellcheck 0.11.0 -- shell-script static-analysis linter (static prebuilt)
+
+shellcheck is a Haskell binary; building the GHC toolchain on EL8 is a sprawl,
+but upstream ships a **fully static** linux.x86_64 release (no `ld-linux`, no
+glibc syms -- `ldd` says "not a dynamic executable"). So download and package --
+no glibc concern, no patchelf, no libs. The asset is already `strip`ped.
+
+```bash
+curl -fsSL -o sc.tar.xz \
+  "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
+tar xf sc.tar.xz                                  # yields ./shellcheck-v0.11.0/shellcheck
+file shellcheck-v0.11.0/shellcheck                # ELF ... statically linked, stripped
+ldd  shellcheck-v0.11.0/shellcheck                # "not a dynamic executable"
+bzip2 -kf shellcheck-v0.11.0/shellcheck
+cp shellcheck-v0.11.0/shellcheck.bz2 pre_built/el8.x86_64.glibc2p28/bin/shellcheck.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/shellcheck.bz2
+./strip_all_elf_binaries
+```
+
+- packages.json `kind: bin`, `tags: [shell,lint]`, no libs; member of `@dev-tools`
+  (next to its formatter sibling `shfmt`).
+- `shellcheck --version` prints `version: 0.11.0` -> farm-versions strategy
+  `r"version:\s*([0-9]+\.[0-9]+\.[0-9]+)"`.
+- The `.tar.gz` and `.tar.xz` assets carry the same binary; `.tar.xz` is smaller.
+
+Install: `./loadout install shellcheck` (also pulled by `@dev-tools` and the full
+`@engineering-loadout` bundle).
