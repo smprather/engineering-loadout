@@ -236,6 +236,15 @@ if is_truthy "$LOADOUT_CFG_USE_LOADOUT_MODULES"; then
     source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
 fi
 
+# IceCream-Bash: ic/icp/ict/ictp debug-print helpers (vendored, MIT).
+# export -f so the functions are available inside child bash scripts too,
+# not just this interactive shell (the debug-a-script use case).
+if is_truthy "${LOADOUT_CFG_ENABLE_ICECREAM}"; then
+    if source_if_exists "$BASH_CONFIG_ROOT_DIR/global/icecream-bash/ic.sh"; then
+        export -f ic icp ict ictp 2>/dev/null
+    fi
+fi
+
 ### Prompt ###
 /bin/stty sane
 # Disable ctrl-s terminal pausing

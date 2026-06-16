@@ -76,6 +76,7 @@ bash/
     completions/            - bat, rg, zoxide, hyperfine, watchexec completions
     github.scop.bash-completion/  - Bundled bash-completion library (offline)
     grc/                    - Generic Colorizer binaries and configs
+    icecream-bash/          - Vendored IceCream-Bash (MIT): ic/icp/ict/ictp debug-print helpers
   corp/                     - Corporation-level overrides (user-created)
   site/                     - Site-level overrides (user-created)
   team/                     - Team-level overrides (user-created)
@@ -358,6 +359,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 | `LOADOUT_CFG_PREFERRED_VI` | `nvim` | Editor (`nvim`, `vim`) |
 | `LOADOUT_CFG_PREFERRED_CAT` | `bat` | cat replacement (used by aliases) |
 | `LOADOUT_CFG_ENABLE_GRC` | `1` | Generic Colorizer |
+| `LOADOUT_CFG_ENABLE_ICECREAM` | `1` | Source vendored IceCream-Bash (`ic`/`icp`/`ict`/`ictp` debug-print helpers); `export -f`'d so child scripts inherit them |
 | `LOADOUT_CFG_ENABLE_FZF` | `0` | fzf shell integration |
 | `LOADOUT_CFG_ENABLE_ZOXIDE` | `0` | zoxide shell integration (`z`/`zi` commands) |
 | `LOADOUT_CFG_ENABLE_STARSHIP` | `1` | Starship prompt (falls back to built-in prompt) |
