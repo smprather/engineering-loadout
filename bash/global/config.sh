@@ -1,5 +1,6 @@
+# Full path to preferred bash binary; re-execs at startup if set
+export LOADOUT_CFG_PREFERRED_BASH=""
 # Valid values for LOADOUT_CFG_PREFERRED_LS: eza, lsd, ls
-export LOADOUT_CFG_PREFERRED_BASH="" # Full path to preferred bash binary; re-execs at startup if set
 export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"
 export LOADOUT_CFG_PREFERRED_CAT="bat"
@@ -13,7 +14,8 @@ export LOADOUT_CFG_ENABLE_FASTNVIM="0"
 export LOADOUT_CFG_ENABLE_FZF="0"
 export LOADOUT_CFG_ENABLE_ZOXIDE="0"
 export LOADOUT_CFG_ENABLE_GRC="1"
-export LOADOUT_CFG_ENABLE_ICECREAM="1" # IceCream-Bash ic/icp/ict/ictp debug-print helpers
+# IceCream-Bash ic/icp/ict/ictp debug-print helpers
+export LOADOUT_CFG_ENABLE_ICECREAM="1"
 export LOADOUT_CFG_ENABLE_STARSHIP="1"
 export LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT=""
 # LOADOUT_CFG_ENABLE_ONLINE_UPDATES -> auto | 1 | 0
