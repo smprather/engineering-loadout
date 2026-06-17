@@ -58,13 +58,18 @@ if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
     set -x
 fi
 
-#BASHRC_STARTUP_TRACE_VARS="PATH"
-if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
+# Either a space-string or an array works:
+#BASHRC_STARTUP_TRACE_VARS="PATH FOO"
+#BASHRC_STARTUP_TRACE_VARS=(PATH FOO)
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS[*]:-} ]]; then
     # State/function use non "_" names so unset_bashrc_local_vars (which wipes
     # _* just before teardown) can't clear them mid-run.
     declare -A BASHRC_TRACE_PREV=()
     BASHRC_TRACE_SRC=
     BASHRC_TRACE_LOC="(init)"
+    # Accept both a space-string ("PATH FOO") and an array (=(PATH FOO)): [*]
+    # joins either form, read -ra splits it into a clean indexed array.
+    read -ra BASHRC_TRACE_NAMES <<< "${BASHRC_STARTUP_TRACE_VARS[*]}"
     bashrc_trace_watch() {
         local _rc=$? _v _cur _src _x= # preserve caller $? (fires pre-cmd)
         [[ $- == *x* ]] && {
@@ -74,7 +79,7 @@ if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
         _src=${BASH_SOURCE[1]:-?}
         # var changes: attribute to the command that just ran (the previous
         # fire's location), since the DEBUG trap fires BEFORE the next command.
-        for _v in $BASHRC_STARTUP_TRACE_VARS; do
+        for _v in "${BASHRC_TRACE_NAMES[@]}"; do
             _cur=${!_v-<unset>}
             if [[ ${BASHRC_TRACE_PREV[$_v]+s} != s || ${BASHRC_TRACE_PREV[$_v]} != "$_cur" ]]; then
                 printf 'VAR   %s  %s=%s\n' "$BASHRC_TRACE_LOC" "$_v" "$_cur"
@@ -169,11 +174,11 @@ unset_bashrc_local_vars
 path_trim PATH
 
 # Tear down startup debugging -- each tool independently (they are decoupled).
-if [[ -n ${BASHRC_STARTUP_TRACE_VARS:-} ]]; then
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS[*]:-} ]]; then
     set +T
     trap - DEBUG
     unset -f bashrc_trace_watch 2>/dev/null
-    unset BASHRC_TRACE_PREV BASHRC_TRACE_SRC BASHRC_TRACE_LOC BASHRC_STARTUP_TRACE_VARS
+    unset BASHRC_TRACE_PREV BASHRC_TRACE_SRC BASHRC_TRACE_LOC BASHRC_TRACE_NAMES BASHRC_STARTUP_TRACE_VARS
 fi
 if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
     set +x
