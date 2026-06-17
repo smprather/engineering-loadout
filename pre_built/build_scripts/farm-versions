@@ -288,6 +288,12 @@ TOOLS = [
         strategy_flag(["--version"], r"v?([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "models",
+        "models",
+        "https://github.com/reyamira/models",
+        strategy_flag(["--version"], r"models ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "htop",
         "htop",
         "https://github.com/htop-dev/htop",

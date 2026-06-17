@@ -187,11 +187,38 @@ def scrape_latest(url, pattern, accept=None, ua=None):
     return max(matches, key=_ver_tuple)
 
 
+def gnu_patchlevel_latest(entry):
+    """Resolve a GNU patchlevel version (e.g. bash 5.3.9, readline 8.2.13).
+
+    GNU ships only `<stem>-X.Y.tar.gz` in the main dir, with patchlevels in a
+    sibling `<stem>-X.Y-patches/` dir as `<stemXY>-NNN` files. The bundled
+    version is base+patchlevel, so a plain scrape of the main dir under-resolves
+    to the bare base (e.g. 5.3) and the comparison looks like a downgrade. Here
+    we scrape the base from version_url/version_pattern, then the highest patch
+    number from the matching patches dir, and combine -> 'X.Y.NNN'.
+    """
+    base = scrape_latest(entry["version_url"], entry["version_pattern"])
+    if not base:
+        return ""
+    stem = entry.get("version_scheme_stem", "bash")
+    dir_url = entry["version_url"].split("?", 1)[0].rstrip("/")
+    patches_url = f"{dir_url}/{stem}-{base}-patches/?C=M&O=D"
+    compact = base.replace(".", "")
+    try:
+        text = _http_get_text(patches_url)
+        nums = [int(m) for m in re.findall(rf"{re.escape(stem)}{compact}-0*([0-9]+)", text)]
+    except Exception:
+        nums = []
+    return f"{base}.{max(nums)}" if nums else base
+
+
 def upstream_for(name, entry, homepages):
     """Returns (source, latest, error_or_None). Source: 'github'|'pypi'|'scrape'|'n/a'."""
     # Explicit scrape URL always wins -- overrides PyPI for python-tools not on PyPI.
     if entry.get("version_url") and entry.get("version_pattern"):
         try:
+            if entry.get("version_scheme") == "gnu-patchlevel":
+                return ("scrape", gnu_patchlevel_latest(entry), None)
             accept = entry.get("version_url_accept")
             ua = entry.get("version_url_ua")
             return ("scrape", scrape_latest(entry["version_url"], entry["version_pattern"], accept=accept, ua=ua), None)
@@ -236,6 +263,29 @@ def _ver_tuple(v):
     return tuple(out)
 
 
+def _shape(v):
+    """Per-component digit/alpha signature, e.g. '5.3.9' -> ('d','d','d')."""
+    return tuple("d" if p.isdigit() else "a" for p in re.split(r"[.\-]", v) if p)
+
+
+def _comparable(current, latest):
+    """Whether current/latest can be sanely ranked.
+
+    Same shape (same length + per-component digit/alpha pattern) -> yes; the
+    differing values are the actual version delta. Differing shape is OK ONLY as
+    a clean prefix-extension (e.g. '1.2' vs '1.2.1' -- a legit new patch
+    component): the shorter's components must equal the longer's leading ones.
+    Any other shape difference (e.g. '410' vs '2026-06-15') almost always means
+    the upstream resolver mis-parsed, and a comparison would be meaningless.
+    """
+    if _shape(current) == _shape(latest):
+        return True
+    cp = [p for p in re.split(r"[.\-]", current) if p]
+    lp = [p for p in re.split(r"[.\-]", latest) if p]
+    n = min(len(cp), len(lp))
+    return cp[:n] == lp[:n]
+
+
 def status_of(current, latest, pin_reason=""):
     if not current:
         return "?"
@@ -243,6 +293,10 @@ def status_of(current, latest, pin_reason=""):
         return "?"
     if current == latest:
         return "current"
+    # Non-homogeneous (non-prefix) shapes are unrankable -- flag rather than
+    # guess a direction (a mis-parsed upstream resolver, not a real delta).
+    if not _comparable(current, latest):
+        return "mismatch"
     if _ver_tuple(current) < _ver_tuple(latest):
         return "pinned" if pin_reason else "outdated"
     return "ahead"

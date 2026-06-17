@@ -181,9 +181,11 @@ bind 'set match-hidden-files off'
 bind '"\e[A":history-search-backward'
 bind '"\e[B":history-search-forward'
 bind "set colored-completion-prefix on"
-# cycle completions forward/backward
-bind '\C-j:menu-complete'
-bind '\C-k:menu-complete-backward'
+# Cycle completions: Tab forward (above), Shift-Tab backward. Do NOT bind
+# \C-j/\C-k here: \C-j IS newline (\n), so binding it to menu-complete makes
+# typed-ahead Enter (buffered as \n in cooked mode while a long command runs)
+# trigger completion instead of accept-line -- the Enter looks "not accepted".
+bind '"\e[Z":menu-complete-backward'
 
 ### Terminal tools ###
 # Rust
@@ -254,6 +256,25 @@ fi
 /bin/stty sane
 # Disable ctrl-s terminal pausing
 /bin/stty -ixon
+
+# Re-enable terminal echo if a foreground program was killed (e.g. ctrl-c at a
+# password prompt) and left -echo on, so typed input stays visible again. Run
+# from PROMPT_COMMAND, but only calls stty (tcsetattr) when echo is ACTUALLY off
+# -- the old approach ran `stty <full-snapshot>` on every prompt, whose
+# unconditional tcsetattr swallowed the Enter of any type-ahead entered while a
+# long command was still running. Preserves $? so a following starship precmd
+# still sees the real command exit status.
+loadout_restore_echo() {
+    local _rc=$?
+    case $- in
+        *i*) ;;
+        *) return "$_rc" ;;
+    esac
+    local _stty=" $(stty -a 2>/dev/null | tr '\n' ' ') "
+    [[ $_stty == *" -echo "* ]] && stty echo 2>/dev/null
+    return "$_rc"
+}
+
 set_prompt() {
     local include_host=${LOADOUT_CFG_PROMPT_INCLUDE_HOST}
     local prompt_color=${LOADOUT_CFG_PROMPT_COLOR_NORMAL}

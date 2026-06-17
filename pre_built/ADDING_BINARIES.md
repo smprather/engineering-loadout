@@ -1561,3 +1561,37 @@ pre_built/build_scripts/build-gocheat.sh --tag v0.1.1
   version probe would hang. Version is tracked only in packages.json.
 
 Install: `./loadout install gocheat`.
+
+---
+
+## models 0.12.3 -- TUI/CLI to browse AI models + benchmarks (Rust, EL8 SOURCE build)
+
+`models` (crate `modelsdev`, github.com/reyamira/models) is a Rust TUI/CLI for
+browsing models.dev data. The ONLY official linux prebuilt is `*-linux-gnu`,
+built on a modern host -- it needs **GLIBC_2.39** and aborts on EL8 (glibc 2.28):
+
+```text
+models: /lib64/libc.so.6: version `GLIBC_2.29' not found (required by models)
+```
+
+Source-build to get a native glibc-2.28 binary. The crate also defines an
+internal `transform` bin -- build/ship ONLY `models` via `--bin models`.
+
+```bash
+pre_built/build_scripts/build-models.sh --tag v0.12.3
+# source /opt/rh/gcc-toolset-14/enable
+# git clone --depth 1 --branch v0.12.3 https://github.com/reyamira/models.git
+# cargo build --release --bin models      # ~90s; max GLIBC symbol 2.28
+# strip; patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib'; bzip2
+```
+
+- System libs only (glibc + libgcc_s) -> no bundling. RPATH set anyway, harmless.
+  The TUI fetches data from models.dev over HTTPS (reqwest/rustls -- no openssl
+  NEEDED); needs network for live data, starts fine offline.
+- packages.json `kind: bin`, `tags: [tui,reference,agent]`, member of `@core-cli`.
+- `models --version` prints `models 0.12.3` -> farm-versions
+  `r"models ([0-9]+\.[0-9]+\.[0-9]+)"`.
+- NOTE: the command name `models` is generic -- watch for PATH collisions with
+  other tools of the same name (this is upstream's binary name).
+
+Install: `./loadout install models`.

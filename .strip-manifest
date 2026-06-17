@@ -9,7 +9,7 @@ sha256  ef493599d19a880cbc943e4cd935fba4fd71e0e0713909a1f6bbb271a6823696  pre_bu
 sha256  d0daffbd7502251024304fb4c1ccbb7ef9244da8554ae45b49d120bb067f7a59  pre_built/el8.x86_64.glibc2p28/bin/base64.bz2
 sha256  54e210db4f5af23203269161c7d155fad2c80de1d34e6e27b83b079ce3072afd  pre_built/el8.x86_64.glibc2p28/bin/basename.bz2
 sha256  74d8c21e3f075bfa1b62e8753283ebfd6fde2d9a0d0989d91ae839188387e9f2  pre_built/el8.x86_64.glibc2p28/bin/basenc.bz2
-sha256  d3ee05b7027b48ee4d53c4e02131f374c5d45ddc45283fea17d80918c5627b7a  pre_built/el8.x86_64.glibc2p28/bin/bash.bz2
+sha256  b56cb31894147914a88f14656ffc0d9b4a6feae18bd715b553f0f7d4fe27efae  pre_built/el8.x86_64.glibc2p28/bin/bash.bz2
 sha256  e5bfde14cafd378a196bb2963d3fea9f486ad0a11276f7780cec8fa2b065caf0  pre_built/el8.x86_64.glibc2p28/bin/bat.bz2
 sha256  6a7d1013b2c05d63459ca6c597a65201329c61626d0381c15ac91020575bada6  pre_built/el8.x86_64.glibc2p28/bin/biome.bz2
 sha256  6b51f51c97878759ca92d950bf5abc3c6ce00aca11f973d8e5a9af4bc4985e26  pre_built/el8.x86_64.glibc2p28/bin/broot.bz2
@@ -107,6 +107,7 @@ sha256  46655e6061de9b8a294754bd8551fc2f51db02bd8fcb15c30c73e92019a27256  pre_bu
 sha256  bdaaaefc586afd1fc860bb19e02d84ff291fbbbba424377bf82dc2132acb11b4  pre_built/el8.x86_64.glibc2p28/bin/mknod.bz2
 sha256  c423373ce5c3cb3d1113cde99858c24bd6abd3dd518cd556aa23cd02e895d684  pre_built/el8.x86_64.glibc2p28/bin/mktemp.bz2
 sha256  cff9472b7bd266ee6df1161c7d3201b7a21963dd0e62642e2aec2f42547f23dc  pre_built/el8.x86_64.glibc2p28/bin/mlr.bz2
+sha256  4d76cefa9581514f784c4498f0ce8e1a96ead1f0749c7c9da18dd0b578fcdd48  pre_built/el8.x86_64.glibc2p28/bin/models.bz2
 sha256  bccf5fcf7a9e81c4144c9988dd931036e49013a83cc9bba7a5a2034c7132aaae  pre_built/el8.x86_64.glibc2p28/bin/mv.bz2
 sha256  b01916a407d7598da814ea2f879ed8766a1bd54256b1249d0e744212906a67f2  pre_built/el8.x86_64.glibc2p28/bin/ncdu.bz2
 sha256  7fa7cf9ee4e94a292cfa2f1f56b7f613c0bb231edb80d378e0739aac136bd77a  pre_built/el8.x86_64.glibc2p28/bin/nedit-ng.bz2
@@ -139,7 +140,7 @@ sha256  38d2a5fb1cc6f92edb6a3c7b92000c4721fd0c32f1a4ddd5c8e825bcbfd98a19  pre_bu
 sha256  1891555602914f1583e3157c84cb0356aa3fd211134fc90cdf5db13d0ffb2f56  pre_built/el8.x86_64.glibc2p28/bin/rm.bz2
 sha256  34826810504c35ae76248e0e79495df8ff4b2f2191b8130fcd8aba8749b86726  pre_built/el8.x86_64.glibc2p28/bin/rmdir.bz2
 sha256  c91517d389e427058df5caa43f06a4136de8d931f4272cd7e7b3cc86759e7cdd  pre_built/el8.x86_64.glibc2p28/bin/rsync.bz2
-sha256  0765926196163a3b37249ff68b72db06eaa231f4e0d50669929c1dbe854dca9a  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
+sha256  5a873926ee7015a086907f1fb6c43db63f204fd9ed7c0dff9f2504848474523d  pre_built/el8.x86_64.glibc2p28/bin/ruff.bz2
 sha256  aa75ac95284fc3f1b4f5817b3fc7c5ac7bac8f4d21ab0ebe938d4702a36a9ae4  pre_built/el8.x86_64.glibc2p28/bin/rust-analyzer.bz2
 sha256  6284620f19c7492544b97bd2472bee22ead412d4a82733be58c68dc1b2b2e460  pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
 sha256  d96dceab12c2ff9045a99c853ed06ddde00d042862bac81532d6e6ab3268024c  pre_built/el8.x86_64.glibc2p28/bin/sd.bz2
@@ -181,7 +182,7 @@ sha256  518ea53d89593a42e135d08ad5f8e2e21f19b4f0121af62466acb139f43050b5  pre_bu
 sha256  b6e03a4ad5884474396246fed62c8b9d24f75bce1a1d7be01a1b5fb47523c25f  pre_built/el8.x86_64.glibc2p28/bin/truncate.bz2
 sha256  0071ab0a9f06e47046ff807b4cab3b0b6493ea35eada14f20bf157027ac179e1  pre_built/el8.x86_64.glibc2p28/bin/tsort.bz2
 sha256  da7d1cd8c8213f1f2fecd74bf77b389a9af00a69d258ebdf5b1661adf593162f  pre_built/el8.x86_64.glibc2p28/bin/tty.bz2
-sha256  258a0ba95857873aac7139de2294a898292aa9cd490eb54660a33294b704ab71  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
+sha256  77fa2bbb4d48b3187aa34e2898d7b7072f2c4eef075f9f22bbbd71066a8598cc  pre_built/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  50057ac6b1bc300c3f583ee00dd7de0a68a5c3c4cfc3644a3a36c18a9b8f75f4  pre_built/el8.x86_64.glibc2p28/bin/uname.bz2
 sha256  e78e24b7ca307e5371d925aad486be6fe23467b08046c64f077ecacbc704bc1f  pre_built/el8.x86_64.glibc2p28/bin/unexpand.bz2
 sha256  38e2a8673c1b9bfb5fd63b659b3e1c4bbee58f7d3d961bc3f639592374666375  pre_built/el8.x86_64.glibc2p28/bin/uniq.bz2
@@ -190,7 +191,7 @@ sha256  09d61b68fb8597049029917a8d830cc293345e74e45eeceb61c3cdca9b09db55  pre_bu
 sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  pre_built/el8.x86_64.glibc2p28/bin/urxvt.bz2
 sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  pre_built/el8.x86_64.glibc2p28/bin/urxvtc.bz2
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  pre_built/el8.x86_64.glibc2p28/bin/urxvtd.bz2
-sha256  58abf90523d435592de72aab7b610bfb070d23266a25587a631c08381b5420fa  pre_built/el8.x86_64.glibc2p28/bin/uv.bz2
+sha256  34ce00ab15e11899a823ab0377868fd2d73d2373784ddff1c11be3bb19c9d401  pre_built/el8.x86_64.glibc2p28/bin/uv.bz2
 sha256  7f9b3a1ef3e92cf8b5aab85b31ca5dc4f2860b37429e7c5ba2610bd337070893  pre_built/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  pre_built/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  pre_built/el8.x86_64.glibc2p28/bin/wc.bz2

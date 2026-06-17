@@ -700,7 +700,8 @@ def _fetch_latest_map():
     for line in out.splitlines()[1:]:
         parts = line.split("\t")
         if len(parts) >= 3 and parts[0] and parts[2]:
-            result[parts[0]] = parts[2]
+            status = parts[4] if len(parts) >= 5 else ""
+            result[parts[0]] = (parts[2], status)
     return result
 
 
@@ -741,10 +742,14 @@ def cmd_list(outdated_only=False):
                 continue
             lstr = raw_latest or "-"
         else:
-            raw_latest = latest_map.get(name, "")
+            raw_latest, status = latest_map.get(name, ("", ""))
             if outdated_only and (not raw_latest or raw_latest == ver):
                 continue
             lstr = raw_latest.lstrip("v") if raw_latest else "-"
+            # Non-homogeneous version/latest -- the upstream resolver almost
+            # certainly mis-parsed; flag it instead of showing a bogus delta.
+            if status == "mismatch":
+                lstr = lstr + "   !! version/latest format differ -- check resolver"
         vstr = ver or "-"
         print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
 

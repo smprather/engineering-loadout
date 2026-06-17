@@ -3131,7 +3131,6 @@ def install_tealdeer_config(repo_dir, home):
         require_writable_dir(dest, "tealdeer config")
     with open(dest, "w") as f:
         f.write(text)
-    print(f"  tealdeer config installed to {dest}")
 
 
 def _install_env_bash(repo_dir, home):
