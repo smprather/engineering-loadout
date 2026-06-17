@@ -282,6 +282,12 @@ TOOLS = [
         strategy_flag(["--version"], r"glow version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "keyb",
+        "keyb",
+        "https://github.com/kencx/keyb",
+        strategy_flag(["--version"], r"v?([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "htop",
         "htop",
         "https://github.com/htop-dev/htop",

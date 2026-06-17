@@ -60,6 +60,7 @@ sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  pre_bu
 sha256  fd06bb9f7938718bb4aa03bc00b6114978cd99ed9e2ce6ea38c78fca5db9d993  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  20520e8ba435ab7f5c575f31924ebc3d189b13e84f80a6954dcc76b4a55fea36  pre_built/el8.x86_64.glibc2p28/bin/glow.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
+sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  pre_built/el8.x86_64.glibc2p28/bin/gocheat.bz2
 sha256  e831fc837c259f399a55e973d9ec8df773ddadabeae33b8f34244a6a15dbd85f  pre_built/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  pre_built/el8.x86_64.glibc2p28/bin/groups.bz2
@@ -75,6 +76,7 @@ sha256  6242ea1674a5bf13e6ada11c9088b60bb8f035f5107fbbc1869906d954b309f8  pre_bu
 sha256  4a0397c5823ee9dbed7191d4d1653293954cec86becc2587097fb315e46862d4  pre_built/el8.x86_64.glibc2p28/bin/join.bz2
 sha256  adb774eca668d2abbc24d2281861ce0a4f5bc0d8ffc64bae4618074b44682d1a  pre_built/el8.x86_64.glibc2p28/bin/jq.bz2
 sha256  c2a48210651d17f2a0b0199b1b79be437352281d485bed86b19ebcdaf6391960  pre_built/el8.x86_64.glibc2p28/bin/just.bz2
+sha256  0905c124d68839a4438cf831295b0a31b2ef11d45600a4f0e022e7ea13026fb3  pre_built/el8.x86_64.glibc2p28/bin/keyb.bz2
 sha256  aa8c6a7cf7d89a30950836ecdd8f10f1407f4c5e082b0d2d8187372aef03e6c8  pre_built/el8.x86_64.glibc2p28/bin/lazygit.bz2
 sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  pre_built/el8.x86_64.glibc2p28/bin/ld.lld.bz2
 sha256  35a5ce9ea2ec6adcacb7be7f964a82f52c072ff863df8d5c701692e3e2e5878a  pre_built/el8.x86_64.glibc2p28/bin/liberty_filter.bz2

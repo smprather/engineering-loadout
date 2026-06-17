@@ -1510,3 +1510,54 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/glow.bz2
 
 Install: `./loadout install glow` (also in `@core-cli` and the full
 `@engineering-loadout` bundle).
+
+---
+
+## keyb 0.8.0 -- TUI keybinding/alias cheatsheet (Go static prebuilt)
+
+keyb is a Go binary; the official `linux-amd64` release tarball is statically
+linked (`ldd` says "not a dynamic executable", no glibc syms). Plain
+download-and-bzip2 -- no glibc concern, no patchelf, no libs.
+
+```bash
+curl -fsSL -o keyb.tgz \
+  "https://github.com/kencx/keyb/releases/download/v0.8.0/keyb-v0.8.0-linux-amd64.tar.gz"
+tar xzf keyb.tgz                                  # -> ./keyb + README/CHANGELOG/LICENSE
+file keyb; ldd keyb                                # statically linked
+bzip2 -kf keyb
+cp keyb.bz2 pre_built/el8.x86_64.glibc2p28/bin/keyb.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/keyb.bz2
+./strip_all_elf_binaries
+```
+
+- packages.json `kind: bin`, `tags: [tui,reference]`, member of `@core-cli`.
+- `keyb --version` prints `v0.8.0` -> farm-versions `r"v?([0-9]+\.[0-9]+\.[0-9]+)"`.
+
+Install: `./loadout install keyb`.
+
+---
+
+## gocheat 0.1.1 -- interactive terminal cheatsheet (Go, EL8 SOURCE build)
+
+gocheat is pure Go (no `import "C"`), but the **upstream prebuilt does not run on
+EL8**: goreleaser builds the official `linux_amd64` tarball with cgo on a newer
+host, so it is dynamically linked and needs `GLIBC_2.34` (EL8 has 2.28):
+
+```text
+gocheat: /lib64/libc.so.6: version `GLIBC_2.34' not found (required by gocheat)
+```
+
+Rebuild from the stable tag with `CGO_ENABLED=0` -> fully static, no glibc dep.
+Use the build script (go1.26 + network for the module proxy, outside the sandbox):
+
+```bash
+pre_built/build_scripts/build-gocheat.sh --tag v0.1.1
+# CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o gocheat .  (asserts static + no glibc syms)
+```
+
+- packages.json `kind: bin`, `tags: [tui,reference]`, member of `@core-cli`.
+- **Not in farm-versions:** gocheat has no `--version` flag -- any argument drops
+  straight into the TUI and opens `/dev/tty` (`could not open a new TTY`), so a
+  version probe would hang. Version is tracked only in packages.json.
+
+Install: `./loadout install gocheat`.

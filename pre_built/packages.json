@@ -625,6 +625,36 @@
       ],
       "description": "Terminal markdown renderer/pager with styles"
     },
+    "gocheat": {
+      "kind": "bin",
+      "bins": [
+        "gocheat"
+      ],
+      "version": "0.1.1",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "tui",
+        "reference"
+      ],
+      "description": "Interactive terminal cheatsheet browser (EL8 source build, CGO_ENABLED=0 static)"
+    },
+    "keyb": {
+      "kind": "bin",
+      "bins": [
+        "keyb"
+      ],
+      "version": "0.8.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "tui",
+        "reference"
+      ],
+      "description": "Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export"
+    },
     "gping": {
       "kind": "bin",
       "bins": [
@@ -2513,7 +2543,9 @@
         "broot",
         "numr",
         "yazi",
-        "glow"
+        "glow",
+        "keyb",
+        "gocheat"
       ],
       "description": "Small, fast, daily-use CLI tools"
     },
