@@ -77,6 +77,7 @@ bash/
     github.scop.bash-completion/  - Bundled bash-completion library (offline)
     grc/                    - Generic Colorizer binaries and configs
     icecream-bash/          - Vendored IceCream-Bash (MIT): ic/icp/ict/ictp debug-print helpers
+    icecream-ext.sh         - loadout override: ic/ict also print arbitrary strings + mixed var/string args (vendored ic.sh kept pristine; icp/ictp stay force-literal)
   corp/                     - Corporation-level overrides (user-created)
   site/                     - Site-level overrides (user-created)
   team/                     - Team-level overrides (user-created)
