@@ -158,6 +158,12 @@ TOOLS = [
         strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "amux",
+        "amux",
+        "https://github.com/andyrewlee/amux",
+        strategy_flag(["--version"], r"amux ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "bash",
         "bash",
         "https://www.gnu.org/software/bash/",
@@ -169,6 +175,12 @@ TOOLS = [
         "broot",
         "https://github.com/Canop/broot",
         strategy_flag(["--version"], r"broot ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "yazi",
+        "yazi",
+        "https://github.com/sxyazi/yazi",
+        strategy_flag(["--version"], r"Yazi ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
         "numr",
@@ -263,6 +275,12 @@ TOOLS = [
         ),
     ),
     ("gping", "gping", "https://github.com/orf/gping", strategy_flag(["--version"], r"gping ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "glow",
+        "glow",
+        "https://github.com/charmbracelet/glow",
+        strategy_flag(["--version"], r"glow version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "htop",
         "htop",

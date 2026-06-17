@@ -4,6 +4,7 @@
 tar-meta  48995175  1779931729  nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2
 sha256  252763d8cd1cec055f637c274d3276ed65782699ed8521f5e325e22d82d585b9  pre_built/el8.x86_64.glibc2p28/bin/7za.bz2
 sha256  a9131c8c4d3ddcc16db2bec37649624134ef92e125f4834bd1eedb24d9a74e9a  pre_built/el8.x86_64.glibc2p28/bin/agent-deck.bz2
+sha256  1b0ea0e198965f1e3556e957e91e9a338933b8e58f03ec7667f1fffbab27e335  pre_built/el8.x86_64.glibc2p28/bin/amux.bz2
 sha256  ef493599d19a880cbc943e4cd935fba4fd71e0e0713909a1f6bbb271a6823696  pre_built/el8.x86_64.glibc2p28/bin/base32.bz2
 sha256  d0daffbd7502251024304fb4c1ccbb7ef9244da8554ae45b49d120bb067f7a59  pre_built/el8.x86_64.glibc2p28/bin/base64.bz2
 sha256  54e210db4f5af23203269161c7d155fad2c80de1d34e6e27b83b079ce3072afd  pre_built/el8.x86_64.glibc2p28/bin/basename.bz2
@@ -57,6 +58,7 @@ sha256  71c69f9a5bcfd4e328674bf252d198b7ce3af6727b1f069c4a1dcf882d7e5088  pre_bu
 sha256  ed02e52236b570b5cff3fd761dd404d44d082bf23134848befcc7cda497cf637  pre_built/el8.x86_64.glibc2p28/bin/fold.bz2
 sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  pre_built/el8.x86_64.glibc2p28/bin/fresh.bz2
 sha256  fd06bb9f7938718bb4aa03bc00b6114978cd99ed9e2ce6ea38c78fca5db9d993  pre_built/el8.x86_64.glibc2p28/bin/fzf.bz2
+sha256  20520e8ba435ab7f5c575f31924ebc3d189b13e84f80a6954dcc76b4a55fea36  pre_built/el8.x86_64.glibc2p28/bin/glow.bz2
 sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  pre_built/el8.x86_64.glibc2p28/bin/gnuplot.bz2
 sha256  e831fc837c259f399a55e973d9ec8df773ddadabeae33b8f34244a6a15dbd85f  pre_built/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  c1248d3312589826270f4dddcef1a27d1a384e55b071a63a119d03bf0506d2c7  pre_built/el8.x86_64.glibc2p28/bin/gping.bz2
@@ -193,8 +195,10 @@ sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  pre_bu
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  pre_built/el8.x86_64.glibc2p28/bin/whoami.bz2
 sha256  93a1e62221255a524a18a84e9f4537888192b5daa24dbb07027351b1fa1292b7  pre_built/el8.x86_64.glibc2p28/bin/xsel.bz2
 sha256  9aaa384a750b03d2672addfcda08ff13782688b844cf7ddf2c9646fc7a98a196  pre_built/el8.x86_64.glibc2p28/bin/xterm.bz2
+sha256  afedd364087fdaa110f10973f2c5b12103be435ca546d00e7bdeb0224c9dde66  pre_built/el8.x86_64.glibc2p28/bin/ya.bz2
 sha256  440f16d186c93b1680d5aebf32ea8906cd69dfbf5af3a173e2ee0c875d0c8fbf  pre_built/el8.x86_64.glibc2p28/bin/yank.bz2
 sha256  41a74109cf13e40d61137e3abdc73e9ddde939247869f1992c1270e2f572eabc  pre_built/el8.x86_64.glibc2p28/bin/yara.bz2
+sha256  852aef2c0524fd51419e6caae4b278f4d60b0504aee08bee9fa97dfddd8d4175  pre_built/el8.x86_64.glibc2p28/bin/yazi.bz2
 sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  pre_built/el8.x86_64.glibc2p28/bin/yes.bz2
 sha256  54fdc2afe2588185f3e87aea2bb2f5bffaeeb3e3d004448abd89cdf43219ba6c  pre_built/el8.x86_64.glibc2p28/bin/yq.bz2
 sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  pre_built/el8.x86_64.glibc2p28/bin/zellij.bz2

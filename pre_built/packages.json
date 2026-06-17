@@ -38,6 +38,25 @@
       ],
       "description": "TUI dashboard for AI agent orchestration"
     },
+    "amux": {
+      "kind": "bin",
+      "bins": [
+        "amux"
+      ],
+      "version": "0.0.19",
+      "platforms": [
+        "linux"
+      ],
+      "depends": [
+        "tmux"
+      ],
+      "tags": [
+        "agent",
+        "tui",
+        "dev"
+      ],
+      "description": "TUI for orchestrating parallel coding agents via git worktrees + tmux"
+    },
     "bash": {
       "kind": "bin",
       "bins": [
@@ -119,6 +138,29 @@
         "tui"
       ],
       "description": "Interactive tree navigator with fuzzy search"
+    },
+    "yazi": {
+      "kind": "bin",
+      "bins": [
+        "yazi",
+        "ya"
+      ],
+      "version": "26.5.6",
+      "platforms": [
+        "linux"
+      ],
+      "recommends": [
+        "fd",
+        "rg",
+        "fzf",
+        "zoxide"
+      ],
+      "tags": [
+        "nav",
+        "tui",
+        "file"
+      ],
+      "description": "Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion"
     },
     "btm": {
       "kind": "bin",
@@ -566,6 +608,22 @@
         "scientific"
       ],
       "description": "Command-line graphing and plotting utility"
+    },
+    "glow": {
+      "kind": "bin",
+      "bins": [
+        "glow"
+      ],
+      "version": "2.1.2",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "markdown",
+        "viewer",
+        "tui"
+      ],
+      "description": "Terminal markdown renderer/pager with styles"
     },
     "gping": {
       "kind": "bin",
@@ -2453,7 +2511,9 @@
         "sd",
         "tldr",
         "broot",
-        "numr"
+        "numr",
+        "yazi",
+        "glow"
       ],
       "description": "Small, fast, daily-use CLI tools"
     },
@@ -2479,6 +2539,7 @@
         "delta",
         "shfmt",
         "shellcheck",
+        "amux",
         "stylua",
         "ruff",
         "ty",

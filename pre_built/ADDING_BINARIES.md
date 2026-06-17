@@ -1416,3 +1416,97 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/shellcheck.bz2
 
 Install: `./loadout install shellcheck` (also pulled by `@dev-tools` and the full
 `@engineering-loadout` bundle).
+
+---
+
+## amux 0.0.19 -- TUI for orchestrating parallel coding agents (Go static prebuilt)
+
+amux is a Go binary (goreleaser); the official `linux_amd64` release tarball is
+statically linked (`ldd` says "not a dynamic executable", no glibc syms). So it
+is a plain download-and-bzip2 -- no glibc concern, no patchelf, no libs. The
+`go1.26` toolchain is available if a source build is ever needed
+(`go install github.com/andyrewlee/amux/cmd/amux@vX.Y.Z`), but the prebuilt is
+preferred.
+
+```bash
+curl -fsSL -o amux.tgz \
+  "https://github.com/andyrewlee/amux/releases/download/v0.0.19/amux_0.0.19_linux_amd64.tar.gz"
+tar xzf amux.tgz                                  # yields ./amux + LICENSE + README.md
+file amux                                         # ELF ... statically linked, stripped
+ldd  amux                                         # "not a dynamic executable"
+bzip2 -kf amux
+cp amux.bz2 pre_built/el8.x86_64.glibc2p28/bin/amux.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/amux.bz2
+./strip_all_elf_binaries
+```
+
+- packages.json `kind: bin`, `tags: [agent,tui,dev]`, member of `@dev-tools`.
+  `depends: [tmux]` -- amux drives each agent in its own tmux session (needs
+  tmux >= 3.2, which the bundled `tmux` provides).
+- `amux --version` prints `amux 0.0.19 (commit: ...)` -> farm-versions strategy
+  `r"amux ([0-9]+\.[0-9]+\.[0-9]+)"`.
+- Runtime: also shells out to coding-agent CLIs (claude/codex/etc.) -- those are
+  not bundled; amux works without them, just with fewer agent backends.
+
+Install: `./loadout install amux` (pulls `tmux`; also in `@dev-tools` and the
+full `@engineering-loadout` bundle).
+
+---
+
+## yazi 26.5.6 -- terminal file manager (Rust, musl static prebuilt)
+
+yazi is a Rust TUI file manager. The official `x86_64-unknown-linux-musl` zip is
+**static-pie** (`ldd` says "statically linked", no glibc syms), so it runs on EL8
+with no patchelf/libs. The zip carries TWO binaries -- `yazi` (the TUI) and `ya`
+(the CLI companion: plugin/package manager, `ya emit`, `ya pub`) -- bundle both.
+
+```bash
+curl -fsSL -o yazi.zip \
+  "https://github.com/sxyazi/yazi/releases/download/v26.5.6/yazi-x86_64-unknown-linux-musl.zip"
+unzip -q yazi.zip                                 # -> yazi-x86_64-unknown-linux-musl/{yazi,ya,README.md,LICENSE}
+D=yazi-x86_64-unknown-linux-musl
+file "$D/yazi"; ldd "$D/yazi"                      # static-pie, "statically linked"
+for b in yazi ya; do
+    bzip2 -kf "$D/$b"
+    cp "$D/$b.bz2" "pre_built/el8.x86_64.glibc2p28/bin/$b.bz2"
+    chmod 644 "pre_built/el8.x86_64.glibc2p28/bin/$b.bz2"
+done
+./strip_all_elf_binaries
+```
+
+- packages.json `kind: bin`, `bins: [yazi, ya]`, `tags: [nav,tui,file]`, member of
+  `@core-cli`. `recommends: [fd, rg, fzf, zoxide]` -- yazi integrates with them for
+  find/search/jump (all already bundled); none are required, previews degrade
+  gracefully without optional host tools (file, ffmpegthumbnailer, poppler, etc.).
+- `yazi --version` prints `Yazi 26.5.6 (...)` -> farm-versions strategy
+  `r"Yazi ([0-9]+\.[0-9]+\.[0-9]+)"` (capital Y).
+
+Install: `./loadout install yazi` (also in `@core-cli` and the full
+`@engineering-loadout` bundle).
+
+---
+
+## glow 2.1.2 -- terminal markdown renderer (Go static prebuilt)
+
+glow is a Go binary (charmbracelet, goreleaser); the official `Linux_x86_64`
+release tarball is statically linked (`ldd` says "not a dynamic executable", no
+glibc syms). Plain download-and-bzip2 -- no glibc concern, no patchelf, no libs.
+
+```bash
+curl -fsSL -o glow.tgz \
+  "https://github.com/charmbracelet/glow/releases/download/v2.1.2/glow_2.1.2_Linux_x86_64.tar.gz"
+tar xzf glow.tgz                                  # -> glow_2.1.2_Linux_x86_64/glow + docs
+D=glow_2.1.2_Linux_x86_64
+file "$D/glow"; ldd "$D/glow"                      # statically linked
+bzip2 -kf "$D/glow"
+cp "$D/glow.bz2" pre_built/el8.x86_64.glibc2p28/bin/glow.bz2
+chmod 644 pre_built/el8.x86_64.glibc2p28/bin/glow.bz2
+./strip_all_elf_binaries
+```
+
+- packages.json `kind: bin`, `tags: [markdown,viewer,tui]`, member of `@core-cli`.
+- `glow --version` prints `glow version 2.1.2 (...)` -> farm-versions strategy
+  `r"glow version ([0-9]+\.[0-9]+\.[0-9]+)"`.
+
+Install: `./loadout install glow` (also in `@core-cli` and the full
+`@engineering-loadout` bundle).
