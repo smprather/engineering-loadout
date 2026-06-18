@@ -7,10 +7,12 @@
 # Deferred (bash-only for now): completion parity (the bash-completion bundle),
 # full keybinding set, and the startup-trace / icecream debug machinery.
 
-# --- zsh compat: make the shared (bash-written) logic behave bash-like --------
-# SH_WORD_SPLIT: split unquoted $var on IFS, like bash (the path_* helpers and
-# various `for x in $list` rely on it). INTERACTIVE_COMMENTS: allow `#` comments.
-setopt SH_WORD_SPLIT INTERACTIVE_COMMENTS 2>/dev/null
+# --- zsh compat ---------------------------------------------------------------
+# INTERACTIVE_COMMENTS: allow `#` comments interactively (bash-like).
+# NOTE: do NOT enable SH_WORD_SPLIT globally -- it breaks zsh's own completion
+# system (compinit/compdump loops). The shared bash bits we reuse (the PATH loop
+# iterates literal words; config.sh/aliases.sh are plain defs) don't need it.
+setopt INTERACTIVE_COMMENTS 2>/dev/null
 
 # --- config root (mirror the bash dispatcher's default) -----------------------
 BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
@@ -60,11 +62,25 @@ HISTSIZE=10000
 SAVEHIST=10000
 setopt HIST_IGNORE_SPACE HIST_IGNORE_ALL_DUPS SHARE_HISTORY INC_APPEND_HISTORY
 
-# --- completion: DEFERRED -----------------------------------------------------
-# compinit is intentionally NOT run: the bundled zsh was built with a /tmp build
-# prefix, so its $fpath points at a gone /tmp/zsh-install-*/share/zsh/... dir and
-# compinit hangs. Fix the zsh binary to be relocatable (bundle its functions dir
-# + correct fpath, like the fish/vim launchers) before enabling completion.
+# --- zsh function library (fpath) + completion --------------------------------
+# zsh modules are static in our build, but the shell functions (compinit,
+# add-zsh-hook, the _* completions) ship via runtime/zsh.tar.bz2 ->
+# <root>/share/zsh. The binary's built-in fpath is the gone /tmp build prefix, so
+# point fpath at the installed library (under the shared prefix when set). If the
+# library isn't present, leave completion/integrations off rather than hang.
+_zsh_share="${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/share/zsh}"
+_zsh_share="${_zsh_share:-$HOME/.local/share/zsh}"
+_zsh_fns_ok=0
+if [[ -d "$_zsh_share/$ZSH_VERSION/functions" ]]; then
+    fpath=("$_zsh_share/$ZSH_VERSION/functions" "$_zsh_share/site-functions" $fpath)
+    _zsh_fns_ok=1
+fi
+# compinit is gated behind an opt-in flag (default off): with the bundled zsh it
+# loops in compdump at startup (under investigation). fpath above is still set so
+# add-zsh-hook etc. are resolvable once that's fixed.
+if (( _zsh_fns_ok )) && is_truthy "${LOADOUT_CFG_ZSH_ENABLE_COMPLETION:-0}"; then
+    autoload -Uz compinit && compinit -u
+fi
 
 # --- key bindings (built-in zle widgets only; no autoload -> no fpath need) ---
 # prefix history search on arrows (bash history-search-* analog), Shift-Tab back.
@@ -79,18 +95,12 @@ if command -v "${LOADOUT_CFG_PREFERRED_LS:-eza}" >/dev/null; then
     alias ls="${LOADOUT_CFG_PREFERRED_LS:-eza}"
 fi
 
-# --- tool integrations (zsh init variants) -- GATED OFF for the MVP -----------
-# BLOCKED, opt-in only (LOADOUT_CFG_ZSH_ENABLE_PROMPT=1) until two things are
-# fixed + verified:
-#   1. The bundled zsh ships NO function library -- its $fpath points at a gone
-#      /tmp/zsh-install-*/share/zsh/... build prefix, so add-zsh-hook/compinit
-#      are unavailable. Repackage zsh relocatably (bundle share/zsh/<ver>/functions
-#      + correct fpath, like the fish/vim launchers).
-#   2. Even with add-zsh-hook present, `eval "$(starship init zsh)"` HANGS at
-#      startup here -- needs debugging before it can be trusted in a login shell.
-# Until then this block is off so the rc can never hang a shell. PATH, aliases,
-# history, and built-in keybinds above all work today.
-if is_truthy "${LOADOUT_CFG_ZSH_ENABLE_PROMPT:-0}"; then
+# --- tool integrations (zsh init variants) ------------------------------------
+# starship/zoxide hooks need add-zsh-hook from the function library. Gated behind
+# an opt-in flag (default off): `eval "$(starship init zsh)"` currently hangs at
+# startup with the bundled zsh (same compdump/compsys issue as compinit, under
+# investigation). fpath is set above so this lights up once that's fixed.
+if (( _zsh_fns_ok )) && is_truthy "${LOADOUT_CFG_ZSH_ENABLE_PROMPT:-0}"; then
     if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
         export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
         eval "$(starship init zsh)"

@@ -1794,14 +1794,19 @@
       "bins": [
         "zsh"
       ],
-      "version": "",
+      "version": "5.9",
       "platforms": [
         "linux"
       ],
+      "archive": "pre_built/PLATFORM/runtime/zsh.tar.bz2",
+      "install_to": "~/.local",
+      "sentinel": "share/zsh/5.9/functions/compinit",
+      "remove_before_extract": "share/zsh",
+      "missing_hint": "zsh function library (completion, add-zsh-hook) will NOT be installed",
       "tags": [
         "shell"
       ],
-      "description": "Z shell \u2014 powerful interactive shell with advanced tab completion"
+      "description": "Z shell \u2014 powerful interactive shell with advanced tab completion; modules static, function library shipped via runtime archive"
     },
     "fish": {
       "kind": "bin",

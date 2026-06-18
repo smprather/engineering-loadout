@@ -87,8 +87,11 @@ fi
 
 cd "$SRCDIR"
 git fetch --tags
-# zsh tags are plain version numbers like "5.9" (no "v" prefix)
-git checkout "$tag"
+# zsh release tags are prefixed: the 5.9 release is the tag "zsh-5.9" (a bare
+# "5.9" is NOT a ref -- an earlier version of this script checked out "5.9",
+# silently stayed on a dev commit, and shipped 5.8.0.1-dev). Accept the bare
+# version as --tag and map to the real tag here.
+git checkout "zsh-$tag"
 
 if [ "$clean" -eq 1 ]; then
     [ -f Makefile ] && make distclean || true
@@ -133,6 +136,31 @@ echo ""
 echo "Build complete: $("$INSTALL_PREFIX/bin/zsh" --version)"
 echo ""
 
+# Sanity: refuse a dev build (stable-release policy). The release tag must yield
+# a clean X.Y version, not an X.Y.Z-dev string.
+_zver="$("$INSTALL_PREFIX/bin/zsh" -c 'print -r -- $ZSH_VERSION')"
+case "$_zver" in
+    *-dev|*dev*)
+        echo "ERROR: built zsh reports dev version '$_zver' -- not a stable release. Aborting." >&2
+        exit 1 ;;
+esac
+echo "ZSH_VERSION: $_zver"
+
+# Package the zsh function library (fpath) as a runtime archive. The binary is
+# built with static modules (no .so to bundle), but the shell functions
+# (compinit, add-zsh-hook, the _* completions, etc.) live in
+# share/zsh/<ver>/functions and share/zsh/site-functions and MUST ship -- without
+# them fpath points at this gone /tmp build prefix and compinit/add-zsh-hook fail
+# (starship's zsh init hangs). zsh/zshrc points fpath at the installed copy.
+RUNTIME_DIR="$REPO/pre_built/el8.x86_64.glibc2p28/runtime"
+mkdir -p "$RUNTIME_DIR"
+echo "Packaging zsh function library -> runtime/zsh.tar.bz2 ..."
+tar -cjf "/tmp/zsh_runtime_${tag}.tar.bz2" -C "$INSTALL_PREFIX" \
+    --exclude='./share/zsh/*/help' \
+    ./share/zsh
+cp "/tmp/zsh_runtime_${tag}.tar.bz2" "$RUNTIME_DIR/zsh.tar.bz2"
+rm -f "/tmp/zsh_runtime_${tag}.tar.bz2"
+
 # Package the binary
 WORK="/tmp/zsh_work_${tag}"
 cp "$INSTALL_PREFIX/bin/zsh" "$WORK"
@@ -150,9 +178,9 @@ import re, sys
 path = sys.argv[1]; ver = sys.argv[2]
 txt = open(path).read()
 txt = re.sub(
-    r'(\"zsh\".*?\"version\":\s*\")([^\"]+)(\")',
+    r'(\"zsh\":\s*\{.*?\"version\":\s*\")([^\"]*)(\")',
     r'\g<1>' + ver + r'\3',
-    txt
+    txt, count=1, flags=re.S
 )
 open(path, 'w').write(txt)
 print('packages.json: zsh version -> ' + ver)
