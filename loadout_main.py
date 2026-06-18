@@ -3296,6 +3296,26 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
         return False
     print(f"  Installing env: {pkg_name} ({source} -> {install_to})")
     install_path(src, dest, links_mode=False)
+    # Honor declared extra_links (e.g. ~/.zshrc -> ~/.config/zsh/zshrc). The
+    # dedicated handlers (env-bash/vim/tmux) hardcode their lns() calls; doing
+    # it here lets a simple env package wire its entrypoint symlinks purely from
+    # packages.json. Target is home-relative (matches the dedicated handlers, so
+    # the link survives a relocated tree); link path is anchored to the install
+    # root the same way dest is above (--dest-dir aware).
+    for link in pkg_entry.get("extra_links", []):
+        link_from = link.get("from", "")
+        link_to = link.get("to", "")
+        if not link_from or not link_to:
+            continue
+        target = link_from[2:] if link_from.startswith("~/") else link_from
+        link_path = os.path.expanduser(link_to)
+        if link_path.startswith("~"):
+            link_path = os.path.join(home, link_to.lstrip("~/"))
+        elif not os.path.isabs(link_path):
+            link_path = os.path.join(home, link_to)
+        if link_path.startswith(expanded_home + os.sep) and home_real != os.path.realpath(expanded_home):
+            link_path = home_real + link_path[len(expanded_home) :]
+        lns(target, link_path, verbose=True)
     return True
 
 

@@ -206,7 +206,7 @@ sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  pre_bu
 sha256  54fdc2afe2588185f3e87aea2bb2f5bffaeeb3e3d004448abd89cdf43219ba6c  pre_built/el8.x86_64.glibc2p28/bin/yq.bz2
 sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  pre_built/el8.x86_64.glibc2p28/bin/zellij.bz2
 sha256  4c00d72c2d66f4be0cf4a95942f1cc80d7bbf006425f48fdc34e2f162542eaad  pre_built/el8.x86_64.glibc2p28/bin/zoxide.bz2
-sha256  9ef27e9770cc0c9c07b69d11bd38cdfb66f645dc99dddbf525a6ddab1a7de69d  pre_built/el8.x86_64.glibc2p28/bin/zsh.bz2
+sha256  cace44fb3233a47ebd5cde749070e3ccaf415461ed2807ff28236280dd99a06d  pre_built/el8.x86_64.glibc2p28/bin/zsh.bz2
 sha256  4e716fa491657670e2f22ef075be94983f6ba903e9ae04df8ec263750afb5987  pre_built/el8.x86_64.glibc2p28/lib64/libFLAC.so.8.bz2
 sha256  a505dfc0042b37350a6c6c3fa284a2d6179b52bde258fa85e5d1a54390ccf67f  pre_built/el8.x86_64.glibc2p28/lib64/libICE.so.6.bz2
 sha256  dcf68a31eb6eaf7cdc6e264472daeb94302fedd383659a96a6109314b9319c00  pre_built/el8.x86_64.glibc2p28/lib64/libQt5Core.so.5.bz2
@@ -365,7 +365,7 @@ tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.b
 tar-meta  4430091  1778655123  pre_built/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3491  1781292760  pre_built/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  8483290  1778430063  pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
-tar-meta  1130152  1781797207  pre_built/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
+tar-meta  1130335  1781799893  pre_built/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  939973  1778105745  tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2

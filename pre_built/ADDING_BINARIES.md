@@ -1595,3 +1595,61 @@ pre_built/build_scripts/build-models.sh --tag v0.12.3
   other tools of the same name (this is upstream's binary name).
 
 Install: `./loadout install models`.
+
+## zsh 5.9 -- Z shell (EL8 SOURCE build; sandboxed-build signal-probe trap)
+
+zsh has no EL8-compatible official prebuilt (source tarballs only), so it is
+built from the tagged release on the EL8 box:
+
+```bash
+pre_built/build_scripts/build-zsh.sh --tag 5.9
+```
+
+The tag is mapped to the real ref `zsh-5.9` inside the script (a bare `5.9` is
+NOT a ref -- an earlier version checked out `5.9`, silently stayed on a dev
+commit, and shipped `5.8.0.1-dev`; the script now refuses any `*-dev` build).
+
+**The non-obvious quirk -- three autoconf run-tests misfire under a sandboxed /
+no-controlling-tty build environment.** zsh's configure has `AC_TRY_RUN` probes
+that COMPILE AND RUN small programs which fork children and poke signals /
+process groups. When the build runs inside a restricted environment (sandbox,
+no tty, ptrace/seccomp) those probes get the wrong answer and configure defines:
+
+```text
+BROKEN_KILL_ESRCH       (zsh_cv_sys_killesrch=no)
+BROKEN_POSIX_SIGSUSPEND (zsh_cv_sys_sigsuspend=no -- nested under killesrch=no)
+BROKEN_TCSETPGRP        (zsh_cv_sys_tcsetpgrp=no)
+```
+
+`BROKEN_POSIX_SIGSUSPEND` is the killer: it swaps zsh's race-free
+`sigsuspend()` child-wait (`Src/signals.c` `signal_suspend()`) for a `pause()`
+fallback with a lost-wakeup race -- SIGCHLD is reaped in the handler, then zsh
+calls `pause()` waiting for a SIGCHLD that already fired. Result: **every
+command substitution `$(...)` and every job-wait hangs forever** (e.g.
+`x=$(echo hi)` never returns; `compinit` appears to "hang" because compdump
+runs a `$(typeset +fm '_*')` substitution). `strace` shows the final syscall is
+`pause(`, not `sigsuspend(`.
+
+On real EL8 (glibc 2.28) all three syscalls work correctly -- the probes only
+failed because of WHERE we built. The build script pre-seeds the cache vars on
+the `./configure` line (the `${var+:}` guard in configure skips the run-test
+when the var is already set), baking in the correct target answer:
+
+```sh
+zsh_cv_sys_killesrch=yes zsh_cv_sys_sigsuspend=yes zsh_cv_sys_tcsetpgrp=yes ./configure ...
+```
+
+Verify after a build: `grep BROKEN_ config.h` must show all three `#undef`, and
+`zsh -fc 'x=$(echo hi); print $x'` must print `hi` (not hang). If you ever build
+another autoconf tool from source on a sandboxed box and it behaves as if
+signals/job-control are broken, suspect the same class of run-test misdetection.
+
+Other build details:
+- `--disable-pcre` (avoids bundling `libpcre.so.1`; POSIX ERE regex still works).
+- Modules are **static** (no `.so` -> no `module_path`/launcher needed). The
+  shell **function library** (compinit, add-zsh-hook, the `_*` completions) does
+  NOT live in the binary -- it ships as `runtime/zsh.tar.bz2` (the generic
+  runtime dispatcher extracts it to `~/.local/share/zsh`); `zsh/zshrc` points
+  `fpath` there since the binary's baked fpath is the gone build prefix.
+- Links `libncurses.so.6` + `libreadline.so.7` (both bundled, RPATH `$ORIGIN`).
+- Config: `loadout install env-zsh` (depends `env-bash` for the shared layers).

@@ -419,7 +419,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 - `new` -- touch + chmod +x + open
 
 **Search:**
-- `g` -- `rg --smart-case --search-zip --hidden --no-ignore` (falls back to `grep -r -i`)
+- `g` -- `rg --smart-case --search-zip --hidden --no-ignore`; fallback grep searches stdin when piped and recursively searches `.` only when stdin is a TTY
 - `sg` -- same but limited to 100K files
 - `gv` -- inverted grep
 - `gf` -- fixed-string grep
@@ -435,10 +435,10 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 - `gc` -- `git commit`
 - `gp` -- `git push`
 - `gd` -- `git d`
-- `gsp` -- stash, pull, pop
+- `gsp` -- pull with a temporary tracked-change stash only when needed; never pops an older unrelated stash
 
 **Utilities:**
-- `cat` -- `bat --paging=never` (if bat available); `catp` -- bat with paging
+- `cat` -- `bat --paging=never` when `LOADOUT_CFG_PREFERRED_CAT=bat` and bat is available; `catp` -- bat with paging
 - `t` -- `exec bash` (reload shell)
 - `lns` -- safe symlink (removes existing link first)
 - `latest` -- create/follow a `latest` symlink to a dir, then cd into it
@@ -452,7 +452,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 - `extract_rpm` -- `rpm2cpio | cpio -idmv`
 - `zhead` -- zcat + head
 - `rp` -- realpath (cwd if no arg)
-- `gzip` / `gunzip` -- pigz / unpigz
+- `gzip` / `gunzip` -- pigz / unpigz when available
 - `vnc` -- start VNC server (no args) or pass through to vncserver
 
 ## Component Reference

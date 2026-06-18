@@ -2213,6 +2213,43 @@
       ],
       "description": "Bash 5-layer config (system \u2192 corp \u2192 site \u2192 project \u2192 user) with prompt, aliases, completions"
     },
+    "env-zsh": {
+      "kind": "env",
+      "source": "zsh/",
+      "install_to": "~/.config/zsh",
+      "extra_links": [
+        {
+          "from": "~/.config/zsh/zshrc",
+          "to": "~/.zshrc"
+        },
+        {
+          "from": "~/.config/zsh/zshrc",
+          "to": "~/.zprofile"
+        }
+      ],
+      "supports_layers": [
+        "corp",
+        "site",
+        "team",
+        "project",
+        "user"
+      ],
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "tags": [
+        "env",
+        "shell"
+      ],
+      "depends": [
+        "env-bash"
+      ],
+      "recommends": [
+        "env-starship"
+      ],
+      "description": "Zsh config that reuses the bash layers (functions.sh/config.sh/aliases.sh) plus zsh-native completion, starship prompt, history and keybindings"
+    },
     "env-nvim": {
       "kind": "env",
       "source": "nvim/",

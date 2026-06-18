@@ -116,13 +116,43 @@ rm -rf "$INSTALL_PREFIX"
 # Build without PCRE to avoid bundling libpcre.so.1.
 # ncurses and readline are bundled from this repo ($ORIGIN/../lib64).
 # --enable-cap: POSIX capabilities support (libcap is always on EL8).
+#
+# Do NOT add --enable-zsh-secure-free: it is a DEBUG allocator that runs error
+# checking on every free(), which makes allocation-heavy work pathologically
+# slow. With it on, compinit's compdump (line 108 globs every fpath dir against
+# a ~900-branch alternation of _* function names -- very alloc-heavy) takes
+# >60s and looks like a startup hang. Plain release builds dump in well under a
+# second.
+#
+# Do NOT add --without-tcsetpgrp: that disables terminal process-group handling
+# (job control). Linux always has tcsetpgrp; let configure auto-detect it so an
+# interactive zsh gets working Ctrl-Z / fg / bg.
+#
+# CRITICAL -- override three autoconf AC_TRY_RUN feature probes (cache vars
+# below). These probes COMPILE AND RUN small programs that fork children and
+# poke signals / process groups. When this build runs inside a restricted build
+# environment (sandbox, no controlling tty, ptrace/seccomp), those probes
+# misbehave and configure wrongly concludes the syscalls are "broken":
+#   zsh_cv_sys_killesrch=no  -> #define BROKEN_KILL_ESRCH
+#     and, nested under it, also runs and fails:
+#   zsh_cv_sys_sigsuspend=no -> #define BROKEN_POSIX_SIGSUSPEND
+#   zsh_cv_sys_tcsetpgrp=no  -> #define BROKEN_TCSETPGRP
+# BROKEN_POSIX_SIGSUSPEND is the killer: it swaps zsh's race-free sigsuspend()
+# child-wait for a pause() fallback that has a lost-wakeup race -- SIGCHLD is
+# reaped in the handler, then zsh calls pause() waiting for a SIGCHLD that
+# already fired, so EVERY command substitution and job-wait hangs forever.
+# On real EL8 (glibc 2.28) all three syscalls work correctly; the probes only
+# failed because of WHERE we built. Pre-seeding the cache vars (the ${var+:}
+# guard in configure skips the run-test when the var is already set) bakes in
+# the correct target-platform answer.
+zsh_cv_sys_killesrch=yes \
+zsh_cv_sys_sigsuspend=yes \
+zsh_cv_sys_tcsetpgrp=yes \
 ./configure \
     --prefix="$INSTALL_PREFIX" \
     --bindir="$INSTALL_PREFIX/bin" \
     --enable-cap \
     --enable-multibyte \
-    --enable-zsh-secure-free \
-    --without-tcsetpgrp \
     --disable-pcre \
     CFLAGS="-O2 -fstack-protector-strong"
 
