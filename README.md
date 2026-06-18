@@ -164,6 +164,7 @@ Run `./loadout list` to see every package and every group, or
 | [lazygit](https://github.com/jesseduffield/lazygit) | 0.61.1 | TUI git client for staging, committing, and rebasing |
 | [liberty-tools](https://github.com/smprather/liberty-tools) | 1.0.1 | Fast Liberty `.lib` parser and browser-based viewer |
 | [mate-terminal](https://github.com/mate-desktop/mate-terminal) | 1.26.1 | GTK3 terminal emulator |
+| [Mesa 3D](https://www.mesa3d.org/) | 23.1.4 | Mesa EGL / GBM / DRI runtime for bundled GPU-accelerated GUI apps |
 | [meld](https://meldmerge.org) | 3.20.4 | GTK3 visual diff and merge tool |
 | [micro](https://micro-editor.github.io) | 2.0.15 | Modern, intuitive terminal text editor -- Ctrl+S just works |
 | [miller](https://github.com/johnkerl/miller) | 6.18.1 | CSV / TSV / JSON / NDJSON / XML data processor (`mlr`) |
@@ -193,6 +194,7 @@ Run `./loadout list` to see every package and every group, or
 | [uv](https://github.com/astral-sh/uv) | 0.11.13 | Extremely fast Python package installer and resolver |
 | [vim](https://www.vim.org) | 9.2 | Vim 9.2 |
 | [visidata](https://www.visidata.org) | 3.3 | TUI spreadsheet for exploring CSV / TSV / JSON / NDJSON data |
+| [WezTerm](https://wezfurlong.org/wezterm/) | 20260618_095146_c10636f3 | GPU-accelerated terminal emulator bundled from the system install |
 | [xsel](https://github.com/kfish/xsel) | 1.2.0 | X11 clipboard command-line access tool |
 | [xterm](https://invisible-island.net/xterm/) | 410 | X Window System terminal emulator |
 | [yank](https://github.com/mptre/yank) | 1.3.0 | Select terminal output and copy to clipboard |
@@ -209,6 +211,10 @@ any GUI application:
 # Or use the group, which pulls gui_libs for you:
 ./loadout install @gui-suite
 ```
+
+GPU-accelerated apps such as WezTerm also pull `mesa3d_libs`, which installs
+Mesa's EGL vendor library, GBM, DRI drivers, and LLVM runtime without bundling
+host display-driver dispatchers like `libGL.so.1`.
 
 ### Python
 

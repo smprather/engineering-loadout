@@ -183,8 +183,10 @@ alongside each other.
 
 **Never bundle**: glibc (`libc.so.6`, `libm.so.6`, etc.), OpenGL dispatcher
 (`libGL.so.1`, `libGLX.so.0`, `libGLdispatch.so.0` -- must match display
-driver), C++ runtime (`libstdc++.so.6`, `libgcc_s.so.1`). Everything else is
-safe to bundle.
+driver), C++ runtime (`libstdc++.so.6`, `libgcc_s.so.1`). Mesa vendor/runtime
+pieces are okay: `mesa3d_libs` ships `libEGL_mesa`, `libgbm`, `libglapi`, DRI
+drivers, GLVND JSON, and `libLLVM-17`; wrappers must set `LD_LIBRARY_PATH`,
+`LIBGL_DRIVERS_PATH`, and `__EGL_VENDOR_LIBRARY_DIRS`.
 
 **Qt5 platform plugins** (`libqxcb.so`, `libqwayland-generic.so`) live flat in
 `~/.local/lib64/`; `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` set in
@@ -220,7 +222,10 @@ only enters relocatable mode when both `<prefix>/share/fish` and
 `TERMINFO_DIRS` so ncurses resolves `st-256color` for normal and `--dest-dir`
 installs instead of relying on implicit `~/.terminfo`. The Neovim runtime lives at `pre_built/<platform>/runtime/nvim.tar.bz2`;
 the installer extracts it to `~/.local/share/nvim/runtime`; `filetype.lua` is
-the sentinel file.
+the sentinel file. `mesa3d_libs.tar.bz2` installs Mesa under
+`~/.local/lib64` / `~/.local/lib64/dri` and is chunked as `.part-000..002`.
+`wezterm.tar.bz2` installs `~/.local/bin/wezterm` plus
+`~/.local/lib/wezterm/wezterm.bin`.
 
 Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `nvim/init.lua` disables the plugin layer cleanly

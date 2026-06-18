@@ -1355,6 +1355,30 @@
       ],
       "description": "Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required)"
     },
+    "mesa3d_libs": {
+      "kind": "runtime",
+      "version": "23.1.4",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "gui",
+        "library",
+        "opengl"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/mesa3d_libs.tar.bz2",
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "Mesa 3D userspace runtime \u2014 Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs)",
+      "sentinel": "lib64/dri/swrast_dri.so",
+      "install_to": "~/.local",
+      "remove_before_extract": [
+        "lib64/dri",
+        "share/glvnd/egl_vendor.d/50_mesa.json"
+      ],
+      "missing_hint": "Mesa DRI/EGL runtime will NOT be installed; GPU-accelerated apps may fall back to host Mesa or fail"
+    },
     "gui_libs": {
       "kind": "lib-bundle",
       "bins": [],
@@ -1514,6 +1538,36 @@
         "gui"
       ],
       "description": "rxvt-unicode \u2014 X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"
+    },
+    "wezterm": {
+      "kind": "bin",
+      "bins": [],
+      "version": "20260618_095146_c10636f3",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "terminal",
+        "gui",
+        "opengl"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/wezterm.tar.bz2",
+      "depends": [
+        "gui_libs",
+        "mesa3d_libs"
+      ],
+      "description": "WezTerm terminal emulator \u2014 shanghai bundle from system install; sample app for bundled Mesa 3D runtime",
+      "sentinel": "bin/wezterm",
+      "install_to": "~/.local",
+      "remove_before_extract": [
+        "bin/wezterm",
+        "lib/wezterm",
+        "share/applications/org.wezfurlong.wezterm.desktop",
+        "share/metainfo/org.wezfurlong.wezterm.appdata.xml",
+        "share/zsh/site-functions/_wezterm"
+      ],
+      "chmod_sentinel": true,
+      "missing_hint": "WezTerm will NOT be installed"
     },
     "st": {
       "kind": "bin",
@@ -2693,6 +2747,7 @@
         "urxvt",
         "st",
         "mate-terminal",
+        "wezterm",
         "firefox",
         "flameshot"
       ],

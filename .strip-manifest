@@ -357,6 +357,7 @@ tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar
 tar-meta  2996378  1780474049  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169604  1781234797  pre_built/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
 tar-meta  414887  1780521340  pre_built/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
+tar-meta  41943040  1781803717  pre_built/el8.x86_64.glibc2p28/runtime/mesa3d_libs.tar.bz2.part-000
 tar-meta  129552  1781292026  pre_built/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  19409  1780066812  pre_built/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
 tar-meta  38690906  1780474060  pre_built/el8.x86_64.glibc2p28/runtime/node.tar.bz2
@@ -365,6 +366,7 @@ tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.b
 tar-meta  4430091  1778655123  pre_built/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3491  1781292760  pre_built/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  8483290  1778430063  pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
+tar-meta  10519250  1781803721  pre_built/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2
 tar-meta  1130335  1781799893  pre_built/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  939973  1778105745  tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
