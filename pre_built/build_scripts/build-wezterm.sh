@@ -6,7 +6,11 @@
 #
 #   pre_built/<platform>/runtime/wezterm.tar.bz2
 #     ./bin/wezterm                 relocatable wrapper
-#     ./lib/wezterm/wezterm.bin     copied from /usr/bin/wezterm
+#     ./bin/wezterm-gui             relocatable wrapper
+#     ./bin/wezterm-mux-server      relocatable wrapper
+#     ./lib/wezterm/wezterm         copied from /usr/bin/wezterm
+#     ./lib/wezterm/wezterm-gui     copied from /usr/bin/wezterm-gui
+#     ./lib/wezterm/wezterm-mux-server copied from /usr/bin/wezterm-mux-server
 #     ./share/applications/...      desktop file, when installed
 #     ./share/metainfo/...          appstream metadata, when installed
 #     ./share/zsh/site-functions/_wezterm, when installed
@@ -66,10 +70,14 @@ command -v "$PATCHELF" >/dev/null 2>&1 || PATCHELF="$(command -v patchelf || tru
 [ -n "$PATCHELF" ] || { echo "missing required command: patchelf" >&2; exit 1; }
 
 WEZTERM_BIN=/usr/bin/wezterm
-[ -x "$WEZTERM_BIN" ] || {
-    echo "ERROR: $WEZTERM_BIN not found or not executable." >&2
-    exit 1
-}
+WEZTERM_GUI=/usr/bin/wezterm-gui
+WEZTERM_MUX_SERVER=/usr/bin/wezterm-mux-server
+for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER"; do
+    [ -x "$wezterm_bin" ] || {
+        echo "ERROR: $wezterm_bin not found or not executable." >&2
+        exit 1
+    }
+done
 
 detected_tag=$("$WEZTERM_BIN" --version | awk '{print $2}')
 if [ -z "$TAG" ]; then
@@ -87,15 +95,20 @@ MESA_STAGE=$(mktemp -d /tmp/mesa3d-stage-XXXXXX)
 trap 'rm -rf "$STAGE" "$MESA_STAGE"' EXIT
 
 mkdir -p "$RUNTIME_DIR"
+rm -f "$RUNTIME_DIR/wezterm.tar.bz2" "$RUNTIME_DIR"/wezterm.tar.bz2.part-* \
+    "$RUNTIME_DIR/mesa3d_libs.tar.bz2" "$RUNTIME_DIR"/mesa3d_libs.tar.bz2.part-*
 
 echo "==> Staging WezTerm $TAG from $WEZTERM_BIN ..."
 mkdir -p "$STAGE/bin" "$STAGE/lib/wezterm" "$STAGE/share/applications" \
     "$STAGE/share/metainfo" "$STAGE/share/zsh/site-functions"
 
-cp "$WEZTERM_BIN" "$STAGE/lib/wezterm/wezterm.bin"
-strip "$STAGE/lib/wezterm/wezterm.bin" 2>/dev/null || true
-# shellcheck disable=SC2016
-"$PATCHELF" --set-rpath '$ORIGIN/../../lib64:$ORIGIN' "$STAGE/lib/wezterm/wezterm.bin"
+for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER"; do
+    name=$(basename "$wezterm_bin")
+    cp "$wezterm_bin" "$STAGE/lib/wezterm/$name"
+    strip "$STAGE/lib/wezterm/$name" 2>/dev/null || true
+    # shellcheck disable=SC2016
+    "$PATCHELF" --set-rpath '$ORIGIN/../../lib64:$ORIGIN' "$STAGE/lib/wezterm/$name"
+done
 
 if [ -f /usr/share/applications/org.wezfurlong.wezterm.desktop ]; then
     cp /usr/share/applications/org.wezfurlong.wezterm.desktop "$STAGE/share/applications/"
@@ -112,7 +125,7 @@ cat >"$STAGE/bin/wezterm" <<'EOF'
 # Wrapper for the engineering-loadout WezTerm shanghai bundle.
 bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
 prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
-real_wezterm="$prefix/lib/wezterm/wezterm.bin"
+real_wezterm="$prefix/lib/wezterm/wezterm"
 
 mesa_libdir="$prefix/lib64"
 if [ -d "$mesa_libdir" ]; then
@@ -159,6 +172,28 @@ fi
 exec "$real_wezterm" "$@"
 EOF
 chmod 755 "$STAGE/bin/wezterm"
+
+for wezterm_cmd in wezterm-gui wezterm-mux-server; do
+    cat >"$STAGE/bin/$wezterm_cmd" <<EOF
+#!/bin/sh
+bin_dir=\$(CDPATH= cd "\$(dirname "\$0")" && pwd -P) || exit 1
+prefix=\$(CDPATH= cd "\$bin_dir/.." && pwd -P) || exit 1
+
+mesa_libdir="\$prefix/lib64"
+if [ -d "\$mesa_libdir" ]; then
+  export LD_LIBRARY_PATH="\$mesa_libdir\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+  if [ -d "\$mesa_libdir/dri" ]; then
+    export LIBGL_DRIVERS_PATH="\$mesa_libdir/dri\${LIBGL_DRIVERS_PATH:+:\$LIBGL_DRIVERS_PATH}"
+  fi
+fi
+if [ -d "\$prefix/share/glvnd/egl_vendor.d" ]; then
+  export __EGL_VENDOR_LIBRARY_DIRS="\$prefix/share/glvnd/egl_vendor.d\${__EGL_VENDOR_LIBRARY_DIRS:+:\$__EGL_VENDOR_LIBRARY_DIRS}"
+fi
+
+exec "\$prefix/lib/wezterm/$wezterm_cmd" "\$@"
+EOF
+    chmod 755 "$STAGE/bin/$wezterm_cmd"
+done
 
 echo "==> Writing WezTerm runtime archive ..."
 tar -cjf "$RUNTIME_DIR/wezterm.tar.bz2" -C "$STAGE" \

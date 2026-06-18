@@ -1561,6 +1561,8 @@
       "install_to": "~/.local",
       "remove_before_extract": [
         "bin/wezterm",
+        "bin/wezterm-gui",
+        "bin/wezterm-mux-server",
         "lib/wezterm",
         "share/applications/org.wezfurlong.wezterm.desktop",
         "share/metainfo/org.wezfurlong.wezterm.appdata.xml",

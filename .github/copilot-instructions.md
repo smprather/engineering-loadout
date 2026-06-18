@@ -224,8 +224,9 @@ installs instead of relying on implicit `~/.terminfo`. The Neovim runtime lives 
 the installer extracts it to `~/.local/share/nvim/runtime`; `filetype.lua` is
 the sentinel file. `mesa3d_libs.tar.bz2` installs Mesa under
 `~/.local/lib64` / `~/.local/lib64/dri` and is chunked as `.part-000..002`.
-`wezterm.tar.bz2` installs `~/.local/bin/wezterm` plus
-`~/.local/lib/wezterm/wezterm.bin`.
+`wezterm.tar.bz2.part-000..001` installs PATH wrappers for `wezterm`,
+`wezterm-gui`, and `wezterm-mux-server`; the real upstream sibling binaries live under
+`~/.local/lib/wezterm/` so `wezterm start` can exec `wezterm-gui` correctly.
 
 Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `nvim/init.lua` disables the plugin layer cleanly
