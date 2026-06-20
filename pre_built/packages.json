@@ -1560,12 +1560,16 @@
       "sentinel": "bin/wezterm",
       "install_to": "~/.local",
       "remove_before_extract": [
+        "bin/open-wezterm-here",
+        "bin/strip-ansi-escapes",
         "bin/wezterm",
         "bin/wezterm-gui",
         "bin/wezterm-mux-server",
         "lib/wezterm",
         "share/applications/org.wezfurlong.wezterm.desktop",
+        "share/icons/hicolor/128x128/apps/org.wezfurlong.wezterm.png",
         "share/metainfo/org.wezfurlong.wezterm.appdata.xml",
+        "share/nautilus-python/extensions/wezterm-nautilus.py",
         "share/zsh/site-functions/_wezterm"
       ],
       "chmod_sentinel": true,

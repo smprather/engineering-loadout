@@ -8,12 +8,15 @@
 #     ./bin/wezterm                 relocatable wrapper
 #     ./bin/wezterm-gui             relocatable wrapper
 #     ./bin/wezterm-mux-server      relocatable wrapper
+#     ./bin/open-wezterm-here       helper script
+#     ./bin/strip-ansi-escapes      copied from /usr/bin/strip-ansi-escapes
 #     ./lib/wezterm/wezterm         copied from /usr/bin/wezterm
 #     ./lib/wezterm/wezterm-gui     copied from /usr/bin/wezterm-gui
 #     ./lib/wezterm/wezterm-mux-server copied from /usr/bin/wezterm-mux-server
 #     ./share/applications/...      desktop file, when installed
 #     ./share/metainfo/...          appstream metadata, when installed
-#     ./share/zsh/site-functions/_wezterm, when installed
+#     ./share/icons/...             application icon, when installed
+#     ./share/nautilus-python/...   Nautilus extension, when installed
 #
 #   pre_built/<platform>/runtime/mesa3d_libs.tar.bz2
 #     ./lib64/libEGL_mesa.so.0
@@ -72,7 +75,8 @@ command -v "$PATCHELF" >/dev/null 2>&1 || PATCHELF="$(command -v patchelf || tru
 WEZTERM_BIN=/usr/bin/wezterm
 WEZTERM_GUI=/usr/bin/wezterm-gui
 WEZTERM_MUX_SERVER=/usr/bin/wezterm-mux-server
-for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER"; do
+STRIP_ANSI_ESCAPES=/usr/bin/strip-ansi-escapes
+for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER" "$STRIP_ANSI_ESCAPES"; do
     [ -x "$wezterm_bin" ] || {
         echo "ERROR: $wezterm_bin not found or not executable." >&2
         exit 1
@@ -100,7 +104,8 @@ rm -f "$RUNTIME_DIR/wezterm.tar.bz2" "$RUNTIME_DIR"/wezterm.tar.bz2.part-* \
 
 echo "==> Staging WezTerm $TAG from $WEZTERM_BIN ..."
 mkdir -p "$STAGE/bin" "$STAGE/lib/wezterm" "$STAGE/share/applications" \
-    "$STAGE/share/metainfo" "$STAGE/share/zsh/site-functions"
+    "$STAGE/share/metainfo" "$STAGE/share/icons/hicolor/128x128/apps" \
+    "$STAGE/share/nautilus-python/extensions"
 
 for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER"; do
     name=$(basename "$wezterm_bin")
@@ -110,14 +115,28 @@ for wezterm_bin in "$WEZTERM_BIN" "$WEZTERM_GUI" "$WEZTERM_MUX_SERVER"; do
     "$PATCHELF" --set-rpath '$ORIGIN/../../lib64:$ORIGIN' "$STAGE/lib/wezterm/$name"
 done
 
+cp "$STRIP_ANSI_ESCAPES" "$STAGE/bin/strip-ansi-escapes"
+strip "$STAGE/bin/strip-ansi-escapes" 2>/dev/null || true
+# shellcheck disable=SC2016
+"$PATCHELF" --set-rpath '$ORIGIN/../lib64:$ORIGIN' "$STAGE/bin/strip-ansi-escapes"
+
+if [ -f /usr/bin/open-wezterm-here ]; then
+    cp /usr/bin/open-wezterm-here "$STAGE/bin/"
+fi
+
 if [ -f /usr/share/applications/org.wezfurlong.wezterm.desktop ]; then
     cp /usr/share/applications/org.wezfurlong.wezterm.desktop "$STAGE/share/applications/"
 fi
 if [ -f /usr/share/metainfo/org.wezfurlong.wezterm.appdata.xml ]; then
     cp /usr/share/metainfo/org.wezfurlong.wezterm.appdata.xml "$STAGE/share/metainfo/"
 fi
-if [ -f /usr/share/zsh/site-functions/_wezterm ]; then
-    cp /usr/share/zsh/site-functions/_wezterm "$STAGE/share/zsh/site-functions/"
+if [ -f /usr/share/icons/hicolor/128x128/apps/org.wezfurlong.wezterm.png ]; then
+    cp /usr/share/icons/hicolor/128x128/apps/org.wezfurlong.wezterm.png \
+        "$STAGE/share/icons/hicolor/128x128/apps/"
+fi
+if [ -f /usr/share/nautilus-python/extensions/wezterm-nautilus.py ]; then
+    cp /usr/share/nautilus-python/extensions/wezterm-nautilus.py \
+        "$STAGE/share/nautilus-python/extensions/"
 fi
 
 cat >"$STAGE/bin/wezterm" <<'EOF'

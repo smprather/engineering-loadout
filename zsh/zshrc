@@ -17,6 +17,7 @@ setopt INTERACTIVE_COMMENTS 2>/dev/null
 
 # --- config root (mirror the bash dispatcher's default) -----------------------
 BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
+ZSH_CONFIG_ROOT_DIR="${ZSH_CONFIG_ROOT_DIR:-$HOME/.config/zsh}"
 
 # --- shared helpers + config (portable; verified to source under zsh) ---------
 # functions.sh defines source_if_exists / path_* / is_truthy / join_by.
@@ -72,18 +73,26 @@ setopt HIST_IGNORE_SPACE HIST_IGNORE_ALL_DUPS SHARE_HISTORY INC_APPEND_HISTORY
 _zsh_share="${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/share/zsh}"
 _zsh_share="${_zsh_share:-$HOME/.local/share/zsh}"
 _zsh_fns_ok=0
+_zsh_extra_fpath=()
+if [[ -d "$ZSH_CONFIG_ROOT_DIR/site-functions" ]]; then
+    _zsh_extra_fpath+=("$ZSH_CONFIG_ROOT_DIR/site-functions")
+fi
 if [[ -d "$_zsh_share/$ZSH_VERSION/functions" ]]; then
-    fpath=("$_zsh_share/$ZSH_VERSION/functions" "$_zsh_share/site-functions" $fpath)
+    _zsh_extra_fpath+=("$_zsh_share/site-functions" "$_zsh_share/$ZSH_VERSION/functions")
     _zsh_fns_ok=1
+fi
+if (( ${#_zsh_extra_fpath[@]} )); then
+    fpath=("${_zsh_extra_fpath[@]}" $fpath)
 fi
 # Completion system. The dump is cached per zsh version (its format is
 # version-specific) under the cache dir. -u skips the insecure-dir check (the
 # bundled function tree is group-writable on a shared install).
-if (( _zsh_fns_ok )) && is_truthy "${LOADOUT_CFG_ZSH_ENABLE_COMPLETION:-1}"; then
+if is_truthy "${LOADOUT_CFG_ZSH_ENABLE_COMPLETION:-1}"; then
     _zsh_cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
     [[ -d "$_zsh_cache" ]] || mkdir -p "$_zsh_cache" 2>/dev/null
-    autoload -Uz compinit
-    compinit -u -d "$_zsh_cache/zcompdump-$ZSH_VERSION"
+    if autoload -Uz +X compinit 2>/dev/null; then
+        compinit -u -d "$_zsh_cache/zcompdump-$ZSH_VERSION"
+    fi
 fi
 
 # --- key bindings (built-in zle widgets only; no autoload -> no fpath need) ---
@@ -115,7 +124,6 @@ fi
 source_if_exists "$BASH_CONFIG_ROOT_DIR/global/aliases.sh"
 
 # --- zsh layer overrides (corp/site/team/project/user), if present ------------
-ZSH_CONFIG_ROOT_DIR="${ZSH_CONFIG_ROOT_DIR:-$HOME/.config/zsh}"
 for _layer in corp site team project user; do
     source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/zshrc"
 done

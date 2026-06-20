@@ -216,7 +216,9 @@ GPU-accelerated apps such as WezTerm also pull `mesa3d_libs`, which installs
 Mesa's EGL vendor library, GBM, DRI drivers, and LLVM runtime without bundling
 host display-driver dispatchers like `libGL.so.1`. The WezTerm bundle keeps
 `wezterm`, `wezterm-gui`, and `wezterm-mux-server` as sibling real binaries
-under `~/.local/lib/wezterm/`, with PATH wrappers in `~/.local/bin`.
+under `~/.local/lib/wezterm/`, with PATH wrappers in `~/.local/bin`. Its zsh
+completion is installed by `env-zsh`; bash completion can be generated with
+`wezterm shell-completion --shell bash`.
 
 ### Python
 
