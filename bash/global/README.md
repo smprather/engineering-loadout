@@ -14,6 +14,20 @@ baked in so it works without system installation:
 If you rebuild GRC from source, patch these paths accordingly.
 Enabled via `LOADOUT_CFG_ENABLE_GRC=1` in `config.sh`.
 
+## Alias-Safe Function Definitions
+
+Interactive bash expands aliases while parsing sourced files. If `aliases.sh`
+defines a function whose name may already be an alias (`df`, `grep`, `cat`,
+etc.), clear the alias first:
+
+```bash
+unalias df 2>/dev/null || true
+df() { command df --block-size=G "$@"; }
+```
+
+This is load-bearing. A plain `df() { ... }` can parse as invalid text after
+alias expansion in `exec bash`, while `bash -n aliases.sh` still passes.
+
 ## Bash Completions (`completions/`)
 
 Bundled completions for offline environments. Sourced automatically by `global/bashrc`.

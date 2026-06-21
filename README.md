@@ -143,6 +143,9 @@ For the shared-tree deployment model, run the split install smoke. It installs
 `@shared` into a temp non-home tree, installs `@envs` into a separate temp
 `HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`, then checks shell
 startup, shared `PATH`, terminfo, WezTerm completions, and core tool startup.
+`@envs` installs copy config files into `~/.config`; old symlinked config
+subdirectories that point back into the repo are replaced with real
+directories so installs cannot mutate the checkout.
 
 ```bash
 tests/install_split_shared_envs

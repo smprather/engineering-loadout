@@ -93,3 +93,18 @@ rs                    # rsync with progress, excludes .snapshot/
 du / dum              # disk usage sorted by size (GB / MB)
 extract_rpm           # rpm2cpio | cpio -idmv
 ```
+
+## Alias-Safe Functions
+
+Interactive bash expands aliases while parsing sourced files. If a startup file
+defines a function with a name that might already be an alias from `/etc`,
+site/corp layers, or an earlier source, clear the alias first:
+
+```bash
+unalias df 2>/dev/null || true
+df() { command df --block-size=G "$@"; }
+```
+
+Without that guard, `exec bash` can fail with `syntax error near unexpected
+token '('` even though `bash -n` passes, because noninteractive syntax checks do
+not exercise the same alias expansion path.

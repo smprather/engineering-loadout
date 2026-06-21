@@ -103,6 +103,22 @@ syncing, refuses overlapping source/destination trees, and tolerates source
 files that vanish mid-copy. This matters for old config layouts where
 `~/.config/nvim/lsp` or `after/` may still symlink back into the repo.
 
+Known install traps to keep covered:
+
+- Do not follow env destination symlinks back into this checkout. A stale
+  `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp` plus delete-style sync can delete
+  tracked repo files during `loadout install @envs`.
+- Do not make host `rsync` or host Python mandatory. The POSIX `loadout` shim
+  must bootstrap the bundled Python, then Python handles recursive copies.
+- Do not let missing/vanished source entries abort the whole env install; users
+  can be updating generated config trees in another session.
+- Do not let the pre-commit embedded-`.git` scan walk the repository's own
+  `.git` tree. Sandbox or unusual home/worktree layouts can expose
+  `./.git/.git`; that is not a vendored plugin.
+- In bash startup files, `bash -n` is not enough. Interactive shells expand
+  aliases while parsing sourced files, so define alias-colliding functions only
+  after `unalias name 2>/dev/null || true`.
+
 Run `./release --dry-run` before creating a release to smoke-test all
 binaries via a temp install. When Docker is available, run
 `pre_built/build_scripts/test-prebuilt-binaries-almalinux8` for the

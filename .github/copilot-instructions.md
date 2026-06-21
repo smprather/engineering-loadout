@@ -213,6 +213,9 @@ Run `tests/install_split_shared_envs` for the production deployment shape:
 `@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with
 `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes bash/zsh startup, shared
 PATH, terminfo, WezTerm completions, and core tool startup.
+That smoke also protects the env-copy contract: `@envs` must copy config into
+the target HOME, replace old symlinked config subdirs that point back into the
+repo, and never mutate files under the checkout.
 When Docker is available, `pre_built/build_scripts/test-prebuilt-binaries-almalinux8`
 is the maximum-coverage variant: clean `almalinux:8.10`, read-only repo bind
 mount, in-container copy, `./loadout` bootstrap of the bundled Python, then the
@@ -319,7 +322,17 @@ end-user installs do not need repo git hooks. The embedded `.git` cleanup may
 broadly re-stage affected files; the binary stripping path restages only
 tracked updates, staged candidates, converted `.tar.bz2` archives, and strip
 manifests. Review staged files after it runs. For full binary smoke-testing
-use `./release --dry-run`, not the pre-commit hook.
+use `./release --dry-run`, not the pre-commit hook. The scan must prune
+`./.git/*`; sandbox/worktree internals such as `./.git/.git` are not vendored
+plugins.
+
+### Bash Alias Parsing Trap
+
+Interactive bash expands aliases while parsing sourced files. Before defining a
+function whose name may be an alias (`df`, `grep`, `cat`, etc.), clear it with
+`unalias name 2>/dev/null || true`. Otherwise `exec bash` can fail with
+`syntax error near unexpected token '('` even when noninteractive syntax checks
+pass.
 
 ### Adding a Bundled Plugin
 

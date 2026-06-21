@@ -12,6 +12,7 @@ Scans for embedded `.git` directories in subdirectories, removes them, and
 re-stages the affected files before the commit proceeds. The hook deliberately
 prunes the repository's top-level `.git` directory before scanning; it must not
 treat sandbox or worktree internals such as `./.git/.git` as vendored repos.
+Only real embedded repos under vendored plugin directories should be removed.
 
 **Why:** Bundled plugins (tmux, vim) include their own `.git` directories.
 Committing them as-is produces "embedded git repository" warnings and can

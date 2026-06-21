@@ -191,7 +191,7 @@ Once an interpreter is found, the shim execs `loadout_main.py` under it. No syst
 
 **Meld's `bin/meld` launcher is the only py3.6 holdout** -- it pins `/usr/bin/python3.6` because PyGObject <=3.30 (the last GLib-2.56-compatible version) breaks under py3.14. Independent of the loadout bootstrap; not affected by this work.
 
-**Install behavior**: `./loadout install <PKG...>` copies files from repo -- no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. There is no "default install" -- users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set).
+**Install behavior**: `./loadout install <PKG...>` copies files from repo -- no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. There is no "default install" -- users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set). The Python copy helper intentionally replaces symlinked destination directories before syncing, refuses overlapping source/destination trees, and treats source entries that vanish mid-copy as non-fatal. This protects old layouts such as `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp`; following that symlink with delete semantics can delete the repo's `nvim/lsp` files.
 
 ### Package registry (pre_built/packages.json)
 
@@ -473,6 +473,16 @@ The old code (`unset PROMPT_COMMAND` + `export PROMPT_COMMAND="/bin/stty '$(stty
 - `rp` -- realpath (cwd if no arg)
 - `gzip` / `gunzip` -- pigz / unpigz when available
 - `vnc` -- start VNC server (no args) or pass through to vncserver
+
+When adding a bash function whose name may already be an alias from a system,
+site, or earlier layer, unalias it first. Interactive bash expands aliases while
+parsing sourced files, so `df() { ... }` can become `df -h() { ... }` and fail
+on `exec bash` even though `bash -n` passes. Use:
+
+```bash
+unalias df 2>/dev/null || true
+df() { ...; }
+```
 
 ## Component Reference
 
