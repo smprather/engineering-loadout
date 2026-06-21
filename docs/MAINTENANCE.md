@@ -81,7 +81,7 @@ per-user (rustup, nvm, uv tool meson) -> sanity checks. Idempotent;
 
 The repo is the source of truth; editing a file there and re-running
 `./loadout install @engineering-loadout` is the canonical workflow. Most install steps are
-idempotent (rsync, atomic bz2 decompress, byte-compare skip) so a re-run
+idempotent (recursive copy, atomic bz2 decompress, byte-compare skip) so a re-run
 finishes quickly.
 
 Install repo git hooks manually:
@@ -97,4 +97,16 @@ Provides:
   embedded `.git` dirs from vendored plugins.
 
 Run `./release --dry-run` before creating a release to smoke-test all
-binaries via a temp install.
+binaries via a temp install. When Docker is available, run
+`pre_built/build_scripts/test-prebuilt-binaries-almalinux8` for the
+maximum-coverage check against a clean AlmaLinux 8.10 base image. That Docker
+path uses `./loadout` to bootstrap the bundled Python; it does not rely on a
+system Python in the image. Expected host-contract skips are explicit: host
+Perl for `cloc`, EL8 `/usr/bin/python3.6` for `meld`, and host GLVND/OpenGL
+dispatcher libs for GL GUI apps.
+
+Run `tests/install_split_shared_envs` for the main deployment model: `@shared`
+to a non-home temp tree, then `@envs` to a separate temp HOME with
+`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`. It verifies shell startup resolves
+shared PATH, terminfo, GUI runtime variables, WezTerm completions, and core tool
+startup without relying on the user's real `~/.local/bin`.

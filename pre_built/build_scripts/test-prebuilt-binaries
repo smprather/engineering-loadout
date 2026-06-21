@@ -2,8 +2,13 @@
 """
 test-prebuilt-binaries: smoke-test installed binary and runtime payloads.
 
-Runs ./loadout install @engineering-loadout --dest-dir /tmp/... --no-backup --skip @fonts-all,tldr-data to get
-a real deployment layout, then probes each executable in <dest>/local/bin/ for:
+Runs ./loadout install @shared --dest-dir /tmp/... --no-backup to get a real
+deployment layout, then probes each executable in <dest>/local/bin/ with a
+cut-down PATH containing only <dest>/local/bin plus basic system directories.
+This catches wrappers that accidentally rely on tools from the user's
+~/.local/bin or the build host.
+
+Each executable is probed for:
   - exit 127  (loader failure / broken ELF)
   - exit 139  (SIGSEGV)
   - "symbol lookup error" / "undefined symbol" in output
@@ -34,21 +39,31 @@ if os.path.isdir(os.path.join(_d, "installer_vendor")):
 
 import rich_click as click  # noqa: E402
 
-FATAL_EXIT_CODES = {127, 139}
+BASIC_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+FATAL_EXIT_CODES = {126, 127, 139}
 
 FATAL_OUTPUT_PATTERNS = (
     "symbol lookup error",
     "undefined symbol",
 )
 
-# Binaries that are non-ELF wrappers (shell scripts) -- skip exec check.
-NON_ELF_WRAPPERS = {"vim"}
+HOST_REQUIRED_COMMANDS = {
+    "cloc": ("perl", "host perl interpreter"),
+    "meld": ("/usr/bin/python3.6", "host /usr/bin/python3.6 for EL8 PyGObject"),
+}
 
-# Binaries that require a display/terminal or fail in headless sandboxes --
-# ldd-check only, skip exec. Each entry below has a one-line rationale.
+HOST_REQUIRED_SOS = {
+    # GLVND/OpenGL dispatchers must come from the host display stack. Bundling
+    # them can select the wrong vendor driver.
+    "libGL.so.1": "host OpenGL dispatcher",
+    "libGLX.so.0": "host OpenGL dispatcher",
+    "libGLdispatch.so.0": "host OpenGL dispatcher",
+}
+
+# Binaries that fail/crash in headless sandboxes -- ldd-check only, skip exec.
+# Each entry below has a one-line rationale.
 NO_EXEC = {
-    "xterm",  # X11 terminal -- needs DISPLAY.
-    "nedit-ng",  # Qt GUI -- needs wayland/X display; runs cleanly under WSLg.
     "gopls",  # LSP server -- boots via nvim; standalone --version segfaults
     # during ld.so init on the current EL8/WSL2 kernel even though
     # the binary is byte-identical to a previously-shipping release.
@@ -65,12 +80,45 @@ PROBE_FLAGS = {
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
 
 
+def test_env(tmpdir):
+    """Minimal test environment: staged tools first, then basic system PATH."""
+    bin_dir = os.path.join(tmpdir, "local", "bin")
+    home = os.path.join(tmpdir, "home")
+    env = {
+        "HOME": home,
+        "PATH": bin_dir + ":" + BASIC_PATH,
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "TERM": "xterm-256color",
+        "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache"),
+        "XDG_CONFIG_HOME": os.path.join(tmpdir, ".config"),
+        "XDG_DATA_HOME": os.path.join(tmpdir, "local", "share"),
+        "XDG_STATE_HOME": os.path.join(tmpdir, "local", "state"),
+        "DISPLAY": "",
+        "WAYLAND_DISPLAY": "",
+    }
+    if os.environ.get("LC_ALL"):
+        env["LC_ALL"] = os.environ["LC_ALL"]
+    return env
+
+
 def is_elf(path):
     try:
         with open(path, "rb") as fh:
             return fh.read(4) == b"\x7fELF"
     except OSError:
         return False
+
+
+def command_available(command, env):
+    if command.startswith("/"):
+        return os.path.exists(command) and os.access(command, os.X_OK)
+    for directory in env.get("PATH", "").split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, command)
+        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+            return True
+    return False
 
 
 def ldd_check(path):
@@ -86,6 +134,21 @@ def ldd_check(path):
         return [line.strip() for line in proc.stdout.decode("utf-8", "replace").splitlines() if "not found" in line]
     except OSError, subprocess.TimeoutExpired:
         return []
+
+
+def missing_so_name(ldd_line):
+    return ldd_line.split("=>", 1)[0].strip()
+
+
+def host_required_sos(missing):
+    required = []
+    for line in missing:
+        name = missing_so_name(line)
+        reason = HOST_REQUIRED_SOS.get(name)
+        if not reason:
+            return []
+        required.append(f"{name} ({reason})")
+    return required
 
 
 def output_excerpt(data, limit=400):
@@ -108,7 +171,7 @@ def require_path(path, label, failures):
     return False
 
 
-def probe_binary(binary_path):
+def probe_binary(binary_path, env, cwd):
     """Return (ok, detail)."""
     name = os.path.basename(binary_path)
     flag_list = PROBE_FLAGS.get(name, DEFAULT_PROBE)
@@ -122,6 +185,8 @@ def probe_binary(binary_path):
                 [binary_path] + flags,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                cwd=cwd,
+                env=env,
                 timeout=4,
             )
             combined = proc.stdout.decode("utf-8", "replace")
@@ -151,7 +216,7 @@ def probe_binary(binary_path):
     return False, f"{code_str} -- {last_out[:200].strip()}"
 
 
-def smoke_runtime_layout(tmpdir):
+def smoke_runtime_layout(tmpdir, env):
     failures = []
     bin_dir = os.path.join(tmpdir, "local", "bin")
 
@@ -164,16 +229,15 @@ def smoke_runtime_layout(tmpdir):
         nvim = os.path.join(bin_dir, "nvim")
         runtime = os.path.join(tmpdir, "local", "share", "nvim", "runtime")
         if require_path(os.path.join(runtime, "filetype.lua"), "nvim runtime", failures):
-            env = os.environ.copy()
-            env.update(
+            nvim_env = env.copy()
+            nvim_env.update(
                 {
-                    "HOME": tmpdir,
                     "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache", "nvim-smoke"),
                     "XDG_STATE_HOME": os.path.join(tmpdir, "local", "state", "nvim-smoke"),
                 }
             )
             lua_check = (
-                "local expected = vim.env.HOME .. '/local/share/nvim/runtime'; "
+                f"local expected = {tmpdir!r} .. '/local/share/nvim/runtime'; "
                 "local rtp = vim.o.runtimepath; "
                 "if not rtp:find(expected, 1, true) then "
                 "vim.api.nvim_err_writeln(rtp); vim.cmd('cquit 1'); end; "
@@ -184,7 +248,7 @@ def smoke_runtime_layout(tmpdir):
                 proc = subprocess.run(
                     [nvim, "--clean", "--headless", "-n", "+lua " + lua_check, "+qa"],
                     cwd=tmpdir,
-                    env=env,
+                    env=nvim_env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     timeout=10,
@@ -237,12 +301,11 @@ def smoke_runtime_layout(tmpdir):
 def main(keep):
     """Smoke-test installed binary and runtime payloads.
 
-    Runs `./loadout install @engineering-loadout --dest-dir /tmp/... --no-backup
-    --skip @fonts-all,tldr-data` to get a real deployment layout, then probes
-    each executable in <dest>/local/bin/ for loader failures, signal crashes,
-    "symbol lookup error" / "undefined symbol" in output. Also checks runtime
-    sentinels for shipped editor payloads and runs Neovim headless against the
-    installed runtime.
+    Runs `./loadout install @shared --dest-dir /tmp/... --no-backup` to get a
+    real deployment layout, then probes each executable in <dest>/local/bin/
+    with PATH limited to that bin dir plus basic system directories. Detects
+    loader failures, signal crashes, "symbol lookup error" / "undefined symbol"
+    in output, runtime sentinel drift, and Neovim runtime regressions.
 
     Exit 0: all clean. Exit 1: failures detected (fails the pre-commit).
     """
@@ -252,21 +315,29 @@ def main(keep):
 
     tmpdir = tempfile.mkdtemp(prefix="loadout-smoketest-")
     try:
+        os.makedirs(os.path.join(tmpdir, "home"), exist_ok=True)
+        install_env = {
+            "HOME": os.path.join(tmpdir, "home"),
+            "PATH": BASIC_PATH,
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+            "TERM": "xterm-256color",
+        }
+        probe_env = test_env(tmpdir)
+
         print(f"Installing to {tmpdir} ...")
         proc = subprocess.run(
             [
                 installer,
                 "install",
-                "@engineering-loadout",
+                "@shared",
                 "--dest-dir",
                 tmpdir,
                 "--no-backup",
-                "--skip",
-                "@fonts-all,tldr-data",
             ],
+            env=install_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=300,
+            timeout=1200,
         )
         install_out = proc.stdout.decode("utf-8", "replace")
         if proc.returncode != 0:
@@ -279,6 +350,7 @@ def main(keep):
             sys.exit(1)
 
         print(f"Smoke-testing binaries in {bin_dir} ...\n")
+        print(f"Probe PATH: {probe_env['PATH']}\n")
         failures = []
         tested = 0
         skipped = 0
@@ -288,32 +360,39 @@ def main(keep):
             if not os.path.isfile(fpath) or not os.access(fpath, os.X_OK):
                 continue
 
-            if fname in NON_ELF_WRAPPERS or not is_elf(fpath):
-                print(f"  skip (non-ELF):      {fname}")
+            if is_elf(fpath):
+                missing = ldd_check(fpath)
+                if missing:
+                    host_sos = host_required_sos(missing)
+                    if host_sos:
+                        print(f"  SKIP (host .so):     {fname:20s}  {', '.join(host_sos)}")
+                        skipped += 1
+                        continue
+                    msg = "missing .so: " + "; ".join(missing)
+                    print(f"  FAIL (ldd):          {fname:20s}  {missing[0]}")
+                    failures.append((fname, msg))
+                    continue
+
+            host_command = HOST_REQUIRED_COMMANDS.get(fname)
+            if host_command and not command_available(host_command[0], probe_env):
+                print(f"  SKIP (host cmd):     {fname:20s}  {host_command[1]} missing")
                 skipped += 1
                 continue
 
-            missing = ldd_check(fpath)
-            if missing:
-                msg = "missing .so: " + "; ".join(missing)
-                print(f"  FAIL (ldd):          {fname:20s}  {missing[0]}")
-                failures.append((fname, msg))
-                continue
-
-            if fname in NO_EXEC:
+            if fname in NO_EXEC and is_elf(fpath):
                 print(f"  OK   (ldd-only):     {fname}")
                 tested += 1
                 continue
 
             tested += 1
-            ok, detail = probe_binary(fpath)
+            ok, detail = probe_binary(fpath, probe_env, tmpdir)
             status = "OK:  " if ok else "FAIL:"
             print(f"  {status}                 {fname:20s}  {detail}")
             if not ok:
                 failures.append((fname, detail))
 
         print()
-        runtime_failures = smoke_runtime_layout(tmpdir)
+        runtime_failures = smoke_runtime_layout(tmpdir, probe_env)
         failures.extend(runtime_failures)
 
         if failures:
@@ -322,7 +401,10 @@ def main(keep):
                 print(f"  {name}: {msg}")
             sys.exit(1)
 
-        print(f"All {tested} binaries OK ({skipped} non-ELF skipped); runtimes OK")
+        if skipped:
+            print(f"All {tested} binaries OK ({skipped} skipped); runtimes OK")
+        else:
+            print(f"All {tested} binaries OK; runtimes OK")
 
     except subprocess.TimeoutExpired:
         print("ERROR: installer timed out")

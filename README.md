@@ -139,6 +139,15 @@ host GLVND dispatchers such as `libGL.so.1`.
 pre_built/build_scripts/test-prebuilt-binaries-almalinux8
 ```
 
+For the shared-tree deployment model, run the split install smoke. It installs
+`@shared` into a temp non-home tree, installs `@envs` into a separate temp
+`HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`, then checks shell
+startup, shared `PATH`, terminfo, WezTerm completions, and core tool startup.
+
+```bash
+tests/install_split_shared_envs
+```
+
 ---
 
 ## Bundled Packages

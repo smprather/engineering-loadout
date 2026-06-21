@@ -209,6 +209,10 @@ before any tag is created. Portable Python keeps generic `python3`/`pip3` links 
 `~/.local/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
 holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
+Run `tests/install_split_shared_envs` for the production deployment shape:
+`@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with
+`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes bash/zsh startup, shared
+PATH, terminfo, WezTerm completions, and core tool startup.
 When Docker is available, `pre_built/build_scripts/test-prebuilt-binaries-almalinux8`
 is the maximum-coverage variant: clean `almalinux:8.10`, read-only repo bind
 mount, in-container copy, `./loadout` bootstrap of the bundled Python, then the

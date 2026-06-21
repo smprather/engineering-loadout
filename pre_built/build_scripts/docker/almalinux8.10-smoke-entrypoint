@@ -1,0 +1,42 @@
+#!/bin/sh
+set -eu
+
+src=${LOADOUT_SMOKE_SRC:-/src}
+dst=${LOADOUT_SMOKE_WORKDIR:-/work/dotfiles}
+
+if [ ! -d "$src" ]; then
+    echo "ERROR: repo source not found: $src" >&2
+    exit 2
+fi
+
+rm -rf "$dst"
+mkdir -p "$dst"
+
+tar \
+    --exclude=.git \
+    --exclude=.loadout-bootstrap \
+    --exclude=.ruff_cache \
+    --exclude=.claude \
+    --exclude=__pycache__ \
+    --exclude=loadout_backups \
+    --exclude='*.log' \
+    -C "$src" \
+    -cf - . \
+    | tar -C "$dst" -xf -
+
+cd "$dst"
+
+sh -n loadout
+# Use loadout's own bootstrap path. The base image intentionally does not
+# install system Python for the harness.
+./loadout --help >/dev/null
+
+py=.loadout-bootstrap/bin/python3.14
+if [ ! -x "$py" ]; then
+    echo "ERROR: portable Python bootstrap not found: $py" >&2
+    exit 1
+fi
+
+"$py" -m py_compile loadout_main.py pre_built/build_scripts/test-prebuilt-binaries
+
+exec "$py" pre_built/build_scripts/test-prebuilt-binaries "$@"

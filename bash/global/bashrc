@@ -32,6 +32,19 @@ if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
 fi
 export TERMINFO_DIRS
 
+# GUI/runtime helpers live under the shared prefix for split deployments, or
+# under ~/.local for normal single-user installs.
+_loadout_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+if [[ -f $_loadout_local_prefix/lib64/libqxcb.so ]]; then
+    export QT_QPA_PLATFORM_PLUGIN_PATH=$_loadout_local_prefix/lib64
+fi
+if [[ -d $_loadout_local_prefix/share/nvim-qt/runtime ]]; then
+    export NVIM_QT_RUNTIME_PATH=$_loadout_local_prefix/share/nvim-qt/runtime
+fi
+if [[ -d $_loadout_local_prefix/lib/girepository-1.0 ]]; then
+    export GI_TYPELIB_PATH=$_loadout_local_prefix/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
+fi
+
 # Exit here if not interactive
 if [[ $- != *i* ]]; then
     # Unset all bashrc local variables
@@ -95,25 +108,9 @@ export VISUAL=$EDITOR
 export GIT_EDITOR=$EDITOR
 export PIP_REQUIRE_VIRTUALENV=1
 
-# Qt5/GTK3: point Qt at bundled xcb platform plugin when gui_libs is installed.
-# libqxcb.so lives flat in ~/.local/lib64 alongside the other Qt5 libs.
-if [[ -f $HOME/.local/lib64/libqxcb.so ]]; then
-    export QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64
-fi
-
 # Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 export EGL_LOG_LEVEL=fatal
-
-# nvim-qt GUI shim runtime -- enables :GuiFont, :GuiTabline, :GuiScrollBar, etc.
-if [[ -d $HOME/.local/share/nvim-qt/runtime ]]; then
-    export NVIM_QT_RUNTIME_PATH=$HOME/.local/share/nvim-qt/runtime
-fi
-
-# GObject introspection typelib search path for bundled GUI Python tools (meld, etc.)
-if [[ -d $HOME/.local/lib/girepository-1.0 ]]; then
-    export GI_TYPELIB_PATH=$HOME/.local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
-fi
 
 ### Online connectivity detection ###
 # Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells / tmux panes.

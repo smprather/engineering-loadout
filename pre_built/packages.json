@@ -381,6 +381,9 @@
         "llvm-strip",
         "llvm-ranlib"
       ],
+      "libs": [
+        "libedit.so.0"
+      ],
       "version": "23.0git",
       "platforms": [
         "linux"
@@ -405,7 +408,7 @@
         "dev",
         "data"
       ],
-      "description": "Count Lines of Code by language (blank/comment/code). Self-contained Perl script; runs on EL8 system perl, no deps"
+      "description": "Count Lines of Code by language (blank/comment/code). Self-contained Perl script; requires host perl"
     },
     "scc": {
       "kind": "bin",
@@ -517,6 +520,7 @@
         "expect"
       ],
       "libs": [
+        "libexpect5.45.4.so",
         "libtcl8.6.so"
       ],
       "version": "5.45.4",
@@ -1084,6 +1088,9 @@
       "bins": [
         "tkdiff"
       ],
+      "depends": [
+        "tk"
+      ],
       "version": "6.0",
       "version_url": "https://sourceforge.net/projects/tkdiff/rss?path=/tkdiff",
       "version_pattern": "/tkdiff/([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)/",
@@ -1094,7 +1101,7 @@
         "diff",
         "gui"
       ],
-      "description": "Tcl/Tk visual diff and merge tool (needs wish)"
+      "description": "Tcl/Tk visual diff and merge tool"
     },
     "tldr": {
       "kind": "bin",
@@ -1397,19 +1404,24 @@
         "libX11-xcb.so.1",
         "libX11.so.6",
         "libXau.so.6",
+        "libXaw.so.7",
         "libXcomposite.so.1",
         "libXcursor.so.1",
         "libXdamage.so.1",
         "libXext.so.6",
         "libXfixes.so.3",
+        "libXft.so.2",
         "libXi.so.6",
         "libXinerama.so.1",
         "libXrandr.so.2",
         "libXrender.so.1",
         "libXt.so.6",
+        "libXmu.so.6",
+        "libXpm.so.4",
         "libatk-1.0.so.0",
         "libatk-bridge-2.0.so.0",
         "libatspi.so.0",
+        "libbz2.so.1",
         "libcairo-gobject.so.2",
         "libcairo.so.2",
         "libdatrie.so.1",
@@ -1417,6 +1429,7 @@
         "libepoxy.so.0",
         "libexpat.so.1",
         "libfontconfig.so.1",
+        "libfreetype.so.6",
         "libfribidi.so.0",
         "libgdk-3.so.0",
         "libgdk_pixbuf-2.0.so.0",
@@ -1431,6 +1444,8 @@
         "libicudata.so.60",
         "libicui18n.so.60",
         "libicuuc.so.60",
+        "libjbig.so.2.1",
+        "libjpeg.so.62",
         "libpango-1.0.so.0",
         "libpangocairo-1.0.so.0",
         "libpangoft2-1.0.so.0",
@@ -1442,6 +1457,8 @@
         "libqwayland-generic.so",
         "libQt5WaylandClient.so.5",
         "libthai.so.0",
+        "libtiff.so.5",
+        "libuuid.so.1",
         "libwayland-client.so.0",
         "libwayland-cursor.so.0",
         "libwayland-egl.so.1",
@@ -1509,6 +1526,9 @@
         "xterm",
         "resize"
       ],
+      "depends": [
+        "gui_libs"
+      ],
       "version": "410",
       "platforms": [
         "linux"
@@ -1528,6 +1548,9 @@
       ],
       "libs": [
         "libptytty.so.0"
+      ],
+      "depends": [
+        "gui_libs"
       ],
       "version": "9.31",
       "platforms": [
@@ -1579,6 +1602,9 @@
       "kind": "bin",
       "bins": [
         "st"
+      ],
+      "depends": [
+        "gui_libs"
       ],
       "version": "0.9.3",
       "version_url": "https://dl.suckless.org/st/",
@@ -1874,6 +1900,10 @@
         "fish",
         "fish.bin"
       ],
+      "libs": [
+        "libpcre2-8.so.0",
+        "libpcre2-32.so.0"
+      ],
       "version": "4.7.1",
       "platforms": [
         "linux"
@@ -1906,6 +1936,29 @@
       ],
       "description": "Tcl scripting language \u2014 tclsh interpreter and runtime library"
     },
+    "tk": {
+      "kind": "bin",
+      "bins": [
+        "wish"
+      ],
+      "libs": [
+        "libtcl9tk9.0.so"
+      ],
+      "depends": [
+        "tcl",
+        "gui_libs"
+      ],
+      "version": "9.0.3",
+      "version_url": "https://github.com/tcltk/tk",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "lang",
+        "gui"
+      ],
+      "description": "Tk GUI toolkit \u2014 wish interpreter and embedded Tk runtime"
+    },
     "nodejs": {
       "kind": "bin",
       "bins": [
@@ -1913,6 +1966,9 @@
         "npm",
         "npx",
         "corepack"
+      ],
+      "libs": [
+        "libatomic.so.1"
       ],
       "version": "26.2.0",
       "platforms": [
@@ -2028,6 +2084,9 @@
         "comm"
       ],
       "uv_tool": "jupyterlab",
+      "libs": [
+        "libatomic.so.1"
+      ],
       "version": "4.5.7",
       "platforms": [
         "linux"
@@ -2986,6 +3045,9 @@
     "pyright": {
       "kind": "python-tool",
       "uv_tool": "pyright",
+      "libs": [
+        "libatomic.so.1"
+      ],
       "wheels": [
         "pyright",
         "nodeenv"

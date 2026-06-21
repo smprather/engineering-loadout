@@ -109,7 +109,29 @@ if [[ -z "${HOME:-}" ]]; then
     export HOME=$(getent passwd "$USER" | cut -d: -f6)
 fi
 
-[[ -z "$BASH_CONFIG_ROOT_DIR" ]] && export BASH_CONFIG_ROOT_DIR="$HOME/.config/bash"
+### Colors ###
+# Config layers may reference prompt color variables before global/bashrc runs.
+export WHITE="\e[38;2;255;255;255m"
+export GREEN="\e[38;2;0;255;0m"
+export RED="\e[38;2;255;0;0m"
+export BLUE="\e[38;2;135;215;255m"
+export VIOLET="\e[38;2;255;0;255m"
+export YELLOW="\e[38;2;255;255;0m"
+export CYAN="\e[38;2;0;255;255m"
+export BOLD="\e[1m"
+export NORMAL="\e[22m"
+# Use the \[ and \] to let bash-prompt know these are zero-width on-screen.
+export PROMPT_WHITE="\\[$WHITE\\]"
+export PROMPT_GREEN="\\[${GREEN}\\]"
+export PROMPT_RED="\\[$RED\\]"
+export PROMPT_BLUE="\\[$BLUE\\]"
+export PROMPT_VIOLET="\\[$VIOLET\\]"
+export PROMPT_YELLOW="\\[$YELLOW\\]"
+export PROMPT_CYAN="\\[$CYAN\\]"
+export PROMPT_BOLD="\\[$BOLD\\]"
+export PROMPT_NORMAL="\\[$NORMAL\\]"
+
+[[ -z "${BASH_CONFIG_ROOT_DIR:-}" ]] && export BASH_CONFIG_ROOT_DIR="$HOME/.config/bash"
 source "$BASH_CONFIG_ROOT_DIR/functions.sh"
 
 # Configuration must come first

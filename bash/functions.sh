@@ -578,7 +578,8 @@ array_slice() {
 alias array.slice="array_slice"
 
 source_if_exists() {
-    [[ -r "$1" ]] && source "$1"
+    [[ -r "$1" ]] || return 0
+    source "$1"
 }
 
 # https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script

@@ -644,6 +644,7 @@ Reads `packages.json` for bundled `version` and `farm-versions`'s TOOLS table fo
 ```
 
 `./release` runs `pre_built/build_scripts/test-prebuilt-binaries` before creating a tag. That script installs `@shared` into a temp `--dest-dir`, then probes every executable in `<dest>/local/bin` with `PATH=<dest>/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` so staged wrappers cannot accidentally call binaries from the build host or the user's `~/.local/bin`. Blocked if any binary/runtime smoke check fails.
+Run `tests/install_split_shared_envs` for the production deployment shape: `@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`. It smokes bash/zsh startup, shared PATH, terminfo, WezTerm completions, and core tool startup.
 For stricter host-baseline coverage when Docker is available, run `pre_built/build_scripts/test-prebuilt-binaries-almalinux8`; it runs the same smoke inside a clean `almalinux:8.10` container after copying the current checkout into the container and bootstrapping the repo-bundled Python through `./loadout`. Expected host-contract skips are explicit: `cloc` needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and GL GUI apps need host GLVND/OpenGL dispatcher libs (`libGL.so.1`, etc.).
 Generates binary version table from `farm-versions --format tsv` for release notes.
 

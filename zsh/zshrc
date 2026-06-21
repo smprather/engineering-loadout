@@ -55,6 +55,19 @@ for _ti in "$HOME/.local/share/terminfo" "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_
         TERMINFO_DIRS="$_ti${TERMINFO_DIRS:+:$TERMINFO_DIRS}"
 done
 
+# GUI/runtime helpers live under the shared prefix for split deployments, or
+# under ~/.local for normal single-user installs.
+_zsh_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+if [[ -f "$_zsh_local_prefix/lib64/libqxcb.so" ]]; then
+    export QT_QPA_PLATFORM_PLUGIN_PATH="$_zsh_local_prefix/lib64"
+fi
+if [[ -d "$_zsh_local_prefix/share/nvim-qt/runtime" ]]; then
+    export NVIM_QT_RUNTIME_PATH="$_zsh_local_prefix/share/nvim-qt/runtime"
+fi
+if [[ -d "$_zsh_local_prefix/lib/girepository-1.0" ]]; then
+    export GI_TYPELIB_PATH="$_zsh_local_prefix/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+fi
+
 # Non-interactive shells need PATH but nothing below.
 [[ -o interactive ]] || return 0
 

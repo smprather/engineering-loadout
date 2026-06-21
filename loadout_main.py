@@ -711,7 +711,7 @@ def _sigint_handler(signum, frame):
     global _INTERRUPT_REQUESTED
     if _INTERRUPT_PHASE == "backup":
         eprint("\n^C during backup -- removing partial backup and exiting.")
-        # Kill any active subprocess (e.g. rsync still writing into the backup dir)
+        # Kill any active subprocess still writing into the backup dir.
         # so cleanup doesn't race against its writes. Use os.kill rather than
         # proc.wait() since main thread is already blocked inside communicate().
         proc = _ACTIVE_SUBPROCESS
@@ -729,7 +729,7 @@ def _sigint_handler(signum, frame):
             except OSError as exc:
                 eprint(f"Warning: could not remove {_ACTIVE_BACKUP_DIR}: {exc}")
         _close_run_log("interrupted-during-backup")
-        # Silence any post-mortem death-rattle from dying subprocesses (e.g. rsync's
+        # Silence any post-mortem death-rattle from dying subprocesses
         # "broken pipe" on stderr) -- the install is already aborted, the noise is just noise.
         try:
             sys.stderr.flush()
@@ -919,7 +919,7 @@ def _close_run_log(exit_code):
 def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
     global _ACTIVE_SUBPROCESS
     # start_new_session=True isolates the child from the terminal's process group
-    # so a Ctrl-C at the keyboard only reaches the installer, not (e.g.) rsync.
+    # so a Ctrl-C at the keyboard only reaches the installer, not child processes.
     # The installer's SIGINT handler decides whether to SIGKILL the child (backup
     # cleanup) or let it finish (other steps).
     if _RUN_LOG_FILE is not None:
@@ -992,15 +992,67 @@ def mkdirn(base_dir):
         counter += 1
 
 
-def rsync_dir(src, dest, delete=False, excludes=None):
-    require_writable_dir(dest if os.path.isdir(dest) else os.path.dirname(dest), "rsync")
-    cmd = [_RSYNC, "-a"]
-    if delete:
-        cmd.append("--delete")
+def _is_excluded(rel_path, excludes):
+    rel_path = rel_path.strip("/")
+    if not rel_path:
+        return False
+    base = os.path.basename(rel_path)
+    parts = rel_path.split("/")
     for pattern in excludes or ():
-        cmd.append(f"--exclude={pattern}")
-    cmd.extend([src.rstrip("/") + "/", dest.rstrip("/") + "/"])
-    run(cmd)
+        if fnmatch.fnmatch(rel_path, pattern) or fnmatch.fnmatch(base, pattern):
+            return True
+        if any(fnmatch.fnmatch(part, pattern) for part in parts):
+            return True
+    return False
+
+
+def _copy_tree_item(src, dest, excludes=(), rel_path=""):
+    if _is_excluded(rel_path, excludes):
+        return
+    # Match rsync's behavior for a source entry that disappears between listdir()
+    # and copy/stat, which can happen when another session edits generated trees.
+    if not os.path.lexists(src):
+        return
+    if os.path.islink(src):
+        if os.path.lexists(dest):
+            remove_path(dest)
+        ensure_dir(os.path.dirname(dest))
+        os.symlink(os.readlink(src), dest)
+        try:
+            shutil.copystat(src, dest, follow_symlinks=False)
+        except OSError:
+            pass
+        return
+    if os.path.isdir(src):
+        if os.path.lexists(dest) and not os.path.isdir(dest):
+            remove_path(dest)
+        ensure_dir(dest)
+        for name in os.listdir(src):
+            child_rel = os.path.join(rel_path, name) if rel_path else name
+            _copy_tree_item(os.path.join(src, name), os.path.join(dest, name), excludes, child_rel)
+        try:
+            shutil.copystat(src, dest)
+        except OSError:
+            pass
+        return
+    if os.path.lexists(dest):
+        remove_path(dest)
+    ensure_dir(os.path.dirname(dest))
+    shutil.copy2(src, dest, follow_symlinks=False)
+
+
+def sync_dir(src, dest, delete=False, excludes=None):
+    excludes = tuple(excludes or ())
+    require_writable_dir(dest if os.path.isdir(dest) else os.path.dirname(dest), "copy")
+    ensure_dir(dest)
+    if delete and os.path.isdir(dest):
+        src_names = set(os.listdir(src)) if os.path.isdir(src) else set()
+        for name in os.listdir(dest):
+            if name in src_names or _is_excluded(name, excludes):
+                continue
+            remove_path(os.path.join(dest, name))
+    for name in os.listdir(src):
+        _copy_tree_item(os.path.join(src, name), os.path.join(dest, name), excludes, name)
 
 
 def install_path(src, dest, links_mode):
@@ -1013,8 +1065,8 @@ def install_path(src, dest, links_mode):
         if os.path.islink(dest):
             os.unlink(dest)
         ensure_dir(dest, "install")
-        rsync_dir(src, dest, delete=True)
-        _vprint(f"  rsync: {src}/ -> {dest}/")
+        sync_dir(src, dest, delete=True)
+        _vprint(f"  copy: {src}/ -> {dest}/")
     else:
         if os.path.lexists(dest):
             remove_path(dest)
@@ -1028,11 +1080,7 @@ def install_path(src, dest, links_mode):
 def backup_item(src, dest):
     require_writable_parent(dest, "backup")
     ensure_dir(os.path.dirname(dest))
-    cmd = [_RSYNC, "-a"]
-    for pattern in FONT_EXCLUDES:
-        cmd.append(f"--exclude={pattern}")
-    cmd.extend([src, dest])
-    run(cmd)
+    _copy_tree_item(src, dest, FONT_EXCLUDES)
 
 
 def is_wsl():
@@ -1066,7 +1114,6 @@ _UNAME = _find_tool("/usr/bin/uname")
 _LDD = _find_tool("/usr/bin/ldd")
 _GETCONF = _find_tool("/usr/bin/getconf")
 _PGREP = _find_tool("/usr/bin/pgrep")
-_RSYNC = _find_tool("/usr/bin/rsync")
 _CP = _find_tool("/usr/bin/cp")
 _GIT = _find_tool("/usr/bin/git", "/usr/local/bin/git")
 
@@ -2660,7 +2707,7 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         if os.path.isdir(src):
             dest = os.path.join(dest_dir, subdir)
             ensure_dir(dest, "Tree-sitter parsers")
-            rsync_dir(src, dest)
+            sync_dir(src, dest)
 
     parser_src = os.path.join(src_dir, "parser")
     parser_dest = os.path.join(dest_dir, "parser")
@@ -2716,13 +2763,13 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
         return
 
     ensure_dir(dest_root, "nvim-treesitter vendor")
-    rsync_dir(
+    sync_dir(
         os.path.join(src_root, "nvim-treesitter"),
         os.path.join(dest_root, "nvim-treesitter"),
         delete=True,
         excludes=(".git",),
     )
-    rsync_dir(
+    sync_dir(
         os.path.join(src_root, "treesitter-parser-registry"),
         os.path.join(dest_root, "treesitter-parser-registry"),
         delete=True,
@@ -3149,9 +3196,9 @@ def _install_env_nvim(repo_dir, home):
     ensure_dir(os.path.join(nvim_config, "lsp"), "Neovim config")
     install_path(os.path.join(nvim_src, "init.lua"), os.path.join(nvim_config, "init.lua"), False)
     install_path(os.path.join(nvim_src, "lua", "global"), os.path.join(nvim_config, "lua", "global"), False)
-    rsync_dir(os.path.join(nvim_src, "lsp"), os.path.join(nvim_config, "lsp"), delete=True)
-    rsync_dir(os.path.join(nvim_src, "after", "ftplugin"), os.path.join(nvim_config, "after", "ftplugin"), delete=True)
-    rsync_dir(os.path.join(nvim_src, "after", "lsp"), os.path.join(nvim_config, "after", "lsp"), delete=True)
+    sync_dir(os.path.join(nvim_src, "lsp"), os.path.join(nvim_config, "lsp"), delete=True)
+    sync_dir(os.path.join(nvim_src, "after", "ftplugin"), os.path.join(nvim_config, "after", "ftplugin"), delete=True)
+    sync_dir(os.path.join(nvim_src, "after", "lsp"), os.path.join(nvim_config, "after", "lsp"), delete=True)
     for layer in NVIM_LAYERS:
         ensure_dir(os.path.join(nvim_config, "lua", layer), f"Neovim {layer} layer")
     _nvim_migration_notice(nvim_config)
@@ -3166,7 +3213,7 @@ def _install_env_vim(repo_dir, home):
     ensure_dir(os.path.join(vim_config, "vim", "pack", "vendor", "start"), "Vim config")
     ensure_dir(os.path.join(vim_config, "vim", "pack", "vendor", "opt"), "Vim config")
     for start_or_opt in ("start", "opt"):
-        rsync_dir(
+        sync_dir(
             os.path.join(repo_dir, "vim", "vim", "pack", "vendor", start_or_opt),
             os.path.join(vim_config, "vim", "pack", "vendor", start_or_opt),
             delete=True,
@@ -3182,7 +3229,7 @@ def _install_env_tmux(repo_dir, home):
     if os.path.islink(tmux_config):
         os.unlink(tmux_config)
     ensure_dir(os.path.join(tmux_config, "tmux", "plugins"), "tmux config")
-    rsync_dir(
+    sync_dir(
         os.path.join(repo_dir, "tmux", "vendor", "plugins"),
         os.path.join(tmux_config, "tmux", "plugins"),
         delete=True,
@@ -3271,7 +3318,7 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
     """Fallback installer for kind='env' entries that declare a simple
     source + install_to shape but have no custom handler in ENV_HANDLERS.
 
-    Reuses install_path() (rsync for dirs, atomic copy for files). Lets
+    Reuses install_path() (recursive copy for dirs, atomic copy for files). Lets
     new single-file or simple-tree env entries land without writing a
     bespoke handler each time. Custom handlers (env-bash, env-nvim, ...)
     still take precedence because the caller checks ENV_HANDLERS first.
@@ -4680,10 +4727,6 @@ def cli_completion(ctx, shell):
 
 
 def main(argv):
-    if not _RSYNC:
-        eprint("Error: This script requires rsync (/usr/bin/rsync not found).")
-        return 1
-
     signal.signal(signal.SIGINT, _sigint_handler)
     # Guarantee the terminal cursor is restored on exit -- Rich transient progress
     # bars can leave it hidden on remote terminals (see _show_cursor docstring).
