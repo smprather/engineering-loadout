@@ -119,6 +119,24 @@ preference is a `LOADOUT_CFG_*` variable you can override in your user layer:
 export LOADOUT_CFG_PREFERRED_VI=vim        # use vim instead of nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=0       # use the built-in prompt
 export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
+export LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION=0   # disable wezterm OSC integration
+```
+
+---
+
+## Smoke Testing
+
+For maximum Linux binary coverage, run the AlmaLinux 8.10 container smoke. It
+uses a clean base image, copies this checkout inside the container, installs
+`@shared` into a temp `--dest-dir`, and probes every installed executable with
+only the staged `local/bin` plus a basic system PATH. The container does not
+install Python for the harness; it uses `./loadout` to bootstrap the bundled
+Python 3.14 first. The smoke reports deliberate host contracts as skips: `cloc`
+needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and OpenGL GUI apps need
+host GLVND dispatchers such as `libGL.so.1`.
+
+```bash
+pre_built/build_scripts/test-prebuilt-binaries-almalinux8
 ```
 
 ---
@@ -184,9 +202,11 @@ Run `./loadout list` to see every package and every group, or
 | [st](https://st.suckless.org) | 0.9.3 | suckless st -- minimal X11 terminal |
 | [starship](https://starship.rs) | 1.25.1 | Cross-shell prompt -- fast, informative, configurable |
 | [stylua](https://github.com/JohnnyMorganz/StyLua) | 2.4.1 | Opinionated Lua code formatter |
+| [Tcl](https://www.tcl-lang.org/) | 9.0.3 | Tcl scripting language (`tclsh`) |
 | [tealdeer / tldr](https://github.com/dbrgn/tealdeer) | 1.8.1 | Fast `tldr` client with offline page cache |
 | [text-serdes](https://github.com/smprather/text-serdes) | 0.1.1 | Short-lived encrypted text transport for copy/paste workflows |
 | [time-plot](https://github.com/smprather/time-plot) | 0.1.0 | Plot arbitrary data vs. zero-based time, uPlot HTML output |
+| [Tk](https://www.tcl-lang.org/) | 9.0.3 | Tk GUI toolkit (`wish`) |
 | [tkdiff](https://sourceforge.net/projects/tkdiff/) | 6.0 | Tcl/Tk visual diff and merge tool |
 | [tmux](https://github.com/tmux/tmux) | 3.6a | Terminal multiplexer |
 | [ty](https://github.com/astral-sh/ty) | 0.0.35 | Extremely fast Python type checker |
@@ -218,7 +238,11 @@ host display-driver dispatchers like `libGL.so.1`. The WezTerm bundle keeps
 `wezterm`, `wezterm-gui`, and `wezterm-mux-server` as sibling real binaries
 under `~/.local/lib/wezterm/`, with PATH wrappers in `~/.local/bin`. Its zsh
 completion is installed by `env-zsh`; bash completion can be generated with
-`wezterm shell-completion --shell bash`.
+`wezterm shell-completion --shell bash`. WezTerm *shell integration* (semantic
+zones / OSC 7 cwd / user vars -- distinct from completion) is vendored at
+`bash/global/wezterm/wezterm.sh` and sourced by the bash config from
+user-writable space (never `/etc`), so wezterm users get it with or without tmux;
+toggle with `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION`.
 
 ### Python
 

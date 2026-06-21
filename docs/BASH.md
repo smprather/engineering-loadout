@@ -47,6 +47,31 @@ path_prepend_if_dir /tools/cadence/bin
 path_prepend_if_dir /tools/synopsys/bin
 ```
 
+## Prompt & shell integration
+
+The prompt is configured in `bash/global/bashrc` and serves the whole terminal
+matrix (raw wezterm, tmux-in-wezterm, tmux-in-st, st/xterm, `dumb`/`linux`) with
+login and `exec bash` behaving identically.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LOADOUT_CFG_ENABLE_STARSHIP` | `1` | Starship prompt (falls back to the built-in prompt) |
+| `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` | `1` | Source the loadout-owned `wezterm.sh` (OSC 133 semantic zones, OSC 7 cwd, user vars). Safe everywhere; self-skips `dumb`/`linux` and non-interactive shells |
+| `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | `""` | Explicit path to `wezterm.sh`; empty auto-resolves (vendored copy -> wezterm-binary-relative -> shared prefix). Set from a `--dest-dir` installer to pin it. Never `/etc` |
+
+WezTerm shell integration is **vendored** at `bash/global/wezterm/wezterm.sh`
+(the bundled wezterm runtime ships only `wezterm shell-completion`, not the
+integration script) and is loaded from user-writable space only -- never
+`/etc/profile.d/wezterm.sh`. tmux-in-wezterm needs `set -g allow-passthrough on`
+for the OSC sequences to reach wezterm.
+
+> **Editing the prompt block?** It is clobber-sensitive: the loadout does not own
+> `PROMPT_COMMAND` and Starship does not always hook through it. The wrong
+> "simplification" makes the Starship prompt vanish on login shells while still
+> working after `exec bash`. Read **`bash/global/README.md` -> "Prompt & shell
+> integration"** for the full rationale, the required ordering, and how to verify
+> with a real PTY (not `bash -lic`, which hides the bug).
+
 ## Notable aliases
 
 ```bash

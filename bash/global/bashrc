@@ -276,20 +276,46 @@ set_prompt() {
     }
 
     PS1="${PROMPT_YELLOW}\$(get_prompt_uid)${prompt_color}\$ ${PROMPT_WHITE}"
-    export PROMPT_COMMAND="/bin/stty '$(stty -g)'"
 }
+# Reset any preexec-framework state to a clean baseline. A login shell may have
+# sourced a *system* wezterm/vte integration via /etc/profile, which loads
+# bash-preexec and registers precmd_functions plus a PROMPT_COMMAND install
+# stub. The clean-slate `unset -f` during startup already deleted that
+# framework's functions, leaving dangling references (PROMPT_COMMAND -> missing
+# __bp_install; precmd_functions -> missing __wezterm_*). Clear it so we can
+# (re)install our own loadout-owned copy from user-writable space below.
+unset precmd_functions preexec_functions __bp_imported bash_preexec_imported
 unset PROMPT_COMMAND
+
+# wezterm shell integration (semantic zones / OSC 7 cwd / user vars), sourced
+# from a loadout-owned copy -- never /etc -- so wezterm users (with or without
+# tmux) get full functionality. The script self-guards (skips non-interactive
+# and dumb/linux terminals) and emits only OSC sequences other terminals
+# ignore, so it is safe to source everywhere. It bundles bash-preexec, which
+# drives precmd_functions; starship and loadout_restore_echo hook into that.
+if is_truthy "${LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION}"; then
+    _wezterm_sh=$(loadout_find_wezterm_shell_integration)
+    [[ -n $_wezterm_sh ]] && source "$_wezterm_sh"
+fi
+
 /bin/stty sane
 if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
+    # starship self-hooks: it appends starship_precmd to precmd_functions when a
+    # framework (the wezterm/bash-preexec above, or ble.sh) is active, else it
+    # uses a plain PROMPT_COMMAND. Do NOT unset or overwrite PROMPT_COMMAND
+    # around this -- doing so wipes the framework's prompt driver so nothing in
+    # precmd_functions (starship included) ever fires.
     eval "$(starship init bash)"
-    # Sometimes, ctrl-c killing a process leaves the -echo stty option enabled, which
-    # makes it so that you can't see the text you're typing (like when entering a pw).
-    # Use every prompt print to disable that state and make typing visible.
-    export PROMPT_COMMAND="/bin/stty '$(stty -g)';$PROMPT_COMMAND"
 else
     set_prompt
 fi
+# Restore terminal echo before every prompt: ctrl-c at e.g. a password prompt
+# can leave -echo on, hiding what you type. loadout_restore_echo is the no-fork,
+# type-ahead-safe replacement for the old `stty '$(stty -g)'` snapshot;
+# loadout_add_precmd registers it via precmd_functions when a framework is
+# active, else PROMPT_COMMAND -- without clobbering starship's own precmd.
+loadout_add_precmd loadout_restore_echo
 
 export LESS_TERMCAP_mb=$'\e[1;32m'
 export LESS_TERMCAP_md=$'\e[1;32m'

@@ -72,6 +72,71 @@ path_append_if_dir() {
     esac
 }
 
+# Register a function to run before each prompt, portably across prompt
+# frameworks. If a precmd_functions array is active (bash-preexec, ble.sh,
+# wezterm/vte shell integration) the callback is appended to it so the
+# framework's own prompt driver keeps working; otherwise it is prepended to
+# PROMPT_COMMAND. Never unsets or clobbers an existing driver, and dedups so a
+# re-source can't register the same callback twice.
+loadout_add_precmd() {
+    local _fn="$1" _f
+    if [[ $(declare -p precmd_functions 2>/dev/null) == 'declare -a'* ]]; then
+        for _f in "${precmd_functions[@]}"; do
+            [[ "$_f" == "$_fn" ]] && return 0
+        done
+        precmd_functions+=("$_fn")
+    else
+        case ";${PROMPT_COMMAND-};" in
+        *";$_fn;"*) ;;
+        *) PROMPT_COMMAND="$_fn${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+        esac
+    fi
+}
+
+# Locate the wezterm shell-integration script (semantic zones / OSC 7 cwd / user
+# vars) from user-writable space only -- never /etc. Search order:
+#   1. LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION  (explicit path; e.g. set by the
+#      engineering-loadout --dest-dir installer)
+#   2. copy vendored with the loadout (config root, plus home-dir override)
+#   3. paths relative to the installed `wezterm` binary (dest-dir installs)
+#   4. the configured shared prefix (${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local})
+# Echoes the first readable match; returns 1 with no output if none found.
+loadout_find_wezterm_shell_integration() {
+    local _c _bin _real _bindir _prefix
+    local _subs=(share/wezterm/shell-integration/wezterm.sh share/wezterm/wezterm.sh etc/profile.d/wezterm.sh)
+
+    # 1. explicit override
+    if [[ -n "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION:-}" && -r "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION}" ]]; then
+        echo "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION}"
+        return 0
+    fi
+
+    # 2. vendored copy (canonical config root, then home-dir override)
+    for _c in "$BASH_CONFIG_ROOT_DIR/global/wezterm/wezterm.sh" \
+              "$HOME/.config/bash/global/wezterm/wezterm.sh"; do
+        [[ -r "$_c" ]] && { echo "$_c"; return 0; }
+    done
+
+    # 3. relative to the installed wezterm binary
+    if _bin=$(command -v wezterm 2>/dev/null); then
+        _real=$(realpath "$_bin" 2>/dev/null || readlink -f "$_bin" 2>/dev/null || echo "$_bin")
+        _bindir=$(dirname "$_real")
+        _prefix=$(dirname "$_bindir")
+        for _c in "${_subs[@]}"; do
+            [[ -r "$_prefix/$_c" ]] && { echo "$_prefix/$_c"; return 0; }
+        done
+        [[ -r "$_bindir/wezterm.sh" ]] && { echo "$_bindir/wezterm.sh"; return 0; }
+    fi
+
+    # 4. configured shared prefix
+    _prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+    for _c in "${_subs[@]}"; do
+        [[ -r "$_prefix/$_c" ]] && { echo "$_prefix/$_c"; return 0; }
+    done
+
+    return 1
+}
+
 is_in() {
     echo -n "$2" | /bin/grep -w -q "$1"
 }

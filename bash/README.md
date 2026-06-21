@@ -8,7 +8,8 @@ bash/
                     ~/.bash_login, ~/.profile). Loads functions.sh,
                     then sources config.sh and bashrc per layer.
   functions.sh    - Shared utilities loaded before any layer config
-                    (path_*, is_truthy, fpcmp, array_slice, source_if_exists, etc.)
+                    (path_*, is_truthy, fpcmp, array_slice, source_if_exists,
+                    loadout_add_precmd, loadout_find_wezterm_shell_integration, etc.)
   global/         - Canonical upstream config. Don't edit locally -- changes here
                     should be upstreamed to the repo.
     config.sh     - LOADOUT_CFG_* preference defaults
@@ -16,6 +17,9 @@ bash/
     completions/  - Bundled bash completions (bat, rg, zoxide, hyperfine, watchexec)
     github.scop.bash-completion/  - Bundled bash-completion library (offline)
     grc/          - Generic Colorizer binaries and configs
+    wezterm/      - Vendored WezTerm shell integration (wezterm.sh + PROVENANCE);
+                    sourced from user-writable space, never /etc. See
+                    global/README.md "Prompt & shell integration".
   corp/           - Corp-level overrides (user-created, not committed here)
   site/           - Site-level overrides (user-created)
   team/           - Team-level overrides (user-created)

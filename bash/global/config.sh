@@ -24,6 +24,15 @@ export LOADOUT_CFG_ENABLE_GRC="1"
 export LOADOUT_CFG_ENABLE_ICECREAM="1"
 export LOADOUT_CFG_ENABLE_STARSHIP="1"
 export LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT=""
+# wezterm shell integration: semantic zones, OSC 7 cwd reporting, and user
+# vars. Safe everywhere -- the script self-skips non-interactive and dumb/linux
+# terminals, and its OSC sequences are ignored by terminals that don't grok
+# them. Benefits wezterm users (including tmux-in-wezterm with passthrough).
+export LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION="1"
+# Explicit path to wezterm.sh. Empty -> auto-resolve (vendored copy, then paths
+# relative to the installed `wezterm` binary / shared prefix). Set this from the
+# engineering-loadout --dest-dir installer to pin an exact location. Never /etc.
+export LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION=""
 # LOADOUT_CFG_ENABLE_ONLINE_UPDATES -> auto | 1 | 0
 export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"
 # LOADOUT_CFG_ONLINE_DETECT_TIMEOUT -> seconds per host (GNU timeout; decimal ok)
