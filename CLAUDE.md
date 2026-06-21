@@ -531,7 +531,7 @@ Falls back gracefully: eza -> lsd -> ls, bat -> cat, fd -> find. Handles Debian 
 
 ## Git Hooks
 
-**pre-commit**: Scans for `.git` dirs in subdirectories, removes them, re-stages. Required because bundled plugins (tmux, vim) include own `.git` dirs causing "embedded git repository" warnings.
+**pre-commit**: Scans for embedded `.git` dirs in subdirectories, removes them, re-stages. It prunes the repository's own top-level `.git` before scanning, so sandbox/worktree internals such as `./.git/.git` are ignored. Required because bundled plugins (tmux, vim) include own `.git` dirs causing "embedded git repository" warnings.
 
 ## Common Patterns
 

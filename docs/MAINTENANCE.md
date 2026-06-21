@@ -94,7 +94,14 @@ Provides:
 
 - **pre-commit** -- strips ELF payloads from newly staged binaries and archives,
   normalizes tarballs to `.tar.bz2`, updates `.strip-manifest`. Removes any
-  embedded `.git` dirs from vendored plugins.
+  embedded `.git` dirs from vendored plugins while pruning the repository's own
+  top-level `.git` directory.
+
+The installer uses its own Python recursive copy instead of requiring host
+`rsync`. That copy path removes symlinked destination directories before
+syncing, refuses overlapping source/destination trees, and tolerates source
+files that vanish mid-copy. This matters for old config layouts where
+`~/.config/nvim/lsp` or `after/` may still symlink back into the repo.
 
 Run `./release --dry-run` before creating a release to smoke-test all
 binaries via a temp install. When Docker is available, run

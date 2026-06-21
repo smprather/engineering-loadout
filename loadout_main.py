@@ -1017,41 +1017,72 @@ def _copy_tree_item(src, dest, excludes=(), rel_path=""):
         if os.path.lexists(dest):
             remove_path(dest)
         ensure_dir(os.path.dirname(dest))
-        os.symlink(os.readlink(src), dest)
+        try:
+            link_target = os.readlink(src)
+        except FileNotFoundError:
+            return
+        os.symlink(link_target, dest)
         try:
             shutil.copystat(src, dest, follow_symlinks=False)
-        except OSError:
+        except FileNotFoundError, OSError:
             pass
         return
     if os.path.isdir(src):
         if os.path.lexists(dest) and not os.path.isdir(dest):
             remove_path(dest)
         ensure_dir(dest)
-        for name in os.listdir(src):
+        try:
+            names = os.listdir(src)
+        except FileNotFoundError:
+            return
+        for name in names:
             child_rel = os.path.join(rel_path, name) if rel_path else name
             _copy_tree_item(os.path.join(src, name), os.path.join(dest, name), excludes, child_rel)
         try:
             shutil.copystat(src, dest)
-        except OSError:
+        except FileNotFoundError, OSError:
             pass
         return
     if os.path.lexists(dest):
         remove_path(dest)
     ensure_dir(os.path.dirname(dest))
-    shutil.copy2(src, dest, follow_symlinks=False)
+    try:
+        shutil.copy2(src, dest, follow_symlinks=False)
+    except FileNotFoundError:
+        return
 
 
 def sync_dir(src, dest, delete=False, excludes=None):
     excludes = tuple(excludes or ())
+    if os.path.islink(dest):
+        require_writable_parent(dest, "copy")
+        remove_path(dest)
+    src_real = os.path.realpath(src)
+    dest_real = os.path.realpath(dest)
+    if src_real == dest_real:
+        return
+    try:
+        common = os.path.commonpath([src_real, dest_real])
+    except ValueError:
+        common = ""
+    if common in (src_real, dest_real):
+        raise InstallRefused(f"copy source and destination overlap: {display_name(src)} -> {display_name(dest)}")
     require_writable_dir(dest if os.path.isdir(dest) else os.path.dirname(dest), "copy")
     ensure_dir(dest)
     if delete and os.path.isdir(dest):
-        src_names = set(os.listdir(src)) if os.path.isdir(src) else set()
+        try:
+            src_names = set(os.listdir(src)) if os.path.isdir(src) else set()
+        except FileNotFoundError:
+            src_names = set()
         for name in os.listdir(dest):
             if name in src_names or _is_excluded(name, excludes):
                 continue
             remove_path(os.path.join(dest, name))
-    for name in os.listdir(src):
+    try:
+        names = os.listdir(src)
+    except FileNotFoundError:
+        return
+    for name in names:
         _copy_tree_item(os.path.join(src, name), os.path.join(dest, name), excludes, name)
 
 

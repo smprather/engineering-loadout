@@ -226,6 +226,7 @@ alias mdkir='mkdir'
 alias rs='rsync --archive --info=progress2 --info=name0 --no-inc-recursive --exclude="*/.snapshot/"'
 alias du='du --block-size=G -s * | sort -r -n -k 1'
 alias dum='/bin/du --block-size=M -s * | sort -r -n -k 1'
+unalias df 2>/dev/null || true
 df() {
     if command -v colourify >/dev/null 2>&1; then
         colourify df --block-size=G "$@"

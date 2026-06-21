@@ -12,7 +12,7 @@ script_dir=$(git rev-parse --show-toplevel)
 
 echo "Pre-commit: Checking for embedded git repositories..."
 
-embedded_gits=$(find . -mindepth 2 -type d -name ".git" 2>/dev/null)
+embedded_gits=$(find . -mindepth 2 -path './.git/*' -prune -o -type d -name ".git" -print 2>/dev/null)
 
 if [[ -n "$embedded_gits" ]]; then
     echo "Found embedded git repositories, removing .git directories:"
