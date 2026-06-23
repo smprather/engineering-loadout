@@ -11,7 +11,7 @@ if exist "%BUNDLED_PWSH%" (
     exit /b %ERRORLEVEL%
 )
 
-where pwsh.exe >nul 2>nul
+where pwsh.exe >nul 2>&1
 if errorlevel 1 (
     echo PowerShell 7+ ^(pwsh.exe^) was not found.
     echo Bootstrapping bundled PowerShell with Windows PowerShell 5.1...

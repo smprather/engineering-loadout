@@ -96,6 +96,11 @@ AutoHotkey global setting:
   enabled = true | false
       false keeps the script installed but writes all optional feature flags off.
 
+  executable = "C:\path\to\AutoHotkey64.exe"
+      Optional. Use this exact executable instead of discovering AutoHotkey_* in
+      %USERPROFILE%. Environment variables (e.g. %USERPROFILE%) are expanded.
+      Useful when AHK has been renamed (e.g. corp infosec policy).
+
 AutoHotkey feature IDs:
   corp-logins
       Ctrl+Alt+I types CORP_PASSWORD then Tab.
@@ -226,6 +231,11 @@ function New-LoadoutKeysConfig {
         '[autohotkey]',
         'enabled = true',
         '',
+        '# Override the AutoHotkey executable. If unset, loadout discovers',
+        '# AutoHotkey64.exe (or similar) inside %USERPROFILE%\AutoHotkey_*.',
+        '# Useful when AHK has been renamed (e.g. corp infosec policy).',
+        '# executable = "%USERPROFILE%\AutoHotkey_2.1-alpha.22\foo.exe"',
+        '',
         '[autohotkey.features]',
         'enabled = ['
     )
@@ -263,6 +273,7 @@ function Get-LoadoutAhkConfig {
     $result = [PSCustomObject]@{
         AutoHotkeyEnabled = $true
         EnabledFeatureIds = @()
+        ExecutablePath    = ''
     }
 
     if (-not (Test-Path $ConfigPath -PathType Leaf)) {
@@ -320,6 +331,11 @@ function Get-LoadoutAhkConfig {
             return
         }
 
+        if ($currentSection -ceq 'autohotkey' -and $trimmed -match '^executable\s*=\s*"(?<value>[^"]*)"\s*$') {
+            $result.ExecutablePath = [Environment]::ExpandEnvironmentVariables($Matches.value)
+            return
+        }
+
         if ((@('autohotkey.features', 'autohotkey.plugins') -contains $currentSection) -and $trimmed -match '^enabled\s*=\s*\[(?<rest>.*)$') {
             $rest = $Matches.rest
             $quoted = [regex]::Matches($rest, '"([^"]+)"')
@@ -363,12 +379,12 @@ function Set-AhkFeatureFlags {
     foreach ($feature in $FeatureDefinitions) {
         $value = if ($AutoHotkeyEnabled -and ($EnabledFeatureIds -contains $feature.Id)) { 'true' } else { 'false' }
         $pattern = '(?m)^' + [regex]::Escape($feature.FlagName) + '\s*:=\s*(true|false)\s*$'
-        $replacement = $feature.FlagName + ' := ' + $value
-        $newContent = [regex]::Replace($content, $pattern, $replacement)
-        if ($newContent -eq $content) {
+        if (-not [regex]::IsMatch($content, $pattern)) {
             Write-Warning "  Could not find feature flag '$($feature.FlagName)' in $AhkScriptPath"
+            continue
         }
-        $content = $newContent
+        $replacement = $feature.FlagName + ' := ' + $value
+        $content = [regex]::Replace($content, $pattern, $replacement)
     }
 
     Set-Content -Path $AhkScriptPath -Value $content -Encoding UTF8
@@ -590,61 +606,89 @@ if (Test-Path $legacyGeneratedFile -PathType Leaf) {
     Write-Host "  Removed legacy generated plugin include file: $legacyGeneratedFile"
 }
 
-$ahkDirs = @(Get-ChildItem -Path $HOME -Filter "AutoHotkey_*" -Directory -ErrorAction SilentlyContinue)
-$ahkDir  = $null
+$ahkExe = $null
 
-if ($ahkDirs.Count -gt 1) {
-    Write-Warning "  Multiple AutoHotkey directories found in $HOME."
-    Write-Warning "  Remove all but one and re-run to set up AutoHotKey."
-} elseif ($ahkDirs.Count -eq 1) {
-    $ahkDir = $ahkDirs[0].FullName
-    Write-Host "  Found existing AutoHotkey: $ahkDir"
-} else {
-    Write-Host "  No AutoHotkey found -- downloading latest stable release..."
-    try {
-        $release  = Invoke-RestMethod "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest" -UseBasicParsing
-        $zipAsset = $release.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
-        if (-not $zipAsset) { throw "No zip asset found in latest release." }
-
-        $zipName = $zipAsset.name
-        $dirName = [System.IO.Path]::GetFileNameWithoutExtension($zipName)
-        $zipPath = Join-Path $HOME $zipName
-        $ahkDir  = Join-Path $HOME $dirName
-
-        Write-Host "  Downloading $zipName..."
-        Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zipPath -UseBasicParsing
-        New-Item -ItemType Directory -Path $ahkDir -Force | Out-Null
-        Expand-Archive -Path $zipPath -DestinationPath $ahkDir -Force
-        Remove-Item $zipPath
-        Remove-Item (Join-Path $ahkDir "AutoHotkey32.exe") -Force -ErrorAction SilentlyContinue
-        Write-Host "  Extracted to $ahkDir"
-    } catch {
-        Write-Warning "  Failed to download AutoHotkey: $_"
+if ($loadoutAhkConfig.ExecutablePath) {
+    if (Test-Path $loadoutAhkConfig.ExecutablePath -PathType Leaf) {
+        $ahkExe = (Resolve-Path $loadoutAhkConfig.ExecutablePath).Path
+        Write-Host "  Using configured AutoHotkey executable: $ahkExe"
+    } else {
+        Write-Warning "  loadout_keys.toml executable '$($loadoutAhkConfig.ExecutablePath)' not found -- falling back to discovery."
     }
 }
 
-if ($ahkDir) {
-    $ahkExe = Join-Path $ahkDir "AutoHotkey64.exe"
-    if (-not (Test-Path $ahkExe)) {
-        Write-Warning "  AutoHotkey64.exe not found in $ahkDir -- skipping."
+if (-not $ahkExe) {
+    $ahkDirs = @(Get-ChildItem -Path $HOME -Filter "AutoHotkey_*" -Directory -ErrorAction SilentlyContinue)
+    $ahkDir  = $null
+
+    if ($ahkDirs.Count -gt 1) {
+        Write-Warning "  Multiple AutoHotkey directories found in $HOME."
+        Write-Warning "  Remove all but one and re-run to set up AutoHotKey."
+    } elseif ($ahkDirs.Count -eq 1) {
+        $ahkDir = $ahkDirs[0].FullName
+        Write-Host "  Found existing AutoHotkey: $ahkDir"
     } else {
-        $oldAhk = "$startupDir\hotkeys.ahk"
-        if (Test-Path $oldAhk) { Remove-Item $oldAhk -Force }
+        Write-Host "  No AutoHotkey found -- downloading latest stable release..."
+        try {
+            $release  = Invoke-RestMethod "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest" -UseBasicParsing
+            $zipAsset = $release.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
+            if (-not $zipAsset) { throw "No zip asset found in latest release." }
 
-        $shortcutPath = "$startupDir\hotkeys.lnk"
-        $shell = New-Object -ComObject WScript.Shell
-        $lnk = $shell.CreateShortcut($shortcutPath)
-        $lnk.TargetPath       = $ahkExe
-        $lnk.Arguments        = "`"$ahkScript`""
-        $lnk.WorkingDirectory = Split-Path $ahkScript -Parent
-        $lnk.Save()
-        Write-Host "  Created startup shortcut: $shortcutPath -> $ahkExe"
+            $zipName = $zipAsset.name
+            $dirName = [System.IO.Path]::GetFileNameWithoutExtension($zipName)
+            $zipPath = Join-Path $HOME $zipName
+            $ahkDir  = Join-Path $HOME $dirName
 
-        Get-Process -Name 'AutoHotkey*' -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Process -FilePath $ahkExe -ArgumentList "`"$ahkScript`""
-        Write-Host "  AutoHotKey started"
-        Write-Host "  AutoHotKey will launch automatically on next login via the startup shortcut."
+            Write-Host "  Downloading $zipName..."
+            Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zipPath -UseBasicParsing
+            New-Item -ItemType Directory -Path $ahkDir -Force | Out-Null
+            Expand-Archive -Path $zipPath -DestinationPath $ahkDir -Force
+            Remove-Item $zipPath
+            Remove-Item (Join-Path $ahkDir "AutoHotkey32.exe") -Force -ErrorAction SilentlyContinue
+            Write-Host "  Extracted to $ahkDir"
+        } catch {
+            Write-Warning "  Failed to download AutoHotkey: $_"
+        }
     }
+
+    if ($ahkDir) {
+        $ahkExeCandidates = @('AutoHotkey64.exe', 'AutoHotkey.exe', 'AutoHotkey32.exe')
+        foreach ($name in $ahkExeCandidates) {
+            $candidate = Join-Path $ahkDir $name
+            if (Test-Path $candidate -PathType Leaf) {
+                $ahkExe = $candidate
+                break
+            }
+        }
+        if (-not $ahkExe) {
+            $found = @(Get-ChildItem -Path $ahkDir -Filter 'AutoHotkey*.exe' -File -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -First 1)
+            if ($found.Count -gt 0) { $ahkExe = $found[0].FullName }
+        }
+        if (-not $ahkExe) {
+            Write-Warning "  No AutoHotkey*.exe found in $ahkDir -- skipping."
+        }
+    }
+}
+
+if ($ahkExe) {
+    $oldAhk = "$startupDir\hotkeys.ahk"
+    if (Test-Path $oldAhk) { Remove-Item $oldAhk -Force }
+
+    $shortcutPath = "$startupDir\hotkeys.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($shortcutPath)
+    $lnk.TargetPath       = $ahkExe
+    $lnk.Arguments        = "`"$ahkScript`""
+    $lnk.WorkingDirectory = Split-Path $ahkScript -Parent
+    $lnk.Save()
+    Write-Host "  Created startup shortcut: $shortcutPath -> $ahkExe"
+
+    $ahkProcName = [System.IO.Path]::GetFileNameWithoutExtension($ahkExe)
+    Get-Process -Name $ahkProcName -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Process -FilePath $ahkExe -ArgumentList "`"$ahkScript`""
+    Write-Host "  AutoHotKey started"
+    Write-Host "  AutoHotKey will launch automatically on next login via the startup shortcut."
 }
 
 Write-Host "PSFzf..."

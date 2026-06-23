@@ -332,7 +332,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `%USERPROFILE%\.config\starship\starship.toml` <- `repo/starship/starship.windows.toml`
 - `%USERPROFILE%\.editorconfig` <- `repo/editorconfig/editorconfig`
 - `%USERPROFILE%\autohotkey\hotkeys.ahk` <- `repo/autohotkey/hotkeys.ahk`
-- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks
+- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey].executable` overrides AHK exe discovery (useful when AHK has been renamed for corp infosec compliance); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks
 - `loadout.ps1` patches feature flags in `%USERPROFILE%\autohotkey\hotkeys.ahk` based on enabled feature list
 - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\hotkeys.lnk` -- `.lnk` shortcut pointing to `AutoHotkey64.exe "%USERPROFILE%\autohotkey\hotkeys.ahk"` (AHK not system-wide to avoid SentinelOne flagging). AHK extracted to `%USERPROFILE%\AutoHotkey_*\`; if none exists, installer downloads latest stable from GitHub, removes `AutoHotkey32.exe`.
 - `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` <- `repo/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
