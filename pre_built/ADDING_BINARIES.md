@@ -310,6 +310,30 @@ Home directory quotas on shared compute systems are typically small (~4-10 GB). 
 Future: consider splitting pre_built into lightweight (-> `~/.local`) and heavyweight
 (-> shared filesystem, symlinked from `~/.local`). See memory file `project_prebuilt_bifurcation.md`.
 
+## PowerShell 7.6.3 -- Windows x64 portable ZIP
+
+Windows installs use a user-local PowerShell runtime so `.\loadout.cmd` can run
+without admin rights, winget, Store/App Installer, or a system `pwsh.exe`.
+Bundle the official Microsoft ZIP under:
+
+```powershell
+pre_built\windows.x86_64\powershell\PowerShell-<version>-win-x64.zip
+```
+
+Refresh from GitHub releases, then split into 45 MiB parts:
+
+```powershell
+New-Item -ItemType Directory -Force pre_built\windows.x86_64\powershell | Out-Null
+gh release download v7.6.3 -R PowerShell/PowerShell `
+  -p PowerShell-7.6.3-win-x64.zip `
+  -D pre_built\windows.x86_64\powershell --clobber
+Get-FileHash pre_built\windows.x86_64\powershell\PowerShell-7.6.3-win-x64.zip -Algorithm SHA256
+python .\split_bz2 --chunk-mb 45 pre_built\windows.x86_64\powershell\PowerShell-7.6.3-win-x64.zip
+```
+
+Update `pre_built/windows.x86_64/powershell/README.md` with the source URL and
+SHA256. The Windows bootstrap rejoins `.zip.part-NNN` files before extraction.
+
 ## gvim build notes (vim 9.2.458, added 2026-05-16)
 
 Built as GTK3 GUI vim targeting el8.x86_64.glibc2p28. Requires gcc-toolset-14 active.

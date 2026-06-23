@@ -181,18 +181,22 @@ snapshots (large and reproducible).
 
 ## Windows
 
-**PowerShell 7+ (recommended):**
+**Recommended:**
 
 ```powershell
 .\loadout.cmd
 # or: pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 ```
 
-**Starting from Windows PowerShell 5.1:**
+`.\loadout.cmd` prefers `%USERPROFILE%\.local\opt\powershell\7\pwsh.exe`.
+If it is missing and no `pwsh.exe` is already on `PATH`, it uses Windows
+PowerShell 5.1 to extract the bundled PowerShell ZIP and then re-runs the
+installer under that user-local `pwsh.exe`.
+
+**Explicit Windows PowerShell 5.1 bootstrap:**
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # installs pwsh via winget
-# then reopen as pwsh:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1
 .\loadout.cmd
 ```
 
@@ -209,6 +213,8 @@ No elevation required. Files are copied, not symlinked -- re-run
 | `%USERPROFILE%\.editorconfig` | `editorconfig/editorconfig` |
 | `%USERPROFILE%\autohotkey\hotkeys.ahk` | `autohotkey/hotkeys.ahk` (feature-patched) |
 | `%USERPROFILE%\loadout_keys.toml` | Created if missing -- choose AHK features |
+| `%USERPROFILE%\.local\opt\powershell\7\` | Bundled PowerShell ZIP from `pre_built/windows.x86_64/powershell/` |
+| `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json` | Windows Terminal profile for bundled PowerShell |
 | PowerShell profile (5.1 + 7+) | `powershell/Microsoft.PowerShell_profile.ps1` |
 
 ### AutoHotKey feature flags
@@ -224,3 +230,16 @@ Edit `%USERPROFILE%\loadout_keys.toml`:
 | `tmux-hotkeys` | `RAlt`/`RWin` zoom toggle, `Ctrl+;` last-pane toggle |
 | `f1f2f3-as-mouse-buttons` | F1/F2/F3 mouse remaps for mspaint/etxc/wezterm-gui |
 | `thinlinc-reconnect` | Auto-dismiss ThinLinc errors and reconnect |
+
+### AutoHotKey feature settings
+
+The Cisco Secure Client automation can skip VPN login attempts on named Wi-Fi
+networks. Add exact SSID names under `%USERPROFILE%\loadout_keys.toml`:
+
+```toml
+[autohotkey.features.cisco-secure-client-vpn]
+skip_wifi_ssids = [
+  "Home WiFi",
+  "Phone Hotspot",
+]
+```

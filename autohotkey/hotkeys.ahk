@@ -12,7 +12,7 @@ cfg_feature_cisco_secure_client_vpn := false
 cfg_feature_password_manager := false
 cfg_feature_tmux_hotkeys := false
 cfg_feature_f1f2f3_as_mouse_buttons := false
-cfg_feature_thinlinc_reconnect := true
+cfg_feature_thinlinc_reconnect := false
 
 StrJoin(arr, sep) {
     out := ""
@@ -85,6 +85,9 @@ log_into_corp_vpn()
         return
 
     if (g_password = "")
+        return
+
+    if (cisco_vpn_skipped_for_current_wifi())
         return
 
     ; Start with a cooldown so Cisco's own auto-connect (e.g. after a
@@ -180,6 +183,237 @@ log_into_corp_vpn()
         last_action_ms := A_TickCount
         ;VpnLog("ERROR: " e.Message " (line " e.Line ")")
     }
+}
+
+cisco_vpn_skipped_for_current_wifi()
+{
+    static last_check_ms := 0
+    static last_result := false
+
+    ; Avoid shelling out to netsh every timer tick.
+    if (A_TickCount - last_check_ms < 30000)
+        return last_result
+
+    last_check_ms := A_TickCount
+    last_result := false
+
+    skip_ssids := loadout_toml_read_quoted_array("autohotkey.features.cisco-secure-client-vpn", "skip_wifi_ssids")
+    if (skip_ssids.Length = 0)
+        return false
+
+    current_ssid := current_wifi_ssid()
+    if (current_ssid = "")
+        return false
+
+    for _, skipped_ssid in skip_ssids {
+        if (current_ssid == skipped_ssid) {
+            last_result := true
+            return true
+        }
+    }
+
+    return false
+}
+
+current_wifi_ssid()
+{
+    temp_path := A_Temp . "\loadout-ahk-netsh-" . A_TickCount . ".txt"
+
+    try {
+        exit_code := RunWait('cmd.exe /c netsh wlan show interfaces > "' . temp_path . '" 2>nul', , "Hide")
+        if (exit_code != 0)
+            return ""
+
+        output := FileRead(temp_path, "UTF-8")
+    } catch {
+        return ""
+    }
+
+    try FileDelete(temp_path)
+
+    connected := false
+    fallback_ssid := ""
+    Loop Parse output, "`n", "`r" {
+        line := A_LoopField
+
+        if (RegExMatch(line, "i)^\s*State\s*:\s*connected\s*$")) {
+            connected := true
+            continue
+        }
+
+        if (RegExMatch(line, "^\s*SSID\s*:\s*(.*)$", &match)) {
+            ssid := Trim(match[1])
+            if (ssid = "")
+                continue
+            if (connected)
+                return ssid
+            if (fallback_ssid = "")
+                fallback_ssid := ssid
+        }
+    }
+
+    return fallback_ssid
+}
+
+loadout_keys_path()
+{
+    user_profile := EnvGet("USERPROFILE")
+    if (user_profile = "")
+        return ""
+    return user_profile . "\loadout_keys.toml"
+}
+
+loadout_toml_read_quoted_array(section_name, key_name)
+{
+    values := []
+    config_path := loadout_keys_path()
+    if (config_path = "" || !FileExist(config_path))
+        return values
+
+    try {
+        content := FileRead(config_path, "UTF-8")
+    } catch {
+        return values
+    }
+
+    in_target_section := false
+    collecting_array := false
+    value_text := ""
+
+    Loop Parse content, "`n", "`r" {
+        line := A_LoopField
+        trimmed := Trim(line)
+
+        if (!collecting_array && RegExMatch(trimmed, "^\[([^\]]+)\]\s*$", &section_match)) {
+            in_target_section := (section_match[1] = section_name)
+            continue
+        }
+
+        if (!in_target_section)
+            continue
+
+        if (collecting_array) {
+            value_text .= "`n" . line
+            if (loadout_toml_has_unquoted_char(line, "]"))
+                return loadout_toml_parse_quoted_strings(value_text)
+            continue
+        }
+
+        if (trimmed = "" || SubStr(trimmed, 1, 1) = "#")
+            continue
+
+        equals_pos := InStr(line, "=")
+        if (!equals_pos)
+            continue
+
+        key := Trim(SubStr(line, 1, equals_pos - 1))
+        if (key != key_name)
+            continue
+
+        value_text := SubStr(line, equals_pos + 1)
+        if (loadout_toml_has_unquoted_char(value_text, "[") && !loadout_toml_has_unquoted_char(value_text, "]")) {
+            collecting_array := true
+            continue
+        }
+
+        return loadout_toml_parse_quoted_strings(value_text)
+    }
+
+    return values
+}
+
+loadout_toml_has_unquoted_char(text, target_char)
+{
+    quote := Chr(34)
+    hash := Chr(35)
+    backslash := Chr(92)
+    in_string := false
+    escaped := false
+
+    Loop Parse text {
+        ch := A_LoopField
+
+        if (in_string) {
+            if (escaped) {
+                escaped := false
+            } else if (ch = backslash) {
+                escaped := true
+            } else if (ch = quote) {
+                in_string := false
+            }
+            continue
+        }
+
+        if (ch = hash)
+            return false
+        if (ch = quote)
+            in_string := true
+        else if (ch = target_char)
+            return true
+    }
+
+    return false
+}
+
+loadout_toml_parse_quoted_strings(text)
+{
+    values := []
+    quote := Chr(34)
+    hash := Chr(35)
+    backslash := Chr(92)
+    in_string := false
+    in_comment := false
+    escaped := false
+    current := ""
+
+    Loop Parse text {
+        ch := A_LoopField
+
+        if (in_comment) {
+            if (ch = "`n")
+                in_comment := false
+            continue
+        }
+
+        if (!in_string) {
+            if (ch = hash) {
+                in_comment := true
+            } else if (ch = quote) {
+                in_string := true
+                escaped := false
+                current := ""
+            }
+            continue
+        }
+
+        if (escaped) {
+            if (ch = "n")
+                current .= "`n"
+            else if (ch = "r")
+                current .= "`r"
+            else if (ch = "t")
+                current .= "`t"
+            else if (ch = quote)
+                current .= quote
+            else if (ch = backslash)
+                current .= backslash
+            else
+                current .= ch
+            escaped := false
+            continue
+        }
+
+        if (ch = backslash) {
+            escaped := true
+        } else if (ch = quote) {
+            values.Push(current)
+            in_string := false
+        } else {
+            current .= ch
+        }
+    }
+
+    return values
 }
 
 mouse_nudge()

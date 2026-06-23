@@ -372,7 +372,13 @@ Handles distro naming differences: `batcat` (Debian) vs `bat` (RedHat),
 ### Windows
 
 Files are **copied**, not symlinked. Re-run `.\loadout.cmd` after
-repo changes. AutoHotKey (`AutoHotkey64.exe`) is extracted to
+repo changes. `.\loadout.cmd` uses bundled user-local PowerShell at
+`%USERPROFILE%\.local\opt\powershell\7\pwsh.exe` when present, falls back to
+system `pwsh.exe`, and otherwise uses Windows PowerShell 5.1 to extract
+`pre_built/windows.x86_64/powershell/PowerShell-*-win-x64.zip[.part-NNN]`
+without winget/admin. `loadout.ps1` writes a Windows Terminal profile fragment
+at `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json`.
+AutoHotKey (`AutoHotkey64.exe`) is extracted to
 `%USERPROFILE%\AutoHotkey_*\` rather than installed system-wide (avoids
 SentinelOne flagging); if no such directory exists, the installer
 auto-downloads the latest stable release from GitHub and removes
@@ -383,3 +389,6 @@ as a SentinelOne bypass for flagged binaries like AHK.
 The AHK feature config lives at `%USERPROFILE%\loadout_keys.toml` (created if
 missing). `.\loadout.ps1` patches feature-flag booleans in
 `%USERPROFILE%\autohotkey\hotkeys.ahk` based on the enabled feature list.
+The Cisco VPN feature also reads
+`[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` directly at
+runtime to skip automation on named Wi-Fi networks.
