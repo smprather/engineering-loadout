@@ -1,5 +1,9 @@
 # Copilot Instructions
 
+After a context clear, read `docs/HANDOFF.md` first for current branch state,
+verification gates, and user-home follow-up that cannot be inferred from Git
+alone.
+
 Engineering-loadout: offline-first, no-root package manager for
 engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), layered configuration (global -> corp -> site -> team -> project -> user).

@@ -138,14 +138,21 @@ catalog.
 
 ### Symlink handling
 
-If `$HOME` has existing symlinks where the loadout needs to create
-directories (e.g. `~/.terminfo -> /usr/share/terminfo`), the default
-(`--install-follows-symlinks=auto`) follows the symlink when its target is
-writable, and otherwise removes the symlink and creates a real directory in
-its place. Use `--install-follows-symlinks=yes` to always write into the
-symlink target, or `=no` to always replace it with a real directory. The
-displaced symlink is backed up and can be restored with
-`./loadout snapshot restore`.
+Archive extraction and env config copying intentionally handle symlinks
+differently:
+
+- Runtime/archive extraction uses `--install-follows-symlinks`. The default
+  (`auto`) follows an existing directory symlink only when its target is
+  writable; otherwise it removes the symlink and creates a real directory. Use
+  `--install-follows-symlinks=yes` to always write into symlink targets, or
+  `=no` to always replace them with real directories.
+- Env config installs (`@envs`, including `env-nvim`) always copy config into
+  the target HOME and replace symlinked config subdirectories with real
+  directories. This is deliberate: stale links such as
+  `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp` must not let delete-style config
+  sync mutate the repository checkout.
+
+Backups/snapshots can restore displaced user files when backups are enabled.
 
 ### Corporate / site add-ons
 

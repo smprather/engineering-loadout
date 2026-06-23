@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+Start with [`docs/HANDOFF.md`](docs/HANDOFF.md) after any context clear. It
+records latest branch state, verification gates, and user-home follow-up that
+cannot be inferred from Git alone.
+
 ## Build Machine Mandate
 
 **ALL developers working on this project are MANDATED to be on an EL8 machine.**

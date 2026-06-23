@@ -13,6 +13,7 @@ At minimum check and update:
 - `AGENTS.md` for current agent rules, repo-specific pitfalls, and lessons learned.
 - `.github/copilot-instructions.md` for GitHub/Copilot agent cold-start notes.
 - Any active plan or handoff Markdown when the area it describes changes.
+  Current handoff lives at `docs/HANDOFF.md`.
 
 Use `rg` to search these docs for renamed commands, retired flags, new
 environment variables, and changed install behavior. The docs must match the
