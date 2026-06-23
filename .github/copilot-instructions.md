@@ -54,7 +54,8 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 ```powershell
 # Windows install (copies files, no elevation required)
-.\loadout.ps1
+.\loadout.cmd
+# or: pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 ```
 
 Use `sh -n loadout` for the POSIX-sh shim,
@@ -370,7 +371,7 @@ Handles distro naming differences: `batcat` (Debian) vs `bat` (RedHat),
 
 ### Windows
 
-Files are **copied**, not symlinked. Re-run `.\loadout.ps1` after
+Files are **copied**, not symlinked. Re-run `.\loadout.cmd` after
 repo changes. AutoHotKey (`AutoHotkey64.exe`) is extracted to
 `%USERPROFILE%\AutoHotkey_*\` rather than installed system-wide (avoids
 SentinelOne flagging); if no such directory exists, the installer

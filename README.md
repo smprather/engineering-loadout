@@ -57,8 +57,9 @@ Name packages or groups the same way `dnf` or `apt` works:
 ### Windows
 
 ```powershell
-.\loadout.ps1                  # PowerShell 7+
-.\loadout-pwsh-bootstrap.ps1   # if starting from PowerShell 5.1
+.\loadout.cmd                  # PowerShell 7+, execution-policy-safe wrapper
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # if starting from PowerShell 5.1
 ```
 
 No elevation required.

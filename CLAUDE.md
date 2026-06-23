@@ -64,8 +64,9 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 **Windows** (no elevation required -- copies files):
 ```powershell
-.\loadout-pwsh-bootstrap.ps1   # if starting from Windows PowerShell 5.1
-.\loadout.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # if starting from Windows PowerShell 5.1
+.\loadout.cmd                  # PowerShell 7+, execution-policy-safe wrapper
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 ```
 
 ## Repository Structure
@@ -174,6 +175,7 @@ loadout                     - POSIX-sh bootstrap shim; resolves portable Python 
 loadout_main.py             - Installer body (Python 3.14, shebang `#!/usr/bin/env python3.14`)
 .loadout-bootstrap/         - Per-clone Python 3.14 bootstrap cache (gitignored; created on first run when neither ~/.local nor a previous cache has python3.14)
 loadout.ps1                 - Windows installation script (PowerShell)
+loadout.cmd                 - Windows wrapper for loadout.ps1 with process-scoped ExecutionPolicy Bypass
 loadout-pwsh-bootstrap.ps1  - Windows PowerShell 5.1 bootstrapper for pwsh via winget
 update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; rolling-git first-party wheels; guidance for build/download packages)
 strip_all_elf_binaries      - Helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2 (Python 3.14)
@@ -322,7 +324,7 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `~/.local/share/nvim/runtime/` <- `repo/pre_built/<platform>/runtime/nvim.tar.bz2`
 - `~/.local/bin/python3.14` etc. <- `repo/pre_built/<platform>/portable-python-*.tar.bz2` (via install.sh)
 
-**Windows copy destinations** (files copied, not symlinked -- re-run `.\loadout.ps1` after repo changes):
+**Windows copy destinations** (files copied, not symlinked -- re-run `.\loadout.cmd` or `.\loadout.ps1` after repo changes):
 - `%LOCALAPPDATA%\nvim` <- `repo/nvim`
 - `%USERPROFILE%\.config\wezterm\wezterm.lua` <- `repo/wezterm/wezterm.lua`
 - `%USERPROFILE%\.config\starship\starship.toml` <- `repo/starship/starship.windows.toml`

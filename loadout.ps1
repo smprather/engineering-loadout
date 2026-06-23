@@ -10,9 +10,41 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Show-LoadoutWindowsHelp {
+    Write-Host @'
+loadout.ps1 - Windows loadout installer
+
+Usage:
+  .\loadout.cmd [--help]
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
+
+Options:
+  -h, --help, -?, /?    Show this help and exit.
+
+Notes:
+  - Requires PowerShell 7+ for install.
+  - No elevation required.
+  - Copies Windows configs and installs/starts the user-local AutoHotkey script.
+  - When running from a WSL UNC path, prefer loadout.cmd or the explicit pwsh
+    command above. Direct .ps1 execution can be blocked by execution policy
+    before this script starts.
+'@
+}
+
+foreach ($arg in $args) {
+    if ($arg -in @('--help', '-h', '-?', '/?')) {
+        Show-LoadoutWindowsHelp
+        exit 0
+    }
+}
+
+if ($args.Count -gt 0) {
+    Write-Error "Unknown argument(s): $($args -join ' '). Use --help for usage."
+}
+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Warning "This installer requires PowerShell 7+."
-    Write-Warning "Run .\loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\loadout.ps1 from pwsh."
+    Write-Warning "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\loadout.cmd or .\loadout.ps1 from pwsh."
     exit 1
 }
 

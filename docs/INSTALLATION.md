@@ -184,19 +184,20 @@ snapshots (large and reproducible).
 **PowerShell 7+ (recommended):**
 
 ```powershell
-.\loadout.ps1
+.\loadout.cmd
+# or: pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 ```
 
 **Starting from Windows PowerShell 5.1:**
 
 ```powershell
-.\loadout-pwsh-bootstrap.ps1   # installs pwsh via winget
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # installs pwsh via winget
 # then reopen as pwsh:
-.\loadout.ps1
+.\loadout.cmd
 ```
 
 No elevation required. Files are copied, not symlinked -- re-run
-`.\loadout.ps1` after repo updates.
+`.\loadout.cmd` or `.\loadout.ps1` after repo updates.
 
 ### Windows destinations
 
