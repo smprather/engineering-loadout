@@ -1,0 +1,272 @@
+# Top crates from https://lib.rs/std (Popular tab), scraped 2026-06-24.
+# Top-level seed set for the offline crate store. build-crate-store.sh feeds
+# these into a Cargo manifest, resolves a lockfile (pulling the full transitive
+# dep closure -- expect this to balloon well past 250), then runs
+# `cargo local-registry --sync` to download every .crate into a local registry.
+#
+# One crate name per line. Blank lines and #-comments ignored.
+# No versions here on purpose: the resolver picks the latest compatible set.
+# To pin a crate, append `=X.Y` (e.g. `base64=0.21`) -- parsed by the build script.
+# Offline additions (TUI/tables/serde formats/time): tabled, comfy-table, ron, postcard, time, bytesize, tui-textarea
+
+serde
+serde_json
+thiserror
+rand
+clap
+tokio
+anyhow
+syn
+regex
+base64
+log
+tempfile
+chrono
+tracing
+libc
+quote
+toml
+proc-macro2
+sha2
+futures
+uuid
+tracing-subscriber
+bytes
+getrandom
+url
+once_cell
+itertools
+indexmap
+futures-util
+bitflags
+async-trait
+hex
+hashbrown
+parking_lot
+rayon
+walkdir
+flate2
+tokio-util
+num-traits
+lazy_static
+criterion
+windows-sys
+cc
+smallvec
+dirs
+env_logger
+rand_core
+semver
+memchr
+cfg-if
+nix
+schemars
+strum
+glob
+zeroize
+hmac
+rand_chacha
+unicode-width
+rustc-hash
+tokio-stream
+byteorder
+heck
+socket2
+percent-encoding
+crossterm
+futures-core
+pin-project-lite
+dashmap
+toml_edit
+indicatif
+colored
+subtle
+proptest
+ahash
+sha1
+crossbeam-channel
+paste
+bytemuck
+fastrand
+nom
+quick-xml
+bincode
+derive_more
+digest
+strum_macros
+zip
+either
+itoa
+image
+num-bigint
+predicates
+crc32fast
+ring
+console
+zstd
+strsim
+memmap2
+serde_with
+shlex
+unicode-segmentation
+urlencoding
+darling
+which
+pretty_assertions
+aho-corasick
+tar
+async-stream
+petgraph
+phf
+libloading
+pkg-config
+lru
+csv
+bindgen
+prettyplease
+encoding_rs
+notify
+rusqlite
+serde_urlencoded
+convert_case
+static_assertions
+ed25519-dalek
+ratatui
+futures-channel
+pyo3
+pin-project
+anstyle
+dotenvy
+unicode-normalization
+arc-swap
+windows
+mime
+ignore
+half
+blake3
+libm
+clap_complete
+sysinfo
+arrayvec
+aes
+ordered-float
+mime_guess
+crossbeam-utils
+insta
+globset
+humantime
+fnv
+serial_test
+assert_cmd
+ipnet
+tokio-test
+indoc
+bumpalo
+rstest
+proc-macro-crate
+num-integer
+pulldown-cmark
+serde_repr
+home
+winapi
+filetime
+similar
+cmake
+aes-gcm
+cargo_metadata
+data-encoding
+hkdf
+pest
+signal-hook
+dunce
+approx
+num-complex
+owo-colors
+ndarray
+rust_decimal
+ctrlc
+pest_derive
+num_enum
+jiff
+bitvec
+num
+rsa
+dialoguer
+sha3
+ciborium
+backtrace
+png
+fs_extra
+textwrap
+async-channel
+glam
+dyn-clone
+secrecy
+p256
+mockall
+derive_builder
+serde_bytes
+directories
+futures-lite
+rand_distr
+camino
+crossbeam-queue
+brotli
+rmp-serde
+arbitrary
+pbkdf2
+crc
+flume
+ctor
+chrono-tz
+crossbeam
+hostname
+tabled
+comfy-table
+ron
+postcard
+time
+bytesize
+tui-textarea
+
+# --- REMOVED 2026-06-24: online-service / network-transport / wasm crates ---
+# loadout is offline-first; these only matter when talking to remote services.
+# Re-add a line above to pull one back into the store.
+#   reqwest
+#   http
+#   axum
+#   rustls
+#   tower
+#   hyper
+#   wasm-bindgen
+#   tower-http
+#   prost
+#   http-body-util
+#   tokio-rustls
+#   hyper-util
+#   js-sys
+#   webpki-roots
+#   tokio-tungstenite
+#   tonic
+#   ureq
+#   web-sys
+#   http-body
+#   wasm-bindgen-futures
+#   rustls-pemfile
+#   prost-types
+#   rustls-pki-types
+#   sqlx
+#   opentelemetry
+#   hyper-rustls
+#   jsonwebtoken
+#   opentelemetry_sdk
+#   prost-build
+#   web-time
+#   tracing-opentelemetry
+#   opentelemetry-otlp
+#   quinn
+#   wiremock
+#   native-tls
+#   rcgen
+#   tonic-build
+#   aws-config

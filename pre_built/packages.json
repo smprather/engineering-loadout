@@ -2686,6 +2686,53 @@
       "install_to": "~/.local",
       "missing_hint": "Environment Modules will NOT be available"
     },
+    "rust": {
+      "kind": "runtime",
+      "version": "1.96.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "rust",
+        "compiler",
+        "toolchain"
+      ],
+      "optional": true,
+      "archive": "pre_built/PLATFORM/runtime/rust.tar.bz2",
+      "sentinel": "bin/cargo",
+      "install_to": "~/.local",
+      "missing_hint": "Rust toolchain (rustc/cargo) will NOT be installed",
+      "description": "Rust toolchain \u2014 rustc + cargo + std libraries (offline source build target)"
+    },
+    "rust-crate-store": {
+      "kind": "data",
+      "archive": "rust/crate-store.tar.bz2",
+      "install_to": "~/.local/share/cargo/registry-store",
+      "version": "",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "rust",
+        "cache"
+      ],
+      "optional": true,
+      "description": "Offline Cargo local-registry (top crates.io crates + full dependency closure)"
+    },
+    "env-cargo": {
+      "kind": "env",
+      "install_to": "~/.cargo/config.toml",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "tags": [
+        "env",
+        "rust"
+      ],
+      "optional": true,
+      "description": "Cargo offline config \u2014 points cargo at the bundled local-registry"
+    },
     "@core-cli": {
       "kind": "group",
       "members": [
@@ -2977,6 +3024,15 @@
         "treesitter-parsers"
       ],
       "description": "Bundled data caches (tldr, tree-sitter parsers)"
+    },
+    "@rust": {
+      "kind": "group",
+      "members": [
+        "rust",
+        "rust-crate-store",
+        "env-cargo"
+      ],
+      "description": "Rust toolchain + offline crate store + cargo config"
     },
     "@engineering-loadout": {
       "kind": "group",

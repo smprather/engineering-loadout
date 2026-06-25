@@ -1,0 +1,36 @@
+# Rust-based loadout tools whose Cargo.lock closures are folded into the offline
+# crate store so the tools themselves can be rebuilt offline (cargo build
+# --offline) on an EL8 farm node with no crates.io access.
+#
+# Format:  <name>  <git-repo>  <ref>
+#   - <ref> is tried as-is, then as v<ref>, then the default branch (HEAD).
+#   - lines with ref "HEAD" clone the default branch (first-party rolling repos).
+# Blank lines and #-comments ignored.
+#
+# Refs track the versions bundled in packages.json. Bump here when the bundled
+# binary is bumped, then re-run build-tool-crate-store.sh.
+
+# --- downloaded-prebuilt upstream rust tools (could be source-built offline) ---
+bat          https://github.com/sharkdp/bat                 0.26.1
+eza          https://github.com/eza-community/eza           0.23.4
+fd           https://github.com/sharkdp/fd                  10.4.2
+just         https://github.com/casey/just                  1.50.0
+ripgrep      https://github.com/BurntSushi/ripgrep          15.1.0
+zoxide       https://github.com/ajeetdsouza/zoxide          0.9.9
+starship     https://github.com/starship/starship           1.25.1
+delta        https://github.com/dandavison/delta            0.19.2
+hyperfine    https://github.com/sharkdp/hyperfine           1.20.0
+stylua       https://github.com/JohnnyMorganz/StyLua        2.4.1
+ty           https://github.com/astral-sh/ty                0.0.49
+uv           https://github.com/astral-sh/uv                0.11.21
+
+# --- source-built rust tools (already built from source in the loadout) ---
+fish         https://github.com/fish-shell/fish-shell       4.7.1
+numr         https://github.com/nasedkinpv/numr             0.5.5
+models       https://github.com/reyamira/models             0.12.3
+
+# --- first-party rolling maturin/Rust wheels (HEAD; may need clone auth) ---
+liberty-tools  https://github.com/smprather/liberty-tools.git  HEAD
+time-plot      https://github.com/smprather/time-plot.git      HEAD
+text-serdes    https://github.com/smprather/text-serdes.git    HEAD
+lefdef-tools   https://github.com/smprather/lefdef-tools.git   HEAD

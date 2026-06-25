@@ -1653,3 +1653,74 @@ Other build details:
   `fpath` there since the binary's baked fpath is the gone build prefix.
 - Links `libncurses.so.6` + `libreadline.so.7` (both bundled, RPATH `$ORIGIN`).
 - Config: `loadout install env-zsh` (depends `env-bash` for the shared layers).
+
+## rust 1.96.0 -- Rust toolchain + offline crate store (repacked rustup stable)
+
+Two coupled artifacts, built by `pre_built/build_scripts/build-rust.sh` and
+`pre_built/build_scripts/build-crate-store.sh`. Both are arch/source archives,
+NOT stripped/patchelf'd: `rust.tar.bz2` is in `strip_all_elf_binaries`'
+`NOSTRIP_ARCHIVE_PREFIXES` (stripping rustc_driver/LLVM corrupts the compiler).
+
+### Toolchain runtime (`pre_built/<platform>/runtime/rust.tar.bz2`, chunked)
+- Source: the rustup-installed **stable** toolchain (`rustup default 1.96.0`).
+  rustup pulls the official static.rust-lang.org binaries, so the repacked bytes
+  ARE the upstream stable release -- this just trims to the compile subset.
+- `build-rust.sh --tag 1.96.0` stages:
+  `bin/{rustc,cargo}`, `lib/librustc_driver-*.so`, `lib/libLLVM*` (the real lib is
+  `libLLVM.so.22.1-rust-<ver>` with NO trailing `.so` plus a 42-byte ld stub --
+  copy every `libLLVM*`, an earlier `libLLVM-*.so` glob missed the real object),
+  and the full `lib/rustlib/x86_64-unknown-linux-gnu/` (std rlibs + libstd dylib
+  + rust-lld + crt objects). Drops docs/clippy/rustfmt/rust-analyzer/src.
+- Relocatable as-is: rustc/cargo already carry RPATH `$ORIGIN/../lib`; rustc
+  derives its sysroot from `bin/..`. The script smoke-compiles a binary from the
+  staged tree (isolated PATH) before packing. ~554 MB staged -> ~171 MB bz2 ->
+  5 `.part-NNN` chunks (build-rust.sh pre-splits at 40 MiB since NOSTRIP archives
+  are not chunked by the strip pass; installer rejoins via `_bz2.resolve`).
+- Host prerequisite at compile time: a C toolchain (`gcc`/`cc` + `ld`) -- rustc
+  shells out to `cc` for the final link. The only thing the offline store can't
+  remove; the AlmaLinux test image installs `gcc glibc-devel`.
+- Package: `rust` (kind runtime, sentinel `bin/cargo`, install_to `~/.local`).
+
+### Offline crate store (`rust/crate-store.tar.bz2`, chunked)
+Two builders write the same archive; the **superset** is what ships.
+
+- **Lean user store** -- `build-crate-store.sh` reads
+  `build_scripts/rust-crate-list.txt` (curated top crates, offline-first:
+  online/TLS/wasm crates removed -- see that file's REMOVED block), builds a seed
+  manifest, `cargo generate-lockfile` for the full transitive closure, then
+  `cargo local-registry --sync`. Ban guardrail (`aws-lc-sys aws-lc-rs`) FAILS the
+  build if a forbidden crate re-enters (with the `cargo tree -i` path). 219 seeds
+  -> 733 crates, ~106 MB bz2 / 3 chunks. Use this for a lean user-only store.
+
+- **Superset store (SHIPPED)** -- `build-tool-crate-store.sh` unions the curated
+  seed closure with **every loadout rust tool's `Cargo.lock`**
+  (`build_scripts/rust-tool-locks.txt`), so a farm node can rebuild the loadout's
+  own rust binaries offline. Mechanism: `cargo local-registry --sync` only
+  downloads what ONE manifest+lock resolves to and prunes the rest, so it syncs
+  each tool's clone into a per-tool store (exact pinned versions an offline tool
+  build needs), then **unions the per-tool stores** -- copy each `.crate` once and
+  union the per-crate index lines (the local-registry index is one JSON line per
+  version, so this is a clean merge; re-resolving to latest would drift off the
+  tools' pins). Here the ban is a WARNING, not a failure: a tool may legitimately
+  pin aws-lc (uv does). **17 stores -> 2101 crates, ~301 MB bz2 / 8 chunks.**
+  Covered: seeds + bat eza fd just ripgrep zoxide starship delta hyperfine stylua
+  uv fish numr models liberty-tools lefdef-tools. NOT covered (lock-gen failed at
+  build, fix later): `ty`, `time-plot`, `text-serdes` (uv's closure overlaps most
+  of ty). Verified: `models` and `ripgrep 15.1.0` both `cargo build --offline`
+  against this store on a clean AlmaLinux 8.10 (`--network none`).
+
+- Package: `rust-crate-store` (kind data; `install_crate_store` extracts to
+  `~/.local/share/cargo/registry-store`).
+
+### Wiring + config
+- `env-cargo` (custom `_install_env_cargo`) writes `~/.cargo/config.toml` with a
+  `[source.crates-io] replace-with = "local-registry"` source replacement
+  pointing at the installed store. Honors `LOADOUT_CFG_SHARED_PREFIX` and
+  `--dest-dir` (store path tracks `_resolve_install_to`). No manual edits.
+- Group `@rust` = `rust` + `rust-crate-store` + `env-cargo`. Install offline:
+  `./loadout install @rust`.
+- Test offline on clean AlmaLinux 8.10:
+  `pre_built/build_scripts/test-rust-offline-almalinux8` (runs `--network none`).
+  Installs to `$HOME` then `--dest-dir /tmp/loadout-alt`, `cargo build --offline`s
+  a crate using anyhow/serde/serde_json/ratatui in each, then rebuilds
+  `ripgrep 15.1.0` from a build-time-baked source against the bundled store.

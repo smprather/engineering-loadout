@@ -1,0 +1,135 @@
+#!/bin/sh
+# Offline Rust toolchain + crate-store smoke for AlmaLinux 8.10.
+#
+# Proves, with NO network (driver runs the container --network none), that:
+#   * `./loadout install @rust` installs rustc/cargo + the bundled local-registry
+#     and writes ~/.cargo/config.toml itself (env-cargo) -- this script NEVER
+#     edits a config.toml.
+#   * a fresh crate depending on bundled crates compiles via `cargo build
+#     --offline` against the local-registry.
+#
+# Runs the whole thing TWICE:
+#   1. default destination  -> install into the test user's $HOME (.local)
+#   2. non-default --dest-dir /tmp/loadout-alt (un-dotted local/ tree)
+set -eu
+
+src=${LOADOUT_RUST_SRC:-/src}
+dst=${LOADOUT_RUST_WORKDIR:-/work/dotfiles}
+proj=/work/offline-proj
+alt=/tmp/loadout-alt
+
+[ -d "$src" ] || { echo "ERROR: repo source not found: $src" >&2; exit 2; }
+
+echo "### copying checkout into container"
+rm -rf "$dst"; mkdir -p "$dst"
+tar --exclude=.git --exclude=.loadout-bootstrap --exclude=.ruff_cache \
+    --exclude=.claude --exclude=__pycache__ --exclude=loadout_backups \
+    --exclude='*.log' -C "$src" -cf - . | tar -C "$dst" -xf -
+cd "$dst"
+./loadout --help >/dev/null   # warms the portable-python bootstrap (offline)
+
+# The crate under test pulls a real closure: anyhow (no deps), serde + derive
+# (proc-macro chain: syn/quote/proc-macro2), serde_json, and ratatui (a TUI lib
+# -- exactly the offline-friendly kind we curated in).
+echo "### writing test crate (uses bundled crates: anyhow, serde, serde_json, ratatui)"
+rm -rf "$proj"; mkdir -p "$proj/src"
+cat > "$proj/Cargo.toml" <<'EOF'
+[package]
+name = "offline-test"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ratatui = "*"
+EOF
+cat > "$proj/src/main.rs" <<'EOF'
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Pane { title: String, rows: u16 }
+
+fn main() -> anyhow::Result<()> {
+    // touch ratatui so it is actually linked, not just resolved
+    let area = ratatui::layout::Rect::new(0, 0, 80, 24);
+    let p = Pane { title: "offline".into(), rows: area.height };
+    println!("{}", serde_json::to_string(&p)?);
+    Ok(())
+}
+EOF
+
+run_one() {
+    label=$1; dest_flag=$2; cargo_home_base=$3; bindir=$4
+    echo
+    echo "============================================================"
+    echo "### MODE: $label"
+    echo "============================================================"
+
+    # shellcheck disable=SC2086
+    ./loadout install @rust $dest_flag --no-backup
+
+    cfg="$cargo_home_base/.cargo/config.toml"
+    echo "--- installer-written $cfg ---"
+    [ -f "$cfg" ] || { echo "ERROR: env-cargo did not write $cfg" >&2; exit 1; }
+    cat "$cfg"
+    case "$(cat "$cfg")" in
+        *local-registry*) : ;;
+        *) echo "ERROR: $cfg missing local-registry source replacement" >&2; exit 1 ;;
+    esac
+
+    echo "--- toolchain present: $bindir/{rustc,cargo} ---"
+    [ -x "$bindir/rustc" ] && [ -x "$bindir/cargo" ] || {
+        echo "ERROR: rustc/cargo not installed under $bindir" >&2; exit 1; }
+
+    echo "--- cargo build --offline (HOME=$cargo_home_base) ---"
+    rm -rf "$proj/target" "$proj/Cargo.lock"
+    # Clean env: only HOME (-> finds .cargo/config.toml), PATH (-> bundled
+    # rustc/cargo + system cc), TERM. No CARGO_NET_OFFLINE, no manual config.
+    env -i \
+        HOME="$cargo_home_base" \
+        PATH="$bindir:/usr/bin:/bin" \
+        TERM=dumb \
+        sh -c "cd '$proj' && cargo build --offline --verbose 2>&1 | tail -25"
+
+    echo "--- run the built binary ---"
+    out="$("$proj/target/debug/offline-test")"
+    echo "  output: $out"
+    case "$out" in
+        *'"title":"offline"'*'"rows":24'*) echo "  OK: $label compiled + ran offline" ;;
+        *) echo "ERROR: unexpected program output for $label" >&2; exit 1 ;;
+    esac
+}
+
+# Mode 1: default destination = the test user's HOME (.local tree).
+run_one "default destination (\$HOME/.local)" "" "$HOME" "$HOME/.local/bin"
+
+# Mode 2: non-default --dest-dir (un-dotted local/ tree). env-cargo writes
+# <dest>/.cargo/config.toml and the store/toolchain land under <dest>/local.
+rm -rf "$alt"; mkdir -p "$alt"
+run_one "non-default --dest-dir $alt" "--dest-dir $alt" "$alt" "$alt/local/bin"
+
+# Tool rebuild: prove the bundled superset store can reconstruct a real loadout
+# rust binary offline. Uses the Mode-1 ($HOME) toolchain + store + config; the
+# tool SOURCE was baked into the image at build time (it is not in the store --
+# the store carries dependency crates, the source comes with the checkout).
+echo
+echo "============================================================"
+echo "### TOOL REBUILD: ripgrep 15.1.0, cargo build --offline"
+echo "============================================================"
+rgsrc=/work/ripgrep-src
+rm -rf "$rgsrc"; cp -a /opt/ripgrep-src "$rgsrc"
+env -i HOME="$HOME" PATH="$HOME/.local/bin:/usr/bin:/bin" TERM=dumb \
+    sh -c "cd '$rgsrc' && cargo build --offline --release 2>&1 | tail -6"
+rgbin="$rgsrc/target/release/rg"
+[ -x "$rgbin" ] || { echo "ERROR: ripgrep did not build offline" >&2; exit 1; }
+ver="$("$rgbin" --version | head -1)"
+echo "  built: $ver"
+case "$ver" in
+    *"ripgrep 15.1.0"*) echo "  OK: loadout rust tool rebuilt offline from the store" ;;
+    *) echo "ERROR: unexpected ripgrep version" >&2; exit 1 ;;
+esac
+
+echo
+echo "### ALL PASSED: 2 install modes + offline tool rebuild (no network, no manual config)"
