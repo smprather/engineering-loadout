@@ -29,8 +29,11 @@ ARCHIVE_SUFFIXES = (
     ".tar",
 )
 
-# Archives whose ELF payloads must not be stripped (e.g. LLVM BOLT-optimized binaries).
-NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-",)
+# Archives whose ELF payloads must not be stripped (e.g. LLVM BOLT-optimized
+# binaries; the Rust toolchain's rustc_driver/LLVM shared objects, which carry
+# compiler-internal symbols that stripping would corrupt -- build-rust.sh
+# pre-chunks rust.tar.bz2 itself).
+NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-", "rust.tar.bz2")
 
 # Files larger than this are split into .part-NNN chunks so no single file
 # exceeds GitHub's 50 MB hard limit or the 40 MB soft recommendation.

@@ -2293,6 +2293,45 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
     print(f"  tldr page cache installed to {dest_dir}")
 
 
+def install_crate_store(repo_dir, home, selected_tools=None):
+    """Extract the bundled offline Cargo local-registry (rust-crate-store).
+
+    Archive lives at top-level rust/crate-store.tar.bz2 (arch-independent crate
+    sources) and is auto-chunked into .part-NNN by build-crate-store.sh, so it
+    is resolved through _bz2.resolve like the runtime archives. The store
+    (index/ + *.crate) is consumed offline via ~/.cargo/config.toml written by
+    the env-cargo package.
+    """
+    if selected_tools is not None and "rust-crate-store" not in selected_tools:
+        skipped("Rust crate store (rust-crate-store not selected)", "")
+        record_result("Rust crate store", "SKIP", "rust-crate-store not in selected packages")
+        return
+    archive = _bz2.resolve(os.path.join(repo_dir, "rust", "crate-store.tar.bz2"))
+    if archive is None:
+        skipped(
+            "rust/crate-store.tar.bz2 not found in repo",
+            "run pre_built/build_scripts/build-crate-store.sh on a connected machine",
+        )
+        record_result("Rust crate store", "SKIP", "no bundled crate store archive")
+        return
+
+    store_dir = _resolve_install_to("~/.local/share/cargo/registry-store", home)
+    ensure_dir(os.path.dirname(store_dir), "Rust crate store")
+    if os.path.lexists(store_dir):
+        require_writable_parent(store_dir, "Rust crate store")
+        if os.path.isdir(store_dir) and not os.path.islink(store_dir):
+            require_writable_dir(store_dir, "Rust crate store")
+            shutil.rmtree(store_dir)
+        else:
+            os.unlink(store_dir)
+    ensure_dir(store_dir, "Rust crate store")
+
+    pv_extract_tar(archive, store_dir)
+    ncrate = len(glob_paths_glob(os.path.join(store_dir, "*.crate")))
+    record_result("Rust crate store", "yes", f"{archive} -> {store_dir}")
+    print(f"  Rust crate store installed to {store_dir} ({ncrate} crates)")
+
+
 def _validate_tar_members(members, dest_real):
     """Shared safety check for tar extraction.
 
@@ -3320,6 +3359,44 @@ def _install_env_helix(repo_dir, home):
     install_path(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), False)
 
 
+def _install_env_cargo(repo_dir, home):
+    """Write ~/.cargo/config.toml pointing Cargo at the bundled offline
+    local-registry (installed by the rust-crate-store data package).
+
+    Source replacement makes any project whose deps are in the store resolve
+    and build with `cargo build --offline` -- no crates.io, no index fetch.
+    The local-registry path tracks the store's install_to and honors a shared
+    tree via LOADOUT_CFG_SHARED_PREFIX, exactly like install_tealdeer_config.
+    """
+    cargo_dir = os.path.join(home, ".cargo")
+    ensure_dir(cargo_dir, "cargo config")
+    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if prefix:
+        store = os.path.join(prefix, "share", "cargo", "registry-store")
+    else:
+        # Match install_crate_store's target in both HOME (.local) and
+        # --dest-dir (un-dotted local) layouts.
+        store = _resolve_install_to("~/.local/share/cargo/registry-store", home)
+    store = os.path.abspath(os.path.expanduser(store))
+    text = (
+        "# Managed by loadout (env-cargo). Offline crate resolution against the\n"
+        "# bundled local-registry. Delete this file to restore crates.io fetches.\n"
+        "[source.crates-io]\n"
+        'registry = "sparse+https://index.crates.io/"\n'
+        'replace-with = "local-registry"\n'
+        "\n"
+        "[source.local-registry]\n"
+        f"local-registry = {json.dumps(store)}\n"
+    )
+    dest = os.path.join(cargo_dir, "config.toml")
+    require_writable_parent(dest, "cargo config")
+    if os.path.exists(dest) or os.path.islink(dest):
+        require_writable_dir(dest, "cargo config")
+    with open(dest, "w") as f:
+        f.write(text)
+    print(f"  cargo offline config -> {dest} (local-registry: {store})")
+
+
 ENV_HANDLERS = {
     "env-bash": _install_env_bash,
     "env-nvim": _install_env_nvim,
@@ -3329,6 +3406,7 @@ ENV_HANDLERS = {
     "env-pip": _install_env_pip,
     "env-starship": _install_env_starship,
     "env-helix": _install_env_helix,
+    "env-cargo": _install_env_cargo,
 }
 
 
@@ -3342,6 +3420,7 @@ ENV_INSTALL_ORDER = (
     "env-pip",
     "env-starship",
     "env-helix",
+    "env-cargo",
 )
 
 
@@ -3980,6 +4059,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("config files", install_copy_mode, repo_dir, home, selected_tools, registry, silent=True)
     run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
+    run_install_step("Rust crate store", install_crate_store, repo_dir, home, selected_tools, silent=True)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
