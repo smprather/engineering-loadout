@@ -5,6 +5,7 @@ param(
     [string]$ThinLincServer = 'dummy.thinlinc.server',
     [string]$ThinLincUsername = 'dummy.thinlinc.username',
     [string]$ThinLincPassword = 'dummy.thinlinc.password',
+    [switch]$ValidateOnly,
     [switch]$KeepOpen
 )
 
@@ -75,6 +76,16 @@ if (-not $ahkCandidates) {
 }
 
 $ahkExe = @($ahkCandidates)[0]
+
+$validateProcess = Start-Process -FilePath $ahkExe -ArgumentList @('/ErrorStdOut', '/Validate', $scriptPath) -NoNewWindow -Wait -PassThru
+if ($validateProcess.ExitCode -ne 0) {
+    throw "AutoHotkey validation failed for: $scriptPath"
+}
+Write-Host "Validated AutoHotkey script: $scriptPath"
+
+if ($ValidateOnly) {
+    exit 0
+}
 
 $testEnv = @{
     CORP_UID = $CorpUid

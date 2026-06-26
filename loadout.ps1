@@ -17,17 +17,144 @@ loadout.ps1 - Windows loadout installer
 Usage:
   .\loadout.cmd [--help]
   pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1
 
 Options:
   -h, --help, -?, /?    Show this help and exit.
 
 Notes:
-  - Requires PowerShell 7+ for install.
+  - .\loadout.cmd uses bundled user-local PowerShell when present.
+  - If pwsh.exe is missing, .\loadout.cmd bootstraps the bundled PowerShell
+    archive with Windows PowerShell 5.1, then runs this installer under it.
   - No elevation required.
   - Copies Windows configs and installs/starts the user-local AutoHotkey script.
   - When running from a WSL UNC path, prefer loadout.cmd or the explicit pwsh
     command above. Direct .ps1 execution can be blocked by execution policy
     before this script starts.
+
+Installed destinations:
+  %USERPROFILE%\.local\opt\powershell\7\
+      Bundled PowerShell extracted from:
+      pre_built\windows.x86_64\powershell\PowerShell-*-win-x64.zip[.part-NNN]
+
+  %LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json
+      Windows Terminal profile for bundled PowerShell.
+
+  %LOCALAPPDATA%\nvim\
+      Neovim config copied from nvim\.
+
+  %USERPROFILE%\.config\wezterm\wezterm.lua
+      WezTerm config copied from wezterm\wezterm.lua.
+
+  %USERPROFILE%\.config\starship\starship.toml
+      Starship config copied from starship\starship.windows.toml.
+
+  PowerShell profile locations
+      powershell\Microsoft.PowerShell_profile.ps1 is copied to the current
+      $PROFILE plus existing WindowsPowerShell and PowerShell profile dirs under
+      Documents.
+
+  %USERPROFILE%\.editorconfig
+      EditorConfig copied from editorconfig\editorconfig.
+
+  %USERPROFILE%\autohotkey\hotkeys.ahk
+      AutoHotkey v2 script copied from autohotkey\hotkeys.ahk, then feature
+      flags are patched from %USERPROFILE%\loadout_keys.toml.
+
+  Startup\hotkeys.lnk
+      Startup shortcut pointing AutoHotkey64.exe at the installed hotkeys.ahk.
+
+Configuration file:
+  %USERPROFILE%\loadout_keys.toml
+
+  Created on first run if missing. Existing files are preserved. The installer
+  reads this file and patches feature booleans into the installed hotkeys.ahk.
+  Legacy [autohotkey.plugins] enabled arrays are still accepted.
+
+Example loadout_keys.toml:
+  version = 1
+
+  [autohotkey]
+  enabled = true
+
+  [autohotkey.features]
+  enabled = [
+    "corp-logins",
+    "cisco-secure-client-vpn",
+    "password-manager",
+    "thinlinc-reconnect",
+  ]
+
+  [autohotkey.features.cisco-secure-client-vpn]
+  skip_wifi_ssids = [
+    "Home WiFi",
+    "Phone Hotspot",
+  ]
+
+AutoHotkey global setting:
+  [autohotkey]
+  enabled = true | false
+      false keeps the script installed but writes all optional feature flags off.
+
+  executable = "C:\path\to\AutoHotkey64.exe"
+      Optional. Use this exact executable instead of discovering AutoHotkey_* in
+      %USERPROFILE%. Environment variables (e.g. %USERPROFILE%) are expanded.
+      Useful when AHK has been renamed (e.g. corp infosec policy).
+
+AutoHotkey feature IDs:
+  corp-logins
+      Ctrl+Alt+I types CORP_PASSWORD then Tab.
+      Ctrl+Alt+O types CORP_UID, Tab, CORP_PASSWORD, Enter.
+      Ctrl+Alt+P types CORP_PASSWORD then Enter.
+
+  mouse-wiggle
+      Nudges the mouse after extended physical idle time. Runtime kill switch:
+      set AHK_ENABLE_MOUSE_WIGGLE=false before launching AutoHotkey.
+
+  cisco-secure-client-vpn
+      Cisco Secure Client automation. Requires CORP_UID and CORP_PASSWORD.
+      Skips while the workstation is locked, while AHK is idle-suspended, and
+      while connected to any SSID listed in skip_wifi_ssids.
+
+  password-manager
+      Ctrl+Alt+B types PWMANAGER_PASSWORD then Enter.
+
+  tmux-hotkeys
+      RAlt/RWin send Ctrl+\ z for tmux zoom toggle.
+      Ctrl+; sends tmux last-pane toggle.
+
+  f1f2f3-as-mouse-buttons
+      In mspaint.exe, etxc.exe, and wezterm-gui.exe:
+      F1 holds left mouse, F2 holds right mouse, F3 double-left-clicks then
+      right-clicks.
+
+  thinlinc-reconnect
+      Auto-dismisses ThinLinc connection errors, relaunches after error
+      dismissals, and auto-fills THINLINC_SERVER / THINLINC_USERNAME /
+      THINLINC_PASSWORD when the main client window is present.
+
+AutoHotkey always-available hotkeys:
+  Ctrl+Alt+R    Reload hotkeys.ahk.
+  Ctrl+Alt+A    Suspend/resume hotkeys and pause/resume VPN auto-login.
+
+Feature-specific diagnostic hotkeys:
+  Ctrl+Alt+V    Toggle Cisco VPN auto-login when cisco-secure-client-vpn is on.
+  Ctrl+Alt+T    Show ThinLinc reconnect diagnostics when thinlinc-reconnect is on.
+
+Environment variables used by AutoHotkey:
+  CORP_UID
+  CORP_PASSWORD
+  PWMANAGER_PASSWORD
+  AHK_ENABLE_MOUSE_WIGGLE=false
+  THINLINC_SERVER
+  THINLINC_USERNAME
+  THINLINC_PASSWORD
+
+PowerShell runtime bundle:
+  The bundled PowerShell ZIP is optional for source-tree development but should
+  be present in release archives. If absent, loadout.ps1 warns and skips
+  installing the user-local runtime. loadout.cmd still uses system pwsh.exe
+  when available.
 '@
 }
 
@@ -44,7 +171,7 @@ if ($args.Count -gt 0) {
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Warning "This installer requires PowerShell 7+."
-    Write-Warning "Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1 from Windows PowerShell 5.1, then rerun .\loadout.cmd or .\loadout.ps1 from pwsh."
+    Write-Warning "Run .\loadout.cmd to bootstrap the bundled user-local PowerShell, or run powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1."
     exit 1
 }
 
@@ -104,6 +231,11 @@ function New-LoadoutKeysConfig {
         '[autohotkey]',
         'enabled = true',
         '',
+        '# Override the AutoHotkey executable. If unset, loadout discovers',
+        '# AutoHotkey64.exe (or similar) inside %USERPROFILE%\AutoHotkey_*.',
+        '# Useful when AHK has been renamed (e.g. corp infosec policy).',
+        '# executable = "%USERPROFILE%\AutoHotkey_2.1-alpha.22\foo.exe"',
+        '',
         '[autohotkey.features]',
         'enabled = ['
     )
@@ -112,7 +244,16 @@ function New-LoadoutKeysConfig {
         $lines += "  # `"$($feature.Id)`",  # $($feature.Description)"
     }
 
-    $lines += ']'
+    $lines += @(
+        ']',
+        '',
+        '[autohotkey.features.cisco-secure-client-vpn]',
+        '# Cisco VPN automation is skipped while connected to one of these Wi-Fi SSIDs.',
+        '# skip_wifi_ssids = [',
+        '#   "Home WiFi",',
+        '#   "Phone Hotspot",',
+        '# ]'
+    )
 
     $parent = Split-Path $ConfigPath -Parent
     if ($parent -and -not (Test-Path $parent)) {
@@ -132,6 +273,7 @@ function Get-LoadoutAhkConfig {
     $result = [PSCustomObject]@{
         AutoHotkeyEnabled = $true
         EnabledFeatureIds = @()
+        ExecutablePath    = ''
     }
 
     if (-not (Test-Path $ConfigPath -PathType Leaf)) {
@@ -189,6 +331,11 @@ function Get-LoadoutAhkConfig {
             return
         }
 
+        if ($currentSection -ceq 'autohotkey' -and $trimmed -match '^executable\s*=\s*"(?<value>[^"]*)"\s*$') {
+            $result.ExecutablePath = [Environment]::ExpandEnvironmentVariables($Matches.value)
+            return
+        }
+
         if ((@('autohotkey.features', 'autohotkey.plugins') -contains $currentSection) -and $trimmed -match '^enabled\s*=\s*\[(?<rest>.*)$') {
             $rest = $Matches.rest
             $quoted = [regex]::Matches($rest, '"([^"]+)"')
@@ -232,20 +379,167 @@ function Set-AhkFeatureFlags {
     foreach ($feature in $FeatureDefinitions) {
         $value = if ($AutoHotkeyEnabled -and ($EnabledFeatureIds -contains $feature.Id)) { 'true' } else { 'false' }
         $pattern = '(?m)^' + [regex]::Escape($feature.FlagName) + '\s*:=\s*(true|false)\s*$'
-        $replacement = $feature.FlagName + ' := ' + $value
-        $newContent = [regex]::Replace($content, $pattern, $replacement)
-        if ($newContent -eq $content) {
+        if (-not [regex]::IsMatch($content, $pattern)) {
             Write-Warning "  Could not find feature flag '$($feature.FlagName)' in $AhkScriptPath"
+            continue
         }
-        $content = $newContent
+        $replacement = $feature.FlagName + ' := ' + $value
+        $content = [regex]::Replace($content, $pattern, $replacement)
     }
 
     Set-Content -Path $AhkScriptPath -Value $content -Encoding UTF8
 }
 
+function Get-LoadoutBundledPowerShellArchive {
+    param([string]$RepoDir)
+
+    $roots = @(
+        (Join-Path $RepoDir 'pre_built\windows.x86_64\powershell'),
+        (Join-Path $RepoDir 'pre_built\windows\powershell')
+    )
+
+    $candidates = @()
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root -PathType Container)) {
+            continue
+        }
+        $candidates += Get-ChildItem -Path $root -File -Filter 'PowerShell-*-win-x64.zip' -ErrorAction SilentlyContinue
+        $candidates += Get-ChildItem -Path $root -File -Filter 'PowerShell-*-win-x64.zip.part-000' -ErrorAction SilentlyContinue
+    }
+
+    return @($candidates | Sort-Object Name -Descending | Select-Object -First 1)[0]
+}
+
+function Get-LoadoutPowerShellArchiveVersion {
+    param([string]$ArchiveName)
+
+    if ($ArchiveName -match '^PowerShell-(?<version>.+)-win-x64\.zip(?:\.part-000)?$') {
+        return $Matches.version
+    }
+    return ''
+}
+
+function Join-LoadoutSplitArchive {
+    param(
+        [string]$PartZeroPath,
+        [string]$TempDir
+    )
+
+    $basePath = $PartZeroPath.Substring(0, $PartZeroPath.Length - '.part-000'.Length)
+    $partPattern = [System.IO.Path]::GetFileName($basePath) + '.part-*'
+    $parts = @(Get-ChildItem -Path (Split-Path $PartZeroPath -Parent) -File -Filter $partPattern | Sort-Object Name)
+    if ($parts.Count -eq 0) {
+        throw "No split archive parts found for $basePath"
+    }
+
+    $joinedPath = Join-Path $TempDir ([System.IO.Path]::GetFileName($basePath))
+    $outStream = [System.IO.File]::Open($joinedPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+    try {
+        foreach ($part in $parts) {
+            $inStream = [System.IO.File]::OpenRead($part.FullName)
+            try {
+                $inStream.CopyTo($outStream)
+            } finally {
+                $inStream.Dispose()
+            }
+        }
+    } finally {
+        $outStream.Dispose()
+    }
+
+    return $joinedPath
+}
+
+function Install-LoadoutBundledPowerShell {
+    param([string]$RepoDir)
+
+    $archive = Get-LoadoutBundledPowerShellArchive -RepoDir $RepoDir
+    if (-not $archive) {
+        Write-Warning "  Bundled PowerShell archive not found under pre_built\windows.x86_64\powershell; skipping runtime install."
+        return $null
+    }
+
+    $version = Get-LoadoutPowerShellArchiveVersion -ArchiveName $archive.Name
+    $installDir = Join-Path $env:USERPROFILE '.local\opt\powershell\7'
+    $pwshExe = Join-Path $installDir 'pwsh.exe'
+    $versionFile = Join-Path $installDir '.loadout-version'
+
+    if ((Test-Path $pwshExe -PathType Leaf) -and (Test-Path $versionFile -PathType Leaf)) {
+        $installedVersion = (Get-Content -Path $versionFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if ($installedVersion -eq $version) {
+            Write-Host "  Already installed: $pwshExe"
+            return $pwshExe
+        }
+    }
+
+    $tempRoot = Join-Path $env:TEMP ("loadout-pwsh-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    try {
+        $zipPath = $archive.FullName
+        if ($archive.Name.EndsWith('.part-000')) {
+            Write-Host "  Rejoining split PowerShell archive..."
+            $zipPath = Join-LoadoutSplitArchive -PartZeroPath $archive.FullName -TempDir $tempRoot
+        }
+
+        $extractDir = Join-Path $tempRoot 'extract'
+        New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+        Write-Host "  Extracting bundled PowerShell $version..."
+        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+        if (-not (Test-Path (Join-Path $extractDir 'pwsh.exe') -PathType Leaf)) {
+            throw "PowerShell archive did not contain pwsh.exe at the archive root."
+        }
+
+        $parent = Split-Path $installDir -Parent
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        if (Test-Path $installDir) {
+            Remove-Item -Path $installDir -Recurse -Force
+        }
+        Move-Item -Path $extractDir -Destination $installDir -Force
+        Set-Content -Path $versionFile -Value $version -Encoding UTF8
+    } finally {
+        Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "  Installed: $pwshExe"
+    return $pwshExe
+}
+
+function Install-LoadoutWindowsTerminalProfile {
+    param([string]$PwshPath)
+
+    if (-not $PwshPath -or -not $env:LOCALAPPDATA) {
+        return
+    }
+
+    $fragmentDir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal\Fragments\engineering-loadout'
+    $fragmentPath = Join-Path $fragmentDir 'powershell.json'
+    New-Item -ItemType Directory -Path $fragmentDir -Force | Out-Null
+
+    $fragment = [ordered]@{
+        profiles = @(
+            [ordered]@{
+                guid = '{1a53bafe-4b0f-5d49-9f9d-8afbcac8fb25}'
+                name = 'Loadout PowerShell'
+                commandline = ('"{0}" -NoLogo' -f $PwshPath)
+                startingDirectory = '%USERPROFILE%'
+            }
+        )
+    }
+
+    $fragment | ConvertTo-Json -Depth 5 | Set-Content -Path $fragmentPath -Encoding UTF8
+    Write-Host "  Windows Terminal profile: $fragmentPath"
+}
+
 $repoDir = $PSScriptRoot
 Write-Host "Loadout repo: $repoDir"
 Write-Host ""
+
+Write-Host "PowerShell runtime..."
+$bundledPwsh = Install-LoadoutBundledPowerShell -RepoDir $repoDir
+if ($bundledPwsh) {
+    Install-LoadoutWindowsTerminalProfile -PwshPath $bundledPwsh
+}
 
 Write-Host "Neovim..."
 Copy-Config "$repoDir\nvim" "$env:LOCALAPPDATA\nvim"
@@ -312,61 +606,89 @@ if (Test-Path $legacyGeneratedFile -PathType Leaf) {
     Write-Host "  Removed legacy generated plugin include file: $legacyGeneratedFile"
 }
 
-$ahkDirs = @(Get-ChildItem -Path $HOME -Filter "AutoHotkey_*" -Directory -ErrorAction SilentlyContinue)
-$ahkDir  = $null
+$ahkExe = $null
 
-if ($ahkDirs.Count -gt 1) {
-    Write-Warning "  Multiple AutoHotkey directories found in $HOME."
-    Write-Warning "  Remove all but one and re-run to set up AutoHotKey."
-} elseif ($ahkDirs.Count -eq 1) {
-    $ahkDir = $ahkDirs[0].FullName
-    Write-Host "  Found existing AutoHotkey: $ahkDir"
-} else {
-    Write-Host "  No AutoHotkey found -- downloading latest stable release..."
-    try {
-        $release  = Invoke-RestMethod "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest" -UseBasicParsing
-        $zipAsset = $release.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
-        if (-not $zipAsset) { throw "No zip asset found in latest release." }
-
-        $zipName = $zipAsset.name
-        $dirName = [System.IO.Path]::GetFileNameWithoutExtension($zipName)
-        $zipPath = Join-Path $HOME $zipName
-        $ahkDir  = Join-Path $HOME $dirName
-
-        Write-Host "  Downloading $zipName..."
-        Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zipPath -UseBasicParsing
-        New-Item -ItemType Directory -Path $ahkDir -Force | Out-Null
-        Expand-Archive -Path $zipPath -DestinationPath $ahkDir -Force
-        Remove-Item $zipPath
-        Remove-Item (Join-Path $ahkDir "AutoHotkey32.exe") -Force -ErrorAction SilentlyContinue
-        Write-Host "  Extracted to $ahkDir"
-    } catch {
-        Write-Warning "  Failed to download AutoHotkey: $_"
+if ($loadoutAhkConfig.ExecutablePath) {
+    if (Test-Path $loadoutAhkConfig.ExecutablePath -PathType Leaf) {
+        $ahkExe = (Resolve-Path $loadoutAhkConfig.ExecutablePath).Path
+        Write-Host "  Using configured AutoHotkey executable: $ahkExe"
+    } else {
+        Write-Warning "  loadout_keys.toml executable '$($loadoutAhkConfig.ExecutablePath)' not found -- falling back to discovery."
     }
 }
 
-if ($ahkDir) {
-    $ahkExe = Join-Path $ahkDir "AutoHotkey64.exe"
-    if (-not (Test-Path $ahkExe)) {
-        Write-Warning "  AutoHotkey64.exe not found in $ahkDir -- skipping."
+if (-not $ahkExe) {
+    $ahkDirs = @(Get-ChildItem -Path $HOME -Filter "AutoHotkey_*" -Directory -ErrorAction SilentlyContinue)
+    $ahkDir  = $null
+
+    if ($ahkDirs.Count -gt 1) {
+        Write-Warning "  Multiple AutoHotkey directories found in $HOME."
+        Write-Warning "  Remove all but one and re-run to set up AutoHotKey."
+    } elseif ($ahkDirs.Count -eq 1) {
+        $ahkDir = $ahkDirs[0].FullName
+        Write-Host "  Found existing AutoHotkey: $ahkDir"
     } else {
-        $oldAhk = "$startupDir\hotkeys.ahk"
-        if (Test-Path $oldAhk) { Remove-Item $oldAhk -Force }
+        Write-Host "  No AutoHotkey found -- downloading latest stable release..."
+        try {
+            $release  = Invoke-RestMethod "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest" -UseBasicParsing
+            $zipAsset = $release.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
+            if (-not $zipAsset) { throw "No zip asset found in latest release." }
 
-        $shortcutPath = "$startupDir\hotkeys.lnk"
-        $shell = New-Object -ComObject WScript.Shell
-        $lnk = $shell.CreateShortcut($shortcutPath)
-        $lnk.TargetPath       = $ahkExe
-        $lnk.Arguments        = "`"$ahkScript`""
-        $lnk.WorkingDirectory = Split-Path $ahkScript -Parent
-        $lnk.Save()
-        Write-Host "  Created startup shortcut: $shortcutPath -> $ahkExe"
+            $zipName = $zipAsset.name
+            $dirName = [System.IO.Path]::GetFileNameWithoutExtension($zipName)
+            $zipPath = Join-Path $HOME $zipName
+            $ahkDir  = Join-Path $HOME $dirName
 
-        Get-Process -Name 'AutoHotkey*' -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Process -FilePath $ahkExe -ArgumentList "`"$ahkScript`""
-        Write-Host "  AutoHotKey started"
-        Write-Host "  AutoHotKey will launch automatically on next login via the startup shortcut."
+            Write-Host "  Downloading $zipName..."
+            Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zipPath -UseBasicParsing
+            New-Item -ItemType Directory -Path $ahkDir -Force | Out-Null
+            Expand-Archive -Path $zipPath -DestinationPath $ahkDir -Force
+            Remove-Item $zipPath
+            Remove-Item (Join-Path $ahkDir "AutoHotkey32.exe") -Force -ErrorAction SilentlyContinue
+            Write-Host "  Extracted to $ahkDir"
+        } catch {
+            Write-Warning "  Failed to download AutoHotkey: $_"
+        }
     }
+
+    if ($ahkDir) {
+        $ahkExeCandidates = @('AutoHotkey64.exe', 'AutoHotkey.exe', 'AutoHotkey32.exe')
+        foreach ($name in $ahkExeCandidates) {
+            $candidate = Join-Path $ahkDir $name
+            if (Test-Path $candidate -PathType Leaf) {
+                $ahkExe = $candidate
+                break
+            }
+        }
+        if (-not $ahkExe) {
+            $found = @(Get-ChildItem -Path $ahkDir -Filter 'AutoHotkey*.exe' -File -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -First 1)
+            if ($found.Count -gt 0) { $ahkExe = $found[0].FullName }
+        }
+        if (-not $ahkExe) {
+            Write-Warning "  No AutoHotkey*.exe found in $ahkDir -- skipping."
+        }
+    }
+}
+
+if ($ahkExe) {
+    $oldAhk = "$startupDir\hotkeys.ahk"
+    if (Test-Path $oldAhk) { Remove-Item $oldAhk -Force }
+
+    $shortcutPath = "$startupDir\hotkeys.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($shortcutPath)
+    $lnk.TargetPath       = $ahkExe
+    $lnk.Arguments        = "`"$ahkScript`""
+    $lnk.WorkingDirectory = Split-Path $ahkScript -Parent
+    $lnk.Save()
+    Write-Host "  Created startup shortcut: $shortcutPath -> $ahkExe"
+
+    $ahkProcName = [System.IO.Path]::GetFileNameWithoutExtension($ahkExe)
+    Get-Process -Name $ahkProcName -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Process -FilePath $ahkExe -ArgumentList "`"$ahkScript`""
+    Write-Host "  AutoHotKey started"
+    Write-Host "  AutoHotKey will launch automatically on next login via the startup shortcut."
 }
 
 Write-Host "PSFzf..."

@@ -64,8 +64,8 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 
 **Windows** (no elevation required -- copies files):
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # if starting from Windows PowerShell 5.1
-.\loadout.cmd                  # PowerShell 7+, execution-policy-safe wrapper
+.\loadout.cmd                  # bootstraps/uses bundled user-local PowerShell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # explicit Windows PowerShell 5.1 bootstrap
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 ```
 
@@ -176,7 +176,7 @@ loadout_main.py             - Installer body (Python 3.14, shebang `#!/usr/bin/e
 .loadout-bootstrap/         - Per-clone Python 3.14 bootstrap cache (gitignored; created on first run when neither ~/.local nor a previous cache has python3.14)
 loadout.ps1                 - Windows installation script (PowerShell)
 loadout.cmd                 - Windows wrapper for loadout.ps1 with process-scoped ExecutionPolicy Bypass
-loadout-pwsh-bootstrap.ps1  - Windows PowerShell 5.1 bootstrapper for pwsh via winget
+loadout-pwsh-bootstrap.ps1  - Windows PowerShell 5.1 bootstrapper for bundled user-local PowerShell
 update                      - Unified dev-artifact updater (yara-rules, tldr-data, tmux-plugins, nodejs; rolling-git first-party wheels; guidance for build/download packages)
 strip_all_elf_binaries      - Helper that strips repo ELF payloads and normalizes tar archives to .tar.bz2 (Python 3.14)
 tests/install_linux_tmp_home - Runs Linux installer against a temp HOME for fresh-user smoke testing
@@ -325,12 +325,14 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `~/.local/bin/python3.14` etc. <- `repo/pre_built/<platform>/portable-python-*.tar.bz2` (via install.sh)
 
 **Windows copy destinations** (files copied, not symlinked -- re-run `.\loadout.cmd` or `.\loadout.ps1` after repo changes):
+- `%USERPROFILE%\.local\opt\powershell\7\` <- bundled `pre_built/windows.x86_64/powershell/PowerShell-*-win-x64.zip[.part-NNN]`
+- `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json` -- Windows Terminal profile for bundled PowerShell
 - `%LOCALAPPDATA%\nvim` <- `repo/nvim`
 - `%USERPROFILE%\.config\wezterm\wezterm.lua` <- `repo/wezterm/wezterm.lua`
 - `%USERPROFILE%\.config\starship\starship.toml` <- `repo/starship/starship.windows.toml`
 - `%USERPROFILE%\.editorconfig` <- `repo/editorconfig/editorconfig`
 - `%USERPROFILE%\autohotkey\hotkeys.ahk` <- `repo/autohotkey/hotkeys.ahk`
-- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing)
+- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey].executable` overrides AHK exe discovery (useful when AHK has been renamed for corp infosec compliance); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks
 - `loadout.ps1` patches feature flags in `%USERPROFILE%\autohotkey\hotkeys.ahk` based on enabled feature list
 - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\hotkeys.lnk` -- `.lnk` shortcut pointing to `AutoHotkey64.exe "%USERPROFILE%\autohotkey\hotkeys.ahk"` (AHK not system-wide to avoid SentinelOne flagging). AHK extracted to `%USERPROFILE%\AutoHotkey_*\`; if none exists, installer downloads latest stable from GitHub, removes `AutoHotkey32.exe`.
 - `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` <- `repo/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
@@ -523,7 +525,7 @@ Key hotkeys:
 Optional features:
 - `corp-logins` -- corp credential entry hotkeys using `CORP_UID` / `CORP_PASSWORD`
 - `mouse-wiggle` -- idle mouse nudge; set `AHK_ENABLE_MOUSE_WIGGLE=false` to suppress
-- `cisco-secure-client-vpn` -- Cisco Secure Client reconnect + credential automation
+- `cisco-secure-client-vpn` -- Cisco Secure Client reconnect + credential automation; skips when current Wi-Fi SSID is listed in `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids`
 - `password-manager` -- `Ctrl+Alt+B` types `PWMANAGER_PASSWORD` + Enter
 - `tmux-hotkeys` -- `RAlt`/`RWin` zoom toggle and `Ctrl+;` last-pane toggle for tmux
 - `f1f2f3-as-mouse-buttons` -- F1/F2/F3 mouse remaps for mspaint/etxc/wezterm-gui
