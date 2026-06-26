@@ -31,7 +31,7 @@ driven by `pre_built/packages.json` (`schema_version: 3`).
 ./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
 # Stage an install into a temp/test root
-./loadout --dest-dir /tmp/loadout-home install @engineering-loadout
+./loadout install @engineering-loadout --dest-dir /tmp/loadout-home
 
 # Selection (positional packages/@groups, plus --skip)
 ./loadout install octave                        # single package; deps auto-pulled
@@ -92,8 +92,8 @@ groups explicitly (dnf/apt style).
 `resolve_tool_selection(args, registry)` in `loadout` performs:
 
 1. Parse `--skip` (groups expanded).
-2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,...`,
-   groups expanded). Bare `install` errors with non-zero exit.
+2. Build initial set from positional `PKG` args (groups expanded). Bare
+   `install` errors with non-zero exit.
 3. Subtract `--skip`.
 4. Walk hard `depends` -- `ResolverError` if a depended-upon package was skipped,
    unless `--no-deps` or `--force`.
@@ -140,10 +140,11 @@ Each layer can inject code into `global/bashrc` via numbered files in
 
 ### Install behavior
 
-- **Default** (no flags): copies files; re-run `./loadout` to pick up
-  repo changes.
+- **Named install**: `./loadout install <PKG...>` copies files; re-run the
+  same command to pick up repo changes. Bare `./loadout install` errors.
 - **`--dest-dir <dir>`**: install into an alternate root instead of `$HOME`;
-  used by installer tests and staging.
+  used by installer tests and staging. It belongs after install-like verbs,
+  e.g. `./loadout install @engineering-loadout --dest-dir /tmp/loadout-home`.
 - **`--no-backup`**: skip backup creation (useful for clean reinstalls or
   automation).
 - **`--post-install-hook <script>`**: execute an explicit corp/site/user add-on
@@ -156,7 +157,7 @@ Backups are numbered (`loadout_backups/backup.N/`, always starting at `.1`; neve
 already pointing into the repo and never overwrites an existing backup. At the end of a successful install run, the
 backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompressed dir is removed; numbering checks
 both `backup.N/` and `backup.N.tar.bz2` when picking the next N. Post-install hooks run before compression so
-`LOADOUT_BACKUP_DIR` still resolves during hook execution. `restore-backup` accepts either the uncompressed dir or
+`LOADOUT_BACKUP_DIR` still resolves during hook execution. `./loadout snapshot restore <path>` accepts either the uncompressed dir or
 the `.tar.bz2` archive. Backups intentionally exclude font files because vendored Nerd Font archives are large
 and reproducible.
 

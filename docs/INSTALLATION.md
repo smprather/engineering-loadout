@@ -157,8 +157,9 @@ Backups/snapshots can restore displaced user files when backups are enabled.
 ### Corporate / site add-ons
 
 ```bash
-./loadout --post-install-hook ~/corp-dotfiles/install.sh \
-           --post-install-hook ~/site-dotfiles/install.sh
+./loadout install @engineering-loadout \
+  --post-install-hook ~/corp-dotfiles/install.sh \
+  --post-install-hook ~/site-dotfiles/install.sh
 ```
 
 Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,

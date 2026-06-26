@@ -57,9 +57,9 @@ every non-group package.
 `resolve_tool_selection(args, registry)` runs at install time:
 
 1. Parse `--skip` (expand groups).
-2. Build initial set from positional `PKG` args (mapped to `--only X,@Y,...`,
-   groups expanded). At least one package or group must be named; bare `install`
-   errors with a non-zero exit code.
+2. Build initial set from positional `PKG` args (groups expanded). At least one
+   package or group must be named; bare `install` errors with a non-zero exit
+   code.
 3. Subtract `--skip`.
 4. Walk hard `depends` -- raise `ResolverError` on skipped hard dep
    (unless `--no-deps` or `--force`).
