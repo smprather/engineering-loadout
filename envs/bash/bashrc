@@ -1,0 +1,210 @@
+####################################################################################################
+###################################        Notes       #############################################
+####################################################################################################
+# * All vars that start with _ will be destroyed before exitting bashrc
+#
+####################################################################################################
+###################################       Debug        #############################################
+####################################################################################################
+# Defensive: kill any xtrace inherited from a parent shell or a leaked prior
+# source, so a double-sourced login shell can never get stuck tracing. The
+# startup-trace ENABLE block lives BELOW the LOADOUT_BASHRC_SOURCED guard: a
+# login shell sources this file twice (.bash_profile + .bashrc), and enabling
+# `set -x` above the guard would leave xtrace stuck on after the guard's early
+# return, before the teardown could run `set +x`. See the block further down.
+set +x
+
+if [[ "${LOADOUT_BASHRC_SOURCED:-0}" == "1" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+# unset first to strip from environment (the preferred-bash re-exec passes it as
+# LOADOUT_BASHRC_SOURCED=0, which lands it in the exported env); re-setting without
+# export after unset makes it shell-local so child processes don't inherit it.
+unset LOADOUT_BASHRC_SOURCED
+LOADOUT_BASHRC_SOURCED=1
+
+# Start with a clean slate: clear all aliases and functions.
+# Preserve inherited PATH when present; otherwise use a minimal fallback.
+if [[ -z "${PATH:-}" ]]; then
+    export PATH="/usr/local/bin:/bin:/usr/bin:/usr/sbin"
+fi
+unalias -a
+unset -f $(declare -F | awk '{print $3}')
+
+# ===========================================================================
+# Startup debugging -- BOTH default OFF, placed AFTER the double-source guard
+# above so a login shell's second source (.bash_profile + .bashrc) can never
+# leave xtrace stuck on. Two independent, composable tools:
+#
+#   BASHRC_STARTUP_TRACE=1           Full `set -x` xtrace of startup to
+#                                    ~/bashrc.log (heavy; deep dives only).
+#                                    Goes to its own fd via BASH_XTRACEFD so
+#                                    the prompt (bash writes it to stderr)
+#                                    stays on the tty.
+#
+#   BASHRC_STARTUP_TRACE_VARS="X Y"  Watch named vars; print to stdout ONLY
+#                                    when one changes, tagged with the
+#                                    file:line that changed it, plus ENTER/
+#                                    LEAVE lines as each sourced layer file is
+#                                    entered/left. Cheap -- this is the one for
+#                                    chasing a variable's life cycle.
+#
+# Enable by exporting in your environment, or uncomment a line here.
+# ===========================================================================
+#export BASHRC_STARTUP_TRACE=1
+if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
+    exec {BASH_XTRACEFD}>>~/bashrc.log
+    PS4='+${BASH_SOURCE}:${LINENO}:${FUNCNAME[0]}: '
+    set -x
+fi
+
+# Either a space-string or an array works:
+#BASHRC_STARTUP_TRACE_VARS="PATH FOO"
+#BASHRC_STARTUP_TRACE_VARS=(PATH FOO)
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS[*]:-} ]]; then
+    # State/function use non "_" names so unset_bashrc_local_vars (which wipes
+    # _* just before teardown) can't clear them mid-run.
+    declare -A BASHRC_TRACE_PREV=()
+    BASHRC_TRACE_SRC=
+    BASHRC_TRACE_LOC="(init)"
+    # Accept both a space-string ("PATH FOO") and an array (=(PATH FOO)): [*]
+    # joins either form, read -ra splits it into a clean indexed array.
+    read -ra BASHRC_TRACE_NAMES <<< "${BASHRC_STARTUP_TRACE_VARS[*]}"
+    bashrc_trace_watch() {
+        local _rc=$? _v _cur _src _x= # preserve caller $? (fires pre-cmd)
+        [[ $- == *x* ]] && {
+            _x=1
+            set +x
+        } # keep this fn out of the xtrace log
+        _src=${BASH_SOURCE[1]:-?}
+        # var changes: attribute to the command that just ran (the previous
+        # fire's location), since the DEBUG trap fires BEFORE the next command.
+        for _v in "${BASHRC_TRACE_NAMES[@]}"; do
+            _cur=${!_v-<unset>}
+            if [[ ${BASHRC_TRACE_PREV[$_v]+s} != s || ${BASHRC_TRACE_PREV[$_v]} != "$_cur" ]]; then
+                printf 'VAR   %s  %s=%s\n' "$BASHRC_TRACE_LOC" "$_v" "$_cur"
+                BASHRC_TRACE_PREV[$_v]=$_cur
+            fi
+        done
+        # file enter/leave as the active source file changes
+        if [[ $_src != "$BASHRC_TRACE_SRC" ]]; then
+            [[ -n $BASHRC_TRACE_SRC ]] && printf 'LEAVE %s\n' "$BASHRC_TRACE_SRC"
+            printf 'ENTER %s\n' "$_src"
+            BASHRC_TRACE_SRC=$_src
+        fi
+        BASHRC_TRACE_LOC="${_src}:${BASH_LINENO[0]:-?}"
+        [[ $_x ]] && set -x
+        return $_rc
+    }
+    trap 'bashrc_trace_watch' DEBUG
+    # functrace: without this the DEBUG trap fires ONLY for top-level commands
+    # in this file. The layer files are sourced inside source_if_exists (a
+    # function), so -T is required to see changes + ENTER/LEAVE inside
+    # functions.sh, global/bashrc, the config.sh layers, path_prepend, etc.
+    set -T
+fi
+
+export USER=$(whoami)
+if [[ -z "${HOME:-}" ]]; then
+    export HOME=$(getent passwd "$USER" | cut -d: -f6)
+fi
+
+### Colors ###
+# Config layers may reference prompt color variables before global/bashrc runs.
+export WHITE="\e[38;2;255;255;255m"
+export GREEN="\e[38;2;0;255;0m"
+export RED="\e[38;2;255;0;0m"
+export BLUE="\e[38;2;135;215;255m"
+export VIOLET="\e[38;2;255;0;255m"
+export YELLOW="\e[38;2;255;255;0m"
+export CYAN="\e[38;2;0;255;255m"
+export BOLD="\e[1m"
+export NORMAL="\e[22m"
+# Use the \[ and \] to let bash-prompt know these are zero-width on-screen.
+export PROMPT_WHITE="\\[$WHITE\\]"
+export PROMPT_GREEN="\\[${GREEN}\\]"
+export PROMPT_RED="\\[$RED\\]"
+export PROMPT_BLUE="\\[$BLUE\\]"
+export PROMPT_VIOLET="\\[$VIOLET\\]"
+export PROMPT_YELLOW="\\[$YELLOW\\]"
+export PROMPT_CYAN="\\[$CYAN\\]"
+export PROMPT_BOLD="\\[$BOLD\\]"
+export PROMPT_NORMAL="\\[$NORMAL\\]"
+
+[[ -z "${BASH_CONFIG_ROOT_DIR:-}" ]] && export BASH_CONFIG_ROOT_DIR="$HOME/.config/bash"
+source "$BASH_CONFIG_ROOT_DIR/functions.sh"
+
+# Configuration must come first
+# Since getting PATH setup is critical to the rest of the startup process, do
+# PATH customization in these config files.
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/site/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/team/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/project/config.sh"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/user/config.sh"
+
+# Allow user home-dir override in case using a shared bash config installation.
+# Only when the config root is NOT already ~/.config/bash -- otherwise these are
+# the same files just sourced above, and re-sourcing them runs any non-idempotent
+# user-layer logic twice. Compare resolved paths (handles trailing slash/symlink).
+_cfg_root_real=$(realpath "$BASH_CONFIG_ROOT_DIR" 2>/dev/null || echo "$BASH_CONFIG_ROOT_DIR")
+_home_bash_real=$(realpath "$HOME/.config/bash" 2>/dev/null || echo "$HOME/.config/bash")
+if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
+    source_if_exists "$HOME/.config/bash/corp/config.sh"
+    source_if_exists "$HOME/.config/bash/site/config.sh"
+    source_if_exists "$HOME/.config/bash/team/config.sh"
+    source_if_exists "$HOME/.config/bash/project/config.sh"
+    source_if_exists "$HOME/.config/bash/user/config.sh"
+fi
+
+# Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
+# Set LOADOUT_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
+# Silently skipped if the binary doesn't exist or isn't executable.
+# Also skip if this is being sourced as part of a non-interactive startup (rare, but can happen).
+if [[ $- == *i* && -n "${LOADOUT_CFG_PREFERRED_BASH:-}" && -x "${LOADOUT_CFG_PREFERRED_BASH}" ]]; then
+    _preferred_real=$(realpath "${LOADOUT_CFG_PREFERRED_BASH}" 2>/dev/null)
+    _current_real=$(realpath /proc/$$/exe 2>/dev/null || realpath "$BASH" 2>/dev/null)
+    if [[ -n "$_preferred_real" && "$_current_real" != "$_preferred_real" ]]; then
+        LOADOUT_BASHRC_SOURCED=0 exec "${LOADOUT_CFG_PREFERRED_BASH}" --init-file "${BASH_SOURCE[0]}"
+    fi
+fi
+
+# PATH to common linux tools should be established by now
+# More PATH can be added by Environment Modules in corp/site/team/project/user layers.
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/site/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/team/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/project/bashrc"
+source_if_exists "$BASH_CONFIG_ROOT_DIR/user/bashrc"
+
+# Allow user home-dir override in case using a shared bash config installation.
+# Guarded by the same root != ~/.config/bash check as the config.sh block above
+# (_cfg_root_real / _home_bash_real computed there; cleared by unset_bashrc_local_vars).
+if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
+    source_if_exists "$HOME/.config/bash/corp/bashrc"
+    source_if_exists "$HOME/.config/bash/site/bashrc"
+    source_if_exists "$HOME/.config/bash/team/bashrc"
+    source_if_exists "$HOME/.config/bash/project/bashrc"
+    source_if_exists "$HOME/.config/bash/user/bashrc"
+fi
+
+unset_bashrc_local_vars
+
+# Clean up any PATH dupe dirs that may have crept in
+path_trim PATH
+
+# Tear down startup debugging -- each tool independently (they are decoupled).
+if [[ -n ${BASHRC_STARTUP_TRACE_VARS[*]:-} ]]; then
+    set +T
+    trap - DEBUG
+    unset -f bashrc_trace_watch 2>/dev/null
+    unset BASHRC_TRACE_PREV BASHRC_TRACE_SRC BASHRC_TRACE_LOC BASHRC_TRACE_NAMES BASHRC_STARTUP_TRACE_VARS
+fi
+if [[ ${BASHRC_STARTUP_TRACE:-} == 1 ]]; then
+    set +x
+    [[ -n ${BASH_XTRACEFD:-} ]] && exec {BASH_XTRACEFD}>&-
+    unset BASH_XTRACEFD
+fi
+# vim: ft=bash ts=4

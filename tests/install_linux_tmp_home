@@ -198,7 +198,7 @@ if [[ -d "$repo_dir/pre_built/el8.x86_64.glibc2p28" ]]; then
         exit 1
     fi
 fi
-if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2" || -f "$repo_dir/vim/runtime.tar.bz2" ]]; then
+if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2" || -f "$repo_dir/envs/vim/runtime.tar.bz2" ]]; then
     assert_exists "$test_home/local/share/vim/vim92/filetype.vim"
 fi
 if [[ -f "$repo_dir/pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" ]]; then
@@ -215,7 +215,7 @@ assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/parser-info/pytho
 
 # Active plugin bundle is seeded into lazy/ (with .git intact) so plugins work
 # offline; lazy.nvim itself is seeded too, making init.lua's bootstrap a no-op.
-if [[ -f "$repo_dir/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2" ]]; then
+if [[ -f "$repo_dir/envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2" || -f "$repo_dir/envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2.part-000" ]]; then
     assert_exists "$test_home/local/share/nvim/lazy/lazy.nvim/.git"
     assert_exists "$test_home/local/share/nvim/lazy/snacks.nvim/.git"
 fi

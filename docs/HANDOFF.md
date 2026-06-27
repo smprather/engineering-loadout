@@ -6,16 +6,16 @@ Last updated: 2026-06-27.
 
 AutoHotkey runtime-config refactor was integrated from
 `0001-ahk-read-feature-config-from-loadout_keys.toml-at-ru.patch`.
-`autohotkey/hotkeys.ahk` now reads `%USERPROFILE%\loadout_keys.toml` at startup
+`envs/autohotkey/hotkeys.ahk` now reads `%USERPROFILE%\loadout_keys.toml` at startup
 instead of having feature booleans stamped in by `loadout.ps1`.
 
-Touched areas: `autohotkey/hotkeys.ahk`, `loadout.ps1`,
-`autohotkey/test-run.ps1`, and cold-start docs. The AHK script also now has
+Touched areas: `envs/autohotkey/hotkeys.ahk`, `loadout.ps1`,
+`envs/autohotkey/test-run.ps1`, and cold-start docs. The AHK script also now has
 `LOADOUT_KEYS_TOML` override support, `--print-config`, gated
 `[autohotkey].logging`, and Cisco VPN SSID fallback through the
 WLAN-AutoConfig event log when `netsh` reports no SSID.
 
-`bash/global/bashrc` now keeps the vendored WezTerm script as the bash-preexec
+`envs/bash/global/bashrc` now keeps the vendored WezTerm script as the bash-preexec
 source outside real WezTerm sessions, but sets the integration skip vars while
 sourcing it so semantic zones, user vars, and cwd OSC hooks do not register.
 This prevents GNOME Terminal/tmux from printing raw OSC text and avoids prompt
@@ -71,14 +71,14 @@ wrapper, real ELF, uPlot assets, and licenses. Build script:
 These checks passed after the recent changes:
 
 - Passed for this Markdown sync: `git diff --check`, `sh -n loadout`,
-  `python3 -m py_compile loadout_main.py`, and `bash -n bash/global/bashrc`.
+  `python3 -m py_compile loadout_main.py`, and `bash -n envs/bash/global/bashrc`.
 - Passed for the AutoHotkey runtime-config patch integration: `git diff
   --check`, `sh -n loadout`, `python3 -m py_compile loadout_main.py`, and
-  `bash -n bash/global/bashrc`. Windows-only checks (`AutoHotkey64.exe
+  `bash -n envs/bash/global/bashrc`. Windows-only checks (`AutoHotkey64.exe
   /Validate`, PowerShell parser/test-run) still need a Windows or PowerShell
   environment; `pwsh` was not available in this Linux sandbox.
 - Passed for the bash prompt off-WezTerm OSC hook skip guard: `git diff
-  --check`, `bash -n bash/global/bashrc`, non-PTY function-body smoke confirming
+  --check`, `bash -n envs/bash/global/bashrc`, non-PTY function-body smoke confirming
   no `__wezterm_*` hooks register off-WezTerm, and a real-PTY tmux smoke covering
   initial prompt plus `exec bash` with no `file://` / `tmux;` leakage.
 - Passed for the mate-terminal schema fix: `python3 -m py_compile
@@ -89,7 +89,7 @@ These checks passed after the recent changes:
   verified the same `--help` behavior there.
 - Passed for the font no-backup/progress fix: `tests/test_install_fonts_rejoin`,
   `python3 -m py_compile loadout_main.py`, `git diff --check`, `sh -n loadout`,
-  and `bash -n bash/global/bashrc`.
+  and `bash -n envs/bash/global/bashrc`.
 - Passed for `vcd-toggle-profiler`: build from local checkout, `strip_all_elf_binaries`
   archive rewrite, temp `./loadout install vcd-toggle-profiler --dest-dir ...`,
   installed wrapper run on `vcd-samples/random/random.vcd`, archive listing check,
@@ -118,8 +118,8 @@ These checks passed after the recent changes:
 - `XDG_CACHE_HOME=/tmp/codex-nvim-cache XDG_STATE_HOME=/tmp/codex-nvim-state nvim --headless +qa`
 - static checks: `python3 -m py_compile loadout_main.py
   pre_built/build_scripts/test-prebuilt-binaries`, `sh -n loadout
-  hooks/pre-commit`, `bash -n bash/global/aliases.sh bash/global/bashrc
-  bash/bashrc`, `zsh -n zsh/zshrc`, `python3 -m json.tool
+  hooks/pre-commit`, `bash -n envs/bash/global/aliases.sh envs/bash/global/bashrc
+  envs/bash/bashrc`, `zsh -n envs/zsh/zshrc`, `python3 -m json.tool
   pre_built/packages.json`, `git diff --check`
 
 ## User-Home Follow-Up
@@ -151,7 +151,7 @@ exec bash
   `./.git/.git` are not embedded vendored repos.
 - Bash startup functions whose names may already be aliases need
   `unalias name 2>/dev/null || true` before `name() { ...; }`.
-- The prompt/WezTerm/Starship block in `bash/global/bashrc` is order-sensitive;
+- The prompt/WezTerm/Starship block in `envs/bash/global/bashrc` is order-sensitive;
   verify with a real PTY, not only `bash -lic`.
 - `hotkeys.ahk` reads `loadout_keys.toml` at startup (reusing its partial TOML
   parser); the installer no longer stamps feature booleans. Override the config

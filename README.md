@@ -116,7 +116,7 @@ work.
 preference is a `LOADOUT_CFG_*` variable you can override in your user layer:
 
 ```bash
-# bash/user/config.sh
+# envs/bash/user/config.sh
 export LOADOUT_CFG_PREFERRED_VI=vim        # use vim instead of nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=0       # use the built-in prompt
 export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
@@ -297,7 +297,7 @@ under `~/.local/lib/wezterm/`, with PATH wrappers in `~/.local/bin`. Its zsh
 completion is installed by `env-zsh`; bash completion can be generated with
 `wezterm shell-completion --shell bash`. WezTerm *shell integration* (semantic
 zones / OSC 7 cwd / user vars -- distinct from completion) is vendored at
-`bash/global/wezterm/wezterm.sh` and sourced by the bash config from
+`envs/bash/global/wezterm/wezterm.sh` and sourced by the bash config from
 user-writable space (never `/etc`), so wezterm users get it with or without tmux;
 toggle with `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION`. Outside a real
 WezTerm session, bash still sources the vendored script for its bash-preexec

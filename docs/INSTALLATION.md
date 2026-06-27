@@ -52,15 +52,15 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 
 | Destination | Source |
 |-------------|--------|
-| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | -> `bash/bashrc` |
+| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | -> `envs/bash/bashrc` |
 | `~/.config/bash/` | Layered bash config |
-| `~/.vimrc` | `vim/vimrc` |
-| `~/.vim/` | `vim/vim/` |
+| `~/.vimrc` | `envs/vim/vimrc` |
+| `~/.vim/` | `envs/vim/vim/` |
 | `~/.tmux.conf` | `tmux/tmux.conf` |
 | `~/.tmux/` | `tmux/tmux/` |
-| `~/.editorconfig` | `editorconfig/editorconfig` |
+| `~/.editorconfig` | `envs/editorconfig/editorconfig` |
 | `~/.config/nvim/` | `nvim/` |
-| `~/.config/starship/starship.toml` | `starship/starship.linux.toml` + `starship/config-schema.json` |
+| `~/.config/starship/starship.toml` | `envs/starship/starship.linux.toml` + `envs/starship/config-schema.json` |
 | `~/.config/helix/runtime/` | `pre_built/<platform>/runtime/helix.tar.bz2` |
 | `~/.local/share/vim/vim92/` | `pre_built/<platform>/runtime/vim92.tar.bz2` |
 | `~/.local/share/nvim/runtime/` | `pre_built/<platform>/runtime/nvim.tar.bz2` |
@@ -209,14 +209,14 @@ No elevation required. Files are copied, not symlinked -- re-run
 | Destination | Source |
 |-------------|--------|
 | `%LOCALAPPDATA%\nvim\` | `nvim/` |
-| `%USERPROFILE%\.config\wezterm\wezterm.lua` | `wezterm/wezterm.lua` |
-| `%USERPROFILE%\.config\starship\starship.toml` | `starship/starship.windows.toml` |
-| `%USERPROFILE%\.editorconfig` | `editorconfig/editorconfig` |
-| `%USERPROFILE%\autohotkey\hotkeys.ahk` | `autohotkey/hotkeys.ahk` (feature-patched) |
+| `%USERPROFILE%\.config\wezterm\wezterm.lua` | `envs/wezterm/wezterm.lua` |
+| `%USERPROFILE%\.config\starship\starship.toml` | `envs/starship/starship.windows.toml` |
+| `%USERPROFILE%\.editorconfig` | `envs/editorconfig/editorconfig` |
+| `%USERPROFILE%\autohotkey\hotkeys.ahk` | `envs/autohotkey/hotkeys.ahk` (feature-patched) |
 | `%USERPROFILE%\loadout_keys.toml` | Created if missing -- choose AHK features |
 | `%USERPROFILE%\.local\opt\powershell\7\` | Bundled PowerShell ZIP from `pre_built/windows.x86_64/powershell/` |
 | `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json` | Windows Terminal profile for bundled PowerShell |
-| PowerShell profile (5.1 + 7+) | `powershell/Microsoft.PowerShell_profile.ps1` |
+| PowerShell profile (5.1 + 7+) | `envs/powershell/Microsoft.PowerShell_profile.ps1` |
 
 ### AutoHotKey feature flags
 

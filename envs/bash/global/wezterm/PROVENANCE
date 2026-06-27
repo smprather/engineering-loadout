@@ -1,0 +1,34 @@
+Vendored from: https://github.com/wezterm/wezterm  (assets/shell-integration/wezterm.sh)
+Matches:       bundled wezterm 20260618_095146_c10636f3 (see CLAUDE.md "WezTerm runtime behavior")
+License:       MIT (upstream WezTerm license)
+File:          assets/shell-integration/wezterm.sh -> wezterm.sh (unmodified)
+
+WezTerm's shell integration: OSC 133 semantic zones, OSC 7 cwd reporting, and
+OSC 1337 user vars. The script is terminal-agnostic and version-stable (upstream
+states the sequences are "not wezterm specific"), self-guards (bash/zsh only,
+interactive only, skips TERM=dumb/linux), and bundles bash-preexec verbatim, so
+it has no external dependency and is safe to source on any terminal -- terminals
+that don't grok the OSC sequences ignore them.
+
+WHY VENDORED HERE (not shipped with the wezterm binary, not used from /etc):
+  * The bundled wezterm runtime archive (pre_built/.../runtime/wezterm.tar.bz2)
+    ships only the binaries + `wezterm shell-completion` (tab-completion). It
+    does NOT ship wezterm.sh shell integration.
+  * The only system copy is /etc/profile.d/wezterm.sh, which (a) requires a
+    distro wezterm package we don't depend on, and (b) lives in non-user-writable
+    space -- against this loadout's no-/etc, user-writable, quota-friendly design.
+  * Owning the file makes integration deterministic across raw wezterm,
+    tmux-in-wezterm, tmux-in-st, st/xterm, --dest-dir and shared-prefix installs.
+
+HOW IT IS LOADED:
+  envs/bash/global/bashrc sources it (when LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION
+  is truthy) via loadout_find_wezterm_shell_integration in envs/bash/functions.sh.
+  Resolver order: explicit LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION -> this vendored
+  copy -> paths relative to the installed `wezterm` binary -> shared prefix.
+  Never /etc. See docs/BASH.md and envs/bash/global/README.md "Prompt & shell
+  integration" for the full rationale.
+
+To update: copy assets/shell-integration/wezterm.sh from the wezterm tag matching
+the bundled binary over wezterm.sh, refresh the version line above. Keep it
+unmodified (vendored). The current copy was taken verbatim from the EL8 system
+/etc/profile.d/wezterm.sh, which is byte-identical to the upstream asset.

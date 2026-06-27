@@ -3,12 +3,12 @@
 ## Layer system
 
 ```
-bash/global/    <- upstream, managed here -- do not modify locally
-bash/corp/      <- corporation-level overrides  (user-created)
-bash/site/      <- site-level overrides         (user-created)
-bash/team/      <- team-level overrides          (user-created)
-bash/project/   <- project-level overrides      (user-created)
-bash/user/      <- personal overrides            (user-created)
+envs/bash/global/    <- upstream, managed here -- do not modify locally
+envs/bash/corp/      <- corporation-level overrides  (user-created)
+envs/bash/site/      <- site-level overrides         (user-created)
+envs/bash/team/      <- team-level overrides          (user-created)
+envs/bash/project/   <- project-level overrides      (user-created)
+envs/bash/user/      <- personal overrides            (user-created)
 ```
 
 Layer order (lowest -> highest precedence):
@@ -18,7 +18,7 @@ Each layer sources `config.sh` (preferences) then `bashrc` (aliases/prompt).
 Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
 
 ```bash
-# bash/user/config.sh
+# envs/bash/user/config.sh
 export LOADOUT_CFG_PREFERRED_VI=nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=1
 export LOADOUT_CFG_ENABLE_FZF=1
@@ -42,14 +42,14 @@ Insert code at precise points in the shell startup sequence:
 Example -- inject a site-specific EDA tool path at hook 3:
 
 ```bash
-# bash/site/global_hooks/3.sh
+# envs/bash/site/global_hooks/3.sh
 path_prepend_if_dir /tools/cadence/bin
 path_prepend_if_dir /tools/synopsys/bin
 ```
 
 ## Prompt & shell integration
 
-The prompt is configured in `bash/global/bashrc` and serves the whole terminal
+The prompt is configured in `envs/bash/global/bashrc` and serves the whole terminal
 matrix (raw wezterm, tmux-in-wezterm, tmux-in-st, st/xterm, `dumb`/`linux`) with
 login and `exec bash` behaving identically.
 
@@ -59,7 +59,7 @@ login and `exec bash` behaving identically.
 | `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` | `1` | Source the loadout-owned `wezterm.sh` (OSC 133 semantic zones, OSC 7 cwd, user vars). Self-skips `dumb`/`linux` and non-interactive shells. Outside real WezTerm, `bashrc` sources it with all WezTerm output hooks skipped, keeping bash-preexec without raw OSC output or `wezterm set-working-directory` prompt stalls |
 | `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | `""` | Explicit path to `wezterm.sh`; empty auto-resolves (vendored copy -> wezterm-binary-relative -> shared prefix). Set from a `--dest-dir` installer to pin it. Never `/etc` |
 
-WezTerm shell integration is **vendored** at `bash/global/wezterm/wezterm.sh`
+WezTerm shell integration is **vendored** at `envs/bash/global/wezterm/wezterm.sh`
 (the bundled wezterm runtime ships only `wezterm shell-completion`, not the
 integration script) and is loaded from user-writable space only -- never
 `/etc/profile.d/wezterm.sh`. tmux-in-wezterm needs `set -g allow-passthrough on`
@@ -75,7 +75,7 @@ GNOME Terminal and prompt stalls on plain SSH/tmux hosts where the loadout puts
 > **Editing the prompt block?** It is clobber-sensitive: the loadout does not own
 > `PROMPT_COMMAND` and Starship does not always hook through it. The wrong
 > "simplification" makes the Starship prompt vanish on login shells while still
-> working after `exec bash`. Read **`bash/global/README.md` -> "Prompt & shell
+> working after `exec bash`. Read **`envs/bash/global/README.md` -> "Prompt & shell
 > integration"** for the full rationale, the required ordering, and how to verify
 > with a real PTY (not `bash -lic`, which hides the bug).
 

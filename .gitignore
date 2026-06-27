@@ -3,9 +3,9 @@ loadout_backups/
 .loadout-bootstrap/
 __pycache__/
 *.log
-!bash/global/grc/share/grc/conf.log
+!envs/bash/global/grc/share/grc/conf.log
 .claude/
-bash/corp
+envs/bash/corp
 vendor/fonts.scale
 resume_claude.sh
 

@@ -67,12 +67,12 @@ AUTOMATED = {
         "git_paths": ["tldr/"],
     },
     "tmux-plugins": {
-        "git_paths": ["tmux/vendor/plugins/"],
-        "desc": "Vendored tmux plugins (tmux/vendor/plugins/)",
+        "git_paths": ["envs/tmux/vendor/plugins/"],
+        "desc": "Vendored tmux plugins (envs/tmux/vendor/plugins/)",
     },
     "env-nvim": {
-        "git_paths": ["nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2", ".strip-manifest"],
-        "desc": "Neovim plugin catalog offline bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2)",
+        "git_paths": ["envs/nvim/vendor/plugins/", ".strip-manifest"],
+        "desc": "Neovim plugin catalog offline bundle (envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2)",
     },
 }
 

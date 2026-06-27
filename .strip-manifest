@@ -1,7 +1,7 @@
 # strip manifest
 # sha256 entries skip unchanged stripped raw/bzip2 payloads
 # tar-meta entries skip unchanged processed tar.bz2 archives by size+mtime
-tar-meta  48995175  1779931729  nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2
+tar-meta  41943040  1782577464  envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2.part-000
 sha256  252763d8cd1cec055f637c274d3276ed65782699ed8521f5e325e22d82d585b9  pre_built/el8.x86_64.glibc2p28/bin/7za.bz2
 sha256  a9131c8c4d3ddcc16db2bec37649624134ef92e125f4834bd1eedb24d9a74e9a  pre_built/el8.x86_64.glibc2p28/bin/agent-deck.bz2
 sha256  1b0ea0e198965f1e3556e957e91e9a338933b8e58f03ec7667f1fffbab27e335  pre_built/el8.x86_64.glibc2p28/bin/amux.bz2

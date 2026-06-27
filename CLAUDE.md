@@ -71,8 +71,13 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
 
 ## Repository Structure
 
+The 13 per-user config-source dirs live under `envs/` (mirrors the `kind: env`
+packages and the `@envs` group). Shared payload (`pre_built/`, `fonts/`,
+`treesitter/`, `tldr/`, `tealdeer/`, `yara/`) and build infra (`hooks/`, `docs/`,
+`installer_vendor/`) stay at the top level.
+
 ```
-bash/
+envs/bash/
   bashrc                    - Main entry point -> ~/.bashrc, ~/.bash_profile, ~/.bash_login, and ~/.profile
   functions.sh              - Shared functions loaded before any layer (path_*, is_truthy, etc.)
   global/                   - Canonical config (upstream here, don't modify locally)
@@ -83,14 +88,14 @@ bash/
     grc/                    - Generic Colorizer binaries and configs
     icecream-bash/          - Vendored IceCream-Bash (MIT): ic/icp/ict/ictp debug-print helpers
     icecream-ext.sh         - loadout override: ic/ict also print arbitrary strings + mixed var/string args (vendored ic.sh kept pristine; icp/ictp stay force-literal)
-    wezterm/                - Vendored WezTerm shell integration (wezterm.sh + PROVENANCE); OSC 133 zones / OSC 7 cwd / user vars; loaded from user-writable space, never /etc. See bash/global/README.md "Prompt & shell integration"
+    wezterm/                - Vendored WezTerm shell integration (wezterm.sh + PROVENANCE); OSC 133 zones / OSC 7 cwd / user vars; loaded from user-writable space, never /etc. See envs/bash/global/README.md "Prompt & shell integration"
   corp/                     - Corporation-level overrides (user-created)
   site/                     - Site-level overrides (user-created)
   team/                     - Team-level overrides (user-created)
   project/                  - Project-level overrides (user-created)
   user/                     - Personal overrides (user-created)
 
-nvim/
+envs/nvim/
   init.lua                  - Thin layer dispatcher (loads global->corp->site->team->project->user)
   lazy-lock.json            - Locked plugin versions
   lsp/                      - LSP server configs
@@ -111,12 +116,12 @@ treesitter/
   vendor/                   - Vendored nvim-treesitter and parser registry
   prebuilt/<platform>/      - Tracked parser `.so.bz2` files, queries, build metadata
 
-vim/
+envs/vim/
   vimrc                     - Vim config -> ~/.vimrc
   vim/pack/vendor/start/    - Auto-loaded plugins (nerdtree, SimpylFold, vim-liberty)
   vim/pack/vendor/opt/      - Optional plugins
 
-tmux/
+envs/tmux/
   tmux.conf                 - Tmux config -> ~/.tmux.conf
   tmux-word-separators      - Expands tmux double-click word separators with emoji ranges
   tmux/vendor/plugins/      - Bundled plugins (tpm, resurrect, continuum, better-mouse-mode)
@@ -145,27 +150,27 @@ pre_built/
     reproduce-llvm-build.sh - LLVM build reproduction script
   .strip-manifest           - sha256/tar-meta cache for strip_all_elf_binaries
 
-helix/
+envs/helix/
   config.toml               - Helix editor config -> ~/.config/helix/config.toml
 
-editorconfig/
+envs/editorconfig/
   editorconfig              - -> ~/.editorconfig
 
-python/
+envs/python/
   pip.conf                  - -> ~/.config/pip/pip.conf (require-virtualenv = true)
 
-starship/
+envs/starship/
   config-schema.json        - Vendored schema for editor completions on Linux
   starship.linux.toml       - Linux Starship config -> ~/.config/starship/starship.toml
   starship.windows.toml     - Windows Starship config -> %USERPROFILE%\.config\starship\starship.toml
 
-powershell/
+envs/powershell/
   Microsoft.PowerShell_profile.ps1  - PowerShell profile (aliases, coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf, Invoke-PatchDOSStub)
 
-wezterm/
+envs/wezterm/
   wezterm.lua               - WezTerm config
 
-autohotkey/
+envs/autohotkey/
   hotkeys.ahk               - Windows AutoHotKey flat script; reads feature config from loadout_keys.toml at startup
 
 hooks/
@@ -197,7 +202,7 @@ Once an interpreter is found, the shim execs `loadout_main.py` under it. No syst
 
 **Meld's `bin/meld` launcher is the only py3.6 holdout** -- it pins `/usr/bin/python3.6` because PyGObject <=3.30 (the last GLib-2.56-compatible version) breaks under py3.14. Independent of the loadout bootstrap; not affected by this work.
 
-**Install behavior**: `./loadout install <PKG...>` copies files from repo -- no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. There is no "default install" -- users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set). The Python copy helper intentionally replaces symlinked destination directories before syncing, refuses overlapping source/destination trees, and treats source entries that vanish mid-copy as non-fatal. This protects old layouts such as `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp`; following that symlink with delete semantics can delete the repo's `nvim/lsp` files.
+**Install behavior**: `./loadout install <PKG...>` copies files from repo -- no symlinks remain. Re-run after repo changes; most steps idempotent so re-runs fast. Installer resolves repo from script path, runs from any cwd. There is no "default install" -- users always name packages or groups explicitly (use `@engineering-loadout` for the full bundled set). The Python copy helper intentionally replaces symlinked destination directories before syncing, refuses overlapping source/destination trees, and treats source entries that vanish mid-copy as non-fatal. This protects old layouts such as `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp`; following that symlink with delete semantics can delete the repo's `envs/nvim/lsp` files.
 
 ### Package registry (pre_built/packages.json)
 
@@ -231,7 +236,7 @@ Installer uses Click/rich-click subcommands (dnf/apt verbs). Bare `loadout` and 
 - `./loadout doctor` -- platform/registry sanity check; verifies archive paths for every `runtime`/`data`/`font`/`python-base` pkg; flags unresolved `depends`/`recommends`.
 - `./loadout snapshot {create|restore|list}` -- manage destination snapshots (uncompressed dir or `.tar.bz2` archive).
 - `./loadout clean [--logs|--pending|--all]` -- remove stale `/tmp/loadout*` state.
-- `./loadout completion bash` -- print a static bash completion script (subcommands, per-verb flags, and the package/group/tag names baked in) to stdout. Regenerate the committed `bash/global/completions/loadout.bash` with `./loadout completion bash > bash/global/completions/loadout.bash` whenever the CLI verbs/flags or the package registry change. The completions dir is sourced at shell startup (static, not eval'd live) -- the generated script is self-contained (computes `cur`/`prev` itself; borrows bash-completion's `_filedir` only when present) and shellcheck-clean (uses `mapfile -t COMPREPLY`).
+- `./loadout completion bash` -- print a static bash completion script (subcommands, per-verb flags, and the package/group/tag names baked in) to stdout. Regenerate the committed `envs/bash/global/completions/loadout.bash` with `./loadout completion bash > envs/bash/global/completions/loadout.bash` whenever the CLI verbs/flags or the package registry change. The completions dir is sourced at shell startup (static, not eval'd live) -- the generated script is self-contained (computes `cur`/`prev` itself; borrows bash-completion's `_filedir` only when present) and shellcheck-clean (uses `mapfile -t COMPREPLY`).
 
 ### Selection flags
 
@@ -268,27 +273,27 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **tldr cache behavior**: `./update tldr-data` writes `tldr/tldr-pages.tar.bz2` for offline tealdeer. Installer accepts `.tar.bz2` and legacy `.tar.gz`, replaces existing pages under the loadout local-root at `<localroot>/share/tealdeer/cache/tldr-pages` (`_resolve_install_to`: `~/.local/...` for HOME, un-dotted `local/...` for `--dest-dir`) unless `--skip tldr-data`; `./strip_all_elf_binaries` normalizes tar archives to bzip2. The cache is NOT in `~/.cache` -- `install_tealdeer_config` (env-side) writes `~/.config/tealdeer/config.toml` with an absolute `cache_dir` (tealdeer does not expand `~`/env; the deprecated `TEALDEER_CACHE_DIR` env var is avoided). When `LOADOUT_CFG_SHARED_PREFIX` is set, both the extract target and `cache_dir` resolve under it, so a separately-installed `@shared` tree and a per-user `@envs` run agree on one cache location. tealdeer 1.8.1 has no config key to silence the "cache is N days old" nag (hardcoded `MAX_CACHE_AGE`; only `--quiet` suppresses it).
 
-**Helix runtime behavior**: Installer looks for `helix.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `helix/helix_runtime.tar.bz2`. Safely extracts into `~/.local/share/helix/`, replacing existing `~/.local/share/helix/runtime`. Correct install has `~/.local/share/helix/runtime/tutor`. Archive contains `./runtime/...`, extracts directly to `~/.local/share/helix/`.
+**Helix runtime behavior**: Installer looks for `helix.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `envs/helix/helix_runtime.tar.bz2`. Safely extracts into `~/.local/share/helix/`, replacing existing `~/.local/share/helix/runtime`. Correct install has `~/.local/share/helix/runtime/tutor`. Archive contains `./runtime/...`, extracts directly to `~/.local/share/helix/`.
 
-**Vim runtime behavior**: Installer looks for `vim92.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `vim/runtime.tar.bz2`. Extracts to `~/.local/share/vim/`, renames `runtime/` to `vim92/`, verifies `filetype.vim` present. Correct install has `~/.local/share/vim/vim92/filetype.vim`. Vim/GVim wrappers derive their default `VIM`/`VIMRUNTIME` from the installed launcher path (`bin/..` -> install prefix), not `$HOME`, while preserving explicit user overrides; this keeps `--dest-dir` installs runnable with fake `HOME`.
+**Vim runtime behavior**: Installer looks for `vim92.tar.bz2` in `pre_built/<platform>/runtime/` first, falls back to legacy `envs/vim/runtime.tar.bz2`. Extracts to `~/.local/share/vim/`, renames `runtime/` to `vim92/`, verifies `filetype.vim` present. Correct install has `~/.local/share/vim/vim92/filetype.vim`. Vim/GVim wrappers derive their default `VIM`/`VIMRUNTIME` from the installed launcher path (`bin/..` -> install prefix), not `$HOME`, while preserving explicit user overrides; this keeps `--dest-dir` installs runnable with fake `HOME`.
 
 **Neovim runtime behavior**: Installer looks for `nvim.tar.bz2` in `pre_built/<platform>/runtime/`. Extracts to `~/.local/share/nvim/`, replaces existing `~/.local/share/nvim/runtime`, verifies `runtime/filetype.lua` present. Release smoke gate runs installed `nvim` headless with `--clean`, asserts this runtime on `runtimepath`. Neovim config bootstraps `lazy.nvim` when available; if `lazy.nvim` missing and `git` cannot clone it, plugin layer disabled cleanly so core editor config still starts on locked-down machines.
 
 **Octave runtime behavior**: Installer looks for `octave.tar.bz2` in `pre_built/<platform>/runtime/` only when `octave` in selected tools (`optional: true` in `packages.json` -- opt in with `./loadout install octave`). Archive contains `./share/octave/11.1.0/` (m-files, fonts, data; doc excluded) and `./lib/octave/11.1.0/oct/` (.oct compiled plugins, patchelf'd to RPATH `$ORIGIN/../../../../../lib64`). Extracts into `~/.local/`, verifying `~/.local/share/octave/11.1.0/m/` present. Three octave core libs (`liboctave.so.13`, `liboctinterp.so.15`, `liboctmex.so.1`) bundled separately as `lib64/*.bz2` with RPATH `$ORIGIN`. Main binary `octave` is thin 16K launcher with RPATH `$ORIGIN/../lib64`. Total uncompressed ~163 MB, dominated by libopenblas + libopenblasp (~110 MB combined). Build with `pre_built/build_scripts/build-octave.sh` from extracted source tarball.
 
-**gui_libs behavior**: `gui_libs` optional pkg (`"optional": true` in `packages.json`) bundling ~80 shared libs covering Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, glib2, xcb extensions, xkbcommon, Wayland client, X11 client libs. Install with `./loadout install gui_libs` or name it alongside GUI apps (for example `./loadout install gui_libs gvim nedit-ng`). Targets **headless compute farm / LSF nodes** lacking GUI libs but running GUI tools with `DISPLAY` forwarding. All gui_libs `.so` files patchelf'd with RPATH `$ORIGIN` (not `$ORIGIN/../lib64`). Qt5 XCB and Wayland platform plugins (`libqxcb.so`, `libqwayland-generic.so`) stored **flat in `~/.local/lib64/`**. `bash/global/bashrc` sets `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` when `libqxcb.so` present -- Qt finds platform plugin there directly. **WSLg / XWayland cursor corruption**: Qt5 XCB backend sends blank/null cursor on window entry, corrupting XWayland's global cursor state for all subsequent X11 apps. Fix: set `QT_QPA_PLATFORM=wayland` in `~/.config/bash/user/bashrc`. Routes Qt5 through Wayland compositor, bypassing XWayland for cursor management. Wayland backend requires `libqwayland-generic.so` + `libQt5WaylandClient.so.5`, both in gui_libs.
+**gui_libs behavior**: `gui_libs` optional pkg (`"optional": true` in `packages.json`) bundling ~80 shared libs covering Qt5 5.15.3, GTK3 3.22, ICU 60, cairo, pango, glib2, xcb extensions, xkbcommon, Wayland client, X11 client libs. Install with `./loadout install gui_libs` or name it alongside GUI apps (for example `./loadout install gui_libs gvim nedit-ng`). Targets **headless compute farm / LSF nodes** lacking GUI libs but running GUI tools with `DISPLAY` forwarding. All gui_libs `.so` files patchelf'd with RPATH `$ORIGIN` (not `$ORIGIN/../lib64`). Qt5 XCB and Wayland platform plugins (`libqxcb.so`, `libqwayland-generic.so`) stored **flat in `~/.local/lib64/`**. `envs/bash/global/bashrc` sets `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` when `libqxcb.so` present -- Qt finds platform plugin there directly. **WSLg / XWayland cursor corruption**: Qt5 XCB backend sends blank/null cursor on window entry, corrupting XWayland's global cursor state for all subsequent X11 apps. Fix: set `QT_QPA_PLATFORM=wayland` in `~/.config/bash/user/bashrc`. Routes Qt5 through Wayland compositor, bypassing XWayland for cursor management. Wayland backend requires `libqwayland-generic.so` + `libQt5WaylandClient.so.5`, both in gui_libs.
 
 **mesa3d_libs behavior**: `mesa3d_libs` runtime pkg bundles the Mesa userspace vendor side from the system install: `libEGL_mesa.so.0`, `libgbm.so.1`, `libglapi.so.0`, DRI drivers under `~/.local/lib64/dri/`, `libLLVM-17.so`, libdrm helpers, and `share/glvnd/egl_vendor.d/50_mesa.json`. It deliberately does **not** bundle `libGL.so.1`, `libGLX.so.0`, or `libGLdispatch.so.0`; those remain host/display-driver dispatchers. Archive is large and chunked (`mesa3d_libs.tar.bz2.part-000..002`). `./loadout install wezterm` pulls `mesa3d_libs` through depends. Build with `pre_built/build_scripts/build-wezterm.sh --tag <wezterm-version>` from the system Mesa/WezTerm install, then run `./strip_all_elf_binaries`. Wrappers using this runtime must prepend `<prefix>/lib64` to `LD_LIBRARY_PATH`, set `LIBGL_DRIVERS_PATH=<prefix>/lib64/dri`, and set `__EGL_VENDOR_LIBRARY_DIRS=<prefix>/share/glvnd/egl_vendor.d`.
 
-**WezTerm runtime behavior (shanghai bundle)**: WezTerm `20260618_095146_c10636f3` is bundled from `/usr/bin/wezterm`, `/usr/bin/wezterm-gui`, `/usr/bin/wezterm-mux-server`, `/usr/bin/strip-ansi-escapes`, and `/usr/bin/open-wezterm-here` by `pre_built/build_scripts/build-wezterm.sh`. Archive is chunked as `wezterm.tar.bz2.part-000..001`. Bundle extracts to `~/.local/` and installs PATH wrappers at `bin/wezterm`, `bin/wezterm-gui`, and `bin/wezterm-mux-server`; real upstream sibling binaries live under `lib/wezterm/` with RPATH `$ORIGIN/../../lib64:$ORIGIN`. Runtime also carries the desktop file, metainfo, app icon, and Nautilus extension. Keep the real binaries as siblings: `wezterm start` resolves and execs `wezterm-gui` next to the real `wezterm` binary. The wrapper derives prefix from installed `bin/..`, prepends Mesa lib paths, points GLVND at the bundled Mesa JSON, keeps the local portal restart workaround from `~/.local/bin/wezterm`, and execs `lib/wezterm/wezterm`. It is the sample app for `mesa3d_libs`; install with `./loadout install wezterm` or `@gui-suite`. Shell **completions** are env-owned: zsh uses `zsh/site-functions/_wezterm`, and bash can generate dynamically with `wezterm shell-completion --shell bash`. Shell **integration** (OSC 133 semantic zones / OSC 7 cwd / user vars -- a *different* thing from completion) is NOT shipped in this runtime archive; it is vendored separately at `bash/global/wezterm/wezterm.sh` and sourced by `bash/global/bashrc` from user-writable space (never `/etc/profile.d/wezterm.sh`). See *Bash Configuration Architecture -> Prompt & shell integration*.
+**WezTerm runtime behavior (shanghai bundle)**: WezTerm `20260618_095146_c10636f3` is bundled from `/usr/bin/wezterm`, `/usr/bin/wezterm-gui`, `/usr/bin/wezterm-mux-server`, `/usr/bin/strip-ansi-escapes`, and `/usr/bin/open-wezterm-here` by `pre_built/build_scripts/build-wezterm.sh`. Archive is chunked as `wezterm.tar.bz2.part-000..001`. Bundle extracts to `~/.local/` and installs PATH wrappers at `bin/wezterm`, `bin/wezterm-gui`, and `bin/wezterm-mux-server`; real upstream sibling binaries live under `lib/wezterm/` with RPATH `$ORIGIN/../../lib64:$ORIGIN`. Runtime also carries the desktop file, metainfo, app icon, and Nautilus extension. Keep the real binaries as siblings: `wezterm start` resolves and execs `wezterm-gui` next to the real `wezterm` binary. The wrapper derives prefix from installed `bin/..`, prepends Mesa lib paths, points GLVND at the bundled Mesa JSON, keeps the local portal restart workaround from `~/.local/bin/wezterm`, and execs `lib/wezterm/wezterm`. It is the sample app for `mesa3d_libs`; install with `./loadout install wezterm` or `@gui-suite`. Shell **completions** are env-owned: zsh uses `envs/zsh/site-functions/_wezterm`, and bash can generate dynamically with `wezterm shell-completion --shell bash`. Shell **integration** (OSC 133 semantic zones / OSC 7 cwd / user vars -- a *different* thing from completion) is NOT shipped in this runtime archive; it is vendored separately at `envs/bash/global/wezterm/wezterm.sh` and sourced by `envs/bash/global/bashrc` from user-writable space (never `/etc/profile.d/wezterm.sh`). See *Bash Configuration Architecture -> Prompt & shell integration*.
 
-**Portable Python behavior**: Installer looks for `portable-python-*.tar.bz2` in platform dir. If found, extracts to temp dir under `/tmp` via `safe_extract_tar`, runs bundled `install.sh --prefix ~/.local --force --no-test`. Generic `python3`/`pip3` links left in place, so `python3` on PATH resolves to 3.14. Base-install protection: `python/pip.conf` installed to `~/.config/pip/pip.conf` with `require-virtualenv = true`, `PIP_REQUIRE_VIRTUALENV=1` exported from `bash/global/bashrc` -- guard against accidental `pip install` to base env. Use `python3.14` and `pip3.14` for this build. Archive must never run through `strip_all_elf_binaries` (BOLT-optimized). To add/update portable Python: `pre_built/build_scripts/import-portable-python <portable-dir>`.
+**Portable Python behavior**: Installer looks for `portable-python-*.tar.bz2` in platform dir. If found, extracts to temp dir under `/tmp` via `safe_extract_tar`, runs bundled `install.sh --prefix ~/.local --force --no-test`. Generic `python3`/`pip3` links left in place, so `python3` on PATH resolves to 3.14. Base-install protection: `envs/python/pip.conf` installed to `~/.config/pip/pip.conf` with `require-virtualenv = true`, `PIP_REQUIRE_VIRTUALENV=1` exported from `envs/bash/global/bashrc` -- guard against accidental `pip install` to base env. Use `python3.14` and `pip3.14` for this build. Archive must never run through `strip_all_elf_binaries` (BOLT-optimized). To add/update portable Python: `pre_built/build_scripts/import-portable-python <portable-dir>`.
 
 **Python tool behavior (uv tool)**: PyPI tools that are Python-only or have manylinux binary wheels installed via `uv tool install` into per-tool isolated venvs at `~/.local/share/uv/tools/<tool>/`. Launchers auto-created at `~/.local/bin/`. Wheels bundled offline in `pre_built/<platform>/wheels/`. Installer runs `uv tool install <pkg> --python ~/.local/bin/python3.14 --no-index --find-links <wheels_dir> --no-cache` for each selected tool with `"uv_tool"` key in `packages.json`. If no matching wheel found in `wheels_dir`, tool skipped with warning. To add new Python tool: (1) bundle wheels with `PIP_REQUIRE_VIRTUALENV=0 pip3.14 download <pkg> --platform manylinux_2_28_x86_64 --python-version 3.14 --only-binary :all: -d pre_built/<platform>/wheels/`; (2) add `packages.json` entry with `"uv_tool"`, `"wheels"`, optionally `"libs"` / `"typelibs"` / `"optional": true`; (3) add required C libs to `lib64/*.bz2` and typelibs to `typelibs/`. **EL8 wheel compatibility:** `--platform manylinux_2_28_x86_64` finds all wheels with minimum glibc <= 2.28 (manylinux1/2010/2014 through manylinux_2_28). EL8 is at the lower boundary of the new cibuildwheel default (manylinux_2_28) -- wheels targeting manylinux_2_29+ (RHEL9) will not run on EL8. If `pip download` fails with `--only-binary :all:`, the package has no compatible wheel for cp314 and must be built from source on the EL8 machine.
 
-**VCD toggle profiler runtime behavior**: `vcd-toggle-profiler` is a C++17 runtime package built from `github.com/smprather/vcd-toggle-profiler` (C++ implementation only). The archive `pre_built/<platform>/runtime/vcd-toggle-profiler.tar.bz2` extracts to `~/.local/` and installs `bin/vcd-toggle-profiler` (POSIX-sh wrapper), `lib/vcd-toggle-profiler/vcd-toggle-profiler.bin` (real ELF), `share/vcd-toggle-profiler/uplot/{uPlot.iife.js,uPlot.min.css}`, and license files. The wrapper derives its prefix from its installed path and supplies `--uplot-js/--uplot-css` defaults so report generation works from any current directory while still allowing explicit user overrides. Build with `pre_built/build_scripts/build-vcd-toggle-profiler.sh --rev <git-ref>` or `--source <checkout>`; it deliberately uses EL8 system `/usr/bin/g++` 8.5 with `-lstdc++fs`, not upstream CMake Release (`-march=native`), keeping the deployed binary portable across farm CPUs and capped at `GLIBCXX_3.4.21`. `pigz` is recommended so `.vcd.gz` input uses the bundled fast gzip path when available. Re-run `./loadout completion bash > bash/global/completions/loadout.bash` after changing the package registry.
+**VCD toggle profiler runtime behavior**: `vcd-toggle-profiler` is a C++17 runtime package built from `github.com/smprather/vcd-toggle-profiler` (C++ implementation only). The archive `pre_built/<platform>/runtime/vcd-toggle-profiler.tar.bz2` extracts to `~/.local/` and installs `bin/vcd-toggle-profiler` (POSIX-sh wrapper), `lib/vcd-toggle-profiler/vcd-toggle-profiler.bin` (real ELF), `share/vcd-toggle-profiler/uplot/{uPlot.iife.js,uPlot.min.css}`, and license files. The wrapper derives its prefix from its installed path and supplies `--uplot-js/--uplot-css` defaults so report generation works from any current directory while still allowing explicit user overrides. Build with `pre_built/build_scripts/build-vcd-toggle-profiler.sh --rev <git-ref>` or `--source <checkout>`; it deliberately uses EL8 system `/usr/bin/g++` 8.5 with `-lstdc++fs`, not upstream CMake Release (`-march=native`), keeping the deployed binary portable across farm CPUs and capped at `GLIBCXX_3.4.21`. `pigz` is recommended so `.vcd.gz` input uses the bundled fast gzip path when available. Re-run `./loadout completion bash > envs/bash/global/completions/loadout.bash` after changing the package registry.
 
-**GObject typelib behavior**: Installer copies `*.typelib` files from `pre_built/<platform>/typelibs/` to `~/.local/lib/girepository-1.0/`. `bash/global/bashrc` exports `GI_TYPELIB_PATH=$HOME/.local/lib/girepository-1.0` when that dir exists, allowing Python tools using `import gi` (PyGObject) to find bundled typelibs. Required typelibs documented in `"typelibs"` key of `packages.json` entries (reference only -- installer copies all typelibs unconditionally). Typelib files from EL8 RPMs: `gobject-introspection` (GLib/GObject/Gio/GIRepository), `gtk3` (Gtk/Gdk/GdkPixbuf), `gtksourceview3` (GtkSource-3.0). Plain files, no strip/patchelf needed.
+**GObject typelib behavior**: Installer copies `*.typelib` files from `pre_built/<platform>/typelibs/` to `~/.local/lib/girepository-1.0/`. `envs/bash/global/bashrc` exports `GI_TYPELIB_PATH=$HOME/.local/lib/girepository-1.0` when that dir exists, allowing Python tools using `import gi` (PyGObject) to find bundled typelibs. Required typelibs documented in `"typelibs"` key of `packages.json` entries (reference only -- installer copies all typelibs unconditionally). Typelib files from EL8 RPMs: `gobject-introspection` (GLib/GObject/Gio/GIRepository), `gtk3` (Gtk/Gdk/GdkPixbuf), `gtksourceview3` (GtkSource-3.0). Plain files, no strip/patchelf needed.
 
 **Meld runtime behavior (shanghai bundle)**: Meld 3.20.4 bundled as "shanghai" -- extracted from system-installed EL8 package, repacked into `pre_built/<platform>/runtime/meld.tar.bz2`. Uses **system Python 3.6** (`/usr/bin/python3.6`) with bundled PyGObject 3.28.3 (gi) and pycairo 1.16.3. Bundle extracts to `~/.local/` and installs: `lib/python3.6/site-packages/{gi,cairo,meld,meld3}/`, `share/meld/`, `bin/meld` (Python 3.6 launcher). Launcher derives its local prefix from installed `bin/meld`, exports `LOADOUT_LOCAL_PREFIX`, and sets `sys.path`, `GI_TYPELIB_PATH`, `LD_LIBRARY_PATH` before `import gi` -- `LD_LIBRARY_PATH` must be set before `import gi` so `dlopen()` for `_gi.cpython-36m.so` finds installed `lib64/libgirepository-1.0.so.1`. Bundled `meld/conf.py` has DATADIR patched to `LOADOUT_LOCAL_PREFIX/share/meld` (was `/usr/share/meld`; fallback remains `~/.local/share/meld` only for direct import outside the launcher). Exclusively-owned libs: `libgirepository-1.0.so.1`, `libgtksourceview-3.0.so.1` (both patchelf'd RPATH `$ORIGIN`). Installer function: `install_meld_runtime()`. Typically installed with gui_libs: `./loadout install gui_libs,meld`. Installer warns if meld selected without gui_libs (GTK3/Qt5/X11 libs all from gui_libs). To update meld: re-`yum install meld` on EL8 build machine, re-run shanghai extract steps (copy gi/cairo/meld packages + data files into bundle dir, patch conf.py, create tar.bz2, bzip2 new libs if version changed, update packages.json version), run `./strip_all_elf_binaries`, commit. **Why shanghai instead of PyPI wheels**: PyGObject has no binary wheels on PyPI (source-only, requires gobject-introspection headers). EL8 ships GLib 2.56.4; PyGObject >= 3.36 requires GLib >= 2.62; PyGObject <= 3.30 (works with GLib 2.56) incompatible with Python 3.14 (`Py_TYPE()` assignment removed). System Python 3.6 sidesteps all of this.
 
@@ -296,11 +301,11 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 
 **Firefox runtime behavior (shanghai bundle)**: Mozilla Firefox ESR 140.11.0 bundled as "shanghai" -- extracted from the AlmaLinux 8.10 BaseOS `firefox` RPM (`firefox-140.11.0-1.el8_10.alma.1.x86_64`), repacked into `pre_built/<platform>/runtime/firefox.tar.bz2` and auto-chunked to ~40 MiB shards (`firefox.tar.bz2.part-NNN`, four chunks ~ 136 MB total) by `strip_all_elf_binaries` so the archive stays under GitHub's per-file warn / hard cap. Bundle extracts to `~/.local/` and installs: `bin/firefox` (thin POSIX-sh launcher), `lib/firefox/` (full `/usr/lib64/firefox/` tree with libxul.so + libmoz*.so + omni.ja + langpacks), `share/applications/firefox.desktop`. Launcher derives prefix from `bin/..`, **prepends `<prefix>/lib/firefox` to `LD_LIBRARY_PATH`**, then execs `<prefix>/lib/firefox/firefox-bin`. The `LD_LIBRARY_PATH` prepend is load-bearing: the EL8 RPM's `firefox-bin` and `libxul.so` carry **no RPATH/RUNPATH** (an earlier "firefox-bin self-resolves via `RPATH=$ORIGIN`" claim was wrong) -- firefox-bin dlopens libxul by absolute path, but libxul's own NEEDED libs (nss, libmoz*) are then resolved by the system loader with no app-dir on its search path, so they must be placed there via `LD_LIBRARY_PATH`, exactly as the stock `/usr/bin/firefox` launcher does. Build script: `pre_built/build_scripts/build-firefox.sh --tag X.Y.Z`. The script wipes any stale `firefox.tar.bz2.part-*` shards before re-tarring so a fresh build does not collide with prior chunks in the strip-manifest. Two absolute symlinks in the RPM are rewritten at build time: `lib/firefox/dictionaries -> /usr/share/myspell` is **deleted** (Firefox keeps its built-in spell data; users who want Hunspell extras install hunspell on the host); `lib/firefox/browser/defaults/preferences -> /usr/lib64/firefox/defaults/preferences` is **replaced with a real directory** holding a copy of the prefs (a relative symlink would work logically, but `add_tree_to_tar`'s `os.walk(followlinks=False)` never re-emits symlinks-to-directories, so a re-tarred archive silently drops them). Installer function: `install_firefox_runtime()`. Typically installed with gui_libs auto-pulled via `depends`. The Fedora-shipped `/usr/bin/firefox` launcher is intentionally NOT carried forward -- it hardcodes `/etc/gre.d/gre64.conf`, `/etc/fonts`, `/etc/firefox` langpack management, and SELinux `restorecon` paths that don't apply to a relocatable `$HOME` install. firefox-bin handles its own Wayland/X11 detection. **NSS / NSPR are BUNDLED** into `lib/firefox/` (13 `.so`: `libnss3`, `libnssutil3`, `libsmime3`, `libssl3`, `libnspr4`, `libplc4`, `libplds4` + the dlopen plugins `libsoftokn3`, `libfreebl3`, `libfreeblpriv3`, `libnssdbm3`, `libnssckbi`, `libnsssysinit`), each `patchelf --set-rpath '$ORIGIN'`. Firefox 140's `libxul.so` needs `NSS_3.107`, newer than the NSS AlmaLinux 8.10 shipped at GA (3.90); an un-patched farm node aborts with ``/lib64/libnss3.so: version `NSS_3.107' not found ... Couldn't load XPCOM``. The build box only had a new-enough `nss-3.112` because the firefox RPM pulled it in -- classic build-box masking (cf. the octave support libs). The wrapper's `LD_LIBRARY_PATH` prepend is what makes the bundled NSS win over the host's older `/lib64` copy. Still assumed present (NOT bundled): `libsqlite3.so.0` (softokn3 dep; EL8 base sqlite 3.26, never security-bumped, identical build+dest), `libtasn1.so.6` (nssckbi dep), `libasound2`, `libfreetype`, `libfontconfig`. gui_libs covers the GTK3 / cairo / pango / X11 / Wayland stack libxul dlopens at runtime.
 
-**Zsh binary behavior**: `zsh` optional pre-built binary (`optional: true` in `packages.json` -- opt in with `./loadout install zsh`). No runtime archive needed; binary self-contained. Links against `libncurses.so.6` and `libreadline.so.7` (both always-installed bundled libs). Built from source on EL8 with `--disable-pcre` (avoids bundling `libpcre.so.1`); POSIX ERE regex still works via zsh `regex` module. Build with `pre_built/build_scripts/build-zsh.sh --tag <version>`. Tag format: bare version number, e.g. `5.9` (no `v` prefix -- zsh upstream convention). `env-zsh` installs env-owned completions under `~/.config/zsh/site-functions/`; `zsh/zshrc` prepends that dir to `fpath` before `compinit`.
+**Zsh binary behavior**: `zsh` optional pre-built binary (`optional: true` in `packages.json` -- opt in with `./loadout install zsh`). No runtime archive needed; binary self-contained. Links against `libncurses.so.6` and `libreadline.so.7` (both always-installed bundled libs). Built from source on EL8 with `--disable-pcre` (avoids bundling `libpcre.so.1`); POSIX ERE regex still works via zsh `regex` module. Build with `pre_built/build_scripts/build-zsh.sh --tag <version>`. Tag format: bare version number, e.g. `5.9` (no `v` prefix -- zsh upstream convention). `env-zsh` installs env-owned completions under `~/.config/zsh/site-functions/`; `envs/zsh/zshrc` prepends that dir to `fpath` before `compinit`.
 
 **Fish runtime behavior**: `fish` optional pre-built binary (`optional: true` -- opt in with `./loadout install fish`). Binary requires standard library (functions, completions, themes) shipped as `pre_built/<platform>/runtime/fish.tar.bz2`. Archive contains `./share/fish/...`, extracts to `~/.local/` so standard library lands at `~/.local/share/fish/`. Installed launcher is a small POSIX-sh wrapper (`bin/fish`) that derives its prefix from installed `bin/..`, ensures `<prefix>/etc/fish` exists so fish's relocatable-tree probe succeeds, exports `__fish_data_dir`, `__fish_bin_dir`, and `__fish_sysconf_dir`, then execs `bin/fish.bin`; explicit user overrides still win. This keeps `--dest-dir` installs and shared-tree deployments from falling back to fish's build-time prefix. Installer function: `install_fish_runtime()`. Binary links against `libncurses.so.6` and `libpcre2-8.so.0` (both bundled -- `libpcre2-8.so.0` owned by `gui_libs` but installed as lib64 dep). fish 4.x written in Rust; build with cmake+cargo via `pre_built/build_scripts/build-fish.sh --tag <version>`.
 
-**st terminfo behavior**: `st` ships its terminfo entries as `pre_built/<platform>/runtime/st.tar.bz2`. Archive contains `./share/terminfo/...`, extracts to `~/.local/`, and installs `share/terminfo/s/st-256color` plus the sibling `st*` entries under `~/.local/share/terminfo/`. `bash/global/bashrc` prepends `$HOME/.local/share/terminfo` to `TERMINFO_DIRS` because Linux ncurses does not search that path by default; this keeps normal installs, `--dest-dir` staging, and shared-tree deploys able to resolve `st-256color` without relying on `~/.terminfo`.
+**st terminfo behavior**: `st` ships its terminfo entries as `pre_built/<platform>/runtime/st.tar.bz2`. Archive contains `./share/terminfo/...`, extracts to `~/.local/`, and installs `share/terminfo/s/st-256color` plus the sibling `st*` entries under `~/.local/share/terminfo/`. `envs/bash/global/bashrc` prepends `$HOME/.local/share/terminfo` to `TERMINFO_DIRS` because Linux ncurses does not search that path by default; this keeps normal installs, `--dest-dir` staging, and shared-tree deploys able to resolve `st-256color` without relying on `~/.terminfo`.
 
 **Rolling-git wheel behavior**: First-party `python-tool` packages can be tagged `"rolling_git": "<clone-url>"` in `packages.json` (currently `liberty-tools`, `text-serdes`, `time-plot`). `./update <name>` (and bare `./update`, which now includes all rolling pkgs) rebuilds these from source instead of using a hand-bundled wheel: cheap `git ls-remote` skip-check -> fresh `git clone --filter=blob:none` (keeps tags so `describe` works; falls back to full clone) -> `uv build --wheel` (handles maturin **and** hatchling backends) -> prune previous `<dist>-*.whl` -> copy new wheel into `pre_built/<platform>/wheels/` -> surgically stamp the package's `version` to `git describe --tags --always --dirty`. Rebuild happens **only when the source commit changed**; `./update <name> --rebuild` forces. `./update --list[-outdated]` shows rolling rows with latest = remote HEAD sha. **maturin gotcha:** under PEP517 maturin tags a bare `linux_x86_64` wheel; `update` sets `MATURIN_PEP517_ARGS="--compatibility manylinux_2_28"` for maturin backends so the wheel is portable + auditwheel-checked. Builds need network + `~/.cache/uv` write (run on the EL8 build machine). Add a 4th rolling project by adding the `rolling_git` field -- `./update` discovers it automatically. To add a new third-party (pinned) Python tool instead, see *Python tool behavior* below.
 
@@ -313,14 +318,14 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 **Tmux selection behavior**: `tmux/tmux-word-separators` run from `tmux.conf` to append broad emoji ranges to `word-separators`. Tmux only supports literal separator chars, not Unicode classes -- keep helper in sync with `tmux.conf` if double-click word selection starts capturing prompt icons like Starship's read-only lock.
 
 **Linux symlink map:**
-- `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` -> `~/.config/bash/bashrc` -> `repo/bash/bashrc`
+- `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` -> `~/.config/bash/bashrc` -> `repo/envs/bash/bashrc`
 - `~/.vimrc` -> `~/.config/vim/vimrc`
 - `~/.vim` -> `~/.config/vim/vim`
 - `~/.tmux.conf` -> `~/.config/tmux/tmux.conf`
 - `~/.tmux` -> `~/.config/tmux/tmux`
 - `~/.editorconfig` -> `~/.config/editorconfig/editorconfig`
-- `~/.config/starship/starship.toml` <- `repo/starship/starship.linux.toml`
-- `~/.config/starship/config-schema.json` <- `repo/starship/config-schema.json`
+- `~/.config/starship/starship.toml` <- `repo/envs/starship/starship.linux.toml`
+- `~/.config/starship/config-schema.json` <- `repo/envs/starship/config-schema.json`
 - `~/.local/share/helix/runtime/` <- `repo/pre_built/<platform>/runtime/helix.tar.bz2`
 - `~/.local/share/vim/vim92/` <- `repo/pre_built/<platform>/runtime/vim92.tar.bz2`
 - `~/.local/share/nvim/runtime/` <- `repo/pre_built/<platform>/runtime/nvim.tar.bz2`
@@ -330,24 +335,24 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `%USERPROFILE%\.local\opt\powershell\7\` <- bundled `pre_built/windows.x86_64/powershell/PowerShell-*-win-x64.zip[.part-NNN]`
 - `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json` -- Windows Terminal profile for bundled PowerShell
 - `%LOCALAPPDATA%\nvim` <- `repo/nvim`
-- `%USERPROFILE%\.config\wezterm\wezterm.lua` <- `repo/wezterm/wezterm.lua`
-- `%USERPROFILE%\.config\starship\starship.toml` <- `repo/starship/starship.windows.toml`
-- `%USERPROFILE%\.editorconfig` <- `repo/editorconfig/editorconfig`
-- `%USERPROFILE%\autohotkey\hotkeys.ahk` <- `repo/autohotkey/hotkeys.ahk`
+- `%USERPROFILE%\.config\wezterm\wezterm.lua` <- `repo/envs/wezterm/wezterm.lua`
+- `%USERPROFILE%\.config\starship\starship.toml` <- `repo/envs/starship/starship.windows.toml`
+- `%USERPROFILE%\.editorconfig` <- `repo/envs/editorconfig/editorconfig`
+- `%USERPROFILE%\autohotkey\hotkeys.ahk` <- `repo/envs/autohotkey/hotkeys.ahk`
 - `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey].executable` overrides AHK exe discovery (useful when AHK has been renamed for corp infosec compliance); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks; `[autohotkey].logging = true` (default false) makes the script append timestamped diagnostics (SSID source, VPN skip decision, auto-login actions) to `%USERPROFILE%\autohotkey\hotkeys.log`
 - `hotkeys.ahk` reads its enabled-feature list from `%USERPROFILE%\loadout_keys.toml` at startup (no install-time patching; the installer just copies the script). Override the config path with `LOADOUT_KEYS_TOML`; run `AutoHotkey64.exe hotkeys.ahk --print-config` to dump the resolved config and exit
 - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\hotkeys.lnk` -- `.lnk` shortcut pointing to `AutoHotkey64.exe "%USERPROFILE%\autohotkey\hotkeys.ahk"` (AHK not system-wide to avoid SentinelOne flagging). AHK extracted to `%USERPROFILE%\AutoHotkey_*\`; if none exists, installer downloads latest stable from GitHub, removes `AutoHotkey32.exe`.
-- `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` <- `repo/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
+- `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` <- `repo/envs/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
 - `%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` <- same (PS 7+)
 
 ## Bash Configuration Architecture
 
 ### Layer System
 
-Files sourced in order: `global -> corp -> site -> team -> project -> user`. Each layer overrides previous. Layer dirs (`bash/corp/`, `bash/site/`, `bash/team/`, `bash/project/`, `bash/user/`) user-created, not bundled.
+Files sourced in order: `global -> corp -> site -> team -> project -> user`. Each layer overrides previous. Layer dirs (`envs/bash/corp/`, `envs/bash/site/`, `envs/bash/team/`, `envs/bash/project/`, `envs/bash/user/`) user-created, not bundled.
 
-**Loading sequence** (see `bash/bashrc`):
-1. Sources `bash/functions.sh` (shared utilities, available to all layers)
+**Loading sequence** (see `envs/bash/bashrc`):
+1. Sources `envs/bash/functions.sh` (shared utilities, available to all layers)
 2. Sources `config.sh` per layer (sets `LOADOUT_CFG_*` preferences)
 3. Sources `bashrc` per layer (PATH, aliases, prompt, completions); each layer's `bashrc` exits early if not interactive
 
@@ -365,7 +370,7 @@ Each layer can have `global_hooks/1.sh` through `7.sh` injected at these points 
 | 6.sh | After bash completions loaded |
 | 7.sh | Late / final |
 
-### Configuration Variables (`bash/global/config.sh`)
+### Configuration Variables (`envs/bash/global/config.sh`)
 
 All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to child processes, visible in `env | grep LOADOUT_CFG_`. Override in user layer's `config.sh` with same form.
 
@@ -396,7 +401,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 | `LOADOUT_CFG_ONLINE_DETECT_HOSTS` | `github.com:443 raw.githubusercontent.com:443 pypi.org:443` | Space-separated `host:port` pairs probed in parallel. Override in `user/config.sh` to use corporate mirror hosts |
 | `LOADOUT_CFG_USE_LOADOUT_MODULES` | `0` | Source `modules-init.bash` on shell startup (enables `module`/`ml` commands from loadout-bundled Environment Modules). Off by default -- opt-in per user/site layer |
 
-### Key Functions (`bash/functions.sh`)
+### Key Functions (`envs/bash/functions.sh`)
 
 - `path_append`, `path_prepend`, `path_remove`, `path_trim` -- PATH colon-list manipulation
 - `path_prepend_if_dir`, `path_append_if_dir` -- prepend/append only if dir exists
@@ -415,14 +420,14 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 
 ### Prompt & shell integration
 
-The prompt block in `bash/global/bashrc` is **clobber-sensitive** -- treat it as load-bearing, not boilerplate. Two facts drive its shape:
+The prompt block in `envs/bash/global/bashrc` is **clobber-sensitive** -- treat it as load-bearing, not boilerplate. Two facts drive its shape:
 
 1. **The loadout does not own `PROMPT_COMMAND`**, and **Starship does not always hook through it.** `starship init bash` auto-detects an active preexec framework: with `precmd_functions` (bash-preexec) or `ble.sh` it registers `starship_precmd` into the **array** and leaves `PROMPT_COMMAND` alone; only with no framework does it use `PROMPT_COMMAND`.
 2. **A framework is often already live at login.** `/etc/profile.d/wezterm.sh` (+`vte.sh`) load bash-preexec and register `precmd_functions` + a `PROMPT_COMMAND` install stub *before* our `bashrc`. Our clean-slate `unset -f $(declare -F ...)` then deletes those framework functions, leaving dangling references.
 
-The old code (`unset PROMPT_COMMAND` + `export PROMPT_COMMAND="/bin/stty '$(stty -g)';$PROMPT_COMMAND"`) wiped the framework's driver, so `starship_precmd` never fired -- **Starship prompt absent on the first login shell but present after `exec bash`** (non-login shells never read `/etc/profile`, so no framework). The block now runs, in this fixed order: **(1)** reset framework state (`unset precmd_functions preexec_functions __bp_imported bash_preexec_imported PROMPT_COMMAND`) -> **(2)** source the loadout-owned `bash/global/wezterm/wezterm.sh` (re-installs working bash-preexec + wezterm hooks from user-writable space; serves raw wezterm and tmux-in-wezterm; off-WezTerm shells set the integration skip vars while sourcing so no WezTerm OSC hooks register) -> **(3)** `eval "$(starship init bash)"` and let it self-hook (never `unset`/overwrite `PROMPT_COMMAND` around it) -> **(4)** `loadout_add_precmd loadout_restore_echo`. This converges login and `exec bash`, and serves the full terminal matrix (raw wezterm, tmux-in-wezterm, tmux-in-st, st/xterm, `dumb`/`linux`). Verify with a **real PTY** (tmux send-keys), never `bash -lic` (no prompt cycle -> bug hides), and test both login and `exec bash`. Full rationale: `bash/global/README.md` -> "Prompt & shell integration"; agent guardrail in `AGENTS.md` -> "Lessons Learned".
+The old code (`unset PROMPT_COMMAND` + `export PROMPT_COMMAND="/bin/stty '$(stty -g)';$PROMPT_COMMAND"`) wiped the framework's driver, so `starship_precmd` never fired -- **Starship prompt absent on the first login shell but present after `exec bash`** (non-login shells never read `/etc/profile`, so no framework). The block now runs, in this fixed order: **(1)** reset framework state (`unset precmd_functions preexec_functions __bp_imported bash_preexec_imported PROMPT_COMMAND`) -> **(2)** source the loadout-owned `envs/bash/global/wezterm/wezterm.sh` (re-installs working bash-preexec + wezterm hooks from user-writable space; serves raw wezterm and tmux-in-wezterm; off-WezTerm shells set the integration skip vars while sourcing so no WezTerm OSC hooks register) -> **(3)** `eval "$(starship init bash)"` and let it self-hook (never `unset`/overwrite `PROMPT_COMMAND` around it) -> **(4)** `loadout_add_precmd loadout_restore_echo`. This converges login and `exec bash`, and serves the full terminal matrix (raw wezterm, tmux-in-wezterm, tmux-in-st, st/xterm, `dumb`/`linux`). Verify with a **real PTY** (tmux send-keys), never `bash -lic` (no prompt cycle -> bug hides), and test both login and `exec bash`. Full rationale: `envs/bash/global/README.md` -> "Prompt & shell integration"; agent guardrail in `AGENTS.md` -> "Lessons Learned".
 
-### Notable Aliases (`bash/global/bashrc`)
+### Notable Aliases (`envs/bash/global/bashrc`)
 
 **Navigation:**
 - `b` / `bb` / `bbb` ... `bbbbbbbbbb` -- `cd ..` up 1-10 levels
@@ -505,7 +510,7 @@ df() { ...; }
 - Capture pane buffer to nvim: `Prefix+v`
 - Plugins: tmux-resurrect (save: `Prefix+Ctrl-s`, restore: `Prefix+Ctrl-r`), tmux-continuum (auto-save every 60min), tmux-better-mouse-mode
 
-### PowerShell (`powershell/Microsoft.PowerShell_profile.ps1`)
+### PowerShell (`envs/powershell/Microsoft.PowerShell_profile.ps1`)
 
 Key aliases: `ls`/`lr` -> eza, `vi` -> nvim, `f` -> fd, `cat` -> bat, `g`/`grep` -> rg, `b`/`bb`/`bbb` -> cd up, `cdd` -> cd to most recently modified dir, `gs`/`gc`/`gp`/`gd`/`ga`/`gsp` -> git shortcuts, `w` -> `Get-DefinitionPath`.
 
@@ -515,7 +520,7 @@ Integrations (conditional, cached init): zoxide (`z`/`zi`), PSFzf (`Ctrl+T` file
 
 coreutils wrappers (via Git for Windows path): `rm`, `cp`, `mv`, `diff`, `rmdir`, `mkdir`, `wc`, `sed`, `awk`, `cut`, `xargs`.
 
-### AutoHotKey (`autohotkey/hotkeys.ahk`)
+### AutoHotKey (`envs/autohotkey/hotkeys.ahk`)
 
 Requires AHKv2. `hotkeys.ahk` single flat script. `loadout.ps1` copies it to `%USERPROFILE%\autohotkey\hotkeys.ahk`. The script reads its feature config from `%USERPROFILE%\loadout_keys.toml` at startup (override path via `LOADOUT_KEYS_TOML`; `--print-config` dumps the resolved config and exits). Undefined settings fall back to defaults (`[autohotkey].enabled` default true; every optional feature default off). Set `[autohotkey].logging = true` to append timestamped runtime diagnostics (SSID resolution, Cisco VPN skip decision, auto-login actions) to `<scriptdir>\hotkeys.log` via the `loadout_log` helper; off by default.
 
@@ -535,13 +540,13 @@ Optional features:
 
 Existing `%USERPROFILE%\loadout_keys.toml` files with legacy plugin IDs (`[autohotkey.plugins]`, numeric-prefixed ids) remain accepted: the script maps them onto current feature ids at startup.
 
-**Layer architecture** (analogous to bash `global->corp->site->team->project->user`): `nvim/init.lua` thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are defaults; later layers override. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` false when lazy.nvim bootstrap fails offline -- core editor still starts cleanly.
+**Layer architecture** (analogous to bash `global->corp->site->team->project->user`): `envs/nvim/init.lua` thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are defaults; later layers override. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` false when lazy.nvim bootstrap fails offline -- core editor still starts cleanly.
 
 Snacks dashboard provides no-argument `nvim` startup screen (`filetype=snacks_dashboard`). `mini.trailspace` highlights trailing whitespace with window-local matches, so dashboard cleanup must disable `vim.b.minitrailspace_disable`, turn off local `list`, delete existing `MiniTrailspace` matches on dashboard open/update.
 
-### Vim (`vim/vimrc`)
+### Vim (`envs/vim/vimrc`)
 
-Native Vim 8 package management. Plugins in `vim/pack/vendor/{start,opt}/`. Basic settings: UTF-8, 4-space tabs, line numbers.
+Native Vim 8 package management. Plugins in `envs/vim/pack/vendor/{start,opt}/`. Basic settings: UTF-8, 4-space tabs, line numbers.
 
 ### Modern CLI Tools Expected
 
@@ -559,14 +564,14 @@ Falls back gracefully: eza -> lsd -> ls, bat -> cat, fd -> find. Handles Debian 
 
 ```bash
 # Create the file -- it will automatically override global/
-bash/user/config.sh      # LOADOUT_CFG_* variable overrides
-bash/user/bashrc         # alias/function overrides
-bash/corp/global_hooks/5.sh  # hook injection at point 5
+envs/bash/user/config.sh      # LOADOUT_CFG_* variable overrides
+envs/bash/user/bashrc         # alias/function overrides
+envs/bash/corp/global_hooks/5.sh  # hook injection at point 5
 ```
 
 ### Add a new bundled plugin (vim/tmux)
 
-1. Copy plugin dir into `vim/vim/pack/vendor/start/` or `tmux/vendor/plugins/`
+1. Copy plugin dir into `envs/vim/vim/pack/vendor/start/` or `envs/tmux/vendor/plugins/`
 2. Pre-commit hook strips `.git` dirs automatically on next commit
 3. Relevant env handler (`_install_env_vim` / `_install_env_tmux`) already copies the whole vendor dir with delete semantics -- no installer change needed.
 

@@ -2329,7 +2329,7 @@
     },
     "env-bash": {
       "kind": "env",
-      "source": "bash/",
+      "source": "envs/bash/",
       "install_to": "~/.config/bash",
       "extra_links": [
         {
@@ -2371,7 +2371,7 @@
     },
     "env-zsh": {
       "kind": "env",
-      "source": "zsh/",
+      "source": "envs/zsh/",
       "install_to": "~/.config/zsh",
       "extra_links": [
         {
@@ -2408,7 +2408,7 @@
     },
     "env-nvim": {
       "kind": "env",
-      "source": "nvim/",
+      "source": "envs/nvim/",
       "install_to": "~/.config/nvim",
       "supports_layers": [
         "corp",
@@ -2429,7 +2429,7 @@
     },
     "nvim-catalog-plugins": {
       "kind": "data",
-      "archive": "nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2",
+      "archive": "envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2",
       "install_to": "~/.local/share/nvim/loadout/vendor/catalog-plugins",
       "version": "",
       "platforms": [
@@ -2443,7 +2443,7 @@
     },
     "env-vim": {
       "kind": "env",
-      "source": "vim/",
+      "source": "envs/vim/",
       "install_to": "~/.config/vim",
       "extra_links": [
         {
@@ -2467,7 +2467,7 @@
     },
     "env-tmux": {
       "kind": "env",
-      "source": "tmux/",
+      "source": "envs/tmux/",
       "install_to": "~/.config/tmux",
       "extra_links": [
         {
@@ -2491,7 +2491,7 @@
     },
     "env-helix": {
       "kind": "env",
-      "source": "helix/",
+      "source": "envs/helix/",
       "install_to": "~/.config/helix",
       "platforms": [
         "linux",
@@ -2506,7 +2506,7 @@
     },
     "env-starship": {
       "kind": "env",
-      "source": "starship/starship.linux.toml",
+      "source": "envs/starship/starship.linux.toml",
       "install_to": "~/.config/starship/starship.toml",
       "extra_links": [
         {
@@ -2526,7 +2526,7 @@
     },
     "env-wezterm": {
       "kind": "env",
-      "source": "wezterm/wezterm.lua",
+      "source": "envs/wezterm/wezterm.lua",
       "install_to": "~/.config/wezterm/wezterm.lua",
       "platforms": [
         "windows",
@@ -2540,7 +2540,7 @@
     },
     "env-editorconfig": {
       "kind": "env",
-      "source": "editorconfig/editorconfig",
+      "source": "envs/editorconfig/editorconfig",
       "install_to": "~/.editorconfig",
       "platforms": [
         "linux",
@@ -2555,7 +2555,7 @@
     },
     "env-pip": {
       "kind": "env",
-      "source": "python/pip.conf",
+      "source": "envs/python/pip.conf",
       "install_to": "~/.config/pip/pip.conf",
       "platforms": [
         "linux",
@@ -2569,7 +2569,7 @@
     },
     "env-powershell": {
       "kind": "env",
-      "source": "powershell/Microsoft.PowerShell_profile.ps1",
+      "source": "envs/powershell/Microsoft.PowerShell_profile.ps1",
       "install_to": "%USERPROFILE%/Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
       "extra_links": [
         {
@@ -2588,7 +2588,7 @@
     },
     "env-autohotkey": {
       "kind": "env",
-      "source": "autohotkey/hotkeys.ahk",
+      "source": "envs/autohotkey/hotkeys.ahk",
       "install_to": "%USERPROFILE%/autohotkey/hotkeys.ahk",
       "platforms": [
         "windows"
@@ -2743,7 +2743,7 @@
     },
     "rust-crate-store": {
       "kind": "data",
-      "archive": "rust/crate-store.tar.bz2",
+      "archive": "envs/rust/crate-store.tar.bz2",
       "install_to": "~/.local/share/cargo/registry-store",
       "version": "",
       "platforms": [

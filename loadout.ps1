@@ -41,24 +41,24 @@ Installed destinations:
       Windows Terminal profile for bundled PowerShell.
 
   %LOCALAPPDATA%\nvim\
-      Neovim config copied from nvim\.
+      Neovim config copied from envs\nvim\.
 
   %USERPROFILE%\.config\wezterm\wezterm.lua
-      WezTerm config copied from wezterm\wezterm.lua.
+      WezTerm config copied from envs\wezterm\wezterm.lua.
 
   %USERPROFILE%\.config\starship\starship.toml
-      Starship config copied from starship\starship.windows.toml.
+      Starship config copied from envs\starship\starship.windows.toml.
 
   PowerShell profile locations
-      powershell\Microsoft.PowerShell_profile.ps1 is copied to the current
+      envs\powershell\Microsoft.PowerShell_profile.ps1 is copied to the current
       $PROFILE plus existing WindowsPowerShell and PowerShell profile dirs under
       Documents.
 
   %USERPROFILE%\.editorconfig
-      EditorConfig copied from editorconfig\editorconfig.
+      EditorConfig copied from envs\editorconfig\editorconfig.
 
   %USERPROFILE%\autohotkey\hotkeys.ahk
-      AutoHotkey v2 script copied from autohotkey\hotkeys.ahk. The script reads
+      AutoHotkey v2 script copied from envs\autohotkey\hotkeys.ahk. The script reads
       its feature selections from %USERPROFILE%\loadout_keys.toml at startup.
 
   Startup\hotkeys.lnk
@@ -522,16 +522,16 @@ if ($bundledPwsh) {
 }
 
 Write-Host "Neovim..."
-Copy-Config "$repoDir\nvim" "$env:LOCALAPPDATA\nvim"
+Copy-Config "$repoDir\envs\nvim" "$env:LOCALAPPDATA\nvim"
 
 Write-Host "WezTerm..."
-Copy-Config "$repoDir\wezterm\wezterm.lua" "$env:USERPROFILE\.config\wezterm\wezterm.lua"
+Copy-Config "$repoDir\envs\wezterm\wezterm.lua" "$env:USERPROFILE\.config\wezterm\wezterm.lua"
 
 Write-Host "Starship..."
-Copy-Config "$repoDir\starship\starship.windows.toml" "$env:USERPROFILE\.config\starship\starship.toml"
+Copy-Config "$repoDir\envs\starship\starship.windows.toml" "$env:USERPROFILE\.config\starship\starship.toml"
 
 Write-Host "PowerShell profile..."
-$psProfileSource = "$repoDir\powershell\Microsoft.PowerShell_profile.ps1"
+$psProfileSource = "$repoDir\envs\powershell\Microsoft.PowerShell_profile.ps1"
 $docRoots = @(
     [Environment]::GetFolderPath('MyDocuments'),
     "$HOME\Documents"
@@ -551,7 +551,7 @@ $psProfileCandidates | Sort-Object -Unique | ForEach-Object {
 }
 
 Write-Host "EditorConfig..."
-Copy-Config "$repoDir\editorconfig\editorconfig" "$env:USERPROFILE\.editorconfig"
+Copy-Config "$repoDir\envs\editorconfig\editorconfig" "$env:USERPROFILE\.editorconfig"
 
 Write-Host "AutoHotKey..."
 $startupDir  = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
@@ -567,7 +567,7 @@ if (-not (Test-Path $loadoutKeysConfigPath -PathType Leaf)) {
 $loadoutAhkConfig = Get-LoadoutAhkConfig -ConfigPath $loadoutKeysConfigPath -FeatureDefinitions $ahkFeatureDefinitions
 Write-Host "  Using config: $loadoutKeysConfigPath"
 
-Copy-Config "$repoDir\autohotkey\hotkeys.ahk" $ahkScript
+Copy-Config "$repoDir\envs\autohotkey\hotkeys.ahk" $ahkScript
 
 if ($loadoutAhkConfig.AutoHotkeyEnabled) {
     if ($loadoutAhkConfig.EnabledFeatureIds.Count -gt 0) {

@@ -1,0 +1,77 @@
+theme = "tokyonight-night"
+
+[editor]
+line-number = "relative"
+cursorline = true
+mouse = false
+idle-timeout = 250
+rulers = []
+scrolloff = 999               # keep cursor vertically centered (matches scrolloff = 999)
+bufferline = "multiple"
+auto-pairs = true
+auto-format = true            # format on save (matches conform BufWritePre)
+text-width = 130              # matches textwidth = 130
+color-modes = true            # colorize mode indicator per mode
+rainbow-brackets = true
+true-color = true             # matches termguicolors = true
+
+[editor.soft-wrap]
+enable = true                 # matches wrap = true
+wrap-at-text-width = true     # wrap at textwidth = 130
+
+[editor.search]
+smart-case = true             # matches smartcase + ignorecase
+
+[editor.whitespace.render]
+space = "none"
+tab = "all"                   # matches listchars tab = "» "
+newline = "none"
+
+[editor.whitespace.characters]
+tab = "»"
+tabpad = " "
+space = "·"
+nbsp = "␣"                    # matches listchars nbsp = "␣"
+
+[editor.indent-guides]
+render = true
+character = "│"
+skip-levels = 1
+
+[editor.cursor-shape]
+normal = "block"
+insert = "block"              # matches guicursor = "i:block"
+select = "underline"
+
+[editor.gutters]
+layout = ["diff", "diagnostics", "line-numbers", "spacer"]
+
+[editor.gutters.line-numbers]
+min-width = 2                 # matches numberwidth = 2
+
+[editor.statusline]
+left = ["mode", "spinner", "file-name", "file-modification-indicator", "diagnostics"]
+center = []
+right = ["version-control", "position", "file-encoding", "file-type"]
+separator = "│"
+mode.normal = "NORMAL"
+mode.insert = "INSERT"
+mode.select = "SELECT"
+
+[editor.file-picker]
+hidden = false                # show dotfiles (matches rg --hidden in global aliases)
+
+[editor.lsp]
+display-messages = true
+auto-signature-help = true
+display-inlay-hints = false
+snippets = true
+
+[keys.normal]
+# mirrors nvim C-h/j/k/l window navigation
+C-h = "jump_view_left"
+C-j = "jump_view_down"
+C-k = "jump_view_up"
+C-l = "jump_view_right"
+# Ctrl-s save (common muscle memory)
+C-s = ":write"

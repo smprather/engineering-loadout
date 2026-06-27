@@ -54,7 +54,7 @@ git commit
 
 ```bash
 ./update tmux-plugins
-git add tmux/vendor/
+git add envs/tmux/vendor/
 git commit
 ```
 

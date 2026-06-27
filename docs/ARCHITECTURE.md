@@ -132,7 +132,7 @@ overrides the previous without touching upstream files.
 
 ### Bash
 
-Entry point: `bash/bashrc` sources `config.sh` then `bashrc` for each layer in order.
+Entry point: `envs/bash/bashrc` sources `config.sh` then `bashrc` for each layer in order.
 Layer dirs live at `~/.config/bash/<layer>/` -- user-created, never committed here.
 
 ```
@@ -146,11 +146,11 @@ Layer dirs live at `~/.config/bash/<layer>/` -- user-created, never committed he
 ```
 
 Completions are auto-sourced from each layer's `completions/*.bash`.
-See `bash/README.md` for hook injection points (numbered `global_hooks/N.sh`).
+See `envs/bash/README.md` for hook injection points (numbered `global_hooks/N.sh`).
 
 ### Neovim
 
-Entry point: `nvim/init.lua` -- thin dispatcher with four phases:
+Entry point: `envs/nvim/init.lua` -- thin dispatcher with four phases:
 1. Source `config.lua` per layer -> sets `vim.g.cfg_*` defaults and overrides.
 2. Bootstrap lazy.nvim (offline-safe: skips plugin setup if git clone fails).
 3. Collect plugin specs from each layer's `plugins/` dir.

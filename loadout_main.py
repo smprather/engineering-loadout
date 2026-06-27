@@ -2320,7 +2320,7 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
 def install_crate_store(repo_dir, home, selected_tools=None):
     """Extract the bundled offline Cargo local-registry (rust-crate-store).
 
-    Archive lives at top-level rust/crate-store.tar.bz2 (arch-independent crate
+    Archive lives at envs/rust/crate-store.tar.bz2 (arch-independent crate
     sources) and is auto-chunked into .part-NNN by build-crate-store.sh, so it
     is resolved through _bz2.resolve like the runtime archives. The store
     (index/ + *.crate) is consumed offline via ~/.cargo/config.toml written by
@@ -2330,10 +2330,10 @@ def install_crate_store(repo_dir, home, selected_tools=None):
         skipped("Rust crate store (rust-crate-store not selected)", "")
         record_result("Rust crate store", "SKIP", "rust-crate-store not in selected packages")
         return
-    archive = _bz2.resolve(os.path.join(repo_dir, "rust", "crate-store.tar.bz2"))
+    archive = _bz2.resolve(os.path.join(repo_dir, "envs", "rust", "crate-store.tar.bz2"))
     if archive is None:
         skipped(
-            "rust/crate-store.tar.bz2 not found in repo",
+            "envs/rust/crate-store.tar.bz2 not found in repo",
             "run pre_built/build_scripts/build-crate-store.sh on a connected machine",
         )
         record_result("Rust crate store", "SKIP", "no bundled crate store archive")
@@ -2535,7 +2535,7 @@ def install_vim_runtime(repo_dir, home, selected_tools=None):
     if platform_dir:
         archive = _bz2.resolve(os.path.join(platform_dir, "runtime", "vim92.tar.bz2"))
     if archive is None:
-        archive = _bz2.resolve(os.path.join(repo_dir, "vim", "runtime.tar.bz2"))
+        archive = _bz2.resolve(os.path.join(repo_dir, "envs", "vim", "runtime.tar.bz2"))
     if archive is None:
         skipped(
             "Vim runtime (no vim92.tar.bz2 in pre_built/<platform>/runtime/ or vim/)",
@@ -2877,7 +2877,7 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
 def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
     """Seed the bundled active nvim plugins into ~/.local/share/nvim/lazy/.
 
-    The bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2) is a snapshot of
+    The bundle (envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2) is a snapshot of
     the active default plugin set -- including lazy.nvim itself -- each with its .git
     intact. Extracting into lazy/<name> lets lazy.nvim treat them as already
     installed, so plugins work on a fully offline box, while remaining real git
@@ -2891,10 +2891,10 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
         skipped("nvim plugin bundle (nvim-catalog-plugins not selected)", "")
         record_result("nvim plugin bundle", "SKIP", "nvim-catalog-plugins not in selected packages")
         return
-    archive = os.path.join(repo_dir, "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
-    if not os.path.isfile(archive):
+    archive = _bz2.resolve(os.path.join(repo_dir, "envs", "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2"))
+    if archive is None:
         skipped(
-            "nvim plugin bundle (nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2 not found)",
+            "nvim plugin bundle (envs/nvim/vendor/plugins/nvim-catalog-plugins.tar.bz2 not found)",
             "Active plugins will NOT be available offline; users must run :Lazy sync online.",
         )
         record_result("nvim plugin bundle", "SKIP", "no bundle archive")
@@ -3083,10 +3083,14 @@ def preserve_bash_layers_from_symlink(home):
 def install_bash(repo_dir, home, links_mode):
     bash_config = os.path.join(home, ".config", "bash")
     preserve_bash_layers_from_symlink(home)
-    install_path(os.path.join(repo_dir, "bash", "global"), os.path.join(bash_config, "global"), links_mode)
-    install_path(os.path.join(repo_dir, "bash", "functions.sh"), os.path.join(bash_config, "functions.sh"), links_mode)
-    install_path(os.path.join(repo_dir, "bash", "README.md"), os.path.join(bash_config, "README.md"), links_mode)
-    install_path(os.path.join(repo_dir, "bash", "bashrc"), os.path.join(bash_config, "bashrc"), links_mode)
+    install_path(os.path.join(repo_dir, "envs", "bash", "global"), os.path.join(bash_config, "global"), links_mode)
+    install_path(
+        os.path.join(repo_dir, "envs", "bash", "functions.sh"), os.path.join(bash_config, "functions.sh"), links_mode
+    )
+    install_path(
+        os.path.join(repo_dir, "envs", "bash", "README.md"), os.path.join(bash_config, "README.md"), links_mode
+    )
+    install_path(os.path.join(repo_dir, "envs", "bash", "bashrc"), os.path.join(bash_config, "bashrc"), links_mode)
     for entrypoint in BASH_ENTRYPOINTS:
         lns(".config/bash/bashrc", os.path.join(home, entrypoint), verbose=True)
 
@@ -3285,7 +3289,7 @@ def _install_env_bash(repo_dir, home):
 
 
 def _install_env_nvim(repo_dir, home):
-    nvim_src = os.path.join(repo_dir, "nvim")
+    nvim_src = os.path.join(repo_dir, "envs", "nvim")
     nvim_config = os.path.join(home, ".config", "nvim")
     ensure_dir(os.path.join(nvim_config, "after", "lsp"), "Neovim config")
     ensure_dir(os.path.join(nvim_config, "after", "ftplugin"), "Neovim config")
@@ -3310,11 +3314,11 @@ def _install_env_vim(repo_dir, home):
     ensure_dir(os.path.join(vim_config, "vim", "pack", "vendor", "opt"), "Vim config")
     for start_or_opt in ("start", "opt"):
         sync_dir(
-            os.path.join(repo_dir, "vim", "vim", "pack", "vendor", start_or_opt),
+            os.path.join(repo_dir, "envs", "vim", "vim", "pack", "vendor", start_or_opt),
             os.path.join(vim_config, "vim", "pack", "vendor", start_or_opt),
             delete=True,
         )
-    install_path(os.path.join(repo_dir, "vim", "vimrc"), os.path.join(vim_config, "vimrc"), False)
+    install_path(os.path.join(repo_dir, "envs", "vim", "vimrc"), os.path.join(vim_config, "vimrc"), False)
     lns(".config/vim/vimrc", os.path.join(home, ".vimrc"), verbose=True)
 
 
@@ -3326,16 +3330,20 @@ def _install_env_tmux(repo_dir, home):
         os.unlink(tmux_config)
     ensure_dir(os.path.join(tmux_config, "tmux", "plugins"), "tmux config")
     sync_dir(
-        os.path.join(repo_dir, "tmux", "vendor", "plugins"),
+        os.path.join(repo_dir, "envs", "tmux", "vendor", "plugins"),
         os.path.join(tmux_config, "tmux", "plugins"),
         delete=True,
     )
-    install_path(os.path.join(repo_dir, "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
+    install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
     install_path(
-        os.path.join(repo_dir, "tmux", "tmux-3col-layout.sh"), os.path.join(tmux_config, "tmux-3col-layout.sh"), False
+        os.path.join(repo_dir, "envs", "tmux", "tmux-3col-layout.sh"),
+        os.path.join(tmux_config, "tmux-3col-layout.sh"),
+        False,
     )
     install_path(
-        os.path.join(repo_dir, "tmux", "tmux-word-separators"), os.path.join(tmux_config, "tmux-word-separators"), False
+        os.path.join(repo_dir, "envs", "tmux", "tmux-word-separators"),
+        os.path.join(tmux_config, "tmux-word-separators"),
+        False,
     )
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
     lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
@@ -3348,13 +3356,15 @@ def _install_env_editorconfig(repo_dir, home):
         os.unlink(editorconfig_dir)
     ensure_dir(editorconfig_dir, "editorconfig")
     install_path(
-        os.path.join(repo_dir, "editorconfig", "editorconfig"), os.path.join(editorconfig_dir, "editorconfig"), False
+        os.path.join(repo_dir, "envs", "editorconfig", "editorconfig"),
+        os.path.join(editorconfig_dir, "editorconfig"),
+        False,
     )
     lns(".config/editorconfig/editorconfig", os.path.join(home, ".editorconfig"), verbose=True)
 
 
 def _install_env_pip(repo_dir, home):
-    _pip_conf_src = os.path.join(repo_dir, "python", "pip.conf")
+    _pip_conf_src = os.path.join(repo_dir, "envs", "python", "pip.conf")
     if not os.path.isfile(_pip_conf_src):
         return
     _pip_cfg_dir = os.path.join(home, ".config", "pip")
@@ -3368,17 +3378,19 @@ def _install_env_starship(repo_dir, home):
         os.unlink(starship_dir)
     ensure_dir(starship_dir, "starship config")
     install_path(
-        os.path.join(repo_dir, "starship", "config-schema.json"),
+        os.path.join(repo_dir, "envs", "starship", "config-schema.json"),
         os.path.join(starship_dir, "config-schema.json"),
         False,
     )
     install_path(
-        os.path.join(repo_dir, "starship", "starship.linux.toml"), os.path.join(starship_dir, "starship.toml"), False
+        os.path.join(repo_dir, "envs", "starship", "starship.linux.toml"),
+        os.path.join(starship_dir, "starship.toml"),
+        False,
     )
 
 
 def _install_env_helix(repo_dir, home):
-    _helix_cfg = os.path.join(repo_dir, "helix", "config.toml")
+    _helix_cfg = os.path.join(repo_dir, "envs", "helix", "config.toml")
     if not os.path.isfile(_helix_cfg):
         return
     ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
