@@ -1,6 +1,19 @@
 # Current Handoff
 
-Last updated: 2026-06-26.
+Last updated: 2026-06-27.
+
+## Recent Integration
+
+AutoHotkey runtime-config refactor was integrated from
+`0001-ahk-read-feature-config-from-loadout_keys.toml-at-ru.patch`.
+`autohotkey/hotkeys.ahk` now reads `%USERPROFILE%\loadout_keys.toml` at startup
+instead of having feature booleans stamped in by `loadout.ps1`.
+
+Touched areas: `autohotkey/hotkeys.ahk`, `loadout.ps1`,
+`autohotkey/test-run.ps1`, and cold-start docs. The AHK script also now has
+`LOADOUT_KEYS_TOML` override support, `--print-config`, gated
+`[autohotkey].logging`, and Cisco VPN SSID fallback through the
+WLAN-AutoConfig event log when `netsh` reports no SSID.
 
 ## Repository State
 
@@ -34,6 +47,11 @@ These checks passed after the recent changes:
 
 - Passed for this Markdown sync: `git diff --check`, `sh -n loadout`,
   `python3 -m py_compile loadout_main.py`, and `bash -n bash/global/bashrc`.
+- Passed for the AutoHotkey runtime-config patch integration: `git diff
+  --check`, `sh -n loadout`, `python3 -m py_compile loadout_main.py`, and
+  `bash -n bash/global/bashrc`. Windows-only checks (`AutoHotkey64.exe
+  /Validate`, PowerShell parser/test-run) still need a Windows or PowerShell
+  environment; `pwsh` was not available in this Linux sandbox.
 - This Markdown sync already reconciled user/agent docs with the current
   Click/rich-click CLI surface: `--dest-dir` belongs after install-like verbs,
   visible selection uses positional `PKG...` args (no user-facing `--only` /
@@ -92,3 +110,6 @@ exec bash
   `unalias name 2>/dev/null || true` before `name() { ...; }`.
 - The prompt/WezTerm/Starship block in `bash/global/bashrc` is order-sensitive;
   verify with a real PTY, not only `bash -lic`.
+- `hotkeys.ahk` reads `loadout_keys.toml` at startup (reusing its partial TOML
+  parser); the installer no longer stamps feature booleans. Override the config
+  path with `LOADOUT_KEYS_TOML`; `--print-config` dumps the resolved config.

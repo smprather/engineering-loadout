@@ -388,8 +388,14 @@ byte-patcher that changes an exe's DOS stub string to alter its hash, useful
 as a SentinelOne bypass for flagged binaries like AHK.
 
 The AHK feature config lives at `%USERPROFILE%\loadout_keys.toml` (created if
-missing). `.\loadout.ps1` patches feature-flag booleans in
-`%USERPROFILE%\autohotkey\hotkeys.ahk` based on the enabled feature list.
-The Cisco VPN feature also reads
+missing). `hotkeys.ahk` reads the enabled-feature list from this file at startup
+-- the installer no longer patches booleans into the script; it just copies it.
+Undefined settings fall back to defaults (`[autohotkey].enabled` default true;
+optional features default off). Override the config path with the
+`LOADOUT_KEYS_TOML` env var; run `hotkeys.ahk --print-config` to dump the
+resolved config and exit. The Cisco VPN feature also reads
 `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` directly at
-runtime to skip automation on named Wi-Fi networks.
+runtime to skip automation on named Wi-Fi networks. Set
+`[autohotkey].logging = true` (default false) to append timestamped diagnostics
+(SSID source, VPN skip decision, auto-login actions) to
+`%USERPROFILE%\autohotkey\hotkeys.log` for troubleshooting.

@@ -78,7 +78,7 @@ No elevation required.
 | **[Starship](https://starship.rs)** | Cross-shell prompt, Linux and Windows configs |
 | **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, Starship + zoxide integration |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
-| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script, feature flags via `loadout_keys.toml` |
+| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script; reads feature config from `loadout_keys.toml` at startup |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
 | **Command-line tools** | 90+ modern CLI utilities, ready offline -- see table below |
 | **Nerd Fonts** | 12 font families |

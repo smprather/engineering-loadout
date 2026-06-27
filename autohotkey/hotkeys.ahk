@@ -4,15 +4,30 @@ SetTitleMatchMode("Slow")
 InstallMouseHook()
 InstallKeybdHook()
 
-; Installer-managed feature flags. engineering-loadout.ps1 patches these values from
-; %USERPROFILE%\loadout_keys.toml after copying this file into place.
-cfg_feature_corp_logins := false
-cfg_feature_mouse_wiggle := false
-cfg_feature_cisco_secure_client_vpn := false
-cfg_feature_password_manager := false
-cfg_feature_tmux_hotkeys := false
-cfg_feature_f1f2f3_as_mouse_buttons := false
-cfg_feature_thinlinc_reconnect := false
+; Optional feature flags are read from %USERPROFILE%\loadout_keys.toml at startup
+; (override the path with the LOADOUT_KEYS_TOML environment variable). The installer
+; no longer patches these values into this script -- edit loadout_keys.toml and
+; reload (Ctrl+Alt+R) to apply changes. Defaults apply only to undefined settings:
+; AutoHotkey is enabled unless [autohotkey].enabled = false, and every optional
+; feature is off unless its id appears in [autohotkey.features].enabled.
+cfg_autohotkey_enabled := loadout_toml_read_bool("autohotkey", "enabled", true)
+loadout_enabled_features := loadout_read_enabled_features()
+
+cfg_feature_corp_logins             := cfg_autohotkey_enabled && loadout_enabled_features.Has("corp-logins")
+cfg_feature_mouse_wiggle            := cfg_autohotkey_enabled && loadout_enabled_features.Has("mouse-wiggle")
+cfg_feature_cisco_secure_client_vpn := cfg_autohotkey_enabled && loadout_enabled_features.Has("cisco-secure-client-vpn")
+cfg_feature_password_manager        := cfg_autohotkey_enabled && loadout_enabled_features.Has("password-manager")
+cfg_feature_tmux_hotkeys            := cfg_autohotkey_enabled && loadout_enabled_features.Has("tmux-hotkeys")
+cfg_feature_f1f2f3_as_mouse_buttons := cfg_autohotkey_enabled && loadout_enabled_features.Has("f1f2f3-as-mouse-buttons")
+cfg_feature_thinlinc_reconnect      := cfg_autohotkey_enabled && loadout_enabled_features.Has("thinlinc-reconnect")
+
+; `<ahk-exe> hotkeys.ahk --print-config` prints the resolved configuration (which
+; loadout_keys.toml was read and which features are on) then exits, without
+; registering any hotkeys. Useful for debugging which features are active.
+if (loadout_should_print_config()) {
+    FileAppend(loadout_format_config_report(), "*")
+    ExitApp(0)
+}
 
 StrJoin(arr, sep) {
     out := ""
@@ -38,6 +53,19 @@ g_mouse_wiggle_allowed := (EnvGet("AHK_ENABLE_MOUSE_WIGGLE") != "false")
 g_thinlinc_ticks := 0
 g_thinlinc_last_seen := "(handle_thinlinc not yet called)"
 g_thinlinc_relaunch_pending := false
+
+; Optional timestamped logging to <script dir>\hotkeys.log, toggled by
+; [autohotkey].logging = true in loadout_keys.toml (off by default). Handy for
+; debugging runtime behavior such as the Cisco VPN Wi-Fi skip decision.
+g_loadout_logging := loadout_toml_read_bool("autohotkey", "logging", false)
+g_loadout_log_path := A_ScriptDir . "\hotkeys.log"
+if (g_loadout_logging) {
+    loadout_log("==== hotkeys.ahk started ====")
+    loadout_log("config: " . loadout_keys_path())
+    loadout_log("autohotkey.enabled=" . (cfg_autohotkey_enabled ? "true" : "false") . "  cisco-secure-client-vpn=" . (cfg_feature_cisco_secure_client_vpn ? "on" : "off"))
+    loadout_startup_skip := loadout_toml_read_quoted_array("autohotkey.features.cisco-secure-client-vpn", "skip_wifi_ssids")
+    loadout_log("skip_wifi_ssids (" . loadout_startup_skip.Length . "): " . StrJoin(loadout_startup_skip, ", "))
+}
 
 ; Don't flood windows with gui events too fast.
 SetMouseDelay(10)
@@ -66,11 +94,15 @@ do_loop()
         handle_thinlinc()
 }
 
-;g_vpn_log := A_ScriptDir . "\vpn_debug.log"
-;VpnLog(msg) {
-;    global g_vpn_log
-;    FileAppend(A_Now " " . msg . "`n", g_vpn_log)
-;}
+; Append a timestamped line to <script dir>\hotkeys.log when logging is enabled
+; via [autohotkey].logging. Wrapped in try so logging can never disrupt hotkeys.
+loadout_log(message)
+{
+    global g_loadout_logging, g_loadout_log_path
+    if (!g_loadout_logging)
+        return
+    try FileAppend(FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") . "  " . message . "`n", g_loadout_log_path, "UTF-8")
+}
 
 log_into_corp_vpn()
 {
@@ -103,6 +135,7 @@ log_into_corp_vpn()
         if (WinExist("Cisco Secure Client", "The secure gateway has terminated the VPN")) {
             WinActivate()
             ControlClick("Button1")
+            loadout_log("[vpn] dismissed 'secure gateway terminated' dialog")
             SetTitleMatchMode(2)
             return
         }
@@ -124,6 +157,7 @@ log_into_corp_vpn()
             ControlClick("Button1")
             last_fail_ms := A_TickCount
             fail_backoff_ms := fail_backoff_ms ? Min(fail_backoff_ms * 2, 1000000) : 30000
+            loadout_log("[vpn] dismissed 'could not connect to server' dialog; backoff=" . fail_backoff_ms . "ms")
             SetTitleMatchMode(2)
             return
         }
@@ -147,6 +181,7 @@ log_into_corp_vpn()
             ControlSetText(g_uid, "Edit1")
             ControlSetText(g_password, "Edit2")
             ControlClick("Button1")
+            loadout_log("[vpn] entered credentials and clicked Connect")
             last_action_ms := A_TickCount
             fail_backoff_ms := 0
             SetTitleMatchMode(2)
@@ -159,6 +194,7 @@ log_into_corp_vpn()
             windowText := WinGetText("Cisco Secure Client", "AnyConnect VPN:")
             DetectHiddenWindows(false)
             if (InStr(windowText, "Connected to")) {
+                loadout_log("[vpn] already connected")
                 fail_backoff_ms := 0
                 SetTitleMatchMode(2)
                 return
@@ -181,7 +217,7 @@ log_into_corp_vpn()
         DetectHiddenWindows(false)
         SetTitleMatchMode(2)
         last_action_ms := A_TickCount
-        ;VpnLog("ERROR: " e.Message " (line " e.Line ")")
+        loadout_log("[vpn] ERROR: " . e.Message . " (line " . e.Line . ")")
     }
 }
 
@@ -202,20 +238,40 @@ cisco_vpn_skipped_for_current_wifi()
         return false
 
     current_ssid := current_wifi_ssid()
-    if (current_ssid = "")
+    if (current_ssid = "") {
+        loadout_log("[vpn] current Wi-Fi SSID unknown -> not skipping (auto-login allowed)")
         return false
+    }
 
     for _, skipped_ssid in skip_ssids {
-        if (current_ssid == skipped_ssid) {
+        if (current_ssid = skipped_ssid) {
+            loadout_log("[vpn] SSID '" . current_ssid . "' matches skip list entry '" . skipped_ssid . "' -> SKIP auto-login")
             last_result := true
             return true
         }
     }
 
+    loadout_log("[vpn] SSID '" . current_ssid . "' not in skip list -> auto-login allowed")
     return false
 }
 
 current_wifi_ssid()
+{
+    ssid := current_wifi_ssid_from_netsh()
+    if (ssid != "") {
+        loadout_log("[ssid] netsh reported '" . ssid . "'")
+        return ssid
+    }
+
+    ; netsh can't report the SSID when Location services are disabled (e.g. by
+    ; corporate Group Policy), so fall back to the WLAN-AutoConfig event log,
+    ; which needs neither Location permission nor elevation.
+    elog := current_wifi_ssid_from_eventlog()
+    loadout_log("[ssid] netsh empty; event log reported '" . elog . "'")
+    return elog
+}
+
+current_wifi_ssid_from_netsh()
 {
     temp_path := A_Temp . "\loadout-ahk-netsh-" . A_TickCount . ".txt"
 
@@ -255,12 +311,158 @@ current_wifi_ssid()
     return fallback_ssid
 }
 
+; Determine the current Wi-Fi SSID from the WLAN-AutoConfig operational log.
+; This works even when "netsh wlan show interfaces" can't report the SSID because
+; Location services are disabled. Returns the SSID of the most recent successful
+; connection (event 8001), or "" if the most recent event is a disconnect (8003).
+current_wifi_ssid_from_eventlog()
+{
+    out_path := A_Temp . "\loadout-ahk-wlanssid-" . A_TickCount . ".txt"
+    ps_path  := A_Temp . "\loadout-ahk-wlanssid-" . A_TickCount . ".ps1"
+
+    ps := ""
+    ps .= "try {`n"
+    ps .= "  $e = Get-WinEvent -LogName 'Microsoft-Windows-WLAN-AutoConfig/Operational' -MaxEvents 200 -ErrorAction Stop |`n"
+    ps .= "       Where-Object { $_.Id -eq 8001 -or $_.Id -eq 8003 } | Select-Object -First 1`n"
+    ps .= "  if ($e -and $e.Id -eq 8001) {`n"
+    ps .= "    $x = [xml]$e.ToXml()`n"
+    ps .= "    ($x.Event.EventData.Data | Where-Object { $_.Name -eq 'SSID' }).'#text'`n"
+    ps .= "  }`n"
+    ps .= "} catch {}`n"
+
+    try {
+        FileAppend(ps, ps_path, "UTF-8")
+        RunWait('cmd.exe /c powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' . ps_path . '" > "' . out_path . '" 2>nul', , "Hide")
+        output := FileRead(out_path, "UTF-8")
+    } catch {
+        try FileDelete(ps_path)
+        try FileDelete(out_path)
+        return ""
+    }
+
+    try FileDelete(ps_path)
+    try FileDelete(out_path)
+
+    return Trim(output, " `t`r`n")
+}
+
 loadout_keys_path()
 {
+    override := EnvGet("LOADOUT_KEYS_TOML")
+    if (override != "")
+        return override
     user_profile := EnvGet("USERPROFILE")
     if (user_profile = "")
         return ""
     return user_profile . "\loadout_keys.toml"
+}
+
+; Legacy/alias feature id -> canonical id. Keep in sync with loadout.ps1
+; Get-AhkFeatureDefinitions so [autohotkey.plugins] entries from older installs
+; still map onto the current feature flags.
+loadout_feature_alias_map()
+{
+    return Map(
+        "10-corp-logins", "corp-logins",
+        "20-mouse-wiggle", "mouse-wiggle",
+        "30-cisco-secure-client-vpn", "cisco-secure-client-vpn",
+        "40-password-manager", "password-manager",
+        "50-tmux-hotkeys", "tmux-hotkeys",
+        "60-f1f2f3-as-mouse-bottons", "f1f2f3-as-mouse-buttons",
+        "f1f2f3_as_mouse_bottons", "f1f2f3-as-mouse-buttons")
+}
+
+; Read the set of enabled feature ids from loadout_keys.toml. Accepts both the
+; current [autohotkey.features].enabled array and the legacy
+; [autohotkey.plugins].enabled array, normalizing legacy ids to canonical ones.
+; Returns a Map of canonical id -> true (absent ids are simply off).
+loadout_read_enabled_features()
+{
+    enabled := Map()
+    aliases := loadout_feature_alias_map()
+
+    ids := loadout_toml_read_quoted_array("autohotkey.features", "enabled")
+    for value in loadout_toml_read_quoted_array("autohotkey.plugins", "enabled")
+        ids.Push(value)
+
+    for value in ids {
+        canonical := aliases.Has(value) ? aliases[value] : value
+        enabled[canonical] := true
+    }
+
+    return enabled
+}
+
+; Read a boolean scalar (key = true|false) from a section of loadout_keys.toml.
+; Returns default_value when the file, section, or key is missing.
+loadout_toml_read_bool(section_name, key_name, default_value)
+{
+    config_path := loadout_keys_path()
+    if (config_path = "" || !FileExist(config_path))
+        return default_value
+
+    try {
+        content := FileRead(config_path, "UTF-8")
+    } catch {
+        return default_value
+    }
+
+    in_target_section := false
+
+    Loop Parse content, "`n", "`r" {
+        trimmed := Trim(A_LoopField)
+
+        if (trimmed = "" || SubStr(trimmed, 1, 1) = "#")
+            continue
+
+        if (RegExMatch(trimmed, "^\[([^\]]+)\]\s*$", &section_match)) {
+            in_target_section := (section_match[1] = section_name)
+            continue
+        }
+
+        if (!in_target_section)
+            continue
+
+        if (RegExMatch(trimmed, "^" . key_name . "\s*=\s*(true|false)\b", &value_match))
+            return (value_match[1] = "true")
+    }
+
+    return default_value
+}
+
+; True when --print-config was passed on the command line.
+loadout_should_print_config()
+{
+    for arg in A_Args {
+        if (arg = "--print-config")
+            return true
+    }
+    return false
+}
+
+; Human-readable dump of the resolved feature configuration for --print-config.
+loadout_format_config_report()
+{
+    global cfg_autohotkey_enabled
+    global cfg_feature_corp_logins, cfg_feature_mouse_wiggle, cfg_feature_cisco_secure_client_vpn
+    global cfg_feature_password_manager, cfg_feature_tmux_hotkeys, cfg_feature_f1f2f3_as_mouse_buttons
+    global cfg_feature_thinlinc_reconnect
+
+    config_path := loadout_keys_path()
+    exists := (config_path != "" && FileExist(config_path))
+
+    out := "loadout_keys.toml: " . (config_path = "" ? "(unresolved)" : config_path) . "`n"
+    out .= "  exists: " . (exists ? "yes" : "no") . "`n"
+    out .= "autohotkey.enabled: " . (cfg_autohotkey_enabled ? "true" : "false") . "`n"
+    out .= "features:`n"
+    out .= "  corp-logins:             " . (cfg_feature_corp_logins ? "on" : "off") . "`n"
+    out .= "  mouse-wiggle:            " . (cfg_feature_mouse_wiggle ? "on" : "off") . "`n"
+    out .= "  cisco-secure-client-vpn: " . (cfg_feature_cisco_secure_client_vpn ? "on" : "off") . "`n"
+    out .= "  password-manager:        " . (cfg_feature_password_manager ? "on" : "off") . "`n"
+    out .= "  tmux-hotkeys:            " . (cfg_feature_tmux_hotkeys ? "on" : "off") . "`n"
+    out .= "  f1f2f3-as-mouse-buttons: " . (cfg_feature_f1f2f3_as_mouse_buttons ? "on" : "off") . "`n"
+    out .= "  thinlinc-reconnect:      " . (cfg_feature_thinlinc_reconnect ? "on" : "off") . "`n"
+    return out
 }
 
 loadout_toml_read_quoted_array(section_name, key_name)

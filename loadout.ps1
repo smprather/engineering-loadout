@@ -58,8 +58,8 @@ Installed destinations:
       EditorConfig copied from editorconfig\editorconfig.
 
   %USERPROFILE%\autohotkey\hotkeys.ahk
-      AutoHotkey v2 script copied from autohotkey\hotkeys.ahk, then feature
-      flags are patched from %USERPROFILE%\loadout_keys.toml.
+      AutoHotkey v2 script copied from autohotkey\hotkeys.ahk. The script reads
+      its feature selections from %USERPROFILE%\loadout_keys.toml at startup.
 
   Startup\hotkeys.lnk
       Startup shortcut pointing AutoHotkey64.exe at the installed hotkeys.ahk.
@@ -67,8 +67,10 @@ Installed destinations:
 Configuration file:
   %USERPROFILE%\loadout_keys.toml
 
-  Created on first run if missing. Existing files are preserved. The installer
-  reads this file and patches feature booleans into the installed hotkeys.ahk.
+  Created on first run if missing. Existing files are preserved. hotkeys.ahk
+  reads this file at startup to decide which features are active; the installer
+  no longer patches booleans into the script, so editing loadout_keys.toml and
+  reloading AutoHotkey (Ctrl+Alt+R) is enough to apply changes.
   Legacy [autohotkey.plugins] enabled arrays are still accepted.
 
 Example loadout_keys.toml:
@@ -94,7 +96,8 @@ Example loadout_keys.toml:
 AutoHotkey global setting:
   [autohotkey]
   enabled = true | false
-      false keeps the script installed but writes all optional feature flags off.
+      false keeps the script installed but makes all optional features resolve
+      as off when hotkeys.ahk starts.
 
   executable = "C:\path\to\AutoHotkey64.exe"
       Optional. Use this exact executable instead of discovering AutoHotkey_* in
@@ -146,6 +149,7 @@ Environment variables used by AutoHotkey:
   CORP_PASSWORD
   PWMANAGER_PASSWORD
   AHK_ENABLE_MOUSE_WIGGLE=false
+  LOADOUT_KEYS_TOML
   THINLINC_SERVER
   THINLINC_USERNAME
   THINLINC_PASSWORD
@@ -225,7 +229,7 @@ function New-LoadoutKeysConfig {
         'version = 1',
         '',
         '# This file is user-local and not shared from the repo.',
-        '# loadout.ps1 patches feature flags in hotkeys.ahk from this list.',
+        '# hotkeys.ahk reads this file at startup; reload AutoHotkey after edits.',
         '# Legacy [autohotkey.plugins] entries are still accepted for existing installs.',
         '',
         '[autohotkey]',
@@ -364,30 +368,6 @@ function Get-LoadoutAhkConfig {
 
     $result.EnabledFeatureIds = $enabledFeatureIds
     return $result
-}
-
-function Set-AhkFeatureFlags {
-    param(
-        [string]$AhkScriptPath,
-        [bool]$AutoHotkeyEnabled,
-        [string[]]$EnabledFeatureIds,
-        [object[]]$FeatureDefinitions
-    )
-
-    $content = Get-Content -Path $AhkScriptPath -Raw -ErrorAction Stop
-
-    foreach ($feature in $FeatureDefinitions) {
-        $value = if ($AutoHotkeyEnabled -and ($EnabledFeatureIds -contains $feature.Id)) { 'true' } else { 'false' }
-        $pattern = '(?m)^' + [regex]::Escape($feature.FlagName) + '\s*:=\s*(true|false)\s*$'
-        if (-not [regex]::IsMatch($content, $pattern)) {
-            Write-Warning "  Could not find feature flag '$($feature.FlagName)' in $AhkScriptPath"
-            continue
-        }
-        $replacement = $feature.FlagName + ' := ' + $value
-        $content = [regex]::Replace($content, $pattern, $replacement)
-    }
-
-    Set-Content -Path $AhkScriptPath -Value $content -Encoding UTF8
 }
 
 function Get-LoadoutBundledPowerShellArchive {
@@ -588,17 +568,17 @@ $loadoutAhkConfig = Get-LoadoutAhkConfig -ConfigPath $loadoutKeysConfigPath -Fea
 Write-Host "  Using config: $loadoutKeysConfigPath"
 
 Copy-Config "$repoDir\autohotkey\hotkeys.ahk" $ahkScript
-Set-AhkFeatureFlags -AhkScriptPath $ahkScript -AutoHotkeyEnabled $loadoutAhkConfig.AutoHotkeyEnabled -EnabledFeatureIds $loadoutAhkConfig.EnabledFeatureIds -FeatureDefinitions $ahkFeatureDefinitions
 
 if ($loadoutAhkConfig.AutoHotkeyEnabled) {
     if ($loadoutAhkConfig.EnabledFeatureIds.Count -gt 0) {
-        Write-Host "  Enabled AHK features: $($loadoutAhkConfig.EnabledFeatureIds -join ', ')"
+        Write-Host "  AHK features enabled in loadout_keys.toml: $($loadoutAhkConfig.EnabledFeatureIds -join ', ')"
     } else {
-        Write-Host "  Enabled AHK features: (none)"
+        Write-Host "  AHK features enabled in loadout_keys.toml: (none)"
     }
 } else {
-    Write-Host "  AutoHotKey is globally disabled in loadout_keys.toml; optional AHK features were written as off."
+    Write-Host "  AutoHotKey is globally disabled in loadout_keys.toml; all optional AHK features are off."
 }
+Write-Host "  hotkeys.ahk reads loadout_keys.toml at startup; edit it and reload AutoHotkey (Ctrl+Alt+R) to apply changes."
 
 $legacyGeneratedFile = Join-Path $ahkHomeDir '_autoload_plugins.generated.ahk'
 if (Test-Path $legacyGeneratedFile -PathType Leaf) {

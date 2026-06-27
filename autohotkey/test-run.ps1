@@ -23,26 +23,28 @@ New-Item -ItemType Directory -Path $sandboxRoot -Force | Out-Null
 $sandboxScriptPath = Join-Path $sandboxRoot 'hotkeys.ahk'
 Copy-Item -Path $scriptPath -Destination $sandboxScriptPath -Force
 
-$sandboxContent = Get-Content -Path $sandboxScriptPath -Raw -ErrorAction Stop
-$featureFlags = @(
-    'cfg_feature_corp_logins',
-    'cfg_feature_mouse_wiggle',
-    'cfg_feature_cisco_secure_client_vpn',
-    'cfg_feature_password_manager',
-    'cfg_feature_tmux_hotkeys',
-    'cfg_feature_f1f2f3_as_mouse_buttons',
-    'cfg_feature_thinlinc_reconnect'
+# Enable every optional feature for the test by pointing the script at a sandbox
+# loadout_keys.toml via the LOADOUT_KEYS_TOML environment variable. The script
+# reads this at startup instead of having feature booleans patched into it.
+$sandboxKeysPath = Join-Path $sandboxRoot 'loadout_keys.toml'
+$sandboxKeys = @(
+    'version = 1'
+    ''
+    '[autohotkey]'
+    'enabled = true'
+    ''
+    '[autohotkey.features]'
+    'enabled = ['
+    '  "corp-logins",'
+    '  "mouse-wiggle",'
+    '  "cisco-secure-client-vpn",'
+    '  "password-manager",'
+    '  "tmux-hotkeys",'
+    '  "f1f2f3-as-mouse-buttons",'
+    '  "thinlinc-reconnect",'
+    ']'
 )
-
-foreach ($flag in $featureFlags) {
-    $sandboxContent = [regex]::Replace(
-        $sandboxContent,
-        '(?m)^' + [regex]::Escape($flag) + '\s*:=\s*(true|false)\s*$',
-        $flag + ' := true'
-    )
-}
-
-Set-Content -Path $sandboxScriptPath -Value $sandboxContent -Encoding UTF8
+Set-Content -Path $sandboxKeysPath -Value $sandboxKeys -Encoding UTF8
 
 $scriptPath = $sandboxScriptPath
 
@@ -95,6 +97,7 @@ $testEnv = @{
     THINLINC_USERNAME = $ThinLincUsername
     THINLINC_PASSWORD = $ThinLincPassword
     AHK_ENABLE_MOUSE_WIGGLE = 'true'
+    LOADOUT_KEYS_TOML = $sandboxKeysPath
 }
 
 foreach ($kv in $testEnv.GetEnumerator()) {
@@ -110,7 +113,8 @@ Write-Host "  THINLINC_USERNAME=$($testEnv.THINLINC_USERNAME)"
 Write-Host "  THINLINC_PASSWORD=$($testEnv.THINLINC_PASSWORD)"
 Write-Host "  AHK_ENABLE_MOUSE_WIGGLE=$($testEnv.AHK_ENABLE_MOUSE_WIGGLE)"
 Write-Host "  Test sandbox=$sandboxRoot"
-Write-Host '  Feature mode=all optional repo features enabled in flat script'
+Write-Host "  LOADOUT_KEYS_TOML=$sandboxKeysPath"
+Write-Host '  Feature mode=all optional features enabled via sandbox loadout_keys.toml'
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $ahkExe

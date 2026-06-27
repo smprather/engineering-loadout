@@ -166,7 +166,7 @@ wezterm/
   wezterm.lua               - WezTerm config
 
 autohotkey/
-  hotkeys.ahk               - Windows AutoHotKey flat script with installer-patched feature flags
+  hotkeys.ahk               - Windows AutoHotKey flat script; reads feature config from loadout_keys.toml at startup
 
 hooks/
   pre-commit                - Removes embedded .git dirs before commits. Manual install only: cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
@@ -332,8 +332,8 @@ Each phase installer (`install_prebuilt_binaries`, `install_fonts`, `install_tld
 - `%USERPROFILE%\.config\starship\starship.toml` <- `repo/starship/starship.windows.toml`
 - `%USERPROFILE%\.editorconfig` <- `repo/editorconfig/editorconfig`
 - `%USERPROFILE%\autohotkey\hotkeys.ahk` <- `repo/autohotkey/hotkeys.ahk`
-- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey].executable` overrides AHK exe discovery (useful when AHK has been renamed for corp infosec compliance); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks
-- `loadout.ps1` patches feature flags in `%USERPROFILE%\autohotkey\hotkeys.ahk` based on enabled feature list
+- `%USERPROFILE%\loadout_keys.toml` -- user-local AHK feature selection config (created if missing); `[autohotkey].executable` overrides AHK exe discovery (useful when AHK has been renamed for corp infosec compliance); `[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` is read by AHK at runtime to skip Cisco automation on named Wi-Fi networks; `[autohotkey].logging = true` (default false) makes the script append timestamped diagnostics (SSID source, VPN skip decision, auto-login actions) to `%USERPROFILE%\autohotkey\hotkeys.log`
+- `hotkeys.ahk` reads its enabled-feature list from `%USERPROFILE%\loadout_keys.toml` at startup (no install-time patching; the installer just copies the script). Override the config path with `LOADOUT_KEYS_TOML`; run `AutoHotkey64.exe hotkeys.ahk --print-config` to dump the resolved config and exit
 - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\hotkeys.lnk` -- `.lnk` shortcut pointing to `AutoHotkey64.exe "%USERPROFILE%\autohotkey\hotkeys.ahk"` (AHK not system-wide to avoid SentinelOne flagging). AHK extracted to `%USERPROFILE%\AutoHotkey_*\`; if none exists, installer downloads latest stable from GitHub, removes `AutoHotkey32.exe`.
 - `%USERPROFILE%\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` <- `repo/powershell/Microsoft.PowerShell_profile.ps1` (PS 5.1)
 - `%USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` <- same (PS 7+)
@@ -515,7 +515,7 @@ coreutils wrappers (via Git for Windows path): `rm`, `cp`, `mv`, `diff`, `rmdir`
 
 ### AutoHotKey (`autohotkey/hotkeys.ahk`)
 
-Requires AHKv2. `hotkeys.ahk` single flat script. `loadout.ps1` copies to `%USERPROFILE%\autohotkey\hotkeys.ahk`, patches feature-flag booleans from `%USERPROFILE%\loadout_keys.toml`.
+Requires AHKv2. `hotkeys.ahk` single flat script. `loadout.ps1` copies it to `%USERPROFILE%\autohotkey\hotkeys.ahk`. The script reads its feature config from `%USERPROFILE%\loadout_keys.toml` at startup (override path via `LOADOUT_KEYS_TOML`; `--print-config` dumps the resolved config and exits). Undefined settings fall back to defaults (`[autohotkey].enabled` default true; every optional feature default off). Set `[autohotkey].logging = true` to append timestamped runtime diagnostics (SSID resolution, Cisco VPN skip decision, auto-login actions) to `<scriptdir>\hotkeys.log` via the `loadout_log` helper; off by default.
 
 Key hotkeys:
 - `Ctrl+Alt+R` -> reload script
@@ -531,7 +531,7 @@ Optional features:
 - `f1f2f3-as-mouse-buttons` -- F1/F2/F3 mouse remaps for mspaint/etxc/wezterm-gui
 - `thinlinc-reconnect` -- auto-dismiss ThinLinc "Connection error" dialogs, relaunch `tlclient.exe`, auto-fill Server/Username/Password from `THINLINC_SERVER` / `THINLINC_USERNAME` / `THINLINC_PASSWORD` (pings server before launching/connecting; user-initiated closes respected). `Ctrl+Alt+T` shows live diagnostic (tick count, last-seen state, env, window matches, ping).
 
-Existing `%USERPROFILE%\loadout_keys.toml` files with legacy plugin IDs remain accepted by installer and mapped onto flat-script feature flags.
+Existing `%USERPROFILE%\loadout_keys.toml` files with legacy plugin IDs (`[autohotkey.plugins]`, numeric-prefixed ids) remain accepted: the script maps them onto current feature ids at startup.
 
 **Layer architecture** (analogous to bash `global->corp->site->team->project->user`): `nvim/init.lua` thin dispatcher that sources `config.lua` per layer (Phase 1), bootstraps lazy.nvim (Phase 2), collects plugin specs from each layer's `plugins/` dir via `{ import = "LAYER.plugins" }` (Phase 3), sources `init.lua` per layer (Phase 4). `vim.g.cfg_*` variables set in `global/config.lua` are defaults; later layers override. Plugin manager: Lazy.nvim (versions locked in `lazy-lock.json`). Key plugins: blink.cmp, snacks.nvim, gitsigns.nvim, conform.nvim, nvim-lint, nvim-treesitter, tokyonight.nvim. `vim.g.cfg_dpc` guards update-checker and notifications on offline machines. `vim.g.loadout_plugins_enabled` false when lazy.nvim bootstrap fails offline -- core editor still starts cleanly.
 
