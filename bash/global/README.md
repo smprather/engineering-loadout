@@ -67,6 +67,13 @@ Resolver order: explicit `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` -> this vendore
 copy -> paths relative to the installed `wezterm` binary -> shared prefix. Never
 `/etc`.
 
+Outside a real WezTerm session (`TERM_PROGRAM != WezTerm` and no
+`WEZTERM_PANE`), `global/bashrc` keeps the vendored bash-preexec hooks but
+overrides `__wezterm_osc7` to the integration script's fast printf fallback.
+This prevents every prompt from blocking in `wezterm set-working-directory` on
+plain SSH/tmux sessions where the loadout's `wezterm` wrapper is visible on
+`PATH` but no mux/GUI is reachable.
+
 ## Prompt & shell integration
 
 > **Read this before touching the prompt block in `global/bashrc`.** It is
@@ -110,7 +117,8 @@ So the prompt block, in this exact order:
                                  __bp_imported bash_preexec_imported PROMPT_COMMAND
 2. source loadout wezterm.sh   (re-installs a *working* bash-preexec + wezterm
                                 hooks from user-writable space; gives wezterm
-                                users semantic zones / OSC7 even without tmux)
+                                users semantic zones / OSC7 even without tmux;
+                                off-WezTerm shells use printf OSC7 fallback)
 3. eval "$(starship init bash)"   (self-hooks onto precmd_functions if present,
                                    else PROMPT_COMMAND -- do NOT touch
                                    PROMPT_COMMAND around it)

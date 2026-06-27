@@ -298,7 +298,10 @@ completion is installed by `env-zsh`; bash completion can be generated with
 zones / OSC 7 cwd / user vars -- distinct from completion) is vendored at
 `bash/global/wezterm/wezterm.sh` and sourced by the bash config from
 user-writable space (never `/etc`), so wezterm users get it with or without tmux;
-toggle with `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION`.
+toggle with `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION`. Outside a real
+WezTerm session, bash keeps the vendored preexec hooks but forces OSC 7 cwd
+reporting through the fast printf fallback, so a PATH-visible `wezterm` binary
+cannot stall prompts by trying `wezterm set-working-directory`.
 
 ### Python
 

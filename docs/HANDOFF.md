@@ -15,20 +15,23 @@ Touched areas: `autohotkey/hotkeys.ahk`, `loadout.ps1`,
 `[autohotkey].logging`, and Cisco VPN SSID fallback through the
 WLAN-AutoConfig event log when `netsh` reports no SSID.
 
+`bash/global/bashrc` now keeps vendored WezTerm/bash-preexec integration enabled
+outside real WezTerm sessions but overrides `__wezterm_osc7` to the fast printf
+fallback. This prevents plain SSH/tmux prompts from blocking in
+`wezterm set-working-directory` when the loadout's `wezterm` wrapper is on
+`PATH` but no WezTerm mux/GUI exists.
+
 ## Repository State
 
 - Branch: `main`
 - Remote: `origin/main` (in sync after the latest push)
-- Latest work on `main` (all pushed): the offline **Rust toolchain + crate
-  store** (build + rebuild the loadout's own rust tools with no crates.io
-  access), the `liberty-tools` wheel bump, the `scan_for_malware` chunk/store
-  coverage fix, the merged Windows PowerShell 7.6.3 bundle + AHK robustness
-  work, and this cold-start Markdown sync.
-- Current uncommitted work at this handoff: the cold-start Markdown sync (this
-  file plus `README.md`, `CLAUDE.md`, `AGENTS.md`,
-  `.github/copilot-instructions.md`, `docs/ARCHITECTURE.md`,
-  `docs/INSTALLATION.md`); committed together with the README package-table
-  squaring (rust rows + liberty-tools version).
+- Latest work on `main` (all pushed): AutoHotkey runtime config from
+  `loadout_keys.toml`, the bash prompt off-WezTerm OSC7 fallback guard, the
+  offline **Rust toolchain + crate store**, the `liberty-tools` wheel bump, the
+  `scan_for_malware` chunk/store coverage fix, the Windows PowerShell 7.6.3
+  bundle, and AHK robustness work.
+- Current uncommitted work at this handoff: none expected after the bash prompt
+  fallback guard commit.
 - Work expected to be merged: none. The `rust-offline-crate-store` branch is
   fully merged into `main` and slated for deletion;
   `git branch --no-merged main` should be empty.
@@ -52,6 +55,10 @@ These checks passed after the recent changes:
   `bash -n bash/global/bashrc`. Windows-only checks (`AutoHotkey64.exe
   /Validate`, PowerShell parser/test-run) still need a Windows or PowerShell
   environment; `pwsh` was not available in this Linux sandbox.
+- Passed for the bash prompt off-WezTerm OSC7 fallback guard: `git diff
+  --check`, `bash -n bash/global/bashrc`, non-PTY function-body smoke confirming
+  off-WezTerm `__wezterm_osc7` is the printf fallback, and a real-PTY tmux smoke
+  covering initial prompt plus `exec bash`.
 - This Markdown sync already reconciled user/agent docs with the current
   Click/rich-click CLI surface: `--dest-dir` belongs after install-like verbs,
   visible selection uses positional `PKG...` args (no user-facing `--only` /

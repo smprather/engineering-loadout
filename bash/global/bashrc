@@ -118,9 +118,9 @@ export EGL_LOG_LEVEL=fatal
 # Override hosts in user/config.sh: LOADOUT_CFG_ONLINE_DETECT_HOSTS="nexus.corp:443 ..."
 if [[ -z "${LOADOUT_ONLINE+x}" ]]; then
     case "${LOADOUT_CFG_ENABLE_ONLINE_UPDATES:-auto}" in
-        0|false|no|off|disabled)  LOADOUT_ONLINE=0 ;;
-        1|true|yes|on|enabled)    LOADOUT_ONLINE=1 ;;
-        *)  loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
+    0 | false | no | off | disabled) LOADOUT_ONLINE=0 ;;
+    1 | true | yes | on | enabled) LOADOUT_ONLINE=1 ;;
+    *) loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
     esac
     export LOADOUT_ONLINE
 fi
@@ -240,8 +240,8 @@ fi
 loadout_restore_echo() {
     local _rc=$?
     case $- in
-        *i*) ;;
-        *) return "$_rc" ;;
+    *i*) ;;
+    *) return "$_rc" ;;
     esac
     local _stty=" $(stty -a 2>/dev/null | tr '\n' ' ') "
     [[ $_stty == *" -echo "* ]] && stty echo 2>/dev/null
@@ -274,6 +274,7 @@ set_prompt() {
 
     PS1="${PROMPT_YELLOW}\$(get_prompt_uid)${prompt_color}\$ ${PROMPT_WHITE}"
 }
+
 # Reset any preexec-framework state to a clean baseline. A login shell may have
 # sourced a *system* wezterm/vte integration via /etc/profile, which loads
 # bash-preexec and registers precmd_functions plus a PROMPT_COMMAND install
@@ -290,12 +291,30 @@ unset PROMPT_COMMAND
 # and dumb/linux terminals) and emits only OSC sequences other terminals
 # ignore, so it is safe to source everywhere. It bundles bash-preexec, which
 # drives precmd_functions; starship and loadout_restore_echo hook into that.
+#
+# Always source it (we need its bundled bash-preexec, plus semantic zones and
+# user vars). But when we are NOT inside a real WezTerm session, neutralize the
+# one slow hook: __wezterm_osc7 prefers `wezterm set-working-directory`, and
+# because the loadout puts the `wezterm` binary on PATH for every host its
+# `hash wezterm` guard wrongly fires off-wezterm and blocks ~12s per prompt
+# trying to reach a mux/GUI that does not exist (e.g. tmux over plain `ssh -t`).
+# We redefine it to use only the script's own fast printf OSC-7 fallback, so we
+# keep cwd reporting and lose nothing but the hang.
 if is_truthy "${LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION}"; then
     _wezterm_sh=$(loadout_find_wezterm_shell_integration)
-    [[ -n $_wezterm_sh ]] && source "$_wezterm_sh"
+    if [[ -n $_wezterm_sh ]]; then
+        source "$_wezterm_sh"
+        if [[ $TERM_PROGRAM != WezTerm && -z ${WEZTERM_PANE:-} ]] &&
+            declare -F __wezterm_osc7 >/dev/null; then
+            __wezterm_osc7() {
+                printf "\033]7;file://%s%s\033\\" "${HOSTNAME}" "${PWD}"
+            }
+        fi
+    fi
 fi
 
 /bin/stty sane
+
 if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
     # starship self-hooks: it appends starship_precmd to precmd_functions when a
@@ -307,6 +326,7 @@ if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null;
 else
     set_prompt
 fi
+
 # Restore terminal echo before every prompt: ctrl-c at e.g. a password prompt
 # can leave -echo on, hiding what you type. loadout_restore_echo is the no-fork,
 # type-ahead-safe replacement for the old `stty '$(stty -g)'` snapshot;
