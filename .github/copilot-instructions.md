@@ -159,7 +159,11 @@ backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and the uncompres
 both `backup.N/` and `backup.N.tar.bz2` when picking the next N. Post-install hooks run before compression so
 `LOADOUT_BACKUP_DIR` still resolves during hook execution. `./loadout snapshot restore <path>` accepts either the uncompressed dir or
 the `.tar.bz2` archive. Backups intentionally exclude font files because vendored Nerd Font archives are large
-and reproducible.
+and reproducible. The fonts phase has its own safety move: normal installs move
+an existing `~/.local/share/fonts` to `fonts.bak*` before extraction, but
+`--no-backup` reuses that directory in place and creates no font backup. Font
+extraction counts real font members and renders a Rich progress bar like other
+bulk phases.
 
 Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
 `install_tldr_cache`, `install_typelibs`, `install_portable_python`,
@@ -182,6 +186,14 @@ into each binary in the repo before bzip2 compression -- the installer is pure
 decompress + chmod, no runtime patchelf step. Installer runs `ldd` to warn
 about missing `.so` dependencies. If a running binary cannot be replaced,
 installer continues and prints a retry notice.
+
+`vcd-toggle-profiler` is a runtime archive rather than a bare `bin/*.bz2`: the
+C++ executable needs uPlot JS/CSS files at report-generation time. Its wrapper
+in `bin/` derives the install prefix and passes bundled asset paths to the real
+ELF under `lib/vcd-toggle-profiler/`. Build it with
+`pre_built/build_scripts/build-vcd-toggle-profiler.sh` using EL8 system
+`/usr/bin/g++` 8.5; avoid upstream CMake Release because it enables
+`-march=native`.
 
 **Binary bundling order: strip -> patchelf -> bzip2.** Never strip after patchelf;
 it corrupts `.dynstr` and causes segfaults or "undefined symbol" at runtime.

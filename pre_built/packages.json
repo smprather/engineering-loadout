@@ -292,6 +292,36 @@
       ],
       "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
     },
+    "vcd-toggle-profiler": {
+      "kind": "runtime",
+      "bins": [
+        "vcd-toggle-profiler"
+      ],
+      "archive": "pre_built/PLATFORM/runtime/vcd-toggle-profiler.tar.bz2",
+      "archive_name": "vcd-toggle-profiler.tar.bz2",
+      "install_to": "~/.local",
+      "sentinel": "bin/vcd-toggle-profiler",
+      "remove_before_extract": [
+        "bin/vcd-toggle-profiler",
+        "lib/vcd-toggle-profiler",
+        "share/vcd-toggle-profiler",
+        "share/licenses/vcd-toggle-profiler"
+      ],
+      "version": "891a391",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "vcd",
+        "profiler",
+        "waveform"
+      ],
+      "recommends": [
+        "pigz"
+      ],
+      "description": "VCD toggle profiler \u2014 C++17 VCD signal toggle analysis with offline self-contained HTML reports"
+    },
     "pdftotext": {
       "kind": "bin",
       "bins": [

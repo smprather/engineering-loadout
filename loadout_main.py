@@ -2149,18 +2149,26 @@ def font_member(name):
     return lower.endswith((".ttf", ".otf", ".pcf", ".bdf", ".pcf.gz", ".bdf.gz"))
 
 
-def extract_font_zip(zip_path, user_fonts_dir):
-    print(f"  Extracting: {zip_path} -> {user_fonts_dir}/")
+def font_zip_members(zip_path):
     with zipfile.ZipFile(zip_path, "r") as zf:
-        for member in zf.namelist():
-            if not font_member(member):
-                continue
+        return [member for member in zf.namelist() if font_member(member) and os.path.basename(member)]
+
+
+def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None, task=None, max_name=0):
+    if progress is None:
+        print(f"  Extracting: {zip_path} -> {user_fonts_dir}/")
+    members = members if members is not None else font_zip_members(zip_path)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in members:
             dest = os.path.join(user_fonts_dir, os.path.basename(member))
-            if not os.path.basename(member):
-                continue
+            if progress is not None:
+                name = os.path.basename(member)
+                progress.update(task, description=f"  {name.ljust(max_name)}")
             require_writable_parent(dest, "fonts")
             with zf.open(member) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
+            if progress is not None:
+                progress.advance(task)
 
 
 def _logical_zip_name(archive):
@@ -2170,7 +2178,7 @@ def _logical_zip_name(archive):
     return b[: i + 4] if i != -1 else b
 
 
-def install_fonts(repo_dir, home, selected_tools=None, registry=None):
+def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=False):
     # Which specific font archives to install. selected_tools=None -> install all
     # (non-selective). When a selection is given, map each selected font-* package
     # to its archive basename and install ONLY those -- otherwise --only font-hack
@@ -2204,19 +2212,23 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None):
     elif os.path.isdir(user_fonts_dir):
         require_writable_parent(user_fonts_dir, "fonts")
         require_writable_dir(user_fonts_dir, "fonts")
-        backup_path = user_fonts_dir + ".bak"
-        counter = 1
-        while os.path.exists(backup_path):
-            backup_path = f"{user_fonts_dir}.bak.{counter}"
-            counter += 1
-        print(f"  Backing up existing fonts dir: {user_fonts_dir} -> {backup_path}")
-        shutil.move(user_fonts_dir, backup_path)
+        if no_backup:
+            print(f"  Reusing existing fonts dir (--no-backup): {user_fonts_dir}")
+        else:
+            backup_path = user_fonts_dir + ".bak"
+            counter = 1
+            while os.path.exists(backup_path):
+                backup_path = f"{user_fonts_dir}.bak.{counter}"
+                counter += 1
+            print(f"  Backing up existing fonts dir: {user_fonts_dir} -> {backup_path}")
+            shutil.move(user_fonts_dir, backup_path)
     ensure_dir(user_fonts_dir, "fonts")
 
-    # Single extraction pass. Handles whole zips and chunked zips (.zip.part-000
-    # sentinel, rejoined transparently by _bz2.resolve). Filter to the selected
-    # font archives when a selection was given.
+    # Handles whole zips and chunked zips (.zip.part-000 sentinel, rejoined
+    # transparently by _bz2.resolve). Filter to the selected font archives when
+    # a selection was given.
     seen_zips = set()
+    zip_jobs = []
     for name in sorted(os.listdir(vendor_fonts_dir)):
         if name.endswith(".zip"):
             zip_logical = os.path.join(vendor_fonts_dir, name)
@@ -2235,7 +2247,19 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None):
             continue
         if zip_logical != zip_path:
             print(f"  Rejoining: {zip_logical}.part-* -> (temp)")
-        extract_font_zip(zip_path, user_fonts_dir)
+        members = font_zip_members(zip_path)
+        if members:
+            zip_jobs.append((zip_path, members))
+
+    total_font_files = sum(len(members) for _, members in zip_jobs)
+    max_font_name = max((len(os.path.basename(member)) for _, members in zip_jobs for member in members), default=0)
+    _p, _pt = _progress("Installing fonts", total_font_files) if total_font_files else (None, None)
+    try:
+        for zip_path, members in zip_jobs:
+            extract_font_zip(zip_path, user_fonts_dir, members, _p, _pt, max_font_name)
+    finally:
+        if _p is not None:
+            _p.stop()
 
     for name, path in (("mkfontscale", "/usr/bin/mkfontscale"), ("mkfontdir", "/usr/bin/mkfontdir")):
         tool = _find_tool(path)
@@ -4059,7 +4083,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
     run_install_step("config files", install_copy_mode, repo_dir, home, selected_tools, registry, silent=True)
-    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry)
+    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry, args.no_backup)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("Rust crate store", install_crate_store, repo_dir, home, selected_tools, silent=True)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)

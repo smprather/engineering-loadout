@@ -375,6 +375,7 @@ tar-meta  5952  1779649520  pre_built/el8.x86_64.glibc2p28/runtime/nvim-qt-runti
 tar-meta  4916915  1779222796  pre_built/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4430091  1778655123  pre_built/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3491  1781292760  pre_built/el8.x86_64.glibc2p28/runtime/st.tar.bz2
+tar-meta  250981  1782531617  pre_built/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  8483290  1778430063  pre_built/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  41943040  1781972238  pre_built/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  1130335  1781799893  pre_built/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2

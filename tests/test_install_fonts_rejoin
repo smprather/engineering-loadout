@@ -2,7 +2,8 @@
 """Unit tests for install font installation.
 
 Covers split-zip rejoining and fonts-dir preparation (symlink removal,
-directory backup) without requiring the real vendored font archives.
+directory backup/no-backup behavior) without requiring the real vendored font
+archives.
 """
 
 import importlib.machinery
@@ -49,7 +50,7 @@ def make_repo(tmp_dir):
 
 
 def user_fonts_dir(home):
-    return os.path.join(home, ".local", "share", "fonts")
+    return os.path.join(home, install._local_name(home), "share", "fonts")
 
 
 def test_split_zip_rejoin():
@@ -74,8 +75,8 @@ def test_symlink_replaced():
     try:
         repo_dir = make_repo(tmp)
         home = os.path.join(tmp, "home")
-        os.makedirs(os.path.join(home, ".local", "share"))
         ufd = user_fonts_dir(home)
+        os.makedirs(os.path.dirname(ufd))
 
         # Pre-place a symlink at the fonts dir location
         link_target = os.path.join(tmp, "old-fonts-link-target")
@@ -135,9 +136,31 @@ def test_existing_dir_backup_numbering():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_existing_dir_no_backup_reused():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(ufd)
+
+        sentinel = os.path.join(ufd, "old-font.ttf")
+        open(sentinel, "w").close()
+
+        install.install_fonts(repo_dir, home, no_backup=True)
+
+        assert not os.path.exists(ufd + ".bak"), "no_backup should not create a fonts backup"
+        assert os.path.exists(sentinel), "Existing font files should remain when reusing the dir"
+        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
+        print("PASS: existing fonts dir reused with no_backup")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_split_zip_rejoin()
     test_symlink_replaced()
     test_existing_dir_backed_up()
     test_existing_dir_backup_numbering()
+    test_existing_dir_no_backup_reused()
     print("All font tests passed.")

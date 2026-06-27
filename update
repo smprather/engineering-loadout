@@ -91,6 +91,7 @@ BUILD_SCRIPTS = {
     "st": {"script": "build-st.sh"},
     "tmux": {"script": "build-tmux.sh"},
     "urxvt": {"script": "build-urxvt.sh"},
+    "vcd-toggle-profiler": {"script": "build-vcd-toggle-profiler.sh", "runtime": "vcd-toggle-profiler.tar.bz2"},
     "vim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
     "zsh": {"script": "build-zsh.sh"},
 }

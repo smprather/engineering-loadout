@@ -1748,3 +1748,69 @@ Two builders write the same archive; the **superset** is what ships.
   Installs to `$HOME` then `--dest-dir /tmp/loadout-alt`, `cargo build --offline`s
   a crate using anyhow/serde/serde_json/ratatui in each, then rebuilds
   `ripgrep 15.1.0` from a build-time-baked source against the bundled store.
+
+## vcd-toggle-profiler 891a391 -- VCD signal toggle profiler (C++17, EL8 SOURCE build)
+
+C++17 reimplementation from `github.com/smprather/vcd-toggle-profiler`. Parses a
+VCD waveform, counts per-signal toggles, and writes a self-contained offline
+HTML report (uPlot charts inlined). Built and packaged by
+`pre_built/build_scripts/build-vcd-toggle-profiler.sh`:
+
+```bash
+pre_built/build_scripts/build-vcd-toggle-profiler.sh --rev main
+# or from an existing checkout:
+pre_built/build_scripts/build-vcd-toggle-profiler.sh --source /tmp/vcd-toggle-profiler
+```
+
+**Prerequisites:** `git`, EL8 system `/usr/bin/g++` (8.5), `tar`, `bzip2`. No
+gcc-toolset, no CMake, no devel packages -- the source is a single translation
+unit plus header-only CLI11.
+
+**Why a plain `g++` build, not upstream CMake Release.** Upstream's CMake Release
+profile enables `-march=native -mtune=native`, which bakes in the build box's CPU
+features and would SIGILL on older farm CPUs. The script compiles one TU with
+EL8 base GCC 8 so the artifact stays portable AND the libstdc++ symbol floor
+stays at `GLIBCXX_3.4.21` (GCC 8's max) -- no newer-than-EL8 C++ ABI symbol can
+sneak in:
+
+```bash
+/usr/bin/g++ -std=c++17 -O2 -DNDEBUG -Wall -Wextra \
+    -I"$src/third_party/CLI11/include" \
+    "$src/src/main.cpp" \
+    -lstdc++fs \
+    -o vcd-toggle-profiler.bin
+```
+
+`-lstdc++fs` is required: GCC 8 keeps `std::filesystem` in the separate
+`libstdc++fs` archive (it folded into `libstdc++` only in GCC 9+).
+
+**Why a runtime archive, not a bare `bin/*.bz2`.** Report generation needs the
+uPlot JS/CSS at runtime, so the package ships them alongside the ELF and uses a
+wrapper. Archive layout (`runtime/vcd-toggle-profiler.tar.bz2`):
+
+```text
+bin/vcd-toggle-profiler                          POSIX-sh wrapper
+lib/vcd-toggle-profiler/vcd-toggle-profiler.bin  real C++ ELF
+share/vcd-toggle-profiler/uplot/uPlot.iife.js    runtime HTML assets
+share/vcd-toggle-profiler/uplot/uPlot.min.css
+share/licenses/vcd-toggle-profiler/{LICENSE,LICENSE-uPlot.txt,LICENSE-CLI11.txt}
+```
+
+The wrapper derives its prefix from `bin/..`, then injects
+`--uplot-js <prefix>/share/.../uPlot.iife.js` and the matching `--uplot-css`
+**only if the user did not pass them**, so reports work from any cwd while
+explicit overrides still win. ELF is a normal dynamic binary (links host
+libstdc++/libc), no RPATH/patchelf needed.
+
+**Packaging:** the build script tars the stage tree, stamps
+`packages.json` `vcd-toggle-profiler.version` to `git describe --tags --always
+--dirty`, then runs `./strip_all_elf_binaries` (rewrites/normalizes the tar.bz2
+and records its size+mtime in `.strip-manifest`). Package kind `runtime`,
+sentinel `bin/vcd-toggle-profiler`, install_to `~/.local`, `recommends pigz` (so
+`.vcd.gz` input uses the fast bundled gzip path). Re-run
+`./loadout completion bash > bash/global/completions/loadout.bash` after the
+registry change.
+
+**Verify:** `ldd lib/vcd-toggle-profiler/vcd-toggle-profiler.bin` (host libs
+only), symbol-version floor `GLIBC <= 2.14` / `GLIBCXX <= 3.4.21`, and a wrapper
+run against a sample VCD producing an HTML report.

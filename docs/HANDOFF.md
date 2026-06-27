@@ -28,6 +28,19 @@ Without it, `mate-terminal.bin` aborts at startup with
 `Settings schema 'org.mate.interface' is not installed` while reading
 `monospace-font-name`.
 
+`install_fonts` now honors `--no-backup`: normal font installs still move an
+existing `<local>/share/fonts` to `fonts.bak*`, but no-backup installs reuse the
+directory in place and overwrite only matching vendored font files. It also
+counts actual font members and displays a Rich progress bar during extraction.
+
+`vcd-toggle-profiler` was added from `github.com/smprather/vcd-toggle-profiler`
+using the C++ implementation. It ships as
+`pre_built/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2` with a
+wrapper, real ELF, uPlot assets, and licenses. Build script:
+`pre_built/build_scripts/build-vcd-toggle-profiler.sh`; it uses EL8 system
+`/usr/bin/g++` 8.5 rather than upstream CMake Release because the latter enables
+`-march=native`.
+
 ## Repository State
 
 - Branch: `main`
@@ -38,8 +51,9 @@ Without it, `mate-terminal.bin` aborts at startup with
   crate store**, the `liberty-tools` wheel bump, the `scan_for_malware`
   chunk/store coverage fix, the Windows PowerShell 7.6.3 bundle, and AHK
   robustness work.
-- Current uncommitted work at this handoff: none expected after the
-  mate-terminal schema fix commit.
+- Current uncommitted work at this handoff: font no-backup/progress fix,
+  `vcd-toggle-profiler` C++ runtime package, regenerated loadout bash
+  completion, focused tests, and cold-start docs.
 - Work expected to be merged: none. The `rust-offline-crate-store` branch is
   fully merged into `main` and slated for deletion;
   `git branch --no-merged main` should be empty.
@@ -73,6 +87,14 @@ These checks passed after the recent changes:
   returned 0, and a no-display launch reached only `Cannot open display` (no
   GSettings schema abort). Reinstalled `mate-terminal` into `~/.local` and
   verified the same `--help` behavior there.
+- Passed for the font no-backup/progress fix: `tests/test_install_fonts_rejoin`,
+  `python3 -m py_compile loadout_main.py`, `git diff --check`, `sh -n loadout`,
+  and `bash -n bash/global/bashrc`.
+- Passed for `vcd-toggle-profiler`: build from local checkout, `strip_all_elf_binaries`
+  archive rewrite, temp `./loadout install vcd-toggle-profiler --dest-dir ...`,
+  installed wrapper run on `vcd-samples/random/random.vcd`, archive listing check,
+  `ldd` on installed real ELF, and symbol-version check showing GLIBC floor
+  <= 2.14 and GLIBCXX floor <= 3.4.21.
 - This Markdown sync already reconciled user/agent docs with the current
   Click/rich-click CLI surface: `--dest-dir` belongs after install-like verbs,
   visible selection uses positional `PKG...` args (no user-facing `--only` /

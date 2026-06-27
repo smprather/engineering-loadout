@@ -177,6 +177,7 @@ Run `./loadout list` to see every package and every group, or
 | liberty-filter | bin | 1.0.1 | liberty-filter -- strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
 | lefdef-tools | python-tool | b9ac43e | lefdef-tools -- fast LEF/DEF parsing and query tools (Rust backend) |
 | liberty-tools | python-tool | v2026.06.01.1-33-gdc193c1 | liberty-tools -- Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools |
+| vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler -- C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 22.12.0 | pdftotext (poppler-utils) -- extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 |
 | p7zip | bin | 16.02 | p7zip -- Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.) |
 | bzip2 | bin | 1.0.8 | Block-sorting file compressor |
@@ -338,7 +339,11 @@ Twelve font families bundled and installed to `~/.local/share/fonts`:
 | [Ubuntu Mono](https://design.ubuntu.com/font) | Ubuntu monospace family |
 
 Use `./loadout install ... --skip @fonts-all` to skip every font, or
-`--skip font-firacode` to skip a single family.
+`--skip font-firacode` to skip a single family. By default, an existing
+`~/.local/share/fonts` directory is moved aside to `fonts.bak*` before the
+vendored fonts are extracted. With `--no-backup`, the installer reuses the
+existing fonts directory in place and overwrites only matching font files. Font
+extraction uses the same progress bar style as other bulk install phases.
 
 ---
 
