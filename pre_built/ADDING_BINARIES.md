@@ -255,6 +255,45 @@ Runtime data (`share/gnuplot/6.0/`) not bundled -- binary works without it for c
 (svg, postscript, x11, dumb all tested OK). If help or color palettes are needed later,
 package `share/gnuplot/` as `gnuplot-runtime.tar.bz2` and add installer support.
 
+### gnuplot_x11 driver (added 2026-06-26)
+
+gnuplot 6's `x11` terminal is **not in-process** -- gnuplot forks a separate helper
+`gnuplot_x11` and pipes it a command stream. It resolves the helper via
+`$GNUPLOT_DRIVER_DIR/gnuplot_x11`, falling back to the compiled-in
+`<prefix>/libexec/gnuplot/6.0/gnuplot_x11`. The original build baked
+`--prefix=/tmp/gnuplot-install`, so on a destination machine x11 plots died with
+`Couldn't exec expected X11 driver: /tmp/gnuplot-install/libexec/gnuplot/6.0/gnuplot_x11`.
+The helper was never bundled (only `bin/gnuplot`). Tools that default to the x11 terminal
+(e.g. `tct plot`) failed on every plot.
+
+Fix: bundle the helper as a runtime archive and point gnuplot at it via env var.
+
+```bash
+# Helper lives at <build-prefix>/libexec/gnuplot/6.0/gnuplot_x11 after the source build above.
+PLAT=el8.x86_64.glibc2p28
+STAGE=$(mktemp -d); DEST="$STAGE/libexec/gnuplot/6.0"; mkdir -p "$DEST"
+cp /tmp/gnuplot-install/libexec/gnuplot/6.0/gnuplot_x11 "$DEST/gnuplot_x11"
+/usr/bin/strip "$DEST/gnuplot_x11"
+# Helper installs to ~/.local/libexec/gnuplot/6.0/; sibling libs are in ~/.local/lib64
+# -> RPATH up three levels. Falls back to host /lib64 when gui_libs is absent.
+~/.local/bin/patchelf --set-rpath '$ORIGIN/../../../lib64:$ORIGIN/../../../lib' "$DEST/gnuplot_x11"
+chmod 755 "$DEST/gnuplot_x11"
+tar -C "$STAGE" -cf - ./libexec | bzip2 -9 > "pre_built/$PLAT/runtime/gnuplot.tar.bz2"
+rm -rf "$STAGE"
+./strip_all_elf_binaries          # normalizes the archive, records it in .strip-manifest
+```
+
+Wiring:
+- `packages.json` `gnuplot` entry gains `sentinel`/`install_to`/`archive_name`/`chmod_sentinel`/
+  `remove_before_extract`, so the generic `install_runtime_archives` extracts it to
+  `~/.local/libexec/gnuplot/6.0/` (un-dotted `local/...` under `--dest-dir`).
+- `bash/global/bashrc` exports `GNUPLOT_DRIVER_DIR=$_loadout_local_prefix/libexec/gnuplot/6.0`
+  when the helper is present (shared-prefix aware).
+
+The helper links `libX11`/`libxcb`/`libXau`. No hard dep on `gui_libs` is added: the main
+gnuplot binary is headless (no X linkage), and the helper resolves X libs from `gui_libs`
+(via RPATH) or the host's `/lib64`. Pure compute nodes with no X libs need `gui_libs`.
+
 ## Octave build notes (11.1.0, added 2026-05-13)
 
 Built without Qt, Java, OpenGL, FLTK, or X11. Plots work via gnuplot backend (already bundled).

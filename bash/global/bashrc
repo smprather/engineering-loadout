@@ -44,6 +44,11 @@ fi
 if [[ -d $_loadout_local_prefix/lib/girepository-1.0 ]]; then
     export GI_TYPELIB_PATH=$_loadout_local_prefix/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
 fi
+# gnuplot's x11 terminal spawns a separate gnuplot_x11 helper. Point gnuplot at
+# the bundled helper so it does not look for the build-time libexec path.
+if [[ -x $_loadout_local_prefix/libexec/gnuplot/6.0/gnuplot_x11 ]]; then
+    export GNUPLOT_DRIVER_DIR=$_loadout_local_prefix/libexec/gnuplot/6.0
+fi
 
 # Exit here if not interactive
 if [[ $- != *i* ]]; then

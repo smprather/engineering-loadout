@@ -363,6 +363,7 @@ sha256  c4ad38a147a2896d3da0bf3263d0957876eb0762983da8d69e134bff2577b6e5  pre_bu
 tar-meta  289188  1780341242  pre_built/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2
 tar-meta  41943040  1781498016  pre_built/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2.part-000
 tar-meta  863111  1779444372  pre_built/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
+tar-meta  49115  1782535650  pre_built/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  20459993  1778430059  pre_built/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2996378  1780474049  pre_built/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169875  1782529255  pre_built/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2

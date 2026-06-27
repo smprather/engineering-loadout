@@ -642,6 +642,13 @@
       "tags": [
         "scientific"
       ],
+      "archive": "pre_built/PLATFORM/runtime/gnuplot.tar.bz2",
+      "archive_name": "gnuplot.tar.bz2",
+      "sentinel": "libexec/gnuplot/6.0/gnuplot_x11",
+      "install_to": "~/.local",
+      "chmod_sentinel": true,
+      "remove_before_extract": "libexec/gnuplot/6.0",
+      "missing_hint": "gnuplot x11 terminal will NOT work (gnuplot_x11 driver absent); core terminals (svg/dumb/postscript) still function. x11 also needs X libs from gui_libs or the host.",
       "description": "Command-line graphing and plotting utility"
     },
     "glow": {
