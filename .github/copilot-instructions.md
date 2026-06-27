@@ -256,9 +256,9 @@ the Nautilus extension. WezTerm zsh completion is env-owned at
 semantic zones / OSC 7 cwd / user vars -- not completion) is NOT in this runtime
 archive; it is vendored at `bash/global/wezterm/wezterm.sh` and sourced by
 `bash/global/bashrc` from user-writable space, never `/etc`. Off-WezTerm shells
-still source it for bash-preexec, but `bashrc` overrides `__wezterm_osc7` to the
-fast printf fallback so a PATH-visible `wezterm` binary cannot hang prompts
-through `wezterm set-working-directory`.
+still source it for bash-preexec, but `bashrc` sets the integration skip vars
+while sourcing so no WezTerm OSC hooks register. This prevents raw OSC text in
+GNOME Terminal and prompt stalls in `wezterm set-working-directory`.
 
 The mate-terminal shanghai bundle must include both
 `org.mate.terminal.gschema.xml` and `org.mate.interface.gschema.xml`, then run
@@ -274,7 +274,7 @@ bash-preexec/wezterm/ble.sh is live). Login shells load that framework via
 `/etc/profile`; `unset`-ing or overwriting `PROMPT_COMMAND` around `starship
 init` wipes its driver, so the Starship prompt vanishes on login but works after
 `exec bash`. Required order: reset framework state -> source loadout `wezterm.sh`
-(with off-WezTerm OSC7 fallback override) -> `starship init` (untouched `PROMPT_COMMAND`) -> `loadout_add_precmd
+(with WezTerm output hooks skipped off-WezTerm) -> `starship init` (untouched `PROMPT_COMMAND`) -> `loadout_add_precmd
 loadout_restore_echo`. Verify with a real PTY (tmux), not `bash -lic`. Full
 detail: `bash/global/README.md` and `AGENTS.md` "Lessons Learned".
 

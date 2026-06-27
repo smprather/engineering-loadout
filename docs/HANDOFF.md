@@ -15,11 +15,12 @@ Touched areas: `autohotkey/hotkeys.ahk`, `loadout.ps1`,
 `[autohotkey].logging`, and Cisco VPN SSID fallback through the
 WLAN-AutoConfig event log when `netsh` reports no SSID.
 
-`bash/global/bashrc` now keeps vendored WezTerm/bash-preexec integration enabled
-outside real WezTerm sessions but overrides `__wezterm_osc7` to the fast printf
-fallback. This prevents plain SSH/tmux prompts from blocking in
-`wezterm set-working-directory` when the loadout's `wezterm` wrapper is on
-`PATH` but no WezTerm mux/GUI exists.
+`bash/global/bashrc` now keeps the vendored WezTerm script as the bash-preexec
+source outside real WezTerm sessions, but sets the integration skip vars while
+sourcing it so semantic zones, user vars, and cwd OSC hooks do not register.
+This prevents GNOME Terminal/tmux from printing raw OSC text and avoids prompt
+stalls in `wezterm set-working-directory` when the loadout's `wezterm` wrapper
+is on `PATH` but no WezTerm mux/GUI exists.
 
 The mate-terminal runtime archive now includes the minimal
 `org.mate.interface.gschema.xml` alongside `org.mate.terminal.gschema.xml`.
@@ -32,7 +33,7 @@ Without it, `mate-terminal.bin` aborts at startup with
 - Branch: `main`
 - Remote: `origin/main` (in sync after the latest push)
 - Latest work on `main` (all pushed): AutoHotkey runtime config from
-  `loadout_keys.toml`, the bash prompt off-WezTerm OSC7 fallback guard, the
+  `loadout_keys.toml`, the bash prompt off-WezTerm OSC hook skip guard, the
   mate-terminal interface GSettings schema fix, the offline **Rust toolchain +
   crate store**, the `liberty-tools` wheel bump, the `scan_for_malware`
   chunk/store coverage fix, the Windows PowerShell 7.6.3 bundle, and AHK
@@ -62,10 +63,10 @@ These checks passed after the recent changes:
   `bash -n bash/global/bashrc`. Windows-only checks (`AutoHotkey64.exe
   /Validate`, PowerShell parser/test-run) still need a Windows or PowerShell
   environment; `pwsh` was not available in this Linux sandbox.
-- Passed for the bash prompt off-WezTerm OSC7 fallback guard: `git diff
+- Passed for the bash prompt off-WezTerm OSC hook skip guard: `git diff
   --check`, `bash -n bash/global/bashrc`, non-PTY function-body smoke confirming
-  off-WezTerm `__wezterm_osc7` is the printf fallback, and a real-PTY tmux smoke
-  covering initial prompt plus `exec bash`.
+  no `__wezterm_*` hooks register off-WezTerm, and a real-PTY tmux smoke covering
+  initial prompt plus `exec bash` with no `file://` / `tmux;` leakage.
 - Passed for the mate-terminal schema fix: `python3 -m py_compile
   loadout_main.py`, temp `./loadout install mate-terminal --dest-dir ...`
   verified both XML schemas and `gschemas.compiled`, `mate-terminal.bin --help`

@@ -285,30 +285,33 @@ set_prompt() {
 unset precmd_functions preexec_functions __bp_imported bash_preexec_imported
 unset PROMPT_COMMAND
 
-# wezterm shell integration (semantic zones / OSC 7 cwd / user vars), sourced
-# from a loadout-owned copy -- never /etc -- so wezterm users (with or without
-# tmux) get full functionality. The script self-guards (skips non-interactive
-# and dumb/linux terminals) and emits only OSC sequences other terminals
-# ignore, so it is safe to source everywhere. It bundles bash-preexec, which
-# drives precmd_functions; starship and loadout_restore_echo hook into that.
-#
-# Always source it (we need its bundled bash-preexec, plus semantic zones and
-# user vars). But when we are NOT inside a real WezTerm session, neutralize the
-# one slow hook: __wezterm_osc7 prefers `wezterm set-working-directory`, and
-# because the loadout puts the `wezterm` binary on PATH for every host its
-# `hash wezterm` guard wrongly fires off-wezterm and blocks ~12s per prompt
-# trying to reach a mux/GUI that does not exist (e.g. tmux over plain `ssh -t`).
-# We redefine it to use only the script's own fast printf OSC-7 fallback, so we
-# keep cwd reporting and lose nothing but the hang.
+# wezterm shell integration is sourced from a loadout-owned copy -- never /etc.
+# In real WezTerm sessions (raw or tmux-in-wezterm) it registers OSC 133 zones,
+# OSC 7 cwd, and user vars. Outside WezTerm, source the same script with all
+# WezTerm output hooks disabled so we still get its bundled bash-preexec driver
+# for Starship/loadout_restore_echo without printing raw OSC escapes in e.g.
+# GNOME Terminal or blocking in `wezterm set-working-directory`.
 if is_truthy "${LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION}"; then
     _wezterm_sh=$(loadout_find_wezterm_shell_integration)
     if [[ -n $_wezterm_sh ]]; then
+        _loadout_real_wezterm=0
+        [[ $TERM_PROGRAM == WezTerm || -n ${WEZTERM_PANE:-} ]] && _loadout_real_wezterm=1
+        if [[ $_loadout_real_wezterm == 0 ]]; then
+            _loadout_had_wz_semantic=${WEZTERM_SHELL_SKIP_SEMANTIC_ZONES+x}
+            _loadout_had_wz_user_vars=${WEZTERM_SHELL_SKIP_USER_VARS+x}
+            _loadout_had_wz_cwd=${WEZTERM_SHELL_SKIP_CWD+x}
+            _loadout_saved_wz_semantic=${WEZTERM_SHELL_SKIP_SEMANTIC_ZONES-}
+            _loadout_saved_wz_user_vars=${WEZTERM_SHELL_SKIP_USER_VARS-}
+            _loadout_saved_wz_cwd=${WEZTERM_SHELL_SKIP_CWD-}
+            WEZTERM_SHELL_SKIP_SEMANTIC_ZONES=1
+            WEZTERM_SHELL_SKIP_USER_VARS=1
+            WEZTERM_SHELL_SKIP_CWD=1
+        fi
         source "$_wezterm_sh"
-        if [[ $TERM_PROGRAM != WezTerm && -z ${WEZTERM_PANE:-} ]] &&
-            declare -F __wezterm_osc7 >/dev/null; then
-            __wezterm_osc7() {
-                printf "\033]7;file://%s%s\033\\" "${HOSTNAME}" "${PWD}"
-            }
+        if [[ ${_loadout_real_wezterm:-0} == 0 ]]; then
+            [[ -n $_loadout_had_wz_semantic ]] && WEZTERM_SHELL_SKIP_SEMANTIC_ZONES=$_loadout_saved_wz_semantic || unset WEZTERM_SHELL_SKIP_SEMANTIC_ZONES
+            [[ -n $_loadout_had_wz_user_vars ]] && WEZTERM_SHELL_SKIP_USER_VARS=$_loadout_saved_wz_user_vars || unset WEZTERM_SHELL_SKIP_USER_VARS
+            [[ -n $_loadout_had_wz_cwd ]] && WEZTERM_SHELL_SKIP_CWD=$_loadout_saved_wz_cwd || unset WEZTERM_SHELL_SKIP_CWD
         fi
     fi
 fi

@@ -299,9 +299,9 @@ zones / OSC 7 cwd / user vars -- distinct from completion) is vendored at
 `bash/global/wezterm/wezterm.sh` and sourced by the bash config from
 user-writable space (never `/etc`), so wezterm users get it with or without tmux;
 toggle with `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION`. Outside a real
-WezTerm session, bash keeps the vendored preexec hooks but forces OSC 7 cwd
-reporting through the fast printf fallback, so a PATH-visible `wezterm` binary
-cannot stall prompts by trying `wezterm set-working-directory`.
+WezTerm session, bash still sources the vendored script for its bash-preexec
+driver but disables all WezTerm OSC hooks, so other terminals do not print raw
+escape sequences or stall in `wezterm set-working-directory`.
 
 ### Python
 
