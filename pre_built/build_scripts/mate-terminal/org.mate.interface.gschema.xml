@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.mate.interface" path="/org/mate/desktop/interface/">
+    <key name="monospace-font-name" type="s">
+      <default>'Monospace 10'</default>
+      <summary>Monospace font</summary>
+      <description>Name of the default monospaced font for applications.</description>
+    </key>
+  </schema>
+</schemalist>

@@ -2590,7 +2590,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
       bin/mate-terminal            POSIX-sh launcher (sets XDG_DATA_DIRS +
                                     GSETTINGS_BACKEND=keyfile, then execs the ELF)
       bin/mate-terminal.bin        the actual ELF, RPATH=$ORIGIN/../lib64
-      share/glib-2.0/schemas/      mate-terminal gsettings schema XML
+      share/glib-2.0/schemas/      mate-terminal + org.mate.interface schema XML
 
     After extraction we run `glib-compile-schemas` against the bundled schema
     dir so GSettings can find the compiled file at runtime. The keyfile
@@ -2623,6 +2623,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
     for stale in (
         os.path.join(local_dir, "bin", "mate-terminal"),
         os.path.join(local_dir, "bin", "mate-terminal.bin"),
+        os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.interface.gschema.xml"),
         os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.terminal.gschema.xml"),
     ):
         remove_if_exists(stale)
@@ -2636,7 +2637,8 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools):
 
     # Compile gsettings schemas. glib-compile-schemas ships with glib2 on every
     # supported base system; without the compiled file mate-terminal aborts on
-    # startup with "Settings schema 'org.mate.terminal.window' is not installed".
+    # startup with "Settings schema 'org.mate.terminal.window' is not installed"
+    # or "Settings schema 'org.mate.interface' is not installed".
     schema_dir = os.path.join(local_dir, "share", "glib-2.0", "schemas")
     glib_compile = _find_tool("/usr/bin/glib-compile-schemas")
     if glib_compile and os.path.isdir(schema_dir):

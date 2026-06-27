@@ -260,6 +260,13 @@ still source it for bash-preexec, but `bashrc` overrides `__wezterm_osc7` to the
 fast printf fallback so a PATH-visible `wezterm` binary cannot hang prompts
 through `wezterm set-working-directory`.
 
+The mate-terminal shanghai bundle must include both
+`org.mate.terminal.gschema.xml` and `org.mate.interface.gschema.xml`, then run
+`glib-compile-schemas` at install time. The interface schema source lives at
+`pre_built/build_scripts/mate-terminal/org.mate.interface.gschema.xml`; without
+it, `mate-terminal.bin` aborts with `Settings schema 'org.mate.interface' is not
+installed` before opening.
+
 **Prompt block in `bash/global/bashrc` is clobber-sensitive -- do not "simplify"
 it.** The loadout does not own `PROMPT_COMMAND` and Starship does not always hook
 through it (it registers into `precmd_functions` when a framework like

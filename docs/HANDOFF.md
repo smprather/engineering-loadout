@@ -21,17 +21,24 @@ fallback. This prevents plain SSH/tmux prompts from blocking in
 `wezterm set-working-directory` when the loadout's `wezterm` wrapper is on
 `PATH` but no WezTerm mux/GUI exists.
 
+The mate-terminal runtime archive now includes the minimal
+`org.mate.interface.gschema.xml` alongside `org.mate.terminal.gschema.xml`.
+Without it, `mate-terminal.bin` aborts at startup with
+`Settings schema 'org.mate.interface' is not installed` while reading
+`monospace-font-name`.
+
 ## Repository State
 
 - Branch: `main`
 - Remote: `origin/main` (in sync after the latest push)
 - Latest work on `main` (all pushed): AutoHotkey runtime config from
   `loadout_keys.toml`, the bash prompt off-WezTerm OSC7 fallback guard, the
-  offline **Rust toolchain + crate store**, the `liberty-tools` wheel bump, the
-  `scan_for_malware` chunk/store coverage fix, the Windows PowerShell 7.6.3
-  bundle, and AHK robustness work.
-- Current uncommitted work at this handoff: none expected after the bash prompt
-  fallback guard commit.
+  mate-terminal interface GSettings schema fix, the offline **Rust toolchain +
+  crate store**, the `liberty-tools` wheel bump, the `scan_for_malware`
+  chunk/store coverage fix, the Windows PowerShell 7.6.3 bundle, and AHK
+  robustness work.
+- Current uncommitted work at this handoff: none expected after the
+  mate-terminal schema fix commit.
 - Work expected to be merged: none. The `rust-offline-crate-store` branch is
   fully merged into `main` and slated for deletion;
   `git branch --no-merged main` should be empty.
@@ -59,6 +66,12 @@ These checks passed after the recent changes:
   --check`, `bash -n bash/global/bashrc`, non-PTY function-body smoke confirming
   off-WezTerm `__wezterm_osc7` is the printf fallback, and a real-PTY tmux smoke
   covering initial prompt plus `exec bash`.
+- Passed for the mate-terminal schema fix: `python3 -m py_compile
+  loadout_main.py`, temp `./loadout install mate-terminal --dest-dir ...`
+  verified both XML schemas and `gschemas.compiled`, `mate-terminal.bin --help`
+  returned 0, and a no-display launch reached only `Cannot open display` (no
+  GSettings schema abort). Reinstalled `mate-terminal` into `~/.local` and
+  verified the same `--help` behavior there.
 - This Markdown sync already reconciled user/agent docs with the current
   Click/rich-click CLI surface: `--dest-dir` belongs after install-like verbs,
   visible selection uses positional `PKG...` args (no user-facing `--only` /
