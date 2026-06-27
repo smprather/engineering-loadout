@@ -400,6 +400,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 | `LOADOUT_CFG_ONLINE_DETECT_TIMEOUT` | `0.15` | Per-host TCP connect timeout in seconds (GNU `timeout`; decimal OK). Total wall time ~ this value |
 | `LOADOUT_CFG_ONLINE_DETECT_HOSTS` | `github.com:443 raw.githubusercontent.com:443 pypi.org:443` | Space-separated `host:port` pairs probed in parallel. Override in `user/config.sh` to use corporate mirror hosts |
 | `LOADOUT_CFG_USE_LOADOUT_MODULES` | `0` | Source `modules-init.bash` on shell startup (enables `module`/`ml` commands from loadout-bundled Environment Modules). Off by default -- opt-in per user/site layer |
+| `LOADOUT_CFG_PRESERVE_FUNCTIONS` | `module _module_raw ml` | Space-separated function names exempted from the clean-slate `unset -f` in `envs/bash/bashrc` (which clears all functions so a re-source / `exec bash` starts fresh). Listed names survive that reset -- e.g. Environment Modules functions inherited via `export -f` from a parent shell. As an exported scalar it is in the env before config.sh re-sources, so it applies on the very `exec bash` that would otherwise wipe them. Empty = clear all |
 
 ### Key Functions (`envs/bash/functions.sh`)
 

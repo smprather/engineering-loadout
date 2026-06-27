@@ -29,7 +29,20 @@ if [[ -z "${PATH:-}" ]]; then
     export PATH="/usr/local/bin:/bin:/usr/bin:/usr/sbin"
 fi
 unalias -a
-unset -f $(declare -F | awk '{print $3}')
+# Clear every function so a re-source / `exec bash` starts fresh -- except any the
+# user listed in LOADOUT_CFG_PRESERVE_FUNCTIONS. That config var is an exported
+# scalar, so on `exec bash` / child shells it is already in the environment here,
+# before config.sh re-sources -- exactly when inherited functions (e.g. Environment
+# Modules' `module`/`_module_raw`/`ml`, carried in via `export -f`) would be wiped.
+if [[ -n ${LOADOUT_CFG_PRESERVE_FUNCTIONS:-} ]]; then
+    _lo_keep_fns=" ${LOADOUT_CFG_PRESERVE_FUNCTIONS} "
+    for _lo_fn in $(declare -F | awk '{print $3}'); do
+        [[ $_lo_keep_fns == *" ${_lo_fn} "* ]] || unset -f "${_lo_fn}"
+    done
+    unset _lo_fn _lo_keep_fns
+else
+    unset -f $(declare -F | awk '{print $3}')
+fi
 
 # ===========================================================================
 # Startup debugging -- BOTH default OFF, placed AFTER the double-source guard

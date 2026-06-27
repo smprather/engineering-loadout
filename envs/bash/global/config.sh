@@ -41,3 +41,9 @@ export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"
 export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"
 # LOADOUT_CFG_USE_LOADOUT_MODULES -> 0 | 1  (source modules-init.bash; opt-in)
 export LOADOUT_CFG_USE_LOADOUT_MODULES="0"
+# LOADOUT_CFG_PRESERVE_FUNCTIONS -> space-separated function names.
+# At startup bash/bashrc clears every function with `unset -f` so a re-source or
+# `exec bash` starts from a clean slate. Names listed here survive that reset --
+# e.g. the Environment Modules functions (module/_module_raw/ml) inherited via
+# `export -f` from a parent shell, which would otherwise be wiped. Empty = clear all.
+export LOADOUT_CFG_PRESERVE_FUNCTIONS="module _module_raw ml"
