@@ -52,23 +52,45 @@ unset_bashrc_local_vars() {
     done
 }
 
-# Prepend a directory to PATH only if it exists and is not already present.
+# Prepend a directory to a colon-list variable only if it exists and is not
+# already present. With one argument the target is PATH; with two, the first
+# argument names the variable to change:
+#   path_prepend_if_dir /opt/bin                  # -> PATH
+#   path_prepend_if_dir LD_LIBRARY_PATH /opt/lib  # -> LD_LIBRARY_PATH
 path_prepend_if_dir() {
-    local dir="$1"
-    [[ -d "$dir" ]] || return 0
-    case ":$PATH:" in
-    *":$dir:"*) ;;
-    *) PATH="$dir:$PATH" ;;
+    local _var _dir _cur
+    if [[ $# -ge 2 ]]; then
+        _var=$1
+        _dir=$2
+    else
+        _var=PATH
+        _dir=$1
+    fi
+    [[ -d "$_dir" ]] || return 0
+    _cur=${!_var}
+    case ":${_cur}:" in
+    *":${_dir}:"*) ;;
+    *) printf -v "$_var" '%s' "${_dir}${_cur:+:}${_cur}" ;;
     esac
 }
 
-# Append a directory to PATH only if it exists and is not already present.
+# Append a directory to a colon-list variable only if it exists and is not
+# already present. One argument targets PATH; two targets the named variable
+# (see path_prepend_if_dir).
 path_append_if_dir() {
-    local dir="$1"
-    [[ -d "$dir" ]] || return 0
-    case ":$PATH:" in
-    *":$dir:"*) ;;
-    *) PATH="$PATH:$dir" ;;
+    local _var _dir _cur
+    if [[ $# -ge 2 ]]; then
+        _var=$1
+        _dir=$2
+    else
+        _var=PATH
+        _dir=$1
+    fi
+    [[ -d "$_dir" ]] || return 0
+    _cur=${!_var}
+    case ":${_cur}:" in
+    *":${_dir}:"*) ;;
+    *) printf -v "$_var" '%s' "${_cur}${_cur:+:}${_dir}" ;;
     esac
 }
 

@@ -405,7 +405,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 ### Key Functions (`envs/bash/functions.sh`)
 
 - `path_append`, `path_prepend`, `path_remove`, `path_trim` -- PATH colon-list manipulation
-- `path_prepend_if_dir`, `path_append_if_dir` -- prepend/append only if dir exists
+- `path_prepend_if_dir [VAR] DIR`, `path_append_if_dir [VAR] DIR` -- prepend/append `DIR` only if it exists and is not already present; one arg targets PATH, two targets the named colon-list variable (e.g. `path_append_if_dir LD_LIBRARY_PATH /opt/lib`)
 - `source_if_exists` -- source file only if readable
 - `is_truthy` -- boolean check (`1`/`true`/`yes`/`on`/`enabled` -> true)
 - `fpcmp N OP N` -- floating-point comparison (`fpcmp 2.17 -gt 2.0`)
