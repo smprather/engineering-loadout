@@ -239,6 +239,7 @@ def _parse_namelist(raw):
 # `list --groups` and `describe`.
 _SYNTHETIC_GROUPS = {
     "@shared": "Every non-env, non-optional package -- install set for a shared/read-only tree.",
+    "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, rust, ...).",
     "@envs": "Every per-user env config bundle (the complement of @shared).",
 }
 
@@ -252,8 +253,10 @@ def expand_groups(names, registry, _stack=None):
     `--only @shared --skip @envs` to keep env recommends out of a shared tree.
     `all` (and the @shared / @engineering-loadout sweeps that build on it) skip
     packages flagged "optional": true -- those install only when named explicitly
-    or pulled in by a group that lists them (e.g. surfer, the @rust trio). Cycles
-    in the group graph raise ResolverError.
+    or pulled in by a group that lists them (e.g. surfer, the @rust trio).
+    @shared-all is @shared with those optionals folded back in (every non-env
+    package regardless of "optional") -- the full shared/read-only tree in one
+    name. Cycles in the group graph raise ResolverError.
     Unknown package names produce a warning and are dropped.
     """
     if _stack is None:
@@ -269,6 +272,10 @@ def expand_groups(names, registry, _stack=None):
                 for n, e in registry.items()
                 if not n.startswith("@") and e.get("kind") != "env" and not e.get("optional")
             }
+            continue
+        if name == "@shared-all":
+            # @shared but optionals INCLUDED -- the full shared/read-only tree.
+            out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") != "env"}
             continue
         if name == "@envs":
             out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") == "env"}
