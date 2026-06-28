@@ -460,6 +460,13 @@ TOOLS = [
         strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "surfer",
+        "surfer",
+        "https://gitlab.com/surfer-project/surfer",
+        # surfer --version -> "surfer 0.7.0 (git: v0.7.0)"
+        strategy_flag(["--version"], r"surfer ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "xterm",
         "xterm",
         "https://github.com/ThomasDickey/xterm-snapshots",

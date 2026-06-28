@@ -164,6 +164,8 @@ sha256  32cb5b2719fd0f50a76a63e92ed0d81f2770d4a260bcc1c096f7d8cec3dc0dc7  pre_bu
 sha256  fddaf7592554e14867cef501599350affa19d95b408a7c1f4a75b043625f3253  pre_built/el8.x86_64.glibc2p28/bin/stty.bz2
 sha256  ea8663a62529908ee65ac75c41adc1874f13c98bd6a2887d9192ddc62810794a  pre_built/el8.x86_64.glibc2p28/bin/stylua.bz2
 sha256  6d62d65b8dcba1d9330f7e9375af1eddec1933d381917d43853a420df469f55c  pre_built/el8.x86_64.glibc2p28/bin/sum.bz2
+sha256  ef1ab201d70c0142e06817393ab229c0923003623aad7d6293afee1816aff32e  pre_built/el8.x86_64.glibc2p28/bin/surfer.bin.bz2
+sha256  66570d88c48d7b347f39c21dda2d137908b1b1d2573ae7bd6451c1d2cbe9a241  pre_built/el8.x86_64.glibc2p28/bin/surfer.bz2
 sha256  0685493a201147e1bf8e62d9102d39c8a624d9b4837e2593daec4c73e1760f0a  pre_built/el8.x86_64.glibc2p28/bin/sync.bz2
 sha256  5eacac3388fae845870fa103a742a0bbf83397476ea844085d825f78ba3d21dc  pre_built/el8.x86_64.glibc2p28/bin/tac.bz2
 sha256  6c68418ef5fa20f1a20693b29f9a631c6be0f4d3f9bcdb74a978be1d98bb2ae4  pre_built/el8.x86_64.glibc2p28/bin/tail.bz2

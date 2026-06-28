@@ -191,10 +191,15 @@ Key rules:
 - `recommends` -- list of soft-dep package names. Silently dropped if skipped.
 
 For a tool with a single binary, no exclusive libs, and no deps:
-`"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "default": true, "description": "..."}`.
+`"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "description": "..."}`.
 
-To make it discoverable by group selection, add it to an `@group` `members` list elsewhere
-in `packages.json` (e.g. `@core-cli`, `@dev-tools`, `@editor-cli`).
+There is no `default` field -- the registry is pure opt-in (bare `install` errors). A
+plain non-`optional` package is swept into the synthetic `all` group, so it ships in the
+full `@engineering-loadout` bundle automatically. Add it to an `@group` `members` list
+elsewhere in `packages.json` (e.g. `@core-cli`, `@dev-tools`, `@editor-cli`) to make it
+discoverable by group selection. Set `"optional": true` to keep it OUT of `all` /
+`@shared` / `@engineering-loadout` so it installs only when named explicitly or pulled by
+a group that lists it (e.g. `surfer`, the `@rust` trio).
 
 ### 8. Verify and commit
 
@@ -1073,11 +1078,11 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/cloc.bz2
 - No patchelf, no bundled libs, no RPATH -- it's a script. `strip_all_elf_binaries`
   decompresses, sees a non-ELF payload, records the sha in `.strip-manifest`, and
   skips it on later runs (same handling as the `vim.bz2` shell wrapper).
-- packages.json: `kind: bin`, `default: true`, `tags: ["dev","data"]`, no `libs`.
+- packages.json: `kind: bin`, `tags: ["dev","data"]`, no `libs`.
 - farm-versions: `strategy_flag(["--version"], r"([0-9]+\.[0-9]+)")` (cloc prints a
   bare two-part version). check-versions resolves latest from the GitHub homepage.
 
-Install: `./loadout install cloc` (or it's in the default set).
+Install: `./loadout install cloc` (also swept into the full `@engineering-loadout` bundle).
 
 ---
 
@@ -1097,7 +1102,7 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/scc.bz2
 ./strip_all_elf_binaries
 ```
 
-packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
+packages.json `kind: bin`, `tags: [dev,data]`, no libs.
 farm-versions: `strategy_flag(["--version"], r"scc version ([0-9]+\.[0-9]+\.[0-9]+)")`.
 
 ## tokei 14.0.0 -- code counter (Rust, EL8 SOURCE build)
@@ -1124,11 +1129,11 @@ chmod 644 pre_built/el8.x86_64.glibc2p28/bin/tokei.bz2
 ```
 
 - System libs only -> no bundling, no RPATH. Max glibc 2.28 (native EL8 build).
-- packages.json `kind: bin`, `default: true`, `tags: [dev,data]`, no libs.
+- packages.json `kind: bin`, `tags: [dev,data]`, no libs.
 - farm-versions: `strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)")`.
 - When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
 
-Install both: `./loadout install scc,tokei` (both in the default set).
+Install both: `./loadout install scc,tokei` (both swept into the full `@engineering-loadout` bundle).
 
 ---
 
@@ -1853,3 +1858,138 @@ registry change.
 **Verify:** `ldd lib/vcd-toggle-profiler/vcd-toggle-profiler.bin` (host libs
 only), symbol-version floor `GLIBC <= 2.14` / `GLIBCXX <= 3.4.21`, and a wrapper
 run against a sample VCD producing an HTML report.
+
+---
+
+## surfer v0.7.0 -- waveform viewer (Rust egui/glow OpenGL GUI, EL8 SOURCE build)
+
+Surfer (`gitlab.com/surfer-project/surfer`) is a VCD/FST/GHW waveform viewer for
+digital hardware debugging, written in Rust on `eframe` with the **glow**
+(OpenGL) backend + winit (x11 + wayland). Upstream prebuilts target newer glibc,
+so we build the latest stable tag from source on EL8 -> native glibc-2.28
+binary. Packaged as a `bin`-package pair like gvim (wrapper + real ELF), `optional`
+so it stays out of the full `@engineering-loadout` bundle.
+
+```bash
+pre_built/build_scripts/build-surfer.sh --tag v0.7.0
+./strip_all_elf_binaries
+./loadout completion bash > envs/bash/global/completions/loadout.bash
+```
+
+**Prerequisites / quirks (all handled by the build script):**
+- **Toolchain:** repo's bundled rust (`cargo 1.96`); surfer MSRV is 1.92. The
+  f128 submodule's `__float128` shim wants a quadmath-capable C compiler, so the
+  script enables `gcc-toolset-14`. glibc floor stays 2.28 regardless of gcc.
+- **Submodules:** the **v0.7.0 tag** vendors `f128` and `instruction-decoder` as
+  git submodules (path deps); `main` later switched them to `git =` deps. Clone
+  with `--recurse-submodules` or the workspace fails to resolve `f128`.
+- **Offline crate-store trap:** the loadout's own `~/.cargo/config.toml`
+  (env-cargo) replaces crates-io with the offline `registry-store`, which only
+  holds the curated crate subset and lacks surfer's pins (e.g. `camino 1.2.1`).
+  The script sets a fresh `CARGO_HOME` so the build hits real crates.io.
+- **Build:** `cargo build --release -p surfer`; release profile is `opt-level=3
+  lto=true` with **no** `-march/target-cpu=native`, so the ~47 MB binary is
+  farm-portable. Pulls extism/wasmtime + reqwest/rustls (plugin + online
+  features) -> ~700 crates; first build is slow, LTO link dominates.
+
+**Packaging:** strip, `patchelf --set-rpath '$ORIGIN/../lib64'` (Mesa vendor libs
+sit one level up from `bin/`), then bzip2 both the stripped ELF (`surfer.bin.bz2`)
+and the POSIX-sh wrapper (`surfer.bz2`) into `pre_built/<platform>/bin/`. The
+wrapper mirrors wezterm's GL block: derive prefix from `bin/..`, prepend
+`<prefix>/lib64` to `LD_LIBRARY_PATH`, set `LIBGL_DRIVERS_PATH=<prefix>/lib64/dri`
+and `__EGL_VENDOR_LIBRARY_DIRS=<prefix>/share/glvnd/egl_vendor.d`, then exec
+`surfer.bin`. packages.json `kind: bin`, `bins: [surfer, surfer.bin]`,
+`optional: true`, `depends: [gui_libs, mesa3d_libs]`, tags `gui/opengl/waveform/eda`.
+
+**Runtime libs:** the ELF itself NEEDs only glibc base + `libgcc_s` -- winit/glow
+**dlopen** everything else at runtime (`libGL.so.1`, `libX11`, `libwayland-client`,
+`libxkbcommon`, ...). X11/Wayland/xkbcommon come from `gui_libs`; the Mesa vendor
+side (software `swrast`/`llvmpipe` for headless farm nodes) from `mesa3d_libs`;
+the GLVND dispatcher `libGL.so.1` stays host-provided (never bundled). Install:
+`./loadout install surfer` (auto-pulls gui_libs + mesa3d_libs).
+
+**Verify:** `readelf -V surfer.bin` glibc floor `<= 2.28`, `ldd` shows host libs
+only, and a real-X/WSLg `surfer --version` + a headed launch on a sample
+`.vcd`/`.fst`.
+
+---
+
+## cicwave 0.5.2 -- PyQtGraph waveform viewer (Python uv_tool, loadout PyQt6 fork)
+
+cicwave (`github.com/wulffern/cicwave`) is a pure-Python PyQtGraph waveform
+viewer (ngspice `.raw` / Xyce `.prn` / VCD / CSV / parquet ...). Upstream imports
+**PySide6**, which has **no wheel that is both EL8 (glibc 2.28) and Python 3.14**:
+
+| PySide6 | python | manylinux | EL8 (glibc 2.28)? |
+|---------|--------|-----------|-------------------|
+| 6.9.3   | `<3.14`| 2_28      | yes, but not 3.14 |
+| 6.10.0+ | 3.14 ok| **2_34**  | **no** (needs glibc 2.34 / RHEL9; `QtCore.abi3.so` floor `GLIBC_2.34`) |
+
+6.10 added 3.14 support *and* bumped the glibc floor in the same release -- a
+one-way ratchet, so "wait for PySide6" never helps EL8. **PyQt6** does satisfy
+both: `PyQt6 6.9.1` is `cp39-abi3` (runs on 3.14), `PyQt6-Qt6 6.9.2` is
+`manylinux_2_28` (`libQt6Core.so` floor **GLIBC_2.28**), `PyQt6-sip 13.11.1` is a
+`cp314` wheel on ancient manylinux. So we carry a small fork.
+
+### The PyQt6 port patch (`build_scripts/cicwave/0001-port-pyside6-to-pyqt6.patch`)
+
+Touches only `wave_pg.py` + `pyproject.toml` (56 +/- lines). Upstream is shiboken
+(PySide6), which tolerates unscoped enums; PyQt6 is sip, which **removed** them.
+The patch is fully reproducible:
+
+1. **Imports:** `from PySide6.* -> from PyQt6.*`, `from PySide6 import QtCore ->
+   from PyQt6 import QtCore`.
+2. **Signal:** `from PyQt6.QtCore import Qt, pyqtSignal as Signal, ...` (alias
+   keeps the 7 `xxx = Signal(...)` class-attr definitions untouched).
+3. **Strict enums (25 distinct tokens, ~58 sites):** scope every one, e.g.
+   `Qt.AlignCenter -> Qt.AlignmentFlag.AlignCenter`,
+   `Qt.UserRole -> Qt.ItemDataRole.UserRole`,
+   `QHeaderView.Stretch -> QHeaderView.ResizeMode.Stretch`,
+   `QEvent.Drop -> QEvent.Type.Drop`,
+   `QFontDatabase.FixedFont -> QFontDatabase.SystemFont.FixedFont`,
+   `QPalette.Text -> QPalette.ColorRole.Text`, `QDialog.Accepted ->
+   QDialog.DialogCode.Accepted`, ...
+4. **Two dynamic enum lookups** sed cannot see statically:
+   `getattr(QPalette, role_name) -> getattr(QPalette.ColorRole, role_name)` (theme
+   palette) and `_Qt.ApplicationShortcut -> _Qt.ShortcutContext.ApplicationShortcut`.
+5. **pyproject dependency** `PySide6 -> PyQt6` (else the built wheel still
+   declares PySide6 and `uv tool install` cannot resolve offline).
+
+### Build + bundle
+
+```bash
+pre_built/build_scripts/build-cicwave.sh --tag 0.5.2
+./loadout completion bash > envs/bash/global/completions/loadout.bash
+```
+
+The script clones the **stable tag**, applies the patch, `uv build`s the wheel
+into `wheels/`, downloads the PyQt6 + matplotlib dependency closure as EL8/cp314
+wheels, and `split`s any wheel over 40 MiB into `.whl.part-NNN`
+(`pyqt6_qt6` is ~79 MB -> 2 parts; the installer's `_prepare_wheels_dir` rejoins
+them before `uv tool install`, same as the polars/pyarrow wheels).
+numpy/pandas/click/pyyaml/packaging/python_dateutil/six are **reused** from the
+existing bundle, not re-fetched. packages.json: `kind: python-tool`,
+`uv_tool: cicwave`, `optional: true`, `depends: [portable-python, uv]`.
+
+### Verify (headless)
+
+The GUI can't open in CI, but `QT_QPA_PLATFORM=offscreen` constructs real Qt
+widgets, so the enum/API port is exercised by rendering to a file (Qt offscreen
+has no GL, so force the raster path with `CICSIM_USE_OPENGL=0`):
+
+```bash
+./loadout install cicwave --dest-dir /tmp/t --no-backup   # offline, rejoins + uv tool install
+QT_QPA_PLATFORM=offscreen /tmp/t/local/bin/cicwave --help
+# construct window + plot waves + matplotlib export (exercises pen-style/palette enums):
+QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 <tool-venv>/bin/python -c \
+  "from cicwave.wave_pg import CmdWavePg; c=CmdWavePg('time'); c.openFile('s.csv'); \
+   c.win._plot_all_visible_waves(); c.exportAndExit('out.png')"
+```
+
+Interactive-only paths (drag/drop `QEvent.Type.*`, context menus, keyboard
+modifiers) are statically scoped but not headlessly exercised -- smoke them on a
+real X/WSLg display after a version bump. **Updating:** re-run
+`build-cicwave.sh --tag <new>`; if upstream restructures `wave_pg.py` the patch
+may need refreshing (`git apply --reject`, fix `.rej`, regenerate). When PySide6
+ships a manylinux_2_28 + python>=3.14 wheel (unlikely; the floor only rises), the
+fork could be dropped for a stock PySide6 uv_tool.
