@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""Update download-type prebuilt payload binaries to new upstream versions.
+
+Mirrors build/verify-binaries' bundling transformation exactly:
+download release asset -> extract binary -> strip -> patchelf RPATH
+'$ORIGIN/../lib64:$ORIGIN/../lib' (dynamic ELFs only) -> bzip2 into
+payload bin/ -> stamp packages.json version.
+
+Usage: update-prebuilt.py tool=version [tool=version ...]
+"""
+
+import bz2
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
+from urllib.request import Request, urlopen
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BIN_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28", "bin")
+RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
+PATCHELF = os.path.expanduser("~/.local/bin/patchelf")
+
+# URL templates copied from build/verify-binaries TOOLS (keep in sync).
+TOOLS = {
+    "ruff": ("https://github.com/astral-sh/ruff/releases/download/{ver}/ruff-x86_64-unknown-linux-gnu.tar.gz", "ruff"),
+    "uv": ("https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz", "uv"),
+    "ty": ("https://github.com/astral-sh/ty/releases/download/{ver}/ty-x86_64-unknown-linux-gnu.tar.gz", "ty"),
+    "starship": (
+        "https://github.com/starship/starship/releases/download/v{ver}/starship-x86_64-unknown-linux-gnu.tar.gz",
+        "starship",
+    ),
+    "procs": ("https://github.com/dalance/procs/releases/download/v{ver}/procs-v{ver}-x86_64-linux.zip", "procs"),
+    "miller": ("https://github.com/johnkerl/miller/releases/download/v{ver}/miller-{ver}-linux-amd64.tar.gz", "mlr"),
+}
+
+
+def download(url, dest):
+    req = Request(url, headers={"User-Agent": "loadout-update-prebuilt/1.0"})
+    with urlopen(req, timeout=180) as resp, open(dest, "wb") as f:
+        shutil.copyfileobj(resp, f)
+    log_download(url, dest)
+
+
+def log_download(url, dest):
+    """Append to the assurance ledger's append-only fetch log."""
+    import datetime
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(dest, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+    with open(os.path.join(REPO, "assurance", "downloads.log"), "a", encoding="utf-8") as f:
+        f.write(f"{stamp}\t{url}\t{h.hexdigest()}\n")
+
+
+def extract(archive, want, destdir):
+    dest = os.path.join(destdir, want)
+    if tarfile.is_tarfile(archive):
+        with tarfile.open(archive, "r:*") as tf:
+            hit = next((m for m in tf.getmembers() if os.path.basename(m.name) == want and m.isfile()), None)
+            if hit is None:
+                raise ValueError(f"{want} not in tar: {[m.name for m in tf.getmembers()][:6]}")
+            hit.name = want
+            tf.extract(hit, destdir)
+    elif zipfile.is_zipfile(archive):
+        with zipfile.ZipFile(archive) as zf:
+            hit = next((n for n in zf.namelist() if os.path.basename(n) == want), None)
+            if hit is None:
+                raise ValueError(f"{want} not in zip: {zf.namelist()[:6]}")
+            with open(dest, "wb") as f:
+                f.write(zf.read(hit))
+    else:
+        raise ValueError(f"unknown archive type: {archive}")
+    os.chmod(dest, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+    return dest
+
+
+def is_dynamic(path):
+    r = subprocess.run(["file", "-b", path], capture_output=True, text=True)
+    return "dynamically linked" in r.stdout
+
+
+def main():
+    updates = []
+    for arg in sys.argv[1:]:
+        tool, _, ver = arg.partition("=")
+        if not ver or tool not in TOOLS:
+            sys.exit(f"bad arg or unknown tool: {arg} (known: {', '.join(TOOLS)})")
+        updates.append((tool, ver))
+
+    reg_path = os.path.join(REPO, "payload", "packages.json")
+    with open(reg_path) as f:
+        registry = json.load(f)
+
+    with tempfile.TemporaryDirectory(prefix="loadout-update.") as tmp:
+        for tool, ver in updates:
+            url_tpl, want = TOOLS[tool]
+            url = url_tpl.format(ver=ver)
+            print(f"== {tool} -> {ver}")
+            archive = os.path.join(tmp, tool + ".archive")
+            download(url, archive)
+            binpath = extract(archive, want, tmp)
+            subprocess.run(["/usr/bin/strip", binpath], capture_output=True)
+            if is_dynamic(binpath):
+                r = subprocess.run([PATCHELF, "--set-rpath", RPATH, binpath], capture_output=True)
+                if r.returncode != 0:
+                    sys.exit(f"patchelf failed for {tool}: {r.stderr.decode()}")
+                print(f"   patchelf RPATH applied (dynamic ELF)")
+            else:
+                print(f"   static ELF, no patchelf")
+            with open(binpath, "rb") as f:
+                data = f.read()
+            out = os.path.join(BIN_DIR, want + ".bz2")
+            with open(out, "wb") as f:
+                f.write(bz2.compress(data, 9))
+            print(f"   wrote {out} ({os.path.getsize(out)} bytes)")
+            registry["packages"][tool]["version"] = ver
+
+    with open(reg_path, "w") as f:
+        json.dump(registry, f, indent=2)
+        f.write("\n")
+    print("packages.json versions stamped")
+
+
+if __name__ == "__main__":
+    main()

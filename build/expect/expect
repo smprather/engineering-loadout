@@ -1,0 +1,18 @@
+#!/bin/sh
+# Relocatable expect entry point.
+#
+# The real ELF lives at <prefix>/lib/expect/bin/expect.bin with its Tcl 8.6
+# script library at <prefix>/lib/expect/lib/tcl8.6. Tcl's own init.tcl search
+# falls back to <exedir>/../lib/tcl8.6, so placing the binary inside that
+# private prefix relocates it with no environment variables -- nothing leaks
+# into processes expect spawns, and portable-python's separate lib/tcl8.6
+# (a different Tcl patchlevel) is never touched.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+exec "$prefix/lib/expect/bin/expect.bin" "$@"

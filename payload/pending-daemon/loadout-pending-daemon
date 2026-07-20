@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""
+loadout-pending-daemon: apply deferred loadout binary installs.
+
+Spawned automatically by the loadout installer when a binary cannot be
+replaced because a blocking process (e.g. tmux server) is running. Polls
+every 10 seconds; exits when all pending ops are done, the timeout is
+reached, or staged files are gone.
+
+Timeout: 1 week from last_activity in pending.json. Re-running ./loadout
+while ops are outstanding updates last_activity and resets the clock. If
+the daemon has already exited due to timeout, re-running ./loadout spawns
+a fresh one.
+
+Pending state directory: /tmp/loadout-pending-<user>/
+  pending.json  - op list (written/updated by ./loadout on each run)
+  pending.lock  - exclusive lock file for JSON read-modify-write
+  files/        - staged decompressed binaries ready to install
+  daemon.pid    - this process's PID
+  daemon.log    - activity log (appended)
+"""
+
+import contextlib
+import datetime
+import errno
+import fcntl
+import getpass
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+# Must match the per-user paths the installer builds in loadout_main.py
+# (_PENDING_DIR / _RUN_LOG_FIXED_PATH).
+_TMP_USER = getpass.getuser()
+
+PENDING_DIR = f"/tmp/loadout-pending-{_TMP_USER}"
+PENDING_JSON = os.path.join(PENDING_DIR, "pending.json")
+PID_FILE = os.path.join(PENDING_DIR, "daemon.pid")
+LOG_FILE = os.path.join(PENDING_DIR, "daemon.log")
+POLL_INTERVAL = 10
+TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
+
+# Mirror significant daemon events to the loadout dev-log if it
+# already exists. Heartbeats (idle polling status) are throttled to one per
+# hour so the log doesn't churn while waiting for tmux/bash to exit.
+RUN_LOG_PATH = f"/tmp/loadout.{_TMP_USER}.log"
+HEARTBEAT_INTERVAL = 3600  # seconds
+_last_heartbeat_ts = 0.0
+
+
+def _append_run_log(msg):
+    """If the dev-log exists (i.e. installer was run from a repo clone),
+    append one timestamped line tagged [daemon]. Never creates the file."""
+    if not os.path.exists(RUN_LOG_PATH):
+        return
+    try:
+        with open(RUN_LOG_PATH, "a") as f:
+            ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            f.write(f"[{ts}] [daemon] {msg}\n")
+    except OSError:
+        pass
+
+
+def log(msg):
+    line = f"[loadout-pending-daemon] {msg}\n"
+    sys.stdout.write(line)
+    sys.stdout.flush()
+    # Significant event -- always mirror to dev-log.
+    _append_run_log(msg)
+
+
+def heartbeat(msg):
+    """Throttled status log -- emits to dev-log at most once per HEARTBEAT_INTERVAL.
+    Stdout is unchanged so daemon's normal log stream isn't affected."""
+    global _last_heartbeat_ts
+    now = time.time()
+    if now - _last_heartbeat_ts < HEARTBEAT_INTERVAL:
+        return
+    _last_heartbeat_ts = now
+    _append_run_log("heartbeat: " + msg)
+
+
+@contextlib.contextmanager
+def _pending_lock():
+    lock_path = os.path.join(PENDING_DIR, "pending.lock")
+    try:
+        fh = open(lock_path, "w")
+    except OSError:
+        yield
+        return
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fh, fcntl.LOCK_UN)
+        fh.close()
+
+
+def _parse_iso(s):
+    """Parse ISO8601 UTC string to Unix timestamp; return 0.0 on failure."""
+    try:
+        dt = datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ")
+        epoch = datetime.datetime(1970, 1, 1)
+        return (dt - epoch).total_seconds()
+    except ValueError, TypeError, AttributeError:
+        return 0.0
+
+
+def _now_utc_iso():
+    return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def read_pending_state():
+    """Return (ops_by_dest, last_activity_iso). Caller must hold _pending_lock()."""
+    try:
+        with open(PENDING_JSON) as f:
+            data = json.load(f)
+        ops = {op["dest"]: op for op in data.get("ops", []) if "dest" in op}
+        last_activity = data.get("last_activity", "")
+        return ops, last_activity
+    except OSError, ValueError:
+        return {}, ""
+
+
+def write_pending_state(ops_by_dest, last_activity_iso):
+    """Atomically write pending.json. Caller must hold _pending_lock()."""
+    tmp = PENDING_JSON + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(
+            {
+                "schema_version": 1,
+                "last_activity": last_activity_iso,
+                "ops": list(ops_by_dest.values()),
+            },
+            f,
+            indent=2,
+        )
+        f.flush()
+        os.fsync(f.fileno())
+    os.rename(tmp, PENDING_JSON)
+
+
+def check_block(block):
+    """Return True if the block condition has cleared (safe to apply)."""
+    btype = block.get("type", "")
+    if btype == "pgrep_absent":
+        name = block.get("name", "")
+        if not name:
+            return True
+        pgrep = _find_pgrep()
+        if not pgrep:
+            return False
+        proc = subprocess.run([pgrep, "-x", name], capture_output=True)
+        return proc.returncode != 0
+    if btype == "proc_exe_absent":
+        path = block.get("path", "")
+        if not path:
+            return True
+        try:
+            for entry in os.listdir("/proc"):
+                if not entry.isdigit():
+                    continue
+                try:
+                    exe = os.readlink(f"/proc/{entry}/exe")
+                except OSError:
+                    continue
+                if exe == path or exe == path + " (deleted)":
+                    return False  # still running
+        except OSError:
+            return False  # /proc unreadable: be conservative
+        return True
+    log(f"WARNING: unknown block type {btype!r} -- leaving op pending")
+    return False
+
+
+def _find_pgrep():
+    p = "/usr/bin/pgrep"
+    return p if os.path.isfile(p) and os.access(p, os.X_OK) else None
+
+
+def apply_op(op):
+    """Try to apply one op. Returns 'done', 'drop', or 'retry'."""
+    staged = op.get("staged", "")
+    dest = op.get("dest", "")
+    mode = op.get("mode", 0o755)
+
+    if not os.path.isfile(staged):
+        log(f"staged file gone for {dest}, dropping op")
+        return "drop"
+
+    dest_dir = os.path.dirname(dest)
+    if not os.path.isdir(dest_dir):
+        log(f"dest dir missing for {dest}, dropping op")
+        return "drop"
+
+    tmp_path = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=dest_dir)
+        os.close(fd)
+        shutil.copy2(staged, tmp_path)
+        os.chmod(tmp_path, mode)
+        os.rename(tmp_path, dest)
+        tmp_path = None
+        log(f"installed {staged} -> {dest}")
+        return "done"
+    except OSError as exc:
+        if exc.errno == errno.ETXTBSY:
+            log(f"{dest} still busy (ETXTBSY), will retry")
+            return "retry"
+        log(f"ERROR applying {dest}: {exc}")
+        return "retry"
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def is_already_running():
+    try:
+        with open(PID_FILE) as f:
+            pid = int(f.read().strip())
+        if pid == os.getpid():
+            return False
+        os.kill(pid, 0)
+        return True
+    except OSError, ValueError:
+        return False
+
+
+def write_pidfile():
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def cleanup():
+    for path in (PID_FILE,):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    files_dir = os.path.join(PENDING_DIR, "files")
+    try:
+        if os.path.isdir(files_dir) and not os.listdir(files_dir):
+            os.rmdir(files_dir)
+    except OSError:
+        pass
+
+
+def main():
+    if is_already_running():
+        log("another instance is running, exiting")
+        sys.exit(0)
+
+    write_pidfile()
+    log(f"started (pid {os.getpid()})")
+
+    try:
+        while True:
+            with _pending_lock():
+                ops_by_dest, last_activity = read_pending_state()
+
+            if not ops_by_dest:
+                log("no pending ops, exiting")
+                break
+
+            # Timeout check: 1 week from last_activity, reset whenever
+            # ./loadout writes new or updated ops.
+            last_ts = _parse_iso(last_activity)
+            if last_ts and (time.time() - last_ts) > TIMEOUT_SECS:
+                log(f"timeout: no install activity since {last_activity}, giving up")
+                log("re-run ./loadout to try again")
+                break
+
+            remaining = dict(ops_by_dest)
+            made_progress = False
+
+            for dest, op in list(ops_by_dest.items()):
+                block = op.get("block", {})
+                if not check_block(block):
+                    continue
+
+                result = apply_op(op)
+                if result == "done":
+                    remaining.pop(dest, None)
+                    staged = op.get("staged", "")
+                    if staged and os.path.isfile(staged):
+                        try:
+                            os.unlink(staged)
+                        except OSError:
+                            pass
+                    made_progress = True
+                elif result == "drop":
+                    remaining.pop(dest, None)
+                    made_progress = True
+                # 'retry': leave in remaining, try again next poll
+
+            # Write back only if something changed.
+            if made_progress:
+                with _pending_lock():
+                    # Re-read under lock: the installer may have staged a newer
+                    # binary (different version) for the same dest while we were
+                    # applying the old one. Only remove an entry if it still
+                    # matches what we applied -- if the installer replaced it,
+                    # leave the new entry so the daemon applies it next cycle.
+                    current, last_activity = read_pending_state()
+                    for dest in list(ops_by_dest.keys()):
+                        if dest not in remaining:
+                            if current.get(dest) == ops_by_dest.get(dest):
+                                current.pop(dest, None)
+                            else:
+                                log(
+                                    f"entry for {os.path.basename(dest)} was superseded by installer "
+                                    "while applying; keeping new entry"
+                                )
+                    write_pending_state(current, last_activity)
+
+            if not remaining:
+                log("all ops applied, exiting")
+                break
+
+            # Throttled heartbeat: lets the dev-log show daemon is alive +
+            # what it's still waiting on, without spamming every 10s.
+            heartbeat(
+                "polling, {} op(s) pending: {}".format(
+                    len(remaining), ", ".join(sorted(os.path.basename(d) for d in remaining))
+                )
+            )
+
+            time.sleep(POLL_INTERVAL)
+
+    finally:
+        cleanup()
+
+
+if __name__ == "__main__":
+    main()

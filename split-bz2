@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Split large .bz2 or .tar.bz2 files into .part-NNN chunks for git storage.
+
+GitHub warns on files > 50 MB; hard-blocks at 100 MB. Default chunk size is
+45 MiB so each part stays comfortably below the warning threshold.
+
+After splitting, the original file is removed. The installer transparently
+rejoins parts at install time -- no user action required.
+
+To reassemble manually:
+    cat file.bz2.part-* > file.bz2
+"""
+
+import os
+import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+DEFAULT_CHUNK_MB = 45
+
+
+def split_file(path, chunk_size):
+    size = os.path.getsize(path)
+    if size <= chunk_size:
+        print(
+            f"{path}: {size / 1024 / 1024:.1f} MB -- no split needed (under {chunk_size / 1024 / 1024:.0f} MiB limit)"
+        )
+        return 0
+
+    part = 0
+    with open(path, "rb") as src:
+        while True:
+            data = src.read(chunk_size)
+            if not data:
+                break
+            part_path = f"{path}.part-{part:03d}"
+            with open(part_path, "wb") as dst:
+                dst.write(data)
+            print(f"  wrote {part_path} ({len(data) / 1024 / 1024:.1f} MB)")
+            part += 1
+
+    os.remove(path)
+    print(f"Removed {path} -- split into {part} parts")
+    return 0
+
+
+@click.command(
+    name="split-bz2",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("files", nargs=-1, required=True, metavar="FILE...", type=click.Path())
+@click.option(
+    "--chunk-mb",
+    "chunk_mb",
+    type=int,
+    default=DEFAULT_CHUNK_MB,
+    show_default=True,
+    metavar="N",
+    help="Chunk size in MiB.",
+)
+def main(files, chunk_mb):
+    """Split large bz2/tar.bz2 files into .part-NNN chunks for git storage.
+
+    Examples:
+
+      ./split-bz2 payload/el8.x86_64.glibc2p28/bin/clang.bz2
+
+      ./split-bz2 --chunk-mb 45 payload/el8.x86_64.glibc2p28/runtime/llvm.tar.bz2
+    """
+    chunk_size = chunk_mb * 1024 * 1024
+    rc = 0
+    for path in files:
+        if not os.path.isfile(path):
+            print(f"ERROR: {path}: not a file", file=sys.stderr)
+            rc = 1
+            continue
+        if not (path.endswith(".bz2") or path.endswith(".tar.bz2")):
+            print(f"WARNING: {path} does not end in .bz2 or .tar.bz2 -- splitting anyway", file=sys.stderr)
+        rc = rc or split_file(path, chunk_size)
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

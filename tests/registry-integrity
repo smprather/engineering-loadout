@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""
+registry-integrity -- consistency checks for the real payload/packages.json
+against loadout_main.py and the sibling build tooling.
+
+Asserts:
+  1. Every depends/recommends/members reference resolves to a real package,
+     a real group, or a synthetic group name.
+  2. No group cycles (expand of every group terminates).
+  3. Every hardcoded phase-gate package name in loadout_main.py
+     (_HARDCODED_GATE_PKGS + ENV_HANDLERS keys) exists in the registry.
+  4. The _schema block documents exactly the set of fields entries use
+     (no undocumented fields in use, no documented-but-unused fields).
+  5. Known enum fields hold known values (kind, platforms).
+  6. Every python-tool carries depends [portable-python, uv].
+  7. Every tool name in farm-versions' TOOLS table maps to a registry package
+     (directly or via the known alias table) -- catches the "shipped but never
+     registered" drift class.
+
+Must run under the bundled Python 3.14. Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import ast
+import importlib.machinery
+import importlib.util
+import json
+import os
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+PACKAGES_JSON = os.path.join(REPO, "payload", "packages.json")
+FARM_VERSIONS = os.path.join(REPO, "build", "farm-versions")
+
+KNOWN_KINDS = {
+    "bin",
+    "lib-bundle",
+    "runtime",
+    "typelib",
+    "python-base",
+    "python-tool",
+    "env",
+    "font",
+    "data",
+    "group",
+}
+KNOWN_PLATFORMS = {"linux", "macos", "windows"}
+SYNTHETIC_NAMES = {"@shared", "@shared-all", "@envs", "@envs-all"}
+
+# farm-versions display names that are neither a registry package name nor a
+# bin stem claimed by one (uv-tool launchers and display aliases).
+FARM_ALIASES = {
+    "bottom": "btm",
+    "helix": "hx",
+    "neovim": "nvim",
+    "ripgrep": "rg",
+    "tclsh": "tcl",
+    "tealdeer": "tldr",
+    "vd": "visidata",
+    "jupyter-lab": "jupyterlab",
+    "python3.14": "portable-python",
+    "liberty_filter": "liberty-tools",
+}
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def farm_tool_names():
+    """First tuple element of every entry in farm-versions' TOOLS list,
+    extracted via ast so nothing gets executed."""
+    tree = ast.parse(open(FARM_VERSIONS).read())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "TOOLS" for t in node.targets):
+            names = []
+            for elt in node.value.elts:
+                if isinstance(elt, ast.Tuple) and elt.elts:
+                    first = elt.elts[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        names.append(first.value)
+            return names
+    raise AssertionError("TOOLS assignment not found in farm-versions")
+
+
+def main():
+    raw = json.load(open(PACKAGES_JSON))
+    registry = raw["packages"]
+    schema_fields = set(raw.get("_schema", {}))
+    mod = load_loadout()
+
+    pkgs = {n for n in registry if not n.startswith("@")}
+    groups = {n for n in registry if n.startswith("@")}
+    valid_refs = pkgs | groups | SYNTHETIC_NAMES
+
+    # 1. reference validity
+    bad = []
+    for name, entry in registry.items():
+        for field in ("depends", "recommends", "members"):
+            for ref in entry.get(field, []):
+                if ref not in valid_refs:
+                    bad.append(f"{name}.{field} -> {ref}")
+    check("all depends/recommends/members resolve", not bad, "; ".join(bad))
+
+    # 2. no group cycles
+    try:
+        for g in groups:
+            mod.expand_groups([g], registry)
+        check("no group cycles", True)
+    except mod.ResolverError as exc:
+        check("no group cycles", False, str(exc))
+
+    # 3. hardcoded gates exist
+    gate_names = set(mod._HARDCODED_GATE_PKGS) | set(mod.ENV_HANDLERS)
+    missing = sorted(gate_names - set(registry))
+    check("hardcoded phase-gate names exist in registry", not missing, ", ".join(missing))
+
+    # 4. _schema field-set == fields in use
+    used_fields = set()
+    for entry in registry.values():
+        used_fields.update(entry)
+    undocumented = sorted(used_fields - schema_fields)
+    unused = sorted(schema_fields - used_fields)
+    check("no undocumented fields in use", not undocumented, ", ".join(undocumented))
+    check("no documented-but-unused fields", not unused, ", ".join(unused))
+
+    # 5. enum sanity
+    bad_kinds = sorted({e.get("kind") for e in registry.values()} - KNOWN_KINDS - {None})
+    check("kind values are known", not bad_kinds, ", ".join(map(str, bad_kinds)))
+    bad_plat = []
+    for name, entry in registry.items():
+        extra = set(entry.get("platforms", [])) - KNOWN_PLATFORMS
+        if extra:
+            bad_plat.append(f"{name}: {sorted(extra)}")
+    check("platform values are known", not bad_plat, "; ".join(bad_plat))
+
+    # 6. python-tool dependency convention
+    bad_pt = [
+        n
+        for n, e in registry.items()
+        if e.get("kind") == "python-tool" and e.get("depends") != ["portable-python", "uv"]
+    ]
+    check("python-tools depend on portable-python + uv", not bad_pt, ", ".join(bad_pt))
+
+    # 7. farm-versions TOOLS <-> registry sync. A TOOLS name is valid when it
+    # is a registry package, a bin stem some package claims, or a known alias.
+    bin_owners = set()
+    for entry in registry.values():
+        bin_owners.update(entry.get("bins", []))
+    stray = []
+    for tool in farm_tool_names():
+        mapped = FARM_ALIASES.get(tool, tool)
+        if mapped not in registry and mapped not in bin_owners:
+            stray.append(tool)
+    check("farm-versions TOOLS names map to registry packages", not stray, ", ".join(stray))
+
+    # 8. scan-for-malware target directories must exist. A rename that leaves a
+    # stale path turns the scan into a silent no-op (this is exactly how the
+    # crate-store and the four ./update artifact paths drifted after the reorg).
+    scan_targets = [
+        os.path.join(REPO, "payload", "crate-store"),
+        os.path.join(REPO, "payload", "yara"),
+        os.path.join(REPO, "payload", "tldr"),
+        os.path.join(REPO, "envs", "tmux"),
+        os.path.join(REPO, "envs", "nvim", "vendor", "plugins"),
+    ]
+    missing_dirs = [d for d in scan_targets if not os.path.isdir(d)]
+    check(
+        "scan/update target directories exist",
+        not missing_dirs,
+        ", ".join(os.path.relpath(d, REPO) for d in missing_dirs),
+    )
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

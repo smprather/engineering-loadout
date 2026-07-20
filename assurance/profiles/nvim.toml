@@ -1,0 +1,39 @@
+# Dynamic-analysis profile for nvim, consumed by tests/dynamic-analysis (S0.5).
+# The harness runs each invocation inside the clean AlmaLinux 8.10 container
+# with --network none, wrapped in strace, against a mock chip-design HOME
+# seeded with canary files. A run FAILS if any canary hash changes, entropy
+# spikes, a write/unlink/rename lands outside fs.write_allow, or a
+# connect()/socket() is attempted while net.allow = false.
+
+package = "nvim"
+
+# Representative *editing* behaviors. These must never touch the network or
+# mutate files outside the allowlist. (+checkhealth is deliberately NOT here:
+# it is a diagnostic that probes network connectivity by design, which is
+# expected and not representative of normal tool operation.)
+[[invocation]]
+argv = ["nvim", "--headless", "+edit proj/mock_design.v", "+write! /tmp/scratch/out.v", "+qa"]
+timeout = 20
+
+# Exercises a treesitter parser .so against a canary source file, and loads the
+# bundled plugin set.
+[[invocation]]
+argv = ["nvim", "--headless", "proj/mock_design.v", "+lua vim.treesitter.start(0)", "+qa"]
+timeout = 20
+
+[fs]
+write_allow = [
+  "$HOME/.local/state/nvim/**",
+  "$HOME/.local/share/nvim/**",
+  "$HOME/.cache/**",
+  "/tmp/**",
+]
+unlink_allow = [
+  "$HOME/.local/state/nvim/**",
+  "$HOME/.cache/**",
+  "/tmp/**",
+]
+max_unlinks = 50
+
+[net]
+allow = false

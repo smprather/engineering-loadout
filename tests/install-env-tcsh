@@ -1,0 +1,93 @@
+#!/bin/sh
+# env-tcsh: installs, links the entrypoints, and -- the headline requirement --
+# starts SILENTLY.
+#
+# Silence is the acceptance criterion for the tcsh env (see
+# docs/superpowers/specs/2026-07-13-tcsh-env-design.md): the users this exists for
+# did not choose tcsh and will not debug it. A warning on startup is a bug; a
+# missing feature is not.
+#
+# TWO TEST-HARNESS TRAPS, both of which produce a green run that proves nothing:
+#
+#   1. `tcsh -i -c CMD` does NOT set $prompt, so the entire interactive block
+#      (aliases, prompt) is SKIPPED. A silence test written that way passes by not
+#      running the code under test. Commands must be fed on stdin.
+#   2. tcsh with a piped stdin and no controlling terminal prints
+#      "Warning: no access to tty" to stderr -- a harness artifact that looks
+#      exactly like the noise we are testing for. A real PTY is required, hence
+#      `script -qec`.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v tcsh >/dev/null 2>&1; then
+    echo "SKIP: native tcsh smoke (no tcsh interpreter; Tier 3 installs tcsh)"
+    exit 0
+fi
+if ! command -v script >/dev/null 2>&1; then
+    echo "SKIP: native tcsh smoke (no 'script' for a PTY; cannot test startup silence honestly)"
+    exit 0
+fi
+
+TMPHOME="$(mktemp -d /tmp/loadout-env-tcsh.XXXXXX)"
+trap 'rm -rf "$TMPHOME"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Run an interactive tcsh under a real PTY, feeding it CMDS on stdin.
+# Echoes stdout; stderr lands in $ERRFILE.
+ERRFILE="$TMPHOME/stderr.txt"
+tcsh_i() {
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$1" \
+        | HOME="$TMPHOME" script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+
+HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
+
+[ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked"
+[ -e "$TMPHOME/.cshrc" ] || fail ".cshrc not linked"
+[ -f "$TMPHOME/.config/tcsh/global/tcshrc" ] || fail "global layer not installed"
+[ -x "$TMPHOME/.config/tcsh/global/git-branch.sh" ] || fail "git-branch.sh not executable"
+
+# --- THE headline test: an env-only HOME (no loadout tools installed at all)
+# --- must start with EMPTY stderr. This is the farm-node case.
+tcsh_i 'echo alive' >/dev/null
+[ ! -s "$ERRFILE" ] || fail "interactive tcsh wrote to stderr:
+$(cat "$ERRFILE")"
+
+# --- A non-interactive tcsh script must still run. tcsh sources ~/.tcshrc for
+# --- non-interactive shells too, so an `exit` in the rc file would kill every
+# --- script the user runs -- a spectacular way to break a farm.
+: > "$ERRFILE"
+echo 'echo script-ran' > "$TMPHOME/s.csh"
+out=$(HOME="$TMPHOME" tcsh "$TMPHOME/s.csh" 2>"$ERRFILE") \
+    || fail "non-interactive tcsh script exited non-zero"
+[ "$out" = "script-ran" ] || fail "non-interactive tcsh script did not run: [$out]"
+[ ! -s "$ERRFILE" ] || fail "non-interactive tcsh wrote to stderr:
+$(cat "$ERRFILE")"
+
+# --- The environment actually landed.
+out=$(tcsh_i 'echo "VI=$LOADOUT_CFG_PREFERRED_VI"')
+echo "$out" | grep -q "VI=nvim" || fail "LOADOUT_CFG_* not set in tcsh: [$out]"
+
+out=$(tcsh_i 'alias b')
+echo "$out" | grep -q "cd \.\." || fail "aliases not loaded: [$out]"
+
+# --- The prompt must never leak git's error text (an unborn HEAD or a detached
+# --- HEAD once rendered git's "Use '--' to separate paths" hint into the prompt).
+if command -v git >/dev/null 2>&1; then
+    ( cd "$TMPHOME" && git init -q . 2>/dev/null ) || true
+    out=$(cd "$TMPHOME" && tcsh_i 'echo "P=$prompt"')
+    echo "$out" | grep -q "separate paths from revisions" \
+        && fail "git error text leaked into the prompt: [$out]"
+    [ ! -s "$ERRFILE" ] || fail "prompt in a fresh repo wrote to stderr:
+$(cat "$ERRFILE")"
+fi
+
+# --- Reinstall must not clobber a user-created layer (the env-st lesson).
+echo 'setenv LOADOUT_TEST_KEEPME 1' > "$TMPHOME/.config/tcsh/user/config.csh"
+HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
+[ -f "$TMPHOME/.config/tcsh/user/config.csh" ] || fail "reinstall deleted the user layer"
+
+echo "install-env-tcsh: OK"

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Relocatable ngspice entry point.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+# ngspice bakes its configure prefix into the binary as NGSPICEDATADIR, so a
+# relocated install never finds spinit on its own. SPICE_LIB_DIR overrides
+# that path (spinit is read from $SPICE_LIB_DIR/scripts/spinit); explicit user
+# values still win.
+if [ -z "${SPICE_LIB_DIR:-}" ] && [ -d "$prefix/share/ngspice" ]; then
+    SPICE_LIB_DIR="$prefix/share/ngspice"
+    export SPICE_LIB_DIR
+fi
+
+# The packaged spinit loads XSPICE codemodels from $loadout_cmdir, guarded by
+# `if $?loadout_cmdir`, so running ngspice.bin directly stays silent instead
+# of erroring on an unset variable.
+exec "$prefix/bin/ngspice.bin" -D loadout_cmdir="$prefix/lib/ngspice" "$@"

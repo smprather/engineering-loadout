@@ -1,0 +1,157 @@
+#!/bin/sh
+# nvim across BOTH deployment shapes.
+#
+# nvim is the most-used tool in the loadout, and it had no coverage in the split
+# shared/envs shape at all -- which is how it shipped broken to an air-gapped
+# deployment: the plugins were installed into the SHARED tree, while nvim resolves
+# everything from stdpath("data") = $HOME. nvim found no lazy.nvim, fell through to
+# its git-clone bootstrap, failed offline, and printed
+# "lazy.nvim unavailable; plugin setup skipped".
+#
+# The two shapes, both exercised here:
+#
+#   1. single HOME   -- `install @engineering-loadout` (the normal/online case)
+#   2. split         -- `install @shared-all --dest-dir <tree>` + `install @envs`
+#                       with LOADOUT_CFG_SHARED_PREFIX=<tree>/local (the farm case)
+#
+# The air-gap is simulated with a proxy pointing at a dead port, so any attempt to
+# reach github fails the way it does on the deployment box. If nvim ever regresses to
+# cloning at startup, this test fails instead of a user finding out.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMP="$(mktemp -d /tmp/loadout-nvim-deploy.XXXXXX)"
+trap 'rm -rf "$TMP"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Run nvim headless with the network blackholed; print what it loaded.
+nvim_offline() {
+    # $1 = HOME, $2 = PATH prefix (bin dir), $3 = shared prefix ("" for none)
+    HOME="$1" \
+    LOADOUT_CFG_SHARED_PREFIX="$3" \
+    PATH="$2:/usr/bin:/bin" \
+    https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 \
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true \
+    timeout 120 nvim --headless -c 'lua vim.defer_fn(function()
+        local ok, lazy = pcall(require, "lazy")
+        print("PLUGINS=" .. (ok and #lazy.plugins() or 0))
+        print("PARSERS=" .. (vim.o.runtimepath:find("tree%-sitter%-parsers") and "yes" or "no"))
+        vim.cmd("qa!")
+    end, 800)' 2>&1 || true
+}
+
+# ---------------------------------------------------------------- shape 1: HOME
+H1="$TMP/home1"
+mkdir -p "$H1"
+# git-nvim is included on purpose: the stash needs git to clone from, and the Tier 3
+# container (stock almalinux:8.10) has NO system git. That makes the container the exact
+# machine git-nvim exists for -- it is the only place the private-git path gets exercised.
+HOME="$H1" "$REPO/loadout" install nvim env-nvim nvim-plugin-stash treesitter-parsers git-nvim \
+    --no-backup >/dev/null 2>&1
+
+[ -e "$H1/.local/bin/git" ] \
+    && fail "single-HOME: git-nvim put a git on the user's PATH -- it would shadow the corp git"
+
+[ -d "$H1/.local/share/nvim/lazy/lazy.nvim" ] || fail "single-HOME: lazy.nvim not cloned into \$HOME"
+[ -d "$H1/.local/share/nvim/loadout/vendor/plugin-stash" ] \
+    || fail "single-HOME: plugin stash not installed (its install_to was a silent no-op once)"
+[ -d "$H1/.local/share/nvim/lazy/snacks.nvim/.git" ] \
+    || fail "single-HOME: plugins are not real git repos -- :Lazy update would be a no-op"
+
+out=$(nvim_offline "$H1" "$H1/.local/bin" "")
+echo "$out" | grep -q "lazy.nvim unavailable" \
+    && fail "single-HOME: nvim fell back to the git-clone bootstrap:
+$out"
+echo "$out" | grep -q "PLUGINS=[1-9]" || fail "single-HOME: no plugins loaded:
+$out"
+echo "$out" | grep -q "PARSERS=yes" || fail "single-HOME: parser dir not on runtimepath:
+$out"
+echo "  single-HOME: plugins load offline, parsers on rtp"
+
+# --------------------------------------------------------------- shape 2: split
+SHARED="$TMP/shared"
+H2="$TMP/home2"
+mkdir -p "$SHARED" "$H2"
+
+# The shared tree carries the binary + runtime, the read-only plugin CATALOG, and the
+# 251 MB parser set. It must NOT carry lazy/ -- that is per-user, writable state.
+"$REPO/loadout" install nvim nvim-plugin-stash treesitter-parsers git-nvim \
+    --dest-dir "$SHARED" --no-backup >/dev/null 2>&1
+
+[ -e "$SHARED/local/bin/git" ] \
+    && fail "split: git-nvim put a git on the shared PATH -- it would shadow the corp git"
+[ -x "$SHARED/local/lib/loadout-git/bin/git" ] \
+    || fail "split: git-nvim did not install its private git"
+
+[ -d "$SHARED/local/share/nvim/loadout/vendor/plugin-stash" ] \
+    || fail "split: plugin stash missing from the shared tree"
+[ -d "$SHARED/local/share/nvim/tree-sitter-parsers" ] \
+    || fail "split: parsers missing from the shared tree"
+[ -d "$SHARED/local/share/nvim/lazy" ] \
+    && fail "split: lazy/ was seeded into the SHARED tree -- it is per-user state, and nvim never looks there"
+
+# The per-user run copies the plugins it needs out of the shared catalog into $HOME.
+HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+    "$REPO/loadout" install env-nvim --no-backup >/dev/null 2>&1
+
+[ -d "$H2/.local/share/nvim/lazy/lazy.nvim" ] \
+    || fail "split: lazy.nvim not seeded into \$HOME (this is the air-gapped bug)"
+[ -d "$H2/.local/share/nvim/tree-sitter-parsers" ] \
+    && fail "split: 251 MB of parsers were copied per-user; they should stay shared"
+
+out=$(nvim_offline "$H2" "$SHARED/local/bin" "$SHARED/local")
+echo "$out" | grep -q "lazy.nvim unavailable" \
+    && fail "split: nvim fell back to the git-clone bootstrap (the reported air-gapped failure):
+$out"
+echo "$out" | grep -q "PLUGINS=[1-9]" || fail "split: no plugins loaded:
+$out"
+echo "$out" | grep -q "PARSERS=yes" \
+    || fail "split: parser dir not on runtimepath -- nvim did not resolve it from the shared tree:
+$out"
+echo "  split shared/envs: plugins load offline from HOME, parsers resolve from the shared tree"
+
+# --- the offline UPDATE path: plugins must be real clones OF THE STASH ---------
+snacks="$H2/.local/share/nvim/lazy/snacks.nvim"
+[ -d "$snacks/.git" ] || fail "split: lazy/snacks.nvim is not a git repo -- :Lazy update cannot work"
+origin=$(git -C "$snacks" remote get-url origin 2>/dev/null || echo "")
+case "$origin" in
+    "$SHARED"/*) ;;
+    *) fail "split: snacks.nvim origin is '$origin', not the stash -- :Lazy update would need github" ;;
+esac
+
+# Checked out at the lockfile pin?
+pin=$(python3 -c "import json;print(json.load(open('$REPO/envs/nvim/lazy-lock.json'))['snacks.nvim']['commit'])" 2>/dev/null || echo "")
+head=$(git -C "$snacks" rev-parse HEAD 2>/dev/null || echo "")
+[ -n "$pin" ] && [ "$pin" != "$head" ] && fail "split: snacks.nvim is at $head, not its lazy-lock pin $pin"
+
+# THE point of the stash: fetch with the network blackholed.
+if ! ( https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 GIT_TERMINAL_PROMPT=0 \
+       git -C "$snacks" fetch --quiet origin ) 2>/dev/null; then
+    fail "split: git fetch from the stash failed -- offline :Lazy update is broken"
+fi
+echo "  offline update path: plugins are real clones of the stash; fetch works with no network"
+
+# --- the catalog is OPT-IN, and installable offline ---------------------------
+[ -d "$H2/.local/share/nvim/lazy/flash.nvim" ] \
+    && fail "split: a catalog plugin was installed without the user enabling it"
+
+mkdir -p "$H2/.config/nvim/lua/user/plugins"
+echo 'return { { "folke/flash.nvim", enabled = true, event = "VeryLazy" } }' \
+    > "$H2/.config/nvim/lua/user/plugins/flash.lua"
+
+# lazy defaults to --filter=blob:none (a partial clone). git CANNOT serve that from a
+# shallow local mirror: it hangs forever. init.lua sets git.filter=false when a stash is
+# present. If that regresses, this step hangs -- so it is bounded by a timeout and the
+# failure is loud.
+HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+    https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 GIT_TERMINAL_PROMPT=0 \
+    PATH="$SHARED/local/bin:/usr/bin:/bin" \
+    timeout 180 nvim --headless "+Lazy! install" -c 'qa!' >/dev/null 2>&1 || true
+
+[ -d "$H2/.local/share/nvim/lazy/flash.nvim" ] \
+    || fail "split: enabling a catalog plugin did not install it offline from the stash
+(if this HUNG rather than failed: lazy's --filter=blob:none against a shallow mirror deadlocks --
+ init.lua must set git.filter=false whenever the stash is in use)"
+echo "  catalog: opt-in, and a user-enabled plugin installs offline from the stash"
+
+echo "install-nvim-deployments: OK"

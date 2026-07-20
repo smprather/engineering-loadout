@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# Fresh-home smoke for native-shape, relocatable Environment Modules.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-modules-home.XXXXXX)
+test_cache=$(mktemp -d /tmp/loadout-modules-cache.XXXXXX)
+test_state=$(mktemp -d /tmp/loadout-modules-state.XXXXXX)
+local_prefix="$test_home/.local"
+module_prefix="$local_prefix/lib/modules"
+relocate_token='/__LOADOUT_RELOC_ROOT__'
+module_runtime_files=(
+    lib/modules/bin/modulecmd
+    lib/modules/etc/initrc
+    lib/modules/init/bash
+    lib/modules/init/csh
+    lib/modules/init/fish
+    lib/modules/init/ksh
+    lib/modules/init/sh
+    lib/modules/init/tcsh
+    lib/modules/init/zsh
+    lib/modules/lib/libtclenvmodules.so
+    lib/modules/libexec/modulecmd.tcl
+    lib/modules/modulefiles
+    lib/modules/share/licenses/modules/COPYING.GPLv2
+)
+
+cleanup() {
+    rm -rf "$test_home" "$test_cache" "$test_state"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "modules smoke failed: $*" >&2
+    exit 1
+}
+
+run_loadout() {
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+        LANG="${LANG:-C.UTF-8}" \
+        XDG_CACHE_HOME="$test_cache" \
+        XDG_STATE_HOME="$test_state" \
+        "$repo_dir/loadout" "$@"
+}
+
+# POSIX-family shells (sh, ksh, bash, zsh) all accept `.`, `[ ]`, `case`, and
+# ${var+x}, so one runner sources each shipped init/<shell> and drives a real
+# load/unload. csh/tcsh differ enough to need their own runner (below).
+run_native_posix() {
+    local interp="$1" init_name="$2"
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin" \
+        TERM=dumb \
+        MODULEPATH="$test_home/modulefiles" \
+        EXPECTED_MODULE_PREFIX="$module_prefix" \
+        MODULE_INIT="$module_prefix/init/$init_name" \
+        "$interp" -c '
+            . "$MODULE_INIT" || exit 1
+            [ "$MODULESHOME" = "$EXPECTED_MODULE_PREFIX" ] || exit 1
+            [ "$MODULES_CMD" = "$EXPECTED_MODULE_PREFIX/libexec/modulecmd.tcl" ] || exit 1
+            command -v module >/dev/null 2>&1 || exit 1
+            module load demo
+            [ "${LOADOUT_MODULES_TEST:-}" = enabled ] || exit 1
+            case ":$PATH:" in *:/opt/loadout-modules-test/bin:*) ;; *) exit 1 ;; esac
+            module unload demo
+            [ -z "${LOADOUT_MODULES_TEST+x}" ] || exit 1
+            case ":$PATH:" in *:/opt/loadout-modules-test/bin:*) exit 1 ;; esac
+            exit 0
+        '
+}
+
+run_native_csh() {
+    local csh_bin="$1"
+    local init_name="$2"
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin" \
+        TERM=dumb \
+        MODULEPATH="$test_home/modulefiles" \
+        EXPECTED_MODULE_PREFIX="$module_prefix" \
+        "$csh_bin" -f -c "
+            source \"\$EXPECTED_MODULE_PREFIX/init/$init_name\"
+            if (! \$?MODULESHOME) exit 1
+            if (\"\$MODULESHOME\" != \"\$EXPECTED_MODULE_PREFIX\") exit 1
+            if (! \$?MODULES_CMD) exit 1
+            if (\"\$MODULES_CMD\" != \"\$EXPECTED_MODULE_PREFIX/libexec/modulecmd.tcl\") exit 1
+            module load demo
+            if (! \$?LOADOUT_MODULES_TEST) exit 1
+            if (\"\$LOADOUT_MODULES_TEST\" != \"enabled\") exit 1
+            module unload demo
+            if (\$?LOADOUT_MODULES_TEST) exit 1
+        "
+}
+
+echo "Installing modules into fresh HOME: $test_home"
+mkdir -p "$local_prefix/bin" "$local_prefix/lib/modules/libexec"
+printf 'legacy modulecmd\n' > "$local_prefix/bin/modulecmd"
+printf 'legacy modulecmd\n' > "$local_prefix/lib/modulecmd.tcl"
+printf 'legacy engine\n' > "$local_prefix/lib/modules/libexec/modulecmd.tcl"
+run_loadout install modules --no-backup
+
+for rel in "${module_runtime_files[@]}"; do
+    [[ -e "$local_prefix/$rel" ]] || fail "missing installed path: $rel"
+done
+[[ -x "$module_prefix/bin/modulecmd" ]] || fail "native modulecmd is not executable"
+[[ -x "$local_prefix/bin/tclsh" ]] || fail "modules did not pull required tclsh"
+[[ ! -e "$local_prefix/bin/modulecmd" ]] || fail "legacy wrapper remained at local bin/modulecmd"
+[[ ! -e "$local_prefix/lib/modulecmd.tcl" ]] || fail "legacy modulecmd.tcl was not removed"
+
+echo "Installed native Modules runtime files:"
+printf '  %s\n' "${module_runtime_files[@]}"
+
+if grep -raF "$relocate_token" "$module_prefix"; then
+    fail "relocation token remains under installed Modules prefix"
+fi
+if grep -raE '/tmp/(build|inst|modules-stage|loadout-tcl-instdir)-' "$module_prefix"; then
+    fail "installed Modules runtime retains transient build path"
+fi
+for rel in bin/modulecmd init/bash init/csh init/fish init/ksh init/sh init/tcsh init/zsh libexec/modulecmd.tcl; do
+    grep -Fq "$local_prefix" "$module_prefix/$rel" || fail "relocation did not patch $rel"
+done
+
+version=$(env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    "$module_prefix/bin/modulecmd" bash --version 2>&1)
+[[ "$version" == *"Modules Release 5.6.1"* ]] || fail "unexpected version output: $version"
+
+mkdir -p "$test_home/modulefiles"
+cat > "$test_home/modulefiles/demo" <<'EOF'
+#%Module
+prepend-path PATH /opt/loadout-modules-test/bin
+setenv LOADOUT_MODULES_TEST enabled
+EOF
+
+run_native_posix bash bash || fail "native bash init/load/unload"
+run_native_posix /bin/sh sh || fail "native sh init/load/unload"
+
+# ksh is not on the EL8 base image, so guard on presence like csh; Tier 3
+# installs ksh so init/ksh gets real coverage there. ksh's EM init drives the
+# Tcl modulecmd engine (no zsh dynamic modules), so any ambient ksh works.
+ksh_bin=$(command -v ksh || command -v ksh93 || command -v mksh || true)
+if [[ -n "$ksh_bin" ]]; then
+    run_native_posix "$ksh_bin" ksh || fail "native ksh init/load/unload"
+else
+    echo "SKIP: native ksh smoke (no ksh interpreter; Tier 3 installs ksh)"
+fi
+
+# init/zsh is deliberately NOT driven here: it needs zsh's module_path pointed
+# off the baked build prefix (done by envs/zsh/zshrc, skipped under `zsh -f`),
+# and it autoloads zsh dynamic modules, so it must run against the loadout's
+# own zsh with its rc -- which tests/install-split-shared-envs does.
+
+csh_bin=$(command -v tcsh || command -v csh || true)
+if [[ -n "$csh_bin" ]]; then
+    run_native_csh "$csh_bin" csh || fail "native csh init/load/unload"
+    run_native_csh "$csh_bin" tcsh || fail "native tcsh init/load/unload"
+else
+    echo "SKIP: native csh/tcsh smoke (no csh interpreter; Tier 3 installs tcsh)"
+fi
+
+# Config integration is intentionally a tiny selector around native init. It
+# must clear old Modules identity and unalias before sourced code defines its
+# function, otherwise an old host install can win or alias expansion can break
+# the function definition while parsing.
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    TERM=dumb \
+    MODULEPATH="$test_home/modulefiles" \
+    MODULESHOME=/wrong \
+    MODULES_CMD=/wrong/modulecmd.tcl \
+    LOADOUT_CFG_SHARED_PREFIX="$local_prefix" \
+    EXPECTED_MODULE_PREFIX="$module_prefix" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        shopt -s expand_aliases
+        alias module=false
+        source "$1"
+        [[ "$MODULESHOME" == "$EXPECTED_MODULE_PREFIX" ]]
+        [[ "$MODULES_CMD" == "$EXPECTED_MODULE_PREFIX/libexec/modulecmd.tcl" ]]
+        type module >/dev/null
+        module load demo
+        [[ "$LOADOUT_MODULES_TEST" == enabled ]]
+        module unload demo
+        [[ -z "${LOADOUT_MODULES_TEST+x}" ]]
+    ' _ "$repo_dir/envs/bash/global/modules-init.bash" \
+    || fail "bash config native-init selector"
+
+echo "Modules fresh-home smoke OK"

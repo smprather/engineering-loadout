@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Unit tests for install font installation.
+
+Covers split-zip rejoining and fonts-dir preparation (symlink removal,
+directory backup/no-backup behavior) without requiring the real vendored font
+archives.
+"""
+
+import importlib.machinery
+import importlib.util
+import io
+import os
+import shutil
+import tempfile
+import zipfile
+
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INSTALL_PATH = os.path.join(REPO_DIR, "loadout_main.py")
+LOADER = importlib.machinery.SourceFileLoader("loadout_install", INSTALL_PATH)
+SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
+install = importlib.util.module_from_spec(SPEC)
+LOADER.exec_module(install)
+
+
+def make_split_font_zip(fonts_dir, base_name, chunk_size=20):
+    """Write a valid zip with one .ttf entry, split into chunk_size-byte parts."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr("dummy.ttf", b"FAKE TTF DATA " * 10)
+    data = buf.getvalue()
+
+    i = 0
+    offset = 0
+    while offset < len(data):
+        part_path = os.path.join(fonts_dir, f"{base_name}.part-{i:03d}")
+        with open(part_path, "wb") as fh:
+            fh.write(data[offset : offset + chunk_size])
+        offset += chunk_size
+        i += 1
+
+    return i  # number of parts written
+
+
+def make_repo(tmp_dir):
+    repo_dir = os.path.join(tmp_dir, "repo")
+    fonts_dir = os.path.join(repo_dir, "payload", "fonts")
+    os.makedirs(fonts_dir)
+    make_split_font_zip(fonts_dir, "TestFont.zip", chunk_size=20)
+    return repo_dir
+
+
+def user_fonts_dir(home):
+    return os.path.join(home, install._local_name(home), "share", "fonts")
+
+
+def test_split_zip_rejoin():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+
+        install.install_fonts(repo_dir, home)
+
+        ufd = user_fonts_dir(home)
+        installed = os.listdir(ufd) if os.path.isdir(ufd) else []
+        assert "dummy.ttf" in installed, f"Expected dummy.ttf in {ufd}; got: {installed}"
+        print("PASS: split-zip rejoin -> dummy.ttf")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_symlink_replaced():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(os.path.dirname(ufd))
+
+        # Pre-place a symlink at the fonts dir location
+        link_target = os.path.join(tmp, "old-fonts-link-target")
+        os.makedirs(link_target)
+        os.symlink(link_target, ufd)
+        assert os.path.islink(ufd)
+
+        install.install_fonts(repo_dir, home)
+
+        assert not os.path.islink(ufd), "Symlink should have been removed"
+        assert os.path.isdir(ufd), "fonts dir should now be a real directory"
+        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
+        print("PASS: symlink at fonts dir replaced with real directory")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_existing_dir_backed_up():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(ufd)
+
+        # Pre-populate fonts dir with a sentinel file
+        sentinel = os.path.join(ufd, "old-font.ttf")
+        open(sentinel, "w").close()
+
+        install.install_fonts(repo_dir, home)
+
+        backup = ufd + ".bak"
+        assert os.path.isdir(backup), f"Old fonts dir should be backed up to {backup}"
+        assert os.path.exists(os.path.join(backup, "old-font.ttf")), "Sentinel file should be in backup"
+        assert os.path.isdir(ufd), "Fresh fonts dir should exist"
+        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
+        print("PASS: existing fonts dir backed up, new dir populated")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_existing_dir_backup_numbering():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(ufd)
+        # Pre-create .bak so numbering kicks in
+        os.makedirs(ufd + ".bak")
+
+        install.install_fonts(repo_dir, home)
+
+        assert os.path.isdir(ufd + ".bak.1"), "Second backup should use .bak.1 when .bak already exists"
+        print("PASS: backup numbering works when .bak already exists")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_existing_dir_no_backup_reused():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(ufd)
+
+        sentinel = os.path.join(ufd, "old-font.ttf")
+        open(sentinel, "w").close()
+
+        install.install_fonts(repo_dir, home, no_backup=True)
+
+        assert not os.path.exists(ufd + ".bak"), "no_backup should not create a fonts backup"
+        assert os.path.exists(sentinel), "Existing font files should remain when reusing the dir"
+        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
+        print("PASS: existing fonts dir reused with no_backup")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    test_split_zip_rejoin()
+    test_symlink_replaced()
+    test_existing_dir_backed_up()
+    test_existing_dir_backup_numbering()
+    test_existing_dir_no_backup_reused()
+    print("All font tests passed.")

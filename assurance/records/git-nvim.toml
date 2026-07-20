@@ -1,0 +1,38 @@
+# Assurance record -- see assurance/README.md for the schema.
+# Validated by tests/assurance-check (re-hashes [artifacts] against disk).
+schema = 1
+package = "git-nvim"
+version = "2.43.7"
+verified_utc = "2026-07-14T06:29:36Z"
+status = "verified"  # shanghai from the EL8 system git RPM; content-manifest + scan clean
+
+[source]
+upstream = "AlmaLinux 8.10 BaseOS/AppStream RPMs git-2.43.7-1.el8_10, git-core-2.43.7-1.el8_10"
+ref = "2.43.7-1.el8_10"
+dep_pinning = "distro-signed RPM contents copied verbatim from the EL8 build machine; no upstream source build, no third-party bytes introduced"
+
+[build]
+builder = "build/build-git.sh"
+form = "shanghai (extracted from the installed system packages)"
+rationale = """
+lazy.nvim clones plugins from the offline stash and needs git to do it. This git is
+PRIVATE: it installs to lib/loadout-git/ and nothing is linked into bin/, because a
+loadout git on the user's PATH would shadow the corp git and silently break its
+subcommands, credential helpers and git-lfs -- the same failure the openssh package
+documents (it ships ssh10 so /usr/bin/ssh keeps winning). Only nvim consumes it, via
+paths.ensure_git(), and only when the system has no git at all.
+"""
+notes = """
+RHEL git is built without RUNTIME_PREFIX, so the binary hard-codes /usr/libexec/git-core;
+bin/git is a POSIX-sh wrapper exporting GIT_EXEC_PATH. The 137 libexec symlinks pointing at
+../../bin/git are repointed at the real ELF (../../bin/git.bin): routing them through the
+wrapper would destroy argv[0], which is how git dispatches git-upload-pack et al, and
+`git clone` fails without it.
+"""
+
+[deps]
+bundled = "none"
+system = "libpcre2-8, libz, libcrypto (openssl 1.1), glibc -- all EL8 BaseOS"
+
+[artifacts]
+"payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2" = "sha256:c52821f7b5645c663191e2a850a372378580dd4e0d4d86232cf264605ecca11b"

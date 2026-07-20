@@ -1,0 +1,55 @@
+#!/bin/sh
+# X-free tests for the st wrapper: does it build the right ST_XRESOURCES chain,
+# and does it get out of the way when the user set one?
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/loadout-st-wrapper.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Fake install tree: our wrapper as bin/st, a stub bin/st.bin that prints what
+# it was handed.
+mkdir -p "$TMP/local/bin" "$TMP/home/.config/st"
+cp "$REPO/build/st/st" "$TMP/local/bin/st"
+chmod +x "$TMP/local/bin/st"
+cat > "$TMP/local/bin/st.bin" <<'STUB'
+#!/bin/sh
+echo "ST_XRESOURCES=$ST_XRESOURCES"
+echo "ARGS=$*"
+STUB
+chmod +x "$TMP/local/bin/st.bin"
+
+CFG="$TMP/home/.config/st"
+out=$(HOME="$TMP/home" XDG_CONFIG_HOME="" "$TMP/local/bin/st" -e true)
+
+expected="ST_XRESOURCES=$CFG/global/st.xresources:$CFG/corp/st.xresources:$CFG/site/st.xresources:$CFG/team/st.xresources:$CFG/project/st.xresources:$CFG/user/st.xresources"
+echo "$out" | grep -qxF "$expected" \
+    || fail "layer chain wrong:
+  got:      $(echo "$out" | head -1)
+  expected: $expected"
+
+echo "$out" | grep -qxF "ARGS=-e true" || fail "wrapper did not pass args through"
+
+# XDG_CONFIG_HOME must win over ~/.config
+xdg="$TMP/xdg"
+out=$(HOME="$TMP/home" XDG_CONFIG_HOME="$xdg" "$TMP/local/bin/st")
+echo "$out" | grep -qF "$xdg/st/user/st.xresources" \
+    || fail "wrapper ignored XDG_CONFIG_HOME"
+
+# An explicit ST_XRESOURCES from the caller must be left alone.
+out=$(HOME="$TMP/home" ST_XRESOURCES="/my/own.xresources" "$TMP/local/bin/st")
+echo "$out" | grep -qxF "ST_XRESOURCES=/my/own.xresources" \
+    || fail "wrapper clobbered a caller-set ST_XRESOURCES"
+
+# st-reload: no st running -> non-zero and a clear message.
+out=$(DISPLAY=:99 "$REPO/build/st/st-reload" 2>&1) && fail "st-reload exited 0 with no st running"
+echo "$out" | grep -q "no running st" || fail "st-reload: unexpected message: $out"
+
+# st-reload: rejects unknown options rather than silently signalling everything.
+if "$REPO/build/st/st-reload" --bogus >/dev/null 2>&1; then
+    fail "st-reload accepted an unknown option"
+fi
+
+echo "st-wrapper: OK"

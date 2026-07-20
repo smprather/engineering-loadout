@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Install @shared into a temp non-home tree, install @envs into a separate temp
+HOME with LOADOUT_CFG_SHARED_PREFIX pointing at that shared tree, then smoke
+test the resulting split deployment.
+
+Options:
+  --keep       Print and keep temp dirs after the test.
+  -h, --help   Show this help.
+EOF
+}
+
+keep=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --keep)
+        keep=1
+        ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        usage >&2
+        exit 2
+        ;;
+    esac
+    shift
+done
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd "$script_dir/.." && pwd)
+shared_root=$(mktemp -d /tmp/loadout-shared-root.XXXXXX)
+test_home=$(mktemp -d /tmp/loadout-env-home.XXXXXX)
+test_cache=$(mktemp -d /tmp/loadout-env-cache.XXXXXX)
+test_state=$(mktemp -d /tmp/loadout-env-state.XXXXXX)
+test_run=$(mktemp -d /tmp/loadout-split-run.XXXXXX)
+shared_prefix="$shared_root/local"
+basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
+
+cleanup() {
+    if [[ "$keep" == "1" ]]; then
+        echo "Kept shared root: $shared_root"
+        echo "Kept temp HOME: $test_home"
+        echo "Kept XDG_CACHE_HOME: $test_cache"
+        echo "Kept XDG_STATE_HOME: $test_state"
+        echo "Kept run dir: $test_run"
+    else
+        rm -rf "$shared_root" "$test_home" "$test_cache" "$test_state" "$test_run"
+    fi
+}
+trap cleanup EXIT
+
+assert_exists() {
+    local path="$1"
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+        echo "Missing expected path: $path" >&2
+        exit 1
+    fi
+}
+
+assert_not_exists() {
+    local path="$1"
+    if [[ -e "$path" || -L "$path" ]]; then
+        echo "Unexpected path exists: $path" >&2
+        exit 1
+    fi
+}
+
+run_loadout() {
+    env -i \
+        HOME="$test_home" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        XDG_CACHE_HOME="$test_cache" \
+        XDG_STATE_HOME="$test_state" \
+        "$repo_dir/loadout" "$@"
+}
+
+echo "Installing @shared to non-home tree: $shared_root"
+run_loadout install @shared --dest-dir "$shared_root" --no-backup
+
+echo "Installing @envs to temp HOME: $test_home"
+env -i \
+    HOME="$test_home" \
+    PATH="$basic_path" \
+    LANG="${LANG:-C.UTF-8}" \
+    TERM="xterm-256color" \
+    XDG_CACHE_HOME="$test_cache" \
+    XDG_STATE_HOME="$test_state" \
+    LOADOUT_CFG_SHARED_PREFIX="$shared_prefix" \
+    "$repo_dir/loadout" install @envs --no-backup
+
+assert_exists "$shared_prefix/bin/bash"
+assert_exists "$shared_prefix/bin/nvim"
+assert_exists "$shared_prefix/bin/tmux"
+assert_exists "$shared_prefix/bin/wezterm"
+assert_exists "$shared_prefix/lib/modules/bin/modulecmd"
+assert_exists "$shared_prefix/lib/modules/libexec/modulecmd.tcl"
+assert_exists "$shared_prefix/lib/modules/init/bash"
+assert_exists "$shared_prefix/lib/modules/init/zsh"
+assert_exists "$shared_prefix/lib/modules/init/fish"
+assert_exists "$shared_prefix/share/nvim/runtime/filetype.lua"
+assert_exists "$shared_prefix/share/terminfo/s/st-256color"
+assert_exists "$test_home/.bashrc"
+assert_exists "$test_home/.zshrc"
+assert_exists "$test_home/.config/bash/global/config.sh"
+assert_exists "$test_home/.config/zsh/zshrc"
+assert_not_exists "$test_home/.local/bin/nvim"
+
+if ! grep -Eq "^export LOADOUT_CFG_SHARED_PREFIX='?$shared_prefix'?$" "$test_home/.config/bash/global/config.sh"; then
+    echo "Expected @envs install to bake LOADOUT_CFG_SHARED_PREFIX into bash/global/config.sh" >&2
+    grep "^export LOADOUT_CFG_SHARED_PREFIX=" "$test_home/.config/bash/global/config.sh" >&2 || true
+    exit 1
+fi
+
+if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
+    assert_exists "$shared_prefix/share/tealdeer/cache/tldr-pages"
+    assert_exists "$test_home/.config/tealdeer/config.toml"
+    if ! grep -q "cache_dir = \"$shared_prefix/share/tealdeer/cache\"" "$test_home/.config/tealdeer/config.toml"; then
+        echo "Expected tealdeer config to use shared cache dir" >&2
+        cat "$test_home/.config/tealdeer/config.toml" >&2
+        exit 1
+    fi
+fi
+
+mkdir -p "$test_home/modulefiles"
+cat > "$test_home/modulefiles/loadout-modules-smoke" <<'EOF'
+#%Module
+setenv LOADOUT_SPLIT_MODULES_TEST enabled
+EOF
+
+echo "Smoke-testing bash env against shared prefix"
+env -i \
+    HOME="$test_home" \
+    PATH="$basic_path" \
+    LANG="${LANG:-C.UTF-8}" \
+    TERM="xterm-256color" \
+    MODULEPATH="$test_home/modulefiles" \
+    EXPECTED_SHARED_PREFIX="$shared_prefix" \
+    bash -c '
+        set -o pipefail
+        fail() { echo "bash env smoke failed: $*" >&2; exit 1; }
+        source "$HOME/.bashrc" || true
+        set -e
+        [[ "${LOADOUT_CFG_SHARED_PREFIX:-}" == "$EXPECTED_SHARED_PREFIX" ]] || fail "LOADOUT_CFG_SHARED_PREFIX=${LOADOUT_CFG_SHARED_PREFIX:-}"
+        nvim_path=$(command -v nvim) || fail "nvim missing from PATH=$PATH"
+        tmux_path=$(command -v tmux) || fail "tmux missing from PATH=$PATH"
+        wezterm_path=$(command -v wezterm) || fail "wezterm missing from PATH=$PATH"
+        [[ "$nvim_path" == "$EXPECTED_SHARED_PREFIX/bin/nvim" ]] || fail "nvim path: $nvim_path"
+        [[ "$tmux_path" == "$EXPECTED_SHARED_PREFIX/bin/tmux" ]] || fail "tmux path: $tmux_path"
+        [[ "$wezterm_path" == "$EXPECTED_SHARED_PREFIX/bin/wezterm" ]] || fail "wezterm path: $wezterm_path"
+        [[ ":${TERMINFO_DIRS:-}:" == *":$EXPECTED_SHARED_PREFIX/share/terminfo:"* ]] || fail "TERMINFO_DIRS=${TERMINFO_DIRS:-}"
+        if [[ -f "$EXPECTED_SHARED_PREFIX/lib64/libqxcb.so" ]]; then
+            [[ "${QT_QPA_PLATFORM_PLUGIN_PATH:-}" == "$EXPECTED_SHARED_PREFIX/lib64" ]] || fail "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_QPA_PLATFORM_PLUGIN_PATH:-}"
+        fi
+        if [[ -d "$EXPECTED_SHARED_PREFIX/share/nvim-qt/runtime" ]]; then
+            [[ "${NVIM_QT_RUNTIME_PATH:-}" == "$EXPECTED_SHARED_PREFIX/share/nvim-qt/runtime" ]] || fail "NVIM_QT_RUNTIME_PATH=${NVIM_QT_RUNTIME_PATH:-}"
+        fi
+        if [[ -d "$EXPECTED_SHARED_PREFIX/lib/girepository-1.0" ]]; then
+            [[ ":${GI_TYPELIB_PATH:-}:" == *":$EXPECTED_SHARED_PREFIX/lib/girepository-1.0:"* ]] || fail "GI_TYPELIB_PATH=${GI_TYPELIB_PATH:-}"
+        fi
+        source "$HOME/.config/bash/global/modules-init.bash"
+        type module >/dev/null || fail "module function missing"
+        [[ "$MODULESHOME" == "$EXPECTED_SHARED_PREFIX/lib/modules" ]] || fail "MODULESHOME=$MODULESHOME"
+        [[ "$MODULES_CMD" == "$EXPECTED_SHARED_PREFIX/lib/modules/libexec/modulecmd.tcl" ]] || fail "MODULES_CMD=$MODULES_CMD"
+        module load loadout-modules-smoke
+        [[ "${LOADOUT_SPLIT_MODULES_TEST:-}" == "enabled" ]] || fail "module load failed"
+        module unload loadout-modules-smoke
+        [[ -z "${LOADOUT_SPLIT_MODULES_TEST+x}" ]] || fail "module unload failed"
+    '
+
+if [[ -x "$shared_prefix/bin/zsh" ]]; then
+    echo "Smoke-testing zsh env against shared prefix"
+    env -i \
+        HOME="$test_home" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        EXPECTED_SHARED_PREFIX="$shared_prefix" \
+        "$shared_prefix/bin/zsh" -fc '
+            fail() { echo "zsh env smoke failed: $*" >&2; exit 1; }
+            source "$HOME/.zshrc"
+            [[ "${LOADOUT_CFG_SHARED_PREFIX:-}" == "$EXPECTED_SHARED_PREFIX" ]] || fail "LOADOUT_CFG_SHARED_PREFIX=${LOADOUT_CFG_SHARED_PREFIX:-}"
+            nvim_path=$(command -v nvim) || fail "nvim missing from PATH=$PATH"
+            wezterm_path=$(command -v wezterm) || fail "wezterm missing from PATH=$PATH"
+            [[ "$nvim_path" == "$EXPECTED_SHARED_PREFIX/bin/nvim" ]] || fail "nvim path: $nvim_path"
+            [[ "$wezterm_path" == "$EXPECTED_SHARED_PREFIX/bin/wezterm" ]] || fail "wezterm path: $wezterm_path"
+            [[ ":${TERMINFO_DIRS:-}:" == *":$EXPECTED_SHARED_PREFIX/share/terminfo:"* ]] || fail "TERMINFO_DIRS=${TERMINFO_DIRS:-}"
+            if [[ -f "$EXPECTED_SHARED_PREFIX/lib64/libqxcb.so" ]]; then
+                [[ "${QT_QPA_PLATFORM_PLUGIN_PATH:-}" == "$EXPECTED_SHARED_PREFIX/lib64" ]] || fail "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_QPA_PLATFORM_PLUGIN_PATH:-}"
+            fi
+        '
+
+    echo "Smoke-testing native Modules zsh init against shared prefix"
+    env -i \
+        HOME="$test_home" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        MODULEPATH="$test_home/modulefiles" \
+        EXPECTED_MODULE_PREFIX="$shared_prefix/lib/modules" \
+        EXPECTED_ZSH_MODULE_DIR="$shared_prefix/lib/zsh/5.9" \
+        "$shared_prefix/bin/zsh" -fc '
+            fail() { echo "zsh modules smoke failed: $*" >&2; exit 1; }
+            module_path=("$EXPECTED_ZSH_MODULE_DIR" $module_path)
+            source "$EXPECTED_MODULE_PREFIX/init/zsh" 2>/dev/null
+            [[ "$MODULESHOME" == "$EXPECTED_MODULE_PREFIX" ]] || fail "MODULESHOME=$MODULESHOME"
+            [[ "$MODULES_CMD" == "$EXPECTED_MODULE_PREFIX/libexec/modulecmd.tcl" ]] || fail "MODULES_CMD=$MODULES_CMD"
+            type module >/dev/null || fail "module function missing"
+            module load loadout-modules-smoke
+            [[ "${LOADOUT_SPLIT_MODULES_TEST:-}" == "enabled" ]] || fail "module load failed"
+            module unload loadout-modules-smoke
+            [[ -z "${LOADOUT_SPLIT_MODULES_TEST+x}" ]] || fail "module unload failed"
+        '
+fi
+
+if [[ -x "$shared_prefix/bin/fish" && -f "$shared_prefix/share/fish/functions/fish_prompt.fish" ]]; then
+    echo "Smoke-testing native Modules fish init against shared prefix"
+    env -i \
+        HOME="$test_home" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        MODULEPATH="$test_home/modulefiles" \
+        EXPECTED_MODULE_PREFIX="$shared_prefix/lib/modules" \
+        "$shared_prefix/bin/fish" -c "
+            source \"\$EXPECTED_MODULE_PREFIX/init/fish\"
+            if not test \"\$MODULESHOME\" = \"\$EXPECTED_MODULE_PREFIX\"
+                echo \"MODULESHOME=\$MODULESHOME\" >&2; exit 1
+            end
+            if not type -q module
+                echo \"module function missing\" >&2; exit 1
+            end
+            module load loadout-modules-smoke
+            if not test \"\$LOADOUT_SPLIT_MODULES_TEST\" = \"enabled\"
+                echo \"module load failed\" >&2; exit 1
+            end
+            module unload loadout-modules-smoke
+            if set -q LOADOUT_SPLIT_MODULES_TEST
+                echo \"module unload failed\" >&2; exit 1
+            end
+        "
+fi
+
+echo "Smoke-testing selected tools with cut PATH"
+probe_env=(
+    env -i
+    HOME="$test_home"
+    PATH="$shared_prefix/bin:$basic_path"
+    LANG="${LANG:-C.UTF-8}"
+    TERM="xterm-256color"
+    XDG_CACHE_HOME="$test_cache/probe"
+    XDG_STATE_HOME="$test_state/probe"
+)
+
+"${probe_env[@]}" "$shared_prefix/bin/bash" --version >/dev/null
+"${probe_env[@]}" "$shared_prefix/bin/tmux" -V >/dev/null
+"${probe_env[@]}" "$shared_prefix/bin/nvim" --clean --headless -n \
+    +'lua local expected = "'"$shared_prefix"'/share/nvim/runtime"; if vim.o.runtimepath:find(expected, 1, true) == nil then vim.api.nvim_err_writeln(vim.o.runtimepath); vim.cmd("cquit 1") end' \
+    +qa
+"${probe_env[@]}" "$shared_prefix/bin/wezterm" --version >/dev/null
+"${probe_env[@]}" "$shared_prefix/bin/wezterm" shell-completion --shell bash >"$test_run/wezterm.bash"
+"${probe_env[@]}" "$shared_prefix/bin/wezterm" shell-completion --shell zsh >"$test_run/_wezterm"
+grep -q "wezterm" "$test_run/wezterm.bash"
+grep -q "_wezterm" "$test_run/_wezterm"
+
+if [[ -x "$shared_prefix/bin/zsh" ]]; then
+    "${probe_env[@]}" "$shared_prefix/bin/zsh" --version >/dev/null
+fi
+
+echo "Split shared/envs smoke OK"

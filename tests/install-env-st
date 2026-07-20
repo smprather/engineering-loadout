@@ -1,0 +1,46 @@
+#!/bin/sh
+# env-st install: ships the global layer, seeds the user layer exactly once,
+# and never clobbers user-created layers on reinstall.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMPHOME="$(mktemp -d /tmp/loadout-env-st.XXXXXX)"
+trap 'rm -rf "$TMPHOME"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+HOME="$TMPHOME" "$REPO/loadout" install env-st --no-backup >/dev/null
+
+ST="$TMPHOME/.config/st"
+[ -f "$ST/global/st.xresources" ] || fail "global layer not installed"
+[ -f "$ST/user/st.xresources" ] || fail "user layer not seeded"
+
+grep -q '^st.font:' "$ST/global/st.xresources" || fail "global layer has no live st.font"
+grep -q 'BEGIN generated font list' "$ST/global/st.xresources" || fail "font block missing"
+grep -q 'Nerd Font:size=' "$ST/global/st.xresources" || fail "font block is empty"
+
+# The seeded user layer must be inert: no uncommented directives.
+if grep -qv '^\s*\(!.*\)\?$' "$ST/user/st.xresources"; then
+    fail "seeded user layer contains an active directive; it must ship fully commented"
+fi
+
+# Both shipped files must end with a newline. Users add settings by appending
+# (echo 'st.font: ...' >> user/st.xresources); with no final newline the new
+# directive is glued onto the last comment line and silently ignored.
+for f in "$ST/global/st.xresources" "$ST/user/st.xresources"; do
+    [ -z "$(tail -c1 "$f")" ] || fail "no trailing newline in $f (an appended directive would be swallowed by a comment)"
+done
+
+# Reinstall must not clobber the user's edits, and must not delete sibling layers.
+echo 'st.font: FiraCode Nerd Font:size=18' >> "$ST/user/st.xresources"
+cp "$ST/user/st.xresources" "$TMPHOME/user.expected"
+mkdir -p "$ST/site"
+echo 'st.color4: #ff0000' > "$ST/site/st.xresources"
+
+HOME="$TMPHOME" "$REPO/loadout" install env-st --no-backup >/dev/null
+
+cmp -s "$ST/user/st.xresources" "$TMPHOME/user.expected" \
+    || fail "reinstall overwrote the user layer"
+[ -f "$ST/site/st.xresources" ] || fail "reinstall deleted the site layer"
+
+echo "install-env-st: OK"

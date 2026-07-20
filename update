@@ -1,0 +1,1002 @@
+#!/usr/bin/env python3
+"""update -- per-package updater for loadout.
+
+Usage:
+  ./update                        run all automated packages (no commit)
+  ./update nodejs yara-rules      run specific automated packages
+  ./update liberty-tools          rebuild a rolling-git wheel from fresh source
+  ./update liberty-tools --rebuild  force rebuild even if commit is unchanged
+  ./update nvim bat rg            show update guidance for those packages
+  ./update --list                 table: package | kind | version | latest
+  ./update --list-outdated        same table, only packages where latest > version
+  ./update --commit               stage + commit automated output
+  ./update --dry-run              print commands without executing
+  ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
+"""
+
+import bz2
+import datetime
+import glob
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import zipfile
+from urllib.request import Request, urlopen
+
+# Make vendored click + rich-click importable. installer_vendor/ lives at the
+# repo root; walk up from this script's path to find it.
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+BUILD = os.path.join(REPO, "build")
+
+_YARA_DIR = os.path.join(REPO, "payload", "yara")
+_YARA_RULES_BZ2 = os.path.join(_YARA_DIR, "yara-rules-full.yar.bz2")
+_YARA_TAG_FILE = os.path.join(_YARA_DIR, "release-tag.txt")
+_YARA_API_LATEST = "https://api.github.com/repos/YARAHQ/yara-forge/releases/latest"
+_YARA_ZIP_URL = "https://github.com/YARAHQ/yara-forge/releases/download/{tag}/yara-forge-rules-full.zip"
+_YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
+
+
+# -- package registry ----------------------------------------------------------
+
+# Fully automated: ./update runs end-to-end.
+# Dev-only repo artifacts (yara-rules, tldr-data, tmux-plugins) are not
+# end-user-installed packages but are vendored into the repo by the dev and
+# bundled into the installer; they live alongside installable packages here.
+AUTOMATED = {
+    "yara-rules": {
+        "supports_tag": True,
+        "git_paths": ["payload/yara/"],
+        "desc": "Vendored YARA-Forge full ruleset (payload/yara/yara-rules-full.yar.bz2)",
+    },
+    "nodejs": {
+        "supports_tag": True,
+        "git_paths": ["payload/", ".strip-manifest", "packages.json"],
+    },
+    "tldr-data": {
+        "git_paths": ["payload/tldr/"],
+    },
+    "tmux-plugins": {
+        "git_paths": ["envs/tmux/vendor/plugins/"],
+        "desc": "Vendored tmux plugins (envs/tmux/vendor/plugins/)",
+    },
+    "env-nvim": {
+        "git_paths": ["envs/nvim/vendor/plugins/", ".strip-manifest"],
+        "desc": "Neovim offline plugin stash -- bare git mirrors (build/build-nvim-plugin-stash)",
+    },
+}
+
+# Build-script: requires EL8 build machine.  script lives in BUILD/.
+BUILD_SCRIPTS = {
+    "fish": {"script": "build-fish.sh", "runtime": "fish.tar.bz2"},
+    "gvim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
+    "jq": {"script": "build-jq.sh"},
+    "micro": {"script": "build-micro.sh"},
+    "modules": {"script": "build-modules.sh", "runtime": "modules.tar.bz2"},
+    "ncdu": {"script": "build-ncdu.sh"},
+    "nedit-ng": {"script": "build-nedit-ng.sh"},
+    "nvim": {"script": "build-nvim.sh", "runtime": "nvim.tar.bz2"},
+    "nvim-qt": {"script": "build-nvim-qt.sh"},
+    "octave": {"script": "build-octave.sh", "runtime": "octave.tar.bz2"},
+    "st": {"script": "build-st.sh"},
+    "tmux": {"script": "build-tmux.sh"},
+    "urxvt": {"script": "build-urxvt.sh"},
+    "vcd-toggle-profiler": {"script": "build-vcd-toggle-profiler.sh", "runtime": "vcd-toggle-profiler.tar.bz2"},
+    "vim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
+    "zsh": {"script": "build-zsh.sh"},
+}
+
+# Import-script: has a dedicated import-* script but not fully automated
+# (requires an externally built directory).
+IMPORT_SCRIPTS = {
+    "portable-python": {
+        "cmd": "./build/import-portable-python <built-dir>",
+        "note": "DO NOT run strip-all-elf-binaries on the result -- BOLT-optimized",
+    },
+}
+
+# Packages known to be download-only (no build script).  Everything else in
+# packages.json kind=bin that is not in AUTOMATED/BUILD_SCRIPTS/IMPORT_SCRIPTS
+# is also treated as download-only.
+DOWNLOAD_ONLY = {
+    "agent-deck",
+    "bash",
+    "bat",
+    "biome",
+    "broot",
+    "btm",
+    "btop",
+    "bzip2",
+    "choose",
+    "clang",
+    "dasel",
+    "delta",
+    "duf",
+    "dust",
+    "eza",
+    "fd",
+    "fresh",
+    "fzf",
+    "gnuplot",
+    "gopls",
+    "gping",
+    "htop",
+    "hx",
+    "hyperfine",
+    "just",
+    "lazygit",
+    "llvm-bolt",
+    "lua-language-server",
+    "meld",
+    "miller",
+    "ninja",
+    "patchelf",
+    "pigz",
+    "procs",
+    "pv",
+    "rg",
+    "rsync",
+    "rust-analyzer",
+    "ruff",
+    "sd",
+    "shfmt",
+    "starship",
+    "stylua",
+    "tkdiff",
+    "tldr",
+    "tree-sitter",
+    "ty",
+    "uutils-coreutils",
+    "uv",
+    "xsel",
+    "xterm",
+    "yank",
+    "yq",
+    "zellij",
+    "zoxide",
+}
+
+
+# -- packages.json helpers -----------------------------------------------------
+
+
+def _load_packages():
+    path = os.path.join(REPO, "payload", "packages.json")
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as f:
+        return json.load(f).get("packages", {})
+
+
+PACKAGES = _load_packages()
+
+# Rolling-git packages: built fresh from source on every ./update.  Tagged in
+# packages.json with "rolling_git": "<clone-url>".  The wheel is rebuilt only
+# when the source commit differs from the recorded version; the version stamped
+# back into packages.json is `git describe --tags --always --dirty` of HEAD.
+ROLLING_GIT = {
+    name: info["rolling_git"] for name, info in PACKAGES.items() if isinstance(info, dict) and info.get("rolling_git")
+}
+
+
+def _pkg_version(name):
+    # Dev-artifact versions live outside packages.json.
+    if name == "yara-rules":
+        tag_file = os.path.join(REPO, "payload", "yara", "release-tag.txt")
+        if os.path.isfile(tag_file):
+            with open(tag_file) as fh:
+                return fh.read().strip()
+        return ""
+    return PACKAGES.get(name, {}).get("version", "")
+
+
+def _pkg_desc(name):
+    # Prefer inline desc for pseudo-packages not in packages.json.
+    inline = AUTOMATED.get(name, {}).get("desc") or IMPORT_SCRIPTS.get(name, {}).get("desc")
+    if inline:
+        return inline
+    return PACKAGES.get(name, {}).get("description", "")
+
+
+def _classify(name):
+    if name in ROLLING_GIT:
+        return "rolling"
+    if name in AUTOMATED:
+        return "automated"
+    if name in BUILD_SCRIPTS:
+        return "build"
+    if name in IMPORT_SCRIPTS:
+        return "import"
+    if name in DOWNLOAD_ONLY:
+        return "download"
+    if name in PACKAGES and PACKAGES[name].get("kind") == "bin":
+        return "download"
+    return None
+
+
+# -- output helpers ------------------------------------------------------------
+
+
+def _sep(title="", width=72):
+    if title:
+        pad = max(0, width - len(title) - 4)
+        print("\n-- {} {}".format(title, "-" * pad))
+    else:
+        print("-" * width)
+
+
+def _run(cmd, dry_run=False):
+    display = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
+    print(f"$ {display}")
+    if dry_run:
+        return 0
+    return subprocess.call(cmd, cwd=REPO)
+
+
+# -- automated runners ---------------------------------------------------------
+
+
+def _fetch_json(url):
+    req = Request(url, headers={"User-Agent": "loadout-update/1.0", "Accept": "application/vnd.github+json"})
+    with urlopen(req, timeout=60) as r:
+        return json.loads(r.read())
+
+
+_DOWNLOADS_LOG = os.path.join(REPO, "assurance", "downloads.log")
+
+
+def _record_download(url, sha256):
+    """Append (date, url, sha256) to the append-only supply-chain download log."""
+    try:
+        os.makedirs(os.path.dirname(_DOWNLOADS_LOG), exist_ok=True)
+        with open(_DOWNLOADS_LOG, "a") as fh:
+            date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fh.write(f"{date}\t{url}\t{sha256}\n")
+    except OSError as exc:
+        print(f"  WARN: could not record download in {_DOWNLOADS_LOG}: {exc}")
+
+
+def _download_file(url, dest, expected_sha256=None):
+    """Download url -> dest, hashing the bytes. If expected_sha256 is given and
+    does not match, raise (a supply-chain integrity failure). Every download is
+    recorded in assurance/downloads.log with its sha256 (TOFU provenance)."""
+    print(f"  GET {url}")
+    req = Request(url, headers={"User-Agent": "loadout-update/1.0"})
+    h = hashlib.sha256()
+    with urlopen(req, timeout=120) as r:
+        with open(dest, "wb") as f:
+            while True:
+                chunk = r.read(65536)
+                if not chunk:
+                    break
+                h.update(chunk)
+                f.write(chunk)
+    digest = h.hexdigest()
+    if expected_sha256 and digest != expected_sha256:
+        raise RuntimeError(f"sha256 mismatch for {url}: expected {expected_sha256}, got {digest}")
+    _record_download(url, digest)
+    return digest
+
+
+def _run_yara_rules(dry_run=False, tag=None):
+    if tag:
+        resolved_tag = tag
+    else:
+        print("Fetching latest YARA-Forge release...")
+        meta = _fetch_json(_YARA_API_LATEST)
+        resolved_tag = meta["tag_name"]
+        print(f"  Latest: {resolved_tag}")
+
+    current_tag = ""
+    if os.path.exists(_YARA_TAG_FILE):
+        with open(_YARA_TAG_FILE) as f:
+            current_tag = f.read().strip()
+    if current_tag == resolved_tag:
+        print(f"Already at {resolved_tag} -- nothing to do.")
+        return True
+
+    zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
+    if dry_run:
+        print(f"$ [download {zip_url} -> payload/yara/]")
+        return True
+
+    with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
+        zip_path = os.path.join(tmp, "rules-full.zip")
+        print(f"Downloading {resolved_tag} rules...")
+        _download_file(zip_url, zip_path)
+
+        print(f"  Extracting {_YARA_ZIP_MEMBER}...")
+        with zipfile.ZipFile(zip_path) as zf:
+            raw = zf.read(_YARA_ZIP_MEMBER)
+
+        print(f"  Rules size: {len(raw) // 1024 // 1024} MB uncompressed")
+
+        os.makedirs(_YARA_DIR, exist_ok=True)
+        bz2_tmp = _YARA_RULES_BZ2 + ".tmp"
+        with bz2.open(bz2_tmp, "wb", compresslevel=9) as f:
+            f.write(raw)
+        os.replace(bz2_tmp, _YARA_RULES_BZ2)
+
+        with open(_YARA_TAG_FILE, "w") as f:
+            f.write(resolved_tag + "\n")
+
+    compressed_kb = os.path.getsize(_YARA_RULES_BZ2) // 1024
+    print(f"  Compressed: {compressed_kb} KB")
+    return True
+
+
+# tldr pages for offensive-security tools whose documented example commands
+# trip the YARA-Forge malware ruleset (mimikatz credential dumping, certutil
+# -decode/-urlcache LOLBin download, msfvenom payload generation). A
+# chip-design toolchain has no reason to ship them; pruning the whole family
+# (not just the individual pages that happened to trip a rule) keeps the
+# release scan clean and is audit-defensible. Glob patterns, matched under
+# every locale dir (pages*, pages.en, ...) in the tldr-pages/ cache root.
+_TLDR_OFFENSIVE_GLOBS = [
+    "pages*/*/mimikatz*.md",
+    "pages*/*/certutil.md",
+    "pages*/*/msfvenom.md",
+]
+
+
+def _prune_tldr_offensive_pages(pages_dir):
+    removed = []
+    for pat in _TLDR_OFFENSIVE_GLOBS:
+        for p in glob.glob(os.path.join(pages_dir, pat)):
+            os.remove(p)
+            removed.append(os.path.relpath(p, pages_dir))
+    if removed:
+        print(f"Pruned {len(removed)} offensive-security tldr page(s):")
+        for r in sorted(removed):
+            print(f"  - {r}")
+
+
+def _run_tldr_data(dry_run=False):
+    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = os.path.join(cache_home, "tealdeer")
+    pages_dir = os.path.join(cache_dir, "tldr-pages")
+    output = os.path.join(REPO, "payload", "tldr", "tldr-pages.tar.bz2")
+
+    if dry_run:
+        print("$ tldr --update")
+        print("$ (prune offensive-security tool pages from cache)")
+        print(f"$ tar cjf {output} -C {cache_dir} tldr-pages/")
+        return True
+
+    rc = subprocess.call(["tldr", "--update"])
+    if rc != 0:
+        print(f"ERROR: tldr --update failed rc={rc}")
+        return False
+
+    if not os.path.isdir(pages_dir):
+        print(f"ERROR: tldr-pages not found at {pages_dir} after update")
+        return False
+
+    _prune_tldr_offensive_pages(pages_dir)
+
+    os.makedirs(os.path.join(REPO, "payload", "tldr"), exist_ok=True)
+    old_gz = os.path.join(REPO, "payload", "tldr", "tldr-pages.tar.gz")
+    if os.path.exists(old_gz):
+        os.remove(old_gz)
+
+    print(f"Bundling {pages_dir} -> {output}")
+    rc = subprocess.call(["tar", "cjf", output, "-C", cache_dir, "tldr-pages/"])
+    if rc != 0:
+        print(f"ERROR: tar failed rc={rc}")
+        return False
+
+    size_mb = os.path.getsize(output) // 1024 // 1024
+    print(f"Done: {size_mb}M written to {output}")
+    return True
+
+
+_TMUX_PLUGINS_LOCK = os.path.join(REPO, "envs", "tmux", "vendor", "plugins.lock")
+
+
+def _load_tmux_lock():
+    """Return {owner/repo: commit} from the committed tmux plugins lockfile."""
+    pins = {}
+    if os.path.isfile(_TMUX_PLUGINS_LOCK):
+        for line in open(_TMUX_PLUGINS_LOCK):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) == 2:
+                pins[parts[0]] = parts[1]
+    return pins
+
+
+def _run_tmux_plugins(dry_run=False):
+    tmux_conf = os.path.join(REPO, "envs", "tmux", "tmux.conf")
+    plugin_dir = os.path.join(REPO, "envs", "tmux", "vendor", "plugins")
+
+    plugins = []
+    with open(tmux_conf) as f:
+        for line in f:
+            m = re.search(r"set -g @plugin '([^']+)'", line)
+            if m:
+                plugins.append(m.group(1))
+
+    if not plugins:
+        print("No @plugin entries found in tmux.conf")
+        return True
+
+    pins = _load_tmux_lock()
+    os.makedirs(plugin_dir, exist_ok=True)
+    ok = True
+    new_pins = {}
+    for plugin in plugins:
+        name = os.path.basename(plugin)
+        dest = os.path.join(plugin_dir, name)
+        url = f"https://github.com/{plugin}.git"
+        pin = pins.get(plugin)
+        print(f"Updating {plugin}..." + (f" (pinned {pin[:12]})" if pin else " (no pin -> HEAD, will record)"))
+        if dry_run:
+            print(f"$ git clone {url} {dest}" + (f" && git checkout {pin}" if pin else ""))
+            continue
+        shutil.rmtree(dest, ignore_errors=True)
+        # Full clone (not --depth 1) so a pinned commit can be checked out.
+        rc = subprocess.call(["git", "clone", url, dest])
+        if rc != 0:
+            print(f"ERROR: git clone failed for {plugin}")
+            ok = False
+            continue
+        if pin:
+            rc = subprocess.call(["git", "-C", dest, "checkout", "--quiet", pin])
+            if rc != 0:
+                print(f"ERROR: pinned commit {pin} not found for {plugin}")
+                ok = False
+                continue
+        commit = subprocess.check_output(["git", "-C", dest, "rev-parse", "HEAD"], text=True).strip()
+        new_pins[plugin] = commit
+        shutil.rmtree(os.path.join(dest, ".git"), ignore_errors=True)
+
+    # Write/refresh the lockfile so the exact commits are pinned + reviewable.
+    if not dry_run and new_pins:
+        with open(_TMUX_PLUGINS_LOCK, "w") as fh:
+            fh.write("# tmux plugin pins: owner/repo  commit -- git-tracked, reviewed before commit\n")
+            for repo in sorted(new_pins):
+                fh.write(f"{repo}  {new_pins[repo]}\n")
+        print(f"Recorded {len(new_pins)} tmux plugin pin(s) in {_TMUX_PLUGINS_LOCK}")
+
+    return ok
+
+
+def _run_env_nvim(dry_run=False):
+    """Update nvim plugins via Lazy and repack the offline catalog archive."""
+    lazy_dir = os.path.expanduser("~/.local/share/nvim/lazy")
+    catalog_archive = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+    nvim_bin = os.path.expanduser("~/.local/bin/nvim")
+
+    if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
+        print(f"ERROR: nvim not found at {nvim_bin} -- run ./loadout install nvim first")
+        return False
+
+    # Step 1: update plugins via Lazy
+    cmd = [nvim_bin, "--headless", "+Lazy! update", "+qa"]
+    print("Updating plugins: {}".format(" ".join(cmd)))
+    if not dry_run:
+        rc = subprocess.call(cmd)
+        if rc != 0:
+            print(f"WARNING: Lazy! update exited rc={rc} -- continuing with repack")
+
+    if not os.path.isdir(lazy_dir):
+        print(f"ERROR: lazy plugin dir not found at {lazy_dir}")
+        return False
+
+    # Step 2: repack catalog archive with relative paths (./PluginName/...)
+    # Use -C so archive entries are relative to lazy_dir, not absolute filesystem paths.
+    print(f"Repacking {catalog_archive} ...")
+    os.makedirs(os.path.dirname(catalog_archive), exist_ok=True)
+    tmp = catalog_archive + ".tmp"
+    if dry_run:
+        print(f"$ tar cjf {catalog_archive} -C {lazy_dir} .")
+        print("$ ./strip-all-elf-binaries")
+        return True
+
+    rc = subprocess.call(["tar", "cjf", tmp, "-C", lazy_dir, "."])
+    if rc != 0:
+        print(f"ERROR: tar failed rc={rc}")
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return False
+
+    os.replace(tmp, catalog_archive)
+    size_mb = os.path.getsize(catalog_archive) // 1024 // 1024
+    print(f"  {size_mb}M -> {catalog_archive}")
+
+    # Step 3: strip ELF payloads inside the archive
+    rc = subprocess.call([os.path.join(REPO, "strip-all-elf-binaries")], cwd=REPO)
+    if rc != 0:
+        print(f"WARNING: strip-all-elf-binaries exited rc={rc}")
+
+    return True
+
+
+def _run_automated(name, dry_run=False, tag=None):
+    _sep(name)
+    if name == "yara-rules":
+        return _run_yara_rules(dry_run=dry_run, tag=tag)
+    elif name == "nodejs":
+        cmd = [os.path.join(BUILD, "import-nodejs")]
+        if tag:
+            cmd += ["--tag", tag]
+        rc = _run(cmd, dry_run)
+        if rc != 0:
+            print(f"WARNING: {name} exited rc={rc}")
+            return False
+        print()
+        rc2 = _run([os.path.join(REPO, "strip-all-elf-binaries")], dry_run)
+        if rc2 != 0:
+            print(f"WARNING: strip-all-elf-binaries exited rc={rc2}")
+        return True
+    elif name == "tldr-data":
+        return _run_tldr_data(dry_run=dry_run)
+    elif name == "tmux-plugins":
+        return _run_tmux_plugins(dry_run=dry_run)
+    elif name == "env-nvim":
+        return _run_env_nvim(dry_run=dry_run)
+    else:
+        print(f"ERROR: no runner for automated package '{name}'")
+        return False
+
+
+# -- rolling-git wheels ----------------------------------------------------------
+
+
+def _git(args, cwd=None):
+    return subprocess.check_output(["git"] + args, cwd=cwd, stderr=subprocess.DEVNULL).decode("utf-8").strip()
+
+
+def _find_uv():
+    for cand in (os.path.expanduser("~/.local/bin/uv"), shutil.which("uv")):
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def _platform_wheels_dir():
+    """Return the payload/<platform>/wheels dir (prefer el8 when several)."""
+    candidates = sorted(glob.glob(os.path.join(REPO, "payload", "*", "wheels")))
+    if not candidates:
+        return None
+    for c in candidates:
+        if "el8" in os.path.basename(os.path.dirname(c)):
+            return c
+    return candidates[0]
+
+
+def _remote_head_short(url):
+    """Short SHA of remote HEAD via ls-remote (no clone). '' on failure."""
+    try:
+        out = _git(["ls-remote", url, "HEAD"])
+    except Exception:
+        return ""
+    return out.split()[0][:7] if out else ""
+
+
+def _build_backend(clone):
+    """PEP517 build-backend declared in the clone's pyproject.toml ('' if none)."""
+    try:
+        with open(os.path.join(clone, "pyproject.toml")) as fh:
+            txt = fh.read()
+    except OSError:
+        return ""
+    m = re.search(r'build-backend\s*=\s*"([^"]+)"', txt)
+    return m.group(1) if m else ""
+
+
+def _set_pkg_version(name, version):
+    """Surgically replace the version value inside one package block (minimal diff)."""
+    path = os.path.join(REPO, "payload", "packages.json")
+    with open(path) as fh:
+        txt = fh.read()
+    i = txt.find(f'"{name}": {{')
+    if i < 0:
+        raise KeyError(f"package {name} not found in packages.json")
+    # Walk from the package's opening brace to its matching close.
+    depth = 0
+    j = txt.index("{", i)
+    while j < len(txt):
+        if txt[j] == "{":
+            depth += 1
+        elif txt[j] == "}":
+            depth -= 1
+            if depth == 0:
+                j += 1
+                break
+        j += 1
+    block = txt[i:j]
+    new_block, n = re.subn(
+        r'("version"\s*:\s*")([^"]*)(")',
+        lambda m: m.group(1) + version + m.group(3),
+        block,
+        count=1,
+    )
+    if n != 1:
+        raise KeyError(f"version key not found for {name}")
+    with open(path, "w") as fh:
+        fh.write(txt[:i] + new_block + txt[j:])
+
+
+def _run_rolling(name, dry_run=False, force=False):
+    _sep(name)
+    url = ROLLING_GIT[name]
+    wheels_dir = _platform_wheels_dir()
+    if not wheels_dir:
+        print("ERROR: no payload/<platform>/wheels dir found")
+        return False
+
+    current = _pkg_version(name)
+    remote_short = _remote_head_short(url)
+    if not force and remote_short and remote_short in (current or "") and not dry_run:
+        print(f"Already at {current} (remote HEAD {remote_short}) -- nothing to build.")
+        return True
+
+    if dry_run:
+        print(f"$ git clone --filter=blob:none {url} <tmp>")
+        print("$ git -C <tmp> describe --tags --always --dirty")
+        print("$ uv build --wheel --out-dir <tmp> <tmp>")
+        print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
+        print(f"$ (stamp packages.json version for {name})")
+        return True
+
+    uv = _find_uv()
+    if not uv:
+        print("ERROR: uv not found -- required to build rolling-git wheels")
+        return False
+
+    tmp = tempfile.mkdtemp(prefix=f"rolling-{name}-")
+    try:
+        clone = os.path.join(tmp, "src")
+        print(f"Cloning {url} ...")
+        rc = subprocess.call(["git", "clone", "--filter=blob:none", "--quiet", url, clone])
+        if rc != 0:
+            print("  partial clone failed; retrying full clone")
+            shutil.rmtree(clone, ignore_errors=True)
+            rc = subprocess.call(["git", "clone", "--quiet", url, clone])
+        if rc != 0:
+            print(f"ERROR: git clone failed for {url}")
+            return False
+
+        try:
+            version = _git(["describe", "--tags", "--always", "--dirty"], cwd=clone)
+        except Exception:
+            version = _git(["rev-parse", "--short", "HEAD"], cwd=clone)
+        print(f"  source version: {version}")
+        if version == current and not force:
+            print(f"Already at {version} -- source unchanged, skipping rebuild.")
+            return True
+
+        out_dir = os.path.join(tmp, "wheels")
+        os.makedirs(out_dir)
+        env = os.environ.copy()
+        if "maturin" in _build_backend(clone):
+            # Under PEP517, maturin tags a bare linux_x86_64 wheel; force a
+            # portable manylinux_2_28 build (EL8 glibc floor) to match the
+            # repo's wheel-compat policy.  maturin reads MATURIN_PEP517_ARGS
+            # when invoked by a build frontend (uv/pip/build).
+            env["MATURIN_PEP517_ARGS"] = "--compatibility manylinux_2_28"
+        print("Building wheel via uv ...")
+        rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, clone], env=env)
+        if rc != 0:
+            print(f"ERROR: uv build failed for {name}")
+            return False
+
+        built = [f for f in os.listdir(out_dir) if f.endswith(".whl")]
+        if not built:
+            print(f"ERROR: no wheel produced for {name}")
+            return False
+        wheel = built[0]
+        dist = wheel.split("-")[0]  # normalized dist name, e.g. liberty_tools
+
+        removed = [f for f in os.listdir(wheels_dir) if f.endswith(".whl") and f.split("-")[0] == dist and f != wheel]
+        for f in removed:
+            os.remove(os.path.join(wheels_dir, f))
+        shutil.copy2(os.path.join(out_dir, wheel), os.path.join(wheels_dir, wheel))
+        for f in removed:
+            print(f"  removed old {f}")
+        print(f"  installed {wheel}")
+
+        _set_pkg_version(name, version)
+        print(f"  packages.json version -> {version}")
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# -- guidance printers ---------------------------------------------------------
+
+
+def _show_build(name):
+    _sep(name)
+    info = BUILD_SCRIPTS[name]
+    ver = _pkg_version(name)
+    if ver:
+        print(f"  current: v{ver}")
+    print()
+    print("  On EL8 build machine:")
+    print("    ./build/{} --tag vX.Y.Z".format(info["script"]))
+    if "runtime" in info:
+        print("    (also produces payload/<platform>/runtime/{})".format(info["runtime"]))
+    print()
+    print("  After building:")
+    print("    ./strip-all-elf-binaries")
+    print("    git add payload/ .strip-manifest packages.json")
+
+
+def _show_import(name):
+    _sep(name)
+    info = IMPORT_SCRIPTS[name]
+    ver = _pkg_version(name)
+    if ver:
+        print(f"  current: v{ver}")
+    print()
+    print("  {}".format(info["cmd"]))
+    print()
+    print("  Note: {}".format(info["note"]))
+    print()
+    print("  After importing:")
+    print("    git add payload/ packages.json")
+
+
+def _show_download(name):
+    _sep(name)
+    ver = _pkg_version(name)
+    if ver:
+        print(f"  current: v{ver}")
+    print()
+    print("  Find latest upstream version + URL:")
+    print("    ./build/check-versions --outdated-only")
+    print()
+    print("  On EL8 build machine:")
+    print("  1. Download EL8/x86_64 binary from GitHub releases")
+    print(f"     objdump -T {name} | awk '/GLIBC/{{print $5}}' | sort -Vr | head -1")
+    print(f"     patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' {name}")
+    print(f"     bzip2 -k {name}")
+    print(f"  2. cp {name}.bz2 payload/el8.x86_64.glibc2p28/bin/")
+    print("  3. ./strip-all-elf-binaries")
+    print("  4. git add payload/ .strip-manifest packages.json")
+
+
+# -- --list --------------------------------------------------------------------
+
+
+def _fetch_latest_map():
+    """Run check-versions --format tsv; return {name: latest_version_str}."""
+    cv = os.path.join(BUILD, "check-versions")
+    if not os.path.isfile(cv):
+        return {}
+    try:
+        out = subprocess.check_output(
+            [sys.executable, cv, "--format", "tsv"],
+            cwd=REPO,
+            timeout=60,
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8")
+    except Exception:
+        return {}
+    result = {}
+    for line in out.splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 3 and parts[0] and parts[2]:
+            status = parts[4] if len(parts) >= 5 else ""
+            result[parts[0]] = (parts[2], status)
+    return result
+
+
+def cmd_list(outdated_only=False):
+    latest_map = _fetch_latest_map()
+    rolling_latest = {n: _remote_head_short(u) for n, u in ROLLING_GIT.items()}
+    rows = []
+
+    for name in sorted(ROLLING_GIT):
+        rows.append((name, "rolling-git", _pkg_version(name)))
+
+    for name in AUTOMATED:
+        tag_note = " (--tag)" if AUTOMATED[name].get("supports_tag") else ""
+        rows.append((name, "automated" + tag_note, _pkg_version(name)))
+
+    for name in sorted(BUILD_SCRIPTS):
+        runtime = BUILD_SCRIPTS[name].get("runtime", "")
+        kind = "build" + (" +runtime" if runtime else "")
+        rows.append((name, kind, _pkg_version(name)))
+
+    for name in sorted(IMPORT_SCRIPTS):
+        rows.append((name, "import-script", _pkg_version(name)))
+
+    dl_names = DOWNLOAD_ONLY | {k for k, v in PACKAGES.items() if not k.startswith("@") and v.get("kind") == "bin"}
+    dl = sorted(n for n in dl_names if n not in AUTOMATED and n not in BUILD_SCRIPTS and n not in IMPORT_SCRIPTS)
+    for name in dl:
+        rows.append((name, "download", _pkg_version(name)))
+
+    col = [20, 16, 12]
+    hdr = "{:<{}} {:<{}} {:<{}} {}".format("PACKAGE", col[0], "KIND", col[1], "VERSION", col[2], "LATEST")
+    print(hdr)
+    print("-" * 72)
+    for name, kind, ver in rows:
+        if name in ROLLING_GIT:
+            raw_latest = rolling_latest.get(name, "")
+            up_to_date = bool(raw_latest) and raw_latest in (ver or "")
+            if outdated_only and (not raw_latest or up_to_date):
+                continue
+            lstr = raw_latest or "-"
+        else:
+            raw_latest, status = latest_map.get(name, ("", ""))
+            if outdated_only and (not raw_latest or raw_latest == ver):
+                continue
+            lstr = raw_latest.lstrip("v") if raw_latest else "-"
+            # Non-homogeneous version/latest -- the upstream resolver almost
+            # certainly mis-parsed; flag it instead of showing a bogus delta.
+            if status == "mismatch":
+                lstr = lstr + "   !! version/latest format differ -- check resolver"
+        vstr = ver or "-"
+        print("{:<{}} {:<{}} {:<{}} {}".format(name, col[0], kind, col[1], vstr, col[2], lstr))
+
+
+# -- git commit ----------------------------------------------------------------
+
+
+def _git_paths_for(name):
+    if name in AUTOMATED:
+        return AUTOMATED[name].get("git_paths", [])
+    if name in ROLLING_GIT:
+        wheels = _platform_wheels_dir()
+        paths = ["payload/packages.json"]
+        if wheels:
+            paths.append(os.path.relpath(wheels, REPO))
+        return paths
+    return []
+
+
+def git_commit(succeeded, dry_run=False):
+    paths = []
+    for name in succeeded:
+        for p in _git_paths_for(name):
+            full = os.path.join(REPO, p)
+            if os.path.exists(full) and p not in paths:
+                paths.append(p)
+
+    if not paths:
+        return
+
+    _sep("git commit")
+    status = (
+        subprocess.check_output(
+            ["git", "status", "--porcelain"] + paths,
+            cwd=REPO,
+        )
+        .decode("utf-8")
+        .strip()
+    )
+    if not status:
+        print("No changes detected -- nothing to commit.")
+        return
+
+    msg = "chore: update {}\n\nUpdated by ./update:\n{}".format(
+        ", ".join(succeeded),
+        "\n".join("  - " + n for n in succeeded),
+    )
+    print()
+    rc = _run(["git", "add"] + paths, dry_run)
+    if rc != 0 and not dry_run:
+        print(f"WARNING: git add failed rc={rc}")
+        return
+    _run(["git", "commit", "-m", msg], dry_run)
+
+
+# -- main ----------------------------------------------------------------------
+
+ALL_KNOWN = (
+    set(AUTOMATED)
+    | set(BUILD_SCRIPTS)
+    | set(IMPORT_SCRIPTS)
+    | set(ROLLING_GIT)
+    | DOWNLOAD_ONLY
+    | {n for n, p in PACKAGES.items() if not n.startswith("@") and p.get("kind") == "bin"}
+)
+
+
+@click.command(
+    name="update",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("packages", nargs=-1, metavar="PACKAGE...")
+@click.option("--list", "show_list", is_flag=True, help="Table: package | kind | version | latest.")
+@click.option(
+    "--list-outdated",
+    "list_outdated",
+    is_flag=True,
+    help="Same as --list, but only packages where latest > current.",
+)
+@click.option("--commit", "do_commit", is_flag=True, help="Stage + commit automated output (default: no commit).")
+@click.option("--rebuild", is_flag=True, help="Rolling-git: rebuild even if the source commit is unchanged.")
+@click.option("--dry-run", "dry_run", is_flag=True, help="Print commands without executing.")
+@click.option(
+    "--tag",
+    default=None,
+    metavar="VERSION",
+    help="Version hint for nodejs and yara (e.g. v26.3.0 or 20260517).",
+)
+def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
+    """update -- per-package updater for loadout.
+
+    With no arguments, runs every automated package end-to-end without
+    committing. Pass package names to update specific items, or use the
+    listing/commit flags below.
+
+    Examples:
+
+      ./update                          # run all automated packages
+      ./update nodejs yara-rules        # update specific packages
+      ./update liberty-tools --rebuild  # force rebuild of a rolling-git wheel
+      ./update nvim bat rg              # show update guidance for those packages
+      ./update --list                   # table of every known package
+      ./update --list-outdated          # only outdated packages
+      ./update --commit                 # stage + commit automated output
+      ./update --tag v26.3.0 nodejs     # version hint for nodejs/yara
+    """
+    if show_list or list_outdated:
+        cmd_list(outdated_only=list_outdated)
+        return
+
+    packages = list(packages) if packages else list(AUTOMATED) + sorted(ROLLING_GIT)
+
+    unknown = [p for p in packages if p not in ALL_KNOWN]
+    if unknown:
+        raise click.UsageError("unknown package(s): {}".format(", ".join(unknown)))
+
+    auto_succeeded = []
+    all_ok = True
+
+    for name in packages:
+        kind = _classify(name)
+        if kind == "rolling":
+            ok = _run_rolling(name, dry_run=dry_run, force=rebuild)
+            if ok:
+                auto_succeeded.append(name)
+            else:
+                all_ok = False
+        elif kind == "automated":
+            ok = _run_automated(name, dry_run=dry_run, tag=tag)
+            if ok:
+                auto_succeeded.append(name)
+            else:
+                all_ok = False
+        elif kind == "build":
+            _show_build(name)
+        elif kind == "import":
+            _show_import(name)
+        elif kind == "download":
+            _show_download(name)
+        else:
+            print(f"WARNING: no handler for '{name}'")
+
+    if do_commit and auto_succeeded:
+        git_commit(auto_succeeded, dry_run=dry_run)
+
+    _sep()
+    if dry_run:
+        print("Dry-run complete.")
+    elif all_ok:
+        print("Done.")
+    else:
+        print("Done (some automated items failed -- see warnings above).")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

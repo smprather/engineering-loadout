@@ -1,0 +1,301 @@
+name: Validate Registry
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly: check URL reachability and subrepo CI health even without code changes
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── 1. Schema validation ──────────────────────────────────────────────────
+  schema:
+    name: Validate schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install ajv-cli
+        run: npm install --global ajv-cli ajv-formats
+
+      - name: Validate registry.json against schema
+        run: |
+          # Strip the $schema meta-key before validating — the schema's root
+          # "type: object / additionalProperties: registryEntry" would reject it.
+          jq 'del(.["$schema"])' registry.json > registry-stripped.json
+          ajv validate \
+            --spec=draft2020 \
+            --strict=false \
+            -c ajv-formats \
+            -s schemas/schema.json \
+            -d registry-stripped.json
+
+  # ── 2. URL reachability ───────────────────────────────────────────────────
+  urls:
+    name: Check URLs
+    runs-on: ubuntu-latest
+    # Never fail CI — upstream repos may have transient downtime.
+    # Results are reported as annotations and a job summary only.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract and check all URLs
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request, sys
+
+          with open("registry.json") as f:
+              registry = json.load(f)
+
+          urls = set()
+          for lang, entry in registry.items():
+              if lang == "$schema":
+                  continue
+              src = entry.get("source", {})
+              for field in ("url", "parser_url", "queries_url"):
+                  v = src.get(field)
+                  if v:
+                      urls.add((lang, field, v))
+
+          failures = []
+          for lang, field, url in sorted(urls):
+              try:
+                  req = urllib.request.Request(url, method="HEAD")
+                  req.add_header("User-Agent", "treesitter-registry-ci/1.0")
+                  resp = urllib.request.urlopen(req, timeout=10)
+                  status = resp.status
+              except Exception as e:
+                  status = str(e)
+
+              if isinstance(status, int) and status < 400:
+                  print(f"  OK  {lang}/{field}: {url}")
+              else:
+                  failures.append((lang, field, url, status))
+                  print(f"  FAIL {lang}/{field}: {url}  ({status})")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout")
+          if failures:
+              print(f"\n::warning::URL check: {len(failures)} unreachable URL(s) found (see job summary)")
+              with open(summary_path, "a") as f:
+                  f.write("## Unreachable URLs\n\n")
+                  f.write("| Lang | Field | URL | Status |\n")
+                  f.write("|------|-------|-----|--------|\n")
+                  for lang, field, url, status in failures:
+                      f.write(f"| `{lang}` | `{field}` | {url} | {status} |\n")
+          else:
+              print("\nAll URLs reachable.")
+          EOF
+
+  # ── 3. Query subrepo CI health ─────────────────────────────────────────────
+  subrepos:
+    name: Check query subrepo CI
+    runs-on: ubuntu-latest
+    # Warn-only: a broken subrepo CI should be visible but not block registry changes.
+    continue-on-error: true
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check CI status for all query repos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, subprocess, sys, os, datetime
+
+          with open("registry.json") as f:
+              registry = json.load(f)
+
+          passing = []
+          failures = []
+          unknown = []
+
+          for lang, entry in sorted(registry.items()):
+              if lang == "$schema":
+                  continue
+              src = entry.get("source", {})
+              stype = src.get("type", "")
+
+              # Determine the query repo URL
+              if stype == "external_queries":
+                  queries_url = src.get("queries_url", "")
+              elif stype == "queries_only":
+                  queries_url = src.get("url", "")
+              else:
+                  # self_contained / local — no separate query repo
+                  continue
+
+              if not queries_url:
+                  unknown.append((lang, stype, "", "no query URL"))
+                  continue
+
+              # Extract owner/repo from https://github.com/<owner>/<repo>
+              parts = queries_url.rstrip("/").split("/")
+              if len(parts) < 2 or "github.com" not in queries_url:
+                  unknown.append((lang, stype, queries_url, "non-GitHub URL"))
+                  continue
+
+              repo = f"{parts[-2]}/{parts[-1]}"
+
+              # Get the most recent workflow run on the default branch.
+              # Don't filter by workflow name — repos may vary.
+              result = subprocess.run(
+                  ["gh", "run", "list", "--repo", repo,
+                   "--branch", "main",
+                   "--limit", "1",
+                   "--json", "conclusion,status,headBranch,workflowName,url"],
+                  capture_output=True, text=True
+              )
+              if result.returncode != 0 or not result.stdout.strip():
+                  unknown.append((lang, stype, repo, result.stderr.strip() or "no runs found"))
+                  continue
+
+              try:
+                  runs = json.loads(result.stdout)
+                  if not runs:
+                      unknown.append((lang, stype, repo, "no runs found"))
+                      continue
+                  run_info = runs[0]
+              except (json.JSONDecodeError, IndexError):
+                  unknown.append((lang, stype, repo, "JSON parse error"))
+                  continue
+
+              conclusion = run_info.get("conclusion", "")
+              status = run_info.get("status", "")
+              run_url = run_info.get("url", f"https://github.com/{repo}/actions")
+
+              if conclusion == "success":
+                  passing.append((lang, stype, repo))
+                  print(f"  OK   {lang}: {repo}")
+              elif status in ("in_progress", "queued", "waiting"):
+                  passing.append((lang, stype, repo))
+                  print(f"  SKIP {lang}: {repo} (in progress)")
+              else:
+                  failures.append((lang, stype, repo, conclusion or status, run_url))
+                  print(f"  FAIL {lang}: {repo} ({conclusion or status})")
+
+          total = len(passing) + len(failures) + len(unknown)
+          now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+          # ── Job summary ──
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout")
+          with open(summary_path, "a") as f:
+              f.write(f"## Query Subrepo CI Status — {now}\n\n")
+              f.write(f"**{len(passing)}** passing, **{len(failures)}** failing, **{len(unknown)}** unknown out of **{total}** repos\n\n")
+
+              if failures:
+                  f.write("### Failing\n\n")
+                  f.write("| Lang | Type | Repo | Status |\n")
+                  f.write("|------|------|------|--------|\n")
+                  for lang, stype, repo, status, url in failures:
+                      f.write(f"| `{lang}` | `{stype}` | [{repo}]({url}) | `{status}` |\n")
+
+              if unknown:
+                  f.write(f"\n### Unknown\n\n")
+                  f.write("| Lang | Type | Repo | Reason |\n")
+                  f.write("|------|------|------|--------|\n")
+                  for lang, stype, repo, reason in unknown:
+                      f.write(f"| `{lang}` | `{stype}` | {repo} | {reason} |\n")
+
+              if not failures and not unknown:
+                  f.write("All query repos passing.\n")
+
+          if failures:
+              print(f"\n::warning::{len(failures)} query subrepo(s) have failing CI (see job summary)")
+
+          # ── Write issue body to file for next step ──
+          issue_path = os.environ.get("RUNNER_TEMP", "/tmp") + "/ci-status-issue.md"
+          with open(issue_path, "w") as f:
+              f.write(f"Last checked: **{now}**\n\n")
+              f.write(f"**{len(passing)}** passing, **{len(failures)}** failing, **{len(unknown)}** unknown out of **{total}** repos\n\n")
+
+              if failures:
+                  f.write("## Failing\n\n")
+                  f.write("| Lang | Type | Repo | Status |\n")
+                  f.write("|------|------|------|--------|\n")
+                  for lang, stype, repo, status, url in failures:
+                      f.write(f"| `{lang}` | `{stype}` | [{repo}]({url}) | `{status}` |\n")
+
+              if unknown:
+                  f.write(f"\n## Unknown\n\n")
+                  f.write("| Lang | Type | Repo | Reason |\n")
+                  f.write("|------|------|------|--------|\n")
+                  for lang, stype, repo, reason in unknown:
+                      f.write(f"| `{lang}` | `{stype}` | {repo} | {reason} |\n")
+
+              if not failures and not unknown:
+                  f.write("All query repos passing.\n")
+
+          # Export for next step
+          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+              f.write(f"has_failures={'true' if failures or unknown else 'false'}\n")
+              f.write(f"issue_path={issue_path}\n")
+          PYEOF
+
+      - name: Create or update status issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          if [ "$BRANCH" = "main" ]; then
+            TITLE="Query Repo CI Status"
+          else
+            TITLE="Query Repo CI Status [$BRANCH]"
+          fi
+          ISSUE_PATH="${RUNNER_TEMP}/ci-status-issue.md"
+          [ -f "$ISSUE_PATH" ] || exit 0
+
+          BODY=$(cat "$ISSUE_PATH")
+          HAS_FAILURES=$(grep -c '| `' "$ISSUE_PATH" || true)
+
+          # Find existing open issue
+          EXISTING_OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "\"${TITLE}\" in:title" --state open \
+            --json number --jq '.[0].number' 2>/dev/null || true)
+
+          # Find existing closed issue (to reopen if needed)
+          EXISTING_CLOSED=$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --search "\"${TITLE}\" in:title" --state closed \
+            --json number --jq '.[0].number' 2>/dev/null || true)
+
+          if [ "$HAS_FAILURES" -gt 0 ]; then
+            # There are failures — create, update, or reopen
+            if [ -n "$EXISTING_OPEN" ]; then
+              gh issue edit "$EXISTING_OPEN" --repo "$GITHUB_REPOSITORY" \
+                --body-file "$ISSUE_PATH"
+              echo "Updated issue #${EXISTING_OPEN}"
+            elif [ -n "$EXISTING_CLOSED" ]; then
+              gh issue reopen "$EXISTING_CLOSED" --repo "$GITHUB_REPOSITORY"
+              gh issue edit "$EXISTING_CLOSED" --repo "$GITHUB_REPOSITORY" \
+                --body-file "$ISSUE_PATH"
+              echo "Reopened and updated issue #${EXISTING_CLOSED}"
+            else
+              gh label create "ci-status" --repo "$GITHUB_REPOSITORY" \
+                --description "Automated CI status tracking" \
+                --color "0E8A16" 2>/dev/null || true
+              gh issue create --repo "$GITHUB_REPOSITORY" \
+                --title "$TITLE" \
+                --body-file "$ISSUE_PATH" \
+                --label "ci-status"
+              echo "Created new status issue"
+            fi
+          else
+            # All passing — close any open issue
+            if [ -n "$EXISTING_OPEN" ]; then
+              gh issue edit "$EXISTING_OPEN" --repo "$GITHUB_REPOSITORY" \
+                --body-file "$ISSUE_PATH"
+              gh issue close "$EXISTING_OPEN" --repo "$GITHUB_REPOSITORY" \
+                --comment "All query repos passing."
+              echo "Closed issue #${EXISTING_OPEN} — all passing"
+            else
+              echo "No failures and no open issue — nothing to do"
+            fi
+          fi

@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# run-all -- single entry point for the loadout test suite.
+#
+# Default: Tier 1 (fast checks + unit tests) then Tier 2 (integration installs
+# into temp roots). --fast stops after Tier 1. --container additionally runs
+# the Tier 3 clean-container smoke (stock AlmaLinux 8.10 via Docker) -- the
+# only verification baseline that counts for install behavior; the dev box is
+# not stock and must not be trusted for that.
+#
+# Usage:
+#   ./tests/run-all             # Tier 1 + Tier 2
+#   ./tests/run-all --fast      # Tier 1 only
+#   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
+
+set -euo pipefail
+
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$REPO_DIR"
+
+FAST=0
+CONTAINER=0
+for arg in "$@"; do
+    case "$arg" in
+        --fast) FAST=1 ;;
+        --container) CONTAINER=1 ;;
+        -h|--help)
+            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+        *)
+            echo "unknown option: $arg" >&2
+            exit 2
+            ;;
+    esac
+done
+
+PY=""
+for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14" python3.14; do
+    if command -v "$cand" > /dev/null 2>&1; then
+        PY=$cand
+        break
+    fi
+done
+[ -n "$PY" ] || { echo "ERROR: python3.14 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
+
+FAILURES=0
+run_test() {
+    local name=$1
+    shift
+    echo
+    echo "=== $name"
+    if "$@"; then
+        echo "=== $name: PASS"
+    else
+        echo "=== $name: FAIL" >&2
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
+# --- Tier 1: fast, no temp HOME -------------------------------------------
+run_test "py_compile" "$PY" -m py_compile loadout_main.py
+if command -v ruff > /dev/null 2>&1; then
+    run_test "ruff check" ruff check loadout_main.py
+fi
+run_test "unit-resolver" "$PY" tests/unit-resolver
+run_test "registry-integrity" "$PY" tests/registry-integrity
+run_test "tar-safety" "$PY" tests/tar-safety
+run_test "content-verify" "$PY" tests/content-verify
+run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
+run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
+run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
+run_test "assurance-check" "$PY" tests/assurance-check
+run_test "check-installer" tests/check-installer
+run_test "st-wrapper" tests/st-wrapper
+
+if [ "$FAST" -eq 1 ]; then
+    echo
+    [ "$FAILURES" -eq 0 ] && echo "Tier 1 passed." || echo "$FAILURES test(s) FAILED." >&2
+    exit "$((FAILURES > 0 ? 1 : 0))"
+fi
+
+# --- Tier 2: integration installs into temp roots --------------------------
+run_test "install-fonts-rejoin" "$PY" tests/install-fonts-rejoin
+run_test "install-modules" tests/install-modules
+run_test "install-env-st" tests/install-env-st
+run_test "install-env-tcsh" tests/install-env-tcsh
+run_test "optional-packages" tests/optional-packages
+run_test "install-linux-tmp-home" tests/install-linux-tmp-home
+run_test "install-split-shared-envs" tests/install-split-shared-envs
+run_test "install-nvim-deployments" tests/install-nvim-deployments
+run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
+run_test "crate-store integrity" "$PY" build/verify-crate-store --check-lock
+
+# --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------
+if [ "$CONTAINER" -eq 1 ]; then
+    run_test "almalinux8.10 container smoke (--full)" \
+        tests/prebuilt-binaries-almalinux8 --full
+    run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" \
+        tests/prebuilt-binaries-almalinux8 --no-build --dynamic
+fi
+
+echo
+if [ "$FAILURES" -eq 0 ]; then
+    echo "All tests passed."
+else
+    echo "$FAILURES test(s) FAILED." >&2
+fi
+exit "$((FAILURES > 0 ? 1 : 0))"

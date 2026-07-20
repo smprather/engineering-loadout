@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""
+content-verify -- unit test for install-time content verification.
+
+Confirms that _Bz2Store.resolve() refuses a payload whose bytes do not match
+the committed .content-manifest, accepts one that does, and honours the
+verification-disabled switch. Uses a synthetic repo + manifest (no real
+payload touched). Runs under the bundled Python 3.14.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def main():
+    m = load_loadout()
+    with tempfile.TemporaryDirectory() as repo:
+        payload = os.path.join(repo, "payload", "el8", "bin")
+        os.makedirs(payload)
+        blob = os.path.join(payload, "tool.bz2")
+        with open(blob, "wb") as fh:
+            fh.write(b"not-really-bz2-but-fine-for-hashing")
+        digest = m._sha256_file(blob)
+        rel = os.path.relpath(blob, repo)
+
+        # write a manifest with the correct hash
+        manifest = os.path.join(repo, ".content-manifest")
+        with open(manifest, "w") as fh:
+            fh.write("# content manifest\n")
+            fh.write(f"sha256  {digest}  {rel}\n")
+
+        m._load_content_manifest(repo)
+        m._VERIFY_CONTENT = True
+
+        # 1. matching file resolves
+        ok = True
+        try:
+            m._verify_source_files([blob])
+        except m.ContentVerificationError as exc:
+            ok = False
+            print("   ", exc)
+        check("matching file verifies", ok)
+
+        # 2. tampered file is refused
+        with open(blob, "ab") as fh:
+            fh.write(b"X")  # flip the bytes
+        refused = False
+        try:
+            m._verify_source_files([blob])
+        except m.ContentVerificationError:
+            refused = True
+        check("tampered file refused", refused)
+
+        # 3. --no-verify disables the check
+        m._VERIFY_CONTENT = False
+        passed_disabled = True
+        try:
+            m._verify_source_files([blob])
+        except m.ContentVerificationError:
+            passed_disabled = False
+        check("verification-disabled skips the check", passed_disabled)
+        m._VERIFY_CONTENT = True
+
+        # 4. a file not listed in the manifest is a hard error
+        unlisted = os.path.join(payload, "rogue.bz2")
+        with open(unlisted, "wb") as fh:
+            fh.write(b"dropped-in")
+        rogue_refused = False
+        try:
+            m._verify_source_files([unlisted])
+        except m.ContentVerificationError:
+            rogue_refused = True
+        check("unlisted payload file refused", rogue_refused)
+
+        # 5. resolve() enforces on the real chokepoint (restore the good blob)
+        with open(blob, "wb") as fh:
+            fh.write(b"not-really-bz2-but-fine-for-hashing")
+        store = m._Bz2Store()
+        resolve_ok = store.resolve(blob) == blob
+        check("resolve() returns a verified file unchanged", resolve_ok)
+        with open(blob, "ab") as fh:
+            fh.write(b"X")
+        resolve_refused = False
+        try:
+            store.resolve(blob)
+        except m.ContentVerificationError:
+            resolve_refused = True
+        check("resolve() refuses a tampered file", resolve_refused)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

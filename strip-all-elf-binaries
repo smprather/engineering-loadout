@@ -1,0 +1,592 @@
+#!/usr/bin/env python3
+
+import bz2
+import hashlib
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import warnings
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+ARCHIVE_SUFFIXES = (
+    ".tar.gz",
+    ".tar.bz2",
+    ".tar.xz",
+    ".tgz",
+    ".tbz2",
+    ".txz",
+    ".tar",
+)
+
+# Archives whose ELF payloads must not be stripped (e.g. LLVM BOLT-optimized
+# binaries; the Rust toolchain's rustc_driver/LLVM shared objects, which carry
+# compiler-internal symbols that stripping would corrupt -- build-rust.sh
+# pre-chunks rust.tar.bz2 itself).
+# portable-python: BOLT-optimized, must never be stripped/repacked.
+# rust.tar.bz2: repacked rustup toolchain, kept verbatim.
+# nvim-plugin-stash: a RELEASE ASSET (not a committed payload), and a tar of bare git
+#   mirrors -- strip must not extract/repack it. Doing so renormalized it away from the
+#   released asset hash AND chunked it locally, so the installer (which verifies against
+#   the single-file hash in .content-manifest.fetched) then refused the chunks.
+NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-", "rust.tar.bz2", "nvim-plugin-stash")
+
+# Files larger than this are split into .part-NNN chunks so no single file
+# exceeds GitHub's 50 MB hard limit or the 40 MB soft recommendation.
+CHUNK_THRESHOLD = 40 * 1024 * 1024  # 40 MiB
+
+
+def eprint(*args):
+    print(*args, file=sys.stderr)
+
+
+def command_exists(name):
+    return shutil.which(name) is not None
+
+
+def repo_rel(repo_dir, path):
+    return os.path.relpath(path, repo_dir)
+
+
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def file_size(path):
+    return os.stat(path).st_size
+
+
+def file_mtime(path):
+    return int(os.stat(path).st_mtime)
+
+
+def is_elf_file(path):
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def is_archive_name(path):
+    return any(path.endswith(suffix) for suffix in ARCHIVE_SUFFIXES)
+
+
+def is_nostrip_archive(path):
+    name = os.path.basename(path)
+    return any(name.startswith(p) for p in NOSTRIP_ARCHIVE_PREFIXES)
+
+
+def is_tar_path(path):
+    if not is_archive_name(path):
+        return False
+    try:
+        return tarfile.is_tarfile(path)
+    except OSError, tarfile.TarError:
+        return False
+
+
+def tar_bz2_path(path):
+    for suffix in (".tar.gz", ".tar.xz", ".tar.bz2"):
+        if path.endswith(suffix):
+            return path[: -len(suffix)] + ".tar.bz2"
+    for suffix in (".tgz", ".tbz2", ".txz", ".tar"):
+        if path.endswith(suffix):
+            return path[: -len(suffix)] + ".tar.bz2"
+    return path + ".tar.bz2"
+
+
+# Directories the walker must never descend into. `.git` is git plumbing;
+# `loadout_backups` is user-side snapshots of a previous install (not
+# repo-managed); `.loadout-bootstrap` is the per-clone portable-python
+# extraction (contains Python's own stdlib test archives with intentionally-
+# crafted special-file members that would crash safe extraction).
+_WALK_SKIP_DIRS = (".git", "loadout_backups", ".loadout-bootstrap", "agent_ignore")
+
+
+def walk_files(repo_dir):
+    for root, dirs, files in os.walk(repo_dir):
+        for skip in _WALK_SKIP_DIRS:
+            if skip in dirs:
+                dirs.remove(skip)
+        dirs[:] = sorted(dirs)
+        for name in sorted(files):
+            yield os.path.join(root, name)
+
+
+class Manifest:
+    def __init__(self, repo_dir, use_manifest):
+        self.repo_dir = repo_dir
+        self.use_manifest = use_manifest
+        self.path = os.path.join(repo_dir, ".strip-manifest")
+        self.legacy_path = os.path.join(repo_dir, "payload", ".strip-manifest")
+        self.entries = {}
+
+    def load(self):
+        if not self.use_manifest:
+            return
+        self._load_file(self.legacy_path)
+        self._load_file(self.path)
+
+    def _load_file(self, path):
+        if not os.path.isfile(path):
+            return
+        with open(path) as fh:
+            for raw in fh:
+                line = raw.rstrip("\n")
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("  ")
+                if len(parts) >= 3 and parts[0] == "sha256":
+                    self.entries[parts[2]] = ("sha256", parts[1])
+                elif len(parts) >= 4 and parts[0] == "tar-meta":
+                    self.entries[parts[3]] = ("tar-meta", parts[1], parts[2])
+                elif len(parts) >= 2 and len(parts[0]) == 64:
+                    self.entries[parts[1]] = ("sha256", parts[0])
+
+    def save(self, dry_run):
+        if not self.use_manifest or dry_run:
+            return
+        tmp = tempfile.NamedTemporaryFile("w", delete=False, dir=self.repo_dir, prefix=".strip-manifest.")
+        try:
+            tmp.write("# strip manifest\n")
+            tmp.write("# sha256 entries skip unchanged stripped raw/bzip2 payloads\n")
+            tmp.write("# tar-meta entries skip unchanged processed tar.bz2 archives by size+mtime\n")
+            for key in sorted(self.entries):
+                if not os.path.exists(os.path.join(self.repo_dir, key)):
+                    continue
+                entry = self.entries[key]
+                if entry[0] == "sha256":
+                    tmp.write(f"sha256  {entry[1]}  {key}\n")
+                elif entry[0] == "tar-meta":
+                    tmp.write(f"tar-meta  {entry[1]}  {entry[2]}  {key}\n")
+            tmp.close()
+            os.rename(tmp.name, self.path)
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+    def sha_hit(self, rel, path):
+        if not self.use_manifest:
+            return False
+        entry = self.entries.get(rel)
+        return bool(entry and entry[0] == "sha256" and sha256_of(path) == entry[1])
+
+    def tar_hit(self, rel, path):
+        if not self.use_manifest:
+            return False
+        entry = self.entries.get(rel)
+        return bool(
+            entry and entry[0] == "tar-meta" and str(file_size(path)) == entry[1] and str(file_mtime(path)) == entry[2]
+        )
+
+    def record_sha(self, rel, path):
+        self.entries[rel] = ("sha256", sha256_of(path))
+
+    def record_tar(self, rel, path):
+        self.entries[rel] = ("tar-meta", str(file_size(path)), str(file_mtime(path)))
+
+
+def strip_file(strip_bin, path):
+    subprocess.check_call([strip_bin, "--strip-all", path])
+
+
+def elf_has_rpath(path):
+    """Return True if ELF has DT_RPATH or DT_RUNPATH (patchelf already ran)."""
+    try:
+        proc = subprocess.run(
+            ["/usr/bin/readelf", "-d", path],
+            capture_output=True,
+        )
+        out = proc.stdout.decode("utf-8", "replace")
+        return "(RPATH)" in out or "(RUNPATH)" in out
+    except OSError:
+        return False
+
+
+def bzip2_write(src_path, dest_path):
+    with open(src_path, "rb") as src:
+        with bz2.open(dest_path, "wb", compresslevel=9) as dest:
+            shutil.copyfileobj(src, dest)
+
+
+def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, stats):
+    rel = repo_rel(repo_dir, bz2_path)
+    if manifest.sha_hit(rel, bz2_path):
+        print(f"manifest hit (already stripped): {bz2_path}")
+        stats["skipped_manifest"] += 1
+        return
+
+    stats["processed"] += 1
+    payload = os.path.join(tmp_dir, os.path.basename(bz2_path[:-4]) + ".payload")
+    with bz2.open(bz2_path, "rb") as src, open(payload, "wb") as dest:
+        shutil.copyfileobj(src, dest)
+
+    if not is_elf_file(payload):
+        print(f"skip non-ELF bzip2 payload: {bz2_path}")
+        stats["skipped_nonelf"] += 1
+        os.unlink(payload)
+        manifest.record_sha(rel, bz2_path)
+        return
+
+    if elf_has_rpath(payload):
+        # RPATH present means patchelf already ran; strip must precede patchelf
+        # (strip after patchelf corrupts .dynstr placement). Binary was already
+        # stripped as part of the bundle workflow -- do not strip again.
+        print(f"skip patchelf'd payload (RPATH set): {bz2_path}")
+        stats["skipped_nonelf"] += 1
+        os.unlink(payload)
+        manifest.record_sha(rel, bz2_path)
+        return
+
+    if dry_run:
+        print(f"would strip bzip2 payload: {bz2_path}")
+        os.unlink(payload)
+        return
+
+    before_size = file_size(bz2_path)
+    mode = stat.S_IMODE(os.stat(bz2_path).st_mode)
+    strip_file(strip_bin, payload)
+    tmp_bz2 = bz2_path + ".tmp"
+    bzip2_write(payload, tmp_bz2)
+    os.chmod(tmp_bz2, mode)
+    os.rename(tmp_bz2, bz2_path)
+    after_size = file_size(bz2_path)
+    print(f"stripped bzip2 payload: {bz2_path} ({before_size} -> {after_size} bytes)")
+    stats["stripped"] += 1
+    manifest.record_sha(rel, bz2_path)
+    os.unlink(payload)
+
+
+def process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats):
+    rel = repo_rel(repo_dir, path)
+    if manifest.sha_hit(rel, path):
+        print(f"manifest hit (already stripped): {path}")
+        stats["skipped_manifest"] += 1
+        return
+
+    # Same patchelf guard as process_bzip2/process_tar: a raw ELF with an
+    # RPATH/RUNPATH was already patchelf'd+stripped; re-stripping corrupts it.
+    if elf_has_rpath(path):
+        print(f"skip patchelf'd raw ELF (RPATH set): {path}")
+        stats["skipped_nonelf"] += 1
+        manifest.record_sha(rel, path)
+        return
+
+    stats["processed"] += 1
+    if dry_run:
+        print(f"would strip: {path}")
+        return
+
+    before_size = file_size(path)
+    strip_file(strip_bin, path)
+    after_size = file_size(path)
+    print(f"stripped: {path} ({before_size} -> {after_size} bytes)")
+    stats["stripped"] += 1
+    manifest.record_sha(rel, path)
+
+
+# Reproducible-tar epoch. Every member's mtime and ownership are pinned to fixed
+# values when repacking, so the SAME payload always produces byte-identical archives
+# (and identical sha256). Without this, strip_file() stamps every stripped ELF with
+# the wall-clock time it ran, so each strip run produced different tar bytes -- which
+# churned unrelated tarballs into commits and broke the assurance ledger's pinned
+# hashes (three runs of git.tar.bz2 gave three different hashes).
+#
+# Honors SOURCE_DATE_EPOCH (the reproducible-builds convention) when set; otherwise a
+# fixed constant, so the payload is reproducible BY DEFAULT without requiring the env
+# var. 1577836800 = 2020-01-01T00:00:00Z -- intentional, and safely after 1980 (dodges
+# pre-1980 timestamp edge cases in some archive tools).
+def _reproducible_mtime():
+    v = os.environ.get("SOURCE_DATE_EPOCH")
+    if v:
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    return 1577836800
+
+
+def _normalize_tarinfo(ti):
+    """Pin mtime + ownership so identical content always yields identical tar bytes."""
+    ti.mtime = _reproducible_mtime()
+    ti.uid = 0
+    ti.gid = 0
+    ti.uname = ""
+    ti.gname = ""
+    return ti
+
+
+def add_tree_to_tar(tf, source_dir):
+    # Members are added in sorted order (deterministic), and _normalize_tarinfo pins
+    # each member's mtime + ownership -- so identical content yields identical bytes.
+    for root, dirs, files in os.walk(source_dir):
+        dirs[:] = sorted(dirs)
+        files = sorted(files)
+        rel_root = os.path.relpath(root, source_dir)
+        arc_root = "." if rel_root == "." else os.path.join(".", rel_root)
+        if rel_root != ".":
+            tf.add(root, arcname=arc_root, recursive=False, filter=_normalize_tarinfo)
+        for name in files:
+            path = os.path.join(root, name)
+            arcname = os.path.join(arc_root, name)
+            tf.add(path, arcname=arcname, recursive=False, filter=_normalize_tarinfo)
+
+
+def split_large_file(path, chunk_size=CHUNK_THRESHOLD):
+    """Split path into path.part-000, path.part-001, ... and remove original.
+
+    Returns the number of chunks created, or 0 if the file is within threshold.
+    Caller is responsible for updating any manifest entry after splitting.
+    """
+    if os.path.getsize(path) <= chunk_size:
+        return 0
+    i = 0
+    with open(path, "rb") as f:
+        while True:
+            data = f.read(chunk_size)
+            if not data:
+                break
+            with open(f"{path}.part-{i:03d}", "wb") as pf:
+                pf.write(data)
+            i += 1
+    os.unlink(path)
+    return i
+
+
+def chunk_large_payload(repo_dir, dry_run=False):
+    """Split any file >CHUNK_THRESHOLD under payload/ that is not already chunked.
+
+    Handles non-bz2 large files (wheels, etc.) that strip-all-elf-binaries does
+    not otherwise process.  Skips NOSTRIP archives and existing chunk files.
+    Returns the number of files split.
+    """
+    payload = os.path.join(repo_dir, "payload")
+    if not os.path.isdir(payload):
+        return 0
+    chunked = 0
+    for root, _dirs, files in os.walk(payload):
+        for name in sorted(files):
+            if ".part-" in name:
+                continue
+            if any(name.startswith(p) for p in NOSTRIP_ARCHIVE_PREFIXES):
+                continue
+            path = os.path.join(root, name)
+            if os.path.getsize(path) <= CHUNK_THRESHOLD:
+                continue
+            if dry_run:
+                print(f"would chunk: {path}")
+                chunked += 1
+                continue
+            n = split_large_file(path)
+            if n:
+                mb = CHUNK_THRESHOLD // (1024 * 1024)
+                print(f"  chunked: {path} -> {n} x {mb} MiB parts")
+                chunked += 1
+    return chunked
+
+
+def safe_extractall(tf, dest_dir):
+    """tarfile.extractall with a path-traversal guard.
+
+    Rejects members whose resolved path escapes dest_dir (absolute paths, '..'
+    components, or symlink/hardlink targets pointing outside). Mirrors the
+    installer's tar safety so a malicious/new upstream archive cannot path-escape
+    during maintenance. Raises ValueError on the first unsafe member.
+    """
+    dest_real = os.path.realpath(dest_dir)
+
+    def _within(path):
+        full = os.path.realpath(os.path.join(dest_real, path))
+        return full == dest_real or full.startswith(dest_real + os.sep)
+
+    for m in tf.getmembers():
+        if os.path.isabs(m.name) or not _within(m.name):
+            raise ValueError(f"unsafe tar member path: {m.name!r} in {tf.name}")
+        if m.issym() or m.islnk():
+            # link target resolved relative to the link's own directory
+            link_dir = os.path.dirname(m.name)
+            if os.path.isabs(m.linkname) or not _within(os.path.join(link_dir, m.linkname)):
+                raise ValueError(f"unsafe tar link target: {m.name!r} -> {m.linkname!r}")
+    tf.extractall(dest_dir)
+
+
+def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats):
+    out_path = tar_bz2_path(tar_path)
+    out_rel = repo_rel(repo_dir, out_path)
+    # Already processed and chunked -- first part stands in for the whole archive.
+    chunk0 = out_path + ".part-000"
+    if os.path.isfile(chunk0) and manifest.tar_hit(out_rel + ".part-000", chunk0):
+        print(f"manifest hit (already processed tar): {out_path}")
+        stats["skipped_manifest"] += 1
+        return
+    if os.path.isfile(out_path) and manifest.tar_hit(out_rel, out_path):
+        print(f"manifest hit (already processed tar): {out_path}")
+        stats["skipped_manifest"] += 1
+        return
+
+    stats["processed"] += 1
+    if dry_run:
+        if tar_path == out_path:
+            print(f"would strip tar contents and rewrite: {tar_path}")
+        else:
+            print(f"would strip tar contents and convert: {tar_path} -> {out_path}")
+        return
+
+    work_dir = tempfile.mkdtemp(prefix="tar.", dir=tmp_dir)
+    before_size = file_size(tar_path)
+    with tarfile.open(tar_path, "r:*") as tf:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="The default behavior of tarfile extraction has been changed.*")
+            safe_extractall(tf, work_dir)
+
+    tar_stripped = 0
+    for member in walk_files(work_dir):
+        if not is_elf_file(member):
+            continue
+        # CRITICAL: never strip an ELF that already carries an RPATH/RUNPATH -- it
+        # was patchelf'd (and stripped first) in its build script. Stripping AFTER
+        # patchelf corrupts .dynstr/.gnu.version placement, producing "no version
+        # information available" / "undefined symbol: , version" at runtime. This is
+        # the same guard process_bzip2 applies; runtime tars (node, octave .oct libs,
+        # lua-language-server, nvim-qt, ...) are full of patchelf'd binaries.
+        if elf_has_rpath(member):
+            continue
+        strip_file(strip_bin, member)
+        tar_stripped += 1
+
+    tmp_out = out_path + ".tmp"
+    with tarfile.open(tmp_out, "w:bz2") as tf:
+        add_tree_to_tar(tf, work_dir)
+    os.rename(tmp_out, out_path)
+    if tar_path != out_path:
+        os.unlink(tar_path)
+
+    after_size = file_size(out_path)
+    print(
+        f"rewrote tar.bz2: {tar_path} -> {out_path} ({before_size} -> {after_size} bytes, stripped {tar_stripped} ELF files)"
+    )
+    stats["rewritten_tar"] += 1
+    stats["stripped"] += tar_stripped
+    # Auto-chunk if the output exceeds the GitHub size threshold.
+    n_chunks = split_large_file(out_path)
+    if n_chunks:
+        mb = CHUNK_THRESHOLD // (1024 * 1024)
+        print(f"  chunked: {out_path} -> {n_chunks} x {mb} MiB parts")
+        manifest.record_tar(out_rel + ".part-000", out_path + ".part-000")
+    else:
+        manifest.record_tar(out_rel, out_path)
+    shutil.rmtree(work_dir)
+
+
+@click.command(
+    name="strip-all-elf-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--dry-run", "dry_run", is_flag=True, help="Show what would be stripped/chunked.")
+@click.option(
+    "--strip",
+    "strip_bin",
+    default=lambda: os.environ.get("STRIP", "strip"),
+    show_default="strip (or $STRIP)",
+    help="Path to the strip executable.",
+)
+@click.option("--no-manifest", "no_manifest", is_flag=True, help="Ignore manifest and strip unconditionally.")
+@click.option(
+    "--chunk-only",
+    "chunk_only",
+    is_flag=True,
+    help="Only split large files (>40 MiB) into chunks; skip all ELF stripping.",
+)
+def main(dry_run, strip_bin, no_manifest, chunk_only):
+    """Strip ELF payloads anywhere in this repository.
+
+    Behaviour:
+      - Raw ELF files are stripped in place.
+      - Standalone *.bz2 files are stripped if their decompressed payload is ELF.
+      - Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
+      - .git is skipped.
+    """
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if chunk_only:
+        n = chunk_large_payload(repo_dir, dry_run)
+        verb = "would chunk" if dry_run else "chunked"
+        print(f"{verb}: {n} file(s)")
+        return
+
+    if not command_exists(strip_bin):
+        eprint(f"Error: strip executable not found: {strip_bin}")
+        sys.exit(1)
+
+    manifest = Manifest(repo_dir, not no_manifest)
+    manifest.load()
+    tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir=os.environ.get("TMPDIR", "/tmp"))
+    stats = {
+        "processed": 0,
+        "stripped": 0,
+        "rewritten_tar": 0,
+        "skipped_manifest": 0,
+        "skipped_nonelf": 0,
+    }
+
+    try:
+        for path in list(walk_files(repo_dir)):
+            if is_tar_path(path):
+                if is_nostrip_archive(path):
+                    print(f"skip nostrip archive: {path}")
+                    continue
+                process_tar(repo_dir, manifest, strip_bin, path, tmp_dir, dry_run, stats)
+
+        for path in list(walk_files(repo_dir)):
+            if path.endswith(".bz2") and not path.endswith(".tar.bz2"):
+                process_bzip2(repo_dir, manifest, strip_bin, path, tmp_dir, dry_run, stats)
+
+        manifest_names = {manifest.path, manifest.legacy_path}
+        for path in list(walk_files(repo_dir)):
+            if path in manifest_names or path.endswith(".bz2") or is_archive_name(path):
+                continue
+            if is_elf_file(path):
+                process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats)
+
+        # Chunk any remaining large files (wheels, etc.) not handled by the strip passes.
+        chunk_large_payload(repo_dir, dry_run)
+
+        manifest.save(dry_run)
+    finally:
+        shutil.rmtree(tmp_dir)
+
+    skipped = stats["skipped_manifest"] + stats["skipped_nonelf"]
+    print(
+        "Processed: {processed}, stripped ELF files: {stripped}, rewritten tar archives: {rewritten_tar}, skipped: {skipped} (manifest: {skipped_manifest}, non-ELF bzip2: {skipped_nonelf})".format(
+            skipped=skipped, **stats
+        )
+    )
+
+    # Regenerate the content manifest so install-time --verify always reflects
+    # the final on-disk bytes (post-strip, post-chunk). Skipped on --chunk-only
+    # (a partial pass) and dry runs.
+    if not dry_run and not chunk_only:
+        gen = os.path.join(repo_dir, "build", "gen-content-manifest")
+        if os.path.isfile(gen):
+            subprocess.run([sys.executable, gen], check=False)
+
+
+if __name__ == "__main__":
+    main()

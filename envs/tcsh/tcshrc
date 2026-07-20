@@ -1,0 +1,30 @@
+# Loadout tcsh entry point.  ~/.tcshrc and ~/.cshrc link here.
+#
+# This environment is a deliberate ONE-TIME port of the bash environment. It does
+# NOT track envs/bash/ and there is no drift test between the two -- see
+# envs/tcsh/README.md before "fixing" anything that looks out of date.
+#
+# csh has no functions, so most of envs/bash/functions.sh is intentionally absent.
+#
+# Layers are sourced lowest-first: global -> corp -> site -> team -> project -> user.
+# Every source is guarded: a missing layer is normal, not an error, and must stay
+# silent.
+
+set _loadout_tcsh_dir = "$HOME/.config/tcsh"
+
+# Pass 1: LOADOUT_CFG_* preferences for every layer.
+foreach _loadout_layer (global corp site team project user)
+    if ( -r "${_loadout_tcsh_dir}/${_loadout_layer}/config.csh" ) then
+        source "${_loadout_tcsh_dir}/${_loadout_layer}/config.csh"
+    endif
+end
+
+# Pass 2: the shell config itself (PATH, aliases, prompt).
+foreach _loadout_layer (global corp site team project user)
+    if ( -r "${_loadout_tcsh_dir}/${_loadout_layer}/tcshrc" ) then
+        source "${_loadout_tcsh_dir}/${_loadout_layer}/tcshrc"
+    endif
+end
+
+unset _loadout_layer
+unset _loadout_tcsh_dir

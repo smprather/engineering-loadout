@@ -1,0 +1,44 @@
+"$schema" = "https://starship.rs/config-schema.json"
+
+add_newline = false
+scan_timeout = 100
+format = """
+(${custom.username}$hostname$git_branch$git_status$cmd_duration$python\n)$directory
+$character"""
+
+[custom.username]
+when = 'if ($env:LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT -split "\s+" -contains $env:USERNAME) { exit 0 } else { exit 1 }'
+command = 'Write-Output $env:USERNAME'
+format = "[$output]($style) "
+style = "bold yellow"
+
+[hostname]
+ssh_only = true
+style = "bold green"
+format = "[@$hostname]($style) "
+
+[directory]
+truncation_length = 0
+truncate_to_repo = false
+style = "bold cyan"
+format = "[$path]($style) "
+
+[git_branch]
+style = "bold blue"
+
+[git_status]
+style = "bold yellow"
+
+[cmd_duration]
+min_time = 2000
+style = "bold violet"
+format = "[took $duration]($style) "
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[python]
+symbol = "🐍"
+format = '[${symbol}${pyenv_prefix}(${version})(\($virtualenv\))](bold yellow) '
+pyenv_prefix = "venv "

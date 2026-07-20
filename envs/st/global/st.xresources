@@ -1,0 +1,103 @@
+! st -- loadout global layer.  Managed by the loadout; edit the USER layer instead:
+!   ~/.config/st/user/st.xresources
+!
+! Layers merge in this order, later wins:
+!   global -> corp -> site -> team -> project -> user
+! Apply changes to running windows:  st-reload   (or Ctrl+Shift+R inside st)
+!
+! ---- Fonts bundled by loadout (exact Xft strings; generated -- do not edit) ----
+! BEGIN generated font list
+!   st.font: CaskaydiaCove Nerd Font:size=12          (CascadiaCode.zip)
+!   st.font: CaskaydiaCove Nerd Font Mono:size=12     (CascadiaCode.zip)
+!   st.font: CaskaydiaCove Nerd Font Propo:size=12    (CascadiaCode.zip)
+!   st.font: DejaVuSansM Nerd Font:size=12            (DejaVuSansMono.zip)
+!   st.font: DejaVuSansM Nerd Font Mono:size=12       (DejaVuSansMono.zip)
+!   st.font: DejaVuSansM Nerd Font Propo:size=12      (DejaVuSansMono.zip)
+!   st.font: EnvyCodeR Nerd Font:size=12
+!   st.font: EnvyCodeR Nerd Font Mono:size=12
+!   st.font: EnvyCodeR Nerd Font Propo:size=12
+!   st.font: FiraCode Nerd Font:size=12
+!   st.font: FiraCode Nerd Font Mono:size=12
+!   st.font: FiraCode Nerd Font Propo:size=12
+!   st.font: Hack Nerd Font:size=12
+!   st.font: Hack Nerd Font Mono:size=12
+!   st.font: Hack Nerd Font Propo:size=12
+!   st.font: Inconsolata Nerd Font:size=12
+!   st.font: Inconsolata Nerd Font Mono:size=12
+!   st.font: Inconsolata Nerd Font Propo:size=12
+!   st.font: IosevkaTerm Nerd Font:size=12
+!   st.font: IosevkaTerm Nerd Font Mono:size=12
+!   st.font: IosevkaTerm Nerd Font Propo:size=12
+!   st.font: JetBrainsMono Nerd Font:size=12
+!   st.font: JetBrainsMono Nerd Font Mono:size=12
+!   st.font: JetBrainsMono Nerd Font Propo:size=12
+!   st.font: JetBrainsMonoNL Nerd Font:size=12
+!   st.font: JetBrainsMonoNL Nerd Font Mono:size=12
+!   st.font: JetBrainsMonoNL Nerd Font Propo:size=12
+!   st.font: MesloLGL Nerd Font:size=12
+!   st.font: MesloLGL Nerd Font Mono:size=12
+!   st.font: MesloLGL Nerd Font Propo:size=12
+!   st.font: MesloLGLDZ Nerd Font:size=12
+!   st.font: MesloLGLDZ Nerd Font Mono:size=12
+!   st.font: MesloLGLDZ Nerd Font Propo:size=12
+!   st.font: MesloLGM Nerd Font:size=12
+!   st.font: MesloLGM Nerd Font Mono:size=12
+!   st.font: MesloLGM Nerd Font Propo:size=12
+!   st.font: MesloLGMDZ Nerd Font:size=12
+!   st.font: MesloLGMDZ Nerd Font Mono:size=12
+!   st.font: MesloLGMDZ Nerd Font Propo:size=12
+!   st.font: MesloLGS Nerd Font:size=12
+!   st.font: MesloLGS Nerd Font Mono:size=12
+!   st.font: MesloLGS Nerd Font Propo:size=12
+!   st.font: MesloLGSDZ Nerd Font:size=12
+!   st.font: MesloLGSDZ Nerd Font Mono:size=12
+!   st.font: MesloLGSDZ Nerd Font Propo:size=12
+!   st.font: RobotoMono Nerd Font:size=12
+!   st.font: RobotoMono Nerd Font Mono:size=12
+!   st.font: RobotoMono Nerd Font Propo:size=12
+!   st.font: SauceCodePro Nerd Font:size=12           (SourceCodePro.zip)
+!   st.font: SauceCodePro Nerd Font Mono:size=12      (SourceCodePro.zip)
+!   st.font: SauceCodePro Nerd Font Propo:size=12     (SourceCodePro.zip)
+!   st.font: UbuntuMono Nerd Font:size=12
+!   st.font: UbuntuMono Nerd Font Mono:size=12
+!   st.font: UbuntuMono Nerd Font Propo:size=12
+! END generated font list
+!
+! Suffixes: plain "Nerd Font" = icons keep their natural width; "Nerd Font Mono"
+! = icons squeezed into one cell (safest in a terminal -- nothing overlaps);
+! "Nerd Font Propo" = proportional icons. Pick Mono if a glyph ever clips.
+!
+! Syntax: <family>:size=<pt>[:style=Bold][:antialias=true][:autohint=false]
+! Check what X actually resolves:  fc-match 'JetBrainsMono Nerd Font'
+! List every installed family:     fc-list : family | sort -u
+
+st.font: JetBrainsMono Nerd Font:size=12
+
+! ---- Colors: tokyonight (matches the nvim colorscheme and starship) ----
+! Accepts #rrggbb or an X color name.
+st.background:  #1a1b26
+st.foreground:  #c0caf5
+st.cursorColor: #c0caf5
+
+st.color0:  #15161e
+st.color1:  #f7768e
+st.color2:  #9ece6a
+st.color3:  #e0af68
+st.color4:  #7aa2f7
+st.color5:  #bb9af7
+st.color6:  #7dcfff
+st.color7:  #a9b1d6
+st.color8:  #414868
+st.color9:  #f7768e
+st.color10: #9ece6a
+st.color11: #e0af68
+st.color12: #7aa2f7
+st.color13: #bb9af7
+st.color14: #7dcfff
+st.color15: #c0caf5
+
+! ---- Behavior ----
+st.cursorshape: 2
+! Mute the audible bell. st's compiled default is already 0, but state it
+! explicitly so a user who wants a bell knows the knob exists.
+st.bellvolume: 0

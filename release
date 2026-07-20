@@ -1,0 +1,425 @@
+#!/usr/bin/env python3
+"""
+release: run pre-release gates, then create a GitHub release.
+
+Usage:
+    ./release                  # tag today's date, create release
+    ./release --tag v2026.05.12
+    ./release --dry-run        # run gates only, no tag or GitHub release
+    ./release --skip-scan      # skip the malware scan (NOT recommended; for a
+                               # known yara false positive only)
+
+Every release runs independent pre-release gates in parallel: malware scan,
+binary smoke test, version table, and checksum generation. The final tag and
+GitHub release step runs only after the mandatory gates pass.
+
+The tag is date-based (v<YYYY.MM.DD>). Re-running on the same day REPLACES the
+existing release and tag with the current tree, rather than failing on the
+collision -- a given day's release is always the latest state.
+
+Requires: gh (GitHub CLI) authenticated, git repo with remote set.
+"""
+
+import concurrent.futures
+import datetime
+import hashlib
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+
+def run(cmd, **kwargs):
+    return subprocess.run(cmd, **kwargs)
+
+
+SHA256SUMS_NAME = "sha256sums.txt"
+STEP_SCAN_TITLE = "Step 0: Scanning bundled binaries for malware (YARA-Forge)"
+STEP_SMOKE_TITLE = "Step 1: Smoke-testing pre-built binaries"
+STEP_VERSIONS_TITLE = "Step 2: Generating version table"
+STEP_CHECKSUMS_TITLE = f"Step 3: Generating {SHA256SUMS_NAME} + checksum table"
+
+
+@dataclass
+class StepResult:
+    name: str
+    title: str
+    returncode: int = 0
+    output: str = ""
+    data: object = None
+
+
+def _signing_configured():
+    """True when git has a signing key configured (SSH or GPG)."""
+    r = subprocess.run(["git", "config", "--get", "user.signingkey"], capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() != ""
+
+
+def _sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# Integrity-critical, in-tree files a downloader can verify without pulling the
+# multi-GB source archive. `.content-manifest` in turn pins the SHA-256 of every
+# payload file, so its single hash transitively binds the whole tree.
+INTEGRITY_TARGETS = [
+    ".content-manifest",
+    "loadout",
+    "loadout_main.py",
+    "payload/packages.json",
+    # The nvim plugin stash is NOT in .content-manifest (it is a release asset, not a git
+    # payload), so its hash must be published here directly -- this is the link
+    # ./fetch-stash checks before the installer will accept the downloaded bytes.
+    "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2",
+]
+
+
+def _integrity_hashes(script_dir):
+    """[(repo-relative path, sha256)] for each integrity target that exists."""
+    pairs = []
+    for rel in INTEGRITY_TARGETS:
+        full = os.path.join(script_dir, rel)
+        if os.path.isfile(full):
+            pairs.append((rel, _sha256_file(full)))
+    return pairs
+
+
+def _write_sha256sums(script_dir, pairs):
+    """Write sha256sums.txt (coreutils `sha256sum -c` format) from PAIRS so the
+    file and the release-notes table share one source of truth."""
+    out = os.path.join(script_dir, SHA256SUMS_NAME)
+    with open(out, "w") as fh:
+        for rel, digest in pairs:
+            fh.write(f"{digest}  {rel}\n")
+    return out
+
+
+def _checksum_table_md(pairs):
+    """Markdown table of PAIRS for the GitHub release notes (renders on-page)."""
+    lines = [
+        "## Asset checksums (SHA-256)",
+        "",
+        "Integrity-critical files pinned by this release. `.content-manifest` in "
+        "turn pins every payload file, so verifying it (or running "
+        "`./loadout doctor --verify`) covers the whole tree.",
+        "",
+        "| File | SHA-256 |",
+        "|------|---------|",
+    ]
+    for rel, digest in pairs:
+        lines.append(f"| `{rel}` | `{digest}` |")
+    return "\n".join(lines)
+
+
+def _version_table_from_tsv(versions_tsv):
+    """Markdown release-notes table from farm-versions TSV output."""
+    lines = [row for row in versions_tsv.splitlines() if row.strip()]
+    md_rows = []
+    for line in lines[1:]:  # skip header
+        parts = line.split("\t")
+        if len(parts) >= 5 and parts[2]:  # skip missing
+            binary, name, version, _status, homepage = parts[0], parts[1], parts[2], parts[3], parts[4]
+            md_rows.append(f"| [{name}]({homepage}) | `{binary}` | {version} |")
+
+    if not md_rows:
+        return ""
+
+    version_table = "\n## Pre-built binary versions\n\n"
+    version_table += "| Tool | Binary | Version |\n"
+    version_table += "|------|--------|--------|\n"
+    version_table += "\n".join(md_rows)
+    return version_table
+
+
+def _print_heading(title):
+    print("=" * 60)
+    print(title)
+    print("=" * 60, flush=True)
+
+
+def _emit_step_result(result):
+    print()
+    _print_heading(result.title)
+    if result.output:
+        print(result.output, end="" if result.output.endswith("\n") else "\n")
+    if result.returncode == 0:
+        print(f"  {result.name}: passed", flush=True)
+    else:
+        print(f"  {result.name}: failed with exit {result.returncode}", file=sys.stderr, flush=True)
+
+
+def _command_step(name, title, cmd):
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return StepResult(name=name, title=title, returncode=proc.returncode, output=proc.stdout)
+
+
+def _skip_scan_step(script_dir, tag):
+    _record_skip_scan_justification(script_dir, tag)
+    return StepResult(
+        name="malware scan",
+        title=STEP_SCAN_TITLE,
+        output="SKIPPED via --skip-scan (not recommended).\n",
+    )
+
+
+def _version_step(farm_versions):
+    proc = subprocess.run(
+        [farm_versions, "--format", "tsv"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        output = "  WARNING: version table generation failed; release notes omit tool versions.\n"
+        if proc.stderr:
+            output += proc.stderr
+        return StepResult(name="version table", title=STEP_VERSIONS_TITLE, output=output, data="")
+
+    version_table = _version_table_from_tsv(proc.stdout)
+    row_count = max(0, len([row for row in proc.stdout.splitlines() if row.strip()]) - 1)
+    return StepResult(
+        name="version table",
+        title=STEP_VERSIONS_TITLE,
+        output=f"  collected {row_count} version rows\n",
+        data=version_table,
+    )
+
+
+def _checksum_step(script_dir):
+    pairs = _integrity_hashes(script_dir)
+    sums_path = _write_sha256sums(script_dir, pairs)
+    return StepResult(
+        name="checksums",
+        title=STEP_CHECKSUMS_TITLE,
+        output=f"  wrote {sums_path} ({len(pairs)} files)\n",
+        data={"pairs": pairs, "sums_path": sums_path},
+    )
+
+
+def _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan):
+    """Run all independent pre-release steps concurrently."""
+    _print_heading("Starting independent pre-release steps in parallel")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {}
+        if skip_scan:
+            future = executor.submit(_skip_scan_step, script_dir, tag)
+        else:
+            future = executor.submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan])
+        futures[future] = ("malware scan", STEP_SCAN_TITLE)
+
+        future = executor.submit(_command_step, "binary smoke test", STEP_SMOKE_TITLE, [smoke_test])
+        futures[future] = ("binary smoke test", STEP_SMOKE_TITLE)
+
+        future = executor.submit(_version_step, farm_versions)
+        futures[future] = ("version table", STEP_VERSIONS_TITLE)
+
+        future = executor.submit(_checksum_step, script_dir)
+        futures[future] = ("checksums", STEP_CHECKSUMS_TITLE)
+
+        results = {}
+        for future in concurrent.futures.as_completed(futures):
+            name, title = futures[future]
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - release gate must surface any worker failure.
+                result = StepResult(name=name, title=title, returncode=1, output=f"{exc}\n")
+            _emit_step_result(result)
+            results[result.name] = result
+
+    return results
+
+
+def _verify_section_md(tag, signing):
+    """Copy-paste verification steps for the release notes."""
+    steps = [
+        "## Verifying this release",
+        "",
+        "```sh",
+        "# from a checkout of the tag (or an extracted source archive):",
+        "sha256sum -c sha256sums.txt     # pins the integrity-critical files above",
+        "./loadout doctor --verify       # re-hashes every payload file vs .content-manifest",
+    ]
+    if signing:
+        steps.append(f"git tag -v {tag}                # verify the SSH-signed tag")
+    steps.append("```")
+    return "\n".join(steps)
+
+
+def _replace_existing_release(tag):
+    """Project policy: a given day's release is always the latest state, and the
+    tag is date-based (v<YYYY.MM.DD>), so a same-day re-run must REPLACE any
+    existing release/tag rather than fail on the collision. Tears down the
+    GitHub release (and its assets) and the remote+local tag; a no-op for a
+    brand-new tag."""
+    exists = subprocess.run(["gh", "release", "view", tag], capture_output=True, text=True)
+    if exists.returncode == 0:
+        print(f"  replacing existing GitHub release {tag} ...")
+        subprocess.run(["gh", "release", "delete", tag, "--yes"])
+    # Remove the remote then local tag; ignore absence (fresh tag, or release
+    # existed without a pushed tag).
+    subprocess.run(["git", "push", "origin", "--delete", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["git", "tag", "-d", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _record_skip_scan_justification(script_dir, tag):
+    """--skip-scan bypasses the malware gate; record that it happened so the
+    ledger has an audit trail rather than a silent skip."""
+    log = os.path.join(script_dir, "assurance", "downloads.log")
+    try:
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        with open(log, "a") as fh:
+            date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fh.write(f"{date}\tRELEASE-SKIP-SCAN\ttag={tag or '(auto)'} -- malware scan bypassed via --skip-scan\n")
+    except OSError:
+        pass
+
+
+@click.command(
+    name="release",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--tag", default=None, metavar="TAG", help="Release tag (default: v<today YYYY.MM.DD>).")
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help="Run pre-release gates only; skip tagging and GitHub release.",
+)
+@click.option(
+    "--skip-scan",
+    "skip_scan",
+    is_flag=True,
+    help="Skip the YARA malware scan (NOT recommended; only for a known false positive).",
+)
+def main(tag, dry_run, skip_scan):
+    """Run pre-release gates, then create a GitHub release.
+
+    The malware scan, binary smoke test, version table, and checksum generation
+    are independent and run in parallel. The tag/release step waits for them and
+    aborts when a mandatory gate fails.
+
+    Requires: gh (GitHub CLI) authenticated, git repo with remote set.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    smoke_test = os.path.join(script_dir, "tests", "prebuilt-binaries")
+    farm_versions = os.path.join(script_dir, "build", "farm-versions")
+    malware_scan = os.path.join(script_dir, "scan-for-malware")
+    tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
+
+    results = _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan)
+
+    scan_result = results["malware scan"]
+    if scan_result.returncode != 0:
+        print("\nRelease blocked: malware scan reported detections (or failed).", file=sys.stderr)
+        print("Investigate every hit before releasing. Override with --skip-scan only", file=sys.stderr)
+        print("if you have confirmed it is a YARA false positive.", file=sys.stderr)
+        sys.exit(1)
+
+    smoke_result = results["binary smoke test"]
+    if smoke_result.returncode != 0:
+        print("\nRelease blocked: binary smoke test failed.", file=sys.stderr)
+        print("Fix failing binaries before releasing.", file=sys.stderr)
+        sys.exit(1)
+
+    checksum_result = results["checksums"]
+    if checksum_result.returncode != 0:
+        print("\nRelease blocked: checksum generation failed.", file=sys.stderr)
+        sys.exit(1)
+
+    if dry_run:
+        print("\nDry run -- pre-release gates passed. Skipping tag and GitHub release.")
+        return
+
+    version_table = results["version table"].data or ""
+    pairs = checksum_result.data["pairs"]
+    sums_path = checksum_result.data["sums_path"]
+
+    # Sign the tag when a signing key is configured (SSH or GPG); otherwise
+    # create an unsigned tag and warn. Uploading the key is a one-time owner
+    # step -- see docs/SECURITY.md section 6. Computed here because the notes
+    # reference the signed-tag verification step.
+    signing = _signing_configured()
+
+    notes = "\n\n".join(
+        section
+        for section in (
+            "All pre-built binaries passed smoke test.",
+            _checksum_table_md(pairs),
+            _verify_section_md(tag, signing),
+            version_table.strip(),
+        )
+        if section
+    )
+
+    # Assets: the sums file plus the content manifest itself, so a downloader can
+    # verify the full payload tree without cloning the multi-GB source archive.
+    assets = [sums_path]
+    content_manifest = os.path.join(script_dir, ".content-manifest")
+    if os.path.isfile(content_manifest):
+        assets.append(content_manifest)
+
+    # The nvim plugin stash rides as an ASSET, not a git payload: it is ~328 MB of bz2'd
+    # git packfiles, so committing it added ~328 MB to history on EVERY refresh,
+    # permanently. Its sha256 is in sha256sums.txt above, which this signed tag covers --
+    # that is the chain ./fetch-stash verifies before the installer will touch the bytes.
+    stash = os.path.join(script_dir, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+    if os.path.isfile(stash):
+        assets.append(stash)
+        print(f"  attaching nvim plugin stash ({os.path.getsize(stash) // 1048576} MB)")
+    else:
+        print("  NOTE: no nvim-plugin-stash.tar.bz2 -- releasing without it.")
+        print("        Users will get nvim with no plugins. Build it with")
+        print("        build/build-nvim-plugin-stash if that is not what you want.")
+
+    print()
+    _print_heading(f"Step 4: Creating tag and GitHub release: {tag}")
+
+    # Same-day releases replace the existing one (date-based tag).
+    _replace_existing_release(tag)
+
+    tag_cmd = ["git", "tag", "-s" if signing else "-a", tag, "-m", tag]
+    if not signing:
+        print("  WARNING: no commit/tag signing key configured (user.signingkey);")
+        print("  creating an UNSIGNED annotated tag. Configure SSH signing to make")
+        print("  the content-manifest trust chain tamper-evident (docs/SECURITY.md).")
+    result = run(tag_cmd)
+    if result.returncode != 0:
+        print("git tag failed.", file=sys.stderr)
+        sys.exit(1)
+
+    result = run(["git", "push", "origin", tag])
+    if result.returncode != 0:
+        print("git push tag failed.", file=sys.stderr)
+        sys.exit(1)
+
+    result = run(["gh", "release", "create", tag, "--title", tag, "--notes", notes, *assets])
+    if result.returncode != 0:
+        print("gh release create failed.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\nRelease {tag} created" + (" (signed tag)." if signing else " (UNSIGNED tag)."))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,35 @@
+# Assurance record -- see assurance/README.md for the schema.
+# Validated by tests/assurance-check (re-hashes [artifacts] + checks the lock).
+schema = 1
+package = "treesitter-parsers"
+version = "ts-0.26.8"  # tree-sitter runtime; grammars pinned per-parser (see [parsers])
+verified_utc = "2026-07-07T03:50:29Z"
+status = "verified"  # grammar commits pinned + shipped .so hashes recorded + scan clean
+
+[source]
+upstream = "nvim-treesitter (vendored) parser registry"
+ref = "vendored parsers.lua install_info per grammar"
+dep_pinning = "each grammar is commit-pinned in parsers.lua (install_info.revision); build_parsers builds at those revisions. assurance/treesitter-parser-locks.json records url+revision+shipped-.so-sha256 for 318 grammars."
+
+[build]
+script = "build/treesitter/build_parsers"
+policy = "builds every grammar in the vendored registry at its pinned revision"
+
+[scan]
+engine = "scan-for-malware (YARA-Forge + optional ClamAV)"
+yara_forge_tag = "20260524"
+result = "clean"
+
+[parsers]
+lock = "assurance/treesitter-parser-locks.json"
+generator = "build/gen-parser-locks"
+count = 318
+
+[artifacts]
+# The pin source: parsers.lua carries every grammar's commit. The 318 shipped
+# .so.bz2 hashes live in the parser-locks JSON above (also under the signed tag).
+"payload/treesitter/vendor/nvim-treesitter/lua/nvim-treesitter/parsers.lua" = "sha256:7f27dba213500accc0add5b97085b8cf38658ae38315e819190b10fa95687b0c"
+
+[dynamic]
+profile = "assurance/profiles/nvim.toml"
+result = "covered"  # parser .so loading + a Tree-sitter parse of the canary run inside the nvim dynamic profile (network-isolated container)

@@ -1,0 +1,182 @@
+name: Test Core
+
+on:
+  workflow_call:
+    inputs:
+      type:
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  check_compilation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        nvim_tag: [stable, nightly]
+    name: ${{matrix.nvim_tag}} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    env:
+      NVIM: ${{ matrix.os == 'windows-latest' && 'nvim-win64\\bin\\nvim.exe' || 'nvim' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: tree-sitter/setup-action/cli@v2
+
+      - name: Install and prepare Neovim
+        env:
+          NVIM_TAG: ${{ matrix.nvim_tag }}
+        run: |
+          bash ./scripts/ci-install.sh
+
+      - name: Install test dependencies
+        env:
+          # For PRs use the head branch; for pushes use the ref name.
+          # The Makefile probes the registry remote for a matching branch
+          # and falls back to main if it doesn't exist.
+          REGISTRY_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: make registry REGISTRY_BRANCH=$REGISTRY_BRANCH
+
+      - if: inputs.type == 'build'
+        name: Compile parsers
+        env:
+          REGISTRY: .test-deps/treesitter-parser-registry
+        run: $NVIM --clean -u scripts/minimal_init.lua -l scripts/install-parsers.lua --max-jobs=10
+
+      - if: inputs.type == 'generate'
+        name: Generate and compile parsers
+        env:
+          REGISTRY: .test-deps/treesitter-parser-registry
+        run: $NVIM --clean -u scripts/minimal_init.lua -l scripts/install-parsers.lua --generate --max-jobs=2
+
+      - name: Check parsers
+        env:
+          REGISTRY: .test-deps/treesitter-parser-registry
+        run: $NVIM --clean -u scripts/minimal_init.lua -l ./scripts/check-parsers.lua
+
+      - name: Check queries (nvim)
+        continue-on-error: true
+        env:
+          REGISTRY: .test-deps/treesitter-parser-registry
+        run: $NVIM --clean -u scripts/minimal_init.lua -l ./scripts/check-queries.lua
+
+      - name: Check queries (tsqueryls)
+        if: ${{ matrix.os != 'windows-latest' }}
+        continue-on-error: true
+        run: |
+          make checkquery 2>&1 | tee /tmp/test-checkquery.log
+          echo "${PIPESTATUS[0]}" > /tmp/test-checkquery.exit
+
+      - name: Run highlight tests
+        if: ${{ matrix.os != 'windows-latest' }}
+        continue-on-error: true
+        run: |
+          make tests TESTS=query NVIM_BIN=$NVIM 2>&1 | tee /tmp/test-query.log
+          echo "${PIPESTATUS[0]}" > /tmp/test-query.exit
+
+      - name: Run indents tests
+        if: ${{ matrix.os != 'windows-latest' }}
+        continue-on-error: true
+        run: |
+          make tests TESTS=indent NVIM_BIN=$NVIM 2>&1 | tee /tmp/test-indent.log
+          echo "${PIPESTATUS[0]}" > /tmp/test-indent.exit
+
+      - name: Run installer tests
+        if: ${{ matrix.os != 'windows-latest' }}
+        continue-on-error: true
+        run: |
+          make tests TESTS=install NVIM_BIN=$NVIM 2>&1 | tee /tmp/test-install.log
+          echo "${PIPESTATUS[0]}" > /tmp/test-install.exit
+
+      - name: Summarize test results
+        if: ${{ matrix.os != 'windows-latest' && always() }}
+        run: |
+          # Strip ANSI escape sequences from a string
+          strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+          # Parse a plentest log and append rows to the summary table.
+          # Usage: parse_log <suite-name> <log-file>
+          parse_log() {
+            local suite="$1"
+            local log="$2"
+            [[ -f "$log" ]] || return
+
+            # plentest prints lines like:
+            #   <ESC>[32mSuccess<ESC>[0m || <ESC>[0m  describe-block test-name
+            #   <ESC>[31mFail<ESC>[0m    || <ESC>[0m  describe-block test-name
+            # We strip ANSI codes then match on the literal words Success/Fail.
+            local prev_status=""
+            local prev_name=""
+            while IFS= read -r raw_line; do
+              local line
+              line=$(printf '%s' "$raw_line" | strip_ansi)
+
+              if [[ "$line" =~ ^(Success|Fail)[[:space:]]*\|\|[[:space:]]*(.*) ]]; then
+                # Flush the previous entry (no error line follows Success)
+                if [[ -n "$prev_status" ]]; then
+                  echo "| $suite | $prev_name | $prev_status | |" >> "$GITHUB_STEP_SUMMARY"
+                fi
+                prev_status="${BASH_REMATCH[1]}"
+                prev_name="${BASH_REMATCH[2]}"
+              elif [[ -n "$prev_status" && "$prev_status" == "Fail" && -n "$line" && ! "$line" =~ ^=+ ]]; then
+                # First non-empty, non-header line after a Fail is the error message.
+                # Trim leading whitespace, escape pipes so the table stays valid.
+                local err
+                err=$(printf '%s' "$line" | sed 's/^[[:space:]]*//' | sed 's/|/\\|/g')
+                echo "| $suite | $prev_name | :x: Fail | \`$err\` |" >> "$GITHUB_STEP_SUMMARY"
+                prev_status=""
+                prev_name=""
+              else
+                # Flush a dangling entry (e.g. Success with no following error)
+                if [[ -n "$prev_status" ]]; then
+                  local icon=":white_check_mark: Pass"
+                  [[ "$prev_status" == "Fail" ]] && icon=":x: Fail"
+                  echo "| $suite | $prev_name | $icon | |" >> "$GITHUB_STEP_SUMMARY"
+                  prev_status=""
+                  prev_name=""
+                fi
+              fi
+            done < "$log"
+
+            # Flush any final pending entry
+            if [[ -n "$prev_status" ]]; then
+              local icon=":white_check_mark: Pass"
+              [[ "$prev_status" == "Fail" ]] && icon=":x: Fail"
+              echo "| $suite | $prev_name | $icon | |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          {
+            echo "## Test Results"
+            echo ""
+            echo "| Suite | Test | Status | Error |"
+            echo "|-------|------|--------|-------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          parse_log "checkquery" /tmp/test-checkquery.log
+          parse_log "query"   /tmp/test-query.log
+          parse_log "indent"  /tmp/test-indent.log
+          parse_log "install" /tmp/test-install.log
+
+      - name: Check test results
+        if: ${{ matrix.os != 'windows-latest' && always() }}
+        run: |
+          failed=0
+          for f in /tmp/test-checkquery.exit /tmp/test-query.exit /tmp/test-indent.exit /tmp/test-install.exit; do
+            [[ -f "$f" ]] || continue
+            code=$(cat "$f")
+            if [[ "$code" != "0" ]]; then
+              echo "::error::Test suite $(basename "$f" .exit) failed with exit code $code"
+              failed=1
+            fi
+          done
+          exit $failed

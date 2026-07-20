@@ -1,0 +1,17 @@
+line-length = 120
+
+# Installer body and post-install scripts run under bundled Python 3.14
+# (via the POSIX-sh `loadout` shim and `~/.local/bin/python3.14` after
+# install). Meld's launcher (`bin/meld`) is the only py3.6 holdout -- its
+# shanghai bundle is shipped pre-built and not source-managed here.
+target-version = "py314"
+
+[lint]
+select = ["I", "UP"]
+
+exclude = [
+    "installer_vendor/",
+    "treesitter/vendor/",
+    "treesitter/src/",
+    "bash/global/github.scop.bash-completion/",
+]

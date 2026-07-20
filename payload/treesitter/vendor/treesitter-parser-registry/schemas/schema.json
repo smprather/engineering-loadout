@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/neovim-treesitter/treesitter-parser-registry/main/schemas/schema.json",
+  "title": "treesitter-parser-registry schema",
+  "description": "Validates registry.json entries and query-repo parser.json manifests",
+  "$defs": {
+    "semverTag": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+    },
+    "gitUri": {
+      "type": "string",
+      "format": "uri"
+    },
+    "inheritRef": {
+      "description": "Pinned parser version for one inherited lang. The installer uses parser_version as the checkout ref for that lang's parser.",
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url":            { "$ref": "#/$defs/gitUri" },
+        "parser_version": {
+          "description": "Exact git ref (tag or SHA) of the inherited lang's parser these queries are tested against.",
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "parserManifest": {
+      "description": "parser.json inside each query repo or self-contained parser repo root",
+      "type": "object",
+      "required": ["lang"],
+      "properties": {
+        "lang":           { "type": "string" },
+        "url":            { "type": ["string", "null"], "format": "uri" },
+        "location":       { "type": ["string", "null"] },
+        "semver":         { "type": ["boolean", "null"] },
+        "parser_version": {
+          "description": "Exact git ref (tag or SHA) of the parser repo that these queries are tested against. Used as the install target; overrides version discovery.",
+          "type": ["string", "null"]
+        },
+        "queries_only":   { "type": ["boolean", "null"] },
+        "queries_dir": {
+          "description": "Parent directory whose <lang>/ subdirectory contains .scm files (e.g. 'nvim-queries'). Used by self-contained repos and the CI workflow.",
+          "type": ["string", "null"]
+        },
+        "queries_path": {
+          "description": "Direct path to directory containing .scm files. Mutually exclusive with queries_dir.",
+          "type": ["string", "null"]
+        },
+        "test_dir": {
+          "description": "Directory containing highlight assertion test files (e.g. 'tests/highlights'). Used by the self-contained validate workflow.",
+          "type": ["string", "null"]
+        },
+        "generate": {
+          "description": "Set true when the parser repo requires `tree-sitter generate` before compilation (no pre-built src/parser.c).",
+          "type": ["boolean", "null"]
+        },
+        "generate_from_json": {
+          "description": "When generate is true: true = use src/grammar.json, false = use grammar.js.",
+          "type": ["boolean", "null"]
+        },
+        "inherits": {
+          "description": "Pinned parser versions for each inherited lang. Keys are language names matching registry entries. Each value pins the parser ref these queries were tested against.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/inheritRef" }
+        },
+        "inject_deps": {
+          "description": "Languages whose parsers are needed at runtime to satisfy injection queries (e.g. html injects css and javascript). Used by test infrastructure to skip injection assertions when a dependency parser is not installed.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "host_parser": {
+          "description": "For queries_only languages: the parser repo that provides the grammar these queries target. The CI workflow builds this parser and uses parser_aliases to map the queries-only language name to the host language.",
+          "type": "object",
+          "properties": {
+            "lang": {
+              "description": "The host parser's language name (e.g. 'html' for html_tags, 'javascript' for ecma/jsx). Used to name the .so and create a parser_aliases entry.",
+              "type": "string"
+            },
+            "url":            { "$ref": "#/$defs/gitUri" },
+            "parser_version": {
+              "description": "Exact git ref (tag or SHA) of the host parser to build for validation.",
+              "type": ["string", "null"]
+            },
+            "location":       { "type": ["string", "null"] }
+          },
+          "required": ["lang", "url"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "selfContainedSource": {
+      "description": "Parser and queries live in the same upstream repo. Exactly one of queries_path or queries_dir must be set.",
+      "type": "object",
+      "required": ["type", "url", "semver"],
+      "properties": {
+        "type":     { "const": "self_contained" },
+        "url":      { "$ref": "#/$defs/gitUri" },
+        "semver":   { "type": "boolean" },
+        "location": { "type": "string" },
+        "queries_path": {
+          "description": "Path relative to repo root of the directory containing .scm files directly (e.g. 'queries' or 'queries/nvim'). Use when the query dir does not follow the <dir>/<lang>/ pattern.",
+          "type": "string"
+        },
+        "queries_dir": {
+          "description": "Path relative to repo root of the parent directory whose <lang>/ subdirectory contains the .scm files (e.g. 'nvim-queries'). The installer appends /<lang> automatically.",
+          "type": "string"
+        },
+        "generate": {
+          "description": "Set true when the parser repo requires `tree-sitter generate` before compilation. Lives here (not in parser.json) because self_contained has no separate query repo.",
+          "type": "boolean"
+        },
+        "generate_from_json": {
+          "description": "When generate is true: true = use src/grammar.json, false = use grammar.js.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "externalQueriesSource": {
+      "type": "object",
+      "required": ["type", "parser_url", "parser_semver", "queries_url", "queries_semver"],
+      "properties": {
+        "type":             { "const": "external_queries" },
+        "parser_url":       { "$ref": "#/$defs/gitUri" },
+        "parser_semver":    { "type": "boolean" },
+        "parser_location":  { "type": "string" },
+        "queries_url":      { "$ref": "#/$defs/gitUri" },
+        "queries_semver":   { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "queriesOnlySource": {
+      "type": "object",
+      "required": ["type", "url", "semver"],
+      "properties": {
+        "type":   { "const": "queries_only" },
+        "url":    { "$ref": "#/$defs/gitUri" },
+        "semver": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "localSource": {
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type":          { "const": "local" },
+        "path":          { "type": "string" },
+        "queries_path":  { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "registryEntry": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "oneOf": [
+            { "$ref": "#/$defs/selfContainedSource" },
+            { "$ref": "#/$defs/externalQueriesSource" },
+            { "$ref": "#/$defs/queriesOnlySource" },
+            { "$ref": "#/$defs/localSource" }
+          ]
+        },
+        "filetypes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "requires":  { "type": "array", "items": { "type": "string" } },
+        "inject_deps": {
+          "description": "Languages whose parsers are needed at runtime to satisfy injection queries (e.g. html injects css and javascript). Used by test infrastructure to skip injection assertions when a dependency parser is not installed.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "additionalProperties": { "$ref": "#/$defs/registryEntry" }
+}

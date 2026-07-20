@@ -1,0 +1,88 @@
+#!/bin/sh
+set -eu
+
+src=${LOADOUT_SMOKE_SRC:-/src}
+dst=${LOADOUT_SMOKE_WORKDIR:-/work/dotfiles}
+
+if [ ! -d "$src" ]; then
+    echo "ERROR: repo source not found: $src" >&2
+    exit 2
+fi
+
+rm -rf "$dst"
+mkdir -p "$dst"
+
+tar \
+    --exclude=.git \
+    --exclude=.loadout-bootstrap \
+    --exclude=.ruff_cache \
+    --exclude=.claude \
+    --exclude=__pycache__ \
+    --exclude=loadout_backups \
+    --exclude='*.log' \
+    -C "$src" \
+    -cf - . \
+    | tar -C "$dst" -xf -
+
+cd "$dst"
+
+sh -n loadout
+# Use loadout's own bootstrap path. The base image intentionally does not
+# install system Python for the harness.
+./loadout --help >/dev/null
+
+py=.loadout-bootstrap/bin/python3.14
+if [ ! -x "$py" ]; then
+    echo "ERROR: portable Python bootstrap not found: $py" >&2
+    exit 1
+fi
+
+"$py" -m py_compile loadout_main.py tests/prebuilt-binaries
+
+if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
+    # Full mode: exercise the CLI surface and both integration installs in
+    # the clean container before the binary smoke. Everything must behave on
+    # a stock EL8 system -- the build box is not a valid baseline.
+    echo "== full: loadout doctor"
+    ./loadout doctor
+
+    echo "== full: resolver dry-runs"
+    ./loadout resolve @shared > /dev/null
+    ./loadout resolve @shared-all > /dev/null
+    ./loadout resolve @envs > /dev/null
+    ./loadout resolve models > /dev/null
+
+    echo "== full: completion in sync"
+    ./loadout completion bash | diff - envs/bash/global/completions/loadout.bash
+
+    echo "== full: unit + registry tests"
+    "$py" tests/unit-resolver
+    "$py" tests/registry-integrity
+    "$py" tests/tar-safety
+
+    echo "== full: assurance ledger"
+    "$py" tests/assurance-check
+
+    echo "== full: fresh-user temp-HOME install"
+    tests/install-linux-tmp-home
+
+    echo "== full: split shared/envs install"
+    tests/install-split-shared-envs
+
+    echo "== full: Environment Modules fresh-home smoke"
+    tests/install-modules
+fi
+
+if [ "${LOADOUT_SMOKE_DYNAMIC:-0}" = "1" ]; then
+    # Behavioral "detonation" of the pilot tool: install it, then run the
+    # dynamic-analysis harness (canary files + strace) against the installed
+    # binary. Meant to run under `docker run --network none`, so the true
+    # offline path is what gets certified and any network attempt cannot
+    # succeed. strace is installed in the smoke image.
+    echo "== dynamic: install nvim into a dest tree"
+    ./loadout install nvim env-nvim treesitter-parsers --dest-dir /work/dyn --no-backup > /dev/null
+    echo "== dynamic: behavioral analysis (canary + strace, network isolated)"
+    exec "$py" tests/dynamic-analysis --package nvim --bindir /work/dyn/local/bin
+fi
+
+exec "$py" tests/prebuilt-binaries "$@"

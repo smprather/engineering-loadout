@@ -1,0 +1,31 @@
+# Assurance record -- see assurance/README.md for the schema.
+# Validated by tests/assurance-check (re-hashes [artifacts] against disk).
+schema = 1
+package = "rust"
+version = "1.96.0"
+verified_utc = "2026-07-07T03:50:29Z"
+status = "verified"  # repacked upstream rustup stable; content-manifest + scan clean
+
+[source]
+upstream = "https://static.rust-lang.org (rustup stable channel)"
+ref = "1.96.0 stable"
+dep_pinning = "rustup verifies every component against the static.rust-lang.org channel manifest (sha256) at fetch; build-rust.sh only repacks/trims the already-verified toolchain -- no unverified bytes are introduced"
+
+[build]
+script = "build/build-rust.sh"
+policy = "stable channel only; keeps rustc/cargo + std + rust-lld, trims docs/clippy/rustfmt/src"
+
+[scan]
+engine = "scan-for-malware (YARA-Forge + optional ClamAV)"
+yara_forge_tag = "20260524"
+result = "clean"
+
+[artifacts]
+"payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-000" = "sha256:09e0969b0d87fbf4b19e3c35ddc62cbc492cd6f68e73a1562c60a834098e054f"
+"payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-001" = "sha256:b1684f1622cb30d82d0ebe260a3bba29aad30b2a75ed1e60ed5bd5f888ea070f"
+"payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-002" = "sha256:4c1ce763ca1ee8ee406f93bd9bc6982a6cf105906e85c067798dd5efdd4a5527"
+"payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-003" = "sha256:b807054a9eabcf7e6b1966f8c1bb7785fa0bb14e996351f0dce1f4fc62ec6e18"
+"payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-004" = "sha256:57a613fe709e75d99c60f8726dcc3d4b4b7a29a850e386cc10c7275c7e444454"
+
+[dynamic]
+result = "n/a"  # rustc/cargo are compilers; the ransomware-canary model does not apply. The offline toolchain + crate store are exercised end-to-end by tests/rust-offline-almalinux8 (cargo build --offline in the clean container).

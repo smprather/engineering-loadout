@@ -1,0 +1,97 @@
+# Loadout tcsh: PATH, environment, prompt.
+#
+# Snapshot of the bash env; see envs/tcsh/README.md. Not synced with envs/bash/.
+#
+# Two csh rules this file obeys, both of which are easy to get wrong:
+#   * NEVER `exit` from here. tcsh sources ~/.tcshrc for NON-interactive shells too,
+#     so an early `exit` would kill every tcsh script the user runs. Interactive-only
+#     work goes inside `if ( $?prompt ) then ... endif`.
+#   * NEVER use `!` unquoted (e.g. `!~`). In an interactive shell it triggers history
+#     expansion. Membership tests below are written as explicit loops for that reason.
+#
+# Everything is guarded: on a machine with no loadout install, this file sets nothing
+# and prints nothing. Silence is the requirement.
+
+# ---- resolve the local root (shared tree if configured, else ~/.local) --------
+set _loadout_prefix = "$HOME/.local"
+if ( $?LOADOUT_CFG_SHARED_PREFIX ) then
+    if ( "$LOADOUT_CFG_SHARED_PREFIX" != "" ) then
+        set _loadout_prefix = "$LOADOUT_CFG_SHARED_PREFIX"
+    endif
+endif
+
+# ---- PATH: prepend the dirs that exist, without duplicating -------------------
+foreach _loadout_dir ( "$HOME/go/bin" "$HOME/.cargo/bin" "$HOME/.local/bin" "${_loadout_prefix}/bin" )
+    if ( -d "$_loadout_dir" ) then
+        set _loadout_seen = 0
+        foreach _loadout_p ( $path:q )
+            if ( "$_loadout_p" == "$_loadout_dir" ) set _loadout_seen = 1
+        end
+        if ( $_loadout_seen == 0 ) set path = ( "$_loadout_dir" $path:q )
+        unset _loadout_seen
+        unset _loadout_p
+    endif
+end
+unset _loadout_dir
+
+# ---- terminfo: ncurses does not search ~/.local/share/terminfo by default -----
+if ( -d "${_loadout_prefix}/share/terminfo" ) then
+    if ( $?TERMINFO_DIRS ) then
+        setenv TERMINFO_DIRS "${_loadout_prefix}/share/terminfo:${TERMINFO_DIRS}"
+    else
+        setenv TERMINFO_DIRS "${_loadout_prefix}/share/terminfo"
+    endif
+endif
+
+# ---- GUI / runtime helpers (only when actually present) -----------------------
+if ( -d "${_loadout_prefix}/lib/girepository-1.0" ) then
+    setenv GI_TYPELIB_PATH "${_loadout_prefix}/lib/girepository-1.0"
+endif
+if ( -f "${_loadout_prefix}/lib64/libqxcb.so" ) then
+    setenv QT_QPA_PLATFORM_PLUGIN_PATH "${_loadout_prefix}/lib64"
+endif
+
+# ---- everything below is interactive-only ------------------------------------
+if ( $?prompt ) then
+
+    set history = 10000
+    set savehist = ( 10000 merge )
+    set autolist
+    set nobeep
+    set color
+    set colorcat
+
+    # Aliases (guarded per tool -- an alias never points at a missing binary).
+    if ( -r "$HOME/.config/tcsh/global/aliases.csh" ) then
+        source "$HOME/.config/tcsh/global/aliases.csh"
+    endif
+
+    # ---- prompt ---------------------------------------------------------------
+    # cwd + git branch. precmd runs before EVERY prompt, so this must stay cheap:
+    # `git` is resolved once, here, and the branch lookup is a single fork whose
+    # stderr is discarded (a non-repo directory must print nothing).
+    #
+    # Starship has no tcsh support upstream, so this is hand-rolled and does not
+    # match the bash prompt. That is expected -- see envs/tcsh/README.md.
+    set _loadout_host = ""
+    if ( $?LOADOUT_CFG_PROMPT_INCLUDE_HOST ) then
+        if ( "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" == "1" ) set _loadout_host = "%m:"
+    endif
+
+    # git-branch.sh does the stderr suppression csh cannot do itself (csh has no
+    # `2>/dev/null`; an inline `|&` merges git's error text into the prompt -- an
+    # unborn HEAD then prints git's "Use '--' to separate paths" hint at you).
+    set _loadout_gitbranch = "$HOME/.config/tcsh/global/git-branch.sh"
+
+    if ( -X git && -x "$_loadout_gitbranch" ) then
+        set prompt = "%B${_loadout_host}%~%b %# "
+        alias precmd 'set _lb = "`'"$_loadout_gitbranch"'`" ; if ( "$_lb" != "" ) set prompt = "%B'"$_loadout_host"'%~%b (${_lb}) %# " ; if ( "$_lb" == "" ) set prompt = "%B'"$_loadout_host"'%~%b %# "'
+    else
+        set prompt = "%B${_loadout_host}%~%b %# "
+    endif
+    unset _loadout_host
+    unset _loadout_gitbranch
+
+endif
+
+unset _loadout_prefix

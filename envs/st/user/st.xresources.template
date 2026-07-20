@@ -1,0 +1,109 @@
+! st -- your personal layer.  Yours to edit; the loadout never overwrites this file.
+!
+! Layers merge in this order, later wins:
+!   global -> corp -> site -> team -> project -> user
+! Anything you uncomment here overrides ~/.config/st/global/st.xresources.
+!
+! Apply changes to already-running st windows:
+!   st-reload            signal every st on your $DISPLAY
+!   st-reload --all      every st you own, any display
+!   Ctrl+Shift+R         from inside an st window
+! No restart, no recompile.
+!
+! ---- Fonts bundled by loadout (exact Xft strings; generated -- do not edit) ----
+! BEGIN generated font list
+!   st.font: CaskaydiaCove Nerd Font:size=12          (CascadiaCode.zip)
+!   st.font: CaskaydiaCove Nerd Font Mono:size=12     (CascadiaCode.zip)
+!   st.font: CaskaydiaCove Nerd Font Propo:size=12    (CascadiaCode.zip)
+!   st.font: DejaVuSansM Nerd Font:size=12            (DejaVuSansMono.zip)
+!   st.font: DejaVuSansM Nerd Font Mono:size=12       (DejaVuSansMono.zip)
+!   st.font: DejaVuSansM Nerd Font Propo:size=12      (DejaVuSansMono.zip)
+!   st.font: EnvyCodeR Nerd Font:size=12
+!   st.font: EnvyCodeR Nerd Font Mono:size=12
+!   st.font: EnvyCodeR Nerd Font Propo:size=12
+!   st.font: FiraCode Nerd Font:size=12
+!   st.font: FiraCode Nerd Font Mono:size=12
+!   st.font: FiraCode Nerd Font Propo:size=12
+!   st.font: Hack Nerd Font:size=12
+!   st.font: Hack Nerd Font Mono:size=12
+!   st.font: Hack Nerd Font Propo:size=12
+!   st.font: Inconsolata Nerd Font:size=12
+!   st.font: Inconsolata Nerd Font Mono:size=12
+!   st.font: Inconsolata Nerd Font Propo:size=12
+!   st.font: IosevkaTerm Nerd Font:size=12
+!   st.font: IosevkaTerm Nerd Font Mono:size=12
+!   st.font: IosevkaTerm Nerd Font Propo:size=12
+!   st.font: JetBrainsMono Nerd Font:size=12
+!   st.font: JetBrainsMono Nerd Font Mono:size=12
+!   st.font: JetBrainsMono Nerd Font Propo:size=12
+!   st.font: JetBrainsMonoNL Nerd Font:size=12
+!   st.font: JetBrainsMonoNL Nerd Font Mono:size=12
+!   st.font: JetBrainsMonoNL Nerd Font Propo:size=12
+!   st.font: MesloLGL Nerd Font:size=12
+!   st.font: MesloLGL Nerd Font Mono:size=12
+!   st.font: MesloLGL Nerd Font Propo:size=12
+!   st.font: MesloLGLDZ Nerd Font:size=12
+!   st.font: MesloLGLDZ Nerd Font Mono:size=12
+!   st.font: MesloLGLDZ Nerd Font Propo:size=12
+!   st.font: MesloLGM Nerd Font:size=12
+!   st.font: MesloLGM Nerd Font Mono:size=12
+!   st.font: MesloLGM Nerd Font Propo:size=12
+!   st.font: MesloLGMDZ Nerd Font:size=12
+!   st.font: MesloLGMDZ Nerd Font Mono:size=12
+!   st.font: MesloLGMDZ Nerd Font Propo:size=12
+!   st.font: MesloLGS Nerd Font:size=12
+!   st.font: MesloLGS Nerd Font Mono:size=12
+!   st.font: MesloLGS Nerd Font Propo:size=12
+!   st.font: MesloLGSDZ Nerd Font:size=12
+!   st.font: MesloLGSDZ Nerd Font Mono:size=12
+!   st.font: MesloLGSDZ Nerd Font Propo:size=12
+!   st.font: RobotoMono Nerd Font:size=12
+!   st.font: RobotoMono Nerd Font Mono:size=12
+!   st.font: RobotoMono Nerd Font Propo:size=12
+!   st.font: SauceCodePro Nerd Font:size=12           (SourceCodePro.zip)
+!   st.font: SauceCodePro Nerd Font Mono:size=12      (SourceCodePro.zip)
+!   st.font: SauceCodePro Nerd Font Propo:size=12     (SourceCodePro.zip)
+!   st.font: UbuntuMono Nerd Font:size=12
+!   st.font: UbuntuMono Nerd Font Mono:size=12
+!   st.font: UbuntuMono Nerd Font Propo:size=12
+! END generated font list
+!
+! Suffixes: plain "Nerd Font" = icons keep their natural width; "Nerd Font Mono"
+! = icons squeezed into one cell (safest in a terminal -- nothing overlaps);
+! "Nerd Font Propo" = proportional icons. Pick Mono if a glyph ever clips.
+!
+! Syntax: <family>:size=<pt>[:style=Bold][:antialias=true][:autohint=false]
+! Check what X actually resolves:  fc-match 'JetBrainsMono Nerd Font'
+! List every installed family:     fc-list : family | sort -u
+!
+! st.font: JetBrainsMono Nerd Font:size=14
+!
+! ---- Colors ----
+! Accepts #rrggbb or an X color name. The loadout default (tokyonight) is set in
+! the global layer; override any single key here.
+!
+! st.background:  #1a1b26
+! st.foreground:  #c0caf5
+! st.cursorColor: #c0caf5
+! st.color0:  #15161e      ! black          st.color8:  #414868   ! bright black
+! st.color1:  #f7768e      ! red            st.color9:  #f7768e   ! bright red
+! st.color2:  #9ece6a      ! green          st.color10: #9ece6a   ! bright green
+! st.color3:  #e0af68      ! yellow         st.color11: #e0af68   ! bright yellow
+! st.color4:  #7aa2f7      ! blue           st.color12: #7aa2f7   ! bright blue
+! st.color5:  #bb9af7      ! magenta        st.color13: #bb9af7   ! bright magenta
+! st.color6:  #7dcfff      ! cyan           st.color14: #7dcfff   ! bright cyan
+! st.color7:  #a9b1d6      ! white          st.color15: #c0caf5   ! bright white
+!
+! ---- Behavior ----
+! st.cursorshape:  2            ! 2=block  4=underline  6=bar; odd values blink (1/3/5)
+! st.borderpx:     2            ! px of padding inside the window
+! st.blinktimeout: 800          ! ms; 0 disables cursor blinking
+! st.bellvolume:   0            ! -100..100; 0 = silent
+! st.tabspaces:    8
+! st.termname:     st-256color  ! must match a terminfo entry the loadout ships
+! st.shell:        /bin/bash
+! st.cwscale:      1.0          ! cell width  multiplier (tighten/loosen columns)
+! st.chscale:      1.0          ! cell height multiplier (line spacing)
+!
+! Keybindings are NOT settable here -- they are compiled into st. The only
+! exception is the reload key (Ctrl+Shift+R), which is built in.

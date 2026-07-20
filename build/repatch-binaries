@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+repatch-binaries: pre-bake RPATH=$ORIGIN/../lib64:$ORIGIN/../lib into every ELF
+binary stored as .bz2 in payload/<platform>/bin/.
+
+Run once when migrating from post-install patchelf to pre-patched bundles.
+After this script completes, run ./strip-all-elf-binaries to update .strip-manifest
+(manifest checksums change because the binaries change).
+
+Usage:
+    build/repatch-binaries [--dry-run]
+"""
+
+import bz2
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
+
+
+def find_patchelf(repo_dir):
+    candidates = [
+        os.path.expanduser("~/.local/bin/patchelf"),
+        shutil.which("patchelf"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+    # Last resort: decompress bundled patchelf to /tmp
+    for platform in (
+        os.listdir(os.path.join(repo_dir, "payload")) if os.path.isdir(os.path.join(repo_dir, "payload")) else []
+    ):
+        bz2_path = os.path.join(repo_dir, "payload", platform, "bin", "patchelf.bz2")
+        if os.path.isfile(bz2_path):
+            tmp = tempfile.NamedTemporaryFile(delete=False, prefix="patchelf_", suffix="")
+            tmp.close()
+            with bz2.open(bz2_path, "rb") as fin, open(tmp.name, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+            os.chmod(tmp.name, 0o755)
+            print(f"Decompressed bundled patchelf to {tmp.name}")
+            return tmp.name
+    return None
+
+
+def is_dynamic_elf(path, patchelf):
+    proc = subprocess.run(
+        [patchelf, "--print-interpreter", path],
+        capture_output=True,
+    )
+    return proc.returncode == 0
+
+
+def get_rpath(path, patchelf):
+    proc = subprocess.run(
+        [patchelf, "--print-rpath", path],
+        capture_output=True,
+    )
+    return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def repatch_bz2(bz2_path, patchelf, dry_run):
+    tmp_elf = None
+    tmp_bz2 = None
+    try:
+        fd, tmp_elf = tempfile.mkstemp(suffix=".elf")
+        os.close(fd)
+
+        with bz2.open(bz2_path, "rb") as fin, open(tmp_elf, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+        os.chmod(tmp_elf, 0o755)
+
+        if not is_dynamic_elf(tmp_elf, patchelf):
+            print(f"  skip non-dynamic-ELF: {bz2_path}")
+            return "skip"
+
+        current = get_rpath(tmp_elf, patchelf)
+        if current == RPATH:
+            print(f"  already patched: {bz2_path}")
+            return "skip"
+
+        if dry_run:
+            print("  [dry-run] would patch: {} (current rpath: {!r})".format(bz2_path, current or "(none)"))
+            return "would-patch"
+
+        # Strip before patchelf: strip after patchelf can leave .dynstr outside
+        # a PT_LOAD segment and corrupt the binary at load time.
+        subprocess.run(["/usr/bin/strip", tmp_elf], capture_output=True)
+
+        proc = subprocess.run(
+            [patchelf, "--set-rpath", RPATH, tmp_elf],
+            capture_output=True,
+        )
+        if proc.returncode != 0:
+            print("  ERROR: patchelf failed on {}: {}".format(bz2_path, proc.stderr.decode("utf-8", "replace").strip()))
+            return "error"
+
+        fd, tmp_bz2 = tempfile.mkstemp(suffix=".bz2", dir=os.path.dirname(bz2_path))
+        os.close(fd)
+        with open(tmp_elf, "rb") as fin, bz2.open(tmp_bz2, "wb", compresslevel=9) as fout:
+            shutil.copyfileobj(fin, fout)
+
+        os.rename(tmp_bz2, bz2_path)
+        tmp_bz2 = None
+        print("  patched: {} (was: {!r})".format(bz2_path, current or "(none)"))
+        return "patched"
+
+    finally:
+        if tmp_elf and os.path.exists(tmp_elf):
+            os.unlink(tmp_elf)
+        if tmp_bz2 and os.path.exists(tmp_bz2):
+            os.unlink(tmp_bz2)
+
+
+@click.command(
+    name="repatch-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--dry-run", "dry_run", is_flag=True, help="Show what would change without modifying files.")
+def main(dry_run):
+    """Pre-bake RPATH=$ORIGIN/../lib64:$ORIGIN/../lib into every ELF binary
+    stored as .bz2 in payload/<platform>/bin/.
+
+    Run once when migrating from post-install patchelf to pre-patched bundles.
+    After this script completes, run ./strip-all-elf-binaries to update
+    .strip-manifest (manifest checksums change because the binaries change).
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    payload_dir = os.path.join(repo_dir, "payload")
+
+    patchelf = find_patchelf(repo_dir)
+    if not patchelf:
+        print("ERROR: patchelf not found. Run ./loadout install patchelf first (patchelf is bundled).")
+        sys.exit(1)
+    print(f"Using patchelf: {patchelf}")
+
+    counts = {"patched": 0, "would-patch": 0, "skip": 0, "error": 0}
+
+    for platform in sorted(os.listdir(payload_dir)):
+        bin_dir = os.path.join(payload_dir, platform, "bin")
+        if not os.path.isdir(bin_dir):
+            continue
+        print(f"\nPlatform: {platform}")
+        for fname in sorted(os.listdir(bin_dir)):
+            if not fname.endswith(".bz2"):
+                continue
+            result = repatch_bz2(os.path.join(bin_dir, fname), patchelf, dry_run)
+            counts[result] = counts.get(result, 0) + 1
+
+    total_changed = counts["patched"] + counts["would-patch"]
+    print(
+        "\nDone: {} patched, {} skipped, {} errors".format(
+            counts["patched"] if not dry_run else counts["would-patch"], counts["skip"], counts["error"]
+        )
+    )
+    if total_changed and not dry_run:
+        print("Next: run ./strip-all-elf-binaries to update .strip-manifest")
+
+
+if __name__ == "__main__":
+    main()

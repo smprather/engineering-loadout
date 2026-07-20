@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+import subprocess
+
+# tmux has a literal character list for select-word boundaries, not a Unicode
+# class or regex. Keep the base ASCII separators readable here, then append
+# broad emoji/symbol ranges so double-click selection stops before prompt icons.
+BASE_SEPARATORS = " '\",=[]$*{}<>()^#!`;\t:"
+
+EMOJI_RANGES = (
+    (0x1F000, 0x1FAFF),  # symbols, pictographs, emoticons, transport, supplemental symbols
+    (0x2600, 0x27BF),  # miscellaneous symbols, dingbats
+    (0x2B00, 0x2BFF),  # miscellaneous symbols and arrows
+)
+
+EMOJI_EXTRAS = (
+    0x00A9,  # copyright sign
+    0x00AE,  # registered sign
+    0x203C,  # double exclamation mark
+    0x2049,  # exclamation question mark
+    0x20E3,  # combining enclosing keycap
+    0x2122,  # trade mark sign
+    0x2139,  # information source
+    0x3030,  # wavy dash
+    0x303D,  # part alternation mark
+    0x3297,  # circled ideograph congratulation
+    0x3299,  # circled ideograph secret
+    0x200D,  # zero width joiner
+    0xFE0E,  # text presentation selector
+    0xFE0F,  # emoji presentation selector
+)
+
+
+def main():
+    emoji_chars = []
+    for start, end in EMOJI_RANGES:
+        emoji_chars.extend(chr(codepoint) for codepoint in range(start, end + 1))
+    emoji_chars.extend(chr(codepoint) for codepoint in EMOJI_EXTRAS)
+
+    subprocess.call(
+        [
+            "tmux",
+            "set-option",
+            "-gq",
+            "word-separators",
+            BASE_SEPARATORS + "".join(emoji_chars),
+        ]
+    )
+
+
+if __name__ == "__main__":
+    main()

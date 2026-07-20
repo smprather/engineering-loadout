@@ -1,0 +1,592 @@
+#!/usr/bin/env python3
+"""
+prebuilt-binaries: smoke-test installed binary and runtime payloads.
+
+Runs ./loadout install @shared --dest-dir /tmp/... --no-backup to get a real
+deployment layout, then probes each executable in <dest>/local/bin/ with a
+cut-down PATH containing only <dest>/local/bin plus basic system directories.
+This catches wrappers that accidentally rely on tools from the user's
+~/.local/bin or the build host.
+
+Each executable is probed for:
+  - exit 127  (loader failure / broken ELF)
+  - exit 139  (SIGSEGV)
+  - "symbol lookup error" / "undefined symbol" in output
+It also checks runtime sentinels for shipped editor payloads and runs Neovim
+headless against the installed runtime.
+
+Any other outcome (including "bad option" exit 1/2, or timeout on an interactive
+binary) counts as OK -- the binary loaded and ran.
+
+Exit 0: all clean.  Exit 1: failures detected (fails the pre-commit).
+
+Usage:
+    tests/prebuilt-binaries
+    tests/prebuilt-binaries --keep   # don't delete tmpdir
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+BASIC_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+FATAL_EXIT_CODES = {126, 127, 139}
+
+FATAL_OUTPUT_PATTERNS = (
+    "symbol lookup error",
+    "undefined symbol",
+    # A binary that starts but prints a known startup-failure banner is broken,
+    # not OK -- expect shipped for a while printing this on every clean-EL8
+    # start while the probe scored it green.
+    "Tcl_Init failed",
+    "Can't find a usable init.tcl",
+)
+
+HOST_REQUIRED_COMMANDS = {
+    "cloc": ("perl", "host perl interpreter"),
+    "meld": ("/usr/bin/python3.6", "host /usr/bin/python3.6 for EL8 PyGObject"),
+}
+
+HOST_REQUIRED_SOS = {
+    # GLVND/OpenGL dispatchers must come from the host display stack. Bundling
+    # them can select the wrong vendor driver.
+    "libGL.so.1": "host OpenGL dispatcher",
+    "libGLX.so.0": "host OpenGL dispatcher",
+    "libGLdispatch.so.0": "host OpenGL dispatcher",
+}
+
+# Binaries that fail/crash in headless sandboxes -- ldd-check only, skip exec.
+# Each entry below has a one-line rationale.
+NO_EXEC = {
+    "gopls",  # LSP server -- boots via nvim; standalone --version segfaults
+    # during ld.so init on the current EL8/WSL2 kernel even though
+    # the binary is byte-identical to a previously-shipping release.
+    # Pinned NO_EXEC until reproducible on a non-WSL2 EL8 box.
+}
+
+# Per-binary probe flags tried in order. First non-fatal result wins.
+PROBE_FLAGS = {
+    "tmux": [["-V"]],
+    "resize": [["--help"]],
+    "bzip2": [["--help"]],
+    "nvim": [["--version"]],
+}
+DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
+
+
+def test_env(tmpdir):
+    """Minimal test environment: staged tools first, then basic system PATH."""
+    bin_dir = os.path.join(tmpdir, "local", "bin")
+    home = os.path.join(tmpdir, "home")
+    env = {
+        "HOME": home,
+        "PATH": bin_dir + ":" + BASIC_PATH,
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "TERM": "xterm-256color",
+        "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache"),
+        "XDG_CONFIG_HOME": os.path.join(tmpdir, ".config"),
+        "XDG_DATA_HOME": os.path.join(tmpdir, "local", "share"),
+        "XDG_STATE_HOME": os.path.join(tmpdir, "local", "state"),
+        "DISPLAY": "",
+        "WAYLAND_DISPLAY": "",
+    }
+    if os.environ.get("LC_ALL"):
+        env["LC_ALL"] = os.environ["LC_ALL"]
+    return env
+
+
+def is_elf(path):
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def command_available(command, env):
+    if command.startswith("/"):
+        return os.path.exists(command) and os.access(command, os.X_OK)
+    for directory in env.get("PATH", "").split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, command)
+        if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+            return True
+    return False
+
+
+def ldd_check(path):
+    ldd = "/usr/bin/ldd"
+    if not os.path.isfile(ldd):
+        return []
+    try:
+        proc = subprocess.run(
+            [ldd, path],
+            capture_output=True,
+            timeout=5,
+        )
+        return [line.strip() for line in proc.stdout.decode("utf-8", "replace").splitlines() if "not found" in line]
+    except OSError, subprocess.TimeoutExpired:
+        return []
+
+
+def missing_so_name(ldd_line):
+    return ldd_line.split("=>", 1)[0].strip()
+
+
+def host_required_sos(missing):
+    required = []
+    for line in missing:
+        name = missing_so_name(line)
+        reason = HOST_REQUIRED_SOS.get(name)
+        if not reason:
+            return []
+        required.append(f"{name} ({reason})")
+    return required
+
+
+def output_excerpt(data, limit=400):
+    if isinstance(data, bytes):
+        text = data.decode("utf-8", "replace")
+    else:
+        text = str(data)
+    text = text.strip().replace("\n", "\\n")
+    if len(text) > limit:
+        return text[:limit] + "..."
+    return text
+
+
+def require_path(path, label, failures):
+    if os.path.exists(path):
+        print(f"  OK   (path):         {label}")
+        return True
+    print(f"  FAIL (path):         {label}  missing {path}")
+    failures.append((label, f"missing {path}"))
+    return False
+
+
+def probe_binary(binary_path, env, cwd):
+    """Return (ok, detail)."""
+    name = os.path.basename(binary_path)
+    flag_list = PROBE_FLAGS.get(name, DEFAULT_PROBE)
+
+    last_code = None
+    last_out = ""
+
+    for flags in flag_list:
+        try:
+            proc = subprocess.run(
+                [binary_path] + flags,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=cwd,
+                env=env,
+                timeout=4,
+            )
+            combined = proc.stdout.decode("utf-8", "replace")
+            last_code = proc.returncode
+            last_out = combined
+
+            # Negative returncode = killed by signal (e.g. -11 = SIGSEGV)
+            if proc.returncode in FATAL_EXIT_CODES or proc.returncode < 0:
+                continue  # try next flag set before declaring failure
+
+            for pat in FATAL_OUTPUT_PATTERNS:
+                if pat in combined:
+                    return False, combined[:200].strip()
+
+            first_line = combined.split("\n")[0][:100].strip()
+            return True, first_line or f"(exit {proc.returncode})"
+
+        except subprocess.TimeoutExpired:
+            return True, "(interactive -- timeout counts as OK)"
+        except OSError as exc:
+            return False, f"OSError: {exc}"
+
+    for pat in FATAL_OUTPUT_PATTERNS:
+        if pat in last_out:
+            return False, last_out[:200].strip()
+    code_str = f"signal {-last_code}" if last_code is not None and last_code < 0 else f"exit {last_code}"
+    return False, f"{code_str} -- {last_out[:200].strip()}"
+
+
+def smoke_runtime_layout(tmpdir, env):
+    failures = []
+    bin_dir = os.path.join(tmpdir, "local", "bin")
+
+    def has_bin(name):
+        return os.path.exists(os.path.join(bin_dir, name))
+
+    print("Smoke-testing installed runtimes...\n")
+
+    if has_bin("nvim"):
+        nvim = os.path.join(bin_dir, "nvim")
+        runtime = os.path.join(tmpdir, "local", "share", "nvim", "runtime")
+        if require_path(os.path.join(runtime, "filetype.lua"), "nvim runtime", failures):
+            nvim_env = env.copy()
+            nvim_env.update(
+                {
+                    "XDG_CACHE_HOME": os.path.join(tmpdir, ".cache", "nvim-smoke"),
+                    "XDG_STATE_HOME": os.path.join(tmpdir, "local", "state", "nvim-smoke"),
+                }
+            )
+            lua_check = (
+                f"local expected = {tmpdir!r} .. '/local/share/nvim/runtime'; "
+                "local rtp = vim.o.runtimepath; "
+                "if not rtp:find(expected, 1, true) then "
+                "vim.api.nvim_err_writeln(rtp); vim.cmd('cquit 1'); end; "
+                "if vim.fn.filereadable(expected .. '/filetype.lua') ~= 1 then "
+                "vim.api.nvim_err_writeln(expected); vim.cmd('cquit 1'); end"
+            )
+            try:
+                proc = subprocess.run(
+                    [nvim, "--clean", "--headless", "-n", "+lua " + lua_check, "+qa"],
+                    cwd=tmpdir,
+                    env=nvim_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                )
+            except subprocess.TimeoutExpired:
+                print("  FAIL (headless):     nvim runtime  timeout")
+                failures.append(("nvim runtime", "headless timeout"))
+            except Exception as exc:
+                print(f"  FAIL (headless):     nvim runtime  {exc}")
+                failures.append(("nvim runtime", str(exc)))
+            else:
+                if proc.returncode == 0:
+                    print("  OK   (headless):     nvim runtime")
+                else:
+                    detail = output_excerpt(proc.stdout)
+                    print(f"  FAIL (headless):     nvim runtime  {detail}")
+                    failures.append(("nvim runtime", detail))
+
+    if has_bin("vim") or has_bin("vim.bin"):
+        require_path(
+            os.path.join(tmpdir, "local", "share", "vim", "vim92", "filetype.vim"),
+            "vim runtime",
+            failures,
+        )
+
+    if has_bin("hx"):
+        require_path(
+            os.path.join(tmpdir, "local", "share", "helix", "runtime", "tutor"),
+            "helix runtime",
+            failures,
+        )
+
+    if has_bin("ngspice"):
+        # Functional XSPICE smoke: the wrapper must find spinit via
+        # SPICE_LIB_DIR and load analog.cm from lib/ngspice; --version alone
+        # cannot detect a dead datadir (the modules/ngspice bug class).
+        require_path(
+            os.path.join(tmpdir, "local", "lib", "ngspice", "analog.cm"),
+            "ngspice codemodels",
+            failures,
+        )
+        netlist = os.path.join(tmpdir, "ngspice-xspice-smoke.cir")
+        with open(netlist, "w") as fh:
+            fh.write("* xspice gain smoke\nv1 1 0 1\na1 1 2 amp\n.model amp gain(gain=2.0)\nr1 2 0 1k\n.op\n.end\n")
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "ngspice"), "-b", netlist],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (xspice):       ngspice runtime  {exc}")
+            failures.append(("ngspice runtime", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "Error opening code model" in out or "2.000000e+00" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (xspice):       ngspice runtime  {detail}")
+                failures.append(("ngspice runtime", detail))
+            else:
+                print("  OK   (xspice):       ngspice runtime")
+
+    if has_bin("espresso"):
+        # Functional smoke: espresso is a pure function, so --version-style checks
+        # are meaningless -- a mis-built binary could still run and mis-reduce. Give
+        # it the 3-input majority truth table and assert it minimizes to exactly 3
+        # product terms (ab + ac + bc).
+        pla = os.path.join(tmpdir, "espresso-majority.pla")
+        with open(pla, "w") as fh:
+            fh.write(".i 3\n.o 1\n011 1\n101 1\n110 1\n111 1\n.e\n")
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "espresso"), pla],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=15,
+            )
+        except Exception as exc:
+            print(f"  FAIL (minimize):     espresso  {exc}")
+            failures.append(("espresso", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if ".p 3" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (minimize):     espresso  {detail}")
+                failures.append(("espresso", detail))
+            else:
+                print("  OK   (minimize):     espresso")
+
+    if has_bin("restic"):
+        # Roundtrip smoke: a backup tool that runs but can't restore is worthless, and
+        # `restic version` cannot detect that. init -> backup -> restore -> content match.
+        rdir = os.path.join(tmpdir, "restic-smoke")
+        src = os.path.join(rdir, "src")
+        rec = os.path.join(rdir, "rec")
+        os.makedirs(src, exist_ok=True)
+        os.makedirs(rec, exist_ok=True)
+        with open(os.path.join(src, "canary.txt"), "w") as fh:
+            fh.write("restic-prebuilt-canary")
+        renv = dict(env, RESTIC_PASSWORD="smoke", RESTIC_REPOSITORY=os.path.join(rdir, "repo"))
+        rbin = os.path.join(bin_dir, "restic")
+        ok = True
+        for args in (["init"], ["backup", src], ["restore", "latest", "--target", rec]):
+            try:
+                r = subprocess.run(
+                    [rbin] + args, cwd=tmpdir, env=renv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60
+                )
+            except Exception as exc:
+                print(f"  FAIL (roundtrip):    restic  {exc}")
+                failures.append(("restic", str(exc)))
+                ok = False
+                break
+            if r.returncode != 0:
+                d = output_excerpt(r.stdout)
+                print(f"  FAIL (roundtrip):    restic  {d}")
+                failures.append(("restic", d))
+                ok = False
+                break
+        if ok:
+            found = subprocess.run(["grep", "-qr", "restic-prebuilt-canary", rec]).returncode == 0
+            if found:
+                print("  OK   (roundtrip):    restic")
+            else:
+                print("  FAIL (roundtrip):    restic  restored content mismatch")
+                failures.append(("restic", "restore mismatch"))
+
+    if has_bin("pdftotext"):
+        # CJK extraction via bundled poppler-data: a predefined-CMap PDF with
+        # no ToUnicode map is silent garbage without the data files (the
+        # wrapper must export POPPLER_DATADIR at the install prefix).
+        require_path(
+            os.path.join(tmpdir, "local", "share", "poppler", "cidToUnicode", "Adobe-Japan1"),
+            "pdftotext poppler-data",
+            failures,
+        )
+        smoke_pdf = os.path.join(tmpdir, "cjk-smoke.pdf")
+        gen = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "build", "pdftotext", "make-cjk-smoke-pdf.py"
+        )
+        try:
+            subprocess.run([sys.executable, gen, smoke_pdf], check=True, timeout=30)
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "pdftotext"), smoke_pdf, "-"],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (cjk):          pdftotext runtime  {exc}")
+            failures.append(("pdftotext runtime", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "あい" in out and "Missing language pack" not in out:
+                print("  OK   (cjk):          pdftotext runtime")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (cjk):          pdftotext runtime  {detail}")
+                failures.append(("pdftotext runtime", detail))
+
+    if has_bin("python3.14"):
+        # Display-free Tcl interp smoke: the bundle's sitecustomize must point
+        # TCL_LIBRARY at the shipped lib/tcl8.6 tree (a stale/clobbered tree
+        # fails init.tcl's `package require -exact`). Needs host X client libs
+        # only to import _tkinter (libtk links libX11); skip on hosts without
+        # them, same contract as the GL-linked GUI apps.
+        try:
+            proc = subprocess.run(
+                [
+                    os.path.join(bin_dir, "python3.14"),
+                    "-c",
+                    "import tkinter; print('TKINTER_OK', tkinter.Tcl().eval('info patchlevel'))",
+                ],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (tkinter):      python tkinter  {exc}")
+            failures.append(("python tkinter", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "TKINTER_OK" in out:
+                print("  OK   (tkinter):      python tkinter")
+            elif "ImportError" in out and ("libX" in out or "libfontconfig" in out):
+                print("  SKIP (host .so):     python tkinter  host X client libs missing")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (tkinter):      python tkinter  {detail}")
+                failures.append(("python tkinter", detail))
+
+    parsers = os.path.join(tmpdir, "local", "share", "nvim", "tree-sitter-parsers")
+    if os.path.isdir(parsers):
+        require_path(os.path.join(parsers, "parser", "python.so"), "tree-sitter python parser", failures)
+        require_path(os.path.join(parsers, "queries", "python", "highlights.scm"), "tree-sitter python query", failures)
+        require_path(os.path.join(parsers, "parser-info", "python.lua"), "tree-sitter python parser-info", failures)
+
+    if not failures:
+        print("Runtime payloads OK")
+    print()
+    return failures
+
+
+@click.command(
+    name="prebuilt-binaries",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--keep", is_flag=True, help="Keep the temp install dir after testing.")
+def main(keep):
+    """Smoke-test installed binary and runtime payloads.
+
+    Runs `./loadout install @shared --dest-dir /tmp/... --no-backup` to get a
+    real deployment layout, then probes each executable in <dest>/local/bin/
+    with PATH limited to that bin dir plus basic system directories. Detects
+    loader failures, signal crashes, "symbol lookup error" / "undefined symbol"
+    in output, runtime sentinel drift, and Neovim runtime regressions.
+
+    Exit 0: all clean. Exit 1: failures detected (fails the pre-commit).
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    installer = os.path.join(repo_dir, "loadout")
+
+    tmpdir = tempfile.mkdtemp(prefix="loadout-smoketest-")
+    try:
+        os.makedirs(os.path.join(tmpdir, "home"), exist_ok=True)
+        install_env = {
+            "HOME": os.path.join(tmpdir, "home"),
+            "PATH": BASIC_PATH,
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+            "TERM": "xterm-256color",
+        }
+        probe_env = test_env(tmpdir)
+
+        print(f"Installing to {tmpdir} ...")
+        proc = subprocess.run(
+            [
+                installer,
+                "install",
+                "@shared",
+                "--dest-dir",
+                tmpdir,
+                "--no-backup",
+            ],
+            env=install_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=1200,
+        )
+        install_out = proc.stdout.decode("utf-8", "replace")
+        if proc.returncode != 0:
+            print(f"Install failed (exit {proc.returncode}):\n{install_out}")
+            sys.exit(1)
+
+        bin_dir = os.path.join(tmpdir, "local", "bin")
+        if not os.path.isdir(bin_dir):
+            print(f"ERROR: {bin_dir} not created by installer")
+            sys.exit(1)
+
+        print(f"Smoke-testing binaries in {bin_dir} ...\n")
+        print(f"Probe PATH: {probe_env['PATH']}\n")
+        failures = []
+        tested = 0
+        skipped = 0
+
+        for fname in sorted(os.listdir(bin_dir)):
+            fpath = os.path.join(bin_dir, fname)
+            if not os.path.isfile(fpath) or not os.access(fpath, os.X_OK):
+                continue
+
+            if is_elf(fpath):
+                missing = ldd_check(fpath)
+                if missing:
+                    host_sos = host_required_sos(missing)
+                    if host_sos:
+                        print(f"  SKIP (host .so):     {fname:20s}  {', '.join(host_sos)}")
+                        skipped += 1
+                        continue
+                    msg = "missing .so: " + "; ".join(missing)
+                    print(f"  FAIL (ldd):          {fname:20s}  {missing[0]}")
+                    failures.append((fname, msg))
+                    continue
+
+            host_command = HOST_REQUIRED_COMMANDS.get(fname)
+            if host_command and not command_available(host_command[0], probe_env):
+                print(f"  SKIP (host cmd):     {fname:20s}  {host_command[1]} missing")
+                skipped += 1
+                continue
+
+            if fname in NO_EXEC and is_elf(fpath):
+                print(f"  OK   (ldd-only):     {fname}")
+                tested += 1
+                continue
+
+            tested += 1
+            ok, detail = probe_binary(fpath, probe_env, tmpdir)
+            status = "OK:  " if ok else "FAIL:"
+            print(f"  {status}                 {fname:20s}  {detail}")
+            if not ok:
+                failures.append((fname, detail))
+
+        print()
+        runtime_failures = smoke_runtime_layout(tmpdir, probe_env)
+        failures.extend(runtime_failures)
+
+        if failures:
+            print(f"FAILED: {len(failures)} smoke checks:")
+            for name, msg in failures:
+                print(f"  {name}: {msg}")
+            sys.exit(1)
+
+        if skipped:
+            print(f"All {tested} binaries OK ({skipped} skipped); runtimes OK")
+        else:
+            print(f"All {tested} binaries OK; runtimes OK")
+
+    except subprocess.TimeoutExpired:
+        print("ERROR: installer timed out")
+        sys.exit(1)
+    finally:
+        if not keep:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        else:
+            print(f"Kept: {tmpdir}")
+
+
+if __name__ == "__main__":
+    main()

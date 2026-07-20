@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""gen-parser-locks -- record the Tree-sitter grammar pins + shipped artifact
+hashes into assurance/treesitter-parser-locks.json.
+
+Grammars are already commit-pinned by the vendored nvim-treesitter parsers.lua
+(each language's install_info.url + install_info.revision); build_parsers builds
+at those revisions. This distills, per language: the grammar repo URL, the
+pinned commit, and the SHA-256 of the shipped prebuilt parser (<lang>.so.bz2 as
+stored, per TS platform). The ledger then ties 'which upstream grammar commit'
+-> 'which shipped bytes', made tamper-evident by the signed release tag.
+
+Runs under any python3 (stdlib only).
+
+Usage:
+    build/gen-parser-locks           # write assurance/treesitter-parser-locks.json
+    build/gen-parser-locks --check   # fail if it drifted from parsers.lua/prebuilt
+"""
+
+import argparse
+import glob
+import hashlib
+import json
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PARSERS_LUA = os.path.join(
+    REPO, "payload", "treesitter", "vendor", "nvim-treesitter", "lua", "nvim-treesitter", "parsers.lua"
+)
+PREBUILT_PARSER_GLOB = os.path.join(REPO, "payload", "treesitter", "prebuilt", "*", "parser")
+OUT = os.path.join(REPO, "assurance", "treesitter-parser-locks.json")
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _parse_parsers_lua(text):
+    """lang -> {url, revision} for every entry with an install_info block."""
+    langs = {}
+    cur = None
+    for line in text.splitlines():
+        m = re.match(r"^  ([A-Za-z0-9_]+) = \{$", line)
+        if m:
+            cur = m.group(1)
+            langs.setdefault(cur, {})
+            continue
+        if cur:
+            mr = re.search(r"revision = '([0-9a-fA-F]+)'", line)
+            if mr and "revision" not in langs[cur]:
+                langs[cur]["revision"] = mr.group(1)
+            mu = re.search(r"url = '([^']+)'", line)
+            if mu and "url" not in langs[cur]:
+                langs[cur]["url"] = mu.group(1)
+    return {k: v for k, v in langs.items() if "revision" in v and "url" in v}
+
+
+def _build_lock():
+    with open(PARSERS_LUA, encoding="utf-8") as fh:
+        langs = _parse_parsers_lua(fh.read())
+    parser_dirs = sorted(glob.glob(PREBUILT_PARSER_GLOB))
+    parsers = {}
+    for lang in sorted(langs):
+        artifacts = {}
+        for pdir in parser_dirs:
+            plat = os.path.basename(os.path.dirname(pdir))
+            so = os.path.join(pdir, lang + ".so.bz2")
+            if os.path.isfile(so):
+                artifacts[plat] = _sha256(so)
+        parsers[lang] = {
+            "url": langs[lang]["url"],
+            "revision": langs[lang]["revision"],
+            "artifacts": artifacts,
+        }
+    return {
+        "_note": (
+            "grammar url+revision from the vendored nvim-treesitter parsers.lua; "
+            "artifacts[platform] = sha256 of the shipped <lang>.so.bz2 as stored"
+        ),
+        "parsers": parsers,
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Record Tree-sitter grammar pins + artifact hashes.")
+    ap.add_argument("--check", action="store_true", help="fail if the lock drifted from parsers.lua/prebuilt")
+    args = ap.parse_args()
+
+    lock = _build_lock()
+    text = json.dumps(lock, indent=2, sort_keys=True) + "\n"
+    n_parsers = len(lock["parsers"])
+    n_art = sum(1 for p in lock["parsers"].values() if p["artifacts"])
+
+    if args.check:
+        if not os.path.exists(OUT):
+            sys.exit("assurance/treesitter-parser-locks.json missing -- run: build/gen-parser-locks")
+        with open(OUT, encoding="utf-8") as fh:
+            if fh.read() != text:
+                print("treesitter-parser-locks.json drifted from parsers.lua/prebuilt", file=sys.stderr)
+                sys.exit(1)
+        print(f"parser-locks OK ({n_parsers} grammars, {n_art} with shipped artifacts)")
+        return
+
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print(f"wrote {OUT} ({n_parsers} grammars, {n_art} with shipped artifacts)")
+
+
+if __name__ == "__main__":
+    main()

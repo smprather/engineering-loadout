@@ -1,0 +1,171 @@
+#!/usr/bin/env python3.14
+"""
+build-nvim-plugins -- rebuild the offline Neovim plugin bundle from the
+commit-pinned lockfile, in a clean staging directory, and scan it before
+packing. This replaces the old ./update path that tarred the maintainer's
+LIVE ~/.local/share/nvim/lazy after an unpinned `Lazy! update`.
+
+Trust model: envs/nvim/lazy-lock.json is the source of truth. Each plugin is
+cloned fresh and checked out at its pinned commit into a throwaway tree; the
+maintainer's own nvim is never involved. The staged tree is scanned with
+scan-for-malware --path before it is packed, and a lua/vimscript heuristic
+report highlights anything worth a human glance (os.execute, io.popen,
+vim.fn.system, http URLs, long base64 blobs). The enforced control is the
+pin: you get exactly the reviewed commits, nothing newer.
+
+Workflow to bump plugins (owner-reviewed):
+  1. Refresh the lockfile in a throwaway HOME (a separate step -- run nvim
+     +Lazy! update against a scratch config, diff the resulting
+     lazy-lock.json, review the per-plugin SHA changes).
+  2. Commit the reviewed lazy-lock.json.
+  3. Run this script to rebuild + scan + repack the bundle from those pins.
+  4. Run ./strip-all-elf-binaries and commit the new bundle + content manifest.
+
+Usage:
+  build/build-nvim-plugins [--staging DIR] [--no-scan]
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCKFILE = os.path.join(REPO, "envs", "nvim", "lazy-lock.json")
+BUNDLE = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", "nvim-catalog-plugins.tar.bz2")
+SPECS_DIR = os.path.join(REPO, "envs", "nvim", "lua", "global", "plugins")
+
+# Deterministic tar epoch so the packed bundle hashes reproducibly.
+TAR_EPOCH = "1700000000"
+
+# Heuristic patterns worth a human glance in plugin lua/vim source.
+HEURISTICS = [
+    re.compile(rb"os\.execute"),
+    re.compile(rb"io\.popen"),
+    re.compile(rb"vim\.fn\.system"),
+    re.compile(rb"vim\.loop\.spawn"),
+    re.compile(rb"https?://[^\s\"')]+"),
+    re.compile(rb"[A-Za-z0-9+/]{120,}={0,2}"),  # long base64 blob
+]
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def load_lock():
+    if not os.path.isfile(LOCKFILE):
+        eprint(f"ERROR: {LOCKFILE} not found. Generate + commit it first.")
+        sys.exit(1)
+    return json.load(open(LOCKFILE))
+
+
+def plugin_remote(name):
+    """Recover the clone URL for a plugin. Reads the shipped bundle's remote if
+    present; otherwise the caller must supply a name->url map. Here we read the
+    committed spec files for `owner/repo` shorthands."""
+    # Best-effort: grep the spec files for "<something>/<name>".
+    want = name
+    for root, _dirs, files in os.walk(SPECS_DIR):
+        for fn in files:
+            if not fn.endswith(".lua"):
+                continue
+            for line in open(os.path.join(root, fn), encoding="utf-8", errors="replace"):
+                m = re.search(r'"([A-Za-z0-9_.-]+/' + re.escape(want) + r')"', line)
+                if m:
+                    return "https://github.com/" + m.group(1) + ".git"
+    return None
+
+
+def heuristic_report(staging):
+    findings = []
+    for root, _dirs, files in os.walk(staging):
+        if ".git" in root:
+            continue
+        for fn in files:
+            if not (fn.endswith(".lua") or fn.endswith(".vim")):
+                continue
+            path = os.path.join(root, fn)
+            try:
+                data = open(path, "rb").read()
+            except OSError:
+                continue
+            for rx in HEURISTICS:
+                if rx.search(data):
+                    findings.append((os.path.relpath(path, staging), rx.pattern.decode("latin1")))
+                    break
+    return findings
+
+
+def main(argv):
+    staging = None
+    do_scan = True
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--staging":
+            staging = argv[i + 1]
+            i += 2
+        elif argv[i] == "--no-scan":
+            do_scan = False
+            i += 1
+        else:
+            eprint(f"unknown arg: {argv[i]}")
+            return 2
+    lock = load_lock()
+    tmp = staging or tempfile.mkdtemp(prefix="nvim-plugins-")
+    os.makedirs(tmp, exist_ok=True)
+    print(f"Staging {len(lock)} pinned plugins in {tmp}")
+
+    for name, pin in sorted(lock.items()):
+        commit = pin["commit"]
+        url = plugin_remote(name)
+        dest = os.path.join(tmp, name)
+        if url is None:
+            eprint(f"  WARN: no clone URL found for {name}; skipping (add its spec)")
+            continue
+        print(f"  {name}: {url} @ {commit[:12]}")
+        subprocess.run(["git", "clone", "--quiet", url, dest], check=True)
+        subprocess.run(["git", "-C", dest, "checkout", "--quiet", commit], check=True)
+        shutil.rmtree(os.path.join(dest, ".git"), ignore_errors=True)
+
+    findings = heuristic_report(tmp)
+    if findings:
+        print(f"\nHeuristic report ({len(findings)} files with dynamic/network/blob patterns -- review, not a gate):")
+        for rel, pat in findings[:40]:
+            print(f"  {rel}  [{pat}]")
+
+    if do_scan:
+        print("\nScanning staged plugins with scan-for-malware --path ...")
+        rc = subprocess.run([os.path.join(REPO, "scan-for-malware"), "--path", tmp]).returncode
+        if rc != 0:
+            eprint("ERROR: scan-for-malware flagged the staged plugins; refusing to pack.")
+            return 1
+
+    print(f"\nPacking deterministic bundle -> {BUNDLE}")
+    subprocess.run(
+        [
+            "tar",
+            "--sort=name",
+            f"--mtime=@{TAR_EPOCH}",
+            "--owner=0",
+            "--group=0",
+            "--numeric-owner",
+            "-C",
+            tmp,
+            "-cjf",
+            BUNDLE,
+            *sorted(os.listdir(tmp)),
+        ],
+        check=True,
+    )
+    print("Done. Next: ./strip-all-elf-binaries (chunks + regenerates .content-manifest), then commit.")
+    if not staging:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

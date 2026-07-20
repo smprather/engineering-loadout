@@ -1,0 +1,20 @@
+#!/bin/bash
+rm -fr bash-completion
+git clone https://github.com/scop/bash-completion.git
+cd bash-completion
+cat <<EOF > build_and_install.sh
+#!/bin/bash
+autoreconf -i
+install_dir="\$BASH_CONFIG_ROOT_DIR/global/github.scop.bash-completion"
+rm -fr \$install_dir
+mkdir -p \$install_dir
+./configure --prefix \$install_dir
+make
+make check
+make install
+EOF
+chmod +x build_and_install.sh
+./build_and_install.sh
+cd ..
+rm -fr bash-completion
+

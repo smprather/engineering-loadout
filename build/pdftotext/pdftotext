@@ -1,0 +1,22 @@
+#!/bin/sh
+# Relocatable pdftotext entry point.
+#
+# The static libpoppler's compiled-in datadir is the temp build prefix, so the
+# loadout build patches GlobalParams to honor POPPLER_DATADIR (upstream Unix
+# poppler has no runtime override). Point it at the bundled poppler-data
+# (CJK CMaps, cidToUnicode, nameToUnicode, unicodeMap); explicit user values
+# still win.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+if [ -z "${POPPLER_DATADIR:-}" ] && [ -d "$prefix/share/poppler" ]; then
+    POPPLER_DATADIR="$prefix/share/poppler"
+    export POPPLER_DATADIR
+fi
+
+exec "$prefix/bin/pdftotext.bin" "$@"

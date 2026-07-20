@@ -1,0 +1,79 @@
+#!/bin/sh
+# loadout -- POSIX-sh bootstrap for the loadout package manager.
+#
+# Resolves a bundled Python 3.14 interpreter and execs loadout_main.py
+# under it. Search order:
+#   1. ~/.local/bin/python3.14            (already installed by loadout)
+#   2. <repo>/.loadout-bootstrap/bin/python3.14  (warm bootstrap cache)
+#   3. Decompress payload/<platform>/portable-python-*.tar.bz2 into
+#      <repo>/.loadout-bootstrap/ and use it (cold bootstrap)
+#
+# The bootstrap cache is per-clone (alongside this script), not in
+# $HOME, so a fresh extraction of the GitHub release tarball boots
+# without polluting the user's home directory.
+#
+# Decompression requirements: bzip2 and tar in PATH. Both are part of
+# every supported base system (RHEL/Alma/CentOS 7/8/9, Suse, WSL).
+#
+# Python 3.6 is no longer required. See CLAUDE.md "Python bootstrap".
+
+set -eu
+
+repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+boot_dir="$repo_dir/.loadout-bootstrap"
+main="$repo_dir/loadout_main.py"
+
+if [ ! -f "$main" ]; then
+    echo "loadout: missing $main" >&2
+    exit 1
+fi
+
+# 1. Prefer the loadout-installed interpreter at ~/.local/bin/python3.14.
+if [ -n "${HOME:-}" ] && [ -x "$HOME/.local/bin/python3.14" ]; then
+    exec "$HOME/.local/bin/python3.14" "$main" "$@"
+fi
+
+# 2. Warm bootstrap cache from a previous run.
+if [ -x "$boot_dir/bin/python3.14" ]; then
+    exec "$boot_dir/bin/python3.14" "$main" "$@"
+fi
+
+# 3. Cold bootstrap: decompress portable-python from payload/.
+archive=$(ls "$repo_dir"/payload/*/portable-python-*.tar.bz2 2>/dev/null | head -1)
+if [ -z "$archive" ]; then
+    echo "loadout: no Python 3.14 found and no bundled archive to extract." >&2
+    echo "Expected one of:" >&2
+    echo "  $HOME/.local/bin/python3.14   (installed via 'loadout install portable-python')" >&2
+    echo "  $boot_dir/bin/python3.14       (warm bootstrap cache)" >&2
+    echo "  $repo_dir/payload/<platform>/portable-python-*.tar.bz2  (release tarball)" >&2
+    exit 1
+fi
+
+archive_root=$(basename "$archive" .tar.bz2)
+
+if ! command -v bzip2 >/dev/null 2>&1; then
+    echo "loadout: bzip2 not found; cannot decompress $archive" >&2
+    exit 1
+fi
+if ! command -v tar >/dev/null 2>&1; then
+    echo "loadout: tar not found; cannot extract $archive" >&2
+    exit 1
+fi
+
+echo "loadout: bootstrapping Python 3.14 from $(basename "$archive") ..." >&2
+mkdir -p "$boot_dir"
+# Extract only the "local/" subtree, strip the two leading components
+# ("portable-python-X/local/") so the result is $boot_dir/bin/python3.14
+# directly. The archive's install.sh is intentionally NOT executed --
+# we use the python interpreter in-place; loadout_main.py later installs
+# the real copy into ~/.local via the existing install_portable_python
+# phase.
+bzip2 -dc "$archive" | tar xf - -C "$boot_dir" --strip-components=2 \
+    "$archive_root/local"
+
+if [ ! -x "$boot_dir/bin/python3.14" ]; then
+    echo "loadout: bootstrap extraction did not produce $boot_dir/bin/python3.14" >&2
+    exit 1
+fi
+
+exec "$boot_dir/bin/python3.14" "$main" "$@"

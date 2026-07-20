@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Run the Linux installer against a temporary HOME to simulate a fresh user.
+
+Options:
+  --keep-home       Print and keep the temp HOME after the test.
+  --with-fonts      Install vendored fonts too. Default skips fonts for speed.
+  --help, -h        Show this help message.
+EOF
+}
+
+keep_home=0
+with_fonts=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --keep-home)
+        keep_home=1
+        shift
+        ;;
+    --with-fonts)
+        with_fonts=1
+        shift
+        ;;
+    --help | -h)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+done
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd "$script_dir/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-install-home.XXXXXX)
+test_cache=$(mktemp -d /tmp/loadout-install-cache.XXXXXX)
+test_state=$(mktemp -d /tmp/loadout-install-state.XXXXXX)
+test_hooks=$(mktemp -d /tmp/loadout-install-hooks.XXXXXX)
+install_log=$(mktemp /tmp/loadout-install-log.XXXXXX)
+
+cleanup() {
+    if [[ "$keep_home" == "1" ]]; then
+        echo "Kept temp HOME: $test_home"
+        echo "Kept XDG_CACHE_HOME: $test_cache"
+        echo "Kept XDG_STATE_HOME: $test_state"
+    else
+        rm -rf "$test_home" "$test_cache" "$test_state" "$test_hooks" "$install_log"
+    fi
+}
+trap cleanup EXIT
+
+assert_exists() {
+    local path="$1"
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+        echo "Missing expected path: $path" >&2
+        exit 1
+    fi
+}
+
+assert_symlink() {
+    local path="$1"
+    if [[ ! -L "$path" ]]; then
+        echo "Expected symlink: $path" >&2
+        exit 1
+    fi
+}
+
+cat > "$test_hooks/hook1.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+{
+    echo "hook1"
+    echo "repo=$LOADOUT_REPO"
+    echo "home=$LOADOUT_HOME"
+    echo "dest_dir=$LOADOUT_DEST_DIR"
+    echo "backup=$LOADOUT_BACKUP_DIR"
+    echo "no_backup=$LOADOUT_NO_BACKUP"
+} >> "$LOADOUT_HOME/post-install-hooks.log"
+EOF
+
+# hook2 runs under the just-installed portable Python. No system python3 is
+# assumed -- a stock EL8 host has none on PATH -- and this doubles as a smoke
+# test that the installed interpreter actually runs.
+cat > "$test_hooks/hook2.sh" <<'EOF'
+#!/bin/sh
+# .local for a real-HOME install, un-dotted local for a --dest-dir tree.
+py="$LOADOUT_HOME/.local/bin/python3.14"
+[ -x "$py" ] || py="$LOADOUT_HOME/local/bin/python3.14"
+exec "$py" -c '
+import os
+with open(os.path.join(os.environ["LOADOUT_HOME"], "post-install-hooks.log"), "a") as fh:
+    fh.write("hook2\n")
+'
+EOF
+
+chmod +x "$test_hooks/hook1.sh" "$test_hooks/hook2.sh"
+
+install_args=(
+    install
+    "@engineering-loadout"
+    --dest-dir "$test_home"
+    --post-install-hook "$test_hooks/hook1.sh"
+    --post-install-hook "$test_hooks/hook2.sh"
+)
+if [[ "$with_fonts" != "1" ]]; then
+    install_args+=(--skip @fonts-all)
+fi
+
+if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
+    mkdir -p "$test_home/local/share/tealdeer/cache/tldr-pages"
+    touch "$test_home/local/share/tealdeer/cache/tldr-pages/stale-before-install"
+fi
+
+echo "Temp HOME: $test_home"
+(
+    cd /tmp
+    XDG_CACHE_HOME="$test_cache" \
+    XDG_STATE_HOME="$test_state" \
+        "$repo_dir/loadout" "${install_args[@]}"
+) 2>&1 | tee "$install_log"
+
+# Header: Rich prints a "Summary" table title, plain fallback prints "Summary:".
+if ! grep -Eq "Summary:?" "$install_log"; then
+    echo "Expected final Summary table" >&2
+    exit 1
+fi
+# Success rows show "done" (Rich: | area | done |). Skipped phases are
+# omitted from the table entirely, so assert the fonts skip by absence of an
+# installed fonts dir instead of by table row.
+if ! grep -Eq "env-bash[[:space:]|│]+done" "$install_log"; then
+    echo "Expected 'env-bash' done row in Summary table" >&2
+    exit 1
+fi
+if [[ "$with_fonts" != "1" && -d "$test_home/local/share/fonts" ]]; then
+    echo "Expected no fonts dir when @fonts-all is skipped" >&2
+    exit 1
+fi
+
+assert_symlink "$test_home/.bashrc"
+assert_symlink "$test_home/.bash_profile"
+assert_symlink "$test_home/.bash_login"
+assert_symlink "$test_home/.profile"
+assert_symlink "$test_home/.vimrc"
+assert_symlink "$test_home/.tmux.conf"
+assert_symlink "$test_home/.editorconfig"
+
+assert_exists "$test_home/post-install-hooks.log"
+mapfile -t hook_log < "$test_home/post-install-hooks.log"
+last_hook_index=$((${#hook_log[@]} - 1))
+if [[ "${hook_log[0]}" != "hook1" || "${hook_log[$last_hook_index]}" != "hook2" ]]; then
+    echo "Expected post-install hooks to run in argument order" >&2
+    printf '%s\n' "${hook_log[@]}" >&2
+    exit 1
+fi
+if ! grep -q "^backup=$test_home/loadout_backups/backup" "$test_home/post-install-hooks.log"; then
+    echo "Expected LOADOUT_BACKUP_DIR to point at current backup dir" >&2
+    cat "$test_home/post-install-hooks.log" >&2
+    exit 1
+fi
+if ! grep -q "^dest_dir=$test_home" "$test_home/post-install-hooks.log"; then
+    echo "Expected LOADOUT_DEST_DIR to equal --dest-dir value" >&2
+    cat "$test_home/post-install-hooks.log" >&2
+    exit 1
+fi
+
+assert_exists "$test_home/.config/bash/bashrc"
+assert_exists "$test_home/.config/nvim/init.lua"
+assert_exists "$test_home/.config/nvim/after/ftplugin/tcl.lua"
+assert_exists "$test_home/.config/nvim/after/ftplugin/yaml.lua"
+assert_exists "$test_home/.config/nvim/after/lsp/ty.lua"
+assert_exists "$test_home/.config/tmux/tmux.conf"
+assert_exists "$test_home/.config/starship/starship.toml"
+if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
+    assert_exists "$test_home/local/share/tealdeer/cache/tldr-pages"
+    if [[ -e "$test_home/local/share/tealdeer/cache/tldr-pages/stale-before-install" ]]; then
+        echo "Expected tldr cache install to replace existing cache" >&2
+        exit 1
+    fi
+    assert_exists "$test_home/.config/tealdeer/config.toml"
+    if ! grep -q "cache_dir = \"$test_home/local/share/tealdeer/cache\"" "$test_home/.config/tealdeer/config.toml"; then
+        echo "Expected tealdeer config cache_dir to point at the installed cache" >&2
+        cat "$test_home/.config/tealdeer/config.toml" >&2
+        exit 1
+    fi
+fi
+if [[ -d "$repo_dir/payload/el8.x86_64.glibc2p28" ]]; then
+    assert_exists "$test_home/local/bin/fd"
+    assert_exists "$test_home/local/bin/eza"
+    assert_exists "$test_home/local/bin/tmux"
+    assert_exists "$test_home/local/bin/choose"
+    assert_exists "$test_home/local/bin/patchelf"
+    assert_exists "$test_home/local/bin/nvim"
+    assert_exists "$test_home/local/lib64/libevent_core-2.1.so.6"
+    rpath=$("$test_home/local/bin/patchelf" --print-rpath "$test_home/local/bin/tmux")
+    if [[ "$rpath" != *'$ORIGIN/../lib64'* ]]; then
+        echo "Expected tmux RPATH to include vendored lib64 path, got: $rpath" >&2
+        exit 1
+    fi
+fi
+if [[ -f "$repo_dir/payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2" ]]; then
+    assert_exists "$test_home/local/share/vim/vim92/filetype.vim"
+fi
+if [[ -f "$repo_dir/payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" ]]; then
+    assert_exists "$test_home/local/share/nvim/runtime/filetype.lua"
+fi
+if [[ -f "$repo_dir/payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2" ]]; then
+    assert_exists "$test_home/local/share/helix/runtime/tutor"
+fi
+assert_exists "$test_home/local/share/nvim/loadout/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua"
+assert_exists "$test_home/local/share/nvim/loadout/vendor/treesitter-parser-registry/registry.json"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/parser/python.so"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/queries/python/highlights.scm"
+assert_exists "$test_home/local/share/nvim/tree-sitter-parsers/parser-info/python.lua"
+
+# Plugins are CLONED from the offline stash into lazy/ -- real git repos, so
+# :Lazy update/restore work with no network. That needs a git: the system one, or the
+# private git-nvim (lib/loadout-git/, never on PATH), which @engineering-loadout pulls.
+# Stock almalinux:8.10 ships no git at all, which is exactly why git-nvim exists.
+if [[ -f "$repo_dir/envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2" || -f "$repo_dir/envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2.part-000" ]]; then
+    assert_exists "$test_home/local/share/nvim/loadout/vendor/plugin-stash"
+    if command -v git >/dev/null || [[ -x "$test_home/local/lib/loadout-git/bin/git" ]]; then
+        assert_exists "$test_home/local/share/nvim/lazy/lazy.nvim/.git"
+        assert_exists "$test_home/local/share/nvim/lazy/snacks.nvim/.git"
+    else
+        echo "  note: no git (system or git-nvim) -- plugin clones correctly skipped"
+    fi
+    # The private git must never be reachable as `git`: it would shadow the corp git.
+    if [[ -e "$test_home/local/bin/git" ]]; then
+        echo "FAIL: git-nvim put a git on PATH ($test_home/local/bin/git)" >&2
+        exit 1
+    fi
+fi
+
+nvim_bin=""
+if [[ -x "$test_home/local/bin/nvim" ]]; then
+    nvim_bin="$test_home/local/bin/nvim"
+elif command -v nvim >/dev/null; then
+    nvim_bin=$(command -v nvim)
+fi
+
+if [[ -n "$nvim_bin" ]]; then
+    if [[ ! -d "$test_home/local/share/nvim/lazy/lazy.nvim" ]]; then
+        fake_git_dir="$test_home/fake-git-bin"
+        mkdir -p "$fake_git_dir"
+        printf '%s\n' '#!/usr/bin/env sh' 'exit 127' > "$fake_git_dir/git"
+        chmod +x "$fake_git_dir/git"
+        HOME="$test_home" \
+            XDG_CONFIG_HOME="$test_home/.config" \
+            XDG_DATA_HOME="$test_home/local/share" \
+            XDG_CACHE_HOME="$test_cache" \
+            XDG_STATE_HOME="$test_state" \
+            PATH="$fake_git_dir:$PATH" \
+            "$nvim_bin" --headless -n \
+            +'lua if vim.g.loadout_plugins_enabled ~= false then vim.api.nvim_err_writeln("expected plugin layer disabled without lazy.nvim"); vim.cmd("cquit 1") end' \
+            +qa
+    fi
+
+    printf 'print("ok")\n' > "$test_home/tree-sitter-smoke.py"
+    HOME="$test_home" \
+        XDG_CONFIG_HOME="$test_home/.config" \
+        XDG_DATA_HOME="$test_home/local/share" \
+        XDG_CACHE_HOME="$test_cache" \
+        XDG_STATE_HOME="$test_state" \
+        "$nvim_bin" --clean --headless -n "$test_home/tree-sitter-smoke.py" \
+        +"set runtimepath+=$test_home/local/share/nvim/loadout/vendor/treesitter-parser-registry" \
+        +"set runtimepath+=$test_home/local/share/nvim/loadout/vendor/nvim-treesitter" \
+        +"set runtimepath+=$test_home/local/share/nvim/tree-sitter-parsers" \
+        +'lua local expected = vim.env.HOME .. "/local/share/nvim/runtime"; if not vim.o.runtimepath:find(expected, 1, true) then vim.api.nvim_err_writeln(vim.o.runtimepath); vim.cmd("cquit 1") end; if vim.fn.filereadable(expected .. "/filetype.lua") ~= 1 then vim.api.nvim_err_writeln(expected); vim.cmd("cquit 1") end' \
+        +'lua local ok, err = pcall(function() require("nvim-treesitter").setup({ install_dir = vim.fn.stdpath("data") .. "/tree-sitter-parsers" }); vim.treesitter.start(0); vim.treesitter.get_parser(0, "python"):parse() end); if not ok then vim.api.nvim_err_writeln(err); vim.cmd("cquit 1") end; print("Tree-sitter smoke OK")' \
+        +qa
+    echo ""
+else
+    echo "nvim not found; skipped Tree-sitter runtime smoke"
+fi
+
+echo "Install temp-home smoke OK"

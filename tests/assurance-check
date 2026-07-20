@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""
+assurance-check -- validate every assurance/records/<pkg>.toml against reality.
+
+A record is a live claim, not documentation: this test re-hashes each record's
+[artifacts] against the files on disk, checks the referenced profile exists,
+and (for nvim) confirms the [plugins] commit pins match envs/nvim/lazy-lock.json.
+A drifted record fails here, so records cannot silently rot.
+
+Runs under the bundled Python 3.14 (uses tomllib). Exits 0 if all records are
+consistent, 1 otherwise.
+"""
+
+import hashlib
+import json
+import os
+import sys
+import tomllib
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RECORDS = os.path.join(REPO, "assurance", "records")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def check_record(path):
+    rec = tomllib.load(open(path, "rb"))
+    pkg = rec.get("package", os.path.basename(path))
+
+    check(f"{pkg}: schema is 1", rec.get("schema") == 1, str(rec.get("schema")))
+    check(f"{pkg}: status is known", rec.get("status") in ("verified", "partial", "unverified"), rec.get("status"))
+
+    # artifacts re-hash against disk
+    for rel, claimed in rec.get("artifacts", {}).items():
+        full = os.path.join(REPO, rel)
+        if not os.path.isfile(full):
+            check(f"{pkg}: artifact present {rel}", False, "missing")
+            continue
+        want = claimed.split(":", 1)[-1]
+        check(f"{pkg}: artifact sha256 {rel}", sha256_of(full) == want, "hash mismatch")
+
+    # dynamic profile referenced exists
+    prof = rec.get("dynamic", {}).get("profile")
+    if prof:
+        check(f"{pkg}: dynamic profile exists", os.path.isfile(os.path.join(REPO, prof)), prof)
+
+    # nvim: plugin pins must match the committed lockfile
+    plugins = rec.get("plugins")
+    if plugins:
+        lock_path = os.path.join(REPO, plugins["lockfile"])
+        lock = json.load(open(lock_path))
+        # Non-pin metadata keys. Everything else in [plugins] is "<plugin>" = "<commit>".
+        _meta = ("lockfile", "bundle", "count", "form", "catalog_count", "delivery", "stash_sha256")
+        pins = {k: v for k, v in plugins.items() if k not in _meta}
+        mismatched = [n for n, c in pins.items() if lock.get(n, {}).get("commit") != c]
+        check(f"{pkg}: plugin pins match {plugins['lockfile']}", not mismatched, ", ".join(mismatched))
+        check(
+            f"{pkg}: plugin count matches lockfile",
+            plugins.get("count") == len(lock),
+            f"{plugins.get('count')} != {len(lock)}",
+        )
+
+    # crate store: the committed closure lock must exist and match the count
+    cs = rec.get("crate_store")
+    if cs:
+        lock_path = os.path.join(REPO, cs["lock"])
+        if os.path.isfile(lock_path):
+            n = sum(1 for line in open(lock_path, encoding="utf-8") if line.strip())
+            check(f"{pkg}: crate count matches {cs['lock']}", cs.get("count") == n, f"{cs.get('count')} != {n}")
+        else:
+            check(f"{pkg}: crate-store lock present", False, cs["lock"])
+
+    # treesitter: the committed parser-locks must exist and match the count
+    ps = rec.get("parsers")
+    if ps:
+        lock_path = os.path.join(REPO, ps["lock"])
+        if os.path.isfile(lock_path):
+            n = len(json.load(open(lock_path, encoding="utf-8")).get("parsers", {}))
+            check(f"{pkg}: parser count matches {ps['lock']}", ps.get("count") == n, f"{ps.get('count')} != {n}")
+        else:
+            check(f"{pkg}: parser-locks present", False, ps["lock"])
+
+
+def main():
+    if not os.path.isdir(RECORDS):
+        print("no assurance/records/ directory", file=sys.stderr)
+        return 1
+    records = sorted(f for f in os.listdir(RECORDS) if f.endswith(".toml"))
+    if not records:
+        print("no assurance records found", file=sys.stderr)
+        return 1
+    for fn in records:
+        check_record(os.path.join(RECORDS, fn))
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

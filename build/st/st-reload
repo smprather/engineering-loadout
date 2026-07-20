@@ -1,0 +1,45 @@
+#!/bin/sh
+# Apply st config changes to already-running windows.
+#
+# The loadout st patch re-reads every file in ST_XRESOURCES on SIGUSR1 and
+# redraws (font, colors, cell metrics). Default scope is the st instances you
+# own on the current $DISPLAY, because a config change is per-display in
+# practice; --all covers every st you own.
+#
+# Ctrl+Shift+R does the same thing from inside an st window.
+
+set -eu
+
+scope_all=0
+for arg in "$@"; do
+    case "$arg" in
+        --all) scope_all=1 ;;
+        -h|--help)
+            echo "usage: st-reload [--all]"
+            echo "  (default) signal st instances on \$DISPLAY; --all: every st you own"
+            exit 0
+            ;;
+        *) echo "st-reload: unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
+
+uid=$(id -u)
+signalled=0
+
+for pid in $(pgrep -u "$uid" -x st.bin 2>/dev/null || true); do
+    if [ "$scope_all" -eq 0 ] && [ -n "${DISPLAY:-}" ]; then
+        # /proc/<pid>/environ is readable for our own processes; entries are
+        # NUL-separated.
+        pid_display=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+            | sed -n 's/^DISPLAY=//p' | head -1) || pid_display=""
+        [ "$pid_display" = "$DISPLAY" ] || continue
+    fi
+    kill -USR1 "$pid" 2>/dev/null && signalled=$((signalled + 1))
+done
+
+if [ "$signalled" -eq 0 ]; then
+    echo "st-reload: no running st found${DISPLAY:+ on $DISPLAY}" >&2
+    exit 1
+fi
+
+echo "st-reload: reloaded $signalled st instance(s)"

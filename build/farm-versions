@@ -1,0 +1,757 @@
+#!/usr/bin/env python3
+"""
+farm-versions: query installed pre-built binary versions.
+
+Outputs a structured version table for all known pre-built tools.
+Use this to update README tables or changelog entries.
+
+Usage:
+    ./farm-versions [--bin-dir DIR] [--format json|tsv|text] [--missing-only]
+
+Formats:
+    json  -- {"name": "bat", "version": "0.26.1", "homepage": "..."}  (default)
+    tsv   -- name<TAB>version<TAB>homepage  (one row per tool)
+    text  -- aligned table suitable for copy-paste into a terminal
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Version strategies
+# ---------------------------------------------------------------------------
+
+
+def _run(cmd, timeout=5):
+    """Run a command, return combined stdout+stderr, empty string on failure."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+        )
+        return proc.stdout.decode("utf-8", "replace")
+    except OSError, subprocess.TimeoutExpired:
+        return ""
+
+
+def _strings(path):
+    """Return strings output for a binary (fallback for stripped Go/C++ binaries)."""
+    try:
+        proc = subprocess.run(
+            ["/usr/bin/strings", path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        return proc.stdout.decode("utf-8", "replace")
+    except OSError, subprocess.TimeoutExpired:
+        return ""
+
+
+def _go_mod_version(binary):
+    """Extract module version from Go build info embedded in the binary."""
+    go = "/usr/local/go/bin/go"
+    if not os.path.isfile(go):
+        go = "/usr/bin/go"
+    if not os.path.isfile(go):
+        return None
+    out = _run([go, "version", "-m", binary], timeout=10)
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("mod\t"):
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                ver = parts[2].lstrip("v").split("+")[0]
+                return ver
+    return None
+
+
+def strategy_flag(flags, pattern=r"([0-9]+\.[0-9]+[\w.\-]*)"):
+    """Run binary with flags, extract first regex match."""
+
+    def _get(binary):
+        out = _run([binary] + flags)
+        m = re.search(pattern, out)
+        return m.group(1).strip() if m else None
+
+    return _get
+
+
+def strategy_stdin(script, pattern=r"([0-9]+\.[0-9]+[\w.\-]*)"):
+    """Pipe a script string to the binary's stdin and extract a version."""
+
+    def _get(binary):
+        try:
+            proc = subprocess.run(
+                [binary],
+                input=script.encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            out = proc.stdout.decode("utf-8", "replace")
+        except OSError, subprocess.TimeoutExpired:
+            return None
+        m = re.search(pattern, out)
+        return m.group(1).strip() if m else None
+
+    return _get
+
+
+def strategy_strings(pattern):
+    """Search strings output of the binary for a regex pattern."""
+
+    def _get(binary):
+        out = _strings(binary)
+        m = re.search(pattern, out)
+        return m.group(1).strip() if m else None
+
+    return _get
+
+
+def strategy_go_mod():
+    """Extract version from embedded Go module metadata."""
+
+    def _get(binary):
+        return _go_mod_version(binary)
+
+    return _get
+
+
+def strategy_first(*strategies):
+    """Try strategies in order, return first non-None result."""
+
+    def _get(binary):
+        for s in strategies:
+            result = s(binary)
+            if result:
+                return result
+        return None
+
+    return _get
+
+
+# ---------------------------------------------------------------------------
+# Tool registry
+# ---------------------------------------------------------------------------
+# Each entry: (binary_name, display_name, homepage_url, version_strategy)
+# binary_name is looked up in bin_dir; display_name is shown in output.
+
+TOOLS = [
+    (
+        "agent-deck",
+        "agent-deck",
+        "https://github.com/asheshgoplani/agent-deck",
+        strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "amux",
+        "amux",
+        "https://github.com/andyrewlee/amux",
+        strategy_flag(["--version"], r"amux ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "bash",
+        "bash",
+        "https://www.gnu.org/software/bash/",
+        strategy_flag(["--version"], r"version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("bat", "bat", "https://github.com/sharkdp/bat", strategy_flag(["--version"], r"bat ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "broot",
+        "broot",
+        "https://github.com/Canop/broot",
+        strategy_flag(["--version"], r"broot ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "yazi",
+        "yazi",
+        "https://github.com/sxyazi/yazi",
+        strategy_flag(["--version"], r"Yazi ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "numr",
+        "numr",
+        "https://github.com/nasedkinpv/numr",
+        strategy_flag(["--version"], r"numr(?:-tui)? ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "btm",
+        "bottom",
+        "https://github.com/ClementTsang/bottom",
+        strategy_flag(["--version"], r"bottom ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("btop", "btop", "https://github.com/aristocratos/btop", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "choose",
+        "choose",
+        "https://github.com/theryangeary/choose",
+        strategy_flag(["--version"], r"choose ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "cloc",
+        "cloc",
+        "https://github.com/AlDanial/cloc",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+)"),
+    ),
+    (
+        "scc",
+        "scc",
+        "https://github.com/boyter/scc",
+        strategy_flag(["--version"], r"scc version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "tokei",
+        "tokei",
+        "https://github.com/XAMPPRocky/tokei",
+        strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "delta",
+        "delta",
+        "https://github.com/dandavison/delta",
+        strategy_flag(["--version"], r"delta ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("duf", "duf", "https://github.com/muesli/duf", strategy_flag(["--version"], r"duf ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "dasel",
+        "dasel",
+        "https://github.com/TomWright/dasel",
+        strategy_first(
+            strategy_go_mod(),
+            strategy_flag(["version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+        ),
+    ),
+    (
+        "dust",
+        "dust",
+        "https://github.com/bootandy/dust",
+        strategy_flag(["--version"], r"Dust ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "expect",
+        "expect",
+        "https://core.tcl-lang.org/expect/",
+        strategy_flag(["-v"], r"expect version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("eza", "eza", "https://github.com/eza-community/eza", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("fd", "fd", "https://github.com/sharkdp/fd", strategy_flag(["--version"], r"fd ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "fio",
+        "fio",
+        "https://github.com/axboe/fio",
+        strategy_flag(["--version"], r"fio-([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
+    ),
+    (
+        "flameshot",
+        "flameshot",
+        "https://github.com/flameshot-org/flameshot",
+        strategy_flag(["--version"], r"Flameshot v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "fzf",
+        "fzf",
+        "https://github.com/junegunn/fzf",
+        # fzf --version segfaults on some glibc builds; fall back to strings
+        strategy_first(
+            strategy_strings(r"fzf ([0-9]+\.[0-9]+\.[0-9]+)"),
+            strategy_flag(
+                ["--version"],
+                r"([0-9]+\.[0-9]+\.[0-9]+)",
+            ),
+        ),
+    ),
+    ("gping", "gping", "https://github.com/orf/gping", strategy_flag(["--version"], r"gping ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "glow",
+        "glow",
+        "https://github.com/charmbracelet/glow",
+        strategy_flag(["--version"], r"glow version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "keyb",
+        "keyb",
+        "https://github.com/kencx/keyb",
+        strategy_flag(["--version"], r"v?([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "models",
+        "models",
+        "https://github.com/reyamira/models",
+        strategy_flag(["--version"], r"models ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "htop",
+        "htop",
+        "https://github.com/htop-dev/htop",
+        strategy_flag(["--version"], r"htop ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "hx",
+        "helix",
+        "https://github.com/helix-editor/helix",
+        strategy_flag(["--version"], r"helix ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "hyperfine",
+        "hyperfine",
+        "https://github.com/sharkdp/hyperfine",
+        strategy_flag(["--version"], r"hyperfine ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("jq", "jq", "https://github.com/jqlang/jq", strategy_flag(["--version"], r"jq-([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("just", "just", "https://github.com/casey/just", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "lazygit",
+        "lazygit",
+        "https://github.com/jesseduffield/lazygit",
+        strategy_flag(["--version"], r"version=([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "gopls",
+        "gopls",
+        "https://github.com/golang/tools",
+        strategy_flag(["version"], r"golang.org/x/tools/gopls v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "micro",
+        "micro",
+        "https://github.com/zyedidia/micro",
+        strategy_flag(["--version"], r"Version:\s*([0-9]+\.[0-9]+\.[0-9a-z.\-]+)"),
+    ),
+    (
+        "lua-language-server",
+        "lua-language-server",
+        "https://github.com/LuaLS/lua-language-server",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "mlr",
+        "miller",
+        "https://github.com/johnkerl/miller",
+        strategy_flag(["--version"], r"mlr ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "nvim",
+        "neovim",
+        "https://github.com/neovim/neovim",
+        strategy_flag(["--version"], r"NVIM v([0-9]+\.[0-9]+\.[0-9]+[^\n]*)"),
+    ),
+    (
+        "patchelf",
+        "patchelf",
+        "https://github.com/NixOS/patchelf",
+        strategy_flag(["--version"], r"patchelf ([0-9]+\.[0-9]+)"),
+    ),
+    (
+        "rust-analyzer",
+        "rust-analyzer",
+        "https://github.com/rust-lang/rust-analyzer",
+        strategy_flag(["--version"], r"rust-analyzer ([0-9]{4}-[0-9]{2}-[0-9]{2})"),
+    ),
+    (
+        "rg",
+        "ripgrep",
+        "https://github.com/BurntSushi/ripgrep",
+        strategy_flag(["--version"], r"ripgrep ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "rsync",
+        "rsync",
+        "https://github.com/RsyncProject/rsync",
+        strategy_flag(["--version"], r"version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "ruff",
+        "ruff",
+        "https://github.com/astral-sh/ruff",
+        strategy_flag(["--version"], r"ruff ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "procs",
+        "procs",
+        "https://github.com/dalance/procs",
+        strategy_flag(["--version"], r"procs \"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("pv", "pv", "https://github.com/icetee/pv", strategy_flag(["--version"], r"pv ([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("sd", "sd", "https://github.com/chmln/sd", strategy_flag(["--version"], r"sd ([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("shfmt", "shfmt", "https://github.com/mvdan/sh", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "shellcheck",
+        "shellcheck",
+        "https://github.com/koalaman/shellcheck",
+        strategy_flag(["--version"], r"version:\s*([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "starship",
+        "starship",
+        "https://github.com/starship/starship",
+        strategy_flag(["--version"], r"starship ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "stylua",
+        "stylua",
+        "https://github.com/JohnnyMorganz/StyLua",
+        strategy_flag(["--version"], r"stylua ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "tkdiff",
+        "tkdiff",
+        "https://sourceforge.net/projects/tkdiff/",
+        strategy_strings(r"g\(version\)\s+\"([0-9]+\.[0-9]+(?:\.[0-9]+)?)\""),
+    ),
+    (
+        "tldr",
+        "tealdeer",
+        "https://github.com/dbrgn/tealdeer",
+        strategy_flag(["--version"], r"tealdeer ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("tmux", "tmux", "https://github.com/tmux/tmux", strategy_flag(["-V"], r"tmux ([0-9]+\.[0-9]+\w*)")),
+    (
+        "tree-sitter",
+        "tree-sitter",
+        "https://github.com/tree-sitter/tree-sitter",
+        strategy_flag(["--version"], r"tree-sitter ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("ty", "ty", "https://github.com/astral-sh/ty", strategy_flag(["--version"], r"ty ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "vim.bin",
+        "vim",
+        "https://github.com/vim/vim",
+        # "Vi IMproved 9.2" + "Included patches: 1-458" -> "9.2.0458"
+        lambda binary: (
+            lambda out: (
+                lambda b, p: f"{b.group(1)}.{int(p.group(1)):04d}" if b and p else (b.group(1) if b else None)
+            )(
+                re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
+                re.search(r"Included patches: 1-([0-9]+)", out or ""),
+            )
+        )(_run([binary, "--version"])),
+    ),
+    (
+        "gvim.bin",
+        "gvim",
+        "https://github.com/vim/vim",
+        lambda binary: (
+            lambda out: (
+                lambda b, p: f"{b.group(1)}.{int(p.group(1)):04d}" if b and p else (b.group(1) if b else None)
+            )(
+                re.search(r"Vi IMproved ([0-9]+\.[0-9]+)", out or ""),
+                re.search(r"Included patches: 1-([0-9]+)", out or ""),
+            )
+        )(_run([binary, "--version"])),
+    ),
+    (
+        "nedit-ng",
+        "nedit-ng",
+        "https://github.com/eteran/nedit-ng",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "surfer",
+        "surfer",
+        "https://gitlab.com/surfer-project/surfer",
+        # surfer --version -> "surfer 0.7.0 (git: v0.7.0)"
+        strategy_flag(["--version"], r"surfer ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "xterm",
+        "xterm",
+        "https://github.com/ThomasDickey/xterm-snapshots",
+        # xterm -version prints to stdout
+        strategy_first(
+            strategy_flag(["-version"], r"XTerm\(([0-9]+)\)"),
+            strategy_strings(r"XTerm\(([0-9]+)\)"),
+        ),
+    ),
+    (
+        "resize",
+        "resize",
+        "https://github.com/ThomasDickey/xterm-snapshots",
+        # resize ships with xterm; its own binary lacks the version string.
+        # Run the sibling xterm binary with -version instead.
+        lambda binary: strategy_flag(["-version"], r"XTerm\(([0-9]+)\)")(
+            os.path.join(os.path.dirname(binary), "xterm")
+        ),
+    ),
+    (
+        "gnuplot",
+        "gnuplot",
+        "http://www.gnuplot.info",
+        lambda binary: (lambda m: re.sub(r" patchlevel ", ".", m.group(1)) if m else None)(
+            re.search(r"gnuplot ([0-9]+\.[0-9]+ patchlevel [0-9]+)", _run([binary, "--version"]))
+        ),
+    ),
+    (
+        "xsel",
+        "xsel",
+        "https://github.com/kfish/xsel",
+        strategy_flag(["--version"], r"xsel version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("yank", "yank", "https://github.com/mptre/yank", strategy_flag(["-v"], r"yank ([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("yq", "yq", "https://github.com/mikefarah/yq", strategy_flag(["--version"], r"version v([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "zoxide",
+        "zoxide",
+        "https://github.com/ajeetdsouza/zoxide",
+        strategy_flag(["--version"], r"zoxide ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("zsh", "zsh", "https://www.zsh.org", strategy_flag(["--version"], r"zsh ([0-9]+\.[0-9]+(?:\.[0-9]+)?)")),
+    (
+        "fish",
+        "fish",
+        "https://github.com/fish-shell/fish-shell",
+        strategy_flag(["--version"], r"fish, version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "tclsh",
+        "tclsh",
+        "https://github.com/tcltk/tcl",
+        strategy_stdin("puts [info patchlevel]\n"),
+    ),
+    (
+        "tmux_path_store",
+        "tmux-path-store",
+        "https://github.com/smprather/tmux-path-store",
+        strategy_flag(["--version"], r"tmux-path-store ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("ncdu", "ncdu", "https://dev.yorhel.nl/ncdu", strategy_flag(["--version"], r"ncdu ([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("vd", "visidata", "https://www.visidata.org", strategy_flag(["--version"], r"VisiData ([0-9]+\.[0-9]+)")),
+    ("jupyter-lab", "jupyterlab", "https://jupyter.org", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
+    ("uv", "uv", "https://github.com/astral-sh/uv", strategy_flag(["--version"], r"uv ([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "python3.14",
+        "Python",
+        "https://www.python.org",
+        strategy_flag(["--version"], r"Python ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "liberty_filter",
+        "liberty-filter",
+        "",
+        strategy_flag(["--help"], r"liberty-filter ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "liberty_format",
+        "liberty-tools",
+        "https://github.com/smprather/liberty-tools",
+        strategy_flag(["--version"], r"liberty_format ([0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?)"),
+    ),
+    (
+        "liberty_view",
+        "liberty-tools",
+        "https://github.com/smprather/liberty-tools",
+        strategy_flag(["--version"], r"liberty_view ([0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?)"),
+    ),
+    (
+        "pdftotext",
+        "pdftotext (poppler)",
+        "https://poppler.freedesktop.org/releases.html",
+        strategy_flag(["-v"], r"pdftotext version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "7za",
+        "p7zip",
+        "https://sourceforge.net/projects/p7zip/files/p7zip/",
+        strategy_flag(["i"], r"p7zip Version ([0-9]+\.[0-9]+)"),
+    ),
+    (
+        "bzip2",
+        "bzip2",
+        "https://sourceware.org/bzip2/",
+        strategy_flag(["--version"], r"Version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("pigz", "pigz", "https://github.com/madler/pigz", strategy_flag(["--version"], r"pigz ([0-9]+\.[0-9]+)")),
+    (
+        "octave",
+        "octave",
+        "https://www.gnu.org/software/octave/",
+        strategy_flag(["--version"], r"GNU Octave, version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "ngspice",
+        "ngspice",
+        "https://sourceforge.net/projects/ngspice/",
+        strategy_flag(["--version"], r"ngspice-([0-9]+(?:\.[0-9]+)*)"),
+    ),
+    (
+        "ls",
+        "gnu-coreutils",
+        "https://www.gnu.org/software/coreutils/",
+        strategy_flag(["--version"], r"ls \(GNU coreutils\) ([0-9]+\.[0-9]+)"),
+    ),
+    (
+        "biome",
+        "biome",
+        "https://github.com/biomejs/biome",
+        strategy_flag(["--version"], r"Version: ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "fresh",
+        "fresh",
+        "https://github.com/sinelaw/fresh",
+        strategy_flag(["--version"], r"fresh ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "ninja",
+        "ninja",
+        "https://github.com/ninja-build/ninja",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("node", "nodejs", "https://github.com/nodejs/node", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "nvim-qt",
+        "nvim-qt",
+        "https://github.com/equalsraf/neovim-qt",
+        strategy_flag(["--version"], r"NVIM-QT v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    ("yara", "yara", "https://github.com/VirusTotal/yara", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
+    (
+        "zellij",
+        "zellij",
+        "https://github.com/zellij-org/zellij",
+        strategy_flag(["--version"], r"zellij ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "st",
+        "st",
+        "https://st.suckless.org",
+        strategy_first(
+            strategy_strings(r"%s ([0-9]+\.[0-9]+\.[0-9]+)"),
+            strategy_strings(r"\b(0\.[0-9]+\.[0-9]+)\b"),
+        ),
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def collect(bin_dir):
+    results = []
+    for binary_name, display_name, homepage, get_version in TOOLS:
+        binary_path = os.path.join(bin_dir, binary_name)
+        if not os.path.isfile(binary_path):
+            version = None
+            status = "missing"
+        elif not os.access(binary_path, os.X_OK):
+            version = None
+            status = "not-executable"
+        else:
+            version = get_version(binary_path)
+            status = "ok" if version else "unknown"
+        results.append(
+            {
+                "name": display_name,
+                "binary": binary_name,
+                "version": version,
+                "status": status,
+                "homepage": homepage,
+                "path": binary_path,
+            }
+        )
+    return results
+
+
+def fmt_json(results):
+    print(json.dumps(results, indent=2))
+
+
+def fmt_tsv(results):
+    print("binary\tname\tversion\tstatus\thomepage")
+    for r in results:
+        print("{}\t{}\t{}\t{}\t{}".format(r["binary"], r["name"], r["version"] or "", r["status"], r["homepage"]))
+
+
+def fmt_text(results):
+    col_b = max(len(r["binary"]) for r in results)
+    col_v = max(len(r["version"] or "--") for r in results)
+    col_s = max(len(r["status"]) for r in results)
+    fmt = "  {:<{b}}  {:<{v}}  {:<{s}}  {}"
+    header = fmt.format("BINARY", "VERSION", "STATUS", "HOMEPAGE", b=col_b, v=col_v, s=col_s)
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for r in results:
+        print(
+            fmt.format(
+                r["binary"],
+                r["version"] or "--",
+                r["status"],
+                r["homepage"],
+                b=col_b,
+                v=col_v,
+                s=col_s,
+            )
+        )
+    ok = sum(1 for r in results if r["status"] == "ok")
+    unknown = sum(1 for r in results if r["status"] == "unknown")
+    missing = sum(1 for r in results if r["status"] == "missing")
+    print()
+    print(f"  {ok} versioned, {unknown} unknown, {missing} missing")
+
+
+@click.command(
+    name="farm-versions",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option(
+    "--bin-dir",
+    "bin_dir",
+    default=lambda: os.path.expanduser("~/.local/bin"),
+    show_default="~/.local/bin",
+    metavar="DIR",
+    help="Directory containing installed binaries.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "tsv", "text"]),
+    default="json",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--missing-only",
+    "missing_only",
+    is_flag=True,
+    help="Only show tools that could not be versioned.",
+)
+def main(bin_dir, fmt, missing_only):
+    """Query installed pre-built binary versions.
+
+    Output formats:
+
+      json -- machine-readable; full record per tool
+
+      tsv  -- tab-separated; suitable for piping into spreadsheets
+
+      text -- aligned table suitable for copy-paste into a terminal
+    """
+    results = collect(bin_dir)
+
+    if missing_only:
+        results = [r for r in results if r["status"] != "ok"]
+
+    if not results:
+        print("All tools versioned successfully.", file=sys.stderr)
+        return
+
+    {"json": fmt_json, "tsv": fmt_tsv, "text": fmt_text}[fmt](results)
+
+
+if __name__ == "__main__":
+    main()

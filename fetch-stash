@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""fetch-stash -- get the nvim plugin stash, verified against the signed release.
+
+The stash (bare git mirrors of every bundled nvim plugin, ~328 MB) is a RELEASE ASSET,
+not a git payload: it is bz2'd packfiles, so committing it added ~328 MB to .git on
+every refresh, permanently. This fetches it and proves it is the real thing.
+
+TRUST CHAIN -- do not shortcut any link:
+
+    signed tag  ->  sha256sums.txt (release asset)  ->  stash bytes
+                ->  .content-manifest.fetched  ->  the installer will use it
+
+.content-manifest is a strict allowlist: loadout_main.py hard-errors on any payload file
+that is not in a manifest, on purpose. This tool is the ONLY thing that may add the stash
+to .content-manifest.fetched, and it does so only after the downloaded bytes match the
+sha256 published in the release. An unverified file is deleted, never left on disk.
+
+Two paths, because the network policy keeps moving:
+
+  online   fetch-stash                    # from the latest release
+           fetch-stash --tag v2026.07.14  # from a specific one
+  offline  fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \\
+                       --sums /path/to/sha256sums.txt
+           # the file was downloaded elsewhere (e.g. a Windows laptop via
+           # tools/download-release.ps1) and scp'd over. It is still verified.
+
+Runs under any python3 (stdlib only). No gh, no curl required.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import sys
+import urllib.error
+import urllib.request
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+SLUG = "smprather/engineering-loadout"
+STASH_NAME = "nvim-plugin-stash.tar.bz2"
+STASH_PATH = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", STASH_NAME)
+FETCHED_MANIFEST = os.path.join(REPO, ".content-manifest.fetched")
+SUMS_NAME = "sha256sums.txt"
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def http_get(url, dest=None, token=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "loadout-fetch-stash"})
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    if dest is None:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read()
+    total = 0
+    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as out:
+        size = int(r.headers.get("Content-Length") or 0)
+        while True:
+            chunk = r.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            total += len(chunk)
+            if size:
+                pct = 100 * total / size
+                print(
+                    f"\r  downloading {STASH_NAME}: {pct:5.1f}%  ({total // 1048576} / {size // 1048576} MB)",
+                    end="",
+                    flush=True,
+                )
+    print()
+    return None
+
+
+def release_assets(tag, token):
+    """Return {asset_name: download_url} for TAG (or the latest release)."""
+    api = f"https://api.github.com/repos/{SLUG}/releases/"
+    api += f"tags/{tag}" if tag else "latest"
+    try:
+        data = json.loads(http_get(api, token=token))
+    except urllib.error.HTTPError as e:
+        eprint(f"ERROR: GitHub API {e.code} for {api}")
+        if e.code == 404:
+            eprint("  No such release. Check the tag, or omit --tag for the latest.")
+        raise SystemExit(1)
+    except urllib.error.URLError as e:
+        eprint(f"ERROR: cannot reach github.com: {e.reason}")
+        eprint("  If this network blocks github, download the asset elsewhere (e.g. the")
+        eprint("  Windows path: tools/download-release.ps1), copy it over, and re-run with:")
+        eprint(f"    ./fetch-stash --from-file <{STASH_NAME}> --sums <{SUMS_NAME}>")
+        raise SystemExit(1)
+    return data["tag_name"], {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
+
+
+def expected_hash(sums_text, name):
+    """Pull NAME's sha256 out of a `sha256sum -c` style file."""
+    for line in sums_text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and os.path.basename(parts[1].lstrip("*")) == name:
+            return parts[0]
+    return None
+
+
+def record_fetched(rel_path, digest):
+    """Add (or replace) this file's verified hash in .content-manifest.fetched."""
+    lines = []
+    if os.path.isfile(FETCHED_MANIFEST):
+        lines = [
+            ln for ln in open(FETCHED_MANIFEST).read().splitlines() if ln.strip() and not ln.endswith(f" {rel_path}")
+        ]
+    header = "# Payload verified against a signed release and fetched out-of-band."
+    header2 = "# Written ONLY by ./fetch-stash, after the bytes matched sha256sums.txt."
+    body = [ln for ln in lines if not ln.startswith("#")]
+    body.append(f"sha256  {digest}  {rel_path}")
+    with open(FETCHED_MANIFEST, "w") as f:
+        f.write(header + "\n" + header2 + "\n" + "\n".join(sorted(body)) + "\n")
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description="Fetch + verify the nvim plugin stash.")
+    ap.add_argument("--tag", help="release tag (default: latest)")
+    ap.add_argument("--from-file", help="a stash file already copied here (skips the download)")
+    ap.add_argument("--sums", help=f"path to {SUMS_NAME} (required with --from-file)")
+    ap.add_argument("--force", action="store_true", help="re-fetch even if the stash is present")
+    args = ap.parse_args(argv)
+
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    os.makedirs(os.path.dirname(STASH_PATH), exist_ok=True)
+
+    if os.path.isfile(STASH_PATH) and not args.force and not args.from_file:
+        print(f"stash already present: {STASH_PATH}")
+        print("  (--force to re-fetch)")
+        return 0
+
+    # ---- get the expected hash, from the release ----------------------------------
+    if args.from_file:
+        if not args.sums:
+            eprint(f"ERROR: --from-file needs --sums (the {SUMS_NAME} from the same release).")
+            eprint("  Without it there is nothing to verify against, and an unverified stash")
+            eprint("  is exactly what the content manifest exists to refuse.")
+            return 2
+        sums_text = open(args.sums).read()
+        src = args.from_file
+    else:
+        tag, assets = release_assets(args.tag, token)
+        if SUMS_NAME not in assets:
+            eprint(f"ERROR: release {tag} has no {SUMS_NAME} -- cannot verify. Refusing.")
+            return 1
+        if STASH_NAME not in assets:
+            eprint(f"ERROR: release {tag} has no {STASH_NAME} asset.")
+            eprint("  Releases before the stash moved out of git do not carry it.")
+            return 1
+        print(f"release: {tag}")
+        sums_text = http_get(assets[SUMS_NAME], token=token).decode()
+        tmp = STASH_PATH + ".part"
+        http_get(assets[STASH_NAME], dest=tmp, token=token)
+        src = tmp
+
+    want = expected_hash(sums_text, STASH_NAME)
+    if not want:
+        eprint(f"ERROR: {SUMS_NAME} has no entry for {STASH_NAME}. Refusing to trust it.")
+        if src.endswith(".part"):
+            os.unlink(src)
+        return 1
+
+    # ---- verify, or destroy ---------------------------------------------------------
+    print(f"  verifying sha256 ({os.path.getsize(src) // 1048576} MB)...")
+    got = sha256_file(src)
+    if got != want:
+        eprint("ERROR: sha256 MISMATCH -- the stash does not match the signed release.")
+        eprint(f"  expected {want}")
+        eprint(f"  got      {got}")
+        eprint("  The file is being deleted. Do not use it.")
+        if src.endswith(".part"):
+            os.unlink(src)
+        return 1
+
+    # Compare REAL paths: --from-file may name the stash's own location (relative vs
+    # absolute), and copying a file onto itself raises SameFileError.
+    if os.path.realpath(src) != os.path.realpath(STASH_PATH):
+        if src.endswith(".part"):
+            os.replace(src, STASH_PATH)
+        else:
+            shutil.copyfile(src, STASH_PATH)
+
+    rel = os.path.relpath(STASH_PATH, REPO)
+    record_fetched(rel, want)
+
+    print(f"  OK: {rel}")
+    print(f"  sha256 {want}")
+    print(f"  recorded in {os.path.basename(FETCHED_MANIFEST)} -- the installer will accept it.")
+    print()
+    print("Next:")
+    print("  ./loadout install @shared-all --dest-dir <shared-tree>   # stage it for everyone")
+    print("  ./loadout install nvim-plugin-stash                      # or just for you")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

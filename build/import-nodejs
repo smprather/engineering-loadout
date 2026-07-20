@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+"""
+import-nodejs: bundle a Node.js installation into the loadout payload tree.
+
+Usage:
+    ./import-nodejs                             # nvm install --lts, bundle latest LTS
+    ./import-nodejs --tag v26.2.0               # nvm install specific version
+    ./import-nodejs ~/.nvm/versions/node/v26.2.0  # use already-installed nvm dir
+
+The output archive is placed at:
+    <repo>/payload/<platform>/runtime/node.tar.bz2
+
+Platform auto-detection:
+  arch: uname -m
+  glibc version: getconf GNU_LIBC_VERSION or ldd --version
+  OS family: /etc/os-release PLATFORM_ID / ID + ID_LIKE
+  Produces a platform string like "el8.x86_64.glibc2p28".
+
+Bundle contents (headers/docs/src stripped):
+  ./bin/node, ./bin/npm, ./bin/npx, ./bin/corepack
+  ./lib/node_modules/npm/
+  ./lib/node_modules/corepack/
+
+Extracts to ~/.local/ so bins land in ~/.local/bin/.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+
+def eprint(*args):
+    print(*args, file=sys.stderr)
+
+
+def die(msg):
+    eprint(f"error: {msg}")
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Platform detection (mirrors import-portable-python)
+# ---------------------------------------------------------------------------
+
+
+def _find_tool(*candidates):
+    for path in candidates:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+_UNAME = _find_tool("/usr/bin/uname", "/bin/uname")
+_LDD = _find_tool("/usr/bin/ldd", "/lib64/ld-linux-x86-64.so.2")
+_GETCONF = _find_tool("/usr/bin/getconf")
+_OBJDUMP = _find_tool("/usr/bin/objdump", "/usr/bin/gobjdump")
+_PATCHELF = _find_tool("/usr/bin/patchelf", "/usr/local/bin/patchelf")
+_STRIP = _find_tool("/usr/bin/strip")
+
+
+def _run_output(*cmd):
+    proc = subprocess.run(list(cmd), capture_output=True)
+    return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def detect_arch():
+    if not _UNAME:
+        die("uname not found")
+    return _run_output(_UNAME, "-m")
+
+
+def detect_glibc_version():
+    if _GETCONF:
+        text = _run_output(_GETCONF, "GNU_LIBC_VERSION")
+        parts = text.split()
+        if len(parts) >= 2:
+            return parts[1]
+    if _LDD:
+        proc = subprocess.run([_LDD, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        m = re.search(rb"[0-9]+\.[0-9]+", proc.stdout)
+        if m:
+            return m.group(0).decode("ascii")
+    return ""
+
+
+def ldd_is_musl():
+    if not _LDD:
+        return False
+    proc = subprocess.run([_LDD, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return b"musl" in proc.stdout.lower()
+
+
+def read_os_release():
+    data = {}
+    try:
+        with open("/etc/os-release") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                data[key] = value.strip().strip('"')
+    except OSError:
+        pass
+    return data
+
+
+def detect_platform():
+    arch = detect_arch()
+    if ldd_is_musl():
+        return f"linux.{arch}.musl"
+    glibc_ver = detect_glibc_version()
+    glibc_id = "glibc{}".format(glibc_ver.replace(".", "p")) if glibc_ver else "glibc"
+    osr = read_os_release()
+    distro_id = osr.get("ID", "")
+    id_like = osr.get("ID_LIKE", "")
+    version_id = osr.get("VERSION_ID", "")
+    platform_id = osr.get("PLATFORM_ID", "")
+    el_id = ""
+    if platform_id.startswith("platform:el"):
+        el_id = platform_id[len("platform:") :]
+    elif any(
+        x in (" " + distro_id + " " + id_like + " ") for x in (" rhel ", " centos ", " almalinux ", " rocky ", " ol ")
+    ):
+        el_id = "el{}".format(version_id.split(".", 1)[0])
+    if el_id:
+        return f"{el_id}.{arch}.{glibc_id}"
+    return f"linux.{arch}.{glibc_id}"
+
+
+# ---------------------------------------------------------------------------
+# nvm invocation
+# ---------------------------------------------------------------------------
+
+
+def _nvm_bash(cmd):
+    """Run a bash -i command with nvm sourced; return (stdout, stderr, returncode)."""
+    script = (
+        'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"\n'
+        '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"\n'
+        'command -v nvm >/dev/null 2>&1 || { echo "nvm not found -- install nvm first"; exit 1; }\n' + cmd
+    )
+    proc = subprocess.run(
+        ["/bin/bash", "-i", "-c", script],
+        capture_output=True,
+    )
+    stdout = proc.stdout.decode("utf-8", "replace")
+    stderr = proc.stderr.decode("utf-8", "replace")
+    return stdout, stderr, proc.returncode
+
+
+def nvm_install(tag=None):
+    """Use nvm to install Node.js; return the installed prefix dir."""
+    if tag:
+        ver_arg = tag.lstrip("v")  # nvm accepts both "v26.2.0" and "26.2.0"
+        install_cmd = f"nvm install --latest-npm v{ver_arg} && nvm which v{ver_arg}"
+    else:
+        install_cmd = "nvm install --lts --latest-npm && nvm which current"
+
+    print("Running: bash -i -c '{}'".format(install_cmd.split("&&")[0].strip()))
+    stdout, stderr, rc = _nvm_bash(install_cmd)
+
+    # Print stderr so user sees nvm install progress
+    for line in stderr.splitlines():
+        print(f"  [nvm] {line}")
+
+    if rc != 0:
+        die(f"nvm command failed (rc={rc}):\n{stdout + stderr}")
+
+    # Last non-empty line of stdout is the path from `nvm which`
+    lines = [l.strip() for l in stdout.splitlines() if l.strip()]
+    if not lines:
+        die("nvm which returned no output")
+
+    node_bin = lines[-1]
+    if not os.path.isfile(node_bin):
+        die(f"nvm which returned '{node_bin}' but that file does not exist")
+
+    # node_bin is e.g. /home/user/.nvm/versions/node/v26.2.0/bin/node
+    prefix = os.path.dirname(os.path.dirname(node_bin))  # strip /bin/node
+    print(f"nvm installed: {prefix}")
+    return prefix
+
+
+# ---------------------------------------------------------------------------
+# glibc symbol audit
+# ---------------------------------------------------------------------------
+
+
+EL8_GLIBC = (2, 28)
+
+
+def _parse_glibc_sym(sym):
+    """Parse 'GLIBC_2.17' -> (2, 17) or None."""
+    m = re.match(r"GLIBC_([0-9]+)\.([0-9]+)", sym)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def audit_glibc(node_bin):
+    if not _OBJDUMP:
+        print("warning: objdump not found; skipping glibc symbol audit")
+        return
+    proc = subprocess.run(
+        [_OBJDUMP, "-T", node_bin],
+        capture_output=True,
+    )
+    highest = (0, 0)
+    for line in proc.stdout.decode("utf-8", "replace").splitlines():
+        parts = line.split()
+        for p in parts:
+            if p.startswith("GLIBC_"):
+                v = _parse_glibc_sym(p)
+                if v and v > highest:
+                    highest = v
+    if highest == (0, 0):
+        print("glibc audit  : no GLIBC_* symbols found (static or unexpected format)")
+        return
+    sym_str = f"GLIBC_{highest[0]}.{highest[1]}"
+    target_str = f"GLIBC_{EL8_GLIBC[0]}.{EL8_GLIBC[1]}"
+    if highest > EL8_GLIBC:
+        print(
+            f"WARNING: bin/node requires {sym_str} > {target_str} (EL8 target). This node bundle may not work on EL8 machines."
+        )
+    else:
+        print(f"glibc audit  : {sym_str} <= {target_str} (EL8-compatible)")
+
+
+# ---------------------------------------------------------------------------
+# Bundle assembly
+# ---------------------------------------------------------------------------
+
+# Paths inside the node prefix dir to include in the bundle
+_KEEP_PATHS = [
+    "bin/node",
+    "bin/npm",
+    "bin/npx",
+    "bin/corepack",
+    os.path.join("lib", "node_modules", "npm"),
+    os.path.join("lib", "node_modules", "corepack"),
+]
+
+
+def assemble_bundle(src_dir, bundle_dir):
+    """Copy kept paths from src_dir into bundle_dir, preserving symlinks."""
+    for rel in _KEEP_PATHS:
+        src = os.path.join(src_dir, rel)
+        dst = os.path.join(bundle_dir, rel)
+        if not os.path.exists(src) and not os.path.islink(src):
+            eprint(f"warning: expected path not found in node dir: {rel}")
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if os.path.islink(src):
+            link_target = os.readlink(src)
+            if os.path.exists(dst) or os.path.islink(dst):
+                os.unlink(dst)
+            os.symlink(link_target, dst)
+        elif os.path.isdir(src):
+            shutil.copytree(src, dst, symlinks=True)
+        else:
+            shutil.copy2(src, dst)
+
+    # Ensure bin/npm and bin/npx are executable (they may be scripts)
+    for name in ("npm", "npx", "corepack"):
+        p = os.path.join(bundle_dir, "bin", name)
+        if os.path.isfile(p) and not os.path.islink(p):
+            os.chmod(p, 0o755)
+
+
+# ---------------------------------------------------------------------------
+# strip + patchelf
+# ---------------------------------------------------------------------------
+
+
+def strip_binary(path):
+    if not _STRIP:
+        eprint("warning: strip not found; skipping debug symbol removal from bin/node")
+        return
+    before = os.path.getsize(path)
+    rc = subprocess.call([_STRIP, "--strip-unneeded", path])
+    if rc != 0:
+        eprint(f"warning: strip returned {rc} for {path}")
+        return
+    after = os.path.getsize(path)
+    print(f"strip        : bin/node {round(before / 1024 / 1024, 1)} MB -> {round(after / 1024 / 1024, 1)} MB")
+
+
+def patchelf_rpath(path):
+    if not _PATCHELF:
+        eprint("warning: patchelf not found; skipping RPATH patch on bin/node")
+        return
+    rpath = "$ORIGIN/../lib64:$ORIGIN/../lib"
+    rc = subprocess.call([_PATCHELF, "--set-rpath", rpath, path])
+    if rc != 0:
+        eprint(f"warning: patchelf returned {rc} for {path}")
+    else:
+        print(f"patchelf     : bin/node RPATH = {rpath}")
+
+
+# ---------------------------------------------------------------------------
+# Node.js version detection
+# ---------------------------------------------------------------------------
+
+
+def detect_node_version(src_dir):
+    node_bin = os.path.join(src_dir, "bin", "node")
+    if os.path.isfile(node_bin) and os.access(node_bin, os.X_OK):
+        out = _run_output(node_bin, "--version")
+        m = re.match(r"v?([0-9]+\.[0-9]+\.[0-9]+)", out.strip())
+        if m:
+            return m.group(1)
+    # Fallback: parse from dir name
+    basename = os.path.basename(os.path.abspath(src_dir))
+    m = re.search(r"v?([0-9]+\.[0-9]+\.[0-9]+)", basename)
+    if m:
+        return m.group(1)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# packages.json update
+# ---------------------------------------------------------------------------
+
+
+def update_packages_json(packages_json_path, version, dry_run):
+    if dry_run:
+        print(f"[dry-run] would update packages.json nodejs.version to {version}")
+        return
+    with open(packages_json_path) as fh:
+        text = fh.read()
+    data = json.loads(text)
+    if "nodejs" not in data.get("packages", {}):
+        eprint("warning: 'nodejs' not found in packages.json; skipping version update")
+        return
+    data["packages"]["nodejs"]["version"] = version
+    with open(packages_json_path, "w") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+    print(f"packages.json: nodejs.version = {version}")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+@click.command(
+    name="import-nodejs",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("node_dir", required=False, default=None, metavar="NODE_DIR", type=click.Path())
+@click.option(
+    "--tag",
+    default=None,
+    metavar="VERSION",
+    help="Node.js version tag to install via nvm (e.g. v26.2.0); ignored when NODE_DIR given.",
+)
+@click.option(
+    "--platform",
+    "platform_override",
+    default=None,
+    metavar="PLATFORM",
+    help="Override platform string (default: auto-detect).",
+)
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help="Print what would be done without creating the archive.",
+)
+def main(node_dir, tag, platform_override, dry_run):
+    """Bundle a Node.js installation into the loadout payload tree.
+
+    Examples:
+
+      ./import-nodejs                                  # nvm install --lts, bundle latest
+      ./import-nodejs --tag v26.2.0                    # nvm install specific version
+      ./import-nodejs ~/.nvm/versions/node/v26.2.0     # bundle an existing nvm install
+    """
+    # Resolve source dir
+    if node_dir:
+        src_dir = os.path.abspath(node_dir)
+        if not os.path.isdir(src_dir):
+            die(f"not a directory: {src_dir}")
+        if not os.path.isfile(os.path.join(src_dir, "bin", "node")):
+            die(f"bin/node not found in {src_dir}: does not look like a Node.js prefix dir")
+    else:
+        src_dir = nvm_install(tag=tag)
+
+    # Version
+    node_version = detect_node_version(src_dir)
+    if node_version:
+        print(f"node version : v{node_version}")
+    else:
+        eprint("warning: could not determine Node.js version")
+        node_version = "unknown"
+
+    # Platform
+    platform = platform_override or detect_platform()
+    print(f"platform     : {platform}")
+
+    # Locate repo root (script lives at build/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    dest_archive = os.path.join(repo_dir, "payload", platform, "runtime", "node.tar.bz2")
+    packages_json = os.path.join(repo_dir, "payload", "packages.json")
+
+    print(f"archive      : {dest_archive}")
+
+    # glibc audit
+    audit_glibc(os.path.join(src_dir, "bin", "node"))
+
+    if dry_run:
+        print(f"[dry-run] would create {dest_archive}")
+        return
+
+    # Assemble bundle in temp dir
+    with tempfile.TemporaryDirectory(prefix="import-nodejs-") as tmpdir:
+        bundle_dir = os.path.join(tmpdir, "bundle")
+        os.makedirs(bundle_dir)
+
+        print("assembling bundle ...")
+        assemble_bundle(src_dir, bundle_dir)
+
+        node_bin = os.path.join(bundle_dir, "bin", "node")
+        if not os.path.isfile(node_bin):
+            die("bin/node not present in assembled bundle")
+
+        strip_binary(node_bin)
+        patchelf_rpath(node_bin)
+
+        # Create archive
+        os.makedirs(os.path.dirname(dest_archive), exist_ok=True)
+        tmp_archive = dest_archive + ".tmp"
+        try:
+            with tarfile.open(tmp_archive, "w:bz2") as tf:
+                # Add contents of bundle_dir with ./ prefix
+                for top in ("bin", "lib"):
+                    top_path = os.path.join(bundle_dir, top)
+                    if os.path.exists(top_path):
+                        tf.add(top_path, arcname="./" + top)
+            os.rename(tmp_archive, dest_archive)
+            tmp_archive = None
+        finally:
+            if tmp_archive and os.path.exists(tmp_archive):
+                os.unlink(tmp_archive)
+
+    size_mb = os.path.getsize(dest_archive) / 1024 / 1024
+    print(f"created      : {dest_archive} ({size_mb:.1f} MB)")
+
+    # Update packages.json
+    if os.path.isfile(packages_json) and node_version != "unknown":
+        update_packages_json(packages_json, node_version, dry_run=False)
+
+    print()
+    print("Next steps:")
+    print("  ./strip-all-elf-binaries")
+    print(f"  git add payload/{platform}/runtime/node.tar.bz2 payload/packages.json .strip-manifest")
+    print("  git commit")
+
+
+if __name__ == "__main__":
+    main()

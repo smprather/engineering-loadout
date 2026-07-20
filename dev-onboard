@@ -1,0 +1,230 @@
+#!/bin/sh
+# dev-onboard -- bring a base AlmaLinux 8.10 machine up to loadout
+# development level.
+#
+# Prereqs: assumes the user has already cloned the repo and run a full
+# `./loadout install @engineering-loadout` so every bundled
+# tool is in ~/.local/bin and ~/.local/lib64. This script only installs
+# what's needed *to build and release the loadout itself* -- system
+# packages (compilers, dev headers, scanning tools) and per-user
+# toolchains (rustup, nvm, gh auth) that the bundled tools can't ship.
+#
+# Idempotent: re-run safe. Skips already-installed pkgs, already-enabled
+# repos, already-installed toolchains.
+#
+# Usage:
+#   ./dev-onboard            # interactive -- prompts before each phase
+#   ./dev-onboard --yes      # non-interactive
+#   ./dev-onboard --check    # print what would happen, change nothing
+#
+# Logs to /tmp/loadout-dev-onboard.log
+
+set -eu
+
+LOG=/tmp/loadout-dev-onboard.log
+: > "$LOG"
+
+YES=0
+CHECK=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --yes|-y) YES=1 ;;
+        --check)  CHECK=1 ;;
+        -h|--help)
+            sed -n '2,/^$/p' "$0"
+            exit 0
+            ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+say()  { printf '\n=== %s ===\n' "$*" | tee -a "$LOG"; }
+do_()  { printf '$ %s\n' "$*" | tee -a "$LOG"; [ "$CHECK" -eq 1 ] || eval "$*" 2>&1 | tee -a "$LOG"; }
+ask()  {
+    [ "$YES" -eq 1 ] && return 0
+    printf '%s [Y/n] ' "$1"
+    read ans
+    case "$ans" in n|N|no|NO) return 1 ;; *) return 0 ;; esac
+}
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ------------------------------------------------------------------ phase 1
+say "Phase 1 -- Enable required dnf repos"
+
+if ! rpm -q epel-release >/dev/null 2>&1; then
+    ask "Install epel-release?" && do_ "sudo dnf install -y epel-release"
+fi
+
+# PowerTools (named differently across Alma/Rocky/RHEL forks)
+if ! sudo dnf repolist 2>/dev/null | grep -qE 'powertools|crb'; then
+    do_ "sudo dnf config-manager --set-enabled powertools 2>/dev/null || sudo dnf config-manager --set-enabled crb"
+fi
+
+if ! rpm -q rpmfusion-free-release >/dev/null 2>&1; then
+    ask "Install RPM Fusion (free + nonfree)?" && {
+        do_ "sudo dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm"
+        do_ "sudo dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-8.noarch.rpm"
+    }
+fi
+
+if ! [ -f /etc/yum.repos.d/gh-cli.repo ]; then
+    ask "Add GitHub CLI repo?" && {
+        do_ "sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo"
+    }
+fi
+
+if ! [ -f /etc/yum.repos.d/docker-ce.repo ]; then
+    ask "Add Docker CE repo?" && {
+        do_ "sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+    }
+fi
+
+# ------------------------------------------------------------------ phase 2
+say "Phase 2 -- Build toolchains (gcc, llvm, go, devtools)"
+
+if ask "Install Development Tools group + gcc-toolset-14?"; then
+    do_ "sudo dnf groupinstall -y 'Development Tools'"
+    do_ "sudo dnf install -y gcc-toolset-14"
+fi
+
+if ask "Install LLVM toolset module (clang, lld, llvm-toolset)?"; then
+    do_ "sudo dnf module install -y llvm-toolset"
+fi
+
+if ask "Install Go toolset module?"; then
+    do_ "sudo dnf module install -y go-toolset"
+fi
+
+# ------------------------------------------------------------------ phase 3
+say "Phase 3 -- Dev libraries (build headers for bundled tools)"
+
+# Group by purpose so re-runs only install missing pieces.
+CORE_DEV='autoconf automake bison byacc cmake ninja-build patchelf
+          libcap-devel libacl-devel libattr-devel libxml2-devel
+          libedit-devel libsecret-devel popt-devel
+          lz4-devel xxhash-devel file-devel
+          perl-IPC-Cmd perl-Time-Piece'
+
+NCURSES_TMUX='ncurses-devel libevent-devel readline-devel'
+
+X11_DEV='libX11-devel libXft-devel libXaw-devel libXt-devel libXmu-devel
+         libXpm-devel libXinerama-devel libXrender-devel libxkbfile-devel
+         libxkbcommon-devel fontconfig-devel freetype-devel
+         libjpeg-turbo-devel libpng-devel pixman-devel harfbuzz-devel'
+
+GUI_DEV='gtk3-devel cairo-devel pango-devel
+         qt5-qtbase-devel qt5-qtsvg-devel qt5-linguist
+         mesa-libGL-devel mesa-libEGL-devel libglvnd-devel'
+
+OCTAVE_DEV='fftw-devel openblas-devel lapack-devel hdf5-devel arpack-devel
+            glpk-devel suitesparse-devel qhull-devel texinfo
+            libcurl-devel libsndfile-devel portaudio-devel rapidjson-devel
+            boost-devel openssl3-devel'
+
+SECURITY='clamav clamav-update yara'
+
+CRYPTO_TLS='gnutls-utils gnupg2'
+
+if ask "Install core build deps + perl helpers?"; then
+    do_ "sudo dnf install -y $CORE_DEV"
+fi
+if ask "Install ncurses + tmux build deps?"; then
+    do_ "sudo dnf install -y $NCURSES_TMUX"
+fi
+if ask "Install X11 dev headers (vim/gvim/nedit-ng/urxvt/st/xterm)?"; then
+    do_ "sudo dnf install -y $X11_DEV"
+fi
+if ask "Install GUI toolkit deps (GTK3, Qt5) -- needed for gvim/nedit-ng/meld builds?"; then
+    do_ "sudo dnf install -y $GUI_DEV"
+fi
+if ask "Install Octave build deps (large -- ~50 -devel packages)?"; then
+    do_ "sudo dnf install -y $OCTAVE_DEV"
+fi
+if ask "Install security scanners (clamav + yara) for release-gate scanning?"; then
+    do_ "sudo dnf install -y $SECURITY"
+    do_ "sudo freshclam || true"
+fi
+# NOTE: no clamd daemon step. scan-for-malware parallelizes ClamAV by sharding
+# the file list across N `clamscan` processes (each with a local DB copy), which
+# saturates the box. A clamd `clamdscan --multiscan` path was benchmarked and
+# was ~4.3x slower here (1365s vs 321s; its --fdpass mode serializes the per-file
+# handoff), so
+# only `clamav` + `clamav-update` above are needed -- not the clamd daemon.
+
+# ------------------------------------------------------------------ phase 4
+say "Phase 4 -- Release / CI tooling"
+
+if ! have gh; then
+    ask "Install gh CLI?" && do_ "sudo dnf install -y gh"
+fi
+
+if ! have docker; then
+    ask "Install Docker CE (for sandboxed builds; optional)?" && {
+        do_ "sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+        do_ "sudo systemctl enable --now docker"
+        do_ "sudo usermod -aG docker $USER"
+        printf '  (log out + back in for docker group to take effect)\n'
+    }
+fi
+
+# ------------------------------------------------------------------ phase 5
+say "Phase 5 -- Per-user toolchains (rust, node, uv tools)"
+
+if ! [ -x "$HOME/.cargo/bin/rustup" ]; then
+    ask "Install Rust toolchain via rustup?" && {
+        do_ "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal"
+    }
+else
+    do_ "$HOME/.cargo/bin/rustup update stable"
+fi
+
+if ! [ -d "$HOME/.nvm" ]; then
+    ask "Install nvm + Node LTS (needed for some upstream source builds; loadout itself avoids JS deps)?" && {
+        do_ "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash"
+        do_ ". $HOME/.nvm/nvm.sh && nvm install --lts"
+    }
+fi
+
+# uv ships with the loadout, but newer meson (>= 0.59) does not -- needed
+# for foot/wayland-era builds. Install via uv tool so it sits in
+# ~/.local/share/uv/tools.
+if have uv && ! [ -x "$HOME/.local/share/uv/tools/meson/bin/meson" ]; then
+    ask "Install meson >= 1.x via 'uv tool install meson' (EL8 ships 0.58)?" && {
+        do_ "uv tool install meson"
+    }
+fi
+
+# ------------------------------------------------------------------ phase 6
+say "Phase 6 -- Sanity check"
+
+cat <<'EOF' | tee -a "$LOG"
+
+  Verification commands to run next:
+    ./loadout doctor
+    build/check-versions --outdated-only
+    build/verify-binaries
+    ./release --dry-run                  # full release smoke
+
+  Per-tool source builds (test each before relying on it):
+    build/build-tmux.sh   --tag <tag>
+    build/build-fish.sh   --tag <tag>
+    build/build-zsh.sh    --tag <tag>
+    build/build-octave.sh --tag <tag>
+    build/build-gvim.sh   --tag <tag>
+    build/build-nedit-ng.sh --tag <tag>
+    build/build-urxvt.sh  --tag <tag>
+    build/build-st.sh     --tag <tag>
+
+  Authenticate gh CLI for higher API rate limits (5000/hr vs 60/hr):
+    gh auth login
+
+  Sourced LD/PATH from the loadout's bashrc layer? Confirm by opening a
+  new shell and running:
+    which python3.14 patchelf uv ruff
+    starship --version
+    nvim --version | head -1
+
+EOF
+
+printf '\nFull log: %s\n' "$LOG"

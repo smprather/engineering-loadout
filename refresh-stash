@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""refresh-stash -- update the nvim plugin mirrors IN PLACE, with no loadout release.
+
+This is the piece that decouples plugin cadence from loadout cadence.
+
+    nDPC (has github, clone/fetch only)          DPC (air-gapped)
+        │                                             │
+        │  ./refresh-stash <shared>/.../plugin-stash  │
+        ▼                                             ▼
+    shared filesystem  ── R/W from nDPC ──  R/O from DPC
+        │
+        └── users' nvim clones + :Lazy update FETCH from these mirrors
+
+Run it on the box that can reach github; it writes the refreshed bare mirrors straight
+into the shared tree. Air-gapped users pick up the new plugin versions on their next
+`:Lazy update` -- no new loadout release, no 328 MB re-committed to git, nothing to
+re-deploy.
+
+It only ever CLONES and FETCHES. It never pushes, so a "clone/pull only" network policy
+is enough.
+
+Usage:
+    ./refresh-stash <stash-dir>              # update every mirror in place
+    ./refresh-stash <stash-dir> --dry-run    # say what would change, touch nothing
+    ./refresh-stash <stash-dir> --add-only   # only mirror plugins that are missing
+
+The stash dir is the one the installer created, e.g.
+    <shared>/local/share/nvim/loadout/vendor/plugin-stash
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+LOCKFILE = os.path.join(REPO, "envs", "nvim", "lazy-lock.json")
+SPECS_DIR = os.path.join(REPO, "envs", "nvim", "lua", "global", "plugins")
+KNOWN_SLUGS = {"lazy.nvim": "folke/lazy.nvim"}
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def git(*args, cwd=None, check=True):
+    return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True)
+
+
+# A plugin slug is "owner/repo". The naive regex also matches file paths that appear in
+# lua strings -- `doc/news.txt`, `queries/python/highlights.scm` -- and we then try to
+# clone them from github. Filter those out: no file extensions, no known directory names
+# in the owner slot.
+_NOT_A_SLUG_EXT = (".txt", ".md", ".lua", ".vim", ".json", ".scm", ".toml", ".yml", ".yaml", ".png", ".so")
+_NOT_A_SLUG_OWNER = {
+    "doc",
+    "lua",
+    "tests",
+    "test",
+    "after",
+    "queries",
+    "plugin",
+    "plugins",
+    "spec",
+    "ftplugin",
+    "autoload",
+    "src",
+    "build",
+    "scripts",
+}
+
+
+def is_plugin_slug(s):
+    owner, _, repo = s.partition("/")
+    if not owner or not repo or "/" in repo:
+        return False
+    if owner.lower() in _NOT_A_SLUG_OWNER:
+        return False
+    if repo.lower().endswith(_NOT_A_SLUG_EXT):
+        return False
+    return True
+
+
+def wanted_slugs():
+    """Every plugin the loadout knows about: the pinned set + the opt-in catalog."""
+    slugs = set(KNOWN_SLUGS.values())
+    for root, _dirs, files in os.walk(SPECS_DIR):
+        for fn in files:
+            if not fn.endswith(".lua"):
+                continue
+            text = open(os.path.join(root, fn), encoding="utf-8", errors="replace").read()
+            for s in re.findall(r'"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)"', text):
+                if is_plugin_slug(s):
+                    slugs.add(s)
+    return sorted(slugs)
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description="Refresh the nvim plugin stash in place.")
+    ap.add_argument("stash", help="the stash dir in the shared tree")
+    ap.add_argument("--dry-run", action="store_true", help="report only; change nothing")
+    ap.add_argument("--add-only", action="store_true", help="only add missing mirrors")
+    args = ap.parse_args(argv)
+
+    stash = os.path.abspath(args.stash)
+    if not os.path.isdir(stash):
+        eprint(f"ERROR: no stash dir at {stash}")
+        eprint("  Point me at the installed stash, e.g.")
+        eprint("    <shared>/local/share/nvim/loadout/vendor/plugin-stash")
+        return 1
+    if not args.dry_run and not os.access(stash, os.W_OK):
+        eprint(f"ERROR: {stash} is not writable.")
+        eprint("  Run this on the box where the shared filesystem is R/W (nDPC), not on the")
+        eprint("  air-gapped side where it is mounted read-only.")
+        return 1
+
+    # What is on disk now?
+    present = {}
+    for root, dirs, _files in os.walk(stash):
+        for d in list(dirs):
+            if d.endswith(".git"):
+                slug = os.path.relpath(os.path.join(root, d), stash)[: -len(".git")]
+                present[slug] = os.path.join(root, d)
+                dirs.remove(d)
+
+    want = wanted_slugs()
+    missing = [s for s in want if s not in present]
+
+    print(f"stash: {stash}")
+    print(f"  {len(present)} mirrors present, {len(missing)} missing")
+    if args.dry_run:
+        for slug in missing:
+            print(f"  would ADD     {slug}")
+        if not args.add_only:
+            for slug in sorted(present):
+                print(f"  would FETCH   {slug}")
+        return 0
+
+    added, updated, moved, failed = [], [], [], []
+
+    for slug in missing:
+        dest = os.path.join(stash, slug + ".git")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        print(f"  mirroring {slug}")
+        r = git("clone", "--quiet", "--mirror", f"https://github.com/{slug}.git", dest, check=False)
+        (added if r.returncode == 0 else failed).append(slug)
+
+    if not args.add_only:
+        for slug, path in sorted(present.items()):
+            before = git("rev-parse", "HEAD", cwd=path, check=False).stdout.strip()
+            # --mirror clones fetch all refs by refspec; `remote update` honors it.
+            r = git("remote", "update", "--prune", cwd=path, check=False)
+            if r.returncode != 0:
+                failed.append(slug)
+                continue
+            after = git("rev-parse", "HEAD", cwd=path, check=False).stdout.strip()
+            (moved if before != after else updated).append(slug)
+
+    print()
+    print(f"  added   : {len(added)}")
+    print(
+        f"  advanced: {len(moved)}" + (f"  ({', '.join(moved[:6])}{'...' if len(moved) > 6 else ''})" if moved else "")
+    )
+    print(f"  current : {len(updated)}")
+    if failed:
+        print(f"  FAILED  : {len(failed)}  ({', '.join(failed[:6])})")
+        eprint()
+        eprint("Some mirrors could not be reached. If github is blocked on this box, fetch the")
+        eprint("stash asset elsewhere (tools/download-release.ps1 on the Windows laptop), copy it")
+        eprint("over, and use ./fetch-stash --from-file instead.")
+        return 1
+
+    print()
+    print("Done. Air-gapped users get the new plugin versions on their next :Lazy update --")
+    print("no loadout release needed.")
+    if moved:
+        print()
+        print("NOTE: fresh installs still clone at the pins in envs/nvim/lazy-lock.json, which")
+        print("      are older than these mirrors now. Refresh the lockfile + cut a release when")
+        print("      you want the DEFAULT set to move too.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

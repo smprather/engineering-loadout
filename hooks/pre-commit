@@ -1,0 +1,161 @@
+#!/bin/bash
+# Pre-commit hook:
+#   1. Remove .git directories from embedded repositories.
+#   2. Strip repo ELF payloads when staged binary/archive candidates change.
+#   3. Ruff-format and isort staged Python files (.py and extensionless python shebangs).
+
+set -euo pipefail
+
+script_dir=$(git rev-parse --show-toplevel)
+
+# --- 1. Embedded git repository cleanup ---
+
+echo "Pre-commit: Checking for embedded git repositories..."
+
+embedded_gits=$(find . -mindepth 2 -path './.git/*' -prune -o -type d -name ".git" -print 2>/dev/null)
+
+if [[ -n "$embedded_gits" ]]; then
+    echo "Found embedded git repositories, removing .git directories:"
+    while IFS= read -r git_dir; do
+        echo "  Removing: $git_dir"
+        rm -rf "$git_dir"
+    done <<< "$embedded_gits"
+    echo "Re-staging affected files..."
+    git add -A
+    echo "OK Cleaned up embedded git repositories"
+else
+    echo "OK No embedded git repositories found"
+fi
+
+# --- 2. Strip repo binaries and binary archives ---
+
+staged_strip_candidates=$(
+    git diff --cached --name-only --diff-filter=ACM |
+        grep -E '(^|/)([^/]+)$' |
+        grep -E '\.(gz|so|tar|tgz|tbz2|txz|tar\.bz2|tar\.gz|tar\.xz)$|(^|/)(bin|lib64|grammars|parser)/' || true
+)
+
+if [[ -n "$staged_strip_candidates" ]]; then
+    echo "Pre-commit: Stripping repo binaries and archives..."
+
+    if ! command -v strip >/dev/null; then
+        echo "  WARNING: 'strip' not found in PATH -- skipping ELF stripping." >&2
+        echo "  Run ./strip-all-elf-binaries manually before committing binary/archive changes." >&2
+    else
+        "$script_dir/strip-all-elf-binaries"
+        # Re-stage candidate files, converted tar.bz2 names, removals, and updated manifests
+        # without sweeping unrelated untracked files into the commit.
+        git add -u
+        while IFS= read -r candidate; do
+            [[ -z "$candidate" ]] && continue
+            [[ -e "$candidate" ]] && git add -- "$candidate"
+            case "$candidate" in
+            *.tar.gz) converted="${candidate%.tar.gz}.tar.bz2" ;;
+            *.tgz) converted="${candidate%.tgz}.tar.bz2" ;;
+            *.tar.xz) converted="${candidate%.tar.xz}.tar.bz2" ;;
+            *.txz) converted="${candidate%.txz}.tar.bz2" ;;
+            *.tbz2) converted="${candidate%.tbz2}.tar.bz2" ;;
+            *.tar) converted="${candidate%.tar}.tar.bz2" ;;
+            *) converted="" ;;
+            esac
+            [[ -n "$converted" && -e "$converted" ]] && git add -- "$converted"
+        done <<< "$staged_strip_candidates"
+        [[ -f .strip-manifest ]] && git add .strip-manifest
+        echo "OK Repo binaries and archives stripped and staged"
+    fi
+fi
+
+# --- 3. Ruff formatting ---
+
+_staged_all=$(git diff --cached --name-only --diff-filter=ACM)
+_staged_py_files=()
+while IFS= read -r _f; do
+    [[ -z "$_f" ]] && continue
+    # Skip vendored third-party Python so ruff doesn't lint/format their code.
+    # The vendor tree is treated as upstream-controlled byte-identical drop-in.
+    if [[ "$_f" == installer_vendor/* ]]; then
+        continue
+    fi
+    if [[ "$_f" == *.py ]]; then
+        _staged_py_files+=("$_f")
+    elif [[ -f "$_f" ]] && head -1 "$_f" 2>/dev/null | grep -qE '^\s*#!.*python'; then
+        _staged_py_files+=("$_f")
+    fi
+done <<< "$_staged_all"
+
+if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
+    # Python 3.14 syntax check -- the installer body and all post-install
+    # scripts run under bundled python3.14 (via the POSIX-sh loadout shim
+    # or ~/.local/bin/python3.14 after install).
+    _py314=""
+    for _cand in "$HOME/.local/bin/python3.14" "$script_dir/.loadout-bootstrap/bin/python3.14"; do
+        if [[ -x "$_cand" ]]; then _py314="$_cand"; break; fi
+    done
+    if [[ -n "$_py314" ]]; then
+        echo "Pre-commit: Checking Python 3.14 syntax ($_py314)..."
+        _py314_ok=1
+        for _f in "${_staged_py_files[@]}"; do
+            if ! "$_py314" -m py_compile "$_f" 2>/tmp/py314-check-err; then
+                echo "  SYNTAX ERROR under $_py314: $_f" >&2
+                cat /tmp/py314-check-err >&2
+                _py314_ok=0
+            fi
+        done
+        if [[ "$_py314_ok" == "1" ]]; then
+            echo "OK Python 3.14 syntax OK"
+        else
+            echo "ERROR: Fix syntax errors above before committing." >&2
+            exit 1
+        fi
+    else
+        echo "Pre-commit: skipping py3.14 syntax check (no python3.14 found)"
+    fi
+
+    echo "Pre-commit: Formatting Python files with ruff..."
+    if ! command -v ruff >/dev/null; then
+        echo "  WARNING: 'ruff' not found in PATH -- skipping format." >&2
+        echo "  Run 'ruff format <files>' && 'ruff check --fix <files>' manually before committing Python changes." >&2
+    else
+        ruff format "${_staged_py_files[@]}"
+        ruff check --fix "${_staged_py_files[@]}"
+        git add -- "${_staged_py_files[@]}"
+        echo "OK Python files formatted and imports sorted"
+    fi
+fi
+
+# --- 4. Auto-chunk large staged files in payload/ ---
+
+_staged_large_prebuilt=$(
+    git diff --cached --name-only --diff-filter=ACM |
+        grep "^payload/" |
+        while IFS= read -r _f; do
+            [[ -z "$_f" ]] && continue
+            [[ "$_f" == *".part-"* ]] && continue  # already a chunk
+            [[ -f "$_f" ]] || continue
+            _sz=$(stat -c%s "$_f" 2>/dev/null || echo 0)
+            [[ "$_sz" -gt $((40 * 1024 * 1024)) ]] && echo "$_f"
+        done || true
+)
+
+if [[ -n "$_staged_large_prebuilt" ]]; then
+    echo "Pre-commit: Chunking large payload/ files (>40 MiB)..."
+    while IFS= read -r _lf; do
+        [[ -z "$_lf" ]] && continue
+        echo "  Chunking: $_lf"
+        "$script_dir/strip-all-elf-binaries" --chunk-only 2>/dev/null || true
+        # strip-all-elf-binaries --chunk-only processes all of payload/ at once;
+        # run once then break -- the loop is just to print which file triggered it.
+        break
+    done <<< "$_staged_large_prebuilt"
+    # Re-stage: remove original large files, add new chunk files.
+    while IFS= read -r _lf; do
+        [[ -z "$_lf" ]] && continue
+        if [[ ! -f "$_lf" && -f "${_lf}.part-000" ]]; then
+            git rm --cached -- "$_lf" 2>/dev/null || true
+            git add -- "${_lf}.part-"* 2>/dev/null || true
+        fi
+    done <<< "$_staged_large_prebuilt"
+    echo "OK Large files chunked and re-staged"
+fi
+
+exit 0

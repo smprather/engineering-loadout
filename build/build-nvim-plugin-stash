@@ -1,0 +1,273 @@
+#!/usr/bin/env python3.14
+"""build-nvim-plugin-stash -- build the offline git stash of nvim plugins.
+
+Ships one FULL bare mirror (`git clone --mirror`: all refs, all tags) per plugin,
+laid out by upstream slug:
+
+    <stash>/folke/snacks.nvim.git
+    <stash>/Saghen/blink.cmp.git
+
+nvim points lazy.nvim's `git.url_format` at that directory, so lazy CLONES each plugin
+from the local stash into the user's ~/.local/share/nvim/lazy/, and `:Lazy update`
+fetches from the stash -- offline, no github. That is the whole point: the previous
+bundle shipped plain directories with no .git (the pre-commit hook strips embedded
+.git dirs), so :Lazy update/sync/restore were silent no-ops and lazy-lock.json's pins
+were decorative.
+
+TRUST MODEL -- read before changing anything here:
+
+  envs/nvim/lazy-lock.json is the source of truth. Every plugin is mirrored from its
+  upstream, and the pinned commit is REQUIRED to exist in the mirror (a mirror that
+  cannot produce its own pin is useless: :Lazy restore could never check it out).
+
+  A bare mirror hides plugin source inside packfiles, where the repo's YARA scan
+  cannot see it. So this script checks each pinned commit OUT into a throwaway
+  worktree and runs the same content heuristics the old worktree builder ran, BEFORE
+  packing. The scan therefore still covers exactly the trees users will get.
+
+Usage:
+    build/build-nvim-plugin-stash            # rebuild the stash from lazy-lock.json
+    build/build-nvim-plugin-stash --check    # verify pins resolve; build nothing
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCKFILE = os.path.join(REPO, "envs", "nvim", "lazy-lock.json")
+SPECS_DIR = os.path.join(REPO, "envs", "nvim", "lua", "global", "plugins")
+OUT = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+
+# Same heuristics the worktree builder used. A hit is a REVIEW gate, not an auto-fail:
+# these fire on legitimate plugin code too (telescope shells out, mason downloads).
+HEURISTICS = [
+    re.compile(rb"curl\s+[^\n]*\|\s*(ba)?sh"),
+    re.compile(rb"io\.popen\s*\("),
+    re.compile(rb"os\.execute\s*\("),
+    re.compile(rb"vim\.fn\.system\s*\(\s*['\"][^'\"]*curl"),
+    re.compile(rb"base64\.decode"),
+]
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def git(*args, cwd=None, check=True):
+    return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True)
+
+
+# Plugins with no lazy spec of their own. lazy.nvim is the plugin MANAGER: init.lua
+# bootstraps it directly, so it never appears in a spec file -- but it must be in the
+# stash, because with the stash present that bootstrap clones it from there too.
+KNOWN_SLUGS = {
+    "lazy.nvim": "folke/lazy.nvim",
+}
+
+
+def plugin_remote(name):
+    """Recover the upstream slug (owner/repo) for a plugin from the committed specs."""
+    if name in KNOWN_SLUGS:
+        return KNOWN_SLUGS[name]
+    for root, _dirs, files in os.walk(SPECS_DIR):
+        for fn in files:
+            if not fn.endswith(".lua"):
+                continue
+            for line in open(os.path.join(root, fn), encoding="utf-8", errors="replace"):
+                m = re.search(r'"([A-Za-z0-9_.-]+/' + re.escape(name) + r')"', line)
+                if m:
+                    return m.group(1)
+    return None
+
+
+# A plugin slug is "owner/repo". The naive regex also matches file paths that appear in
+# lua strings -- `doc/news.txt`, `queries/python/highlights.scm` -- and we then try to
+# clone them from github. Filter those out: no file extensions, no known directory names
+# in the owner slot.
+_NOT_A_SLUG_EXT = (".txt", ".md", ".lua", ".vim", ".json", ".scm", ".toml", ".yml", ".yaml", ".png", ".so")
+_NOT_A_SLUG_OWNER = {
+    "doc",
+    "lua",
+    "tests",
+    "test",
+    "after",
+    "queries",
+    "plugin",
+    "plugins",
+    "spec",
+    "ftplugin",
+    "autoload",
+    "src",
+    "build",
+    "scripts",
+}
+
+
+def is_plugin_slug(s):
+    owner, _, repo = s.partition("/")
+    if not owner or not repo or "/" in repo:
+        return False
+    if owner.lower() in _NOT_A_SLUG_OWNER:
+        return False
+    if repo.lower().endswith(_NOT_A_SLUG_EXT):
+        return False
+    return True
+
+
+def catalog_slugs():
+    """Every `owner/repo` in the catalog spec -- the plugins a user can enable."""
+    catalog = os.path.join(SPECS_DIR, "catalog.lua")
+    if not os.path.isfile(catalog):
+        return []
+    text = open(catalog, encoding="utf-8", errors="replace").read()
+    found = re.findall(r'"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)"', text)
+    return sorted({s for s in found if is_plugin_slug(s)})
+
+
+def scan_tree(path):
+    """Run the content heuristics over a checked-out plugin tree."""
+    findings = []
+    for root, _dirs, files in os.walk(path):
+        if os.sep + ".git" in root:
+            continue
+        for fn in files:
+            if not (fn.endswith(".lua") or fn.endswith(".vim") or fn.endswith(".sh")):
+                continue
+            fp = os.path.join(root, fn)
+            try:
+                data = open(fp, "rb").read()
+            except OSError:
+                continue
+            for rx in HEURISTICS:
+                if rx.search(data):
+                    findings.append((os.path.relpath(fp, path), rx.pattern.decode("latin1")))
+                    break
+    return findings
+
+
+def main(argv):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true", help="verify pins resolve; build nothing")
+    args = ap.parse_args(argv)
+
+    if not os.path.isfile(LOCKFILE):
+        eprint(f"ERROR: {LOCKFILE} not found.")
+        return 1
+    lock = json.load(open(LOCKFILE))
+
+    slugs = {}
+    for name in sorted(lock):
+        slug = plugin_remote(name)
+        if slug is None:
+            eprint(f"ERROR: cannot resolve an upstream slug for '{name}' from {SPECS_DIR}")
+            eprint("  Add the owner/repo shorthand to its spec, or drop it from lazy-lock.json.")
+            return 1
+        slugs[name] = slug
+    active = set(slugs)
+
+    # The CATALOG (envs/nvim/lua/global/plugins/catalog.lua) is the library of plugins a
+    # user can switch on in their own layer. Those specs carry no lockfile pin -- they
+    # are not installed by default -- but they MUST be in the stash, or enabling one on
+    # an air-gapped box would try to reach github and fail. Mirror them at their default
+    # branch; lazy resolves the rest.
+    for slug in catalog_slugs():
+        name = slug.split("/")[-1]
+        slugs.setdefault(name, slug)
+
+    print(f"{len(active)} pinned (active) + {len(slugs) - len(active)} catalog = {len(slugs)} mirrors")
+    if args.check:
+        for name, slug in sorted(slugs.items()):
+            pin = (lock.get(name) or {}).get("commit")
+            print(f"  {name:28s} -> {slug:44s} @ {pin[:10] if pin else 'catalog (unpinned)'}")
+        return 0
+
+    staging = tempfile.mkdtemp(prefix="nvim-stash.")
+    worktree = tempfile.mkdtemp(prefix="nvim-stash-scan.")
+    all_findings = []
+    try:
+        for name, slug in slugs.items():
+            pinned = (lock.get(name) or {}).get("commit")  # catalog plugins are unpinned
+            dest = os.path.join(staging, slug + ".git")
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            url = f"https://github.com/{slug}.git"
+
+            print(f"  mirroring {slug} @ {pinned[:10] if pinned else 'catalog (unpinned)'}")
+            # `--mirror`, deliberately: a full bare mirror with ALL refs, including
+            # TAGS. This is shared space -- spend the disk.
+            #   * single-branch clones omit tags, and lazy specs that pin `version` or a
+            #     tag would silently fail to resolve.
+            #   * shallow (--depth 1) mirrors are worse than useless here: git cannot
+            #     serve a PARTIAL clone from a shallow repo and the clone HANGS forever,
+            #     which is precisely how nvim froze at startup when a catalog plugin was
+            #     enabled. (init.lua also sets git.filter=false, belt and braces.)
+            git("clone", "--quiet", "--mirror", url, dest)
+            if not pinned:
+                git("gc", "--quiet", "--prune=all", cwd=dest, check=False)
+                continue
+
+            # The pin MUST exist in the mirror. A single-branch clone of the default
+            # branch usually contains it; when the pin predates a branch rewrite (or
+            # lives on another branch), widen to a full mirror rather than shipping a
+            # stash that cannot produce its own lockfile commit.
+            if git("cat-file", "-e", pinned + "^{commit}", cwd=dest, check=False).returncode != 0:
+                print(f"    pin not on the default branch; re-mirroring all refs")
+                shutil.rmtree(dest)
+                git("clone", "--quiet", "--bare", url, dest)
+                if git("cat-file", "-e", pinned + "^{commit}", cwd=dest, check=False).returncode != 0:
+                    eprint(f"ERROR: {slug}: pinned commit {pinned} is not reachable in the mirror.")
+                    eprint("  The lockfile pins a commit upstream no longer has. Refresh the lock.")
+                    return 1
+
+            # Scan the exact tree users will check out.
+            wt = os.path.join(worktree, name)
+            git("--git-dir", dest, "worktree", "add", "--quiet", "--detach", wt, pinned, check=False)
+            if not os.path.isdir(wt):
+                # `git worktree add` from a bare repo needs a non-bare-ish setup on some
+                # git versions; fall back to an archive extract of the pinned tree.
+                os.makedirs(wt, exist_ok=True)
+                tar = subprocess.run(
+                    ["git", "--git-dir", dest, "archive", pinned],
+                    capture_output=True,
+                    check=True,
+                )
+                with tarfile.open(fileobj=__import__("io").BytesIO(tar.stdout)) as tf:
+                    tf.extractall(wt, filter="data")
+            hits = scan_tree(wt)
+            for rel, pat in hits:
+                all_findings.append((name, rel, pat))
+            git("--git-dir", dest, "worktree", "prune", check=False)
+            shutil.rmtree(wt, ignore_errors=True)
+
+            git("gc", "--quiet", "--aggressive", "--prune=all", cwd=dest, check=False)
+
+        if all_findings:
+            print("\nContent heuristics fired (REVIEW -- these also fire on legitimate code):")
+            for name, rel, pat in all_findings:
+                print(f"  {name}: {rel}  [{pat}]")
+            print()
+
+        os.makedirs(os.path.dirname(OUT), exist_ok=True)
+        for stale in os.listdir(os.path.dirname(OUT)):
+            if stale.startswith("nvim-plugin-stash.tar.bz2"):
+                os.unlink(os.path.join(os.path.dirname(OUT), stale))
+        with tarfile.open(OUT, "w:bz2") as tf:
+            for owner in sorted(os.listdir(staging)):
+                tf.add(os.path.join(staging, owner), arcname="./" + owner)
+        size = os.path.getsize(OUT)
+        print(f"Wrote {OUT} ({size / 1024 / 1024:.0f} MB)")
+        print("Next: ./split-bz2 to chunk it, then ./strip-all-elf-binaries, then commit.")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.rmtree(worktree, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

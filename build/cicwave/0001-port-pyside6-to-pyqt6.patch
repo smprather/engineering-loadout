@@ -1,0 +1,417 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 3d06466..101aad0 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -14,7 +14,7 @@ dependencies = [
+     "matplotlib",      # Engineering formatters (minimal dependency)
+     "click",           # CLI parsing
+     "pyyaml",          # Session files, pivot specs
+-    "PySide6",         # Qt6 GUI framework  
++    "PyQt6",           # Qt6 GUI framework (PyQt6: EL8 glibc-2.28 + Python 3.14 wheels; PySide6 needs glibc 2.34)
+     "pyqtgraph",       # High-performance plotting
+     "PyOpenGL",        # GPU acceleration
+ ]
+diff --git a/src/cicwave/wave_pg.py b/src/cicwave/wave_pg.py
+index 250ee8b..326e9cb 100644
+--- a/src/cicwave/wave_pg.py
++++ b/src/cicwave/wave_pg.py
+@@ -13,15 +13,15 @@ import numpy as np
+ import pandas as pd
+ from importlib.metadata import version as _pkg_version
+ 
+-from PySide6.QtWidgets import (
++from PyQt6.QtWidgets import (
+     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+     QSplitter, QTreeWidget, QTreeWidgetItem, QLineEdit, QTabWidget,
+     QPushButton, QLabel, QCheckBox, QTextEdit, QFileDialog, QDialog,
+     QInputDialog, QMenu, QComboBox, QTableWidget, QTableWidgetItem,
+     QHeaderView, QAbstractItemView, QMessageBox)
+-from PySide6 import QtCore
+-from PySide6.QtCore import Qt, Signal, QEvent, QSettings, QTimer
+-from PySide6.QtGui import (QKeySequence, QFont, QFontDatabase, QShortcut,
++from PyQt6 import QtCore
++from PyQt6.QtCore import Qt, pyqtSignal as Signal, QEvent, QSettings, QTimer
++from PyQt6.QtGui import (QKeySequence, QFont, QFontDatabase, QShortcut,
+                            QPainter, QColor, QPalette)
+ 
+ import pyqtgraph as pg
+@@ -33,7 +33,7 @@ from matplotlib.ticker import EngFormatter
+ 
+ def _mono_font(size):
+     """Return the system fixed-width font at the given point size."""
+-    f = QFontDatabase.systemFont(QFontDatabase.FixedFont)
++    f = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+     f.setPointSize(size)
+     return f
+ 
+@@ -117,7 +117,7 @@ class _RotatedAxisItem(pg.AxisItem):
+             p.drawText(
+                 QtCore.QRectF(-rect.height() / 2, -rect.width() / 2,
+                               rect.height(), rect.width()),
+-                Qt.AlignCenter, text)
++                Qt.AlignmentFlag.AlignCenter, text)
+             p.restore()
+ 
+ 
+@@ -165,9 +165,9 @@ class _SignalPickerDialog(QDialog):
+         self._table.setHorizontalHeaderLabels(["Signal", "File"])
+         hdr = self._table.horizontalHeader()
+         hdr.setStretchLastSection(True)
+-        hdr.setSectionResizeMode(0, QHeaderView.Stretch)
+-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
++        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
++        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
++        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+         self._table.setAlternatingRowColors(True)
+         for i, n in enumerate(self._names):
+             self._table.setItem(i, 0, QTableWidgetItem(n))
+@@ -659,8 +659,8 @@ class PgWaveBrowser(QWidget):
+         #- Allow shift/ctrl/cmd-click multi-select so the user can close
+         #- many files at once via the context menu.
+         self.file_tree.setSelectionMode(
+-            QAbstractItemView.ExtendedSelection)
+-        self.file_tree.setContextMenuPolicy(Qt.CustomContextMenu)
++            QAbstractItemView.SelectionMode.ExtendedSelection)
++        self.file_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+         self.file_tree.customContextMenuRequested.connect(
+             self._file_context_menu)
+ 
+@@ -701,7 +701,7 @@ class PgWaveBrowser(QWidget):
+         self.wave_tree = _DropUrlTree()
+         self.wave_tree.setHeaderLabel("Waves")
+         self.wave_tree.itemDoubleClicked.connect(self._wave_clicked)
+-        self.wave_tree.setContextMenuPolicy(Qt.CustomContextMenu)
++        self.wave_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+         self.wave_tree.customContextMenuRequested.connect(self._wave_context)
+ 
+         layout.addWidget(self.file_tree, 1)
+@@ -718,7 +718,7 @@ class PgWaveBrowser(QWidget):
+         f = self.files.open(fname, self.xaxis, sheet_name=sheet)
+         key = self.files.current
+         item = QTreeWidgetItem([f.name])
+-        item.setData(0, Qt.UserRole, key)
++        item.setData(0, Qt.ItemDataRole.UserRole, key)
+         self.file_tree.addTopLevelItem(item)
+         self.file_tree.setCurrentItem(item)
+         self._fill_waves()
+@@ -732,7 +732,7 @@ class PgWaveBrowser(QWidget):
+             f._original_path = original_path
+         key = self.files.current
+         item = QTreeWidgetItem([f.name])
+-        item.setData(0, Qt.UserRole, key)
++        item.setData(0, Qt.ItemDataRole.UserRole, key)
+         self.file_tree.addTopLevelItem(item)
+         self.file_tree.setCurrentItem(item)
+         self._fill_waves()
+@@ -741,19 +741,19 @@ class PgWaveBrowser(QWidget):
+         """Color a wave tree item to match its plot line."""
+         item = self._tag_to_item.get(tag)
+         if item:
+-            from PySide6.QtGui import QColor
++            from PyQt6.QtGui import QColor
+             item.setForeground(0, QColor(color))
+ 
+     def clearWaveColor(self, tag):
+         """Reset a wave tree item color back to default."""
+         item = self._tag_to_item.get(tag)
+         if item:
+-            from PySide6.QtGui import QColor
++            from PyQt6.QtGui import QColor
+             item.setForeground(0, QColor(_get_theme()['tree_default_fg']))
+ 
+     def _file_selected(self, current, previous):
+         if current:
+-            fname = current.data(0, Qt.UserRole)
++            fname = current.data(0, Qt.ItemDataRole.UserRole)
+             self.files.select(fname)
+             self._fill_waves()
+ 
+@@ -771,8 +771,8 @@ class PgWaveBrowser(QWidget):
+             item.setSelected(True)
+             selected = [item]
+ 
+-        keys = [it.data(0, Qt.UserRole) for it in selected
+-                if it.data(0, Qt.UserRole)]
++        keys = [it.data(0, Qt.ItemDataRole.UserRole) for it in selected
++                if it.data(0, Qt.ItemDataRole.UserRole)]
+         if not keys:
+             return
+ 
+@@ -794,7 +794,7 @@ class PgWaveBrowser(QWidget):
+         self.files.remove(key)
+         for i in range(self.file_tree.topLevelItemCount()):
+             it = self.file_tree.topLevelItem(i)
+-            if it.data(0, Qt.UserRole) == key:
++            if it.data(0, Qt.ItemDataRole.UserRole) == key:
+                 self.file_tree.takeTopLevelItem(i)
+                 break
+         self._sync_file_selection_after_remove()
+@@ -807,7 +807,7 @@ class PgWaveBrowser(QWidget):
+             return
+         for i in range(self.file_tree.topLevelItemCount()):
+             it = self.file_tree.topLevelItem(i)
+-            if it.data(0, Qt.UserRole) == cur:
++            if it.data(0, Qt.ItemDataRole.UserRole) == cur:
+                 self.file_tree.setCurrentItem(it)
+                 break
+         self._fill_waves()
+@@ -868,7 +868,7 @@ class PgWaveBrowser(QWidget):
+         if self._flat_mode:
+             for name in sorted(names):
+                 item = QTreeWidgetItem([name])
+-                item.setData(0, Qt.UserRole, name)
++                item.setData(0, Qt.ItemDataRole.UserRole, name)
+                 self.wave_tree.addTopLevelItem(item)
+                 self._color_if_plotted(item, f, name)
+             return
+@@ -898,13 +898,13 @@ class PgWaveBrowser(QWidget):
+             value = node[key]
+             if isinstance(value, str):
+                 item = QTreeWidgetItem([key])
+-                item.setData(0, Qt.UserRole, value)
++                item.setData(0, Qt.ItemDataRole.UserRole, value)
+                 self._attach(parent, item)
+                 self._color_if_plotted(item, wfile, value)
+             else:
+                 item = QTreeWidgetItem([key])
+                 if None in value:
+-                    item.setData(0, Qt.UserRole, value[None])
++                    item.setData(0, Qt.ItemDataRole.UserRole, value[None])
+                     self._color_if_plotted(item, wfile, value[None])
+                 self._attach(parent, item)
+                 self._build_tree(item, value, wfile)
+@@ -922,11 +922,11 @@ class PgWaveBrowser(QWidget):
+         if tag in self._wave_cache:
+             wave = self._wave_cache[tag]
+             if wave.color:
+-                from PySide6.QtGui import QColor
++                from PyQt6.QtGui import QColor
+                 item.setForeground(0, QColor(wave.color))
+ 
+     def _wave_clicked(self, item, column):
+-        yname = item.data(0, Qt.UserRole)
++        yname = item.data(0, Qt.ItemDataRole.UserRole)
+         if not yname:
+             item.setExpanded(not item.isExpanded())
+             return
+@@ -947,7 +947,7 @@ class PgWaveBrowser(QWidget):
+         item = self.wave_tree.currentItem()
+         if item is None:
+             return None
+-        yname = item.data(0, Qt.UserRole)
++        yname = item.data(0, Qt.ItemDataRole.UserRole)
+         if not yname:
+             return None
+         f = self.files.getSelected()
+@@ -988,7 +988,7 @@ class PgWaveBrowser(QWidget):
+             menu.exec(self.wave_tree.viewport().mapToGlobal(pos))
+             return
+ 
+-        yname = item.data(0, Qt.UserRole)
++        yname = item.data(0, Qt.ItemDataRole.UserRole)
+         if not yname:
+             menu = QMenu(self)
+             menu.addAction("Plot all visible waves", _plot_all_visible)
+@@ -1269,7 +1269,7 @@ class PgWavePlot(QWidget):
+         #- and freeze the UI. We render at most ``_DIGITAL_MAX_LABELS``
+         #- labels per signal, only for transitions inside the current
+         #- view rect, and refresh on demand.
+-        from PySide6.QtCore import QTimer as _QT
++        from PyQt6.QtCore import QTimer as _QT
+         self._digital_label_timer = _QT()
+         self._digital_label_timer.setSingleShot(True)
+         self._digital_label_timer.setInterval(60)
+@@ -1451,7 +1451,7 @@ class PgWavePlot(QWidget):
+             base = pg.InfiniteLine(
+                 pos=mid, angle=0,
+                 pen=pg.mkPen(mono, width=0.5,
+-                             style=Qt.DotLine))
++                             style=Qt.PenStyle.DotLine))
+             self.digital_plot.addItem(base)
+             items['lines'].append(base)
+         else:
+@@ -2340,7 +2340,7 @@ class PgWavePlot(QWidget):
+     def _make_cursor_line(self, x, color, which):
+         line = pg.InfiniteLine(
+             pos=x, angle=90, movable=True,
+-            pen=pg.mkPen(color, width=1, style=Qt.DashLine))
++            pen=pg.mkPen(color, width=1, style=Qt.PenStyle.DashLine))
+         line.sigPositionChanged.connect(
+             lambda l, w=which: self._cursor_dragged(w, l))
+         return line
+@@ -2400,7 +2400,7 @@ class PgWavePlot(QWidget):
+             self._wheel_pending_x_scale = 1.0
+             self._wheel_pending_y_scale = 1.0
+ 
+-        if modifiers & Qt.ShiftModifier:
++        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+             self._wheel_pending_y_scale *= scale
+         else:
+             self._wheel_pending_x_scale *= scale
+@@ -2438,7 +2438,7 @@ class PgWavePlot(QWidget):
+ 
+     def _on_mouse_drag(self, ev, axis=None):
+         mods = ev.modifiers()
+-        if ev.button() == Qt.RightButton:
++        if ev.button() == Qt.MouseButton.RightButton:
+             #- Right-drag always draws a rubber band. Modifiers constrain
+             #- the resulting zoom to a single axis:
+             #-   plain                -> rectangle, zoom both x and y
+@@ -2446,8 +2446,8 @@ class PgWavePlot(QWidget):
+             #-   Ctrl (or Cmd on Mac) -> band spans full plot width,  zoom y only
+             #- On macOS Qt swaps the physical Ctrl and Meta keys by
+             #- default, so accept either modifier to mean "y-only".
+-            ctrl_like = (Qt.ControlModifier | Qt.MetaModifier)
+-            if mods & Qt.ShiftModifier:
++            ctrl_like = (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier)
++            if mods & Qt.KeyboardModifier.ShiftModifier:
+                 self._right_drag_rubber_band(ev, constrain='x')
+             elif mods & ctrl_like:
+                 self._right_drag_rubber_band(ev, constrain='y')
+@@ -2468,10 +2468,10 @@ class PgWavePlot(QWidget):
+         """
+         ev.accept()
+         vb = self.plot.vb
+-        from PySide6.QtCore import QRectF, QPointF
++        from PyQt6.QtCore import QRectF, QPointF
+         from pyqtgraph import Point
+ 
+-        down_pos = ev.buttonDownPos(Qt.RightButton)
++        down_pos = ev.buttonDownPos(Qt.MouseButton.RightButton)
+         cur_pos = ev.pos()
+ 
+         #- Build the on-screen (parent-coords) rectangle with the chosen
+@@ -2878,7 +2878,7 @@ class PgAnalysisPlot(QWidget):
+ 
+     def _set_cursor(self, which, x):
+         pen = pg.mkPen('y' if which == 'a' else 'g',
+-                        width=1, style=Qt.DashLine)
++                        width=1, style=Qt.PenStyle.DashLine)
+         attr_line = '_cursor_%s_line' % which
+         old = getattr(self, attr_line)
+         if old:
+@@ -2904,7 +2904,7 @@ class PgAnalysisPlot(QWidget):
+         pos = event.pos()
+         mouse_point = vb.mapSceneToView(pos)
+         modifiers = event.modifiers()
+-        if modifiers & Qt.ShiftModifier:
++        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+             vr = vb.viewRange()
+             ylo, yhi = vr[1]
+             yd = mouse_point.y()
+@@ -2920,8 +2920,8 @@ class PgAnalysisPlot(QWidget):
+ 
+     def _on_mouse_drag(self, ev, axis=None):
+         mods = ev.modifiers()
+-        if ev.button() == Qt.RightButton and (
+-                mods & Qt.ShiftModifier or mods & Qt.ControlModifier):
++        if ev.button() == Qt.MouseButton.RightButton and (
++                mods & Qt.KeyboardModifier.ShiftModifier or mods & Qt.KeyboardModifier.ControlModifier):
+             ev.accept()
+             if ev.isFinish():
+                 return
+@@ -2930,12 +2930,12 @@ class PgAnalysisPlot(QWidget):
+             vr = vb.viewRange()
+             w = vb.width()
+             h = vb.height()
+-            if mods & Qt.ShiftModifier:
++            if mods & Qt.KeyboardModifier.ShiftModifier:
+                 dx = delta.x() / w
+                 xlo, xhi = vr[0]
+                 xspan = xhi - xlo
+                 vb.setXRange(xlo + dx * xspan, xhi - dx * xspan, padding=0)
+-            elif mods & Qt.ControlModifier:
++            elif mods & Qt.KeyboardModifier.ControlModifier:
+                 dy = delta.y() / h
+                 ylo, yhi = vr[1]
+                 yspan = yhi - ylo
+@@ -2999,7 +2999,7 @@ class PgWaveWindow(QMainWindow):
+         self.setWindowTitle("cIcWave v%s: %s" % (ver, os.getcwd()))
+         self.resize(1200, 700)
+ 
+-        splitter = QSplitter(Qt.Horizontal)
++        splitter = QSplitter(Qt.Orientation.Horizontal)
+         self.setCentralWidget(splitter)
+ 
+         self.browser = PgWaveBrowser(xaxis)
+@@ -3049,14 +3049,14 @@ class PgWaveWindow(QMainWindow):
+ 
+     def eventFilter(self, obj, event):
+         et = event.type()
+-        if et in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
++        if et in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+             if obj in self._drops_delegate_trees:
+                 return False
+-        if et == QEvent.DragEnter or et == QEvent.DragMove:
++        if et == QEvent.Type.DragEnter or et == QEvent.Type.DragMove:
+             if self._drop_mime_has_files(event.mimeData()):
+                 event.acceptProposedAction()
+                 return True
+-        elif et == QEvent.Drop:
++        elif et == QEvent.Type.Drop:
+             self._handle_file_drop(event)
+             return True
+         return super().eventFilter(obj, event)
+@@ -3157,10 +3157,10 @@ class PgWaveWindow(QMainWindow):
+         #- Single-letter shortcuts that should fire even while the
+         #- wave/file tree has focus. ``ApplicationShortcut`` context
+         #- bypasses the QTreeWidget's keyboard-search swallowing.
+-        from PySide6.QtCore import Qt as _Qt
++        from PyQt6.QtCore import Qt as _Qt
+         d_sc = QShortcut(QKeySequence("D"), self,
+                          self.browser.togglePlotAsDigital)
+-        d_sc.setContext(_Qt.ApplicationShortcut)
++        d_sc.setContext(_Qt.ShortcutContext.ApplicationShortcut)
+ 
+     def keyPressEvent(self, event):
+         if isinstance(self.focusWidget(), QLineEdit):
+@@ -3169,7 +3169,7 @@ class PgWaveWindow(QMainWindow):
+         p = self._current()
+         key = event.text()
+         mods = event.modifiers()
+-        ctrl_like = (Qt.ControlModifier | Qt.MetaModifier)
++        ctrl_like = (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier)
+         if p and key == 'z' and not (mods & ctrl_like) and hasattr(p, 'zoomIn'):
+             p.zoomIn()
+         elif p and key == 'Z' and hasattr(p, 'zoomOut'):
+@@ -3482,7 +3482,7 @@ class PgWaveWindow(QMainWindow):
+             "(time, frequency, sweeps, …).\n"
+             "Leave empty for automatic detection.\n"
+             "Applies to newly opened files; saved for later sessions.",
+-            QLineEdit.Normal,
++            QLineEdit.EchoMode.Normal,
+             self.browser.xaxis or "")
+         if not ok:
+             return
+@@ -3518,7 +3518,7 @@ class PgWaveWindow(QMainWindow):
+         btn.clicked.connect(dlg.accept)
+         form.addWidget(btn)
+ 
+-        if dlg.exec() != QDialog.Accepted:
++        if dlg.exec() != QDialog.DialogCode.Accepted:
+             return
+         p.custom_title = title_le.text().strip() or None
+         p.custom_xlabel = xlabel_le.text().strip() or None
+@@ -3839,7 +3839,7 @@ class PgWaveWindow(QMainWindow):
+         names = list(f.getWaveNames())
+         dlg = _SignalPickerDialog(self, "Select X-axis signal", names,
+                                   file_label=f.name)
+-        if dlg.exec() != QDialog.Accepted:
++        if dlg.exec() != QDialog.DialogCode.Accepted:
+             return
+         chosen = dlg.selected()
+         if not chosen:
+@@ -3875,9 +3875,9 @@ def _apply_theme(app, theme_name='dark'):
+     app.setStyle("Fusion")
+     p = QPalette()
+     for role_name, rgb in theme['palette'].items():
+-        p.setColor(getattr(QPalette, role_name), QColor(*rgb))
+-    p.setColor(QPalette.Disabled, QPalette.Text, QColor(128, 128, 128))
+-    p.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(128, 128, 128))
++        p.setColor(getattr(QPalette.ColorRole, role_name), QColor(*rgb))
++    p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(128, 128, 128))
++    p.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(128, 128, 128))
+     app.setPalette(p)
+     pg.setConfigOptions(background=theme['pg_background'],
+                         foreground=theme['pg_foreground'])

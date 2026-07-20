@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage: $0 [LANG ...] [OPTIONS]
+
+Build Tree-sitter parser shared libraries and queries with vendored
+nvim-treesitter. With no LANG arguments, builds all parsers in the vendored
+nvim-treesitter parser registry.
+
+Options:
+  --max-jobs <n>      Parallel build/download jobs. Default: 4
+  --install-dir <dir> Override output directory.
+                     Default: payload/treesitter/prebuilt/<os>-<arch>-<libc>
+  --generate          Ask nvim-treesitter to regenerate parsers when supported.
+  --help, -h          Show this help message.
+EOF
+}
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd "$script_dir/../.." && pwd)
+max_jobs=4
+generate=0
+install_dir=""
+langs=()
+
+platform_id() {
+    local os
+    local arch
+    local libc
+
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    arch=$(uname -m)
+    if ldd --version 2>&1 | grep -qi musl; then
+        libc="musl"
+    else
+        libc="glibc"
+    fi
+
+    echo "${os}-${arch}-${libc}"
+}
+
+libc_version() {
+    ldd --version 2>&1 | head -n 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --max-jobs)
+        if [[ -z "${2:-}" ]]; then
+            echo "Error: --max-jobs requires a number" >&2
+            exit 1
+        fi
+        max_jobs="$2"
+        shift 2
+        ;;
+    --install-dir)
+        if [[ -z "${2:-}" ]]; then
+            echo "Error: --install-dir requires a directory" >&2
+            exit 1
+        fi
+        install_dir="$2"
+        shift 2
+        ;;
+    --generate)
+        generate=1
+        shift
+        ;;
+    --help | -h)
+        usage
+        exit 0
+        ;;
+    --)
+        shift
+        while [[ $# -gt 0 ]]; do
+            langs+=("$1")
+            shift
+        done
+        ;;
+    -*)
+        echo "Error: unsupported option: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+    *)
+        langs+=("$1")
+        shift
+        ;;
+    esac
+done
+
+for tool in nvim tree-sitter curl tar git bzip2; do
+    if ! command -v "$tool" >/dev/null; then
+        echo "Error: required tool not found: $tool" >&2
+        exit 1
+    fi
+done
+
+if ! nvim --version | head -n 1 | grep -Eq 'NVIM v0\.(1[2-9]|[2-9][0-9])'; then
+    echo "Error: nvim >= 0.12 is required" >&2
+    exit 1
+fi
+
+if [[ -z "$install_dir" ]]; then
+    install_dir="$repo_dir/payload/treesitter/prebuilt/$(platform_id)"
+fi
+mkdir -p "$install_dir/build-info"
+
+plugin_dir="$repo_dir/payload/treesitter/vendor/nvim-treesitter"
+registry_dir="$repo_dir/payload/treesitter/vendor/treesitter-parser-registry"
+if [[ ! -d "$plugin_dir" || ! -d "$registry_dir" ]]; then
+    echo "Error: vendored nvim-treesitter and treesitter-parser-registry are required under payload/treesitter/vendor" >&2
+    exit 1
+fi
+
+args=()
+if [[ "$generate" == "1" ]]; then
+    args+=("--generate")
+fi
+args+=("--max-jobs=$max_jobs")
+args+=("--")
+if [[ "${#langs[@]}" -gt 0 ]]; then
+    args+=("${langs[@]}")
+fi
+
+echo "Building Tree-sitter parsers into: $install_dir"
+if [[ "${#langs[@]}" -eq 0 ]]; then
+    echo "Languages: all"
+else
+    echo "Languages: ${langs[*]}"
+fi
+
+TS_INSTALL_DIR="$install_dir" \
+    nvim --clean --headless -n \
+    --cmd "set runtimepath+=$registry_dir" \
+    --cmd "set runtimepath+=$plugin_dir" \
+    -l "$plugin_dir/scripts/install-parsers.lua" \
+    "${args[@]}"
+
+if [[ -d "$install_dir/parser" ]]; then
+    find "$install_dir/parser" -maxdepth 1 -type f -name '*.so' -print0 | sort -z | xargs -0r bzip2 -f -9
+fi
+
+cat > "$install_dir/build-info/platform.env" <<EOF
+platform=$(platform_id)
+os=$(uname -s)
+arch=$(uname -m)
+libc=$(libc_version)
+nvim=$(nvim --version | head -n 1)
+tree_sitter=$(tree-sitter --version | head -n 1)
+compiler=$(command -v cc 2>/dev/null || true)
+compiler_version=$(cc --version 2>&1 | head -n 1 || true)
+repo=$repo_dir
+output=$install_dir
+parser_compression=bzip2
+EOF
+
+echo "Built parsers: $(find "$install_dir/parser" -maxdepth 1 -name '*.so.bz2' 2>/dev/null | wc -l)"
+echo "Build info: $install_dir/build-info/platform.env"

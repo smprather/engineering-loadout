@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""gen-st-font-comments -- regenerate the bundled-font comment block in the
+shipped st config files.
+
+st's font is an Xft/fontconfig pattern whose family name frequently differs
+from the name of the zip we ship it in (CascadiaCode.zip -> "CaskaydiaCove
+Nerd Font"). Users cannot be expected to guess that, so the shipped config
+files list every bundled family as a ready-to-paste `st.font:` line -- and
+that list is generated from the actual font metadata, never hand-typed.
+
+Reads payload/fonts/*.zip (rejoining .part-NNN chunks the way the installer
+does), extracts each face to a temp dir, and asks fc-scan for its family.
+
+Runs under any python3 (stdlib only); needs fc-scan (fontconfig) on PATH.
+
+Usage:
+    build/gen-st-font-comments           # rewrite the block in the config files
+    build/gen-st-font-comments --check   # exit 1 if the committed block drifted
+"""
+
+import argparse
+import glob
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FONTS_DIR = os.path.join(REPO, "payload", "fonts")
+TARGETS = [
+    os.path.join(REPO, "envs", "st", "global", "st.xresources"),
+    os.path.join(REPO, "envs", "st", "user", "st.xresources.template"),
+]
+BEGIN = "! BEGIN generated font list"
+END = "! END generated font list"
+DEFAULT_SIZE = 12
+FACE_SUFFIXES = (".ttf", ".otf")
+
+
+def logical_zips(fonts_dir):
+    """Return sorted logical zip paths, deduping real files and .part-000 heads."""
+    names = set()
+    for path in glob.glob(os.path.join(fonts_dir, "*.zip")):
+        names.add(path)
+    for part0 in glob.glob(os.path.join(fonts_dir, "*.zip.part-000")):
+        names.add(part0[: -len(".part-000")])
+    return sorted(names)
+
+
+def resolve_zip(path, tmpdir):
+    """Return a real readable path for *path*, rejoining .part-NNN if needed."""
+    if os.path.isfile(path):
+        return path
+    parts = sorted(glob.glob(path + ".part-*"))
+    if not parts:
+        return None
+    joined = os.path.join(tmpdir, os.path.basename(path))
+    with open(joined, "wb") as out:
+        for p in parts:
+            with open(p, "rb") as inp:
+                shutil.copyfileobj(inp, out)
+    return joined
+
+
+def families_in_zip(zip_path, tmpdir):
+    """Return the sorted set of fontconfig family names inside *zip_path*."""
+    families = set()
+    with zipfile.ZipFile(zip_path) as zf:
+        faces = [n for n in zf.namelist() if n.lower().endswith(FACE_SUFFIXES)]
+        for name in faces:
+            dest = os.path.join(tmpdir, os.path.basename(name))
+            with zf.open(name) as src, open(dest, "wb") as out:
+                shutil.copyfileobj(src, out)
+            try:
+                res = subprocess.run(
+                    ["fc-scan", "--format", "%{family[0]}\\n", dest],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+            finally:
+                os.unlink(dest)
+            fam = res.stdout.strip().splitlines()
+            if fam and fam[0].strip():
+                families.add(fam[0].strip())
+    return sorted(families)
+
+
+def build_block():
+    """Return the generated block text (BEGIN/END markers included)."""
+    if not shutil.which("fc-scan"):
+        sys.exit("gen-st-font-comments: fc-scan not found (dnf install fontconfig)")
+    rows = []
+    with tempfile.TemporaryDirectory(prefix="gen-st-fonts.") as tmpdir:
+        for logical in logical_zips(FONTS_DIR):
+            real = resolve_zip(logical, tmpdir)
+            if real is None:
+                continue
+            zipname = os.path.basename(logical)
+            stem = zipname[: -len(".zip")]
+            for fam in families_in_zip(real, tmpdir):
+                # Annotate only when the family name is not guessable from the zip.
+                note = "" if fam.replace(" ", "").startswith(stem) else f"({zipname})"
+                rows.append((fam, note))
+    if not rows:
+        sys.exit(f"gen-st-font-comments: no fonts found under {FONTS_DIR}")
+    rows.sort(key=lambda r: r[0].lower())
+    width = max(len(f"!   st.font: {fam}:size={DEFAULT_SIZE}") for fam, _ in rows)
+    lines = [BEGIN]
+    for fam, note in rows:
+        line = f"!   st.font: {fam}:size={DEFAULT_SIZE}"
+        if note:
+            line = f"{line.ljust(width)}  {note}"
+        lines.append(line)
+    lines.append(END)
+    return "\n".join(lines) + "\n"
+
+
+def splice(text, block):
+    """Replace the BEGIN..END region of *text* with *block*."""
+    pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", re.DOTALL)
+    if not pattern.search(text):
+        sys.exit("gen-st-font-comments: BEGIN/END markers missing from target file")
+    return pattern.sub(lambda _: block, text, count=1)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true", help="exit 1 on drift")
+    args = ap.parse_args()
+
+    block = build_block()
+    drifted = []
+    for target in TARGETS:
+        with open(target) as f:
+            old = f.read()
+        new = splice(old, block)
+        if old == new:
+            continue
+        if args.check:
+            drifted.append(target)
+        else:
+            with open(target, "w") as f:
+                f.write(new)
+            print(f"updated: {os.path.relpath(target, REPO)}")
+
+    if args.check and drifted:
+        for t in drifted:
+            print(f"STALE: {os.path.relpath(t, REPO)}", file=sys.stderr)
+        print("Run build/gen-st-font-comments and commit the result.", file=sys.stderr)
+        return 1
+    if args.check:
+        print("st font list in sync")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

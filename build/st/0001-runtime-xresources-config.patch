@@ -1,0 +1,262 @@
+From: engineering-loadout
+Subject: [PATCH] st: runtime configuration via $ST_XRESOURCES + SIGUSR1 reload
+
+Derived from the upstream st `xresources` and `xresources-with-reload` patches
+(https://st.suckless.org/patches/xresources/), MIT-licensed like st itself, with
+two loadout changes:
+
+  * config_init() takes the Display and merges every file named in the
+    colon-separated $ST_XRESOURCES (later file wins) on top of RESOURCE_MANAGER,
+    instead of reading RESOURCE_MANAGER alone. That keeps per-user config in a
+    plain file, works over X-forwarding to a farm node, and needs no xrdb --
+    which matters because st is shipped to machines where the user cannot
+    recompile anything.
+  * Ctrl+Shift+R triggers the same reload path as SIGUSR1.
+
+Unset resources keep their compiled config.h defaults, so st with no config
+files and no RESOURCE_MANAGER behaves exactly as an unpatched build.
+
+An explicit -f on the command line still beats the config files (xreload()
+re-derives usedfont from opt_font first).
+
+Applies on top of: st 0.9.3 + the undercurl patch and the three st.c/st.info
+fixups build-st.sh performs before this patch. If you bump the st tag, re-derive
+this patch -- see build/ADDING_BINARIES.md -> st.
+
+Verified on EL8 + WSLg by machine-checking window pixels and WM_NORMAL_HINTS
+resize increments (the cell size):
+  - launch with background #ff0000 + 20pt  -> pixel srgb(255,0,0), cell 16x36
+  - edit the file, SIGUSR1                 -> pixel srgb(0,0,255), cell 8x18
+  - no config at all                       -> black, i.e. stock st
+  - xrdb only                              -> honored
+  - xrdb + file                            -> file wins
+diff --git a/config.def.h b/config.def.h
+index e7b8a25..cdf21e0 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -94,7 +94,7 @@ char *termname = "st-256color";
+ unsigned int tabspaces = 8;
+ 
+ /* Terminal colors (16 first used in escape sequence) */
+-static const char *colorname[] = {
++static char *colorname[] = {
+ 	/* 8 normal colors */
+ 	"black",
+ 	"red3",
+@@ -189,6 +189,7 @@ static MouseShortcut mshortcuts[] = {
+ 
+ static Shortcut shortcuts[] = {
+ 	/* mask                 keysym          function        argument */
++	{ ControlMask|ShiftMask, XK_R,          reload,         {.i =  0} },
+ 	{ XK_ANY_MOD,           XK_Break,       sendbreak,      {.i =  0} },
+ 	{ ControlMask,          XK_Print,       toggleprinter,  {.i =  0} },
+ 	{ ShiftMask,            XK_Print,       printscreen,    {.i =  0} },
+diff --git a/st.h b/st.h
+index 5d398b5..e28bbf5 100644
+--- a/st.h
++++ b/st.h
+@@ -86,6 +86,7 @@ void draw(void);
+ 
+ void printscreen(const Arg *);
+ void printsel(const Arg *);
++void reload(const Arg *);
+ void sendbreak(const Arg *);
+ void toggleprinter(const Arg *);
+ 
+diff --git a/x.c b/x.c
+index d94ce7c..7b27088 100644
+--- a/x.c
++++ b/x.c
+@@ -14,6 +14,7 @@
+ #include <X11/keysym.h>
+ #include <X11/Xft/Xft.h>
+ #include <X11/XKBlib.h>
++#include <X11/Xresource.h>
+ 
+ char *argv0;
+ #include "arg.h"
+@@ -1143,7 +1144,7 @@ xinit(int cols, int rows)
+ 	pid_t thispid = getpid();
+ 	XColor xmousefg, xmousebg;
+ 
+-	if (!(xw.dpy = XOpenDisplay(NULL)))
++	if (!xw.dpy && !(xw.dpy = XOpenDisplay(NULL)))
+ 		die("can't open display\n");
+ 	xw.scr = XDefaultScreen(xw.dpy);
+ 	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
+@@ -2322,6 +2323,148 @@ resize(XEvent *e)
+ 	cresize(e->xconfigure.width, e->xconfigure.height);
+ }
+ 
++/*
++ * Loadout: runtime configuration.
++ *
++ * Settings are merged into one XrmDatabase, lowest priority first:
++ *   1. the X server's RESOURCE_MANAGER (so plain `xrdb` users still work)
++ *   2. each file named in the colon-separated $ST_XRESOURCES, in order,
++ *      later file wins (this is the loadout's global->user layer chain)
++ *   3. anything still unset keeps its compiled config.h default
++ *
++ * A missing file is not an error: an unused layer simply does not exist.
++ * st with no config files and no RESOURCE_MANAGER behaves exactly as an
++ * unpatched build.
++ */
++static XrmDatabase xdb;
++
++#define XRESOURCE_LOAD_META(NAME)					\
++	if (!XrmGetResource(xdb, "st." NAME, "St." NAME, &type, &ret))	\
++		if (!XrmGetResource(xdb, "*." NAME, "*." NAME, &type, &ret)) \
++			break;						\
++	if (ret.addr != NULL && !strncmp("String", type, 64))
++
++#define XRESOURCE_LOAD_STRING(NAME, DST)	\
++	do {					\
++		XRESOURCE_LOAD_META(NAME)	\
++			DST = ret.addr;		\
++	} while (0)
++
++#define XRESOURCE_LOAD_INTEGER(NAME, DST)			\
++	do {							\
++		XRESOURCE_LOAD_META(NAME)			\
++			DST = strtoul(ret.addr, NULL, 10);	\
++	} while (0)
++
++#define XRESOURCE_LOAD_FLOAT(NAME, DST)			\
++	do {						\
++		XRESOURCE_LOAD_META(NAME)		\
++			DST = strtof(ret.addr, NULL);	\
++	} while (0)
++
++void
++config_init(Display *dpy)
++{
++	char *resm, *paths, *path, *save;
++	XrmValue ret;
++	char *type;
++
++	XrmInitialize();
++
++	if (xdb != NULL) {
++		XrmDestroyDatabase(xdb);
++		xdb = NULL;
++	}
++
++	if ((resm = XResourceManagerString(dpy)) != NULL)
++		xdb = XrmGetStringDatabase(resm);
++
++	if ((resm = getenv("ST_XRESOURCES")) != NULL && *resm != '\0') {
++		if ((paths = strdup(resm)) == NULL)
++			die("strdup: %s\n", strerror(errno));
++		for (path = strtok_r(paths, ":", &save); path != NULL;
++		     path = strtok_r(NULL, ":", &save)) {
++			if (*path == '\0' || access(path, R_OK) != 0)
++				continue;
++			XrmCombineFileDatabase(path, &xdb, True);
++		}
++		free(paths);
++	}
++
++	if (xdb == NULL)
++		return;
++
++	XRESOURCE_LOAD_STRING("font", font);
++	XRESOURCE_LOAD_STRING("color0", colorname[0]);
++	XRESOURCE_LOAD_STRING("color1", colorname[1]);
++	XRESOURCE_LOAD_STRING("color2", colorname[2]);
++	XRESOURCE_LOAD_STRING("color3", colorname[3]);
++	XRESOURCE_LOAD_STRING("color4", colorname[4]);
++	XRESOURCE_LOAD_STRING("color5", colorname[5]);
++	XRESOURCE_LOAD_STRING("color6", colorname[6]);
++	XRESOURCE_LOAD_STRING("color7", colorname[7]);
++	XRESOURCE_LOAD_STRING("color8", colorname[8]);
++	XRESOURCE_LOAD_STRING("color9", colorname[9]);
++	XRESOURCE_LOAD_STRING("color10", colorname[10]);
++	XRESOURCE_LOAD_STRING("color11", colorname[11]);
++	XRESOURCE_LOAD_STRING("color12", colorname[12]);
++	XRESOURCE_LOAD_STRING("color13", colorname[13]);
++	XRESOURCE_LOAD_STRING("color14", colorname[14]);
++	XRESOURCE_LOAD_STRING("color15", colorname[15]);
++	XRESOURCE_LOAD_STRING("background", colorname[defaultbg]);
++	XRESOURCE_LOAD_STRING("foreground", colorname[defaultfg]);
++	XRESOURCE_LOAD_STRING("cursorColor", colorname[defaultcs]);
++	XRESOURCE_LOAD_STRING("termname", termname);
++	XRESOURCE_LOAD_STRING("shell", shell);
++	XRESOURCE_LOAD_INTEGER("cursorshape", cursorshape);
++	XRESOURCE_LOAD_INTEGER("borderpx", borderpx);
++	XRESOURCE_LOAD_INTEGER("blinktimeout", blinktimeout);
++	XRESOURCE_LOAD_INTEGER("bellvolume", bellvolume);
++	XRESOURCE_LOAD_INTEGER("tabspaces", tabspaces);
++	XRESOURCE_LOAD_FLOAT("cwscale", cwscale);
++	XRESOURCE_LOAD_FLOAT("chscale", chscale);
++}
++
++/*
++ * SIGUSR1 (and Ctrl+Shift+R) re-read the config and redraw. The handler only
++ * sets a flag -- no X calls are safe from a signal handler -- and run() does
++ * the work on its next pass, which pselect() reaches promptly because the
++ * signal interrupts it with EINTR.
++ */
++static volatile sig_atomic_t reload_requested = 0;
++
++static void
++sigusr1_handler(int unused)
++{
++	(void)unused;
++	reload_requested = 1;
++}
++
++void
++xreload(void)
++{
++	config_init(xw.dpy);
++
++	/* An explicit -f on the command line still beats the config files. */
++	usedfont = (opt_font == NULL) ? font : opt_font;
++
++	xunloadfonts();
++	xloadfonts(usedfont, 0);
++	xloadcols();
++
++	/* Cell metrics may have changed: re-derive the grid and resize the tty. */
++	cresize(0, 0);
++	redraw();
++	xhints();
++}
++
++void
++reload(const Arg *arg)
++{
++	(void)arg;
++	xreload();
++}
++
+ void
+ run(void)
+ {
+@@ -2352,6 +2495,11 @@ run(void)
+ 	cresize(w, h);
+ 
+ 	for (timeout = -1, drawing = 0, lastblink = (struct timespec){0};;) {
++		if (reload_requested) {
++			reload_requested = 0;
++			xreload();
++		}
++
+ 		FD_ZERO(&rfd);
+ 		FD_SET(ttyfd, &rfd);
+ 		FD_SET(xfd, &rfd);
+@@ -2498,6 +2646,14 @@ run:
+ 
+ 	setlocale(LC_CTYPE, "");
+ 	XSetLocaleModifiers("");
++
++	/* Config must be loaded before tnew()/xinit() consume tabspaces,
++	 * fonts and colors. */
++	if (!(xw.dpy = XOpenDisplay(NULL)))
++		die("can't open display\n");
++	config_init(xw.dpy);
++	signal(SIGUSR1, sigusr1_handler);
++
+ 	cols = MAX(cols, 1);
+ 	rows = MAX(rows, 1);
+ 	tnew(cols, rows);

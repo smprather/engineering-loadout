@@ -1,0 +1,36 @@
+# Files and directories excluded from "git archive" and GitHub's auto-generated
+# source archives (Source code .tar.gz / .zip on releases).
+# These are dev/build/AI tooling -- end users do not need them to run ./loadout
+# or .\loadout.ps1.
+
+# AI / agent instructions
+/AGENTS.md                      export-ignore
+/CLAUDE.md                      export-ignore
+/.github                        export-ignore
+
+# Git hooks (developer-only; install manually with cp hooks/* .git/hooks/)
+/hooks                          export-ignore
+
+# Build and maintenance scripts (payload/ ships; build tooling does not)
+/update                         export-ignore
+/release                        export-ignore
+/build                          export-ignore
+
+
+# Test harness
+/tests                          export-ignore
+
+
+# AI / agent tooling (developer-only)
+/.agents                        export-ignore
+/.codex-plugins                 export-ignore
+/.agentignore                   export-ignore
+/dev-onboard                    export-ignore
+/strip-all-elf-binaries         export-ignore
+/scan-for-malware               export-ignore
+/split-bz2                      export-ignore
+
+# Version stamp for git-less trees (GitHub release source archives).
+# git archive substitutes %(describe:tags) at archive time; a git checkout
+# keeps the literal $Format placeholder and uses `git describe` instead.
+/.release-version               export-subst

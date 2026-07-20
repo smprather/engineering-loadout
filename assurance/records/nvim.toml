@@ -1,0 +1,67 @@
+# Assurance record -- see assurance/README.md for the schema.
+# Validated by tests/assurance-check (re-hashes [artifacts] against disk).
+schema = 1
+package = "nvim"
+version = "0.12.4"
+verified_utc = "2026-07-10T22:34:14Z"
+status = "verified"  # binary+plugins provenance + content hashes + dynamic detonation all pass
+
+[source]
+upstream = "https://github.com/neovim/neovim"
+ref = "v0.12.4"
+dep_pinning = "upstream cmake.deps/deps.txt pins sha256 for every bundled dep (luajit, luv, libuv, tree-sitter)"
+
+[build]
+script = "build/build-nvim.sh"
+policy = "stable tag only (script rejects nightly/dev)"
+
+[scan]
+engine = "scan-for-malware (YARA-Forge + optional ClamAV)"
+yara_forge_tag = "20260524"
+result = "clean"
+
+[artifacts]
+"payload/el8.x86_64.glibc2p28/bin/nvim.bz2" = "sha256:5af93582ed4b8886a24eec3d2ca8b7711be6ca85606d23e8946a7e35b29e8df1"
+"payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" = "sha256:6910be2fe023b0dd108ad9f23bf3bf68f010f9f304f392f223b25a611c7969f4"
+
+[dynamic]
+profile = "assurance/profiles/nvim.toml"
+harness = "tests/dynamic-analysis"
+result = "pass"  # canary + strace, network-isolated container
+
+[plugins]
+lockfile = "envs/nvim/lazy-lock.json"
+bundle = "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2"
+form = "bare git mirrors (git clone --mirror), built by build/build-nvim-plugin-stash"
+delivery = "RELEASE ASSET -- not committed to git (328 MB of bz2'd packfiles would add ~328 MB to history on every refresh). Its sha256 is published in sha256sums.txt, which the signed tag covers; ./fetch-stash verifies the bytes against it and records the hash in .content-manifest.fetched, which the installer trusts identically to .content-manifest. Refreshable in place in a shared tree with ./refresh-stash -- no release required."
+stash_sha256 = "sha256:5f90b1684a357e1abb0a2e8f9f925f7fd25a3f5ccaebff2027d860481fb8f204"  # of the asset attached to the release
+count = 24            # pinned/active; the stash also carries 55 unpinned catalog mirrors
+catalog_count = 55
+# The builder REQUIRES every pinned commit below to be reachable in its mirror, and
+# runs the content heuristics on each pinned tree checked OUT of the mirror -- a bare
+# repo hides source inside packfiles where the YARA scan cannot see it.
+# per-plugin commit pins mirror lazy-lock.json
+"blink.cmp" = "78336bc89ee5365633bcf754d93df01678b5c08f"
+"conform.nvim" = "619363c30309d29ffa631e67c8183f2a72caa373"
+"faster.nvim" = "6b7cb8b1a9628d4b87009c4849d510d1a3a14319"
+"friendly-snippets" = "6cd7280adead7f586db6fccbd15d2cac7e2188b9"
+"gitsigns.nvim" = "eb60cc7b94c46005237fd34170d76f3a089a90aa"
+"guess-indent.nvim" = "84a4987ff36798c2fc1169cbaff67960aed9776f"
+"indent-blankline.nvim" = "d28a3f70721c79e3c5f6693057ae929f3d9c0a03"
+"lazy.nvim" = "306a05526ada86a7b30af95c5cc81ffba93fef97"
+"lazydev.nvim" = "ff2cbcba459b637ec3fd165a2be59b7bbaeedf0d"
+"lualine.nvim" = "221ce6b2d999187044529f49da6554a92f740a96"
+"markdown-toc.nvim" = "869af35bce0c27e2006f410fa3f706808db4843d"
+"markdown.nvim" = "093be911d90de03877f3009de36081c1a6242d51"
+"mini.trailspace" = "82c4fb7d4336f8824ca6c97068932886b56326d0"
+"nvim-bufdel" = "523d58e94e7212fff3e05c247b962dc8f93bcfde"
+"nvim-web-devicons" = "09d1324e264c6950262dbe02a9bce2933a6800db"
+"plenary.nvim" = "74b06c6c75e4eeb3108ec01852001636d85a932b"
+"render-markdown.nvim" = "f422cb5c6855f150e2ddcfaf44e7157b98b34f6a"
+"snacks.nvim" = "882c996cf28183f4d63640de0b4c02ec886d01f2"
+"tcl.nvim" = "668cc336ecd2f7953c3f3aef960b9c78a8408b36"
+"todo-comments.nvim" = "31e3c38ce9b29781e4422fc0322eb0a21f4e8668"
+"tokyonight.nvim" = "cdc07ac78467a233fd62c493de29a17e0cf2b2b6"
+"transparent.nvim" = "e00ca1cf09caef575edf8da7e5a8b9193893b4c7"
+"vim-illuminate" = "91313e598ca62e110bc71535c49069b66b9883c9"
+"which-key.nvim" = "3aab2147e74890957785941f0c1ad87d0a44c15a"

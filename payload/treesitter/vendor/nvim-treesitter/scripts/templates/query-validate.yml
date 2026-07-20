@@ -1,0 +1,12 @@
+name: Validate Queries
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    uses: neovim-treesitter/.github/.github/workflows/query-validate.yml@main

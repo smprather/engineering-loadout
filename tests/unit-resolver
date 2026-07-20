@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""
+unit-resolver -- unit tests for the pure resolver layer of loadout_main.py.
+
+Covers expand_groups (incl. the @shared/@shared-all/@envs synthetics, the
+'all' keyword, optional gating, nesting, and cycle detection), walk_depends
+(forbidden/force), walk_recommends, filter_by_platform,
+resolve_tool_selection, _tool_bin_sets/_tool_lib_sets, _parse_namelist,
+_local_name, and _resolve_install_to.
+
+Everything runs against small synthetic registries -- no filesystem payloads,
+no network. Must run under the bundled Python 3.14 (loadout_main.py uses
+PEP 758 syntax that older interpreters cannot parse).
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import sys
+import types
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+REGISTRY = {
+    "rg": {"kind": "bin", "bins": ["rg"], "platforms": ["linux"]},
+    "bat": {
+        "kind": "bin",
+        "bins": ["bat"],
+        "platforms": ["linux"],
+        "description": "Vim companion with syntax highlighting",
+    },
+    "gvim": {
+        "kind": "bin",
+        "bins": ["gvim", "gvim.bin"],
+        "platforms": ["linux"],
+        "depends": ["gui_libs"],
+        "recommends": ["bat"],
+    },
+    "gui_libs": {"kind": "lib-bundle", "libs": ["libQt5Core.so.5"], "platforms": ["linux"]},
+    "surfer": {"kind": "bin", "bins": ["surfer"], "platforms": ["linux"], "optional": True},
+    "env-bash": {"kind": "env", "platforms": ["linux"]},
+    "env-vim": {"kind": "env", "platforms": ["linux"]},
+    "env-opt": {"kind": "env", "platforms": ["linux"], "optional": True},
+    "winonly": {"kind": "bin", "bins": ["winonly"], "platforms": ["windows"]},
+    "@cli": {"kind": "group", "members": ["rg", "bat"]},
+    "@editors": {"kind": "group", "members": ["gvim", "@cli"]},
+    "@loop-a": {"kind": "group", "members": ["@loop-b"]},
+    "@loop-b": {"kind": "group", "members": ["@loop-a"]},
+    "@with-optional": {"kind": "group", "members": ["surfer", "rg"]},
+}
+
+
+def test_expand_groups(m):
+    eg = m.expand_groups
+    check("plain names pass through", eg(["rg", "bat"], REGISTRY) == {"rg", "bat"})
+    check("group expands", eg(["@cli"], REGISTRY) == {"rg", "bat"})
+    check("nested group expands", eg(["@editors"], REGISTRY) == {"gvim", "rg", "bat"})
+    check("unknown package dropped", eg(["rg", "nope"], REGISTRY) == {"rg"})
+    check("unknown group dropped", eg(["@nope"], REGISTRY) == set())
+
+    # `all` was removed: it meant "every NON-optional package", the opposite of what
+    # the -all suffix means everywhere else (@shared-all / @envs-all = "+ optionals").
+    try:
+        eg(["all"], REGISTRY)
+        check("'all' is rejected", False)
+    except m.ResolverError as exc:
+        check("'all' is rejected with a pointer to the replacements", "@engineering-loadout" in str(exc))
+
+    shared = eg(["@shared"], REGISTRY)
+    check("@shared excludes env kind", shared == {"rg", "bat", "gvim", "gui_libs", "winonly"})
+    shared_all = eg(["@shared-all"], REGISTRY)
+    check("@shared-all folds optionals back in", shared_all == shared | {"surfer"})
+    envs = eg(["@envs"], REGISTRY)
+    check("@envs is the env complement, minus optionals", envs == {"env-bash", "env-vim"})
+    envs_all = eg(["@envs-all"], REGISTRY)
+    check("@envs-all folds optional envs back in", envs_all == envs | {"env-opt"})
+    check("@envs and @shared stay disjoint", not (envs & eg(["@shared"], REGISTRY)))
+
+    check("group listing an optional pulls it", "surfer" in eg(["@with-optional"], REGISTRY))
+    check("optional installable by explicit name", eg(["surfer"], REGISTRY) == {"surfer"})
+
+    try:
+        eg(["@loop-a"], REGISTRY)
+        check("group cycle raises ResolverError", False)
+    except m.ResolverError:
+        check("group cycle raises ResolverError", True)
+
+
+def test_walk_depends(m):
+    wd = m.walk_depends
+    check("hard deps pulled transitively", wd({"gvim"}, REGISTRY) == {"gvim", "gui_libs"})
+    check("no-dep set unchanged", wd({"rg"}, REGISTRY) == {"rg"})
+    try:
+        wd({"gvim"}, REGISTRY, forbidden={"gui_libs"})
+        check("skipped hard dep raises", False)
+    except m.ResolverError:
+        check("skipped hard dep raises", True)
+    forced = wd({"gvim"}, REGISTRY, forbidden={"gui_libs"}, force=True)
+    check("--force continues past skipped dep", forced == {"gvim"})
+
+
+def test_walk_recommends(m):
+    wr = m.walk_recommends
+    check("soft recommends pulled", wr({"gvim"}, REGISTRY) == {"gvim", "bat"})
+    check("forbidden recommends dropped", wr({"gvim"}, REGISTRY, forbidden={"bat"}) == {"gvim"})
+    check("recommends of unknown pkg ignored", wr({"rg"}, REGISTRY) == {"rg"})
+
+
+def test_filter_by_platform(m):
+    fp = m.filter_by_platform
+    names = {"rg", "winonly"}
+    check("platform filter keeps matches", fp(names, REGISTRY, "linux") == {"rg"})
+    check("platform filter windows side", fp(names, REGISTRY, "windows") == {"winonly"})
+    check("missing platforms defaults linux", fp({"x"}, {"x": {}}, "linux") == {"x"})
+
+
+def _args(**kw):
+    ns = types.SimpleNamespace(skip=None, only=None, add=None, no_deps=False, force=False)
+    for k, v in kw.items():
+        setattr(ns, k, v)
+    return ns
+
+
+def test_resolve_tool_selection(m):
+    rts = m.resolve_tool_selection
+    check("empty registry -> None sentinel", rts(_args(only="rg"), {}) is None)
+
+    sel = rts(_args(only="gvim"), REGISTRY)
+    check("selection walks deps+recommends", sel == {"gvim", "gui_libs", "bat"})
+
+    sel = rts(_args(only="gvim", no_deps=True), REGISTRY)
+    check("--no-deps installs named set verbatim", sel == {"gvim"})
+
+    sel = rts(_args(only="@cli", skip="bat"), REGISTRY)
+    check("--skip removes from group selection", sel == {"rg"})
+
+    try:
+        rts(_args(), REGISTRY)
+        check("no packages specified raises", False)
+    except m.ResolverError:
+        check("no packages specified raises", True)
+
+    try:
+        rts(_args(only="gvim", skip="gui_libs"), REGISTRY)
+        check("skipping a hard dep raises", False)
+    except m.ResolverError:
+        check("skipping a hard dep raises", True)
+
+    sel = rts(_args(only="gvim", skip="gui_libs", force=True), REGISTRY)
+    check("--force downgrade to warning", sel == {"gvim", "bat"})
+
+    sel = rts(_args(only="rg,winonly"), REGISTRY)
+    check("platform filter applied to selection", sel == {"rg"})
+
+
+def test_tool_bin_lib_sets(m):
+    allowed, registered = m._tool_bin_sets({"gvim"}, REGISTRY)
+    check("bin sets: allowed follows selection", allowed == {"gvim", "gvim.bin"})
+    check("bin sets: registered is the union", registered == {"rg", "bat", "gvim", "gvim.bin", "surfer", "winonly"})
+    allowed, _ = m._tool_bin_sets(None, REGISTRY)
+    check("bin sets: None selection allows all", allowed == registered)
+
+    allowed, registered = m._tool_lib_sets({"gui_libs"}, REGISTRY)
+    check("lib sets: allowed follows selection", allowed == {"libQt5Core.so.5"})
+    check("lib sets: registered is the union", registered == {"libQt5Core.so.5"})
+
+
+def test_parse_namelist(m):
+    pn = m._parse_namelist
+    check("namelist splits and trims", pn(" rg , bat ,,@cli ") == ["rg", "bat", "@cli"])
+    check("namelist empty input", pn("") == [])
+    check("namelist None input", pn(None) == [])
+
+
+def test_list_name_filters(m):
+    rows = []
+    original_list_table = m._list_table
+    m._list_table = lambda listed_rows, columns: rows.extend(listed_rows)
+    try:
+        args = types.SimpleNamespace(list_groups=False, tag=None, patterns=("VIM", "rg"))
+        check("package list filter exits cleanly", m.cmd_list(args, REGISTRY) == 0)
+        check(
+            "package list filters names case-insensitively with OR semantics",
+            {row[0] for row in rows} == {"env-vim", "gvim", "rg"},
+            str(rows),
+        )
+        check(
+            "package list ignores description-only matches",
+            "bat" not in {row[0] for row in rows},
+            str(rows),
+        )
+
+        rows.clear()
+        args = types.SimpleNamespace(list_groups=True, tag=None, patterns=("CLI", "edit"))
+        check("group list filter exits cleanly", m.cmd_list(args, REGISTRY) == 0)
+        check(
+            "group list filters names case-insensitively with OR semantics",
+            {row[0] for row in rows} == {"@cli", "@editors"},
+            str(rows),
+        )
+    finally:
+        m._list_table = original_list_table
+
+
+def test_get_version_release_stamp(m):
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        check("no git + no stamp -> unknown", m._get_version(d) == "unknown")
+
+        stamp = os.path.join(d, ".release-version")
+        with open(stamp, "w") as fh:
+            fh.write("$Format:%(describe:tags)$\n")
+        check(
+            "unexpanded export-subst placeholder -> unknown",
+            m._get_version(d) == "unknown",
+        )
+
+        with open(stamp, "w") as fh:
+            fh.write("v2026.07.10\n")
+        check("release stamp read from git-less tree", m._get_version(d) == "v2026.07.10")
+
+    if m._GIT is None:
+        print("  skip  git-checkout describe cases (no git on this host)")
+        return
+    import re
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as d:
+        env = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null")
+
+        def git(*args):
+            subprocess.run(
+                [m._GIT, "-C", d, *args],
+                check=True,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        git("init", "-q")
+        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+        git("tag", "v9.9.9")
+        # A stamp file must lose to git describe, and --long keeps the
+        # -N-g<hash> suffix even exactly on the tag so a checkout never looks
+        # like a release tarball.
+        with open(os.path.join(d, ".release-version"), "w") as fh:
+            fh.write("v0.0.0-stamp\n")
+        version = m._get_version(d)
+        check(
+            "git checkout always carries -N-g<hash>",
+            re.fullmatch(r"v9\.9\.9-0-g[0-9a-f]+", version) is not None,
+            version,
+        )
+
+
+def test_local_name_and_install_to(m):
+    home = os.path.expanduser("~")
+    check("_local_name real HOME -> .local", m._local_name(home) == ".local")
+    check("_local_name dest-dir -> local", m._local_name("/srv/loadout/2026") == "local")
+
+    r = m._resolve_install_to("~/.local/share/helix", "/srv/root")
+    check("install_to maps .local -> local for dest-dir", r == "/srv/root/local/share/helix")
+    r = m._resolve_install_to("~/.local", home)
+    check("install_to keeps .local for real HOME", r == os.path.join(home, ".local"))
+    r = m._resolve_install_to("~/.config/tealdeer", "/srv/root")
+    check("install_to leaves .config dotted", r == "/srv/root/.config/tealdeer")
+    check("absolute install_to passes through", m._resolve_install_to("/opt/x", "/srv/root") == "/opt/x")
+
+
+def main():
+    mod = load_loadout()
+    for fn in (
+        test_expand_groups,
+        test_walk_depends,
+        test_walk_recommends,
+        test_filter_by_platform,
+        test_resolve_tool_selection,
+        test_tool_bin_lib_sets,
+        test_parse_namelist,
+        test_list_name_filters,
+        test_get_version_release_stamp,
+        test_local_name_and_install_to,
+    ):
+        print(f"-- {fn.__name__}")
+        fn(mod)
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

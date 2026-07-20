@@ -1,0 +1,26 @@
+#!/bin/sh
+# Relocatable st entry point.
+#
+# st bakes its settings into config.h at compile time. The loadout patch teaches
+# it to merge an X resource database from the colon-separated file list in
+# ST_XRESOURCES (later file wins, missing files skipped), so this wrapper's only
+# job is to name the layer chain. A caller who sets ST_XRESOURCES themselves
+# keeps full control.
+#
+# Reads no shell-startup state on purpose: st launched from a .desktop file,
+# dmenu, or `ssh host st` must resolve the same config as an interactive shell.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+if [ -z "${ST_XRESOURCES:-}" ]; then
+    cfg="${XDG_CONFIG_HOME:-$HOME/.config}/st"
+    ST_XRESOURCES="$cfg/global/st.xresources:$cfg/corp/st.xresources:$cfg/site/st.xresources:$cfg/team/st.xresources:$cfg/project/st.xresources:$cfg/user/st.xresources"
+    export ST_XRESOURCES
+fi
+
+exec "$prefix/bin/st.bin" "$@"

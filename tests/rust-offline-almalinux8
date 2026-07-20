@@ -1,0 +1,70 @@
+#!/bin/sh
+# Build + run the offline Rust toolchain / crate-store smoke in a clean
+# AlmaLinux 8.10 container. The checkout is mounted read-only and copied inside
+# the container, then the test runs with NO network so an offline `cargo build`
+# is genuinely proven (any crates.io fallback would fail).
+#
+# Runs the install + compile twice: default $HOME and a non-default --dest-dir.
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+repo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+docker_dir="$repo_dir/build/docker"
+image=${LOADOUT_RUST_IMAGE:-loadout-rust:almalinux8.10}
+build=1
+interactive=0
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  --no-build    Use existing image; do not run docker build.
+  --image NAME  Docker image tag to build/run (default: $image).
+  --shell       Open a shell in the image (network enabled) for debugging.
+  -h, --help    Show this help.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --no-build) build=0 ;;
+        --image) shift; [ "$#" -gt 0 ] || { echo "missing value for --image" >&2; exit 2; }; image=$1 ;;
+        --shell) interactive=1 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+
+command -v docker >/dev/null 2>&1 || { echo "ERROR: docker command not found" >&2; exit 127; }
+
+if [ -z "${DOCKER_CONFIG:-}" ]; then
+    docker_home=${HOME:-}/.docker
+    if [ ! -d "$docker_home" ] || [ ! -w "$docker_home" ]; then
+        DOCKER_CONFIG=/tmp/loadout-docker-config-${USER:-$(id -u)}
+        export DOCKER_CONFIG
+        mkdir -p "$DOCKER_CONFIG"
+    fi
+fi
+
+if [ "$build" -eq 1 ]; then
+    docker build \
+        -t "$image" \
+        -f "$docker_dir/almalinux8.10-rust.Dockerfile" \
+        "$docker_dir"
+fi
+
+if [ "$interactive" -eq 1 ]; then
+    exec docker run --rm -it \
+        -v "$repo_dir:/src:ro" \
+        --entrypoint /bin/bash \
+        "$image"
+fi
+
+# --network none: the smoke must succeed with zero network access.
+exec docker run --rm \
+    --network none \
+    -v "$repo_dir:/src:ro" \
+    "$image"

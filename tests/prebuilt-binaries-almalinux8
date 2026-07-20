@@ -1,0 +1,114 @@
+#!/bin/sh
+# Build and run the maximum-coverage binary smoke test in a clean AlmaLinux 8.10
+# container. The repo is mounted read-only, copied inside the container, then
+# tested there so loadout bootstrap/cache files do not mutate the host checkout.
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+repo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+docker_dir="$repo_dir/build/docker"
+image=${LOADOUT_SMOKE_IMAGE:-loadout-smoke:almalinux8.10}
+build=1
+interactive=0
+full=0
+dynamic=0
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS] [-- INNER_SMOKE_ARGS...]
+
+Options:
+  --no-build       Use existing image; do not run docker build.
+  --image NAME     Docker image tag to build/run (default: $image).
+  --shell          Open a shell in the AlmaLinux 8.10 smoke image.
+  --full           Also run doctor, resolver dry-runs, completion diff, the
+                   unit/registry tests, and both integration installs
+                   (tmp-home + split shared/envs) inside the container.
+  --dynamic        Run ONLY the behavioral dynamic-analysis harness (canary +
+                   strace) for the pilot tool, with the container network
+                   disabled (docker run --network none).
+  -h, --help       Show this help.
+
+Any args after -- are passed to test-prebuilt-binaries inside the container.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --no-build)
+            build=0
+            ;;
+        --image)
+            shift
+            [ "$#" -gt 0 ] || { echo "missing value for --image" >&2; exit 2; }
+            image=$1
+            ;;
+        --shell)
+            interactive=1
+            ;;
+        --full)
+            full=1
+            ;;
+        --dynamic)
+            dynamic=1
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: docker command not found" >&2
+    exit 127
+fi
+
+if [ -z "${DOCKER_CONFIG:-}" ]; then
+    docker_home=${HOME:-}/.docker
+    if [ ! -d "$docker_home" ] || [ ! -w "$docker_home" ]; then
+        DOCKER_CONFIG=/tmp/loadout-docker-config-${USER:-$(id -u)}
+        export DOCKER_CONFIG
+        mkdir -p "$DOCKER_CONFIG"
+    fi
+fi
+
+if [ "$build" -eq 1 ]; then
+    docker build \
+        -t "$image" \
+        -f "$docker_dir/almalinux8.10-smoke.Dockerfile" \
+        "$docker_dir"
+fi
+
+if [ "$interactive" -eq 1 ]; then
+    exec docker run --rm -it \
+        -v "$repo_dir:/src:ro" \
+        --entrypoint /bin/bash \
+        "$image"
+fi
+
+net_arg=""
+if [ "$dynamic" -eq 1 ]; then
+    # The dynamic detonation runs with no network so an exfiltration/update
+    # attempt cannot succeed and the offline path is what gets certified.
+    net_arg="--network=none"
+fi
+
+exec docker run --rm \
+    $net_arg \
+    -e "LOADOUT_SMOKE_FULL=$full" \
+    -e "LOADOUT_SMOKE_DYNAMIC=$dynamic" \
+    -v "$repo_dir:/src:ro" \
+    "$image" \
+    "$@"

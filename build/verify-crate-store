@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""verify-crate-store -- integrity-check the offline Cargo crate store.
+
+The store (payload/crate-store/crate-store.tar.bz2.part-*) is a `cargo
+local-registry`: a flat set of `<name>-<vers>.crate` files plus an `index/`
+whose JSON-lines each carry the upstream crates.io SHA-256 (`cksum`). This tool
+re-hashes every `.crate` against that `cksum` -- any mismatch means the vendored
+store no longer matches what crates.io published (tampering or corruption).
+
+It also emits/checks `assurance/crate-store.lock`: the committed
+`name version cksum` closure. Because the lock lives in git and the release tag
+is SSH-signed, altering a shipped crate requires rewriting BOTH the store and
+the signed-tag'd lock -- not just a file drop. See docs/SECURITY.md.
+
+Runs under any python3 (stdlib only); no 3.14-only syntax so it works in the
+clean almalinux:8.10 container's system python too.
+
+Usage:
+    build/verify-crate-store              # re-hash all crates vs the index
+    build/verify-crate-store --emit-lock  # (re)write assurance/crate-store.lock
+    build/verify-crate-store --check-lock # fail if the committed lock drifted
+"""
+
+import argparse
+import glob
+import hashlib
+import json
+import os
+import sys
+import tarfile
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STORE_BASE = os.path.join(REPO, "payload", "crate-store", "crate-store.tar.bz2")
+LOCK = os.path.join(REPO, "assurance", "crate-store.lock")
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _extract_store(tmp):
+    """Rejoin the chunked archive and extract it into tmp; return the store dir."""
+    parts = sorted(glob.glob(STORE_BASE + ".part-*")) or ([STORE_BASE] if os.path.exists(STORE_BASE) else [])
+    if not parts:
+        sys.exit("crate-store archive not found under payload/crate-store/")
+    joined = os.path.join(tmp, "crate-store.tar.bz2")
+    with open(joined, "wb") as out:
+        for p in parts:
+            with open(p, "rb") as inp:
+                while True:
+                    b = inp.read(1 << 20)
+                    if not b:
+                        break
+                    out.write(b)
+    dest = os.path.join(tmp, "store")
+    os.makedirs(dest)
+    with tarfile.open(joined, "r:bz2") as tf:
+        try:
+            tf.extractall(dest, filter="data")  # py3.12+ path-safe filter
+        except TypeError:
+            tf.extractall(dest)
+    # The archive may wrap the registry in a single top dir; find the dir holding index/.
+    if os.path.isdir(os.path.join(dest, "index")):
+        return dest
+    for root, dirs, _ in os.walk(dest):
+        if "index" in dirs:
+            return root
+    sys.exit("no index/ directory found in the crate store")
+
+
+def _index_checksums(store_dir):
+    """Map (name, vers) -> cksum by reading the cargo registry index JSON-lines."""
+    cks = {}
+    idx = os.path.join(store_dir, "index")
+    for root, _, files in os.walk(idx):
+        for fn in files:
+            if fn.startswith("."):
+                continue
+            with open(os.path.join(root, fn), encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    if "name" in e and "vers" in e and "cksum" in e:
+                        cks[(e["name"], e["vers"])] = e["cksum"]
+    return cks
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Integrity-check the offline Cargo crate store.")
+    ap.add_argument("--emit-lock", action="store_true", help="(re)write assurance/crate-store.lock")
+    ap.add_argument("--check-lock", action="store_true", help="fail if the committed lock differs from computed")
+    args = ap.parse_args()
+
+    with tempfile.TemporaryDirectory(prefix="verify-crate-store-") as tmp:
+        store = _extract_store(tmp)
+        cks = _index_checksums(store)
+        if not cks:
+            sys.exit("no index checksums found -- is this a cargo local-registry?")
+
+        mismatch = []
+        missing = []
+        ok = 0
+        lock_lines = []
+        for (name, vers), cksum in sorted(cks.items()):
+            crate = os.path.join(store, f"{name}-{vers}.crate")
+            if not os.path.isfile(crate):
+                missing.append(f"{name}-{vers}")
+                continue
+            actual = _sha256(crate)
+            if actual != cksum:
+                mismatch.append((f"{name}-{vers}", cksum, actual))
+            else:
+                ok += 1
+                lock_lines.append(f"{name} {vers} {cksum}")
+
+        crate_files = {os.path.basename(p) for p in glob.glob(os.path.join(store, "*.crate"))}
+        indexed = {f"{n}-{v}.crate" for (n, v) in cks}
+        orphans = sorted(crate_files - indexed)
+
+        print(
+            f"crate-store: {ok} verified, {len(mismatch)} MISMATCH, {len(missing)} missing (index entries: {len(cks)})"
+        )
+        for n, exp, act in mismatch[:20]:
+            print(f"  MISMATCH {n}\n    index : {exp}\n    actual: {act}")
+        for n in missing[:20]:
+            print(f"  MISSING .crate for index entry {n}")
+        if orphans:
+            print(f"  WARNING: {len(orphans)} .crate file(s) not in index (orphan): {orphans[:5]}")
+
+        lock_text = "".join(line + "\n" for line in sorted(lock_lines))
+        if args.emit_lock:
+            os.makedirs(os.path.dirname(LOCK), exist_ok=True)
+            with open(LOCK, "w", encoding="utf-8") as fh:
+                fh.write(lock_text)
+            print(f"  wrote {LOCK} ({len(lock_lines)} crates)")
+        if args.check_lock:
+            if not os.path.exists(LOCK):
+                sys.exit("assurance/crate-store.lock missing -- run: build/verify-crate-store --emit-lock")
+            if open(LOCK, encoding="utf-8").read() != lock_text:
+                print("  crate-store.lock DIFFERS from the computed closure", file=sys.stderr)
+                sys.exit(1)
+            print("  crate-store.lock matches the computed closure")
+
+        if mismatch or missing:
+            print("\nCRATE STORE INTEGRITY FAILURE", file=sys.stderr)
+            sys.exit(1)
+        print("crate store OK")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Smoke the optional packages no other gate ever probes: openssh, surfer,
+# cicwave. @shared excludes optional packages, so tests/prebuilt-binaries and
+# the Tier 3 container never see them (the rust trio has its own
+# tests/rust-offline-almalinux8).
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-optional-home.XXXXXX)
+dest_dir=$(mktemp -d /tmp/loadout-optional-dest.XXXXXX)
+local_prefix="$dest_dir/local"
+
+cleanup() {
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "optional-packages smoke failed: $*" >&2
+    exit 1
+}
+
+echo "Installing optional packages into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install openssh surfer cicwave --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -20 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+probe_env=(env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
+
+# --- openssh: ssh-keygen -Y sign/verify roundtrip (the package's raison d'etre)
+echo "Smoke: openssh signing roundtrip"
+[[ -x $local_prefix/bin/ssh-keygen ]] || fail "ssh-keygen not installed"
+[[ -x $local_prefix/bin/ssh10 ]] || fail "ssh10 wrapper not installed"
+[[ ! -e $local_prefix/bin/ssh ]] || fail "bare ssh must never be installed"
+mkdir -p "$test_home/.ssh"
+"${probe_env[@]}" ssh-keygen -q -t ed25519 -N '' -C smoke -f "$test_home/.ssh/smoke_key"
+printf 'loadout optional smoke payload\n' > "$test_home/artifact.txt"
+"${probe_env[@]}" ssh-keygen -Y sign -n file -f "$test_home/.ssh/smoke_key" "$test_home/artifact.txt" \
+    2>> "$test_home/sign.log" || { cat "$test_home/sign.log" >&2; fail "ssh-keygen -Y sign"; }
+printf 'smoke@loadout %s\n' "$(cut -d' ' -f1-2 "$test_home/.ssh/smoke_key.pub")" > "$test_home/allowed"
+"${probe_env[@]}" sh -c \
+    'ssh-keygen -Y verify -n file -f "$1/allowed" -I smoke@loadout -s "$1/artifact.txt.sig" < "$1/artifact.txt"' \
+    _ "$test_home" >/dev/null || fail "ssh-keygen -Y verify"
+"${probe_env[@]}" ssh10 -V 2>&1 | grep -qi 'openssh' || fail "ssh10 -V"
+echo "  OK: sign/verify roundtrip + ssh10 client"
+
+# --- surfer: version probe (GL is dlopen'd lazily; --version must not need it)
+echo "Smoke: surfer"
+[[ -x $local_prefix/bin/surfer ]] || fail "surfer wrapper not installed"
+surfer_out=$("${probe_env[@]}" surfer --version 2>&1) || fail "surfer --version: $surfer_out"
+grep -qi 'surfer' <<< "$surfer_out" || fail "unexpected surfer version output: $surfer_out"
+echo "  OK: $surfer_out"
+
+# --- cicwave: offscreen Qt startup (no GL in offscreen per CLAUDE.md)
+echo "Smoke: cicwave (offscreen Qt)"
+[[ -x $local_prefix/bin/cicwave ]] || fail "cicwave launcher not installed"
+cicwave_out=$("${probe_env[@]}" QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 \
+    cicwave --help 2>&1) || fail "cicwave --help: ${cicwave_out:0:300}"
+grep -qiE 'usage|cicwave' <<< "$cicwave_out" || fail "unexpected cicwave output: ${cicwave_out:0:300}"
+echo "  OK: cicwave offscreen startup"
+
+echo "Optional-packages smoke OK"

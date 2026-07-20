@@ -1,0 +1,54 @@
+"$schema" = "./config-schema.json"
+
+add_newline = false
+
+# How long Starship spends looking for directory context (like Git repos or package files) to determine the prompt's layout
+scan_timeout = 2000
+
+# How long Starship waits for a specific module to execute a script or system command (like finding a Node.js version)
+# before giving up and aborting it. [1]
+command_timeout = 2000
+
+format = """
+(${custom.username}${custom.lsf}$git_branch$git_status$cmd_duration$python\n)$directory
+$character"""
+
+[custom.username]
+when = 'for u in $LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT; do [ "$(whoami)" = "$u" ] && exit 0; done; exit 1'
+command = 'whoami'
+format = "[$output]($style) "
+style = "bold yellow"
+
+[custom.lsf]
+when = 'test -n "$LSB_JOBID"'
+command = "hostname -s"
+format = "[LSF:$output]($style) "
+style = "bold red"
+
+[directory]
+truncation_length = 0
+truncate_to_repo = false
+style = "bold cyan"
+format = "[$path]($style) "
+
+[git_branch]
+style = "bold blue"
+
+[git_status]
+style = "bold yellow"
+
+# A threshold for the previous command you ran. It dictates how fast a command must execute before the terminal
+# displays a timer indicating how long it took.
+[cmd_duration]
+min_time = 5000
+style = "bold violet"
+format = "[took $duration]($style) "
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[python]
+symbol = "🐍"
+format = '[${symbol}${pyenv_prefix}(${version})(\($virtualenv\))](bold yellow) '
+pyenv_prefix = "venv "
