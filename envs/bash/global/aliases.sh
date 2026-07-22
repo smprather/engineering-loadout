@@ -27,7 +27,11 @@ loadout_cd_recent_dir() {
             cut -d' ' -f2-
     )
     [[ -n $target ]] || return 1
-    builtin cd -- "$target" || return
+    # Deliberately the cd FUNCTION (global/bashrc), not `builtin cd`: every
+    # directory change is expected to be followed by an ls, and the builtin
+    # skips that. `find` always emits a ./-prefixed path, so no `--` is needed
+    # (the wrapper does not take one).
+    cd "$target" || return
 }
 cdd() { loadout_cd_recent_dir 1; }
 cddd() { loadout_cd_recent_dir 2; }
@@ -36,9 +40,6 @@ cddddd() { loadout_cd_recent_dir 4; }
 cdddddd() { loadout_cd_recent_dir 5; }
 alias p='pwd | tee "/tmp/p_dir.$USER"'
 alias cdp='cd "$(cat "/tmp/p_dir.$USER")"'
-cds() {
-    eval "$(cd-surfer "$@")"
-}
 
 ### Listing ###
 alias sl='ls'
@@ -338,7 +339,8 @@ latest() {
         [[ -n $latest ]] || return 1
         ln -s -- "$latest" latest
     fi
-    builtin cd -- "$latest" || return
+    # cd function, not `builtin cd` -- see loadout_cd_recent_dir above.
+    cd "$latest" || return
 }
 
 ### Tmux ###

@@ -209,6 +209,12 @@ fi
 # zoxide: smart cd with frecency tracking (z/zi commands)
 if command -v zoxide >/dev/null && is_truthy "${LOADOUT_CFG_ENABLE_ZOXIDE}"; then
     eval "$(zoxide init bash)"
+    # Every zoxide jump (z, zi, and its internal paths) funnels through
+    # __zoxide_cd, whose generated body is `builtin cd -- "$@"` -- which skips
+    # the ls that the cd wrapper runs. Re-point that one choke point at the cd
+    # function so "changing directory always lists" stays true for z/zi too.
+    # Overriding here rather than wrapping z/zi covers future zoxide verbs.
+    __zoxide_cd() { cd "$@" || return; }
 fi
 
 # tmux_path_store: create per-path tmux session aliases

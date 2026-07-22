@@ -8,8 +8,14 @@ Usage:
     ./release --dry-run        # run gates only, no tag or GitHub release
     ./release --skip-scan      # skip the malware scan (NOT recommended; for a
                                # known yara false positive only)
+    ./release --allow-unsigned # release with an UNSIGNED tag (breaks trust chain)
 
-Every release runs independent pre-release gates in parallel: malware scan,
+A preflight runs FIRST, before any gate: it checks `gh` auth and proves the tag
+signer produces a real signature with no tty, askpass or DISPLAY. Authentication
+problems therefore surface at kickoff, while the operator is still at the
+keyboard, instead of hanging an hour later when the slow gates have finished.
+
+Every release then runs independent pre-release gates in parallel: malware scan,
 binary smoke test, version table, and checksum generation. The final tag and
 GitHub release step runs only after the mandatory gates pass.
 
@@ -61,6 +67,124 @@ def _signing_configured():
     """True when git has a signing key configured (SSH or GPG)."""
     r = subprocess.run(["git", "config", "--get", "user.signingkey"], capture_output=True, text=True)
     return r.returncode == 0 and r.stdout.strip() != ""
+
+
+SIGNING_PROBE_TAG = "loadout-release-signing-preflight"
+
+
+def _delete_probe_tag():
+    subprocess.run(["git", "tag", "-d", SIGNING_PROBE_TAG], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _test_sign_noninteractive():
+    """Prove the tag signer works with every interactive channel closed.
+
+    A release runs unattended for a long time (scan + smoke are the slow part),
+    so a signer that can still prompt does not fail -- it HANGS, at the very
+    end, after all the expensive work. This signs a throwaway tag with no tty,
+    no askpass and no DISPLAY, so the only way it succeeds is a live ssh-agent
+    (or an unencrypted key). Returns (ok, detail).
+    """
+    env = dict(os.environ)
+    env["SSH_ASKPASS_REQUIRE"] = "never"  # OpenSSH >= 8.4: never fall back to a GUI prompt
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env.pop("SSH_ASKPASS", None)
+    env.pop("DISPLAY", None)
+
+    _delete_probe_tag()  # a killed earlier run can leave one behind
+    try:
+        r = subprocess.run(
+            ["git", "tag", "-s", SIGNING_PROBE_TAG, "-m", SIGNING_PROBE_TAG],
+            capture_output=True,
+            text=True,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        _delete_probe_tag()
+        return False, "signer did not finish in 60s -- it is waiting for a passphrase"
+
+    if r.returncode != 0:
+        _delete_probe_tag()
+        # git's own diagnosis comes FIRST ("error: Enter passphrase ...");
+        # the last line is the useless "tag message left in .git/TAG_EDITMSG".
+        lines = [ln.strip() for ln in (r.stderr or r.stdout).splitlines() if ln.strip()]
+        useful = [ln for ln in lines if ln.startswith(("error:", "fatal:"))]
+        return False, (useful or lines or ["git tag -s failed"])[0]
+
+    obj = subprocess.run(["git", "cat-file", "-p", SIGNING_PROBE_TAG], capture_output=True, text=True)
+    _delete_probe_tag()
+    # Belt and braces: a zero exit is not proof of a signature. The 2026-07-22
+    # release shipped an unsigned tag because nothing ever checked the object.
+    if "BEGIN SSH SIGNATURE" not in obj.stdout and "BEGIN PGP SIGNATURE" not in obj.stdout:
+        return False, "git tag -s exited 0 but produced a tag with no signature block"
+    return True, "throwaway tag signed with no tty, askpass or DISPLAY"
+
+
+def _gh_authenticated():
+    r = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True)
+    if r.returncode == 0:
+        return True, "gh CLI authenticated"
+    err = (r.stderr or r.stdout).strip().splitlines()
+    return False, err[-1] if err else "gh auth status failed"
+
+
+def _print_signing_remediation():
+    print("", file=sys.stderr)
+    print("  The tag signer needs a live ssh-agent holding the key. Run, in your shell:", file=sys.stderr)
+    print("", file=sys.stderr)
+    print('      eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519', file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  then re-run the release with that agent's socket:", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("      SSH_AUTH_SOCK=$SSH_AUTH_SOCK ./release", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  (From a background/tool shell SSH_AUTH_SOCK is usually unset -- find the", file=sys.stderr)
+    print("  keyed agent with: for s in $(ls -t /tmp/ssh-*/agent.*); do", file=sys.stderr)
+    print("  SSH_AUTH_SOCK=$s ssh-add -l >/dev/null 2>&1 && echo $s && break; done)", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  To release without a signature anyway, pass --allow-unsigned.", file=sys.stderr)
+
+
+def _preflight(dry_run, allow_unsigned):
+    """Authenticate BEFORE any long-running gate.
+
+    Everything credential-shaped is settled here, at kickoff, while the operator
+    is still at the keyboard -- not an hour later when the scan and smoke test
+    have finished and nobody is around to answer a prompt. Returns True when the
+    tag will be signed.
+    """
+    _print_heading("Preflight: authentication (before any gate)")
+
+    gh_ok, gh_detail = _gh_authenticated()
+    print(f"  gh auth       : {'OK' if gh_ok else 'FAILED'} -- {gh_detail}", flush=True)
+
+    key = _signing_configured()
+    sign_ok, sign_detail = (False, "no user.signingkey configured")
+    if key:
+        sign_ok, sign_detail = _test_sign_noninteractive()
+    print(f"  tag signing   : {'OK' if sign_ok else 'FAILED'} -- {sign_detail}", flush=True)
+
+    if dry_run:
+        # No tag is created, so nothing here can block; still reported above.
+        return sign_ok
+
+    if not gh_ok:
+        print("\nRelease blocked: gh CLI is not authenticated. Run: gh auth login", file=sys.stderr)
+        sys.exit(1)
+
+    if not sign_ok:
+        if not allow_unsigned:
+            print("\nRelease blocked: cannot produce a SIGNED tag.", file=sys.stderr)
+            print("An unsigned tag breaks the top link of the trust chain", file=sys.stderr)
+            print("(signed tag -> sha256sums.txt -> payload bytes; docs/SECURITY.md).", file=sys.stderr)
+            _print_signing_remediation()
+            sys.exit(1)
+        print("  WARNING: --allow-unsigned -- this release will carry an UNSIGNED tag.")
+        print("  The content-manifest trust chain will NOT be tamper-evident.")
+
+    return sign_ok
 
 
 def _sha256_file(path):
@@ -312,12 +436,20 @@ def _record_skip_scan_justification(script_dir, tag):
     is_flag=True,
     help="Skip the YARA malware scan (NOT recommended; only for a known false positive).",
 )
-def main(tag, dry_run, skip_scan):
+@click.option(
+    "--allow-unsigned",
+    "allow_unsigned",
+    is_flag=True,
+    help="Release even when the tag cannot be signed (breaks the trust chain; NOT recommended).",
+)
+def main(tag, dry_run, skip_scan, allow_unsigned):
     """Run pre-release gates, then create a GitHub release.
 
-    The malware scan, binary smoke test, version table, and checksum generation
-    are independent and run in parallel. The tag/release step waits for them and
-    aborts when a mandatory gate fails.
+    Authentication is settled in a preflight step BEFORE any gate runs, because
+    the gates are slow and the operator is only reliably at the keyboard at
+    kickoff. The malware scan, binary smoke test, version table, and checksum
+    generation are independent and run in parallel. The tag/release step waits
+    for them and aborts when a mandatory gate fails.
 
     Requires: gh (GitHub CLI) authenticated, git repo with remote set.
     """
@@ -326,6 +458,8 @@ def main(tag, dry_run, skip_scan):
     farm_versions = os.path.join(script_dir, "build", "farm-versions")
     malware_scan = os.path.join(script_dir, "scan-for-malware")
     tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
+
+    signing = _preflight(dry_run, allow_unsigned)
 
     results = _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan)
 
@@ -355,12 +489,12 @@ def main(tag, dry_run, skip_scan):
     pairs = checksum_result.data["pairs"]
     sums_path = checksum_result.data["sums_path"]
 
-    # Sign the tag when a signing key is configured (SSH or GPG); otherwise
-    # create an unsigned tag and warn. Uploading the key is a one-time owner
-    # step -- see docs/SECURITY.md section 6. Computed here because the notes
-    # reference the signed-tag verification step.
-    signing = _signing_configured()
-
+    # `signing` comes from the preflight, which proved the signer actually
+    # produces a signature non-interactively. It is deliberately NOT re-derived
+    # from `git config` here: a bare config lookup says a key is *named*, not
+    # that signing works, and that gap is exactly how the 2026-07-22 release
+    # shipped an unsigned tag. Uploading the key is a one-time owner step --
+    # see docs/SECURITY.md section 6.
     notes = "\n\n".join(
         section
         for section in (
@@ -400,13 +534,21 @@ def main(tag, dry_run, skip_scan):
 
     tag_cmd = ["git", "tag", "-s" if signing else "-a", tag, "-m", tag]
     if not signing:
-        print("  WARNING: no commit/tag signing key configured (user.signingkey);")
-        print("  creating an UNSIGNED annotated tag. Configure SSH signing to make")
-        print("  the content-manifest trust chain tamper-evident (docs/SECURITY.md).")
+        print("  WARNING: creating an UNSIGNED annotated tag (--allow-unsigned).")
+        print("  The content-manifest trust chain is NOT tamper-evident (docs/SECURITY.md).")
     result = run(tag_cmd)
     if result.returncode != 0:
         print("git tag failed.", file=sys.stderr)
         sys.exit(1)
+
+    # Never take the signer's exit status as proof. Confirm the object really
+    # carries a signature before anything downstream claims it does.
+    if signing:
+        obj = subprocess.run(["git", "cat-file", "-p", tag], capture_output=True, text=True)
+        if "BEGIN SSH SIGNATURE" not in obj.stdout and "BEGIN PGP SIGNATURE" not in obj.stdout:
+            print("Release blocked: tag was created WITHOUT a signature.", file=sys.stderr)
+            subprocess.run(["git", "tag", "-d", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            sys.exit(1)
 
     result = run(["git", "push", "origin", tag])
     if result.returncode != 0:

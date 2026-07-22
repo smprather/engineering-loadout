@@ -1,6 +1,34 @@
 # Current Handoff
 
-Last updated: 2026-07-22 (Parity Plot v0.4.0; per-user default is Bash-only).
+Last updated: 2026-07-22 (release signing preflight; cd-always-lists fixes).
+
+## Release signing: the 2026-07-22 unsigned-tag incident
+
+The first `v2026.07.22` release shipped an **unsigned** tag (GitHub reported
+`verification.reason = "unsigned"`), silently. `./release` decided whether to sign
+from `_signing_configured()`, which only asked `git config --get user.signingkey`.
+When that resolved empty the script took the `git tag -a` fallback, printed a warning
+into a long unattended log, and dropped the `git tag -v` line from the release notes.
+Nobody was at the keyboard to notice. The top link of the trust chain was missing.
+
+`./release` now runs `_preflight()` **before any gate**, because the gates are slow and
+the operator is only reliably present at kickoff:
+
+- checks `gh auth status`;
+- proves signing works by signing a throwaway tag with `SSH_ASKPASS_REQUIRE=never`,
+  no `DISPLAY`, `stdin=DEVNULL` and a 60s timeout, then greps the resulting object for
+  `BEGIN SSH SIGNATURE` -- a zero exit from the signer is not proof;
+- blocks with remediation unless `--allow-unsigned` is passed;
+- after the real `git tag -s`, re-reads the tag object and aborts (deleting the tag)
+  if no signature block is present.
+
+Signing needs a live ssh-agent. **Probe for one before asking anyone to run `ssh-add`** --
+it is normally already running and only `SSH_AUTH_SOCK` is missing from tool shells.
+Two traps: the agent socket probe fails under a sandbox with `unix_listener: socket:
+Operation not permitted` (a sandbox artifact, not a broken agent), and `ssh-add` is
+aliased on this box to `eval "$(ssh-agent -s)" && command ssh-add ...`, so a bare call
+spawns a fresh **keyless** agent. Use `/usr/bin/ssh-add -l` against each
+`/tmp/ssh-*/agent.*` and match the fingerprint of `~/.ssh/id_ed25519.pub`.
 
 ## State
 
@@ -69,6 +97,23 @@ Last updated: 2026-07-22 (Parity Plot v0.4.0; per-user default is Bash-only).
   across 75051 files with the known Firefox `omni.ja` allowlisted FP;
   `tests/prebuilt-binaries` reports `All 255 binaries OK; runtimes OK`;
   release checksum/version steps passed and refreshed `sha256sums.txt`.
+
+## Bash env: every directory change lists
+
+`cd()` in `envs/bash/global/bashrc` is the **only** thing that runs the follow-up `ls`,
+so anything reaching `builtin cd` silently skips it. Fixed: `loadout_cd_recent_dir`
+(backing `cdd`/`cddd`/...) and `latest` in `envs/bash/global/aliases.sh` now call the
+`cd` function, and the zoxide block overrides `__zoxide_cd` -- zoxide funnels every jump
+through that one generated function, so overriding it covers `z`, `zi` and future verbs.
+The `--` was dropped at those call sites: the wrapper does not accept one, and `find`
+always emits `./`-prefixed paths. `alias bcd="builtin cd"` stays as the escape hatch.
+
+Verify with a real PTY (`script -qec`) driving `cdd`/`z` in a scratch dir with a marker
+file, and check the negative control -- the same harness against a tree without the fix
+must print no listing. `bash -lic` will not do: no prompt cycle, so the bug hides.
+
+`cds()` / `cd-surfer` was a failed experiment and is deleted. Unrelated `cds` hits
+elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not related.
 
 ## Next steps
 
