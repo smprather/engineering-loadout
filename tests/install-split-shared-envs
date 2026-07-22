@@ -110,9 +110,9 @@ assert_exists "$shared_prefix/lib/modules/init/fish"
 assert_exists "$shared_prefix/share/nvim/runtime/filetype.lua"
 assert_exists "$shared_prefix/share/terminfo/s/st-256color"
 assert_exists "$test_home/.bashrc"
-assert_exists "$test_home/.zshrc"
 assert_exists "$test_home/.config/bash/global/config.sh"
-assert_exists "$test_home/.config/zsh/zshrc"
+assert_not_exists "$test_home/.zshrc"
+assert_not_exists "$test_home/.config/zsh"
 assert_not_exists "$test_home/.local/bin/nvim"
 
 if ! grep -Eq "^export LOADOUT_CFG_SHARED_PREFIX='?$shared_prefix'?$" "$test_home/.config/bash/global/config.sh"; then
@@ -178,27 +178,6 @@ env -i \
     '
 
 if [[ -x "$shared_prefix/bin/zsh" ]]; then
-    echo "Smoke-testing zsh env against shared prefix"
-    env -i \
-        HOME="$test_home" \
-        PATH="$basic_path" \
-        LANG="${LANG:-C.UTF-8}" \
-        TERM="xterm-256color" \
-        EXPECTED_SHARED_PREFIX="$shared_prefix" \
-        "$shared_prefix/bin/zsh" -fc '
-            fail() { echo "zsh env smoke failed: $*" >&2; exit 1; }
-            source "$HOME/.zshrc"
-            [[ "${LOADOUT_CFG_SHARED_PREFIX:-}" == "$EXPECTED_SHARED_PREFIX" ]] || fail "LOADOUT_CFG_SHARED_PREFIX=${LOADOUT_CFG_SHARED_PREFIX:-}"
-            nvim_path=$(command -v nvim) || fail "nvim missing from PATH=$PATH"
-            wezterm_path=$(command -v wezterm) || fail "wezterm missing from PATH=$PATH"
-            [[ "$nvim_path" == "$EXPECTED_SHARED_PREFIX/bin/nvim" ]] || fail "nvim path: $nvim_path"
-            [[ "$wezterm_path" == "$EXPECTED_SHARED_PREFIX/bin/wezterm" ]] || fail "wezterm path: $wezterm_path"
-            [[ ":${TERMINFO_DIRS:-}:" == *":$EXPECTED_SHARED_PREFIX/share/terminfo:"* ]] || fail "TERMINFO_DIRS=${TERMINFO_DIRS:-}"
-            if [[ -f "$EXPECTED_SHARED_PREFIX/lib64/libqxcb.so" ]]; then
-                [[ "${QT_QPA_PLATFORM_PLUGIN_PATH:-}" == "$EXPECTED_SHARED_PREFIX/lib64" ]] || fail "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_QPA_PLATFORM_PLUGIN_PATH:-}"
-            fi
-        '
-
     echo "Smoke-testing native Modules zsh init against shared prefix"
     env -i \
         HOME="$test_home" \

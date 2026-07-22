@@ -49,10 +49,11 @@ Unchanged files are skipped, so re-runs are quick.
 Name packages or groups the same way `dnf` or `apt` works:
 
 ```bash
-./loadout install @engineering-loadout                    # the full set
+./loadout install @engineering-loadout                    # the curated set
 ./loadout install octave                                  # one package
+./loadout install parity-plot                             # parity-plot CLI + local designer
 ./loadout install @gui-suite                              # a group
-./loadout install @engineering-loadout --skip @fonts-all  # everything but fonts
+./loadout install @engineering-loadout --skip @fonts-all  # curated set minus fonts
 ./loadout list                                            # browse packages
 ./loadout list vim helix                                  # name matches either filter
 ./loadout list --tag editor                               # filter by tag
@@ -162,9 +163,11 @@ tests/prebuilt-binaries-almalinux8 --full   # + doctor, resolvers, unit tests,
 
 For the shared-tree deployment model, run the split install smoke. It installs
 `@shared` into a temp non-home tree, installs `@envs` into a separate temp
-`HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`, then checks shell
+`HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`, then checks Bash
 startup, shared `PATH`, terminfo, WezTerm completions, and core tool startup.
-`@envs` installs copy config files into `~/.config`; old symlinked config
+`@envs` installs Bash configuration only (plus its Starship recommendation);
+install other config bundles explicitly or use `@envs-all` when every shell
+and editor config is intentional. Env installs copy config files into `~/.config`; old symlinked config
 subdirectories that point back into the repo are replaced with real
 directories so installs cannot mutate the checkout.
 
@@ -294,6 +297,7 @@ OpenSSH for those.
 | nodejs | bin | 26.2.0 | Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.5.7 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | 2a1c077 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
+| parity-plot | python-tool | v0.4.0 | Plotly parity plots and bundled local NiceGUI designer; HTML output is self-contained |
 | text-serdes | python-tool | c9e83b7 | text-serdes -- short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
 | portable-python | python-base | 3.14.4 | BOLT-optimized portable CPython build with bundled install.sh |
@@ -310,6 +314,15 @@ OpenSSH for those.
 | lua-language-server | bin | 3.18.2 | Lua language server (LSP) -- useful for nvim config and Lua tooling |
 | pyright | python-tool | 1.1.410 | Python language server (LSP) -- type-checking, go-to-def, completions |
 | tmux-path-store | python-tool | 1.0.0 | Tmux window-name-keyed directory/file path store -- shell aliases for per-window path bookmarks |
+
+### Parity plots
+
+`./loadout install parity-plot` installs the CLI and its local designer, with no
+Python packages fetched at install time. `parity-plot plot measurements.csv
+--no-open-browser --output parity.html` creates a self-contained HTML report:
+the Plotly runtime is embedded so it renders on an air-gapped machine. PNG, SVG,
+and PDF export still need a compatible Chrome/Chromium already on the host for
+Kaleido; loadout deliberately does not download or bundle a browser.
 
 If your machine doesn't already have GTK3 / Qt5 / X11 / Wayland libraries
 installed (common on remote compute nodes), install `gui_libs` alongside

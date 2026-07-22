@@ -10,10 +10,13 @@ Asserts:
   3. Every hardcoded phase-gate package name in loadout_main.py
      (_HARDCODED_GATE_PKGS + ENV_HANDLERS keys) exists in the registry.
   4. The _schema block documents exactly the set of fields entries use
-     (no undocumented fields in use, no documented-but-unused fields).
+     (no undocumented fields in use, no documented-but-unused fields except
+     intentionally optional schema fields).
   5. Known enum fields hold known values (kind, platforms).
   6. Every python-tool carries depends [portable-python, uv].
-  7. Every tool name in farm-versions' TOOLS table maps to a registry package
+  7. uv_extras occurs only on python-tools with valid uv_tool names, and is a
+     non-empty unique string list.
+  8. Every tool name in farm-versions' TOOLS table maps to a registry package
      (directly or via the known alias table) -- catches the "shipped but never
      registered" drift class.
 
@@ -46,6 +49,7 @@ KNOWN_KINDS = {
 }
 KNOWN_PLATFORMS = {"linux", "macos", "windows"}
 SYNTHETIC_NAMES = {"@shared", "@shared-all", "@envs", "@envs-all"}
+OPTIONAL_SCHEMA_FIELDS = {"uv_extras"}
 
 # farm-versions display names that are neither a registry package name nor a
 # bin stem claimed by one (uv-tool launchers and display aliases).
@@ -137,7 +141,7 @@ def main():
     for entry in registry.values():
         used_fields.update(entry)
     undocumented = sorted(used_fields - schema_fields)
-    unused = sorted(schema_fields - used_fields)
+    unused = sorted(schema_fields - used_fields - OPTIONAL_SCHEMA_FIELDS)
     check("no undocumented fields in use", not undocumented, ", ".join(undocumented))
     check("no documented-but-unused fields", not unused, ", ".join(unused))
 
@@ -159,7 +163,29 @@ def main():
     ]
     check("python-tools depend on portable-python + uv", not bad_pt, ", ".join(bad_pt))
 
-    # 7. farm-versions TOOLS <-> registry sync. A TOOLS name is valid when it
+    # 7. Extras change the install requirement but only make sense for uv tools.
+    bad_extras = []
+    for name, entry in registry.items():
+        if "uv_extras" not in entry:
+            continue
+        extras = entry["uv_extras"]
+        if (
+            entry.get("kind") != "python-tool"
+            or not isinstance(entry.get("uv_tool"), str)
+            or not entry["uv_tool"]
+            or not isinstance(extras, list)
+            or not extras
+            or any(not isinstance(extra, str) or not extra for extra in extras)
+            or len(extras) != len(set(extras))
+        ):
+            bad_extras.append(name)
+    check(
+        "uv extras belong to python-tools and are unique non-empty strings",
+        not bad_extras,
+        ", ".join(bad_extras),
+    )
+
+    # 8. farm-versions TOOLS <-> registry sync. A TOOLS name is valid when it
     # is a registry package, a bin stem some package claims, or a known alias.
     bin_owners = set()
     for entry in registry.values():

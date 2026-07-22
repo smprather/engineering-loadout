@@ -10,8 +10,10 @@
 #
 # The two shapes, both exercised here:
 #
-#   1. single HOME   -- `install @engineering-loadout` (the normal/online case)
-#   2. split         -- `install @shared-all --dest-dir <tree>` + `install @envs`
+#   1. single HOME   -- `install nvim env-nvim nvim-plugin-stash
+#                       treesitter-parsers git-nvim` (the normal/online case)
+#   2. split         -- `install nvim nvim-plugin-stash treesitter-parsers
+#                       git-nvim --dest-dir <tree>` + `install env-nvim`
 #                       with LOADOUT_CFG_SHARED_PREFIX=<tree>/local (the farm case)
 #
 # The air-gap is simulated with a proxy pointing at a dead port, so any attempt to

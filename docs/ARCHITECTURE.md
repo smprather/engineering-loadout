@@ -41,8 +41,12 @@ There is no "default install" -- the user always names packages or groups explic
 Entries whose keys start with `@` carry a `members` list and expand recursively
 with cycle detection. Synthetic groups computed at runtime: `@shared` (every
 non-env, non-optional package), `@shared-all` (`@shared` plus the `optional:
-true` packages -- the full shared tree), `@envs` (every env config bundle).
-There is no bare `all` keyword: it meant "every non-optional package", the opposite of the `-all` suffix used by `@shared-all` / `@envs-all` ("+ optionals"), so it was removed. Use `@engineering-loadout` for the full bundled set, or `@shared-all @envs-all` for truly everything.
+true` packages -- the full shared tree), `@envs` (Bash config only), and
+`@envs-all` (every env config bundle). There is no bare `all` keyword: it
+meant "every non-optional package", the opposite of the `-all` suffix used by
+`@shared-all` / `@envs-all` ("+ optionals"), so it was removed. Use
+`@engineering-loadout` for the curated bundled set, or `@shared-all
+@envs-all` for truly everything.
 
 ### Dependencies
 
@@ -85,7 +89,7 @@ There is no bare `all` keyword: it meant "every non-optional package", the oppos
 # Selection (positional PKG args + --skip)
 ./loadout install octave                        # single package; deps auto-pulled
 ./loadout install @gui-suite                    # group; expands recursively
-./loadout install @engineering-loadout          # full bundled set
+./loadout install @engineering-loadout          # curated bundled set
 ./loadout install @engineering-loadout --skip @fonts-all      # drop all font packages
 ./loadout install @engineering-loadout --skip tldr-data       # skip tldr cache install
 ./loadout install @core-cli vim                 # exact set (deps still walked)

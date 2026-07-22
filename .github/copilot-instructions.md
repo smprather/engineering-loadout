@@ -37,7 +37,7 @@ driven by `payload/packages.json` (`schema_version: 3`).
 # Selection (positional packages/@groups, plus --skip)
 ./loadout install octave                        # single package; deps auto-pulled
 ./loadout install @gui-suite                    # group; expands recursively
-./loadout install @engineering-loadout --skip @fonts-all   # full set minus fonts
+./loadout install @engineering-loadout --skip @fonts-all   # curated set minus fonts
 ./loadout install @engineering-loadout --skip tldr-data
 ./loadout install @core-cli vim                 # exact set
 ./loadout install gvim --no-deps                # install verbatim, no dep walk
@@ -64,7 +64,8 @@ Use `sh -n loadout` for the POSIX-sh shim,
 `bash -n envs/bash/global/bashrc`
 after installer or shell edits. `./tests/install-linux-tmp-home` runs the Linux
 installer against a temp `HOME` with temp XDG cache/state dirs from `/tmp`, then
-smoke-tests offline Tree-sitter with headless Neovim.
+smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
+`@envs-all` for broad config coverage; normal `@envs` is Bash-only.
 
 ## Architecture
 
@@ -79,15 +80,23 @@ smoke-tests offline Tree-sitter with headless Neovim.
 - `depends` -- hard-dependency package names (or `@group` refs). Resolver auto-pulls.
 - `recommends` -- soft-dependency package names. Auto-pulled when available, silently
   dropped when skipped or unknown.
-- Per-kind artifact fields: `bins`, `libs`, `wheels`, `uv_tool`, `typelibs`,
+- Per-kind artifact fields: `bins`, `libs`, `wheels`, `uv_tool`, `uv_extras`, `typelibs`,
   `archive`, `install_to`, `source`, `extra_links`, `supports_layers`, `members`.
 
 Groups (`@`-prefixed keys) have a `members` list and expand recursively with
 cycle detection. Synthetic runtime groups: `@shared` (every non-env,
-non-optional package), `@shared-all` (same plus optionals), and `@envs` (every
-env config bundle); the bare keyword `all` also resolves to every non-group,
-non-optional package. There is no "default install"; users always name packages
-or groups explicitly (dnf/apt style).
+non-optional package), `@shared-all` (same plus optionals), `@envs` (Bash
+configuration only), and `@envs-all` (every env config bundle). The bare
+keyword `all` is rejected; users always name packages or groups explicitly
+(dnf/apt style).
+
+`uv_extras` turns a Python tool requirement into `uv_tool[extra,...]`; bundle the
+full locked wheel closure for every extra. `parity-plot` is pinned to stable
+upstream tag `v0.4.0`; rebuild with `build/build-parity-plot.sh --tag v0.4.0`.
+NiceGUI is now a core upstream dependency, not a `uv_extras` entry. Its
+loadout-only patch corrects the stale module version and embeds Plotly in
+generated HTML because the upstream CDN form is not offline-safe; retain it.
+Kaleido static images still require an already-installed host Chrome/Chromium.
 
 `openssh` is optional and must not expose bare `ssh`, `scp`, or `sftp`; loadout
 owns `ssh10`, `ssh10.bin`, `ssh-keygen`, `ssh-add`, `ssh-agent`, and
@@ -244,7 +253,7 @@ holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
 Run `tests/install-split-shared-envs` for the production deployment shape:
 `@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with
-`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes bash/zsh startup, shared
+`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes Bash startup, shared
 PATH, terminfo, WezTerm completions, and core tool startup.
 That smoke also protects the env-copy contract: `@envs` must copy config into
 the target HOME, replace old symlinked config subdirs that point back into the

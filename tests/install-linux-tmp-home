@@ -107,6 +107,9 @@ chmod +x "$test_hooks/hook1.sh" "$test_hooks/hook2.sh"
 install_args=(
     install
     "@engineering-loadout"
+    # @envs is intentionally Bash-only. Keep this full fresh-home smoke broad
+    # enough to exercise the explicitly opt-in editor/shell config bundles.
+    "@envs-all"
     --dest-dir "$test_home"
     --post-install-hook "$test_hooks/hook1.sh"
     --post-install-hook "$test_hooks/hook2.sh"

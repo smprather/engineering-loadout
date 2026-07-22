@@ -23,7 +23,7 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 ### Subcommands & options
 
 ```bash
-./loadout install @engineering-loadout        # install the full bundled set
+./loadout install @engineering-loadout        # install the curated bundled set
 ./loadout list                                # show all packages
 ./loadout list --groups                       # show all @groups
 ./loadout list --tag editor                   # filter packages by tag
@@ -40,7 +40,7 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 ./loadout install @engineering-loadout --post-install-hook ~/corp/install.sh
 ./loadout install octave                      # single package; deps auto-pulled
 ./loadout install @gui-suite                  # group; expands recursively
-./loadout install @engineering-loadout --skip @fonts-all   # full set minus fonts
+./loadout install @engineering-loadout --skip @fonts-all   # curated set minus fonts
 ./loadout install @engineering-loadout --skip tldr-data
 ./loadout install @engineering-loadout --skip gnuplot,micro
 ./loadout install vim nvim rg tmux            # install exactly this set
@@ -99,12 +99,13 @@ per-user `env` config bundles -- with the synthetic `@shared` group:
 `@shared` = all non-`env`, non-`optional` packages (binaries, libs,
 runtimes, fonts, data, python tools); `@shared-all` = the same with the
 `optional: true` packages folded back in (surfer, cicwave, rust,
-rust-crate-store) -- the full shared tree in one name; the complement
-`@envs` = the config bundles each user installs into their own `$HOME`
-with `./loadout install @envs`. Tools and config bundles are fully
-decoupled (no cross-`recommends`), so `@shared` and `@envs` need no extra
-`--skip` / `--no-deps` flags. Preview any set with `./loadout resolve
-@shared` / `@shared-all` / `@envs`.
+rust-crate-store) -- the full shared tree in one name. `@envs` = Bash
+configuration only (plus its normal recommends), installed into each user's
+`$HOME` with `./loadout install @envs`. Install other config bundles by
+name, or use `@envs-all` when every shell and editor config is intentional.
+Tools and config bundles are fully decoupled (no cross-`recommends`), so
+`@shared` and `@envs` need no extra `--skip` / `--no-deps` flags. Preview
+any set with `./loadout resolve @shared` / `@shared-all` / `@envs`.
 
 Install each release into a versioned directory and atomically move a
 stable symlink only after the new tree is complete:
@@ -159,8 +160,9 @@ differently:
   writable; otherwise it removes the symlink and creates a real directory. Use
   `--install-follows-symlinks=yes` to always write into symlink targets, or
   `=no` to always replace them with real directories.
-- Env config installs (`@envs`, including `env-nvim`) always copy config into
-  the target HOME and replace symlinked config subdirectories with real
+- Env config installs (including `@envs` for Bash and explicitly named
+  bundles such as `env-nvim`) always copy config into the target HOME and
+  replace symlinked config subdirectories with real
   directories. This is deliberate: stale links such as
   `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp` must not let delete-style config
   sync mutate the repository checkout.

@@ -80,17 +80,19 @@ export LOADOUT_CFG_SHARED_PREFIX=/mnt/shared/loadout/local
 exec bash
 ```
 
-`@envs` is the per-user config layer (bash/zsh/fish/tcsh, nvim config, tmux,
-starship, etc.). It is decoupled from `@shared` -- no cross-recommends, no
-extra flags. The installer bakes `LOADOUT_CFG_SHARED_PREFIX` into
+`@envs` is the Bash-only per-user config layer (plus its Starship
+recommendation). Add any other config bundle explicitly, for example
+`./loadout install env-nvim env-tmux --no-backup`; use `@envs-all` only when
+every shell/editor config, including csh and zsh, is intentionally wanted. It
+is decoupled from `@shared` -- no cross-recommends, no extra flags. The
+installer bakes `LOADOUT_CFG_SHARED_PREFIX` into
 `~/.config/bash/global/config.sh` so it survives future shells.
 
 Verify per-user:
 
 ```bash
-command -v nvim    # -> /mnt/shared/loadout/local/bin/nvim
-ls ~/.local/share/nvim/lazy/lazy.nvim   # per-user plugin clones (real git repos)
-nvim --headless -c 'qa!'                # nvim starts
+bash -ic 'test -f ~/.config/bash/bashrc'
+command -v bash    # -> /mnt/shared/loadout/local/bin/bash
 ```
 
 ---
@@ -223,7 +225,7 @@ git pull                          # or: tar xzf engineering-loadout-v*.tar.gz
 ```
 
 Users on the DPC do not need to re-run anything unless they want the new
-`@envs` config; if they do, they run `./loadout install @envs --no-backup`
+Bash `@envs` config; if they do, they run `./loadout install @envs --no-backup`
 with `LOADOUT_CFG_SHARED_PREFIX` set (same as section 1).
 
 For a versioned-rollover deployment (atomic, no `Text file busy`):
@@ -318,8 +320,9 @@ optional, in `@shared-all`, and private to nvim -- it never goes on PATH):
 ./loadout install git-nvim --dest-dir "$SHARED" --no-backup
 ```
 
-Or make a system git available. Then re-run the user's `@envs` install (the
-plugin clone happens on the per-user side).
+Or make a system git available. Then install or re-run the user's `env-nvim`
+bundle (the plugin clone happens on the per-user side); `@envs` alone is
+Bash-only.
 
 ### `ERROR: GitHub API 404 for ...` (fetch-stash)
 
@@ -360,7 +363,7 @@ still pin to `lazy-lock.json` until a release moves them.
 | what | where | command |
 |---|---|---|
 | first shared tree | nDPC | `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
-| per-user env | DPC (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local ./loadout install @envs --no-backup` |
+| per-user Bash config | DPC (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local ./loadout install @envs --no-backup` |
 | fetch stash (online) | nDPC | `./fetch-stash` |
 | fetch stash (scp'd) | nDPC | `./fetch-stash --from-file <f> --sums <sha256sums.txt>` |
 | download stash (Windows) | laptop | `tools/download-release.ps1 -Tag <tag>` |

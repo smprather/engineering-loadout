@@ -66,6 +66,8 @@ REGISTRY = {
     "surfer": {"kind": "bin", "bins": ["surfer"], "platforms": ["linux"], "optional": True},
     "env-bash": {"kind": "env", "platforms": ["linux"]},
     "env-vim": {"kind": "env", "platforms": ["linux"]},
+    "env-zsh": {"kind": "env", "platforms": ["linux"]},
+    "env-tcsh": {"kind": "env", "platforms": ["linux"], "optional": True},
     "env-opt": {"kind": "env", "platforms": ["linux"], "optional": True},
     "winonly": {"kind": "bin", "bins": ["winonly"], "platforms": ["windows"]},
     "@cli": {"kind": "group", "members": ["rg", "bat"]},
@@ -97,9 +99,12 @@ def test_expand_groups(m):
     shared_all = eg(["@shared-all"], REGISTRY)
     check("@shared-all folds optionals back in", shared_all == shared | {"surfer"})
     envs = eg(["@envs"], REGISTRY)
-    check("@envs is the env complement, minus optionals", envs == {"env-bash", "env-vim"})
+    check("@envs contains bash config only", envs == {"env-bash"})
     envs_all = eg(["@envs-all"], REGISTRY)
-    check("@envs-all folds optional envs back in", envs_all == envs | {"env-opt"})
+    check(
+        "@envs-all includes every env bundle",
+        envs_all == {"env-bash", "env-vim", "env-zsh", "env-tcsh", "env-opt"},
+    )
     check("@envs and @shared stay disjoint", not (envs & eg(["@shared"], REGISTRY)))
 
     check("group listing an optional pulls it", "surfer" in eg(["@with-optional"], REGISTRY))
@@ -196,6 +201,19 @@ def test_parse_namelist(m):
     check("namelist splits and trims", pn(" rg , bat ,,@cli ") == ["rg", "bat", "@cli"])
     check("namelist empty input", pn("") == [])
     check("namelist None input", pn(None) == [])
+
+
+def test_uv_tool_spec(m):
+    spec = m._uv_tool_spec
+    check("uv tool spec leaves a bare tool unchanged", spec({"uv_tool": "time-plot"}) == "time-plot")
+    check(
+        "uv tool spec adds requested extras",
+        spec({"uv_tool": "parity-plot", "uv_extras": ["designer"]}) == "parity-plot[designer]",
+    )
+    check(
+        "uv tool spec preserves extra order",
+        spec({"uv_tool": "demo", "uv_extras": ["one", "two"]}) == "demo[one,two]",
+    )
 
 
 def test_list_name_filters(m):
@@ -304,6 +322,7 @@ def main():
         test_resolve_tool_selection,
         test_tool_bin_lib_sets,
         test_parse_namelist,
+        test_uv_tool_spec,
         test_list_name_filters,
         test_get_version_release_stamp,
         test_local_name_and_install_to,

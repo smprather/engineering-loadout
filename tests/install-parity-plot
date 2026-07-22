@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Offline end-to-end smoke for parity-plot's CLI and bundled NiceGUI designer.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-parity-home.XXXXXX)
+dest_dir=$(mktemp -d /tmp/loadout-parity-dest.XXXXXX)
+local_prefix="$dest_dir/local"
+designer_pid=""
+
+cleanup() {
+    if [[ -n ${designer_pid:-} ]]; then
+        kill "$designer_pid" 2>/dev/null || true
+        wait "$designer_pid" 2>/dev/null || true
+    fi
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "parity-plot smoke failed: $*" >&2
+    exit 1
+}
+
+echo "Installing parity-plot into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install parity-plot --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -40 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+probe_env=(env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
+parity_bin="$local_prefix/bin/parity-plot"
+tool_python="$local_prefix/share/uv/tools/parity-plot/bin/python"
+
+[[ -x $parity_bin ]] || fail "parity-plot launcher not installed"
+[[ -x $tool_python ]] || fail "parity-plot tool venv missing"
+expected_version="0.4.0"
+version_out=$("${probe_env[@]}" parity-plot --version) || fail "parity-plot --version"
+[[ $version_out == *"$expected_version"* ]] || fail "unexpected CLI version: $version_out"
+"${probe_env[@]}" PARITY_EXPECTED_VERSION="$expected_version" "$tool_python" -c 'import parity_plot, os; expected = os.environ["PARITY_EXPECTED_VERSION"]; assert parity_plot.__version__ == expected, parity_plot.__version__' \
+    || fail "bundled module version is not $expected_version"
+$repo_dir/build/farm-versions --bin-dir "$local_prefix/bin" --format json \
+    | "${probe_env[@]}" "$tool_python" -c '
+import json
+import sys
+
+row = next(item for item in json.load(sys.stdin) if item["name"] == "parity-plot")
+assert row["status"] == "ok", row
+assert row["version"] == "0.4.0", row
+' || fail "farm-versions did not report parity-plot 0.4.0"
+
+echo "Smoke: self-contained HTML output"
+csv="$test_home/input.csv"
+html="$test_home/parity.html"
+printf 'id,reference,measured\nA,10,11\nB,20,19\n' > "$csv"
+"${probe_env[@]}" parity-plot plot "$csv" --no-open-browser --output "$html" \
+    > "$test_home/plot.log" 2>&1 || {
+    cat "$test_home/plot.log" >&2
+    fail "plot command"
+}
+[[ -s $html ]] || fail "plot output missing"
+grep -q 'Plotly.newPlot' "$html" || fail "Plotly runtime was not embedded"
+! grep -Eiq '<script[^>]*src=[^>]*cdn\.plot\.ly' "$html" || \
+    fail "plot output still loads Plotly from the CDN"
+echo "  OK: HTML embeds Plotly; no CDN dependency"
+
+echo "Smoke: bundled designer"
+"${probe_env[@]}" "$tool_python" -c 'import nicegui, tomlkit; print(nicegui.__version__, tomlkit.__version__)' \
+    > "$test_home/designer-import.log" 2>&1 || {
+    cat "$test_home/designer-import.log" >&2
+    fail "designer dependencies missing"
+}
+"${probe_env[@]}" parity-plot design --help >/dev/null || fail "designer command unavailable"
+if ! port=$("${probe_env[@]}" "$tool_python" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()' 2>"$test_home/socket.log"); then
+    echo "  SKIP: host policy forbids local socket binds; designer imports passed"
+    exit 0
+fi
+"${probe_env[@]}" parity-plot design "$csv" --no-open-browser --port "$port" \
+    > "$test_home/designer.log" 2>&1 &
+designer_pid=$!
+for _ in $(seq 1 100); do
+    if "${probe_env[@]}" PARITY_PORT="$port" "$tool_python" -c '
+import os
+import re
+import urllib.request
+
+port = os.environ["PARITY_PORT"]
+body = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1).read()
+assert b"parity-plot designer" in body
+assert not re.search(rb"(?:src|href)\s*=\s*[^>\s]{0,2}https?://", body, re.I)
+' \
+        >/dev/null 2>&1; then
+        echo "  OK: designer serves locally without external page assets"
+        exit 0
+    fi
+    sleep 0.5
+done
+cat "$test_home/designer.log" >&2
+fail "designer did not serve on localhost"

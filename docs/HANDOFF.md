@@ -1,6 +1,6 @@
 # Current Handoff
 
-Last updated: 2026-07-20 (single-snapshot history reset after a complete verified archive).
+Last updated: 2026-07-22 (Parity Plot v0.4.0; per-user default is Bash-only).
 
 ## State
 
@@ -14,6 +14,20 @@ Last updated: 2026-07-20 (single-snapshot history reset after a complete verifie
   shared-library check ordering, and the Tier 3 assurance gate. The nvim plugin stash
   remains a GitHub release asset (`nvim-plugin-stash.tar.bz2`) with its checksum and
   content-manifest trust chain; it is not a Git payload.
+- `parity-plot` is bundled as a non-optional Linux Python tool from stable upstream
+  tag `v0.4.0` (`261720c64b60fbfba09826183b315ce15dd6d560`). NiceGUI is now a
+  core upstream dependency, not a `uv_extras` entry, so the local designer still
+  installs offline. Its loadout patch corrects the stale Python module version and
+  embeds Plotly in generated HTML, so reports render offline. Static image/PDF export
+  still needs an already-installed Chrome/Chromium for Kaleido. Rebuild with
+  `build/build-parity-plot.sh --tag v0.4.0`; it copies a supplied source checkout
+  into a disposable build tree and first reuses the vendored lock closure offline.
+  Upstream v0.4.0 has no explicit license file/metadata; the owner authorized this
+  first-party bundle, but add explicit terms upstream before third-party redistribution.
+- `@envs` now intentionally expands only `env-bash` (then its `env-starship`
+  recommendation). Install another config bundle by name, or use `@envs-all` for
+  every env package. The fresh-home integration test explicitly selects
+  `@engineering-loadout @envs-all` to retain broad Nvim/editor/shell coverage.
 
 ## Audit 2026-07-18 (pre-reset tree; all gates green)
 
@@ -30,6 +44,31 @@ Last updated: 2026-07-20 (single-snapshot history reset after a complete verifie
 - git "unable to access '.gitmodules': Permission denied" inside Claude Code sandboxed
   commands is a sandbox artifact, NOT repo state (file doesn't exist outside the
   sandbox). Never "fix" it. See project memory `gitmodules-sandbox-mask`.
+
+## Audit 2026-07-21 (Parity Plot + Bash-only @envs)
+
+- `tests/run-all --container`: PASS. Tier 1/2 integration, the stock
+  AlmaLinux 8.10 full smoke (250 binaries OK, 5 documented skips, runtimes OK),
+  and isolated dynamic analysis all passed.
+- Focused `tests/install-parity-plot`: PASS. It verifies CLI/module 0.4.0,
+  self-contained Plotly HTML, `farm-versions` reporting, and a local NiceGUI
+  designer page with no external page assets.
+- `@envs` resolves exactly `env-bash` plus `env-starship`; the split
+  deployment smoke asserts no zsh config is created. `@envs-all` resolves all
+  12 env bundles and is selected only by the broad fresh-home coverage test.
+
+## Audit 2026-07-22 (Parity Plot v0.4.0)
+
+- `tests/run-all --container`: PASS (`/tmp/loadout-final-suite-v040.log`).
+  Tier 1/2 integration, the stock AlmaLinux 8.10 full smoke (250 binaries OK,
+  5 documented skips, runtimes OK), and isolated dynamic analysis all passed.
+- Focused `tests/install-parity-plot`: PASS after the v0.4.0 update. It
+  verifies CLI/module 0.4.0, self-contained Plotly HTML, `farm-versions`
+  reporting, and a local NiceGUI designer page with no external page assets.
+- Release gate components: PASS. `./scan-for-malware` reports cached CLEAN
+  across 75051 files with the known Firefox `omni.ja` allowlisted FP;
+  `tests/prebuilt-binaries` reports `All 255 binaries OK; runtimes OK`;
+  release checksum/version steps passed and refreshed `sha256sums.txt`.
 
 ## Next steps
 

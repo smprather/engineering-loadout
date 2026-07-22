@@ -189,6 +189,7 @@ def _load_tool_registry(repo_dir):
       typelibs     -- typelibs/*.typelib files documented as required.
       wheels       -- Python wheel basenames bundled offline.
       uv_tool      -- package name passed to 'uv tool install'.
+      uv_extras    -- optional extras included in the uv tool requirement.
 
     Files not claimed by any entry are unregistered and always installed.
     """
@@ -243,8 +244,8 @@ def _parse_namelist(raw):
 _SYNTHETIC_GROUPS = {
     "@shared": "Every non-env, non-optional package -- install set for a shared/read-only tree.",
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, rust, ...).",
-    "@envs": "Every non-optional per-user env config bundle (the complement of @shared).",
-    "@envs-all": "@envs plus every optional env bundle (env-tcsh, env-cargo).",
+    "@envs": "Bash configuration only (env-bash); install other per-user config bundles explicitly.",
+    "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh, env-cargo).",
 }
 
 
@@ -253,23 +254,22 @@ def expand_groups(names, registry, _stack=None):
 
     @shared is special: every non-group package except per-user "env" config
     bundles -- i.e. everything you install into a shared/read-only tree. @envs
-    is its complement (every "env" package); pair them as
-    `--only @shared --skip @envs` to keep env recommends out of a shared tree.
-    The sweeps skip packages flagged "optional": true -- those install only when
-    named explicitly or pulled in by a group that lists them (e.g. surfer, the
-    @rust trio, env-tcsh). @shared-all and @envs-all are the same sweeps with those
-    optionals folded back in -- the full shared tree, and the full env set, each in
-    one name.
+    deliberately installs only env-bash. This keeps the normal per-user shell
+    setup Bash-only; install other env packages by name or use @envs-all for the
+    complete env set. @shared skips packages flagged "optional": true; those
+    install only when named explicitly or pulled in by a group that lists them
+    (e.g. surfer, the @rust trio, env-tcsh). @shared-all and @envs-all fold
+    optional packages back in.
 
     There is no bare `all`: it used to mean "every NON-optional package", which is
     the opposite of what the -all suffix means everywhere else. Use
-    @engineering-loadout for the full bundled set (an identical resolved set), or
+    @engineering-loadout for the curated bundled set (including Bash setup), or
     `@shared-all @envs-all` for truly everything.
 
-    The -all pairs are symmetric, and both sides honor "optional" the same way:
+    The full sweeps are:
 
-        @shared      non-env, non-optional        @envs      env, non-optional
-        @shared-all  non-env, optional included   @envs-all  env, optional included
+        @shared      non-env, non-optional        @envs      env-bash only
+        @shared-all  non-env, optional included   @envs-all  every env, optional included
 
     Cycles in the group graph raise ResolverError.
     Unknown package names produce a warning and are dropped.
@@ -285,7 +285,8 @@ def expand_groups(names, registry, _stack=None):
             raise ResolverError(
                 "'all' was removed -- its name lied: it meant 'every non-optional package', "
                 "while the -all suffix elsewhere means '+ optionals'.\n"
-                "  full bundled set : @engineering-loadout   (identical to what 'all' resolved)\n"
+                "  curated loadout  : @engineering-loadout\n"
+                "  bash config      : @envs\n"
                 "  everything shared: @shared-all\n"
                 "  every env bundle : @envs-all\n"
                 "  truly everything : @shared-all @envs-all"
@@ -302,14 +303,11 @@ def expand_groups(names, registry, _stack=None):
             out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") != "env"}
             continue
         if name == "@envs":
-            out |= {
-                n
-                for n, e in registry.items()
-                if not n.startswith("@") and e.get("kind") == "env" and not e.get("optional")
-            }
+            if "env-bash" in registry:
+                out.add("env-bash")
             continue
         if name == "@envs-all":
-            # @envs but optionals INCLUDED -- the full per-user env set.
+            # Full per-user env set, including optional env packages.
             out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") == "env"}
             continue
         if name.startswith("@"):
@@ -2044,6 +2042,17 @@ def install_typelibs(repo_dir, home, selected_tools=None):
     print(f"  Installed {len(typelib_files)} typelibs -> {dest_dir}/")
 
 
+def _uv_tool_spec(info):
+    """Return the requirement passed to ``uv tool install`` for a registry entry.
+
+    Keep ``uv_tool`` as the base distribution name: installer wheel-presence
+    checks need that name, while extras select optional dependency closures.
+    """
+    package = info["uv_tool"]
+    extras = info.get("uv_extras", [])
+    return f"{package}[{','.join(extras)}]" if extras else package
+
+
 def install_python_tools(repo_dir, home, selected_tools, registry):
     """Install Python tools via 'uv tool install' using bundled offline wheels."""
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
@@ -2060,7 +2069,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             continue
         if selected_tools is not None and name not in selected_tools:
             continue
-        tools_to_install.append((name, info["uv_tool"]))
+        tools_to_install.append((name, info["uv_tool"], _uv_tool_spec(info)))
 
     if not tools_to_install:
         skipped("Python tools (no selected tools require uv_tool)", "")
@@ -2091,7 +2100,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     failed = []
     skipped_tools = []
     try:
-        for tool_name, pkg_name in tools_to_install:
+        for tool_name, pkg_name, install_spec in tools_to_install:
             # Check if a wheel for this package exists (whole or chunked) before install.
             norm = pkg_name.lower().replace("-", "_").replace(".", "_")
             matches = (
@@ -2101,14 +2110,14 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 + glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
             )
             if not matches:
-                warn(f"skipping {pkg_name} -- no wheel found in {wheels_dir}")
+                warn(f"skipping {install_spec} -- no wheel found in {wheels_dir}")
                 skipped_tools.append(tool_name)
                 continue
             cmd = [
                 uv_bin,
                 "tool",
                 "install",
-                pkg_name,
+                install_spec,
                 "--python",
                 python_bin,
                 "--no-index",
@@ -2131,7 +2140,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             if proc.returncode != 0:
                 for line in err.splitlines():
                     eprint(f"  {line}")
-                warn(f"uv tool install {pkg_name} exited {proc.returncode}")
+                warn(f"uv tool install {install_spec} exited {proc.returncode}")
                 failed.append(tool_name)
             else:
                 installed.append(tool_name)
@@ -4373,6 +4382,7 @@ def cmd_describe(args, registry):
         "wheels",
         "typelibs",
         "uv_tool",
+        "uv_extras",
         "archive",
         "archive_name",
         "source",
@@ -4746,7 +4756,7 @@ def cmd_install_v2(args, registry, repo_dir, home):
     if "@default" in pkgs:
         eprint(
             "Error: @default no longer exists. Use 'loadout install "
-            "@engineering-loadout' for the full bundled set, or name "
+            "@engineering-loadout' for the curated bundled set, or name "
             "packages explicitly."
         )
         return 1
@@ -5098,7 +5108,7 @@ def cli(ctx, verbose):
     Installs bundled packages into the destination directory. Bare 'loadout' and
     bare 'loadout install' both print usage and exit non-zero (dnf parity); always
     name packages or @groups explicitly. Use [bold]@engineering-loadout[/] for the
-    full bundled set.
+    curated bundled set.
 
     `--dest-dir` lives on the verbs that act on the install destination
     (`install`, `reinstall`, `upgrade`, and the `snapshot` subcommands); read-only

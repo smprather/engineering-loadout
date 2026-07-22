@@ -191,7 +191,7 @@ Add an entry under `packages` in `payload/packages.json` (`schema_version: 3`):
 }
 ```
 
-If the tool should ship with the full bundled set, also add `"mytool"` to
+If the tool should ship with the curated bundled set, also add `"mytool"` to
 the `@engineering-loadout` group's `members` list. There is no `default`
 field in schema 3 -- users always name packages or groups explicitly.
 
@@ -203,15 +203,17 @@ Key rules:
 - `libs` -- **only** lib64 stems that are *exclusively* owned by this tool (not needed by any
   other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted -- they are
   always installed regardless of tool selection.
-- `default: false` -- if the tool should NOT be installed by default (e.g. large optional tools
-  like `octave`). Users opt in with `./loadout install mytool`. The legacy
-  `optional: true` field still works but `default` is preferred.
+- `optional: true` -- keep a large or niche tool out of `all` / `@shared` / the
+  full loadout sweep. Users then opt in with `./loadout install mytool`.
 - `platforms` -- list from `linux`, `macos`, `windows`. Resolver filters by current platform.
 - `tags` -- free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
 - `depends` -- list of hard-dep package names (or `@group` refs). Resolver auto-pulls them;
   skipping a hard dep raises `ResolverError` unless `--no-deps` or `--force`. Use for
   binary-needs-lib-bundle (e.g. `"gvim"` depends on `"gui_libs"` + `"vim92-runtime"`).
 - `recommends` -- list of soft-dep package names. Silently dropped if skipped.
+- `uv_extras` -- for `python-tool`: extras appended to `uv_tool` as
+  `package[extra,...]`. Bundle the complete locked wheel closure for every extra;
+  offline installs cannot fetch it later.
 
 For a tool with a single binary, no exclusive libs, and no deps:
 `"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "description": "..."}`.
@@ -1351,7 +1353,7 @@ find_package is hardcoded `-qt6`; this only loses single-instance enforcement),
 
 GUI tool, links Qt5 (Core/Gui/Widgets/Network/DBus/Svg) + X11/xcb -- **all from gui_libs**.
 strip -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> bzip2. `depends: ["gui_libs"]`,
-`default: false`, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
+non-optional, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
 
 Install: `./loadout install gui_libs,flameshot`
 
@@ -2112,6 +2114,66 @@ only, and a real-X/WSLg `surfer --version` + a headed launch on a sample
 `.vcd`/`.fst`.
 
 ---
+
+## parity-plot 0.4.0 -- offline Plotly parity plots + NiceGUI designer
+
+`parity-plot` is the first-party Python CLI at
+`https://github.com/smprather/parity-plot`. The bundled snapshot is upstream
+stable tag `v0.4.0` (`261720c64b60fbfba09826183b315ce15dd6d560`). It is a pure
+wheel requiring Python 3.14. NiceGUI is a core upstream dependency now, so
+`parity-plot design` is usable after an offline install without a separate extra.
+
+### Licensing note
+
+The v0.4.0 upstream tree currently contains no `LICENSE`/`COPYING` file or
+project license metadata. Its owner authorized this first-party bundle; do not
+claim a license or redistribute it on another party's behalf until upstream
+adds explicit terms.
+
+### Offline patch
+
+Upstream currently writes HTML with `include_plotlyjs="cdn"`. That output is
+tiny, but a browser on an air-gapped machine cannot render it. The loadout-only
+patch `build/parity-plot/0001-inline-plotly-js-for-offline-html.patch` changes
+this to `include_plotlyjs=True`, embedding Plotly from the already-installed
+wheel. Keep this patch and its positive HTML smoke: it costs about 4.9 MiB per
+generated report, but no extra bundled wheel bytes because Plotly contains its
+own `plotly.min.js`. It also corrects upstream module metadata that still
+reported version 0.1.0.
+
+PNG/SVG/PDF are a different boundary: Kaleido needs a compatible local
+Chrome/Chromium. Do **not** run `plotly_get_chrome` from the installer or add a
+network fallback. The package supports static output when the host already has
+a browser; it guarantees only HTML rendering entirely offline.
+
+### Build + bundle
+
+```bash
+build/build-parity-plot.sh --tag v0.4.0            # repeat the pinned stable release
+build/build-parity-plot.sh --tag vNEXT             # deliberate stable-tag update
+./loadout completion bash > envs/bash/global/completions/loadout.bash
+./build/gen-content-manifest
+./tests/install-parity-plot
+```
+
+The builder clones/apply-checks the patch, builds the project wheel with `uv`,
+exports upstream runtime dependencies, and first validates the already-vendored
+lock closure for an offline rebuild. If a release tag has stale lock metadata,
+the builder refreshes it only inside the disposable checkout before exporting
+hash-locked requirements. A changed lock falls back to downloading its
+hash-locked EL8-compatible CPython 3.14 wheels. It replaces only
+old `parity_plot-*.whl` root wheels; dependency wheels are shared with other
+tools and are additive. It also stamps the registry's exact source tag and
+wheel list. Wheels above 40 MiB are split before commit, though this closure
+does not currently need splitting.
+
+Registry shape: non-optional `python-tool`, `uv_tool: parity-plot`,
+`depends: [portable-python, uv]`; it participates in
+`@shared` and `@python-tools-extra`. `tests/install-parity-plot` does a real
+offline temp-tree install, generates a small self-contained HTML report, checks
+the designer imports and command, then starts/probes the local designer server.
+The last probe explicitly skips only where the test host prohibits loopback
+socket binding; it is expected to run on a normal host/container.
 
 ## cicwave 0.5.2 -- PyQtGraph waveform viewer (Python uv_tool, loadout PyQt6 fork)
 

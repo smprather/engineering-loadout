@@ -21,7 +21,7 @@ cp /tmp/mybinary_tmp.bz2 payload/el8.x86_64.glibc2p28/bin/mybinary.bz2
 #                  "platforms": ["linux"], "tags": ["..."],
 #                  "description": "..."}}
 #    Add "mybinary" to the @engineering-loadout group's members list if it
-#    should ship in the full bundled set.
+#    should ship in the curated bundled set.
 
 # 4. Smoke-test and commit
 tests/prebuilt-binaries --keep   # or just ./release --dry-run
