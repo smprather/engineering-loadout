@@ -29,9 +29,11 @@ Requires: gh (GitHub CLI) authenticated, git repo with remote set.
 import concurrent.futures
 import datetime
 import hashlib
+import json
 import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 
 _d = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +50,11 @@ def run(cmd, **kwargs):
 
 
 SHA256SUMS_NAME = "sha256sums.txt"
+# The nvim plugin stash: ~328 MB, shipped as a release ASSET (not a git payload).
+# Reused across same-day/routine re-releases when its bytes are unchanged so the
+# release does not re-upload 328 MB every time (_can_reuse_stash).
+STASH_REL = "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2"
+STASH_ASSET_NAME = os.path.basename(STASH_REL)
 STEP_SCAN_TITLE = "Step 0: Scanning bundled binaries for malware (YARA-Forge)"
 STEP_SMOKE_TITLE = "Step 1: Smoke-testing pre-built binaries"
 STEP_VERSIONS_TITLE = "Step 2: Generating version table"
@@ -206,7 +213,7 @@ INTEGRITY_TARGETS = [
     # The nvim plugin stash is NOT in .content-manifest (it is a release asset, not a git
     # payload), so its hash must be published here directly -- this is the link
     # ./fetch-stash checks before the installer will accept the downloaded bytes.
-    "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2",
+    STASH_REL,
 ]
 
 
@@ -400,10 +407,102 @@ def _replace_existing_release(tag):
     if exists.returncode == 0:
         print(f"  replacing existing GitHub release {tag} ...")
         subprocess.run(["gh", "release", "delete", tag, "--yes"])
-    # Remove the remote then local tag; ignore absence (fresh tag, or release
-    # existed without a pushed tag).
+    _delete_tag(tag)
+
+
+def _delete_tag(tag):
+    """Remove the remote then local tag; ignore absence (fresh tag, or a release
+    that exists without a pushed tag). Used both to tear a release down fully and
+    to move the tag under a KEPT release (stash-reuse path)."""
     subprocess.run(["git", "push", "origin", "--delete", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.run(["git", "tag", "-d", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _remote_release_exists(tag):
+    return subprocess.run(["gh", "release", "view", tag], capture_output=True, text=True).returncode == 0
+
+
+def _remote_stash_asset(tag):
+    """(present, size) for the plugin-stash asset on the existing release TAG."""
+    r = subprocess.run(["gh", "release", "view", tag, "--json", "assets"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return (False, 0)
+    try:
+        assets = json.loads(r.stdout).get("assets", [])
+    except ValueError, AttributeError:
+        return (False, 0)
+    for a in assets:
+        if a.get("name") == STASH_ASSET_NAME:
+            return (True, a.get("size", 0))
+    return (False, 0)
+
+
+def _remote_stash_sha(tag):
+    """SHA-256 recorded for the plugin stash in the EXISTING release's
+    sha256sums.txt, or None if there is no release / no sums asset / no stash
+    line. Downloading the tiny sums file is how we compare stash CONTENT without
+    the GitHub asset API (which does not expose a content digest). The temp file
+    lives OUTSIDE the repo -- the pre-commit hook runs `git add -A`, so a stray
+    file in the tree would risk being committed."""
+    fd, tmp = tempfile.mkstemp(prefix="release-prev-sums.", suffix=".txt")
+    os.close(fd)
+    r = subprocess.run(
+        ["gh", "release", "download", tag, "-p", SHA256SUMS_NAME, "-O", tmp, "--clobber"],
+        capture_output=True,
+        text=True,
+    )
+    sha = None
+    if r.returncode == 0 and os.path.isfile(tmp):
+        try:
+            with open(tmp) as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) == 2 and parts[1] == STASH_REL:
+                        sha = parts[0]
+                        break
+        except OSError:
+            sha = None
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    return sha
+
+
+def _can_reuse_stash(tag, stash_path, local_stash_sha):
+    """True when the existing release already carries a byte-identical stash
+    asset, so the 328 MB upload can be skipped. Requires an existing release, a
+    present stash asset whose size matches the local file, AND a matching SHA-256
+    in the previous release's sha256sums.txt -- size alone is not proof."""
+    if not (os.path.isfile(stash_path) and local_stash_sha and _remote_release_exists(tag)):
+        return False
+    present, remote_size = _remote_stash_asset(tag)
+    if not present or remote_size != os.path.getsize(stash_path):
+        return False
+    return _remote_stash_sha(tag) == local_stash_sha
+
+
+def _verify_published_stash(tag, stash_path):
+    """(ok, detail): confirm the release is PUBLISHED (not a draft -- a draft is
+    invisible to /releases/latest, which is what ./fetch-stash resolves) and
+    still carries the stash asset at the right size. Never trust an upload/edit
+    exit code; re-read the release and check -- the 2026-07-22 lesson."""
+    r = subprocess.run(["gh", "release", "view", tag, "--json", "isDraft,assets"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return (False, "cannot read the release after publish")
+    try:
+        d = json.loads(r.stdout)
+    except ValueError, AttributeError:
+        return (False, "release JSON unparseable after publish")
+    if d.get("isDraft"):
+        return (False, "release is still a DRAFT (invisible to /releases/latest)")
+    want = os.path.getsize(stash_path)
+    for a in d.get("assets", []):
+        if a.get("name") == STASH_ASSET_NAME:
+            if a.get("size") == want:
+                return (True, "published; stash asset present, size matches")
+            return (False, f"stash asset size {a.get('size')} != local {want}")
+    return (False, "stash asset missing from published release")
 
 
 def _record_skip_scan_justification(script_dir, tag):
@@ -506,21 +605,34 @@ def main(tag, dry_run, skip_scan, allow_unsigned):
         if section
     )
 
-    # Assets: the sums file plus the content manifest itself, so a downloader can
-    # verify the full payload tree without cloning the multi-GB source archive.
-    assets = [sums_path]
-    content_manifest = os.path.join(script_dir, ".content-manifest")
-    if os.path.isfile(content_manifest):
-        assets.append(content_manifest)
-
     # The nvim plugin stash rides as an ASSET, not a git payload: it is ~328 MB of bz2'd
     # git packfiles, so committing it added ~328 MB to history on EVERY refresh,
     # permanently. Its sha256 is in sha256sums.txt above, which this signed tag covers --
     # that is the chain ./fetch-stash verifies before the installer will touch the bytes.
-    stash = os.path.join(script_dir, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+    stash = os.path.join(script_dir, STASH_REL)
+    local_stash_sha = dict(pairs).get(STASH_REL)
+
+    # Reuse the existing release's stash asset when its bytes are unchanged, so a
+    # routine re-release does not re-upload 328 MB. Requires a signed tag: a
+    # reused asset is only as trustworthy as the tag that (re)binds sha256sums.txt.
+    reuse_stash = bool(signing) and _can_reuse_stash(tag, stash, local_stash_sha)
+
+    # Assets: the sums file plus the content manifest itself, so a downloader can
+    # verify the full payload tree without cloning the multi-GB source archive.
+    # The stash joins them only when NOT reusing the remote copy.
+    assets = [sums_path]
+    content_manifest = os.path.join(script_dir, ".content-manifest")
+    if os.path.isfile(content_manifest):
+        assets.append(content_manifest)
     if os.path.isfile(stash):
-        assets.append(stash)
-        print(f"  attaching nvim plugin stash ({os.path.getsize(stash) // 1048576} MB)")
+        if reuse_stash:
+            print(
+                f"  reusing the existing release's stash asset "
+                f"({os.path.getsize(stash) // 1048576} MB, sha256 unchanged) -- not re-uploading"
+            )
+        else:
+            assets.append(stash)
+            print(f"  attaching nvim plugin stash ({os.path.getsize(stash) // 1048576} MB)")
     else:
         print("  NOTE: no nvim-plugin-stash.tar.bz2 -- releasing without it.")
         print("        Users will get nvim with no plugins. Build it with")
@@ -529,8 +641,13 @@ def main(tag, dry_run, skip_scan, allow_unsigned):
     print()
     _print_heading(f"Step 4: Creating tag and GitHub release: {tag}")
 
-    # Same-day releases replace the existing one (date-based tag).
-    _replace_existing_release(tag)
+    # Same-day releases replace the existing one (date-based tag). When reusing the
+    # stash we must KEEP the release object (it holds the 328 MB asset), so only
+    # the tag is moved; otherwise the whole release is torn down and recreated.
+    if reuse_stash:
+        _delete_tag(tag)
+    else:
+        _replace_existing_release(tag)
 
     tag_cmd = ["git", "tag", "-s" if signing else "-a", tag, "-m", tag]
     if not signing:
@@ -555,10 +672,42 @@ def main(tag, dry_run, skip_scan, allow_unsigned):
         print("git push tag failed.", file=sys.stderr)
         sys.exit(1)
 
-    result = run(["gh", "release", "create", tag, "--title", tag, "--notes", notes, *assets])
-    if result.returncode != 0:
-        print("gh release create failed.", file=sys.stderr)
-        sys.exit(1)
+    if reuse_stash:
+        # Deleting the tag drafts the kept release (GitHub drafts a release whose
+        # tag vanished, and recreating the tag does NOT auto-republish). Undraft
+        # it, refresh the notes, and clobber only the small assets -- the stash
+        # asset is left in place. Then VERIFY the release is published and still
+        # carries the stash; on any doubt self-heal with a full stash upload
+        # rather than ship an invisible or asset-less release.
+        run(["gh", "release", "edit", tag, "--draft=false", "--notes", notes])
+        small = [a for a in assets if a != stash]
+        if small:
+            result = run(["gh", "release", "upload", tag, *small, "--clobber"])
+            if result.returncode != 0:
+                print("gh release upload failed.", file=sys.stderr)
+                sys.exit(1)
+        ok, detail = _verify_published_stash(tag, stash)
+        if not ok:
+            print(f"  reuse verification failed ({detail}); self-healing with a full stash upload.", file=sys.stderr)
+            run(["gh", "release", "upload", tag, stash, "--clobber"])
+            run(["gh", "release", "edit", tag, "--draft=false"])
+            ok, detail = _verify_published_stash(tag, stash)
+            if not ok:
+                print(f"Release blocked: {detail}", file=sys.stderr)
+                sys.exit(1)
+        print(f"  reuse verified: {detail}")
+    else:
+        result = run(["gh", "release", "create", tag, "--title", tag, "--notes", notes, *assets])
+        if result.returncode != 0:
+            print("gh release create failed.", file=sys.stderr)
+            sys.exit(1)
+        # Re-read: confirm the freshly-uploaded stash actually landed (never trust
+        # the create exit code alone).
+        if os.path.isfile(stash):
+            ok, detail = _verify_published_stash(tag, stash)
+            if not ok:
+                print(f"Release blocked: {detail}", file=sys.stderr)
+                sys.exit(1)
 
     print(f"\nRelease {tag} created" + (" (signed tag)." if signing else " (UNSIGNED tag)."))
 
