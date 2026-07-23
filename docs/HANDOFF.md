@@ -1,6 +1,30 @@
 # Current Handoff
 
-Last updated: 2026-07-22 (release signing preflight; cd-always-lists fixes).
+Last updated: 2026-07-23 (release-time reduction: stash-asset reuse + smoke content cache).
+
+## Release-time reduction (2026-07-23)
+
+Two structural wastes in `./release` removed, both on the release critical path:
+
+- **nvim plugin stash reuse.** The ~328 MB stash asset was re-uploaded on every
+  re-release even when byte-identical. `./release` now keeps the existing release
+  object (it holds the asset), moves only the tag, **undrafts** it (deleting a tag
+  drafts its release; recreating the tag does not republish -- verified empirically),
+  and clobbers only the small assets. Gated on a signed tag + a byte-match (present
+  asset, size, and matching SHA-256 in the previous release's `sha256sums.txt`), then
+  a post-publish re-read asserts published-not-draft + stash present, self-healing
+  with a full upload on any doubt. See CLAUDE.md -> "Create a GitHub release".
+- **Binary-smoke content cache.** The ~4.5 min smoke gate (the slowest) is now cached
+  under `release-smoke-v1/`, keyed on a parallel hash of **actual bytes** (all of
+  `payload/**` + `loadout` + `loadout_main.py` + `tests/prebuilt-binaries`, a
+  deliberate superset) plus platform `uname`/glibc; pass-only, double-checked key.
+  The hash (~a few seconds, parallelised) runs inside the smoke worker so it overlaps
+  the version gate. Cache lives in `./release`, so `tests/prebuilt-binaries` run
+  directly still always executes. `--no-cache` / `--clear-cache` force fresh.
+
+Net: a routine re-release whose payload is unchanged skips both the 328 MB upload and
+the 4.5 min smoke re-run. A real payload change re-fingerprints and re-runs, so the
+false-green surface is only an *over*-cover (needless re-run), never an under-cover.
 
 ## Release signing: the 2026-07-22 unsigned-tag incident
 

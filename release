@@ -31,6 +31,7 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -347,7 +348,150 @@ def _checksum_step(script_dir):
     )
 
 
-def _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan):
+# --- binary smoke-test cache ---------------------------------------------------
+# The smoke test installs @shared into a temp tree and probes every binary/runtime
+# -- ~4.5 min, the slowest gate. Its result is a pure function of the bytes it
+# installs plus the code that installs and probes them, so a content fingerprint
+# lets a routine re-release skip an identical re-run. Modelled on the (proven)
+# scan-for-malware clean-cache: pass-only, double-checked key, keyed on real bytes.
+SMOKE_CACHE_SCHEMA = 1
+SMOKE_CACHE_DIR_NAME = os.path.join("engineering-loadout", "release-smoke-v1")
+
+
+def _smoke_cache_dir():
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, SMOKE_CACHE_DIR_NAME)
+
+
+def _iter_smoke_source_files(script_dir):
+    """(relpath, fullpath) for every file whose bytes can change the smoke result.
+
+    Deliberately a SUPERSET of what `@shared` installs: hashing extra files only
+    costs an occasional needless re-run, whereas MISSING one is a false green --
+    a cache hit that ships an untested binary. That asymmetry is why this walks
+    all of payload/ (not a per-platform subset) plus the installer and the probe
+    script itself."""
+    roots = [os.path.join(script_dir, "payload")]
+    for root in roots:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames.sort()
+            for name in sorted(filenames):
+                full = os.path.join(dirpath, name)
+                if os.path.isfile(full) and not os.path.islink(full):
+                    yield os.path.relpath(full, script_dir).replace(os.sep, "/"), full
+    # The installer that performs the install and the script that probes it are
+    # as load-bearing as the payload bytes.
+    for rel in ("loadout", "loadout_main.py", os.path.join("tests", "prebuilt-binaries")):
+        full = os.path.join(script_dir, rel)
+        if os.path.isfile(full):
+            yield rel.replace(os.sep, "/"), full
+
+
+def _smoke_source_fingerprint(script_dir):
+    # ~4300 files / ~2.9 GB. Hash them concurrently (the box is beefy and sha256
+    # releases the GIL over the C hashing), then fold the per-file digests in a
+    # fixed sorted order so the result is deterministic regardless of which
+    # worker finished first. Keeps the fingerprint well under the parallel
+    # version gate it overlaps, so a cache hit costs seconds, not the 39 s a
+    # single-threaded walk took.
+    files = sorted(_iter_smoke_source_files(script_dir))
+    digests = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=(os.cpu_count() or 8)) as ex:
+        futs = {ex.submit(_sha256_file, full): rel for rel, full in files}
+        for fut in concurrent.futures.as_completed(futs):
+            digests[futs[fut]] = fut.result()
+
+    h = hashlib.sha256()
+    for rel, _ in files:
+        h.update(b"file\0")
+        h.update(rel.encode("utf-8", "surrogateescape"))
+        h.update(b"\0")
+        h.update(digests[rel].encode("ascii"))
+        h.update(b"\0")
+    return {"sha256": h.hexdigest(), "files": len(files)}
+
+
+def _platform_fingerprint():
+    """uname + glibc: the smoke also links against host glibc and runs host tools,
+    so a platform/libc change must invalidate a cached pass."""
+    uname = subprocess.run(["uname", "-s", "-m"], capture_output=True, text=True)
+    glibc = subprocess.run(["getconf", "GNU_LIBC_VERSION"], capture_output=True, text=True)
+    return {
+        "uname": uname.stdout.strip(),
+        "glibc": glibc.stdout.strip(),
+    }
+
+
+def _smoke_cache_key(script_dir):
+    data = {
+        "schema": SMOKE_CACHE_SCHEMA,
+        "platform": _platform_fingerprint(),
+        "source": _smoke_source_fingerprint(script_dir),
+    }
+    encoded = json.dumps(data, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest(), data
+
+
+def _load_smoke_cache(cache_id, key_data):
+    path = os.path.join(_smoke_cache_dir(), f"{cache_id}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            entry = json.load(fh)
+    except OSError, json.JSONDecodeError:
+        return None
+    # Only a recorded PASS counts, and the full key must match byte-for-byte --
+    # the cache_id alone is not trusted (guards a hash collision or schema drift).
+    if entry.get("verdict") != "pass" or entry.get("key") != key_data:
+        return None
+    return entry
+
+
+def _write_smoke_cache(cache_id, key_data, output):
+    d = _smoke_cache_dir()
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, f"{cache_id}.json"), "w", encoding="utf-8") as fh:
+            json.dump(
+                {
+                    "verdict": "pass",
+                    "key": key_data,
+                    "recorded": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "output_tail": "".join(output.splitlines(keepends=True)[-15:]),
+                },
+                fh,
+                sort_keys=True,
+            )
+    except OSError:
+        pass  # a cache we cannot write is not a release failure
+
+
+def _smoke_step(script_dir, smoke_test, use_cache):
+    """Run the binary smoke test, or return a cached PASS when the fingerprint of
+    everything it installs/probes is unchanged. The fingerprint hash runs in this
+    worker thread, overlapping the other parallel gates, so a cache hit turns the
+    slowest gate into a ~40 s hash."""
+    cache_id = key_data = None
+    if use_cache:
+        cache_id, key_data = _smoke_cache_key(script_dir)
+        entry = _load_smoke_cache(cache_id, key_data)
+        if entry is not None:
+            n = key_data["source"]["files"]
+            output = (
+                f"  CACHED PASS -- {n} source files unchanged since {entry.get('recorded', '?')}\n"
+                f"  (fingerprint {cache_id[:16]}; skipping the ~4.5 min re-run. "
+                f"Force a fresh run with --no-cache.)\n"
+            )
+            return StepResult(name="binary smoke test", title=STEP_SMOKE_TITLE, returncode=0, output=output)
+
+    result = _command_step("binary smoke test", STEP_SMOKE_TITLE, [smoke_test])
+    if use_cache and result.returncode == 0:
+        _write_smoke_cache(cache_id, key_data, result.output)
+    return result
+
+
+def _run_parallel_pre_release_steps(
+    script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+):
     """Run all independent pre-release steps concurrently."""
     _print_heading("Starting independent pre-release steps in parallel")
 
@@ -356,10 +500,10 @@ def _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malwa
         if skip_scan:
             future = executor.submit(_skip_scan_step, script_dir, tag)
         else:
-            future = executor.submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan])
+            future = executor.submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
         futures[future] = ("malware scan", STEP_SCAN_TITLE)
 
-        future = executor.submit(_command_step, "binary smoke test", STEP_SMOKE_TITLE, [smoke_test])
+        future = executor.submit(_smoke_step, script_dir, smoke_test, use_smoke_cache)
         futures[future] = ("binary smoke test", STEP_SMOKE_TITLE)
 
         future = executor.submit(_version_step, farm_versions)
@@ -541,7 +685,19 @@ def _record_skip_scan_justification(script_dir, tag):
     is_flag=True,
     help="Release even when the tag cannot be signed (breaks the trust chain; NOT recommended).",
 )
-def main(tag, dry_run, skip_scan, allow_unsigned):
+@click.option(
+    "--no-cache",
+    "no_cache",
+    is_flag=True,
+    help="Force fresh gates: re-run the binary smoke test and malware scan even if a cached pass matches.",
+)
+@click.option(
+    "--clear-cache",
+    "clear_cache",
+    is_flag=True,
+    help="Delete cached smoke/scan results before running (implies a fresh run).",
+)
+def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     """Run pre-release gates, then create a GitHub release.
 
     Authentication is settled in a preflight step BEFORE any gate runs, because
@@ -549,6 +705,11 @@ def main(tag, dry_run, skip_scan, allow_unsigned):
     kickoff. The malware scan, binary smoke test, version table, and checksum
     generation are independent and run in parallel. The tag/release step waits
     for them and aborts when a mandatory gate fails.
+
+    The malware scan and the ~4.5 min binary smoke test are content-cached: a
+    routine re-release whose payload, installer and probe script are byte-for-byte
+    unchanged reuses the recorded pass instead of re-running. --no-cache / --clear
+    -cache force a fresh run.
 
     Requires: gh (GitHub CLI) authenticated, git repo with remote set.
     """
@@ -558,9 +719,21 @@ def main(tag, dry_run, skip_scan, allow_unsigned):
     malware_scan = os.path.join(script_dir, "scan-for-malware")
     tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
 
+    if clear_cache:
+        shutil.rmtree(_smoke_cache_dir(), ignore_errors=True)
+    use_smoke_cache = not (no_cache or clear_cache)
+    # Forward the same intent to scan-for-malware, which owns its own clean-cache.
+    scan_flags = []
+    if clear_cache:
+        scan_flags.append("--clear-cache")
+    if no_cache or clear_cache:
+        scan_flags.append("--no-cache")
+
     signing = _preflight(dry_run, allow_unsigned)
 
-    results = _run_parallel_pre_release_steps(script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan)
+    results = _run_parallel_pre_release_steps(
+        script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+    )
 
     scan_result = results["malware scan"]
     if scan_result.returncode != 0:
