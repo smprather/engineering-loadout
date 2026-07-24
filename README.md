@@ -255,7 +255,7 @@ OpenSSH for those.
 | pv | bin | 1.6.6 | Monitor and show progress of data through a pipe |
 | rg | bin | 15.1.0 | Extremely fast grep alternative (ripgrep) |
 | rsync | bin | 3.4.1 | Efficient file sync with delta-transfer algorithm |
-| ruff | bin | 0.15.17 | Extremely fast Python linter and formatter |
+| ruff | bin | 0.16.0 | Extremely fast Python linter and formatter |
 | sd | bin | 1.0.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.13.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
@@ -265,9 +265,9 @@ OpenSSH for those.
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
 | tmux | bin | 3.6b | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.26.8 | Incremental parser generator and query tool |
-| ty | bin | 0.0.49 | Fast Python type checker (Astral) |
+| ty | bin | 0.0.63 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils -- individual binaries (ls, cp, mv, etc.) built from source on EL8 |
-| uv | bin | 0.11.21 | Extremely fast Python package and project manager |
+| uv | bin | 0.11.32 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.0458 | Vi IMproved text editor |
 | gvim | bin | 9.2.0458 | GTK3 GUI Vim with clipboard and font rendering |
 | nedit-ng | bin | 2025.1 | Qt5 GUI text editor, NEdit rewrite |
@@ -297,7 +297,7 @@ OpenSSH for those.
 | nodejs | bin | 26.2.0 | Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.5.7 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | 2a1c077 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
-| parity-plot | python-tool | v0.4.0 | Plotly parity plots and bundled local NiceGUI designer; HTML output is self-contained |
+| parity-plot | python-tool | v0.5.0 | Plotly parity plots and bundled local NiceGUI designer; HTML output is self-contained |
 | text-serdes | python-tool | c9e83b7 | text-serdes -- short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
 | portable-python | python-base | 3.14.4 | BOLT-optimized portable CPython build with bundled install.sh |

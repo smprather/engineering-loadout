@@ -1099,7 +1099,7 @@
       "bins": [
         "ruff"
       ],
-      "version": "0.15.21",
+      "version": "0.16.0",
       "platforms": [
         "linux"
       ],
@@ -1257,7 +1257,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.58",
+      "version": "0.0.63",
       "platforms": [
         "linux"
       ],
@@ -1376,7 +1376,7 @@
       "bins": [
         "uv"
       ],
-      "version": "0.11.28",
+      "version": "0.11.32",
       "platforms": [
         "linux"
       ],
@@ -2438,7 +2438,7 @@
         "yarl"
       ],
       "uv_tool": "parity-plot",
-      "version": "v0.4.0",
+      "version": "v0.5.0",
       "platforms": [
         "linux"
       ],

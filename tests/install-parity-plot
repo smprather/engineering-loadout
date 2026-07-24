@@ -40,7 +40,7 @@ tool_python="$local_prefix/share/uv/tools/parity-plot/bin/python"
 
 [[ -x $parity_bin ]] || fail "parity-plot launcher not installed"
 [[ -x $tool_python ]] || fail "parity-plot tool venv missing"
-expected_version="0.4.0"
+expected_version="0.5.0"
 version_out=$("${probe_env[@]}" parity-plot --version) || fail "parity-plot --version"
 [[ $version_out == *"$expected_version"* ]] || fail "unexpected CLI version: $version_out"
 "${probe_env[@]}" PARITY_EXPECTED_VERSION="$expected_version" "$tool_python" -c 'import parity_plot, os; expected = os.environ["PARITY_EXPECTED_VERSION"]; assert parity_plot.__version__ == expected, parity_plot.__version__' \
@@ -52,8 +52,8 @@ import sys
 
 row = next(item for item in json.load(sys.stdin) if item["name"] == "parity-plot")
 assert row["status"] == "ok", row
-assert row["version"] == "0.4.0", row
-' || fail "farm-versions did not report parity-plot 0.4.0"
+assert row["version"] == "0.5.0", row
+' || fail "farm-versions did not report parity-plot 0.5.0"
 
 echo "Smoke: self-contained HTML output"
 csv="$test_home/input.csv"

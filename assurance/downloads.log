@@ -5,3 +5,6 @@
 2026-07-10	https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-gnu.tar.gz	321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8deef22
 2026-07-10	https://github.com/dalance/procs/releases/download/v0.14.12/procs-v0.14.12-x86_64-linux.zip	81964faf9d5cd0e9f399d5d0954fb6fe4d4d9f7d3cbec4507633df5a45b11713
 2026-07-10	https://github.com/johnkerl/miller/releases/download/v6.20.2/miller-6.20.2-linux-amd64.tar.gz	73461cd6469df3a0c14a102d6e19ef04528eda08cbd7aedbce5d32ccc7c0428e
+2026-07-24	https://github.com/astral-sh/ruff/releases/download/0.16.0/ruff-x86_64-unknown-linux-gnu.tar.gz	98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865
+2026-07-24	https://github.com/astral-sh/ty/releases/download/0.0.63/ty-x86_64-unknown-linux-gnu.tar.gz	e8916a3c110ace4d4f25e73b5850efd9447e0796d93ec9e1a3ab69bc8c46f56c
+2026-07-24	https://github.com/astral-sh/uv/releases/download/0.11.32/uv-x86_64-unknown-linux-gnu.tar.gz	aab924fd522efd06f1c5f3b93a243864fc453132c94b2dc49f1371b528a4b967

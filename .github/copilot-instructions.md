@@ -92,7 +92,7 @@ keyword `all` is rejected; users always name packages or groups explicitly
 
 `uv_extras` turns a Python tool requirement into `uv_tool[extra,...]`; bundle the
 full locked wheel closure for every extra. `parity-plot` is pinned to stable
-upstream tag `v0.4.0`; rebuild with `build/build-parity-plot.sh --tag v0.4.0`.
+upstream tag `v0.5.0`; rebuild with `build/build-parity-plot.sh --tag v0.5.0`.
 NiceGUI is now a core upstream dependency, not a `uv_extras` entry. Its
 loadout-only patch corrects the stale module version and embeds Plotly in
 generated HTML because the upstream CDN form is not offline-safe; retain it.

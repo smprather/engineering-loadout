@@ -1,6 +1,23 @@
 # Current Handoff
 
-Last updated: 2026-07-23 (release-time reduction: stash-asset reuse + smoke content cache).
+Last updated: 2026-07-24 (parity-plot v0.5.0 + Astral tools ruff/ty/uv bumped).
+
+## Dependency bumps (2026-07-24)
+
+- **parity-plot v0.4.0 -> v0.5.0** (`ed16b6a446837db78d7502d9062a98d276a66dd4`).
+  Rebuilt with `build/build-parity-plot.sh --tag v0.5.0`. The offline-HTML patch
+  applies clean to v0.5.0 (the `include_plotlyjs="cdn" -> True` line moved 418->487
+  but the context matched; `__version__` still `0.1.0` upstream). Dependency closure
+  unchanged vs the vendored wheels -- only `parity_plot-0.5.0-*.whl` replaced
+  `0.4.0`. `tests/install-parity-plot` updated to assert 0.5.0 and passes (CLI +
+  module version, self-contained Plotly HTML, local NiceGUI designer).
+- **Astral tools** via `build/update-prebuilt ruff=0.16.0 ty=0.0.63 uv=0.11.32`:
+  ruff 0.15.21->0.16.0, ty 0.0.58->0.0.63, uv 0.11.28->0.11.32. Downloaded, stripped,
+  patchelf'd (`$ORIGIN/../lib64:$ORIGIN/../lib`), bz2'd, versions stamped. Astral was
+  acquired by OpenAI -- release cadence/URLs unchanged for now; watch for redirects.
+- Post-payload chain run: `./strip-all-elf-binaries` (3 new bz2 recorded),
+  `build/gen-content-manifest` (4312 files, `--check` OK). Bash completion diff = no
+  change (only versions/wheels moved, not package names/verbs).
 
 ## Release-time reduction (2026-07-23)
 
@@ -67,14 +84,14 @@ spawns a fresh **keyless** agent. Use `/usr/bin/ssh-add -l` against each
   remains a GitHub release asset (`nvim-plugin-stash.tar.bz2`) with its checksum and
   content-manifest trust chain; it is not a Git payload.
 - `parity-plot` is bundled as a non-optional Linux Python tool from stable upstream
-  tag `v0.4.0` (`261720c64b60fbfba09826183b315ce15dd6d560`). NiceGUI is now a
+  tag `v0.5.0` (`ed16b6a446837db78d7502d9062a98d276a66dd4`). NiceGUI is now a
   core upstream dependency, not a `uv_extras` entry, so the local designer still
   installs offline. Its loadout patch corrects the stale Python module version and
   embeds Plotly in generated HTML, so reports render offline. Static image/PDF export
   still needs an already-installed Chrome/Chromium for Kaleido. Rebuild with
-  `build/build-parity-plot.sh --tag v0.4.0`; it copies a supplied source checkout
+  `build/build-parity-plot.sh --tag v0.5.0`; it copies a supplied source checkout
   into a disposable build tree and first reuses the vendored lock closure offline.
-  Upstream v0.4.0 has no explicit license file/metadata; the owner authorized this
+  Upstream still ships no explicit license file/metadata; the owner authorized this
   first-party bundle, but add explicit terms upstream before third-party redistribution.
 - `@envs` now intentionally expands only `env-bash` (then its `env-starship`
   recommendation). Install another config bundle by name, or use `@envs-all` for

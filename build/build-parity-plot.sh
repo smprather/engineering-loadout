@@ -7,8 +7,8 @@
 # upstream uses Plotly's CDN, which cannot render air-gapped.
 #
 # Usage:
-#   build/build-parity-plot.sh --tag v0.4.0
-#   build/build-parity-plot.sh --tag v0.4.0 --source /path/to/parity-plot
+#   build/build-parity-plot.sh --tag v0.5.0
+#   build/build-parity-plot.sh --tag v0.5.0 --source /path/to/parity-plot
 
 set -euo pipefail
 

@@ -2115,17 +2115,17 @@ only, and a real-X/WSLg `surfer --version` + a headed launch on a sample
 
 ---
 
-## parity-plot 0.4.0 -- offline Plotly parity plots + NiceGUI designer
+## parity-plot 0.5.0 -- offline Plotly parity plots + NiceGUI designer
 
 `parity-plot` is the first-party Python CLI at
 `https://github.com/smprather/parity-plot`. The bundled snapshot is upstream
-stable tag `v0.4.0` (`261720c64b60fbfba09826183b315ce15dd6d560`). It is a pure
+stable tag `v0.5.0` (`ed16b6a446837db78d7502d9062a98d276a66dd4`). It is a pure
 wheel requiring Python 3.14. NiceGUI is a core upstream dependency now, so
 `parity-plot design` is usable after an offline install without a separate extra.
 
 ### Licensing note
 
-The v0.4.0 upstream tree currently contains no `LICENSE`/`COPYING` file or
+The v0.5.0 upstream tree currently contains no `LICENSE`/`COPYING` file or
 project license metadata. Its owner authorized this first-party bundle; do not
 claim a license or redistribute it on another party's behalf until upstream
 adds explicit terms.
@@ -2149,7 +2149,7 @@ a browser; it guarantees only HTML rendering entirely offline.
 ### Build + bundle
 
 ```bash
-build/build-parity-plot.sh --tag v0.4.0            # repeat the pinned stable release
+build/build-parity-plot.sh --tag v0.5.0            # repeat the pinned stable release
 build/build-parity-plot.sh --tag vNEXT             # deliberate stable-tag update
 ./loadout completion bash > envs/bash/global/completions/loadout.bash
 ./build/gen-content-manifest
