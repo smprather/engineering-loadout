@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.14
 """
 release: run pre-release gates, then create a GitHub release.
 

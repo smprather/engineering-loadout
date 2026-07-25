@@ -217,7 +217,7 @@ def main(argv):
             # lives on another branch), widen to a full mirror rather than shipping a
             # stash that cannot produce its own lockfile commit.
             if git("cat-file", "-e", pinned + "^{commit}", cwd=dest, check=False).returncode != 0:
-                print(f"    pin not on the default branch; re-mirroring all refs")
+                print("    pin not on the default branch; re-mirroring all refs")
                 shutil.rmtree(dest)
                 git("clone", "--quiet", "--bare", url, dest)
                 if git("cat-file", "-e", pinned + "^{commit}", cwd=dest, check=False).returncode != 0:

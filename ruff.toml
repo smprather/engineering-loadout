@@ -6,12 +6,16 @@ line-length = 120
 # shanghai bundle is shipped pre-built and not source-managed here.
 target-version = "py314"
 
-[lint]
-select = ["I", "UP"]
-
 exclude = [
     "installer_vendor/",
-    "treesitter/vendor/",
-    "treesitter/src/",
-    "bash/global/github.scop.bash-completion/",
+    "payload/treesitter/vendor/",
+    "payload/treesitter/prebuilt/",
+    "envs/bash/global/github.scop.bash-completion/",
+    "envs/bash/global/grc/",
+    "envs/nvim/vendor/",
+    "envs/tmux/vendor/",
 ]
+
+[lint]
+select = ["F", "E4", "E7", "E9", "B", "I", "UP"]
+ignore = ["E402"]

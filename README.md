@@ -204,117 +204,122 @@ OpenSSH for those.
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
 | biome | bin | 2.4.15 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
-| broot | bin | 1.56.2 | Interactive tree navigator with fuzzy search |
+| broot | bin | 1.58.0 | Interactive tree navigator with fuzzy search |
 | yazi | bin | 26.5.6 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
-| btm | bin | 0.12.3 | Cross-platform system resource monitor (TUI) |
+| btm | bin | 0.14.4 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
-| liberty-filter | bin | 1.0.1 | liberty-filter -- strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
-| lefdef-tools | python-tool | b9ac43e | lefdef-tools -- fast LEF/DEF parsing and query tools (Rust backend) |
-| liberty-tools | python-tool | v2026.06.01.1-33-gdc193c1 | liberty-tools -- Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools |
-| vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler -- C++17 VCD signal toggle analysis with offline self-contained HTML reports |
-| pdftotext | bin | 22.12.0 | pdftotext (poppler-utils) -- extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
-| p7zip | bin | 16.02 | p7zip -- Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.) |
+| liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
+| lefdef-tools | python-tool | b9ac43e | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
+| liberty-tools | python-tool | v2026.06.01.1-33-gdc193c1 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools |
+| vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
+| pdftotext | bin | 22.12.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
+| p7zip | bin | 16.02 | p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.) |
 | bzip2 | bin | 1.0.8 | Block-sorting file compressor |
 | choose | bin | 1.3.7 | awk/cut alternative for column field selection |
 | clang | bin | 23.0git | LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link) |
-| cloc | bin | 2.08 | Count Lines of Code by language (blank/comment/code). Self-contained Perl script; requires host perl |
-| scc | bin | 3.7.0 | Sloc, Cloc and Code -- fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
+| cloc | bin | 2.10 | Count Lines of Code by language (blank/comment/code). Self-contained Perl script; requires host perl |
+| scc | bin | 3.7.0 | Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
 | tokei | bin | 14.0.0 | Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28 |
-| dasel | bin | 3.8.1 | Query and modify YAML/JSON/TOML/XML/CSV data |
+| dasel | bin | 3.11.2 | Query and modify YAML/JSON/TOML/XML/CSV data |
 | delta | bin | 0.19.2 | Git diff pager with syntax highlighting |
 | duf | bin | 0.9.1 | df replacement with colored usage table |
 | dust | bin | 1.2.4 | du replacement with visual bar chart |
-| flameshot | bin | 13.3.0 | Flameshot -- powerful GUI screenshot tool. flameshot 13.3.0 back-ported to Qt5 for EL8 (upstream is Qt6-only); needs gui_libs (Qt5/X11) + DISPLAY |
+| flameshot | bin | 13.3.0 | Flameshot — powerful GUI screenshot tool. flameshot 13.3.0 back-ported to Qt5 for EL8 (upstream is Qt6-only); needs gui_libs (Qt5/X11) + DISPLAY |
 | expect | bin | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
-| eza | bin | 0.23.4 | ls replacement with icons, colors, git status |
+| eza | bin | 0.23.5 | ls replacement with icons, colors, git status |
 | fd | bin | 10.4.2 | Fast and user-friendly find alternative |
-| fio | bin | 3.42 | Flexible I/O tester -- storage and filesystem performance benchmark |
-| fzf | bin | 0.72.0 | General-purpose command-line fuzzy finder |
+| fio | bin | 3.42 | Flexible I/O tester — storage and filesystem performance benchmark |
+| fzf | bin | 0.74.0 | General-purpose command-line fuzzy finder |
 | gnuplot | bin | 6.0.2 | Command-line graphing and plotting utility |
 | glow | bin | 2.1.2 | Terminal markdown renderer/pager with styles |
 | gocheat | bin | 0.1.1 | Interactive terminal cheatsheet browser (EL8 source build, CGO_ENABLED=0 static) |
 | keyb | bin | 0.8.0 | Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export |
-| gping | bin | 1.20.1 | Ping with live graph visualization |
+| gping | bin | 1.20.4 | Ping with live graph visualization |
 | htop | bin | 3.2.1 | Interactive process viewer and manager |
 | hx | bin | 25.07.1 | Modern modal text editor with tree-sitter and LSP |
 | hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
-| ncdu | bin | 2.9.2 | NCurses disk usage -- interactive disk space analyzer (Zig v2) |
-| jq | bin | 1.8.1 | Lightweight JSON processor and formatter |
-| just | bin | 1.50.0 | Command runner, ergonomic Makefile alternative |
-| lazygit | bin | 0.61.1 | TUI git client for staging, committing, rebasing |
+| ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
+| openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
+| jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
+| just | bin | 1.56.0 | Command runner, ergonomic Makefile alternative |
+| lazygit | bin | 0.63.0 | TUI git client for staging, committing, rebasing |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
-| miller | bin | 6.18.1 | CSV/TSV/JSON/NDJSON data processor (mlr) |
+| miller | bin | 6.20.2 | CSV/TSV/JSON/NDJSON data processor (mlr) |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
-| numr | bin | 0.5.5 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
+| numr | bin | 0.6.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.3.8 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
-| nvim | bin | 0.12.2 | Hyperextensible Vim-based text editor |
+| nvim | bin | 0.12.4 | Hyperextensible Vim-based text editor |
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
-| procs | bin | 0.14.11 | ps replacement with colors and process tree |
+| procs | bin | 0.14.12 | ps replacement with colors and process tree |
 | pv | bin | 1.6.6 | Monitor and show progress of data through a pipe |
 | rg | bin | 15.1.0 | Extremely fast grep alternative (ripgrep) |
+| restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
 | rsync | bin | 3.4.1 | Efficient file sync with delta-transfer algorithm |
 | ruff | bin | 0.16.0 | Extremely fast Python linter and formatter |
-| sd | bin | 1.0.0 | sed alternative with simpler regex syntax |
+| sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.13.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
-| starship | bin | 1.25.1 | Cross-shell customizable minimal prompt |
-| stylua | bin | 2.4.1 | Opinionated Lua code formatter |
+| starship | bin | 1.26.0 | Cross-shell customizable minimal prompt |
+| stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
-| tmux | bin | 3.6b | Terminal multiplexer with session management |
-| tree-sitter | bin | 0.26.8 | Incremental parser generator and query tool |
+| tmux | bin | 3.7b | Terminal multiplexer with session management |
+| tree-sitter | bin | 0.26.10 | Incremental parser generator and query tool |
 | ty | bin | 0.0.63 | Fast Python type checker (Astral) |
-| gnu-coreutils | bin | 9.7 | GNU coreutils -- individual binaries (ls, cp, mv, etc.) built from source on EL8 |
+| gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.11.32 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.0458 | Vi IMproved text editor |
-| gvim | bin | 9.2.0458 | GTK3 GUI Vim with clipboard and font rendering |
+| vim | bin | 9.2.0782 | Vi IMproved text editor |
+| gvim | bin | 9.2.0782 | GTK3 GUI Vim with clipboard and font rendering |
 | nedit-ng | bin | 2025.1 | Qt5 GUI text editor, NEdit rewrite |
+| surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | nvim-qt | bin | 0.2.19 | Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required) |
-| mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime -- Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
+| mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.0 | X11 clipboard command-line access tool |
 | yara | bin | 4.5.5 | Malware pattern matching and classification tool |
 | xterm | bin | 410 | X11 terminal emulator with Unicode and color |
-| urxvt | bin | 9.31 | rxvt-unicode -- X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
-| wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator -- shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
-| st | bin | 0.9.3 | suckless st -- minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
+| urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
+| wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
+| st | bin | 0.9.3 | suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
 | yank | bin | 1.3.0 | Select terminal output and copy to clipboard |
-| yq | bin | 4.53.2 | YAML/JSON/XML/CSV processor (jq for YAML) |
+| yq | bin | 4.53.3 | YAML/JSON/XML/CSV processor (jq for YAML) |
 | zellij | bin | 0.44.3 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
-| zoxide | bin | 0.9.9 | Smarter cd with frecency ranking (z/zi) |
+| zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
 | octave | bin | 11.1.0 | GNU scientific computing language (MATLAB-compatible) |
-| ngspice | bin | 46 | ngspice -- open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
-| visidata | python-tool | 3.3 | TUI spreadsheet for CSV/TSV/JSON data |
-| meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle -- system py3.6 + bundled PyGObject/GtkSource) |
-| mate-terminal | bin | 1.26.1 | MATE Terminal -- GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
+| ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
+| visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
+| meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
+| mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
 | firefox | bin | 140.11.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin) |
-| zsh | bin | 5.9 | Z shell -- powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, ...) + function library shipped via runtime archive, libpcre.so.1 bundled for zsh/pcre |
-| fish | bin | 4.7.1 | Fish shell -- friendly interactive shell with autosuggestions and syntax highlighting |
-| tcl | bin | 9.0.3 | Tcl scripting language -- tclsh interpreter and runtime library |
-| tk | bin | 9.0.3 | Tk GUI toolkit -- wish interpreter and embedded Tk runtime |
-| nodejs | bin | 26.2.0 | Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling) |
-| jupyterlab | python-tool | 4.5.7 | Web-based interactive development environment for notebooks, code, and data |
-| time-plot | python-tool | 2a1c077 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
-| parity-plot | python-tool | v0.5.0 | Plotly parity plots and bundled local NiceGUI designer; HTML output is self-contained |
-| text-serdes | python-tool | c9e83b7 | text-serdes -- short-lived encrypted text transport for copy/paste workflows (enc/dec) |
+| zsh | bin | 5.9 | Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive |
+| fish | bin | 4.8.0 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
+| tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |
+| tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
+| nodejs | bin | 26.5.0 | Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling) |
+| jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
+| time-plot | python-tool | 4e94f23 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
+| text-serdes | python-tool | c9e83b7 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
+| cicwave | python-tool | 0.5.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
+| parity-plot | python-tool | v0.6.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
 | portable-python | python-base | 3.14.4 | BOLT-optimized portable CPython build with bundled install.sh |
 | gobject-typelibs | typelib |  | GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo) |
 | tldr-data | data |  | Bundled tldr-pages cache for offline tealdeer use |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
-| nvim-plugin-stash | data |  | Offline git stash of every bundled nvim plugin (bare mirrors); a GitHub release asset, fetched with `./fetch-stash`. `lazy` clones from it, so `:Lazy update` works with no network |
-| git-nvim | runtime | 2.43.7 | Private git for nvim/lazy only (`lib/loadout-git/`, never on `PATH`); optional, `@shared-all`. For boxes with no system git |
-| modules | runtime | 5.6.1 | Environment Modules -- native upstream `make install` tree (source `<local>/lib/modules/init/<shell>`) relocated from a build token at install time, for HPC-style shell environment management; pulls Tcl |
-| rust-analyzer | bin | 410 | Rust language server (LSP) -- diagnostics, go-to-def, completions |
-| rust | runtime | 1.96.0 | Rust toolchain (rustc + cargo + std) for offline `cargo build`; repacked from rustup stable, relocatable |
-| rust-crate-store | data |  | Offline Cargo local-registry (top crates + every loadout rust tool's dependency closure); enables `cargo build --offline` |
-| gopls | bin | 0.22.0 | Go language server (LSP) -- diagnostics, go-to-def, completions |
-| lua-language-server | bin | 3.18.2 | Lua language server (LSP) -- useful for nvim config and Lua tooling |
-| pyright | python-tool | 1.1.410 | Python language server (LSP) -- type-checking, go-to-def, completions |
-| tmux-path-store | python-tool | 1.0.0 | Tmux window-name-keyed directory/file path store -- shell aliases for per-window path bookmarks |
-
+| git-nvim | runtime | 2.43.7 | PRIVATE git for nvim/lazy only -- installed to lib/loadout-git/, never on the user's PATH (a loadout git would shadow the corp git and break its subcommands/credential helpers, cf. openssh/ssh10). Optional: @shared-all or by name. nvim uses it only when the system has no git. |
+| nvim-plugin-stash | data |  | Offline git stash for nvim plugins -- 24 bare mirrors + lazy.nvim, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update fetches from it, so plugin updates work with no network. Needs git (system, or the optional git-nvim package). |
+| models | bin | 0.14.0 | TUI/CLI to browse AI models + benchmarks from models.dev (needs network for live data) |
+| modules | runtime | 5.6.1 | Environment Modules — module load/unload for shell environment management (HPC-style) |
+| rust | runtime | 1.96.0 | Rust toolchain — rustc + cargo + std libraries (offline source build target) |
+| rust-crate-store | data |  | Offline Cargo local-registry (top crates.io crates + full dependency closure) |
+| espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
+| rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
+| gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
+| lua-language-server | bin | 3.18.2 | Lua language server (LSP) — useful for nvim config and Lua tooling |
+| pyright | python-tool | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions |
+| tmux-path-store | python-tool | 1.0.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots
 
 `./loadout install parity-plot` installs the CLI and its local designer, with no

@@ -337,7 +337,6 @@ def walk_depends(names, registry, forbidden=None, force=False):
         forbidden = set()
     out = set()
     pending = list(names)
-    parent = {n: None for n in names}
     while pending:
         name = pending.pop()
         if name in out:
@@ -359,7 +358,6 @@ def walk_depends(names, registry, forbidden=None, force=False):
                         f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force."
                     )
                 if d not in out:
-                    parent[d] = name
                     pending.append(d)
     return out
 
@@ -3341,14 +3339,10 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
     """When online, run headless nvim to bootstrap lazy.nvim and sync all plugins.
 
     Gated on env-nvim, like the seeding phase: :Lazy lives in the per-user config and
-    operates on the per-user lazy/ dir. Gating this on nvim-catalog-plugins (which
+    operates on the per-user lazy/ dir. Gating this on nvim-plugin-stash (which
     lands in the shared tree) meant it never ran on the @envs side, where the config
     it needs actually is.
     """
-    if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("Neovim Lazy sync (env-nvim not selected)", "")
-        record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
-        return
     # Lazy sync requires the staged tree to contain a usable nvim config
     # (init.lua + plugin specs). That config ships in the env-nvim package
     # (`kind: env`). When env-nvim isn't in the selection -- e.g. a `@shared`
@@ -3362,7 +3356,7 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         return
     nvim_bin = os.path.join(home, _local_name(home), "bin", "nvim")
     if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
-        skipped("Neovim Lazy sync (nvim binary not found)", f"install nvim first")
+        skipped("Neovim Lazy sync (nvim binary not found)", "install nvim first")
         record_result("Neovim Lazy sync", "SKIP", "nvim binary not found")
         return
     # Security default: do NOT pull plugin code from GitHub at install time.

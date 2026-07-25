@@ -1,0 +1,26 @@
+# ty is advisory for this repo, not a tests/run-all gate.
+#
+# Expected `~/.local/bin/ty check loadout_main.py` result today: 11 diagnostics,
+# all known false positives. Recheck with:
+#   ~/.local/bin/ty check loadout_main.py 2>&1 | grep -E '^(error|warning)' | sort | uniq -c
+#
+# Breakdown:
+# - 3x unresolved-attribute on click.exceptions.{Abort,ClickException,UsageError}.
+#   `loadout_main.py` imports `rich_click as click` in a try/except ImportError;
+#   ty cannot infer the module type through that shape. Runtime verification:
+#   `PYTHONPATH=installer_vendor ~/.local/bin/python3.14 -c 'import rich_click; print(hasattr(rich_click.exceptions, "Abort"), hasattr(rich_click.exceptions, "ClickException"), hasattr(rich_click.exceptions, "UsageError"))'`
+#   prints `True True True`.
+# - 7x invalid-argument-type on rich.progress.Progress.update/advance. Rich wants
+#   TaskID, but `_progress_task` is typed None | TaskID. The calls are correct:
+#   `_progress_ctx` and `_progress_task` are assigned in lockstep in
+#   `loadout_main.py:1782-1785`, then calls are guarded by `_progress_ctx is not
+#   None`; ty cannot correlate the two variables.
+# - 1x invalid-assignment on `pwd = None`, the deliberate non-Linux fallback.
+#
+# Do not add blanket [rules] suppressions to make ty go green. If this count or
+# breakdown changes, investigate the new signal instead of silencing categories.
+#
+# The extra path below lets ty resolve vendored click, rich_click, and rich;
+# they are not installed into the active Python environment.
+[environment]
+extra-paths = ["installer_vendor"]

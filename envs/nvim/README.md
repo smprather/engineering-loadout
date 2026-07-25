@@ -6,12 +6,12 @@ versions), 326 prebuilt Tree-sitter parsers, and LSP server entries for
 nearly every language Neovim's `vim.lsp.config` can target.
 
 For the install workflow and the prebuilt parser bundle see the top-level
-[README](../README.md). For the architecture deep-dive see
-[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+[README](../../README.md). For the architecture deep-dive see
+[`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 ## Layer Dispatcher
 
-`nvim/init.lua` is a thin dispatcher. The six layers
+`envs/nvim/init.lua` is a thin dispatcher. The six layers
 (`global → corp → site → team → project → user`) match the bash layer
 system — each layer overrides the previous without touching upstream files.
 
@@ -58,7 +58,7 @@ per plugin. Versions are locked in `lazy-lock.json`. Notable inclusions:
 
 ## LSP
 
-`nvim/lsp/<server>.lua` files hold one `vim.lsp.config` entry per server.
+`envs/nvim/lsp/<server>.lua` files hold one `vim.lsp.config` entry per server.
 Coverage is broad — most languages Neovim knows about have an entry here.
 Enable in your user layer with `vim.lsp.enable("<server>")`.
 

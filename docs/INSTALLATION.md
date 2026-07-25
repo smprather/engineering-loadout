@@ -56,10 +56,10 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 | `~/.config/bash/` | Layered bash config |
 | `~/.vimrc` | `envs/vim/vimrc` |
 | `~/.vim/` | `envs/vim/vim/` |
-| `~/.tmux.conf` | `tmux/tmux.conf` |
-| `~/.tmux/` | `tmux/tmux/` |
+| `~/.tmux.conf` | `envs/tmux/tmux.conf` |
+| `~/.tmux/` | `envs/tmux/vendor/plugins/` |
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |
-| `~/.config/nvim/` | `nvim/` |
+| `~/.config/nvim/` | `envs/nvim/` |
 | `~/.config/starship/starship.toml` | `envs/starship/starship.linux.toml` + `envs/starship/config-schema.json` |
 | `~/.config/helix/runtime/` | `payload/<platform>/runtime/helix.tar.bz2` |
 | `~/.local/share/vim/vim92/` | `payload/<platform>/runtime/vim92.tar.bz2` |
@@ -67,7 +67,7 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 | `~/.local/bin/` | `payload/<platform>/bin/*.bz2` (decompressed) |
 | `~/.local/lib64/` | `payload/<platform>/lib64/*.bz2` (decompressed) |
 | `~/.local/bin/python3.14` | `payload/<platform>/portable-python-*.tar.bz2` |
-| `~/.local/share/fonts/` | `fonts/*.zip` (Nerd Font archives) |
+| `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives) |
 | `~/.local/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
 | `~/.local/share/tealdeer/cache/tldr-pages/` | `payload/tldr/tldr-pages.tar.bz2` |
 
@@ -223,7 +223,7 @@ No elevation required. Files are copied, not symlinked -- re-run
 
 | Destination | Source |
 |-------------|--------|
-| `%LOCALAPPDATA%\nvim\` | `nvim/` |
+| `%LOCALAPPDATA%\nvim\` | `envs/nvim/` |
 | `%USERPROFILE%\.config\wezterm\wezterm.lua` | `envs/wezterm/wezterm.lua` |
 | `%USERPROFILE%\.config\starship\starship.toml` | `envs/starship/starship.windows.toml` |
 | `%USERPROFILE%\.editorconfig` | `envs/editorconfig/editorconfig` |

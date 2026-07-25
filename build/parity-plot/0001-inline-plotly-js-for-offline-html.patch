@@ -1,21 +1,8 @@
-diff --git a/parity_plot/__init__.py b/parity_plot/__init__.py
-index bf2dff0..744b38c 100644
---- a/parity_plot/__init__.py
-+++ b/parity_plot/__init__.py
-@@ -31,7 +31,7 @@ from .tolerance import Tolerance
- from .themes import THEMES as THEME_NAMES
- from .themes import Theme
- 
--__version__ = "0.1.0"
-+__version__ = "0.0.0"
- 
- __all__ = [
-     "parity_plot",
 diff --git a/parity_plot/plot.py b/parity_plot/plot.py
-index 8b142c4..f765d0a 100644
+index c810e21..b7ccd0b 100644
 --- a/parity_plot/plot.py
 +++ b/parity_plot/plot.py
-@@ -418,7 +418,10 @@ def save(fig: go.Figure, output: OutputConfig) -> Path:
+@@ -574,7 +574,10 @@ def save(fig: go.Figure, output: OutputConfig) -> Path:
      fig.update_layout(width=output.width, height=output.height)
  
      if output.format == "html":

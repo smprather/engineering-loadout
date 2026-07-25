@@ -88,8 +88,12 @@ that lockfile so `:Lazy restore` reproduces the exact vetted commits.
   staging directory (never the maintainer's live `~/.local/share/nvim/lazy`),
   scans it with `scan-for-malware --path`, and packs deterministically.
 
-The tmux plugin bundle is likewise pinned via `envs/tmux/vendor/plugins.lock`
-(`./update tmux-plugins` clones + checks out the pinned commit and records it).
+The tmux plugin bundle is likewise commit-pinned, via
+`envs/tmux/vendor/plugins.lock` (4 plugins). `./update tmux-plugins` reads that
+lock, clones each plugin and checks out the pinned commit, then rewrites the file
+with the commits it actually landed on. The plugin list is scraped from the
+`set -g @plugin` lines in `envs/tmux/tmux.conf`; commented-out entries are
+skipped, so a disabled plugin is neither cloned nor pinned.
 
 ## 4. Behavioral analysis: `tests/dynamic-analysis`
 

@@ -436,8 +436,21 @@ def main(tools, keep, verbose):
         tool_info = registry[name]
         version = tool_info.get("version", "")
 
-        def _row(status, detail):
-            return "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(name, version, status, detail, n=w_name, v=w_ver, s=w_status)
+        # name/version are bound as defaults rather than captured: the closure is
+        # only ever called inside this iteration, so capturing would be correct
+        # today, but binding makes that explicit and survives someone later
+        # deferring the call. It also clears the B023 false positive without a
+        # suppression comment, which `ruff format` can shift off the flagged line.
+        def _row(status, detail, name=name, version=version):
+            return "{:<{n}}  {:<{v}}  {:<{s}}  {}".format(
+                name,
+                version,
+                status,
+                detail,
+                n=w_name,
+                v=w_ver,
+                s=w_status,
+            )
 
         if name in _SKIP_REASONS:
             print(_row("SKIP", _SKIP_REASONS[name]))

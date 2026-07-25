@@ -2438,7 +2438,7 @@
         "yarl"
       ],
       "uv_tool": "parity-plot",
-      "version": "v0.5.0",
+      "version": "v0.6.0",
       "platforms": [
         "linux"
       ],
@@ -3409,7 +3409,16 @@
       "kind": "group",
       "members": [
         "@shared",
-        "@envs",
+        "env-bash",
+        "env-editorconfig",
+        "env-helix",
+        "env-nvim",
+        "env-pip",
+        "env-st",
+        "env-starship",
+        "env-tmux",
+        "env-vim",
+        "env-zsh",
         "git-nvim",
         "@editor-gui",
         "@gui-suite",
@@ -3421,7 +3430,7 @@
         "modules",
         "lua-language-server"
       ],
-      "description": "Curated loadout \u2014 shared packages, Bash setup, and selected package groups"
+      "description": "Curated loadout \u2014 shared packages, per-user config bundles, and selected package groups"
     },
     "rust-analyzer": {
       "kind": "bin",

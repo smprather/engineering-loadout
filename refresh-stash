@@ -29,7 +29,6 @@ The stash dir is the one the installer created, e.g.
 """
 
 import argparse
-import json
 import os
 import re
 import subprocess

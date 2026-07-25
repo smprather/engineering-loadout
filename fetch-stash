@@ -89,17 +89,17 @@ def release_assets(tag, token):
     api += f"tags/{tag}" if tag else "latest"
     try:
         data = json.loads(http_get(api, token=token))
-    except urllib.error.HTTPError as e:
-        eprint(f"ERROR: GitHub API {e.code} for {api}")
-        if e.code == 404:
+    except urllib.error.HTTPError as exc:
+        eprint(f"ERROR: GitHub API {exc.code} for {api}")
+        if exc.code == 404:
             eprint("  No such release. Check the tag, or omit --tag for the latest.")
-        raise SystemExit(1)
-    except urllib.error.URLError as e:
-        eprint(f"ERROR: cannot reach github.com: {e.reason}")
+        raise SystemExit(1) from exc
+    except urllib.error.URLError as exc:
+        eprint(f"ERROR: cannot reach github.com: {exc.reason}")
         eprint("  If this network blocks github, download the asset elsewhere (e.g. the")
         eprint("  Windows path: tools/download-release.ps1), copy it over, and re-run with:")
         eprint(f"    ./fetch-stash --from-file <{STASH_NAME}> --sums <{SUMS_NAME}>")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
     return data["tag_name"], {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
 
 

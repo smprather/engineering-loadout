@@ -1,6 +1,84 @@
 # Current Handoff
 
-Last updated: 2026-07-24 (parity-plot v0.5.0 + Astral tools ruff/ty/uv bumped).
+Last updated: 2026-07-25 (deep consistency review + parity-plot v0.6.0).
+
+## Deep review (2026-07-25)
+
+A full consistency/lint/docs pass. Everything below is landed and Tier 1+2 green
+(23/23). The two findings worth remembering:
+
+- **`@engineering-loadout` had silently lost 9 env bundles.** Commit `e3f4857`
+  narrowed `@envs` from "every non-optional env package" to "env-bash only". The
+  curated group listed `@envs` as a member and was never edited, so it inherited
+  the narrowing: `env-nvim`, `env-vim`, `env-tmux`, `env-helix`, `env-st`,
+  `env-zsh`, `env-editorconfig` and `env-pip` all vanished from the headline
+  `./loadout install @engineering-loadout`. Since the nvim plugin/parser phases
+  gate on `env-nvim`, that install shipped the 328 MB stash and 251 MB of parsers
+  while writing no nvim config and seeding no `lazy/`. The group now lists its ten
+  env packages **explicitly** rather than via `@envs`, so a future redefinition of
+  `@envs` cannot silently re-narrow it. Lesson: a group that references another
+  group inherits every future redefinition of it, including the ones nobody
+  connected to this group.
+- **Six scripts declared `#!/usr/bin/env python3` but contained PEP 758
+  (`except A, B:`) syntax**, which only parses on 3.14: `build/check-versions`,
+  `build/farm-versions`, `release`, `scan-for-malware`, `strip-all-elf-binaries`,
+  `tests/prebuilt-binaries`. Stock EL8 `python3` is 3.6.8, so all six were dead
+  on a clean box and worked here only because `~/.local/bin/python3` is 3.14 --
+  textbook build-box masking. All six now say `python3.14`.
+
+Lint infrastructure was the root enabler and is now fixed:
+
+- `ruff.toml`'s excludes were all **pre-reboot paths matching nothing**, so
+  `ruff check .` reported 3363 errors (all vendored) and was unusable; and
+  `select = ["I", "UP"]` **replaced** ruff's default set, silently disabling
+  pyflakes entirely. Excludes repointed (plus the vendored `grc` tree),
+  `F,E4,E7,E9,B` enabled, `E402` ignored for the deliberate post-`pwd` imports.
+- `tests/run-all` linted exactly **one** file, behind `if command -v ruff` -- a
+  missing ruff was a silent skip. It now lints and `py_compile`s every
+  first-party Python file and treats a missing ruff as a hard FAIL. This gate is
+  what caught the remaining strays (`fetch-stash` B904, `import-nodejs` E741).
+- `ty` is wired up but deliberately **advisory, not a gate**. All 11 diagnostics
+  on `loadout_main.py` are proven false positives (vendored `rich`/`rich_click`
+  lack type info; `_progress_task` is guarded via a correlated variable ty cannot
+  narrow). Documented in `ty.toml` with reproduction commands. **Do not add
+  blanket `[rules]` suppressions to make it go green** -- an investigation was
+  first "fixed" that way and reverted.
+
+Also fixed: `./update` never regenerated `.content-manifest` after mutating
+`payload/` (Tier 1 failed on drift as a result) -- now automatic on every
+payload-mutating path plus all three guidance printers; `./update tmux-plugins`
+cloned a commented-out `@plugin` line (unanchored `re.search`); two writers of
+`assurance/downloads.log` disagreed on date format (now ISO-8601 UTC);
+`vercomp` glob-matched its RHS; a duplicated unreachable gate in
+`install_nvim_lazy_update`; README's package table had 30 stale versions and 6
+missing packages (regenerated from the registry, 122 rows, now exact).
+
+tmux plugins are now genuinely commit-pinned: `envs/tmux/vendor/plugins.lock`
+exists with 4 pins (the fixed regex correctly excludes the disabled
+`tmux-yank`). `docs/SECURITY.md` had claimed this pin for some time while the
+lockfile had never been committed.
+
+## Dependency bumps (2026-07-25)
+
+- **parity-plot v0.5.0 -> v0.6.0** (`e98f08fecb7f250af508e0d81c9c94349cc6b1ea`).
+  Two things made this a non-routine bump:
+  - **The patch stopped applying.** Upstream re-sorted imports, breaking the
+    context of the patch's `__version__` hunk. That hunk was always redundant --
+    `build-parity-plot.sh` stamps the real tag into `parity_plot/__init__.py`
+    with a `count != 1` assertion right after applying the patch, so the hunk
+    set `0.0.0` only to be immediately overwritten. The patch is now a **single
+    hunk** (`include_plotlyjs="cdn"` -> `True`, at line 574). Fewer contexts,
+    fewer false failures on the next bump.
+  - **v0.6.0 is a breaking CLI change**: TOML-only. `parity-plot plot` takes a
+    config file (default `parity.toml`), not a CSV path. The old smoke test fed
+    it a bare CSV and died with `invalid TOML: Expected '=' after a key`.
+    `tests/install-parity-plot` now generates a real `parity.toml`, and also
+    covers `init` (documented entry point) and `example` (a second exercise of
+    the patched `save()`).
+  - The test's expected version is now **read from `packages.json`** instead of
+    hard-coded; the literal had gone stale on every previous bump.
+  - Dependency closure unchanged -- only `parity_plot-0.5.0-*.whl` replaced by
+    `0.6.0`.
 
 ## Dependency bumps (2026-07-24)
 

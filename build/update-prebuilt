@@ -10,6 +10,8 @@ Usage: update-prebuilt.py tool=version [tool=version ...]
 """
 
 import bz2
+import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -49,14 +51,11 @@ def download(url, dest):
 
 def log_download(url, dest):
     """Append to the assurance ledger's append-only fetch log."""
-    import datetime
-    import hashlib
-
     h = hashlib.sha256()
     with open(dest, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
-    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(os.path.join(REPO, "assurance", "downloads.log"), "a", encoding="utf-8") as f:
         f.write(f"{stamp}\t{url}\t{h.hexdigest()}\n")
 
@@ -113,9 +112,9 @@ def main():
                 r = subprocess.run([PATCHELF, "--set-rpath", RPATH, binpath], capture_output=True)
                 if r.returncode != 0:
                     sys.exit(f"patchelf failed for {tool}: {r.stderr.decode()}")
-                print(f"   patchelf RPATH applied (dynamic ELF)")
+                print("   patchelf RPATH applied (dynamic ELF)")
             else:
-                print(f"   static ELF, no patchelf")
+                print("   static ELF, no patchelf")
             with open(binpath, "rb") as f:
                 data = f.read()
             out = os.path.join(BIN_DIR, want + ".bz2")

@@ -57,11 +57,44 @@ run_test() {
     fi
 }
 
+is_first_party_python_path() {
+    case "$1" in
+        installer_vendor/*|payload/*) return 1 ;;
+        envs/bash/global/github.scop.bash-completion/*) return 1 ;;
+        envs/nvim/vendor/*|envs/tmux/vendor/*) return 1 ;;
+    esac
+    return 0
+}
+
+collect_python_files() {
+    local file first_line
+    PYTHON_FILES=()
+    while IFS= read -r -d '' file; do
+        is_first_party_python_path "$file" || continue
+        if [[ "$file" == *.py ]]; then
+            PYTHON_FILES+=("$file")
+            continue
+        fi
+        [[ "$(basename "$file")" != *.* ]] || continue
+        if [ -f "$file" ] && IFS= read -r first_line < "$file" && [[ "$first_line" == '#!'*python* ]]; then
+            PYTHON_FILES+=("$file")
+        fi
+    done < <(git ls-files -z)
+}
+
+lint_python_files() {
+    if ! command -v ruff > /dev/null 2>&1; then
+        echo "ERROR: ruff not found" >&2
+        return 1
+    fi
+    ruff check --force-exclude "$@"
+}
+
+collect_python_files
+
 # --- Tier 1: fast, no temp HOME -------------------------------------------
-run_test "py_compile" "$PY" -m py_compile loadout_main.py
-if command -v ruff > /dev/null 2>&1; then
-    run_test "ruff check" ruff check loadout_main.py
-fi
+run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
+run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
 run_test "registry-integrity" "$PY" tests/registry-integrity
 run_test "tar-safety" "$PY" tests/tar-safety

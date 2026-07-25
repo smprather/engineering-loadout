@@ -1,4 +1,4 @@
-# append-only supply-chain download log -- columns: date  url  sha256 (populated by ./update in S1)
+# append-only supply-chain download log -- columns: iso8601_utc_timestamp  url  sha256 (populated by ./update in S1)
 2026-07-10	https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-unknown-linux-gnu.tar.gz	7ddba1886f39ba918587f9ca37de9651008726834811c19ee83991705bd3e56b
 2026-07-10	https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz	e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
 2026-07-10	https://github.com/astral-sh/ty/releases/download/0.0.58/ty-x86_64-unknown-linux-gnu.tar.gz	1e756543bc02420dbd63189ace4316fa7f3dbf7800b066d3b9db477b215894e0
@@ -8,3 +8,4 @@
 2026-07-24	https://github.com/astral-sh/ruff/releases/download/0.16.0/ruff-x86_64-unknown-linux-gnu.tar.gz	98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865
 2026-07-24	https://github.com/astral-sh/ty/releases/download/0.0.63/ty-x86_64-unknown-linux-gnu.tar.gz	e8916a3c110ace4d4f25e73b5850efd9447e0796d93ec9e1a3ab69bc8c46f56c
 2026-07-24	https://github.com/astral-sh/uv/releases/download/0.11.32/uv-x86_64-unknown-linux-gnu.tar.gz	aab924fd522efd06f1c5f3b93a243864fc453132c94b2dc49f1371b528a4b967
+2026-07-25T04:51:32Z	https://github.com/YARAHQ/yara-forge/releases/download/20260719/yara-forge-rules-full.zip	ca131d5cf32de14ff07555d018edb7d3624f091a9f2cbaba57a1fec7eaba9861

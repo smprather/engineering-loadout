@@ -40,35 +40,87 @@ tool_python="$local_prefix/share/uv/tools/parity-plot/bin/python"
 
 [[ -x $parity_bin ]] || fail "parity-plot launcher not installed"
 [[ -x $tool_python ]] || fail "parity-plot tool venv missing"
-expected_version="0.5.0"
+# Derive the expected version from the registry rather than hard-coding it. The
+# literal went stale on every upstream bump, and a stale expectation either fails
+# for the wrong reason or gets edited reflexively. What this test actually needs
+# to prove is that the INSTALLED artifact matches what packages.json claims to
+# ship -- so read the claim, then check the installation against it.
+expected_version=$("$tool_python" -c '
+import json, sys
+reg = json.load(open(sys.argv[1]))["packages"]["parity-plot"]
+print(str(reg["version"]).lstrip("v"))
+' "$repo_dir/payload/packages.json") || fail "could not read parity-plot version from packages.json"
+[[ -n $expected_version ]] || fail "empty parity-plot version in packages.json"
 version_out=$("${probe_env[@]}" parity-plot --version) || fail "parity-plot --version"
 [[ $version_out == *"$expected_version"* ]] || fail "unexpected CLI version: $version_out"
 "${probe_env[@]}" PARITY_EXPECTED_VERSION="$expected_version" "$tool_python" -c 'import parity_plot, os; expected = os.environ["PARITY_EXPECTED_VERSION"]; assert parity_plot.__version__ == expected, parity_plot.__version__' \
     || fail "bundled module version is not $expected_version"
 $repo_dir/build/farm-versions --bin-dir "$local_prefix/bin" --format json \
-    | "${probe_env[@]}" "$tool_python" -c '
+    | "${probe_env[@]}" PARITY_EXPECTED_VERSION="$expected_version" "$tool_python" -c '
 import json
+import os
 import sys
 
+expected = os.environ["PARITY_EXPECTED_VERSION"]
 row = next(item for item in json.load(sys.stdin) if item["name"] == "parity-plot")
 assert row["status"] == "ok", row
-assert row["version"] == "0.5.0", row
-' || fail "farm-versions did not report parity-plot 0.5.0"
+assert row["version"] == expected, row
+' || fail "farm-versions did not report parity-plot $expected_version"
 
 echo "Smoke: self-contained HTML output"
 csv="$test_home/input.csv"
 html="$test_home/parity.html"
-printf 'id,reference,measured\nA,10,11\nB,20,19\n' > "$csv"
-"${probe_env[@]}" parity-plot plot "$csv" --no-open-browser --output "$html" \
+config="$test_home/parity.toml"
+printf 'id,reference,measured\nA,10,11\nB,20,19\nC,30,31\n' > "$csv"
+# parity-plot 0.6.0 moved to a TOML-only CLI: `plot` takes a config file, not a
+# CSV. Absolute paths here so the run does not depend on cwd.
+cat > "$config" <<TOML
+[data]
+files = ["$csv"]
+ref = "$csv:reference"
+test = "$csv:measured"
+
+[output]
+path = "$html"
+format = "html"
+TOML
+"${probe_env[@]}" parity-plot plot "$config" --no-open-browser \
     > "$test_home/plot.log" 2>&1 || {
     cat "$test_home/plot.log" >&2
-    fail "plot command"
+    fail "plot command (TOML config path)"
 }
 [[ -s $html ]] || fail "plot output missing"
 grep -q 'Plotly.newPlot' "$html" || fail "Plotly runtime was not embedded"
 ! grep -Eiq '<script[^>]*src=[^>]*cdn\.plot\.ly' "$html" || \
     fail "plot output still loads Plotly from the CDN"
 echo "  OK: HTML embeds Plotly; no CDN dependency"
+
+# `init` writes the fully-commented starter config. It is the documented entry
+# point, so a bump that breaks it strands every new user even though `plot`
+# still works against a hand-written file.
+starter="$test_home/starter.toml"
+"${probe_env[@]}" parity-plot init -o "$starter" > "$test_home/init.log" 2>&1 || {
+    cat "$test_home/init.log" >&2
+    fail "init command"
+}
+grep -q '^\[data\]' "$starter" || fail "starter config has no [data] section"
+grep -q '^\[output\]' "$starter" || fail "starter config has no [output] section"
+echo "  OK: init writes a starter parity.toml"
+
+# `example` generates its own data and renders through the same save() path the
+# offline-HTML patch touches. Cheap second exercise of the patch, and it covers
+# the generator that the docs point new users at.
+example_html="$test_home/example.html"
+"${probe_env[@]}" parity-plot example --out-dir "$test_home/exdata" -n 50 \
+    --output "$example_html" --no-open-browser > "$test_home/example.log" 2>&1 || {
+    cat "$test_home/example.log" >&2
+    fail "example command"
+}
+[[ -s $example_html ]] || fail "example plot output missing"
+grep -q 'Plotly.newPlot' "$example_html" || fail "example HTML did not embed Plotly"
+! grep -Eiq '<script[^>]*src=[^>]*cdn\.plot\.ly' "$example_html" || \
+    fail "example HTML still loads Plotly from the CDN"
+echo "  OK: example generates data and renders offline HTML"
 
 echo "Smoke: bundled designer"
 "${probe_env[@]}" "$tool_python" -c 'import nicegui, tomlkit; print(nicegui.__version__, tomlkit.__version__)' \

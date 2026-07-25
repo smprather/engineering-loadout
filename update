@@ -245,6 +245,10 @@ def _run(cmd, dry_run=False):
     return subprocess.call(cmd, cwd=REPO)
 
 
+def _run_content_manifest(dry_run=False):
+    return _run([os.path.join(BUILD, "gen-content-manifest")], dry_run)
+
+
 # -- automated runners ---------------------------------------------------------
 
 
@@ -310,6 +314,7 @@ def _run_yara_rules(dry_run=False, tag=None):
     zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
     if dry_run:
         print(f"$ [download {zip_url} -> payload/yara/]")
+        _run_content_manifest(dry_run=True)
         return True
 
     with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
@@ -334,6 +339,10 @@ def _run_yara_rules(dry_run=False, tag=None):
 
     compressed_kb = os.path.getsize(_YARA_RULES_BZ2) // 1024
     print(f"  Compressed: {compressed_kb} KB")
+    rc = _run_content_manifest(dry_run=False)
+    if rc != 0:
+        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        return False
     return True
 
 
@@ -373,6 +382,7 @@ def _run_tldr_data(dry_run=False):
         print("$ tldr --update")
         print("$ (prune offensive-security tool pages from cache)")
         print(f"$ tar cjf {output} -C {cache_dir} tldr-pages/")
+        _run_content_manifest(dry_run=True)
         return True
 
     rc = subprocess.call(["tldr", "--update"])
@@ -399,6 +409,10 @@ def _run_tldr_data(dry_run=False):
 
     size_mb = os.path.getsize(output) // 1024 // 1024
     print(f"Done: {size_mb}M written to {output}")
+    rc = _run_content_manifest(dry_run=False)
+    if rc != 0:
+        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        return False
     return True
 
 
@@ -426,7 +440,7 @@ def _run_tmux_plugins(dry_run=False):
     plugins = []
     with open(tmux_conf) as f:
         for line in f:
-            m = re.search(r"set -g @plugin '([^']+)'", line)
+            m = re.match(r"\s*set -g @plugin '([^']+)'", line)
             if m:
                 plugins.append(m.group(1))
 
@@ -472,7 +486,15 @@ def _run_tmux_plugins(dry_run=False):
                 fh.write(f"{repo}  {new_pins[repo]}\n")
         print(f"Recorded {len(new_pins)} tmux plugin pin(s) in {_TMUX_PLUGINS_LOCK}")
 
-    return ok
+    if not ok:
+        return False
+
+    rc = _run_content_manifest(dry_run=dry_run)
+    if rc != 0:
+        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        return False
+
+    return True
 
 
 def _run_env_nvim(dry_run=False):
@@ -542,6 +564,10 @@ def _run_automated(name, dry_run=False, tag=None):
         rc2 = _run([os.path.join(REPO, "strip-all-elf-binaries")], dry_run)
         if rc2 != 0:
             print(f"WARNING: strip-all-elf-binaries exited rc={rc2}")
+        rc3 = _run_content_manifest(dry_run)
+        if rc3 != 0:
+            print(f"WARNING: gen-content-manifest exited rc={rc3}")
+            return False
         return True
     elif name == "tldr-data":
         return _run_tldr_data(dry_run=dry_run)
@@ -652,6 +678,7 @@ def _run_rolling(name, dry_run=False, force=False):
         print("$ uv build --wheel --out-dir <tmp> <tmp>")
         print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
         print(f"$ (stamp packages.json version for {name})")
+        _run_content_manifest(dry_run=True)
         return True
 
     uv = _find_uv()
@@ -713,6 +740,10 @@ def _run_rolling(name, dry_run=False, force=False):
 
         _set_pkg_version(name, version)
         print(f"  packages.json version -> {version}")
+        rc = _run_content_manifest(dry_run=False)
+        if rc != 0:
+            print(f"WARNING: gen-content-manifest exited rc={rc}")
+            return False
         return True
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -735,6 +766,7 @@ def _show_build(name):
     print()
     print("  After building:")
     print("    ./strip-all-elf-binaries")
+    print("    build/gen-content-manifest")
     print("    git add payload/ .strip-manifest packages.json")
 
 
@@ -750,6 +782,7 @@ def _show_import(name):
     print("  Note: {}".format(info["note"]))
     print()
     print("  After importing:")
+    print("    build/gen-content-manifest")
     print("    git add payload/ packages.json")
 
 
@@ -769,7 +802,8 @@ def _show_download(name):
     print(f"     bzip2 -k {name}")
     print(f"  2. cp {name}.bz2 payload/el8.x86_64.glibc2p28/bin/")
     print("  3. ./strip-all-elf-binaries")
-    print("  4. git add payload/ .strip-manifest packages.json")
+    print("  4. build/gen-content-manifest")
+    print("  5. git add payload/ .strip-manifest packages.json")
 
 
 # -- --list --------------------------------------------------------------------

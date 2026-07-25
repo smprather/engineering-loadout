@@ -181,7 +181,7 @@ def nvm_install(tag=None):
         die(f"nvm command failed (rc={rc}):\n{stdout + stderr}")
 
     # Last non-empty line of stdout is the path from `nvm which`
-    lines = [l.strip() for l in stdout.splitlines() if l.strip()]
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
     if not lines:
         die("nvm which returned no output")
 
