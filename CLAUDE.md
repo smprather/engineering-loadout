@@ -762,6 +762,13 @@ Reads `packages.json` for bundled `version` and `farm-versions`'s TOOLS table fo
 
 ### Create a GitHub release
 
+**Follow [`docs/RELEASE.md`](docs/RELEASE.md).** It is the authoritative, ordered
+procedure -- release class, auth-at-kickoff, the currency sweep, security-data
+refresh, the mandatory post-payload chain, assurance re-pin, doc sync, gates by
+class, post-publish verification, and a catalogue of every mistake that has
+actually shipped. `./release` runs the *gates*; it cannot tell that a step
+before it was skipped. The notes below describe what `./release` itself does.
+
 ```bash
 ./release              # runs pre-release gates, then tags + publishes
 ./release --dry-run    # pre-release gates only, no tag or GitHub release

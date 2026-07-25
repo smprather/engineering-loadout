@@ -46,9 +46,13 @@ git commit
 
 ```bash
 ./update tldr-data
-git add tldr/
+git add payload/tldr/ .content-manifest
 git commit
 ```
+
+> Cutting a release? Follow [`docs/RELEASE.md`](RELEASE.md) — it is the
+> authoritative, ordered procedure (currency sweep, security data, the
+> mandatory post-payload chain, gates by release class).
 
 ## Updating tmux plugins
 
