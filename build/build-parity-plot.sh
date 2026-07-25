@@ -3,12 +3,21 @@
 #
 # The upstream CLI is a Python package with a NiceGUI designer.  The loadout
 # ships the full runtime dependency set because an offline install cannot fetch
-# missing wheels later.  A small local patch makes generated HTML self-contained:
-# upstream uses Plotly's CDN, which cannot render air-gapped.
+# missing wheels later.
+#
+# There is NO loadout patch any more.  Through v0.6.0 we carried one that turned
+# plotly's CDN reference into an inlined copy, so generated HTML renders
+# air-gapped.  v0.7.0 adopted that natively and went further: `[output].plotlyjs`
+# selects inline/cdn/directory/none, and a standalone document defaults to
+# "inline" precisely so it opens with no network.  Upstream default == what we
+# used to patch for, so the patch is gone rather than rewritten.  What guards the
+# property now is behavioural, not textual: tests/install-parity-plot asserts the
+# generated HTML embeds the plotly runtime and carries no CDN reference, so a
+# future upstream default flip fails there instead of silently shipping.
 #
 # Usage:
-#   build/build-parity-plot.sh --tag v0.5.0
-#   build/build-parity-plot.sh --tag v0.5.0 --source /path/to/parity-plot
+#   build/build-parity-plot.sh --tag v0.7.0
+#   build/build-parity-plot.sh --tag v0.7.0 --source /path/to/parity-plot
 
 set -euo pipefail
 
@@ -16,7 +25,6 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLATFORM="el8.x86_64.glibc2p28"
 WHEELS_DIR="$REPO/payload/$PLATFORM/wheels"
 CLONE_URL="https://github.com/smprather/parity-plot.git"
-PATCH="$REPO/build/parity-plot/0001-inline-plotly-js-for-offline-html.patch"
 PYVER="3.14"
 CHUNK_BYTES=$((40 * 1024 * 1024))
 
@@ -59,15 +67,14 @@ need uv
 need pip3.14
 need python3
 need split
-[ -r "$PATCH" ] || { echo "missing offline patch: $PATCH" >&2; exit 1; }
 
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/parity-plot-build.XXXXXX")"
 trap 'rm -rf "$workdir"' EXIT
 
 src="$workdir/src"
 if [ -n "$source_dir" ]; then
-    # Build from a disposable clone: applying the loadout-only patch must never
-    # leave the caller's checkout dirty.
+    # Build from a disposable clone: the version stamp below rewrites
+    # parity_plot/__init__.py, and that must never dirty the caller's checkout.
     source_dir="$(cd "$source_dir" && pwd)"
     git clone --no-checkout "$source_dir" "$src"
 else
@@ -78,8 +85,6 @@ git -C "$src" checkout --detach "$tag"
 version="$(git -C "$src" describe --exact-match --tags)"
 version_number="${version#v}"
 echo "Building parity-plot $version from $src"
-git -C "$src" apply --check "$PATCH"
-git -C "$src" apply "$PATCH"
 python3 - "$src/parity_plot/__init__.py" "$version_number" <<'PY'
 import re
 import sys

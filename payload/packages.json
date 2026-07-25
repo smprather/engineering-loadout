@@ -2438,7 +2438,7 @@
         "yarl"
       ],
       "uv_tool": "parity-plot",
-      "version": "v0.6.0",
+      "version": "v0.7.0",
       "platforms": [
         "linux"
       ],
