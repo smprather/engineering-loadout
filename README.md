@@ -27,6 +27,7 @@ binary, library, font, and config file ready to install:
 ```bash
 tar xzf engineering-loadout-v*.tar.gz
 cd engineering-loadout-v*/
+./fetch-stash                        # Neovim plugins -- see below
 ./loadout install @engineering-loadout
 ```
 
@@ -34,6 +35,29 @@ That installs the `@engineering-loadout` group -- a curated set of
 command-line tools, editors, fonts, and configuration files -- into
 `~/.local` and `~/.config`. Reload your shell with `exec bash` when it
 finishes.
+
+### The Neovim plugin stash is a second download
+
+The plugin stash is a **separate release asset**, not part of the tarball --
+it is ~328 MB of bz2'd git packfiles, so committing it would grow every clone
+permanently. `./fetch-stash` downloads and verifies it against the release.
+
+If this machine cannot reach GitHub, download `nvim-plugin-stash.tar.bz2` and
+`sha256sums.txt` from the release elsewhere (on Windows,
+`tools/download-release.ps1`), copy both over, and pair them by hand:
+
+```bash
+./fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \
+              --sums     /path/to/sha256sums.txt
+```
+
+`--sums` is required: without it there is nothing to verify against, and a
+stash that fails its hash is deleted rather than left on disk. Do **not** copy
+the asset into place manually -- `.content-manifest` is a strict allowlist, so
+a hand-placed stash is refused, not silently trusted.
+
+Skipping it is safe: Neovim still installs and starts, and the plugin step is
+skipped with a warning naming `fetch-stash`.
 
 Re-run the same command against a newer release tarball to update.
 Unchanged files are skipped, so re-runs are quick.
@@ -257,6 +281,7 @@ OpenSSH for those.
 | rg | bin | 15.1.0 | Extremely fast grep alternative (ripgrep) |
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
 | rsync | bin | 3.4.1 | Efficient file sync with delta-transfer algorithm |
+| ruby | bin | 3.3.10 | Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher |
 | ruff | bin | 0.16.0 | Extremely fast Python linter and formatter |
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.13.1 | Shell script formatter and parser |
@@ -289,6 +314,7 @@ OpenSSH for those.
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
 | octave | bin | 11.1.0 | GNU scientific computing language (MATLAB-compatible) |
 | ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
+| spice-subckt-rc-reduce | bin | 0.1.0 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |

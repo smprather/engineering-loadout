@@ -1094,6 +1094,41 @@
       ],
       "description": "Efficient file sync with delta-transfer algorithm"
     },
+    "ruby": {
+      "kind": "bin",
+      "bins": [
+        "ruby",
+        "ruby.bin",
+        "gem",
+        "irb",
+        "rdbg"
+      ],
+      "libs": [
+        "libruby.so.3.3"
+      ],
+      "version": "3.3.10",
+      "version_url": "https://www.ruby-lang.org/en/downloads/releases/",
+      "platforms": [
+        "linux"
+      ],
+      "archive": "payload/PLATFORM/runtime/ruby.tar.bz2",
+      "install_to": "~/.local",
+      "sentinel": "share/ruby/json.rb",
+      "remove_before_extract": [
+        "share/ruby",
+        "lib64/ruby",
+        "share/gems",
+        "share/rubygems",
+        "libexec/ruby"
+      ],
+      "missing_hint": "the Ruby standard library and default gems (json, psych, bigdecimal, irb) will NOT be installed; `ruby` will start but almost every `require` will fail",
+      "tags": [
+        "language",
+        "scripting",
+        "ruby"
+      ],
+      "description": "Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream \u2014 stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher"
+    },
     "ruff": {
       "kind": "bin",
       "bins": [
@@ -1899,6 +1934,24 @@
       "sentinel": "lib/ngspice/analog.cm",
       "install_to": "~/.local",
       "missing_hint": "ngspice spinit/code models will be missing"
+    },
+    "spice-subckt-rc-reduce": {
+      "kind": "bin",
+      "bins": [
+        "spice_subckt_rc_reduce"
+      ],
+      "version": "0.1.0",
+      "version_url": "https://github.com/smprather/spice-subckt-rc-reduce/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "spice",
+        "rc",
+        "reduction"
+      ],
+      "description": "Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time"
     },
     "visidata": {
       "kind": "python-tool",
@@ -3213,7 +3266,8 @@
         "gnuplot",
         "octave",
         "ngspice",
-        "espresso"
+        "espresso",
+        "spice-subckt-rc-reduce"
       ],
       "description": "Scientific computing (octave is opt-in)"
     },

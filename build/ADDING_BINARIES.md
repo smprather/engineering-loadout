@@ -2638,3 +2638,156 @@ roundtrip on the INSTALLED binary.
 
 **Usage:** `restic init --repo /path/repo`; `restic -r /path/repo backup ~/work`;
 `restic -r /path/repo snapshots`; `restic -r /path/repo restore latest --target DIR`.
+
+## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
+
+First-party (github.com/smprather). Simplifies parasitic RC networks inside
+`.subckt` models while preserving electrical behavior at the port nodes, so
+downstream simulation runs faster. Two algorithms: TICER (time-constant
+elimination, the default) and small-resistor merge.
+
+**Build:** `build/build-spice-subckt-rc-reduce.sh --tag v0.1.0`
+
+```sh
+git clone --filter=blob:none https://github.com/smprather/spice-subckt-rc-reduce.git
+git checkout --detach v0.1.0
+cargo build --release --locked
+# -> target/release/spice_subckt_rc_reduce
+```
+
+Prereqs: `cargo`/`rustc` (tested 1.96.0; `edition = "2024"` needs >= 1.85, and
+upstream's README asks for 1.96+), `patchelf` at `~/.local/bin/patchelf`.
+Packaging is the standard strip -> patchelf -> bzip2 via `loadout_package_bin`.
+
+**Why this one is unusually easy:** `Cargo.lock` resolves to exactly ONE package
+-- itself. Zero external crates. So the build needs no network and no offline
+crate-store (unlike `surfer` or the `@rust` trio), and there is nothing to
+vendor. The build script asserts this invariant (`grep -c '^\[\[package\]\]'
+Cargo.lock` must be 1) and fails loudly if upstream ever takes a dependency,
+rather than silently reaching for the network on some future build box.
+
+**No libs bundled.** NEEDED is `libgcc_s.so.1`, `libpthread.so.0`, `libm.so.6`,
+`libc.so.6` -- all glibc/libgcc, all present on every EL8 target, and all on the
+never-bundle list in CLAUDE.md. Max glibc symbol is `GLIBC_2.28`, exactly the
+EL8 floor. No runtime data files, so no runtime tarball.
+
+**Name asymmetry (upstream's, and load-bearing here):**
+
+| thing | value |
+|---|---|
+| repo / registry package | `spice-subckt-rc-reduce` (dashes) |
+| installed binary, `[[bin]]` name | `spice_subckt_rc_reduce` (underscores) |
+| cargo `[lib]` name | `rcreduce` |
+
+The registry `"bins"` entry MUST use the underscore form -- it names the payload
+stem `bin/spice_subckt_rc_reduce.bz2`, not the package.
+
+**Not `rolling_git`, despite being first-party.** `./update`'s rolling path
+builds Python *wheels* (`uv build --wheel`), so it cannot produce a Rust binary.
+Bump it with the build script and a stable tag like any other `build`-class
+package.
+
+**Not in `farm-versions`, deliberately.** The tool has no `--version` flag and
+embeds no version string, so every probe strategy would report `missing`
+forever. A permanently-red row is the "stale check trains people to ignore real
+signal" failure this repo already learned from (the fish `FAILED` row), so it is
+omitted instead. `tests/registry-integrity` only checks TOOLS -> registry, so
+omission is safe. Add a row if upstream ever grows `--version`.
+
+**Smoke:** `--version` does not exist and exit-0 proves nothing about a
+reduction engine -- a mis-built binary can parse a netlist and reduce nothing.
+Both the build script and `tests/prebuilt-binaries` therefore assert a real
+reduction: the build script runs `testdata/large_mesh.subckt` at `--tau 1e-9`
+and requires the node count to drop below its starting 105; the installed-binary
+probe feeds a 6-node RC chain at `--tau 1e-6` and requires `Nodes: N -> M` with
+`M < N` plus a non-empty output netlist.
+
+**Group:** `@scientific` (beside `gnuplot`, `octave`, `ngspice`, `espresso`),
+which is itself a member of `@engineering-loadout`, so it ships in the curated
+set. Non-optional: 305 KB compressed, no dependencies.
+
+**Usage:** `spice_subckt_rc_reduce in.subckt -o out.subckt -a ticer --tau 1e-12 -v`;
+`--pg-tau` sets a separate threshold for power/ground nets; `--power-ports` /
+`--ground-ports` default to `auto`; `-a merge --r-threshold R` selects the
+small-resistor merge algorithm instead; `--subckt NAME` targets one subcircuit.
+
+## ruby 3.3.10 -- Ruby interpreter (shanghai from AlmaLinux 8's ruby:3.3 stream)
+
+The user-facing Ruby, and the interpreter KLayout embeds for DRC/LVS scripting.
+
+**Build:** `build/build-ruby.sh --tag 3.3.10-7`
+
+Repacked from AlmaLinux's own module stream rather than source-built, so CVE
+fixes arrive by re-running the script against a newer NVR instead of a
+source-build babysitting job. Find the current NVR + context with:
+
+```sh
+dnf module info ruby:3.3 | tr ' ' '\n' | grep -E '^ruby-0:' | sort -V | tail -3
+build/build-ruby.sh --tag 3.3.10-7 --context module_el8.10.0+4210+b037b1ec
+```
+
+**Never ship EL8's default ruby stream (2.5)** -- EOL since March 2021, no
+security updates. 3.3 is the newest stream AlmaLinux 8 carries.
+
+RPM set: `ruby`, `ruby-libs`, `rubygems`, `ruby-bundled-gems`, and
+`rubygem-{irb,json,bigdecimal,io-console,psych,rdoc}`. The `rubygem-*` ones are
+**not optional**: in Ruby 3.3 json/psych/bigdecimal moved out of core into
+default gems, so without them `require "json"` fails outright.
+
+### Four fixups, each silently fatal if skipped
+
+1. **83 absolute symlinks.** The stdlib entries for default gems are links into
+   `/usr`, e.g. `share/ruby/psych.rb -> /usr/share/gems/gems/psych-5.1.2/lib/psych.rb`.
+   They dangle the instant the tree leaves `/usr`. The script **materializes**
+   them (replaces each with a real copy resolved inside the extracted tree)
+   rather than rewriting them relative, because `add_tree_to_tar`'s
+   `os.walk(followlinks=False)` never re-emits symlinks-to-directories -- a
+   re-tarred archive would silently drop the 5 directory links (the firefox
+   lesson).
+2. **Split gem extensions.** Fedora/RHEL put compiled gem `.so` files under
+   `/usr/lib64/gems/ruby/<g>-<v>/`, but relocated rubygems looks in
+   `<prefix>/share/gems/extensions/x86_64-linux/3.3.0/<g>-<v>/`. Left alone,
+   every extension gem prints `Ignoring <gem> because its extensions are not
+   built` on stderr and fails to load. Do not try to fix this with `RUBYLIB` --
+   the `gem.build_complete` marker is what rubygems actually checks.
+3. **Not relocatable.** EL8's ruby is not built `--enable-load-relative`.
+   `rbconfig`'s `TOPDIR` trick sets `prefix`, but `rubylibdir`/`rubyarchdir`
+   stay absolute `/usr` paths, so `$LOAD_PATH` ignores where the tree lives.
+   `bin/ruby` is therefore a POSIX-sh wrapper exporting `RUBYLIB` +
+   `GEM_HOME`/`GEM_PATH` derived from its own installed path. `bin/{gem,irb,rdbg}`
+   ship `#!/usr/bin/ruby` shebangs -- absolute, resolving to the SYSTEM ruby (2.5
+   or absent) -- so they become wrappers too, with the real scripts under
+   `libexec/ruby/`.
+4. **Missing default-gem specs.** EL8 ships `share/gems/specifications/default/`
+   **empty**, so psych/irb/debug declare runtime deps (`stringio`, `reline`,
+   `date`, `forwardable`, `singleton`, `time`, `net-protocol`) that rubygems
+   cannot resolve -- `irb` dies in `activate_bin_path` even though every one of
+   those libraries is present and `require`s fine. The script generates the
+   specs, reading each library's real `VERSION` at runtime rather than
+   hardcoding. They go in `specifications/`, **not** `specifications/default/`:
+   `Gem.default_specifications_dir` is a compiled-in `/usr` path that relocation
+   cannot move, so anything written to the relocated `default/` dir is never
+   scanned.
+
+The script gates on all of this before packaging: it requires 0 remaining
+absolute symlinks, 0 unsatisfied gem dependencies, a successful `require` of 13
+stdlib/default-gem modules, and **silent stderr** on a clean require.
+
+**Also drops** `lib/.build-id/` -- RPM debuginfo cross-links pointing
+`../../../../usr/lib64/...`, which escape the archive root and make
+`safe_extract_tar` (correctly) reject the whole tarball.
+
+**Payload:** `bin/{ruby,ruby.bin,gem,irb,rdbg}.bz2`, `lib64/libruby.so.3.3.bz2`
+(RPATH `$ORIGIN`, so KLayout and anything else embedding Ruby links this exact
+copy), and `runtime/ruby.tar.bz2` (~3.9 MB: stdlib, gems, rubygems, libexec).
+Non-optional, so it is in `@shared` and therefore in `@engineering-loadout`.
+
+**Assumed present, not bundled:** `libcrypt.so.1` (libxcrypt, EL8 base -- same
+assumption as `libgnutls` for mate-terminal). `libgmp.so.10` and `libz.so.1` are
+already bundled by other packages.
+
+**Smoke:** `ruby --version` proves nothing -- the interpreter starts fine with
+its entire stdlib unreachable. `tests/prebuilt-binaries` instead requires 13
+modules from the *installed* tree, asserts stderr is silent, and checks
+`gem env`'s INSTALLATION DIRECTORY resolves inside the staged tree (which is what
+catches the wrapper falling through to a system ruby).

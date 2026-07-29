@@ -26,6 +26,7 @@ Usage:
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -318,6 +319,130 @@ def smoke_runtime_layout(tmpdir, env):
                 failures.append(("ngspice runtime", detail))
             else:
                 print("  OK   (xspice):       ngspice runtime")
+
+    if has_bin("ruby"):
+        # `ruby --version` proves nothing here: the interpreter starts fine even
+        # when its whole stdlib is unreachable, because EL8's ruby is not built
+        # --enable-load-relative and bakes /usr paths into $LOAD_PATH. What must
+        # be proven is that the RELOCATED tree resolves: the stdlib, the default
+        # gems whose stdlib entries were absolute symlinks into /usr, and the
+        # extension gems whose .so files had to be moved to the canonical
+        # rubygems layout. Also assert stderr is silent -- a permanently-printed
+        # "Ignoring <gem> because its extensions are not built" is exactly the
+        # known-false warning this repo refuses to ship.
+        script = (
+            "mods = %w[json psych yaml bigdecimal stringio digest openssl zlib erb set uri net/http];"
+            "mods.each { |m| require m };"
+            "print RUBY_VERSION"
+        )
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "ruby"), "-e", script],
+                cwd=tmpdir,
+                env=env,
+                capture_output=True,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (stdlib):       ruby  {exc}")
+            failures.append(("ruby", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace").strip()
+            err = proc.stderr.decode("utf-8", "replace").strip()
+            if proc.returncode != 0 or not out.startswith("3."):
+                detail = output_excerpt(proc.stderr or proc.stdout)
+                print(f"  FAIL (stdlib):       ruby  {detail}")
+                failures.append(("ruby", detail))
+            elif err:
+                detail = f"stderr not silent: {err.splitlines()[0][:80]}"
+                print(f"  FAIL (stdlib):       ruby  {detail}")
+                failures.append(("ruby", detail))
+            else:
+                print(f"  OK   (stdlib):       ruby {out} stdlib + default gems, stderr clean")
+
+        # `gem` is a wrapper around a script that ships a #!/usr/bin/ruby shebang;
+        # if the wrapper is wrong it silently runs the SYSTEM ruby (2.5 or none).
+        # Checking the reported installation dir is what catches that.
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "gem"), "env"],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (gem):          ruby gem  {exc}")
+            failures.append(("ruby gem", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if proc.returncode != 0 or "INSTALLATION DIRECTORY" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (gem):          ruby gem  {detail}")
+                failures.append(("ruby gem", detail))
+            elif tmpdir not in out:
+                detail = "gem resolves outside the staged tree (system ruby leaked in?)"
+                print(f"  FAIL (gem):          ruby gem  {detail}")
+                failures.append(("ruby gem", detail))
+            else:
+                print("  OK   (gem):          ruby gem resolves inside the staged tree")
+
+    if has_bin("spice_subckt_rc_reduce"):
+        # Functional smoke: the tool has NO --version flag, and an exit-0 run
+        # proves nothing about a reduction engine -- a mis-built binary can
+        # happily parse a netlist and reduce nothing. So feed it a real RC mesh
+        # and assert the node count actually drops. This 6-node chain reduces to
+        # its 2 ports at a loose tau; anything that leaves >= 6 nodes means the
+        # TICER elimination never ran.
+        netlist = os.path.join(tmpdir, "rc-reduce-smoke.subckt")
+        with open(netlist, "w") as fh:
+            fh.write(
+                ".subckt rcchain in out\n"
+                "r1 in n1 100\nc1 n1 0 1f\n"
+                "r2 n1 n2 100\nc2 n2 0 1f\n"
+                "r3 n2 n3 100\nc3 n3 0 1f\n"
+                "r4 n3 out 100\n"
+                ".ends\n"
+            )
+        reduced_out = os.path.join(tmpdir, "rc-reduce-smoke.out.subckt")
+        try:
+            proc = subprocess.run(
+                [
+                    os.path.join(bin_dir, "spice_subckt_rc_reduce"),
+                    netlist,
+                    "-o",
+                    reduced_out,
+                    "--tau",
+                    "1e-6",
+                    "-v",
+                ],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (reduce):       spice-subckt-rc-reduce  {exc}")
+            failures.append(("spice-subckt-rc-reduce", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            m = re.search(r"Nodes:\s+(\d+)\s*->\s*(\d+)", out)
+            if proc.returncode != 0 or not m:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (reduce):       spice-subckt-rc-reduce  {detail}")
+                failures.append(("spice-subckt-rc-reduce", detail))
+            elif int(m.group(2)) >= int(m.group(1)):
+                detail = f"no reduction: {m.group(1)} -> {m.group(2)} nodes"
+                print(f"  FAIL (reduce):       spice-subckt-rc-reduce  {detail}")
+                failures.append(("spice-subckt-rc-reduce", detail))
+            elif not os.path.isfile(reduced_out) or os.path.getsize(reduced_out) == 0:
+                detail = "reduced netlist not written"
+                print(f"  FAIL (reduce):       spice-subckt-rc-reduce  {detail}")
+                failures.append(("spice-subckt-rc-reduce", detail))
+            else:
+                print(f"  OK   (reduce):       spice-subckt-rc-reduce  {m.group(1)} -> {m.group(2)} nodes")
 
     if has_bin("espresso"):
         # Functional smoke: espresso is a pure function, so --version-style checks

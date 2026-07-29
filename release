@@ -525,6 +525,52 @@ def _run_parallel_pre_release_steps(
     return results
 
 
+def _stash_section_md():
+    """How to pair the source tarball with the plugin-stash asset.
+
+    These are two separate downloads that have to be brought together by hand,
+    and nothing on the release page says so -- the instructions lived only in
+    docs/INSTALLATION.md and the deployment runbook, i.e. findable only by
+    someone who already knew to look. Putting it in the notes puts it next to
+    the assets it is about.
+    """
+    return "\n".join(
+        [
+            f"## Installing (and the `{STASH_ASSET_NAME}` asset)",
+            "",
+            "The Neovim plugin stash ships as a **separate release asset**, not inside the",
+            "source tarball -- it is ~328 MB of bz2'd git packfiles, so committing it would",
+            "grow every clone permanently. Download it alongside the tarball and pair them:",
+            "",
+            "```sh",
+            "tar xzf engineering-loadout-*.tar.gz",
+            "cd engineering-loadout-*/",
+            "",
+            "# online: fetches + verifies the stash from this release",
+            "./fetch-stash",
+            "",
+            "# air-gapped: stash + sha256sums.txt downloaded elsewhere and copied over",
+            f"./fetch-stash --from-file /path/to/{STASH_ASSET_NAME} \\",
+            f"              --sums     /path/to/{SHA256SUMS_NAME}",
+            "",
+            "./loadout install @engineering-loadout",
+            "```",
+            "",
+            "Run `fetch-stash` **from inside the extracted directory**; it places the stash at",
+            f"`{STASH_REL}` and records it in `.content-manifest.fetched`.",
+            "",
+            f"`--sums` is required with `--from-file`: without the `{SHA256SUMS_NAME}` from this",
+            "same release there is nothing to verify against, and a stash that fails its hash is",
+            "deleted rather than left on disk. Do **not** copy the asset into place by hand --",
+            "`.content-manifest` is a strict allowlist and the installer refuses any payload file",
+            "with no manifest entry, so a hand-placed stash is rejected, not silently trusted.",
+            "",
+            "Without the stash, Neovim still installs and starts; the plugin step is skipped with",
+            "a warning naming `fetch-stash`.",
+        ]
+    )
+
+
 def _verify_section_md(tag, signing):
     """Copy-paste verification steps for the release notes."""
     steps = [
@@ -771,6 +817,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
         section
         for section in (
             "All pre-built binaries passed smoke test.",
+            _stash_section_md(),
             _checksum_table_md(pairs),
             _verify_section_md(tag, signing),
             version_table.strip(),
