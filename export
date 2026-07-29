@@ -1,0 +1,310 @@
+#!/usr/bin/env python3.14
+"""
+export: publish a verified, git-less copy of this checkout to an install directory.
+
+The result is byte-for-byte what a GitHub release tarball contains -- `git archive`
+applies the same `export-ignore` rules -- so the installation directory carries the
+payload, the installer, `.content-manifest` and the docs, but none of the dev
+tooling (`build/`, `tests/`, `update`, `release`, `scan-for-malware`, CLAUDE.md...)
+and no `.git`.
+
+WHY THIS EXISTS RATHER THAN "just run git archive": the security claims survive an
+export only if the export is of something that was actually verified. `git archive`
+archives a COMMIT, so uncommitted edits silently do not ship, and nothing stops you
+archiving a tree whose payload no longer matches its manifest. This runs the checks
+first and refuses on failure.
+
+WHAT SURVIVES INTO THE EXPORT (verified, not assumed -- see docs/RELEASE.md):
+  - `.content-manifest`, the strict sha256 allowlist covering every payload file.
+    The installer enforces it on EVERY install, so follow-on
+    `./loadout install <pkg>` from the install directory is checked exactly as it
+    is from a clone. A single flipped byte fails with CONTENT VERIFICATION FAILED.
+  - `.release-version`, stamped by `git archive`'s export-subst, so a git-less tree
+    still reports a real version instead of "unknown".
+  - `fetch-stash` / `refresh-stash`, deliberately not export-ignored, so the
+    exported tree can still acquire and re-verify the Neovim plugin stash.
+
+WHAT CHANGES: in the release flow the chain is
+    signed tag -> sha256sums.txt -> .content-manifest -> payload bytes
+When YOU export locally there is no signed tag over your export, so you become the
+authority for that last hop. That is not a weakening if you verify before
+exporting, which is what this script enforces -- but if anyone else installs from
+the directory, pass --with-sums so they can check `.content-manifest` against the
+release independently.
+
+Usage:
+    ./export /path/to/install-dir
+    ./export /path/to/install-dir --with-sums        # also copy sha256sums.txt
+    ./export /path/to/install-dir --fetch-stash      # download the stash fresh
+    ./export /path/to/install-dir --no-stash         # skip the stash entirely
+    ./export /path/to/install-dir --allow-dirty      # ONLY archives HEAD regardless
+"""
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+
+_d = os.path.dirname(os.path.abspath(__file__))
+while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
+    _d = os.path.dirname(_d)
+if os.path.isdir(os.path.join(_d, "installer_vendor")):
+    sys.path.insert(0, os.path.join(_d, "installer_vendor"))
+
+import rich_click as click  # noqa: E402
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+STASH_REL = "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2"
+FETCHED_MANIFEST = ".content-manifest.fetched"
+SUMS_NAME = "sha256sums.txt"
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _git(*args, check=True):
+    return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, check=check)
+
+
+def _heading(msg):
+    print("=" * 62)
+    print(msg)
+    print("=" * 62, flush=True)
+
+
+def check_clean_tree(allow_dirty):
+    """`git archive` archives HEAD, so uncommitted work silently does not ship.
+
+    That is the right behaviour -- you export what you committed -- but it makes a
+    dirty tree a trap: the directory you hand out would not match the tree you
+    tested. Refuse unless the operator says otherwise.
+    """
+    dirty = _git("status", "--porcelain").stdout.strip()
+    if not dirty:
+        print("  working tree  : clean")
+        return True
+    n = len(dirty.splitlines())
+    if allow_dirty:
+        print(f"  working tree  : DIRTY ({n} path(s)) -- --allow-dirty given, archiving HEAD anyway")
+        print("                  those uncommitted changes will NOT be in the export.")
+        return True
+    eprint(f"\nRefusing to export: {n} uncommitted path(s).")
+    eprint("`git archive` ships HEAD, so those changes would silently be missing from")
+    eprint("the install directory. Commit them, or pass --allow-dirty to export HEAD as-is.")
+    eprint("")
+    for line in dirty.splitlines()[:10]:
+        eprint("    " + line)
+    if n > 10:
+        eprint(f"    ... and {n - 10} more")
+    return False
+
+
+def check_signed_tag():
+    """Advisory: report whether HEAD's nearest tag still verifies.
+
+    Not fatal -- you may legitimately export an untagged commit -- but a tag that
+    fails verification means the clone itself is suspect, and everything below
+    inherits that.
+    """
+    r = _git("describe", "--tags", "--abbrev=0", check=False)
+    tag = r.stdout.strip()
+    if r.returncode != 0 or not tag:
+        print("  signed tag    : none reachable from HEAD (advisory)")
+        return
+    v = _git("tag", "-v", tag, check=False)
+    blob = v.stdout + v.stderr
+    if "Good" in blob and ("SSH SIGNATURE" in blob or "signature" in blob.lower()):
+        print(f"  signed tag    : {tag} verifies")
+    else:
+        print(f"  signed tag    : {tag} does NOT verify (advisory -- clone may be suspect)")
+
+
+def check_payload(skip_verify):
+    """Re-hash every payload file against .content-manifest before exporting.
+
+    This is the claim the install directory inherits, so prove it here rather than
+    assume it: an export of a tree whose payload already drifted would hand out a
+    directory that fails on the user's first install.
+    """
+    if skip_verify:
+        print("  payload       : SKIPPED (--skip-verify) -- the export is unverified")
+        return True
+    proc = subprocess.run(
+        [os.path.join(REPO, "loadout"), "doctor", "--verify"],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    )
+    out = proc.stdout + proc.stderr
+    if proc.returncode != 0 or "content-manifest verified" not in out:
+        eprint("\nRefusing to export: payload does not match .content-manifest.")
+        for line in out.splitlines():
+            if any(k in line.lower() for k in ("mismatch", "verif", "missing", "error")):
+                eprint("    " + line.strip())
+        eprint("\nRegenerate it with `python3.14 build/gen-content-manifest` if the payload")
+        eprint("changed on purpose (see docs/RELEASE.md section 4).")
+        return False
+    for line in out.splitlines():
+        if "content-manifest verified" in line:
+            print("  payload       : " + line.strip())
+    return True
+
+
+def do_archive(dest, force):
+    if os.path.exists(dest) and os.listdir(dest):
+        if not force:
+            eprint(f"\nRefusing to export: {dest} exists and is not empty (pass --force to overwrite).")
+            return False
+        print(f"  clearing      : {dest} (--force)")
+        for name in os.listdir(dest):
+            p = os.path.join(dest, name)
+            shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.remove(p)
+    os.makedirs(dest, exist_ok=True)
+    tar = subprocess.Popen(["git", "-C", REPO, "archive", "--format=tar", "HEAD"], stdout=subprocess.PIPE)
+    extract = subprocess.Popen(["tar", "x", "-C", dest], stdin=tar.stdout)
+    tar.stdout.close()
+    extract.communicate()
+    if tar.wait() != 0 or extract.returncode != 0:
+        eprint("\ngit archive | tar failed")
+        return False
+    return True
+
+
+def place_stash(dest, mode, from_file, sums):
+    """Get the plugin stash into the export without weakening its verification.
+
+    Reusing the local copy is the fast path, but the hash is RE-CHECKED against
+    .content-manifest.fetched rather than trusting that file -- otherwise a stash
+    that changed on disk since it was fetched would be copied out with a stale
+    attestation, which is exactly the kind of quiet gap this chain exists to close.
+    """
+    src_stash = os.path.join(REPO, STASH_REL)
+    src_fetched = os.path.join(REPO, FETCHED_MANIFEST)
+    dest_stash = os.path.join(dest, STASH_REL)
+
+    if mode == "none":
+        print("  stash         : skipped (--no-stash); nvim installs, plugin step warns")
+        return True
+
+    if mode == "fetch" or from_file:
+        cmd = [os.path.join(dest, "fetch-stash")]
+        if from_file:
+            cmd += ["--from-file", os.path.abspath(from_file)]
+            if sums:
+                cmd += ["--sums", os.path.abspath(sums)]
+        print("  stash         : running fetch-stash in the export ...")
+        rc = subprocess.run(cmd, cwd=dest).returncode
+        if rc != 0:
+            eprint("  stash         : fetch-stash FAILED -- the export has no verified stash")
+            return False
+        return True
+
+    # Default: reuse the local copy when it is present AND still matches its record.
+    if not os.path.isfile(src_stash):
+        print("  stash         : not present locally -- run ./fetch-stash in the export later")
+        return True
+    recorded = None
+    if os.path.isfile(src_fetched):
+        for line in open(src_fetched, encoding="utf-8"):
+            parts = line.split()
+            if len(parts) == 3 and parts[2] == STASH_REL:
+                recorded = parts[1]
+    if recorded is None:
+        print("  stash         : present but not in .content-manifest.fetched -- NOT copied")
+        print("                  (run ./fetch-stash in the export; an unverified stash is refused)")
+        return True
+    actual = _sha256(src_stash)
+    if actual != recorded:
+        eprint("  stash         : local copy does NOT match .content-manifest.fetched -- NOT copied")
+        eprint(f"                  recorded {recorded[:16]}.. != on-disk {actual[:16]}..")
+        eprint("                  re-run ./fetch-stash here, then export again.")
+        return False
+    os.makedirs(os.path.dirname(dest_stash), exist_ok=True)
+    shutil.copy2(src_stash, dest_stash)
+    shutil.copy2(src_fetched, os.path.join(dest, FETCHED_MANIFEST))
+    mb = os.path.getsize(dest_stash) // 1048576
+    print(f"  stash         : copied ({mb} MB), sha256 re-verified against its record")
+    return True
+
+
+def place_sums(dest, with_sums):
+    """sha256sums.txt is gitignored, so it is never in the archive.
+
+    Without it nobody but you can check `.content-manifest` itself against the
+    release -- fine for a personal install dir, not fine if others install from it.
+    """
+    if not with_sums:
+        return True
+    src = os.path.join(REPO, SUMS_NAME)
+    if not os.path.isfile(src):
+        eprint(f"  {SUMS_NAME}: not present -- generate it with ./release (or omit --with-sums)")
+        return False
+    shutil.copy2(src, os.path.join(dest, SUMS_NAME))
+    print(f"  {SUMS_NAME}: copied -- third parties can verify .content-manifest independently")
+    return True
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("dest", type=click.Path(file_okay=False))
+@click.option("--allow-dirty", is_flag=True, help="Export HEAD even with uncommitted changes (they will NOT ship).")
+@click.option("--skip-verify", is_flag=True, help="Skip the payload check (NOT recommended).")
+@click.option("--force", is_flag=True, help="Overwrite a non-empty destination.")
+@click.option("--with-sums", is_flag=True, help=f"Also copy {SUMS_NAME} so others can verify the manifest.")
+@click.option("--fetch-stash", "fetch_stash", is_flag=True, help="Download the stash fresh instead of copying.")
+@click.option("--no-stash", "no_stash", is_flag=True, help="Do not place the plugin stash at all.")
+@click.option(
+    "--stash-from-file", type=click.Path(dir_okay=False), help="Stash file to verify + install into the export."
+)
+@click.option("--sums", type=click.Path(dir_okay=False), help=f"{SUMS_NAME} to verify --stash-from-file against.")
+def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash, stash_from_file, sums):
+    """Publish a verified, git-less copy of this checkout to DEST.
+
+    DEST is then a working loadout: `DEST/loadout install <pkg>` verifies every
+    payload file against .content-manifest exactly as a clone does.
+    """
+    dest = os.path.abspath(dest)
+
+    _heading("Pre-export checks")
+    if not check_clean_tree(allow_dirty):
+        raise SystemExit(1)
+    check_signed_tag()
+    if not check_payload(skip_verify):
+        raise SystemExit(1)
+
+    _heading(f"Exporting HEAD -> {dest}")
+    if not do_archive(dest, force):
+        raise SystemExit(1)
+    version = "unknown"
+    vf = os.path.join(dest, ".release-version")
+    if os.path.isfile(vf):
+        version = open(vf, encoding="utf-8").read().strip()
+    print(f"  version       : {version}")
+
+    mode = "none" if no_stash else ("fetch" if fetch_stash else "copy")
+    if not place_stash(dest, mode, stash_from_file, sums):
+        raise SystemExit(1)
+    if not place_sums(dest, with_sums):
+        raise SystemExit(1)
+
+    _heading("Done")
+    print(f"  {dest}")
+    print("")
+    print("  Verify it stands on its own:")
+    print(f"    cd {dest} && ./loadout doctor --verify")
+    print("")
+    print("  Then install from it:")
+    print(f"    {dest}/loadout install @engineering-loadout")
+
+
+if __name__ == "__main__":
+    main()
