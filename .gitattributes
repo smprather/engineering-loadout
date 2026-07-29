@@ -30,6 +30,23 @@
 /scan-for-malware               export-ignore
 /split-bz2                      export-ignore
 
+# ./export publishes a git-less tree by running `git archive`, so it cannot
+# function inside its own output -- there is no .git there to archive from.
+/export                         export-ignore
+
+# Linter configs for developing this repo. ruff and ty are shipped as bundled
+# BINARIES (payload/.../bin/), which users get regardless; these files only
+# configure linting of the loadout's own sources.
+/ruff.toml                      export-ignore
+/ty.toml                        export-ignore
+
+# sha256/tar-mtime cache for strip-all-elf-binaries, which is itself
+# export-ignored. Nothing the installer runs reads it -- verified: the only
+# references are build/*.sh, ./update and strip-all-elf-binaries. Not covered by
+# .content-manifest either (that pins payload/ only), so dropping it changes no
+# verification.
+/.strip-manifest                export-ignore
+
 # Version stamp for git-less trees (GitHub release source archives).
 # git archive substitutes %(describe:tags) at archive time; a git checkout
 # keeps the literal $Format placeholder and uses `git describe` instead.
