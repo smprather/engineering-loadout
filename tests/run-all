@@ -102,6 +102,7 @@ run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
 run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
+run_test "README table in sync" "$PY" build/gen-readme-table --check
 run_test "assurance-check" "$PY" tests/assurance-check
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper

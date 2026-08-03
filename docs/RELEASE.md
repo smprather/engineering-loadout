@@ -182,8 +182,12 @@ Docs drift is not cosmetic here: `CLAUDE.md` is the contract the next session
 reads, and a wrong statement in it causes wrong work later.
 
 - **README package table** — every row's version must equal
-  `payload/packages.json`. Regenerate from the registry; never hand-edit.
-  Font and `env-*` packages are intentionally excluded.
+  `payload/packages.json`. Regenerate with `build/gen-readme-table`; never
+  hand-edit. `build/gen-readme-table --check` is a Tier 1 gate, so the table
+  can no longer silently rot (it once carried 30 stale versions — failure
+  catalogue entry 8 — precisely because the instruction to "regenerate" had no
+  tool behind it and no gate). Font and `env-*` packages are intentionally
+  excluded; rows are only rewritten when the name matches a registry entry.
 - **`CLAUDE.md`** — package behavior sections, the repo-structure tree, group
   membership, CLI flags. If you deleted a patch or a package, grep for its name.
 - **`AGENTS.md`** — carries its own per-package pins that drift independently of
@@ -292,7 +296,7 @@ what now catches it — where nothing does, that is the open risk.
 | 5 | `.content-manifest` never regenerated after `./update` mutated `payload/` | `./update` now regenerates it; Tier 1 `gen-content-manifest --check` |
 | 6 | Unsigned release tag shipped silently | `_preflight()` proves signing before any gate; post-tag re-read aborts |
 | 7 | `docs/SECURITY.md` claimed a tmux plugin pin whose lockfile had never been committed | lockfile now committed; **no automated check** that a documented control exists |
-| 8 | README package table: 30 stale versions, 6 missing packages | regenerate from registry; **no `--check` gate** (unlike completions and st font list) |
+| 8 | README package table: 30 stale versions, 6 missing packages | `build/gen-readme-table`, gated by `--check` in Tier 1 (**fixed** 2026-08-03; it immediately found 16 stale rows) |
 | 9 | Release-notes version table reports the **build box's installed binaries**, not the registry — 29 of 93 rows wrong | **NOT FIXED** — see below |
 | 10 | Test version literals (`0.5.0`) went stale on every bump | `tests/install-parity-plot` reads the expected version from `packages.json` |
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |

@@ -1,0 +1,85 @@
+#!/usr/bin/env python3.14
+"""Sync the README package table's version column with payload/packages.json.
+
+docs/RELEASE.md 5 says the table must be regenerated from the registry and
+never hand-edited -- but no generator existed, which is why entry 8 of the
+failure catalogue is "README package table: 30 stale versions, 6 missing
+packages". Unlike the completions and the st font list, nothing gated it.
+
+This is that generator, and `--check` is the gate: it rewrites only the version
+cell of rows whose first cell names a real package, so descriptions and row
+order stay hand-owned.
+
+  build/gen-readme-table            # rewrite README.md in place
+  build/gen-readme-table --check    # exit 1 if any row is stale (Tier 1 gate)
+
+Font and env-* packages are intentionally absent from the table; rows are only
+touched when the name matches a registry entry, so their absence is not an
+error here.
+"""
+
+import json
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+README = os.path.join(REPO, "README.md")
+REGISTRY = os.path.join(REPO, "payload", "packages.json")
+
+# | name | kind | version | description |
+ROW = re.compile(r"^\|\s*([A-Za-z0-9._+-]+)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|(.*)\|\s*$")
+
+
+def main():
+    check = "--check" in sys.argv[1:]
+
+    with open(REGISTRY) as fh:
+        packages = json.load(fh)["packages"]
+
+    with open(README) as fh:
+        lines = fh.read().splitlines(keepends=True)
+
+    stale = []
+    out = []
+    for line in lines:
+        m = ROW.match(line.rstrip("\n"))
+        if not m:
+            out.append(line)
+            continue
+        name, kind, version, rest = m.groups()
+        pkg = packages.get(name)
+        if not pkg or "version" not in pkg:
+            out.append(line)
+            continue
+        want = str(pkg["version"])
+        if version == want:
+            out.append(line)
+            continue
+        stale.append((name, version, want))
+        eol = "\n" if line.endswith("\n") else ""
+        out.append(f"| {name} | {kind} | {want} |{rest}|{eol}")
+
+    if check:
+        if stale:
+            print(f"README package table is stale ({len(stale)} row(s)):")
+            for name, have, want in stale:
+                print(f"  {name}: README says {have}, registry says {want}")
+            print("Run build/gen-readme-table to fix.")
+            return 1
+        print("README package table OK")
+        return 0
+
+    if stale:
+        with open(README, "w") as fh:
+            fh.writelines(out)
+        for name, have, want in stale:
+            print(f"  {name}: {have} -> {want}")
+        print(f"updated {len(stale)} row(s) in README.md")
+    else:
+        print("README package table already in sync")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,7 +2,62 @@
 
 Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
 
-## Release debt carried by the xephyr release (2026-08-03) -- READ THIS
+## Currency sweep, 2026-08-03 -- what moved, what did not, and why
+
+Ran the sweep the previous entry said was owed. It cleared a good part of the
+debt and turned up two destructive bugs in `./update` itself, both now fixed.
+
+**Bumped and verified** (15 packages): `rg` 15.2.0, `fzf` 0.74.2, `uv` 0.12.1,
+`ruff` 0.16.1, `ty` 0.0.65, `just` 1.57.0, `lazygit` 0.63.1, `btm` 0.14.7,
+`amux` 0.0.20, `agent-deck` 1.11.0, `biome` 2.5.6, `nodejs` 26.6.0,
+`fish` 4.8.1, `numr` 0.8.0, `flameshot` 14.0.0. Plus `text-serdes` -> `e624d2d`
+and the YARA-Forge ruleset.
+
+**Two `./update` bugs, both silent, both would have shipped:**
+
+- `./update env-nvim` repacked *this box's* `~/.local/share/nvim/lazy` over the
+  plugin stash: 328 MB of bare mirrors replaced by 47 MB of flat plugin dirs
+  that lazy cannot clone from. The stash is gitignored *and* excluded from
+  `.content-manifest`, so there was no baseline to diff and no gate to fail;
+  recovery needed `./fetch-stash` against a published release.
+- `./update nodejs` with no `--tag` runs `nvm install --lts` and bundled the
+  build box's own v26.2.0, stamping the registry *backwards* from 26.5.0. A
+  bare `./update` -- what the procedure told you to run -- did this.
+
+Both are fixed, and `./update` now hard-errors on any version that goes
+backwards (`--allow-downgrade` to override).
+
+**Left undone, deliberately** -- the remaining packages are all source builds
+and this was cut as a "ship what is verified" release rather than claiming a
+class C it did not meet:
+
+- `vim`/`gvim` 9.2.0901 and `octave` 11.3.0. **`build-gvim.sh` and
+  `build-octave.sh` take no `--tag`** and want a source checkout you supply --
+  CLAUDE.md's claim that all `build/build-*.sh` enforce `--tag` is wrong for
+  these two.
+- `htop`, `rsync`, `xsel`, `yank`, `yara`: **no build script and no
+  `ADDING_BINARIES.md` note at all.** Bumping them means authoring the
+  procedure first, which the repo mandates anyway.
+- `tree-sitter` 0.26.11 and `fresh` 0.4.6: upstream prebuilts need GLIBC 2.39
+  and 2.35 against EL8's 2.28, so both become EL8 source builds.
+- `gnuplot` 6.0.5, `jupyterlab` 4.6.2 (wheel closure).
+- **`rust-crate-store` is stale.** fish 4.8.1 only built after bypassing the
+  offline store with a fresh `CARGO_HOME`, because upstream added
+  `fish-fluent`/`unic-langid`. The shipped binary is fine but that build is no
+  longer offline-reproducible, and the same wall is waiting for every other
+  Rust package. Refreshing the store is the real fix and should come before the
+  next Rust bump.
+
+`pdftotext` stays pinned (poppler >= 23.01 needs freetype >= 2.10; EL8 has
+2.9.1).
+
+**Also fixed here:** the README package table finally has a generator,
+`build/gen-readme-table`, gated by `--check` in Tier 1. It found 16 stale rows
+on its first run. That was failure-catalogue entry 8, open since the table was
+last found carrying 30 wrong versions -- the instruction to "regenerate from the
+registry" had never had a tool behind it.
+
+## Release debt carried by the xephyr release (2026-08-03) -- SUPERSEDED, see above
 
 The xephyr release is **class C** by the rules in `docs/RELEASE.md` §0
 (`payload/packages.json` group membership changed: `@gui-suite` gained
