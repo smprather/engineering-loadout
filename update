@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import zipfile
 from urllib.request import Request, urlopen
@@ -498,47 +499,68 @@ def _run_tmux_plugins(dry_run=False):
 
 
 def _run_env_nvim(dry_run=False):
-    """Update nvim plugins via Lazy and repack the offline catalog archive."""
-    lazy_dir = os.path.expanduser("~/.local/share/nvim/lazy")
+    """Rebuild the offline plugin stash from upstream, via the real builder.
+
+    The stash is 79 FULL BARE MIRRORS (`<org>/<plugin>.git`, `git clone
+    --mirror`, all refs including tags), because init.lua points lazy's
+    `git.url_format` at it and lazy clones/fetches from it offline.
+
+    This used to run `nvim --headless +Lazy! update` against THIS BOX's
+    ~/.local/share/nvim and tar the resulting lazy/ tree over the stash. That
+    is a different thing in every respect: it produced flat plugin directories
+    with .git subdirs instead of bare mirrors, and only the ~24 active plugins
+    instead of all 79, shrinking the archive from ~328 MB to ~47 MB and giving
+    offline users a stash lazy cannot clone from. Nothing caught it -- the
+    stash is deliberately excluded from .content-manifest and gitignored, so
+    there was no local baseline to diff and no gate went red. Recovery needed
+    `./fetch-stash` against a published release.
+
+    Delegate to build/build-nvim-plugin-stash, which is the documented builder
+    and verifies every pinned commit is reachable in the mirror it produced.
+    """
+    builder = os.path.join(REPO, "build", "build-nvim-plugin-stash")
     catalog_archive = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
-    nvim_bin = os.path.expanduser("~/.local/bin/nvim")
 
-    if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
-        print(f"ERROR: nvim not found at {nvim_bin} -- run ./loadout install nvim first")
+    if not os.path.isfile(builder) or not os.access(builder, os.X_OK):
+        print(f"ERROR: stash builder not found at {builder}")
         return False
 
-    # Step 1: update plugins via Lazy
-    cmd = [nvim_bin, "--headless", "+Lazy! update", "+qa"]
-    print("Updating plugins: {}".format(" ".join(cmd)))
-    if not dry_run:
-        rc = subprocess.call(cmd)
-        if rc != 0:
-            print(f"WARNING: Lazy! update exited rc={rc} -- continuing with repack")
-
-    if not os.path.isdir(lazy_dir):
-        print(f"ERROR: lazy plugin dir not found at {lazy_dir}")
-        return False
-
-    # Step 2: repack catalog archive with relative paths (./PluginName/...)
-    # Use -C so archive entries are relative to lazy_dir, not absolute filesystem paths.
-    print(f"Repacking {catalog_archive} ...")
-    os.makedirs(os.path.dirname(catalog_archive), exist_ok=True)
-    tmp = catalog_archive + ".tmp"
+    print(f"Rebuilding plugin stash via {os.path.relpath(builder, REPO)} ...")
     if dry_run:
-        print(f"$ tar cjf {catalog_archive} -C {lazy_dir} .")
+        print(f"$ {builder}")
         print("$ ./strip-all-elf-binaries")
         return True
 
-    rc = subprocess.call(["tar", "cjf", tmp, "-C", lazy_dir, "."])
+    rc = subprocess.call([builder], cwd=REPO)
     if rc != 0:
-        print(f"ERROR: tar failed rc={rc}")
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        print(f"ERROR: {os.path.relpath(builder, REPO)} exited rc={rc}")
         return False
 
-    os.replace(tmp, catalog_archive)
+    if not os.path.isfile(catalog_archive):
+        print(f"ERROR: builder did not produce {catalog_archive}")
+        return False
+
+    # Guard the failure this function used to cause. A lazy/-tree repack is
+    # flat (./plugin/...); a real stash is ./<org>/<plugin>.git/... Check the
+    # shape rather than a size threshold, which would drift with the catalog.
+    try:
+        with tarfile.open(catalog_archive, "r:bz2") as tf:
+            mirrors = {
+                m.name.split("/")[1] + "/" + m.name.split("/")[2]
+                for m in tf
+                if len(m.name.split("/")) > 2 and m.name.split("/")[2].endswith(".git")
+            }
+    except (OSError, tarfile.TarError) as exc:
+        print(f"ERROR: cannot read {catalog_archive}: {exc}")
+        return False
+
+    if not mirrors:
+        print(f"ERROR: {catalog_archive} contains no <org>/<plugin>.git bare mirrors.")
+        print("  That is the lazy/-tree-repack shape; lazy cannot clone from it.")
+        return False
+
     size_mb = os.path.getsize(catalog_archive) // 1024 // 1024
-    print(f"  {size_mb}M -> {catalog_archive}")
+    print(f"  {size_mb}M, {len(mirrors)} bare mirrors -> {catalog_archive}")
 
     # Step 3: strip ELF payloads inside the archive
     rc = subprocess.call([os.path.join(REPO, "strip-all-elf-binaries")], cwd=REPO)

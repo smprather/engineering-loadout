@@ -79,7 +79,18 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
 `build`, `import-script`, `download`. That classification tells you the work:
 
 - **automated** (`yara-rules`, `nodejs`, `tldr-data`, `tmux-plugins`, `env-nvim`)
-  — `./update <name>` does it end to end.
+  — `./update <name>` does it end to end. `env-nvim` is the expensive one: it
+  re-mirrors all 79 plugins from upstream (~328 MB, network-bound), so do not
+  run it casually. It is also the one with no safety net — the stash is
+  gitignored *and* excluded from `.content-manifest`, so a bad rebuild has no
+  local baseline to diff and turns no gate red; recovery is `./fetch-stash`
+  against a published release. `./update` now delegates to
+  `build/build-nvim-plugin-stash` and asserts the result really is
+  `<org>/<plugin>.git` bare mirrors, after a version that repacked this box's
+  `~/.local/share/nvim/lazy` over the stash and shrank it 328 MB → 47 MB.
+  Skipping it is defensible when `envs/nvim/lazy-lock.json` has not moved:
+  the pins are the source of truth, so an unchanged lockfile means an
+  equivalent stash. Say so in the release notes if you skip it.
 - **rolling-git** (`liberty-tools`, `text-serdes`, `time-plot`, `lefdef-tools`)
   — first-party; `./update <name>` rebuilds from source HEAD when the commit
   moved, `--rebuild` forces.
