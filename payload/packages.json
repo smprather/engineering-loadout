@@ -2141,7 +2141,7 @@
         "libpcre2-8.so.0",
         "libpcre2-32.so.0"
       ],
-      "version": "4.8.0",
+      "version": "4.8.1",
       "platforms": [
         "linux"
       ],
