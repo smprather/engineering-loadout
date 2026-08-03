@@ -2,6 +2,36 @@
 
 Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
 
+## Release debt carried by the xephyr release (2026-08-03) -- READ THIS
+
+The xephyr release is **class C** by the rules in `docs/RELEASE.md` §0
+(`payload/packages.json` group membership changed: `@gui-suite` gained
+`xephyr`), but it was cut with §2 **deliberately deferred**. This is a recorded
+deviation, not an oversight, and the debt is real:
+
+- **28 packages are behind upstream** as of this date. Four are build-class and
+  need `build/build-<tool>.sh` on this EL8 box: `fish` 4.8.0 -> 4.8.1,
+  `vim`/`gvim` 9.2.0782 -> 9.2.0901, `octave` 11.1.0 -> 11.3.0. The rest are
+  download-class one-liners. Re-derive the current list with
+  `build/check-versions --outdated-only` and `./update --list-outdated` --
+  do not trust this snapshot.
+- **`yara` itself is behind** (4.5.5 -> 4.5.8) and `./update yara-rules` was
+  **not** run.
+- **The ClamAV signature DB was 17 days stale** (`daily.cld` dated 2026-07-17)
+  when the release scan ran. `sudo freshclam` needs sudo and was not run. Per
+  `docs/RELEASE.md` §2b a scan against stale signatures is a green light that
+  means nothing -- so treat this release's CLEAN verdict as weaker evidence than
+  usual.
+
+What *was* fully gated: Tier 1 + Tier 2 (24/24), `tests/prebuilt-binaries`
+(264/264), and Tier 3 on stock AlmaLinux 8.10 (`--full` 257 OK / 7 skipped,
+`--dynamic` 10/10). The class C **container** requirement was met; the currency
+and security-data requirements were not.
+
+**The next release should be a real class C** and clear all of the above before
+anything else. If you are reading this while planning a "quick" release, that is
+exactly the situation the class rules exist for.
+
 ## Deep review of xephyr + xdesk (2026-08-03)
 
 Reviewed the uncommitted xephyr work end to end against a real staged install.
