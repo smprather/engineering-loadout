@@ -43,7 +43,7 @@
       "bins": [
         "agent-deck"
       ],
-      "version": "1.9.12",
+      "version": "1.11.0",
       "platforms": [
         "linux"
       ],
@@ -58,7 +58,7 @@
       "bins": [
         "amux"
       ],
-      "version": "0.0.19",
+      "version": "0.0.20",
       "platforms": [
         "linux"
       ],
@@ -129,7 +129,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.4.15",
+      "version": "2.5.6",
       "platforms": [
         "linux"
       ],
@@ -183,7 +183,7 @@
       "bins": [
         "btm"
       ],
-      "version": "0.14.4",
+      "version": "0.14.7",
       "platforms": [
         "linux"
       ],
@@ -642,7 +642,7 @@
       "bins": [
         "fzf"
       ],
-      "version": "0.74.0",
+      "version": "0.74.2",
       "platforms": [
         "linux"
       ],
@@ -851,7 +851,7 @@
       "bins": [
         "just"
       ],
-      "version": "1.56.0",
+      "version": "1.57.0",
       "platforms": [
         "linux"
       ],
@@ -865,7 +865,7 @@
       "bins": [
         "lazygit"
       ],
-      "version": "0.63.0",
+      "version": "0.63.1",
       "platforms": [
         "linux"
       ],
@@ -1050,7 +1050,7 @@
       "bins": [
         "rg"
       ],
-      "version": "15.1.0",
+      "version": "15.2.0",
       "platforms": [
         "linux"
       ],
@@ -1134,7 +1134,7 @@
       "bins": [
         "ruff"
       ],
-      "version": "0.16.0",
+      "version": "0.16.1",
       "platforms": [
         "linux"
       ],
@@ -1292,7 +1292,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.63",
+      "version": "0.0.65",
       "platforms": [
         "linux"
       ],
@@ -1411,7 +1411,7 @@
       "bins": [
         "uv"
       ],
-      "version": "0.11.32",
+      "version": "0.12.1",
       "platforms": [
         "linux"
       ],
@@ -2207,7 +2207,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.2.0",
+      "version": "26.6.0",
       "platforms": [
         "linux"
       ],

@@ -602,6 +602,59 @@ def _run_automated(name, dry_run=False, tag=None):
         return False
 
 
+# -- downgrade guard -------------------------------------------------------------
+
+
+def _registry_version(name):
+    """The version packages.json currently records for `name` ('' if absent)."""
+    try:
+        with open(os.path.join(REPO, "payload", "packages.json")) as fh:
+            return json.load(fh)["packages"].get(name, {}).get("version", "") or ""
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
+def _version_tuple(v):
+    """Numeric release tuple, or None when the string is not a version.
+
+    Returns None for git SHAs and describe strings -- rolling-git packages are
+    ordered by commit, not by number, so they must not be compared here.
+    """
+    if not v or not re.match(r"^v?\d", v):
+        return None
+    parts = re.findall(r"\d+", v.split("-")[0].split("+")[0])
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def _check_no_downgrade(name, before, allow_downgrade, dry_run):
+    """Refuse a silent version regression. True when the result is acceptable.
+
+    Bare `./update` bundles whatever a package's importer finds locally when it
+    is given no target. `import-nodejs` with no --tag runs `nvm install --lts`,
+    so a class C sweep run straight from docs/RELEASE.md rewrote node.tar.bz2
+    from the build box's own v26.2.0 and stamped packages.json 26.5.0 -> 26.2.0
+    -- a three-minor-version downgrade, in a commit described as an update, with
+    nothing to object to it. Compare what the registry says before and after and
+    make that loud.
+    """
+    if dry_run:
+        return True
+    after = _registry_version(name)
+    if not before or not after or before == after:
+        return True
+    b, a = _version_tuple(before), _version_tuple(after)
+    if b is None or a is None or a >= b:
+        return True
+    print(f"ERROR: {name}: version went BACKWARDS {before} -> {after}")
+    print("  A bare `./update` bundles whatever the importer finds locally when")
+    print(f"  given no target. Name the version you want: ./update --tag <ver> {name}")
+    print("  Pass --allow-downgrade if the regression is genuinely intended.")
+    if allow_downgrade:
+        print("  --allow-downgrade given; continuing anyway.")
+        return True
+    return False
+
+
 # -- rolling-git wheels ----------------------------------------------------------
 
 
@@ -982,12 +1035,17 @@ ALL_KNOWN = (
 @click.option("--rebuild", is_flag=True, help="Rolling-git: rebuild even if the source commit is unchanged.")
 @click.option("--dry-run", "dry_run", is_flag=True, help="Print commands without executing.")
 @click.option(
+    "--allow-downgrade",
+    is_flag=True,
+    help="Permit a package's recorded version to go backwards (default: hard error).",
+)
+@click.option(
     "--tag",
     default=None,
     metavar="VERSION",
     help="Version hint for nodejs and yara (e.g. v26.3.0 or 20260517).",
 )
-def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
+def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, allow_downgrade):
     """update -- per-package updater for loadout.
 
     With no arguments, runs every automated package end-to-end without
@@ -1020,14 +1078,19 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag):
 
     for name in packages:
         kind = _classify(name)
+        before = _registry_version(name)
         if kind == "rolling":
             ok = _run_rolling(name, dry_run=dry_run, force=rebuild)
+            if ok and not _check_no_downgrade(name, before, allow_downgrade, dry_run):
+                ok = False
             if ok:
                 auto_succeeded.append(name)
             else:
                 all_ok = False
         elif kind == "automated":
             ok = _run_automated(name, dry_run=dry_run, tag=tag)
+            if ok and not _check_no_downgrade(name, before, allow_downgrade, dry_run):
+                ok = False
             if ok:
                 auto_succeeded.append(name)
             else:
