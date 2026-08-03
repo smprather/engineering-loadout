@@ -82,6 +82,12 @@ PROBE_FLAGS = {
     "resize": [["--help"]],
     "bzip2": [["--help"]],
     "nvim": [["--version"]],
+    # X servers take single-dash options only; --version exits 1 with
+    # "Unrecognized option". -help prints the usage banner and exits 0
+    # without needing a parent display, so it probes cleanly headless.
+    "Xephyr": [["-help"]],
+    "Xephyr.bin": [["-help"]],
+    "xdesk": [["--help"]],
 }
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
 
@@ -669,6 +675,21 @@ def main(keep):
                     print(f"  FAIL (ldd):          {fname:20s}  {missing[0]}")
                     failures.append((fname, msg))
                     continue
+            else:
+                # Wrapper + real-ELF sibling (bin/<name> and bin/<name>.bin) is a
+                # repo-wide packaging convention. A wrapper cannot be ldd-checked,
+                # so exec'ing it in a container that legitimately lacks the host
+                # GLVND stack reports 127 for a package that is fine. Resolve to
+                # the sibling for the host-.so skip decision only: when anything
+                # is missing that is NOT host-required, fall through to the normal
+                # exec probe so real breakage still surfaces.
+                sibling = fpath + ".bin"
+                if os.path.isfile(sibling) and is_elf(sibling):
+                    host_sos = host_required_sos(ldd_check(sibling))
+                    if host_sos:
+                        print(f"  SKIP (host .so):     {fname:20s}  {', '.join(host_sos)} (via {fname}.bin)")
+                        skipped += 1
+                        continue
 
             host_command = HOST_REQUIRED_COMMANDS.get(fname)
             if host_command and not command_available(host_command[0], probe_env):

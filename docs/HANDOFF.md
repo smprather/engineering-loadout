@@ -1,6 +1,125 @@
 # Current Handoff
 
-Last updated: 2026-07-25 (deep consistency review + parity-plot v0.6.0).
+Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
+
+## Deep review of xephyr + xdesk (2026-08-03)
+
+Reviewed the uncommitted xephyr work end to end against a real staged install.
+Twelve findings, all fixed. Re-verified after the payload rebuild: Tier 1 + Tier 2
+**24/24**, `tests/prebuilt-binaries` **264/264**, and Tier 3 on stock
+AlmaLinux 8.10 -- `--full` **257 binaries OK (7 skipped)** and the network-isolated
+`--dynamic` pass **10/10**. `Xephyr`/`Xephyr.bin` skip on `libGL.so.1` (host GLVND
+dispatcher), alongside the existing flameshot / nedit-ng / nvim-qt skips; that is
+the documented host contract, and it is the wrapper-sibling change in
+`tests/prebuilt-binaries` doing its job -- before it, the `bin/Xephyr` wrapper
+was exec-probed and returned 127 in the GL-less container.
+
+**The one that mattered: `xdesk --keep` left a nested X server with no access
+control.** `cleanup()` removed the state dir unconditionally, including under
+`-k`, and that dir holds the MIT-MAGIC-COOKIE file passed to Xephyr with
+`-auth`. Reproduced 3/3: after `xdesk -k` exited, `DISPLAY=:10 xdpyinfo` with no
+cookie at all returned the vendor string. On a shared farm node that is exactly
+the keystroke exposure the auth block exists to prevent. (The second failure
+mode is milder but still fatal to the feature: when clients *had* connected, auth
+stayed enforced but the cookie file was gone, so nothing new could ever attach.)
+`cleanup()` now keeps both the server and its state dir under `-k` and prints
+the display, pid, `XAUTHORITY` path and the `kill`/`rm -rf` disposal command.
+`tests/install-xdesk` asserts it: cookie-less connection refused, cookie
+connection accepted, state dir retained, then tears the server down itself.
+
+**Second-worst: the nested session inherited the outer compositor's Wayland
+environment.** `WAYLAND_DISPLAY` and `QT_QPA_PLATFORM=wayland` passed straight
+through, and GTK/Qt prefer Wayland whenever it is set -- so apps launched inside
+the nest rendered on the **outer** desktop. This repo's own WSLg guidance to set
+`QT_QPA_PLATFORM=wayland` guaranteed it. `xdesk` now unsets `WAYLAND_DISPLAY` and
+exports `GDK_BACKEND=x11` / `QT_QPA_PLATFORM=xcb` / `XDG_SESSION_TYPE=x11` for
+the session.
+
+**Provenance was half-pinned.** `--tag` pinned the Xephyr RPM while the six
+support libs were `cp`'d out of the build box's `/usr/lib64` -- the exact
+build-box-masking shape the closure guard next to it was written to catch. They
+now come from their own downloaded RPMs (`libXdmcp`, `libXfont2`, `libfontenc`,
+`libxcb`), resolved *within* the extracted tree (a bare `readlink -f` on an
+absolute symlink would fall back to the host root and silently reintroduce it).
+`--tag` is now the **full version-release** (`1.20.11-28.el8_10.3`) matched
+exactly, because the release field is where Red Hat's CVE backports live and a
+bare `1.20.11` reads as a 2021 X server; `payload/packages.json` records the same
+NVR and the build fails if they disagree; every consumed RPM NVR is written to
+`build/xephyr/PROVENANCE`. This matters more than usual here because the package
+is deliberately absent from `farm-versions`/`check-versions`, so no currency
+sweep covers it.
+
+**A dead assertion.** `tests/install-xdesk` guarded its orphan check with
+`pgrep -x Xephyr`, which never matches -- the process name is `Xephyr.bin`
+(`bin/Xephyr` is a wrapper that `exec`s it), so the check had never run. Also,
+the test rewrote `HOME` without carrying `XAUTHORITY`, which would have failed
+on any host whose outer display uses cookie auth -- i.e. the NoMachine/GDM hosts
+this package exists for. It passed only because WSLg has no outer auth at all.
+
+Smaller: `XDESK_SESSION=" "` died with a `set -u` "unbound variable" instead of
+an error message; `--size` accepted `0x0` and `1x2x3`; dead `status=$?` after a
+`set -e` exec; the build script's header still said "five" sonames and omitted
+`libfontenc` from the bundled list -- the very lib whose omission shipped broken;
+`CLAUDE.md` had no xephyr/xdesk coverage at all while every comparable package
+has a behavior section; and the `Xephyr` wrapper's exported `LD_LIBRARY_PATH` is
+inherited by the host helpers Xephyr forks (`xkbcomp`), which is benign on EL8
+but is now recorded in a comment.
+
+## xephyr + xdesk (2026-08-02)
+
+New `xephyr` package (`bin`, non-optional, in `@gui-suite` -> `@shared` ->
+`@engineering-loadout`): Xephyr `1.20.11-28.el8_10.3` shanghai'd from the EL8
+AppStream RPM, plus an `xdesk` launcher. **Uncommitted.**
+
+The problem it solves: on a NoMachine host the desktop is fixed by root-owned
+`/usr/NX/etc/node.cfg`, which hardcodes
+`DefaultDesktopCommand "... gnome-session --session=gnome"` rather than
+`/etc/X11/xinit/Xsession default` -- so the usual per-user `~/.xsession` hook
+does not apply and there is no no-root way to change the session. A nested X
+server needs none of that. Xvnc was rejected deliberately: it opens a listening
+port (590x), Xephyr binds no network socket.
+
+Verified by hand on the dev box: full nested XFCE 4.16 session (xfwm4, panel,
+xfdesktop, Thunar, xfsettingsd), clean Logout. **Nested GNOME does not work** --
+`gnome-shell` 3.32 dies with `this._userProxy.Display is null` in
+`loginManager.js` because it asks logind for a graphical session that a nested
+display does not have. Not a GL problem, not fixable from our side; run a WM or
+a non-GNOME session inside the nest.
+
+Three things worth remembering:
+
+- **The clean container was the only gate that caught the real bug.** Tier 1 and
+  Tier 2 were both green while `libfontenc.so.1` was missing from the payload.
+  It is a dependency of *bundled* `libXfont2`, not of the binary, so a closure
+  check that walked only the binary never saw it -- and the build box has the X
+  libs installed, so nothing local could. The guard in `build/build-xephyr.sh`
+  now walks the binary **and every bundled lib**, and immediately found a second
+  one (`libfreetype.so.6`, already owned by `gui_libs`, so a depends not a
+  bundle). Textbook build-box masking, same shape as the NSS/firefox incident.
+- **`mesa3d_libs` already owns `libdrm.so.2` and `libxshmfence.so.1`** at the
+  same `lib64/` path, so `xephyr` declares it as a `depends` rather than
+  duplicating them. Two packages owning one path is an install hazard. It costs
+  nothing: `mesa3d_libs` is non-optional already.
+- **`tests/prebuilt-binaries` could not skip wrapper scripts.** `bin/Xephyr`
+  (POSIX sh) cannot be ldd-checked, so it was exec-probed in the GL-less
+  container and returned 127 while `bin/Xephyr.bin` skipped correctly. The loop
+  now resolves a non-ELF `bin/<name>` to its `bin/<name>.bin` sibling for the
+  host-`.so` skip decision **only** -- anything missing that is not
+  host-required still falls through to the exec probe, so the change can add
+  skips but never mask a failure. This helps every wrapper+`.bin` package.
+
+`tests/install-xdesk` is new in Tier 2 and covers what no headless gate can:
+nested display comes up at the requested size, a cookie-less connection is
+refused (an unauthenticated nested server is readable by any other user on a
+shared farm node), and the server plus its state dir are gone afterwards. It
+**skips** when `$DISPLAY` is unset. Its predecessor bug is the reason it exists:
+`xdesk` first waited for `/tmp/.X11-unix/X$N` and timed out against a healthy
+server, because a host whose `/tmp/.X11-unix` has the wrong mode (WSLg, and
+hardened hosts) makes Xephyr bind **only** the Linux abstract socket.
+
+No `build/farm-versions` entry on purpose -- X servers of this vintage reject
+`-version` and the stripped binary carries no version string, so every strategy
+would report a permanent gap.
 
 ## Deep review (2026-07-25)
 

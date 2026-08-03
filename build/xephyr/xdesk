@@ -1,0 +1,298 @@
+#!/bin/sh
+# xdesk -- run a nested desktop session inside Xephyr.
+#
+# Why this exists: on a locked-down host the desktop environment is chosen by
+# the display manager or by the remote-desktop server's own config (NoMachine's
+# /usr/NX/etc/node.cfg, GDM's session list), both root-owned. A nested X server
+# sidesteps that entirely -- Xephyr is just another window inside the session
+# you already have, so any window manager or desktop you can execute runs in it
+# with no root, no config change, and no listening TCP port.
+#
+#   xdesk                      # autodetect a session/WM, 1440x900
+#   xdesk -s 1920x1080 fluxbox
+#   xdesk --fullscreen xfce4-session
+#   xdesk -- dwm               # everything after -- is the session command
+#
+# Keyboard note: the OUTER desktop grabs its own bindings (Super, Alt+Tab,
+# Ctrl+Alt+arrows) before the nested server ever sees them, and a remote-desktop
+# client may grab more before that. Press Ctrl+Shift inside the Xephyr window to
+# toggle a full keyboard/pointer grab, which routes those combos into the nested
+# session instead; press it again to release. Bind nested WM shortcuts to
+# Ctrl+Alt+<letter> to avoid the collision in the first place.
+#
+# --keep note: the kept nested server inherits xdesk's own stdout/stderr. A
+# caller that consumes xdesk's output through a pipe or $(...) will therefore
+# block until the kept server itself exits. Redirect xdesk's output to a file
+# when combining --keep with output capture.
+
+set -eu
+
+progname=xdesk
+
+usage() {
+    cat <<'EOF'
+usage: xdesk [options] [--] [command [args...]]
+
+Run a nested desktop session inside Xephyr.
+
+options:
+  -s, --size WxH      nested screen size (default: $XDESK_SIZE or 1440x900)
+  -f, --fullscreen    run the nested server fullscreen on the outer display
+  -d, --display :N    use display :N instead of picking a free one
+      --no-dbus       do not wrap the session in its own D-Bus session bus
+      --no-auth       skip MIT-MAGIC-COOKIE auth (INSECURE on shared hosts)
+  -k, --keep          leave the nested server running when the session exits
+                      (the kept server inherits xdesk's stdout/stderr -- redirect
+                      to a file if a caller reads xdesk's output via a pipe)
+  -h, --help          this text
+
+command defaults to $XDESK_SESSION, else the first of:
+  xfce4-session startxfce4 mate-session startlxqt fluxbox icewm openbox
+  i3 dwm twm
+EOF
+}
+
+die() {
+    printf '%s: %s\n' "$progname" "$*" >&2
+    exit 1
+}
+
+warn() {
+    printf '%s: %s\n' "$progname" "$*" >&2
+}
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+xephyr="$prefix/bin/Xephyr"
+[ -x "$xephyr" ] || xephyr=$(command -v Xephyr) || die "Xephyr not found"
+
+size=${XDESK_SIZE:-1440x900}
+fullscreen=0
+display=""
+use_dbus=1
+use_auth=1
+keep=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -s|--size)
+            shift
+            [ "$#" -gt 0 ] || die "missing value for --size"
+            size=$1
+            ;;
+        -f|--fullscreen) fullscreen=1 ;;
+        -d|--display)
+            shift
+            [ "$#" -gt 0 ] || die "missing value for --display"
+            display=${1#:}
+            ;;
+        --no-dbus) use_dbus=0 ;;
+        --no-auth) use_auth=0 ;;
+        -k|--keep) keep=1 ;;
+        -h|--help) usage; exit 0 ;;
+        --) shift; break ;;
+        -*) die "unknown option: $1 (see --help)" ;;
+        *) break ;;
+    esac
+    shift
+done
+
+[ -n "${DISPLAY:-}" ] || die "DISPLAY is not set -- xdesk needs an outer X display to nest inside"
+
+# Validate --size: exactly one 'x', both sides all digits and >= 1.
+# Written as a single compound test feeding `|| die` so a failed check flows
+# into the error path instead of tripping `set -e` as a bare failing statement.
+case "$size" in
+    *x*) ;;
+    *) die "bad --size '$size' (expected WxH, e.g. 1440x900)" ;;
+esac
+size_w=${size%%x*}
+size_h=${size#*x}
+case "$size_h" in
+    *x*) die "bad --size '$size' (expected WxH, e.g. 1440x900)" ;;
+esac
+[ -n "$size_w" ] && [ -n "$size_h" ] &&
+    case "$size_w" in *[!0-9]*) false ;; esac &&
+    case "$size_h" in *[!0-9]*) false ;; esac &&
+    [ "$size_w" -ge 1 ] && [ "$size_h" -ge 1 ] ||
+    die "bad --size '$size' (expected WxH, e.g. 1440x900)"
+
+# ---- session command -------------------------------------------------------
+if [ "$#" -eq 0 ]; then
+    if [ -n "${XDESK_SESSION:-}" ]; then
+        # shellcheck disable=SC2086  # deliberate word-split: XDESK_SESSION may carry args
+        set -- $XDESK_SESSION
+        [ "$#" -gt 0 ] || die "XDESK_SESSION is set but empty (whitespace only); unset it or name a command"
+    else
+        for candidate in xfce4-session startxfce4 mate-session startlxqt \
+                         fluxbox icewm openbox i3 dwm twm; do
+            if [ -x "$prefix/bin/$candidate" ] || command -v "$candidate" >/dev/null 2>&1; then
+                set -- "$candidate"
+                break
+            fi
+        done
+        [ "$#" -gt 0 ] || die "no session command found; name one explicitly (xdesk -- fluxbox) or set XDESK_SESSION"
+    fi
+fi
+
+session_bin=$1
+if [ -x "$prefix/bin/$session_bin" ]; then
+    shift
+    set -- "$prefix/bin/$session_bin" "$@"
+elif ! command -v "$session_bin" >/dev/null 2>&1; then
+    die "session command not found: $session_bin"
+fi
+
+# start* launchers run dbus-launch themselves; a second bus would orphan half
+# the session's services on the wrong one.
+case "$session_bin" in
+    start*) use_dbus=0 ;;
+esac
+if [ "$use_dbus" -eq 1 ] && ! command -v dbus-launch >/dev/null 2>&1; then
+    warn "dbus-launch not found -- running without a private session bus"
+    use_dbus=0
+fi
+
+# GTK/GNOME-family sessions write settings through dconf, which needs a private
+# XDG_RUNTIME_DIR. A world-writable one makes dconf and D-Bus refuse to start.
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+    perms=$(ls -ld "$XDG_RUNTIME_DIR" | cut -c1-10)
+    case "$perms" in
+        drwx------) ;;
+        *) warn "XDG_RUNTIME_DIR ($XDG_RUNTIME_DIR) is $perms, not drwx------; expect dconf/D-Bus warnings" ;;
+    esac
+fi
+
+# ---- pick a free display ---------------------------------------------------
+if [ -z "$display" ]; then
+    n=10
+    while [ "$n" -lt 100 ]; do
+        if [ ! -e "/tmp/.X$n-lock" ] && [ ! -e "/tmp/.X11-unix/X$n" ] &&
+           ! grep -aqE "@/tmp/\.X11-unix/X$n\$" /proc/net/unix 2>/dev/null; then
+            display=$n
+            break
+        fi
+        n=$((n + 1))
+    done
+    [ -n "$display" ] || die "no free display between :10 and :99"
+fi
+
+# ---- auth cookie -----------------------------------------------------------
+# Without this any other user on the host can connect to the nested server and
+# read its keystrokes: the unix socket alone is not an access control.
+statedir=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/xdesk.XXXXXX") || die "cannot create state dir"
+authfile="$statedir/Xauthority"
+auth_args=""
+
+if [ "$use_auth" -eq 1 ]; then
+    if command -v xauth >/dev/null 2>&1; then
+        cookie=""
+        if command -v mcookie >/dev/null 2>&1; then
+            cookie=$(mcookie)
+        elif [ -r /dev/urandom ]; then
+            cookie=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+        fi
+        if [ -n "$cookie" ]; then
+            : > "$authfile"
+            chmod 600 "$authfile"
+            if xauth -q -f "$authfile" add ":$display" MIT-MAGIC-COOKIE-1 "$cookie" 2>/dev/null; then
+                auth_args="-auth $authfile"
+            fi
+        fi
+    fi
+    if [ -z "$auth_args" ]; then
+        warn "could not create an X auth cookie (need xauth + mcookie); nested server will accept any local connection"
+    fi
+fi
+
+# ---- launch ----------------------------------------------------------------
+xpid=""
+cleanup() {
+    if [ "$keep" -eq 1 ] && [ -n "$xpid" ] && kill -0 "$xpid" 2>/dev/null; then
+        # --keep: leave the nested server (and its auth cookie) in place.
+        # Removing $statedir would delete the MIT-MAGIC-COOKIE file passed to
+        # Xephyr with -auth: if no client has connected yet the kept server
+        # ends up with NO access control (any local user can connect and read
+        # keystrokes); if clients did connect, no new client can ever attach.
+        # Either way --keep is useless, so do not touch the server or state.
+        warn "keeping nested server -- display :$display pid $xpid"
+        if [ -n "$auth_args" ]; then
+            warn "  connect with: DISPLAY=:$display XAUTHORITY=$authfile <client>"
+        else
+            warn "  connect with: DISPLAY=:$display <client> (no auth)"
+        fi
+        warn "  dispose of it with: kill $xpid; rm -rf $statedir"
+        return 0
+    fi
+    if [ -n "$xpid" ]; then
+        kill "$xpid" 2>/dev/null || true
+        wait "$xpid" 2>/dev/null || true
+    fi
+    rm -rf "$statedir"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [ "$fullscreen" -eq 1 ]; then
+    screen_args="-fullscreen"
+else
+    screen_args="-screen $size -resizeable"
+fi
+
+# shellcheck disable=SC2086  # screen_args/auth_args are built here, splitting is intended
+"$xephyr" ":$display" $screen_args $auth_args \
+    -nolisten tcp \
+    -title "xdesk :$display -- $session_bin" &
+xpid=$!
+
+# Wait on a fact the server produces -- its listening socket -- not on a timer.
+#
+# Both socket forms have to count. When /tmp/.X11-unix has the wrong mode (WSLg
+# mounts it 0755, and some hardened hosts do the same) the server logs
+# "failed to create listener for unix" and binds ONLY the Linux abstract
+# socket. Clients still connect through it, so waiting on the filesystem socket
+# alone reports a healthy server as a timeout.
+server_ready() {
+    [ -e "/tmp/.X11-unix/X$display" ] && return 0
+    grep -aqE "@/tmp/\.X11-unix/X$display\$" /proc/net/unix 2>/dev/null && return 0
+    return 1
+}
+
+waited=0
+while ! server_ready; do
+    kill -0 "$xpid" 2>/dev/null || die "Xephyr exited before display :$display came up"
+    waited=$((waited + 1))
+    [ "$waited" -lt 100 ] || die "timed out waiting for display :$display"
+    sleep 0.1
+done
+
+DISPLAY=":$display"
+export DISPLAY
+if [ -n "$auth_args" ]; then
+    XAUTHORITY="$authfile"
+    export XAUTHORITY
+fi
+
+# A nested X server is X11-only. If the outer desktop is Wayland (WSLg, GNOME
+# on Wayland, etc.) the inherited WAYLAND_DISPLAY points at the OUTER desktop's
+# socket, and GTK/Qt prefer Wayland whenever it is set -- so apps launched in
+# the nest would render on the outer desktop instead of inside Xephyr. Force
+# the toolkits onto X11 for the nested session.
+unset WAYLAND_DISPLAY
+GDK_BACKEND=x11
+export GDK_BACKEND
+QT_QPA_PLATFORM=xcb
+export QT_QPA_PLATFORM
+XDG_SESSION_TYPE=x11
+export XDG_SESSION_TYPE
+
+if [ "$use_dbus" -eq 1 ]; then
+    dbus-launch --exit-with-session "$@"
+else
+    "$@"
+fi

@@ -308,6 +308,7 @@ OpenSSH for those.
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
 | wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
 | st | bin | 0.9.3 | suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
+| xephyr | bin | 1.20.11-28.el8_10.3 | Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port) |
 | yank | bin | 1.3.0 | Select terminal output and copy to clipboard |
 | yq | bin | 4.53.3 | YAML/JSON/XML/CSV processor (jq for YAML) |
 | zellij | bin | 0.44.3 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |

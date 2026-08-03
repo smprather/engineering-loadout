@@ -122,6 +122,7 @@ run_test "install-parity-plot" tests/install-parity-plot
 run_test "install-linux-tmp-home" tests/install-linux-tmp-home
 run_test "install-split-shared-envs" tests/install-split-shared-envs
 run_test "install-nvim-deployments" tests/install-nvim-deployments
+run_test "install-xdesk" tests/install-xdesk
 run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
 run_test "crate-store integrity" "$PY" build/verify-crate-store --check-lock
 

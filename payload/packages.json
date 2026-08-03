@@ -1721,6 +1721,36 @@
       ],
       "description": "rxvt-unicode \u2014 X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"
     },
+    "xephyr": {
+      "kind": "bin",
+      "bins": [
+        "Xephyr",
+        "Xephyr.bin",
+        "xdesk"
+      ],
+      "libs": [
+        "libXdmcp.so.6",
+        "libXfont2.so.2",
+        "libfontenc.so.1",
+        "libxcb-glx.so.0",
+        "libxcb-xf86dri.so.0",
+        "libxcb-xv.so.0"
+      ],
+      "depends": [
+        "gui_libs",
+        "mesa3d_libs"
+      ],
+      "version": "1.20.11-28.el8_10.3",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "x11",
+        "gui",
+        "desktop"
+      ],
+      "description": "Xephyr \u2014 nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
+    },
     "wezterm": {
       "kind": "bin",
       "bins": [],
@@ -3284,6 +3314,7 @@
         "st",
         "mate-terminal",
         "wezterm",
+        "xephyr",
         "firefox",
         "flameshot"
       ],

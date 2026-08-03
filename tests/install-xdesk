@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# Smoke the nested-desktop package (xephyr + xdesk) end to end: install into a
+# temp root, start a nested X server through the xdesk launcher, run a client
+# inside it, and prove the launcher's three load-bearing behaviours.
+#
+# Needs a real parent X display, so it SKIPS cleanly when $DISPLAY is unset --
+# the Tier 3 container and any headless CI have none. tests/prebuilt-binaries
+# already covers the headless half (Xephyr -help / xdesk --help probes); what
+# only a display can catch is the launcher logic:
+#
+#   1. server readiness -- the first version waited on /tmp/.X11-unix/X$N and
+#      timed out against a healthy server, because a host whose /tmp/.X11-unix
+#      has the wrong mode (WSLg, hardened hosts) makes Xephyr bind ONLY the
+#      Linux abstract socket. Regressing that check makes xdesk useless while
+#      every other gate stays green.
+#   2. auth -- a nested server with no cookie is readable by every other user
+#      on a shared farm node.
+#   3. teardown -- no orphaned X server, no leaked state dir.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+if [[ -z ${DISPLAY:-} ]]; then
+    echo "SKIP: no \$DISPLAY -- xdesk needs a parent X display to nest inside"
+    exit 0
+fi
+
+test_home=$(mktemp -d /tmp/loadout-xdesk-home.XXXXXX)
+dest_dir=$(mktemp -d /tmp/loadout-xdesk-dest.XXXXXX)
+local_prefix="$dest_dir/local"
+
+# State for the --keep regression test: populated when we bring up a server
+# we expect to outlive the launcher, and torn down by the EXIT trap so a
+# failure mid-test never leaks a running nested X server or its state dir.
+keep_pid=""
+keep_state_dir=""
+
+cleanup() {
+    if [[ -n $keep_pid ]] && kill -0 "$keep_pid" 2>/dev/null; then
+        kill "$keep_pid" 2>/dev/null || true
+        wait "$keep_pid" 2>/dev/null || true
+    fi
+    if [[ -n $keep_state_dir ]] && [[ -d $keep_state_dir ]]; then
+        rm -rf "$keep_state_dir"
+    fi
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "xdesk smoke failed: $*" >&2
+    exit 1
+}
+
+echo "Installing xephyr into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install xephyr --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -20 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+[[ -x $local_prefix/bin/Xephyr ]] || fail "Xephyr wrapper not installed"
+[[ -x $local_prefix/bin/Xephyr.bin ]] || fail "Xephyr.bin not installed"
+[[ -x $local_prefix/bin/xdesk ]] || fail "xdesk not installed"
+
+# The wrapper must resolve every bundled lib from the staged tree, not from the
+# build host's /usr/lib64.
+if LD_LIBRARY_PATH="$local_prefix/lib64" ldd "$local_prefix/bin/Xephyr.bin" | grep -q 'not found'; then
+    LD_LIBRARY_PATH="$local_prefix/lib64" ldd "$local_prefix/bin/Xephyr.bin" | grep 'not found' >&2
+    fail "unresolved shared libraries"
+fi
+
+if ! command -v xdpyinfo > /dev/null 2>&1; then
+    echo "SKIP: host xdpyinfo missing -- cannot verify the nested display"
+    exit 0
+fi
+
+# The session command runs INSIDE the nested display, which is the only place
+# the cookie is valid -- that is itself the auth assertion.
+cat > "$test_home/session.sh" << 'SESSION'
+#!/bin/sh
+set -e
+echo "nested-display=$DISPLAY"
+xdpyinfo | sed -n 's/^  dimensions: *\([0-9x]*\).*/nested-dimensions=\1/p'
+if XAUTHORITY=/dev/null xdpyinfo > /dev/null 2>&1; then
+    echo "auth-enforced=no"
+else
+    echo "auth-enforced=yes"
+fi
+SESSION
+chmod +x "$test_home/session.sh"
+
+# Xephyr is itself a client of the OUTER display, so Xlib needs the outer
+# cookie. On hosts whose outer display uses MIT-MAGIC auth (NoMachine, GDM,
+# most non-WSLg boxes) the cookie lives at $XAUTHORITY or $HOME/.Xauthority.
+# Below we rewrite HOME to the temp dir so the nested session does not litter
+# the real home, which would leave XAUTHORITY pointing at a nonexistent path
+# -- so resolve the outer auth file FIRST and carry it through explicitly.
+# WSLg has no outer auth file at all; there we must leave XAUTHORITY unset
+# rather than point it at a path that does not exist.
+outer_xauth=""
+if [[ -n ${XAUTHORITY:-} ]] && [[ -e $XAUTHORITY ]]; then
+    outer_xauth=$XAUTHORITY
+elif [[ -e ${HOME}/.Xauthority ]]; then
+    outer_xauth=$HOME/.Xauthority
+fi
+
+run_xdesk() {
+    # run_xdesk <log-path> <args...>
+    local log_path=$1; shift
+    if [[ -n $outer_xauth ]]; then
+        DISPLAY="$DISPLAY" HOME="$test_home" XAUTHORITY="$outer_xauth" \
+            "$local_prefix/bin/xdesk" "$@" > "$log_path" 2>&1
+    else
+        DISPLAY="$DISPLAY" HOME="$test_home" \
+            "$local_prefix/bin/xdesk" "$@" > "$log_path" 2>&1
+    fi
+}
+
+echo "Smoke: nested server via xdesk"
+if ! run_xdesk "$test_home/xdesk.log" -s 640x480 --no-dbus -- "$test_home/session.sh"; then
+    cat "$test_home/xdesk.log" >&2
+    fail "xdesk exited non-zero"
+fi
+out=$(cat "$test_home/xdesk.log")
+
+grep -q 'nested-dimensions=640x480' <<< "$out" \
+    || { echo "$out" >&2; fail "nested display did not come up at the requested size"; }
+grep -q 'auth-enforced=yes' <<< "$out" \
+    || { echo "$out" >&2; fail "nested server accepted a connection with no cookie"; }
+
+nested_display=$(sed -n 's/^nested-display=//p' <<< "$out")
+[[ -n $nested_display ]] || fail "could not determine the nested display"
+echo "  OK: $nested_display at 640x480, cookie auth enforced"
+
+# Teardown: the server dies with the session and leaves no state behind.
+# The process name is Xephyr.bin (bin/Xephyr is a sh wrapper that execs
+# bin/Xephyr.bin), so pgrep -x Xephyr never matches -- match on the full
+# command line instead, scoped to this test's own display and user. A
+# developer's own unrelated Xephyr is on a different display and is not
+# matched, so this stays safe to run on a shared dev box.
+sleep 1
+display_num=${nested_display#:}
+if [[ -e /tmp/.X11-unix/X$display_num ]] ||
+    grep -aqE "@/tmp/\.X11-unix/X$display_num\$" /proc/net/unix 2> /dev/null; then
+    fail "nested server $nested_display still listening after the session exited"
+fi
+if pgrep -u "$(id -u)" -f "Xephyr.bin $nested_display" > /dev/null 2>&1; then
+    fail "orphaned Xephyr process for $nested_display"
+fi
+echo "  OK: server torn down, no listener left"
+
+# Regression test for the --keep security bug: cleanup() used to delete the
+# state dir (which holds the MIT-MAGIC-COOKIE file passed to Xephyr via
+# -auth) even under -k/--keep, where the server is deliberately left
+# running. Deleting the cookie before any client has connected left a nested
+# X server that ANY local user could connect to with no cookie -- on a
+# shared farm node that exposed the nested session's keystrokes. The fixed
+# launcher keeps the server AND the state dir alive under -k and prints the
+# display, pid, XAUTHORITY path, and the cleanup command to stderr.
+#
+# CRITICAL: the kept server inherits xdesk's stdout/stderr, so capturing the
+# launcher's output with $(...) or a pipe would block forever waiting for
+# the pipe to close. Redirect to a file and read the file instead.
+echo "Smoke: xdesk --keep leaves server up and cookie enforced"
+
+# A trivial session command that exits immediately; the server is what we
+# care about, and --keep is supposed to outlive it.
+cat > "$test_home/keep-session.sh" << 'KEEP_SESSION'
+#!/bin/sh
+echo "keep-display=$DISPLAY"
+KEEP_SESSION
+chmod +x "$test_home/keep-session.sh"
+
+if ! run_xdesk "$test_home/keep.log" -k -s 320x240 --no-dbus -- "$test_home/keep-session.sh"; then
+    cat "$test_home/keep.log" >&2
+    fail "xdesk --keep exited non-zero"
+fi
+keep_out=$(cat "$test_home/keep.log")
+
+keep_display=$(sed -n 's/^keep-display=//p' <<< "$keep_out")
+[[ -n $keep_display ]] || { cat "$test_home/keep.log" >&2; fail "could not determine the kept display"; }
+
+# The fixed launcher prints three lines on stderr; parse each out of the
+# captured log so this test fails loudly if the message format regresses --
+# do NOT glob $XDG_RUNTIME_DIR, that would pass even with the bug back.
+#
+#   xdesk: keeping nested server -- display :10 pid 4242
+#   xdesk:   connect with: DISPLAY=:10 XAUTHORITY=<authfile> <client>
+#   xdesk:   dispose of it with: kill 4242; rm -rf <statedir>
+keep_pid=$(sed -n 's/^xdesk: keeping nested server -- display .* pid \([0-9]\{1,\}\)$/\1/p' <<< "$keep_out")
+keep_xauth=$(sed -n 's/^xdesk:  *connect with: .*XAUTHORITY=\([^ ]\{1,\}\).*$/\1/p' <<< "$keep_out")
+keep_state_dir=$(sed -n 's/^xdesk:  *dispose of it with: kill [0-9]\{1,\}; rm -rf \(.*\)$/\1/p' <<< "$keep_out")
+
+[[ -n $keep_pid ]] || { cat "$test_home/keep.log" >&2; fail "xdesk --keep did not print its pid"; }
+[[ -n $keep_xauth ]] || { cat "$test_home/keep.log" >&2; fail "xdesk --keep did not print the XAUTHORITY path"; }
+[[ -n $keep_state_dir ]] || { cat "$test_home/keep.log" >&2; fail "xdesk --keep did not print the state dir path"; }
+
+kill -0 "$keep_pid" 2>/dev/null \
+    || { cat "$test_home/keep.log" >&2; fail "kept server pid $keep_pid is not alive"; }
+[[ -d $keep_state_dir ]] \
+    || { cat "$test_home/keep.log" >&2; fail "kept state dir $keep_state_dir was removed"; }
+[[ -e $keep_xauth ]] \
+    || { cat "$test_home/keep.log" >&2; fail "kept Xauthority $keep_xauth was removed"; }
+echo "  OK: server $keep_display (pid $keep_pid) alive, state dir and cookie retained"
+
+# 1. A connection with NO cookie must FAIL. Point HOME at an empty dir so
+#    ~/.Xauthority cannot supply one either, and unset XAUTHORITY. If this
+#    succeeds, the security bug is back -- the kept server is wide open.
+empty_home=$(mktemp -d /tmp/loadout-xdesk-empty.XXXXXX)
+if env -u XAUTHORITY HOME="$empty_home" DISPLAY="$keep_display" xdpyinfo > /dev/null 2>&1; then
+    rm -rf "$empty_home"
+    fail "SECURITY REGRESSION: kept server $keep_display accepted a cookie-less connection"
+fi
+rm -rf "$empty_home"
+echo "  OK: cookie-less connection rejected"
+
+# 2. A connection WITH the printed cookie must succeed.
+if ! env -u XAUTHORITY XAUTHORITY="$keep_xauth" HOME="$test_home" DISPLAY="$keep_display" \
+        xdpyinfo > /dev/null 2>&1; then
+    fail "kept server $keep_display rejected a connection with the printed cookie"
+fi
+echo "  OK: authenticated connection accepted"
+
+# 3. Tear the kept server down ourselves and verify it is gone. Mirror what
+#    the fixed launcher's cleanup command would do.
+kill "$keep_pid" 2>/dev/null || true
+wait "$keep_pid" 2>/dev/null || true
+rm -rf "$keep_state_dir"
+keep_pid=""
+keep_state_dir=""
+
+keep_display_num=${keep_display#:}
+sleep 1
+if [[ -e /tmp/.X11-unix/X$keep_display_num ]] ||
+    grep -aqE "@/tmp/\.X11-unix/X$keep_display_num\$" /proc/net/unix 2> /dev/null; then
+    fail "kept server $keep_display still listening after teardown"
+fi
+if pgrep -u "$(id -u)" -f "Xephyr.bin $keep_display" > /dev/null 2>&1; then
+    fail "orphaned Xephyr process for $keep_display"
+fi
+echo "  OK: kept server torn down, no listener left"
+
+echo "xdesk: OK"

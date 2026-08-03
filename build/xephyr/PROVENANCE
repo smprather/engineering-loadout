@@ -1,0 +1,25 @@
+# Written by build/build-xephyr.sh on 2026-08-03T15:20:58Z.
+# Do not edit by hand; the script overwrites this on each build.
+
+Source:       EL8 AppStream RPMs (x86_64 only), pinned by --tag
+Platform:     el8.x86_64.glibc2p28
+Tag:          1.20.11-28.el8_10.3
+Built:        2026-08-03
+
+Bundled RPM NVRs (every source RPM actually consumed):
+  xorg-x11-server-Xephyr-1.20.11-28.el8_10.3.x86_64
+  libXdmcp-1.1.3-1.el8.x86_64
+  libXfont2-2.0.3-2.el8_10.1.x86_64
+  libfontenc-1.1.3-8.el8.x86_64
+  libxcb-1.13.1-1.el8.x86_64
+
+The --tag is the full version-release (e.g. 1.20.11-28.el8_10.3). The release
+field is where Red Hat's CVE backports live, so pinning it is what
+makes the shipped X server reproducible and auditable.
+payload/packages.json records the same full NVR as the xephyr
+entry's "version" field.
+
+Bundled support libs (taken from the RPMs above, never from
+/usr/lib64 on the build box):
+  libXdmcp.so.6, libXfont2.so.2, libfontenc.so.1,
+  libxcb-glx.so.0, libxcb-xf86dri.so.0, libxcb-xv.so.0

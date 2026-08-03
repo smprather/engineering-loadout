@@ -2791,3 +2791,166 @@ its entire stdlib unreachable. `tests/prebuilt-binaries` instead requires 13
 modules from the *installed* tree, asserts stderr is silent, and checks
 `gem env`'s INSTALLATION DIRECTORY resolves inside the staged tree (which is what
 catches the wrapper falling through to a system ruby).
+
+## Xephyr 1.20.11-28.el8_10.3 -- nested X server + `xdesk` session launcher (shanghai from EL8 AppStream RPM)
+
+Lets a user run a *different* desktop or window manager without root. On a
+locked-down host the DE is chosen by root-owned config -- NoMachine's
+`/usr/NX/etc/node.cfg` (`DefaultDesktopCommand "... gnome-session --session=gnome"`,
+hardcoded, so the usual `~/.xsession` hook via `/etc/X11/xinit/Xsession default`
+does **not** apply), or GDM's session list. Xephyr sidesteps all of it: it is an
+ordinary client window inside the session the user already has, and an X server
+for whatever runs inside it.
+
+**Chosen over Xvnc deliberately.** A user-run `Xvnc` opens a listening TCP port
+(590x), which is exactly the thing a security-minded site bans, and the repo's
+own `vnc`/`killvnc` aliases imply farm nodes already run one. Xephyr binds no
+network socket at all.
+
+**Build:** `build/build-xephyr.sh --tag 1.20.11-28.el8_10.3`
+
+`--tag` takes the full NVR version-release, not a bare upstream version: the
+`-28.el8_10.3` release field is where Red Hat's CVE backports live, and the
+build rejects a bare `1.20.11`. The script `dnf download`s the RPM into a temp
+dir and extracts with `rpm2cpio | cpio` -- no root, and the bundled bits are
+pinned to `--tag` rather than to whatever the build box happens to have
+installed. `--rpm <file>` takes a hand-carried RPM on an offline box. The
+script records every consumed RPM NVR in `build/xephyr/PROVENANCE` and **fails
+unless `payload/packages.json` records the same NVR** as `--tag`, so the
+registry and the payload cannot drift.
+
+### Library split (the part that decides what ships)
+
+Of Xephyr's 34 `NEEDED` sonames, only **six** needed bundling:
+`libXdmcp.so.6 libXfont2.so.2 libfontenc.so.1 libxcb-glx.so.0 libxcb-xf86dri.so.0 libxcb-xv.so.0`.
+The six support libs are sourced from their own downloaded RPMs (`libXdmcp`,
+`libXfont2`, `libfontenc`, `libxcb`), not copied out of the build box's
+`/usr/lib64` -- the old behaviour pinned Xephyr to `--tag` while leaving its
+libraries at whatever the build box happened to have installed, so a lib bump
+could ship silently. Each consumed RPM NVR is recorded in
+`build/xephyr/PROVENANCE`.
+
+`libfontenc` is there for a reason worth remembering: it is **not** a dependency
+of the binary, it is a dependency of bundled `libXfont2`. The first cut of this
+package checked only the binary's own `NEEDED` list, shipped green through Tier
+1 and Tier 2, and was caught by the clean-container gate with
+`libfontenc.so.1 => not found` -- the build box had the X libs installed, so
+nothing local could see the gap. The closure guard now walks the binary **and
+every bundled lib**. (`libXfont2` also pulls `libfreetype.so.6`, which
+`gui_libs` already owns, so that one is a depends, not a bundle.)
+
+- **`gui_libs`** already owns libX11, libX11-xcb, libXau, libdbus-1, libepoxy,
+  libpixman-1, libfreetype and 9 of the `libxcb-*` extensions -> declared as a
+  `depends`.
+- **`mesa3d_libs`** already owns `libdrm.so.2` and `libxshmfence.so.1` at the
+  same `lib64/` path this package would install to. Declared as a `depends`
+  rather than duplicated -- two packages owning one path is a real install
+  hazard -- and it has the side benefit of giving the nested server a genuine
+  Mesa vendor side for GLX. It is non-optional already, so this adds no weight.
+- **GLVND stays host-provided.** `libGL.so.1` / `libGLX.so.0` /
+  `libGLdispatch.so.0` are NEEDED but must never be bundled (see CLAUDE.md).
+  `tests/prebuilt-binaries` skips the exec probe when the host lacks them.
+
+The build script re-derives this closure with `objdump -p` on every run and
+**fails** on any NEEDED soname not covered by the bundle, a declared dependency,
+or the EL8-base allowlist. Without that guard a new upstream dep would ship
+green from a build box that happens to have it (the NSS/firefox trap).
+
+**Assumed present, not bundled:** `/usr/share/X11/xkb` (xkeyboard-config) and
+`/usr/bin/xkbcomp`, which the server compiles its keymap through at startup.
+Present on any host with an X server or GUI stack; without them Xephyr falls
+back to a pre-XKB keymap rather than failing. Also the EL8-base set
+(libsystemd, libudev, libaudit, libcap-ng, libselinux, libcrypto, libgcrypt).
+
+### `xdesk` (build/xephyr/xdesk)
+
+`xdesk [-s WxH] [-f] [-d :N] [--no-dbus] [--no-auth] [-k] [-- command...]`.
+Picks a free display, starts Xephyr, runs the session, tears the server down.
+With no command it tries `$XDESK_SESSION` then autodetects
+(`xfce4-session startxfce4 mate-session startlxqt fluxbox icewm openbox i3 dwm twm`).
+
+Three things in it are load-bearing:
+
+1. **MIT-MAGIC-COOKIE auth by default.** A unix-socket X server is *not*
+   access-controlled: on a shared farm node any other user could connect to the
+   nested display and read its keystrokes. `xdesk` mints a cookie into a private
+   `$XDG_RUNTIME_DIR` state dir and exports `XAUTHORITY`. It warns loudly if
+   `xauth`/`mcookie` are missing rather than silently running open.
+   `--no-auth` exists for debugging only.
+2. **Readiness waits on the right fact.** The first version waited for
+   `/tmp/.X11-unix/X$N` to appear and timed out against a perfectly healthy
+   server: when `/tmp/.X11-unix` has the wrong mode (WSLg mounts it 0755, and
+   hardened hosts do the same) Xephyr logs `failed to create listener for unix`
+   and binds **only** the Linux abstract socket. Clients connect through it
+   fine. `server_ready()` therefore accepts either the filesystem socket or
+   `@/tmp/.X11-unix/X$N` in `/proc/net/unix`; display selection checks both too.
+3. **One session bus.** `dbus-launch --exit-with-session` wraps the session,
+   except for `start*` launchers (`startxfce4` runs `dbus-launch` itself; a
+   second bus would strand half the session's services on the wrong one).
+
+It also warns when `XDG_RUNTIME_DIR` is not `drwx------`, because dconf and
+D-Bus refuse a world-writable one and the resulting CRITICAL spew looks like a
+packaging bug.
+
+Two more `xdesk` rules worth recording:
+
+- **`-k/--keep` does not remove the state dir holding the cookie.** An X server
+  whose auth file is gone before any client connects applies no access control
+  at all -- verified: a cookie-less connection succeeds against a kept server
+  whose state dir was deleted. The kept server also inherits xdesk's
+  stdout/stderr, so a caller reading xdesk's output through a pipe or `$(...)`
+  blocks until the server itself exits; redirect to a file when combining
+  `--keep` with output capture.
+- **The nested session is forced onto X11 toolkits.** `xdesk` unsets
+  `WAYLAND_DISPLAY` and exports `GDK_BACKEND=x11` / `QT_QPA_PLATFORM=xcb` so
+  GTK/Qt clients cannot escape to the outer compositor. Without it this repo's
+  own guidance to set `QT_QPA_PLATFORM=wayland` on WSLg would send every Qt app
+  in the nest to the outer desktop.
+
+### Keyboard grabs -- expect them, they are not a defect
+
+Three layers grab before the nested server sees anything: the local OS and
+remote-desktop client (Alt+Tab, the NoMachine magic key `Ctrl+Alt+0`), then the
+**outer** desktop's own passive grabs (Super, Super+\*, Alt+Tab, Ctrl+Alt+arrows,
+Print). Inside the Xephyr window, **Ctrl+Shift** toggles a full keyboard/pointer
+grab, which outranks those passive grabs and routes them into the nested
+session. Bind nested WM shortcuts to **Ctrl+Alt+letter** to avoid the collision
+outright; do not use Super (outer WM owns it) or Ctrl+Shift (that is the toggle).
+
+### Verified
+
+Nested full XFCE 4.16 session on an EL8 box: `_NET_WM_NAME = "Xfwm4"`, panel,
+xfdesktop, Thunar, xfsettingsd, power-manager, clean Logout. `xfwm4` warns
+`Unsupported GL renderer (llvmpipe)` and falls back from compositing -- expected
+with software GL.
+
+**Nested GNOME does not work, and it is not Xephyr's fault.** `gnome-session`
+starts, and every `gsd-*` daemon plus ibus/yelp connect, but `gnome-shell` 3.32
+exits with `TypeError: this._userProxy.Display is null` in
+`loginManager.js:getCurrentSessionProxy` -- it asks logind for the user's
+graphical session and gets nothing on a host where none is registered. No GL
+error is involved. Use a WM or a non-GNOME session inside the nest.
+
+**No `build/farm-versions` entry**, on purpose: X servers of this vintage take
+single-dash options only, `-version` is unrecognized, and the stripped binary
+carries no version string, so every strategy would report a permanent gap. The
+version lives in `packages.json` and is enforced against the RPM NVR by
+`--tag`.
+
+**Smoke:** `Xephyr -help` (exit 0, no parent display needed) and
+`xdesk --help`, wired into `PROBE_FLAGS` in `tests/prebuilt-binaries` --
+`--version` exits 1 with `Unrecognized option`, which would score red.
+
+`tests/prebuilt-binaries` also gained a general fix here: a **wrapper** script
+cannot be ldd-checked, so `bin/Xephyr` was exec-probed in the GL-less container
+and returned 127 for a package that was fine, while `bin/Xephyr.bin` skipped
+correctly. The loop now resolves a non-ELF `bin/<name>` to its `bin/<name>.bin`
+sibling (a repo-wide convention) for the host-`.so` skip decision only -- when
+anything is missing that is *not* host-required it still falls through to the
+normal exec probe, so the change can only add skips, never mask a real failure.
+
+`tests/install-xdesk` covers what no headless gate can: it installs into a temp
+root, brings up a nested display through `xdesk`, and asserts the size, that a
+cookie-less connection is refused, and that the server and its state dir are
+gone afterwards. It **skips** when `$DISPLAY` is unset, so the container and any
+headless CI stay green.

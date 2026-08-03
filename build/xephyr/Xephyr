@@ -1,0 +1,44 @@
+#!/bin/sh
+# Relocatable Xephyr entry point.
+#
+# Xephyr is a nested X server: it is an ordinary X client of the outer display
+# and an X server for whatever runs inside it. It links libGL for GLX proxying,
+# so this wrapper points the Mesa vendor side at the bundled mesa3d_libs tree
+# exactly as the surfer and wezterm wrappers do. The GLVND dispatcher
+# (libGL.so.1 / libGLX.so.0 / libGLdispatch.so.0) stays host-provided on
+# purpose -- see CLAUDE.md, "Never bundle these libs".
+#
+# Prefix is derived from the installed launcher path, not from $HOME, so
+# --dest-dir installs and shared-tree deployments resolve their own libs.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+bin_dir="$prefix/bin"
+mesa_libdir="$prefix/lib64"
+
+if [ -d "$mesa_libdir" ]; then
+    # NOTE: this exported LD_LIBRARY_PATH is inherited by host binaries that
+    # Xephyr forks at runtime -- notably /usr/bin/xkbcomp, which it runs to
+    # compile its keymap. Those children then resolve libX11/libxcb/etc. from
+    # the bundled tree instead of the host's. On EL8 the bundled and host
+    # versions match, so this is benign today; a future non-EL8 target where
+    # the bundled libs are older/newer than the host's could see xkbcomp (or
+    # similar forked helpers) misbehave. Unlike the wezterm/surfer wrappers,
+    # Xephyr is the only one that forks host helpers like this.
+    LD_LIBRARY_PATH="$mesa_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH
+    if [ -d "$mesa_libdir/dri" ]; then
+        LIBGL_DRIVERS_PATH="$mesa_libdir/dri${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
+        export LIBGL_DRIVERS_PATH
+    fi
+fi
+if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
+    __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+    export __EGL_VENDOR_LIBRARY_DIRS
+fi
+
+exec "$bin_dir/Xephyr.bin" "$@"
