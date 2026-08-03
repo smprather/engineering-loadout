@@ -55,7 +55,7 @@ sha256  2f53fe219fbe6edf520124779d2272b3d7d9e7ba4715bfac3c2752ecd101668c  payloa
 sha256  0a54580a36df9790a89a481cd6d87c1691963c6477b22e1548bd4fa248c4ffa4  payload/el8.x86_64.glibc2p28/bin/fio.bz2
 sha256  4ec7a3c799c74c49ad962cb1ca57a09a67d3eeb48f1d74577a914e692962d1e7  payload/el8.x86_64.glibc2p28/bin/fish.bin.bz2
 sha256  b7e73e2cb678e23a7fbc90058d26b1a607e25820631333c17bf2ca1897b7648d  payload/el8.x86_64.glibc2p28/bin/fish.bz2
-sha256  2365eb19a164711291d447b6bcde4f4e1814b98721d3769fdfef84c71bc73302  payload/el8.x86_64.glibc2p28/bin/flameshot.bz2
+sha256  d81e97dabe525b0fc3a8e0be31db95430fc2373024d342890b006516bf388d81  payload/el8.x86_64.glibc2p28/bin/flameshot.bz2
 sha256  71c69f9a5bcfd4e328674bf252d198b7ce3af6727b1f069c4a1dcf882d7e5088  payload/el8.x86_64.glibc2p28/bin/fmt.bz2
 sha256  ed02e52236b570b5cff3fd761dd404d44d082bf23134848befcc7cda497cf637  payload/el8.x86_64.glibc2p28/bin/fold.bz2
 sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  payload/el8.x86_64.glibc2p28/bin/fresh.bz2
@@ -123,7 +123,7 @@ sha256  7e23b9702a7f02f2be8dca5cdacceb417d76fa30deafb315fecaeb8cd597baca  payloa
 sha256  c67127a51d1190afd3ce56cbb7e3aa1327c00eb62cc1f8ba1c79373838980959  payload/el8.x86_64.glibc2p28/bin/nohup.bz2
 sha256  b07a55cf07829ef22189172b0e58ca92cbca62ec48ca5c7a9703c2ec0b31d16e  payload/el8.x86_64.glibc2p28/bin/nproc.bz2
 sha256  20970dc40eddcfc2a99385a163ebdf8b4c346915c608c8dd234fa0a50ce78cb6  payload/el8.x86_64.glibc2p28/bin/numfmt.bz2
-sha256  603b81679c6d734b914793cfe9a77f560785e1111d707a033dac767c4a250d59  payload/el8.x86_64.glibc2p28/bin/numr.bz2
+sha256  8cea5405de5c17b7129f28bcec5a23b0c19fb2631dd8b38cc9dfac24cde3ea82  payload/el8.x86_64.glibc2p28/bin/numr.bz2
 sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  payload/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
 sha256  5af93582ed4b8886a24eec3d2ca8b7711be6ca85606d23e8946a7e35b29e8df1  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  eacb73a3e57af3b2d3399f3785aab8305fcd1fa743bc08d7500ac15f19f3577d  payload/el8.x86_64.glibc2p28/bin/octave.bz2

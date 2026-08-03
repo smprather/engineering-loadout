@@ -114,6 +114,38 @@ patch("src/tools/pin/pinwidget.h",
       [("    void enterEvent(QEnterEvent*) override;", enter("    void enterEvent(QEVT) override;"))])
 patch("src/tools/pin/pinwidget.cpp",
       [("void PinWidget::enterEvent(QEnterEvent*)", enter("void PinWidget::enterEvent(QEVT)"))])
+# 14.0.0 grew a third enterEvent override, this one with a named parameter.
+patch("src/utils/monitorpreview.h",
+      [("    void enterEvent(QEnterEvent* event) override;",
+        enter("    void enterEvent(QEVT event) override;"))])
+patch("src/utils/monitorpreview.cpp",
+      [("void MonitorPreview::enterEvent(QEnterEvent* event)",
+        enter("void MonitorPreview::enterEvent(QEVT event)"))])
+
+# 3b. QImageReader::setAllocationLimit (new in Qt 6.0) -- no Qt5 equivalent.
+# Qt5 simply has no allocation cap, which is the behaviour every flameshot
+# release before 14.0 shipped, so compiling the call out is not a regression.
+patch("src/utils/screengrabber.cpp",
+      [("    QImageReader::setAllocationLimit(1024);",
+        "#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)\n"
+        "    QImageReader::setAllocationLimit(1024);\n"
+        "#endif")])
+
+# 3c. QMimeData::retrieveData's second parameter is QMetaType on Qt6 and
+# QVariant::Type on Qt5. It is an override, so the signature has to match the
+# base class exactly or it stops overriding anything (which is what the Qt5
+# build reported). The body passes `type` straight through to
+# QMimeData::retrieveData, so only the declaration needs to differ.
+patch("src/utils/screenshotsaver.cpp",
+      [("    QVariant retrieveData(const QString& mimeType,\n"
+        "                          QMetaType type) const override",
+        "#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)\n"
+        "    QVariant retrieveData(const QString& mimeType,\n"
+        "                          QMetaType type) const override\n"
+        "#else\n"
+        "    QVariant retrieveData(const QString& mimeType,\n"
+        "                          QVariant::Type type) const override\n"
+        "#endif")])
 
 # 4. QMouseEvent::globalPosition() (Qt6) -> globalPos() (present in both)
 patch("src/widgets/draggablewidgetmaker.cpp",

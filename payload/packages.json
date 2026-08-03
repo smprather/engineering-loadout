@@ -554,7 +554,7 @@
       "depends": [
         "gui_libs"
       ],
-      "version": "13.3.0",
+      "version": "14.0.0",
       "platforms": [
         "linux"
       ],
@@ -941,7 +941,7 @@
       "bins": [
         "numr"
       ],
-      "version": "0.6.0",
+      "version": "0.8.0",
       "platforms": [
         "linux"
       ],
