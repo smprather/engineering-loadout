@@ -401,7 +401,7 @@ tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal
 tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
-tar-meta  38874648  1784306296  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
+tar-meta  38794521  1785780813  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  5831  1784306296  payload/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
 tar-meta  4854855  1784306298  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4435698  1784306301  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
@@ -411,7 +411,7 @@ tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  8133059  1784306306  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
-tar-meta  937153  1784306309  payload/tldr/tldr-pages.tar.bz2
+tar-meta  937153  1785780848  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2
 sha256  dd4de208187c47636fe5ac53fdbb31347902ba5372e2d19b3959acb6c91b2526  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/angular.so.bz2
@@ -738,4 +738,4 @@ sha256  c52891aae13f34d05c509c114a3e92e97c26938fac67e14ce32b578c4c6ff5b2  payloa
 sha256  e342cf73d0933f8bfe60b7a6587786cd4bf53ce8d5608ddf5f89efc1215f4702  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy.so.bz2
 sha256  ba384ab03a65cbd5e4e9c7f8159aef7c8c2975fc38d3732b3b60b79ee14ebc80  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy_schema.so.bz2
 sha256  3a8f97cc4768000e6e3e349ea0ad1cfa8531a2cb1765619696da7f9c4cc592d3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/zsh.so.bz2
-sha256  4846e5052a7c3ec160a241f11ead00757fd04eaaf88be75651889de8b5a3a344  payload/yara/yara-rules-full.yar.bz2
+sha256  acc02922530198d50c3dde9ec3ffd246250dc88517a7811e3fcb068dfd75720e  payload/yara/yara-rules-full.yar.bz2

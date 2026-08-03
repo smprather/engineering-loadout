@@ -2207,7 +2207,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.5.0",
+      "version": "26.2.0",
       "platforms": [
         "linux"
       ],
@@ -2390,7 +2390,7 @@
       ],
       "uv_tool": "text-serdes",
       "rolling_git": "https://github.com/smprather/text-serdes.git",
-      "version": "c9e83b7",
+      "version": "e624d2d",
       "platforms": [
         "linux"
       ],

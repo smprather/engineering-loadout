@@ -37,3 +37,4 @@
 2026-07-27T19:19:47Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygem-io-console-0.7.1-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	f05d2baa744e842dd0aa079f32f602b53f5444844a88f2f412f25b97ad85272b
 2026-07-27T19:19:47Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygem-psych-5.1.2-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	75451cb7374bc9de02fb635a7d25b5f71ad17f0eb2b5f66aff190f9364f1b997
 2026-07-27T19:19:48Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygem-rdoc-6.6.3.1-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	16609a745d44377dcc550a7f741a0ef935c40598893026521f52ebbbefd21468
+2026-08-03T18:12:51Z	https://github.com/YARAHQ/yara-forge/releases/download/20260802/yara-forge-rules-full.zip	b2d6ae823ae97088a79b94855e21c9795467d3618510a50f041a7bb9019f6f23
