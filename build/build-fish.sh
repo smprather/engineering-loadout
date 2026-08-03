@@ -142,14 +142,42 @@ fi
 echo "  OK: fish_prompt defined, $("$INSTALL_PREFIX/bin/fish" -c 'functions | count') functions available"
 echo ""
 
-# Package the binary
+# Package the binary as bin/fish.bin, behind the POSIX-sh wrapper at bin/fish.
+#
+# The split is load-bearing and was silently lost once: an earlier tag bump wrote
+# the raw ELF straight to bin/fish.bz2, which dropped the wrapper and left
+# bin/fish.bin.bz2 frozen at whatever version last built it (4.7.1, shipped for
+# months afterwards). Nothing caught it -- probing `fish --version` returns the
+# new version either way, because bin/fish was then the binary itself. What is
+# lost without the wrapper is relocation: fish falls back to its build-time
+# prefix, a throwaway /tmp path, so --dest-dir installs and shared-tree
+# deployments resolve the wrong data dir.
 WORK="/tmp/fish_work_${tag}"
 cp "$INSTALL_PREFIX/bin/fish" "$WORK"
 strip "$WORK"
 "$PATCHELF" --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' "$WORK"
 bzip2 -kf "$WORK"
-cp "${WORK}.bz2" "$BIN_DIR/fish.bz2"
+cp "${WORK}.bz2" "$BIN_DIR/fish.bin.bz2"
 rm -f "$WORK" "${WORK}.bz2"
+
+WRAPPER="$REPO/build/fish/fish"
+[ -f "$WRAPPER" ] || { echo "ERROR: missing wrapper $WRAPPER" >&2; exit 1; }
+WWORK="/tmp/fish_wrapper_${tag}"
+cp "$WRAPPER" "$WWORK"
+chmod 755 "$WWORK"
+bzip2 -kf "$WWORK"
+cp "${WWORK}.bz2" "$BIN_DIR/fish.bz2"
+rm -f "$WWORK" "${WWORK}.bz2"
+
+# Guard the regression above: bin/fish must be the script, bin/fish.bin the ELF.
+if bzip2 -dc "$BIN_DIR/fish.bz2" | head -c 4 | grep -q ELF; then
+    echo "ERROR: $BIN_DIR/fish.bz2 is an ELF; it must be the sh wrapper." >&2
+    exit 1
+fi
+if ! bzip2 -dc "$BIN_DIR/fish.bin.bz2" | head -c 4 | grep -q ELF; then
+    echo "ERROR: $BIN_DIR/fish.bin.bz2 is not an ELF." >&2
+    exit 1
+fi
 
 # Package the runtime. Since 4.8 this is only the vendor_*.d drop-in dirs (the
 # stdlib is inside the binary); on older tags it also carries functions/,

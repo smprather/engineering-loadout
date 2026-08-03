@@ -1,0 +1,32 @@
+#!/bin/sh
+# Relocatable fish entry point.
+#
+# fish resolves its data/config directories from a prefix baked in at build
+# time unless it can detect a relocatable tree. It only switches into that mode
+# when BOTH <prefix>/share/fish and <prefix>/etc/fish exist; otherwise it
+# overwrites the __fish_* variables with the build-time prefix, which for this
+# payload is a throwaway /tmp path. share/fish comes from the runtime archive;
+# etc/fish is not shipped by anything, so create it here.
+#
+# Prefix is derived from the installed launcher path, not from $HOME, so
+# --dest-dir installs and shared-tree deployments resolve their own data. A
+# --dest-dir install can also be run with a fake HOME, which is exactly when a
+# $HOME-derived prefix silently resolves to the wrong tree.
+#
+# Explicit user overrides win: the assignments below are conditional.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+[ -d "$prefix/etc/fish" ] || mkdir -p "$prefix/etc/fish" 2>/dev/null || true
+
+: "${__fish_data_dir:=$prefix/share/fish}"
+: "${__fish_bin_dir:=$prefix/bin}"
+: "${__fish_sysconf_dir:=$prefix/etc/fish}"
+export __fish_data_dir __fish_bin_dir __fish_sysconf_dir
+
+exec "$prefix/bin/fish.bin" "$@"
