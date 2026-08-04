@@ -95,11 +95,100 @@ def _index_checksums(store_dir):
     return cks
 
 
+TOOL_LOCKS = os.path.join(REPO, "build", "rust-tool-locks.txt")
+REGISTRY = os.path.join(REPO, "payload", "packages.json")
+
+# rust-tool-locks.txt name -> packages.json name, where they differ.
+_TOOL_ALIASES = {"ripgrep": "rg"}
+
+
+def _tool_refs():
+    """[(name, ref)] from build/rust-tool-locks.txt, skipping HEAD-tracked repos."""
+    out = []
+    with open(TOOL_LOCKS, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 3 or parts[2] == "HEAD":
+                continue
+            out.append((parts[0], parts[2]))
+    return out
+
+
+def check_policy():
+    """Assert build/rust-tool-locks.txt still matches what packages.json ships.
+
+    The SHIPPED store is the superset built by build-tool-crate-store.sh: the
+    user seed closure UNION every bundled rust tool's Cargo.lock closure. Those
+    tool locks are harvested at the refs pinned in build/rust-tool-locks.txt,
+    and that file says "Refs track the versions bundled in packages.json. Bump
+    here when the bundled binary is bumped." Nothing enforced it.
+
+    So the refs silently rotted -- fish sat at 4.7.1 while the loadout shipped
+    4.8.1, which is exactly why the store lacked fish's Fluent crates and the
+    4.8.1 build died with "no matching package named `unic-langid` found". Same
+    for numr 0.5.5 vs 0.8.0 and nine others. --check-lock never noticed, because
+    it only compares the store to its own committed lock, never to the inputs
+    that are supposed to produce it.
+
+    Deliberately does NOT check the aws-lc ban: build-crate-store.sh bans it for
+    the lean user-only store, but the superset builder downgrades that to a
+    warning because a bundled tool's lock may legitimately pin it (numr's does,
+    via reqwest -> rustls).
+    """
+    with open(REGISTRY, encoding="utf-8") as fh:
+        packages = json.load(fh)["packages"]
+
+    drifted, unknown = [], []
+    refs = _tool_refs()
+    for name, ref in refs:
+        pkg = packages.get(_TOOL_ALIASES.get(name, name))
+        if pkg is None:
+            unknown.append(name)
+            continue
+        want = str(pkg.get("version", ""))
+        if want and want != ref:
+            drifted.append((name, ref, want))
+
+    if drifted or unknown:
+        if drifted:
+            print(
+                "build/rust-tool-locks.txt refs disagree with payload/packages.json.",
+                file=sys.stderr,
+            )
+            print(
+                "The shipped crate store is built from these refs, so a stale one means "
+                "the store cannot rebuild that tool offline:",
+                file=sys.stderr,
+            )
+            for name, ref, want in drifted:
+                print(f"  {name}: locks say {ref}, registry ships {want}", file=sys.stderr)
+        if unknown:
+            print("Tools listed in rust-tool-locks.txt with no packages.json entry:", file=sys.stderr)
+            for name in unknown:
+                print("  " + name, file=sys.stderr)
+        print("  Re-pin the refs, then rebuild: build/build-tool-crate-store.sh", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"crate-store policy OK ({len(refs)} pinned tool refs match packages.json)")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Integrity-check the offline Cargo crate store.")
     ap.add_argument("--emit-lock", action="store_true", help="(re)write assurance/crate-store.lock")
     ap.add_argument("--check-lock", action="store_true", help="fail if the committed lock differs from computed")
+    ap.add_argument(
+        "--check-policy",
+        action="store_true",
+        help="fail if the store violates the seed list or the ban list (reads the lock; no extraction)",
+    )
     args = ap.parse_args()
+
+    if args.check_policy and not (args.emit_lock or args.check_lock):
+        check_policy()
+        return
 
     with tempfile.TemporaryDirectory(prefix="verify-crate-store-") as tmp:
         store = _extract_store(tmp)

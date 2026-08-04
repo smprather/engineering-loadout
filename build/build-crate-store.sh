@@ -39,10 +39,15 @@ LIST="$REPO/build/rust-crate-list.txt"
 OUT_DIR="$REPO/payload/crate-store"
 OUT_ARCHIVE="$OUT_DIR/crate-store.tar.bz2"
 
-# Crates forbidden in the store. The seed list already drops the online/TLS
-# stack that drags these in, so this is a regression guardrail: if a banned
-# crate ever sneaks back into the resolved closure the build fails loudly with
-# the dependency path so you can drop/steer the offending seed.
+# Crates forbidden in the store. If a banned crate turns up in the resolved
+# closure the build fails loudly with the dependency path, so you can drop or
+# steer the offending seed.
+#
+# This is the LEAN user-only store, so the ban stands: the seed list drops the
+# online/TLS stack these come from. The SHIPPED store is built by
+# build-tool-crate-store.sh, which unions in every bundled tool's Cargo.lock and
+# downgrades this ban to a warning, because a tool's lock may legitimately pin
+# aws-lc (numr's does, via reqwest -> rustls).
 BANNED="aws-lc-sys aws-lc-rs"
 # Match strip-all-elf-binaries' CHUNK_THRESHOLD so no committed file trips
 # GitHub's 50 MB warning. rust/ is top-level (not under payload/), so the
@@ -83,13 +88,39 @@ need bzip2
 [ -r "$LIST" ] || { echo "seed list not found: $LIST" >&2; exit 1; }
 
 # Ensure cargo-local-registry is available (builds offline store indexes).
+# Deliberately BEFORE the CARGO_HOME isolation below: `cargo install` writes to
+# $CARGO_HOME/bin, so installing it into the throwaway home would discard it on
+# every run. Once installed it is found through PATH, which the isolation does
+# not touch.
 if ! cargo local-registry --help >/dev/null 2>&1; then
     echo "cargo-local-registry not found -- installing via 'cargo install'..."
     cargo install cargo-local-registry
 fi
 
+# Isolate the resolve/sync from the loadout's OWN offline cargo config.
+#
+# env-cargo writes ~/.cargo/config.toml with `[source.crates-io] replace-with =
+# "loadout-store"`, pointing cargo at the very registry this script builds. On a
+# build box that has run `loadout install env-cargo`, cargo therefore resolves
+# against the PREVIOUS store, so a resolve can only ever succeed for crates
+# already in it -- a new seed dies with "no matching package named `<seed>`
+# found ... index (which is replacing registry `crates-io`)". That is a
+# bootstrap trap: the store could not grow, which is why it went stale enough to
+# break the fish 4.8.1 build in the first place.
+#
+# A private CARGO_HOME with no config.toml makes the resolve and the sync talk
+# to real crates.io -- which is what this script's header has always claimed it
+# does ("all ONLINE").
+CARGO_HOME_ISOLATED="$(mktemp -d "${TMPDIR:-/tmp}/crate-store-cargo-home.XXXXXX")"
+CARGO_HOME="$CARGO_HOME_ISOLATED"
+export CARGO_HOME
+echo "Isolated CARGO_HOME: $CARGO_HOME (bypasses the offline source replacement)"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/crate-store.XXXXXX")"
-cleanup() { [ "$keep" -eq 1 ] || rm -rf "$WORK"; }
+cleanup() {
+    rm -rf "$CARGO_HOME_ISOLATED"
+    [ "$keep" -eq 1 ] || rm -rf "$WORK"
+}
 trap cleanup EXIT INT TERM
 
 PROJ="$WORK/seed"

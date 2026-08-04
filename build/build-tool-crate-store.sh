@@ -58,8 +58,22 @@ if ! cargo local-registry --help >/dev/null 2>&1; then
     echo "installing cargo-local-registry..."; cargo install cargo-local-registry
 fi
 
+# Isolate the resolve/sync from the loadout's OWN offline cargo config, exactly
+# as build-crate-store.sh does. env-cargo writes ~/.cargo/config.toml with
+# `[source.crates-io] replace-with = "loadout-store"`, so on a build box that has
+# run `loadout install env-cargo`, cargo resolves against the store this script
+# is rebuilding -- and a crate not already in it dies with "no matching package
+# named `<name>` found ... index (which is replacing registry `crates-io`)".
+# The store could then never gain a crate, which is how it went stale enough to
+# break the fish 4.8.1 build. Deliberately after the cargo-local-registry check
+# above, since `cargo install` writes to $CARGO_HOME/bin.
+CARGO_HOME_ISOLATED="$(mktemp -d "${TMPDIR:-/tmp}/tool-store-cargo-home.XXXXXX")"
+CARGO_HOME="$CARGO_HOME_ISOLATED"
+export CARGO_HOME
+echo "Isolated CARGO_HOME: $CARGO_HOME (bypasses the offline source replacement)"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tool-store.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT INT TERM
+trap 'rm -rf "$WORK" "$CARGO_HOME_ISOLATED"' EXIT INT TERM
 STORES="$WORK/stores"; STORE="$WORK/store"; LOCKS_DIR="$WORK/locks"
 mkdir -p "$STORES" "$STORE" "$LOCKS_DIR"
 nsync=0

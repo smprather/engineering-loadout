@@ -126,6 +126,7 @@ run_test "install-nvim-deployments" tests/install-nvim-deployments
 run_test "install-xdesk" tests/install-xdesk
 run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
 run_test "crate-store integrity" "$PY" build/verify-crate-store --check-lock
+run_test "crate-store policy" "$PY" build/verify-crate-store --check-policy
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------
 if [ "$CONTAINER" -eq 1 ]; then

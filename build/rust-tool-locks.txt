@@ -12,25 +12,29 @@
 
 # --- downloaded-prebuilt upstream rust tools (could be source-built offline) ---
 bat          https://github.com/sharkdp/bat                 0.26.1
-eza          https://github.com/eza-community/eza           0.23.4
+eza          https://github.com/eza-community/eza           0.23.5
 fd           https://github.com/sharkdp/fd                  10.4.2
-just         https://github.com/casey/just                  1.50.0
-ripgrep      https://github.com/BurntSushi/ripgrep          15.1.0
-zoxide       https://github.com/ajeetdsouza/zoxide          0.9.9
-starship     https://github.com/starship/starship           1.25.1
+just         https://github.com/casey/just                  1.57.0
+ripgrep      https://github.com/BurntSushi/ripgrep          15.2.0
+zoxide       https://github.com/ajeetdsouza/zoxide          0.10.0
+starship     https://github.com/starship/starship           1.26.0
 delta        https://github.com/dandavison/delta            0.19.2
 hyperfine    https://github.com/sharkdp/hyperfine           1.20.0
-stylua       https://github.com/JohnnyMorganz/StyLua        2.4.1
-ty           https://github.com/astral-sh/ty                0.0.49
-uv           https://github.com/astral-sh/uv                0.11.21
+stylua       https://github.com/JohnnyMorganz/StyLua        2.5.2
+ty           https://github.com/astral-sh/ty                0.0.65
+uv           https://github.com/astral-sh/uv                0.12.1
 
 # --- source-built rust tools (already built from source in the loadout) ---
-fish         https://github.com/fish-shell/fish-shell       4.7.1
-numr         https://github.com/nasedkinpv/numr             0.5.5
-models       https://github.com/reyamira/models             0.12.3
+fish         https://github.com/fish-shell/fish-shell       4.8.1
+numr         https://github.com/nasedkinpv/numr             0.8.0
+models       https://github.com/reyamira/models             0.14.0
 
 # --- first-party rolling maturin/Rust wheels (HEAD; may need clone auth) ---
 liberty-tools  https://github.com/smprather/liberty-tools.git  HEAD
 time-plot      https://github.com/smprather/time-plot.git      HEAD
 text-serdes    https://github.com/smprather/text-serdes.git    HEAD
 lefdef-tools   https://github.com/smprather/lefdef-tools.git   HEAD
+
+# --- added 2026-08-04: EL8 source-built rust tools that were never listed ---
+surfer       https://gitlab.com/surfer-project/surfer      0.7.0
+tokei        https://github.com/XAMPPRocky/tokei           14.0.0
