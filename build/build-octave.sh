@@ -114,6 +114,15 @@ bundle_lib() {
     tmp="/tmp/oct_lib_${soname}_tmp"
     cp "$srcpath" "$tmp"
     strip "$tmp" 2>/dev/null || true
+    # RPATH '$ORIGIN' so these resolve each other inside the installed lib64/.
+    # This step was missing: the shipped libhdf5/libsz/libsatlas had $ORIGIN
+    # from some earlier hand-patch, and rebuilding produced them with an EMPTY
+    # rpath. Nothing on this box noticed, because a build host with system szip
+    # installed silently satisfies libhdf5 -> libsz from /lib64; the clean
+    # AlmaLinux container, which has no szip, failed with
+    # "libsz.so.2 => not found". Textbook build-box masking -- the container is
+    # the only gate that can see it.
+    "$PATCHELF" --set-rpath '$ORIGIN' "$tmp"
     bzip2 -f -k "$tmp"
     cp "${tmp}.bz2" "$LIB_DIR/${soname}.bz2"
     chmod 644 "$LIB_DIR/${soname}.bz2"

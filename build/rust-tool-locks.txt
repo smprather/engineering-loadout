@@ -14,14 +14,14 @@
 bat          https://github.com/sharkdp/bat                 0.26.1
 eza          https://github.com/eza-community/eza           0.23.5
 fd           https://github.com/sharkdp/fd                  10.4.2
-just         https://github.com/casey/just                  1.57.0
+just         https://github.com/casey/just                  1.58.0
 ripgrep      https://github.com/BurntSushi/ripgrep          15.2.0
 zoxide       https://github.com/ajeetdsouza/zoxide          0.10.0
 starship     https://github.com/starship/starship           1.26.0
 delta        https://github.com/dandavison/delta            0.19.2
 hyperfine    https://github.com/sharkdp/hyperfine           1.20.0
 stylua       https://github.com/JohnnyMorganz/StyLua        2.5.2
-ty           https://github.com/astral-sh/ty                0.0.65
+ty           https://github.com/astral-sh/ty                0.0.66
 uv           https://github.com/astral-sh/uv                0.12.1
 
 # --- source-built rust tools (already built from source in the loadout) ---

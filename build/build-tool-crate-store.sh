@@ -214,13 +214,32 @@ mkdir -p "$OUT_DIR"
 rm -f "$OUT_ARCHIVE" "$OUT_ARCHIVE".part-*
 echo ""; echo "Packing -> $OUT_ARCHIVE ..."
 tar -cjf "$OUT_ARCHIVE" -C "$STORE" .
+
+# Assert the archive is actually there before measuring it. `wc -c < missing`
+# fails in the redirect, so the command substitution yields an empty string and
+# the `[ "$packed_bytes" -gt ... ]` below dies with "integer expression
+# expected" -- which this script previously survived, exiting 0 while leaving a
+# TRUNCATED two-chunk store in payload/. That happened for real: a concurrent
+# ./strip-all-elf-binaries saw the freshly written 314 MB archive, chunked it
+# mid-write, and this step never noticed. Never run two payload-mutating builds
+# at once, and fail loudly when the output is missing.
+[ -s "$OUT_ARCHIVE" ] || {
+    echo "ERROR: $OUT_ARCHIVE was not created (or is empty) by tar." >&2
+    echo "  Is another payload-mutating job running (strip-all-elf-binaries)?" >&2
+    exit 1
+}
 packed_bytes="$(wc -c < "$OUT_ARCHIVE" | tr -d ' ')"
+case "$packed_bytes" in
+    ''|*[!0-9]*) echo "ERROR: could not size $OUT_ARCHIVE" >&2; exit 1 ;;
+esac
 echo "  packed: $(du -sh "$OUT_ARCHIVE" | cut -f1)"
 if [ "$packed_bytes" -gt "$CHUNK_BYTES" ]; then
     echo "  splitting into .part-NNN chunks..."
     split -d -a 3 -b "$CHUNK_BYTES" "$OUT_ARCHIVE" "$OUT_ARCHIVE".part-
     rm -f "$OUT_ARCHIVE"
-    echo "  -> $(ls "$OUT_ARCHIVE".part-* | wc -l | tr -d ' ') chunks"
+    nchunks="$(ls "$OUT_ARCHIVE".part-* 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$nchunks" -ge 1 ] || { echo "ERROR: split produced no chunks" >&2; exit 1; }
+    echo "  -> $nchunks chunks"
 fi
 echo ""
 echo "Shipped store now covers user projects + offline rebuilds of loadout rust tools."

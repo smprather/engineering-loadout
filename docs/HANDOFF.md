@@ -2,6 +2,55 @@
 
 Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
 
+## Sweep finished, 2026-08-04 -- 21 packages, and what is genuinely left
+
+The currency debt from 2026-08-03 is cleared. Everything outdated that could be
+built on EL8 has been, and the things that could not are named below with the
+reason, not left as a vague "TODO".
+
+**Source-built this round:** vim + gvim 9.2.0901, octave 11.3.0, fish 4.8.1,
+flameshot 14.0.0, numr 0.8.0, tree-sitter 0.26.11, htop 3.5.2, rsync 3.4.4,
+xsel 1.2.1, yank 1.4.0, yara 4.5.8. **Prebuilt:** rg, uv, ruff, ty, fzf, just,
+lazygit, btm, amux, agent-deck, biome, nodejs 26.6.0.
+
+**Three build scripts were broken or missing** and are now fixed, which matters
+more than the version numbers:
+
+- `build/build-vim.sh` is **new**. `build-gvim.sh` took no `--tag`, wanted a
+  checkout you had prepared, and only *printed* the packaging commands. The new
+  one builds all three artifacts (terminal vim, gvim, the runtime archive) from
+  one checkout so they cannot drift apart, enforces `--without-wayland` for
+  terminal vim with a hard NEEDED check, and carries an EL8 Pango back-port
+  (9.2.0901 calls `pango_font_metrics_get_height()`, Pango >= 1.44; EL8 has
+  1.42.3).
+- `build/build-octave.sh` had `$ORIGIN` in a double-quoted `echo` (unbound
+  variable under `set -u`, so it died *after* a full compile), `11.1.0`
+  hardcoded in six paths, and a fixed `/tmp/octave-install` that had
+  accumulated two versions. Now `--tag`-driven and version-scoped. Octave's
+  registry entry is version-bearing: `version`, `sentinel` and three
+  `octave/<VERSION>` paths move together.
+- `build/build-simple-c.sh` is **new**, covering htop, rsync, xsel, yank and
+  yara -- five tools that had no script and no `ADDING_BINARIES.md` note at all,
+  in a repo that mandates one per tool.
+
+**The EL8 glibc floor check rejected four upstream prebuilts** (bottom 2.34,
+fresh 2.35, tree-sitter 2.39, htop). Each would have installed cleanly here and
+been dead on a stock farm node.
+
+Genuinely blocked, with reasons:
+
+- **jupyterlab stays at 4.6.1.** pip's `--platform` resolver backtracks into
+  httpcore 0.18.0 and then reports no usable `anyio`; constrain that and the
+  conflict moves to `jupyterlab-server`. Every package resolves individually and
+  the deps are already bundled -- this is a cross-platform-resolver limitation,
+  not a real incompatibility. Not worth a hand-assembled wheel set for a patch
+  bump.
+- **`pdftotext` stays pinned** (poppler >= 23.01 needs freetype >= 2.10; EL8 has
+  2.9.1).
+- **vim tags patches daily.** 9.2.0901 was current at build time and 9.2.0907
+  landed hours later. Chasing it is a treadmill; bump on a deliberate cadence.
+- **fish still cannot build fully offline** -- see the crate-store entry below.
+
 ## Crate store refreshed, 2026-08-04 -- and the three things still open
 
 Cleared the `rust-crate-store` debt the previous entry recorded. Root cause was
