@@ -1427,7 +1427,7 @@
         "vim",
         "vim.bin"
       ],
-      "version": "9.2.0782",
+      "version": "9.2.0901",
       "platforms": [
         "linux"
       ],
@@ -1443,7 +1443,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2.0782",
+      "version": "9.2.0901",
       "platforms": [
         "linux"
       ],

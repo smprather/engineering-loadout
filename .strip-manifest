@@ -67,7 +67,7 @@ sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  payloa
 sha256  b8f93f9c06449bc7d595bd56f280769747c3457ae6ac0b921d1098c8b7a48454  payload/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  4420caa461b042bb4c35bfc8d7580256479098c273a3f35b19edc33e6ac36ed6  payload/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  payload/el8.x86_64.glibc2p28/bin/groups.bz2
-sha256  e9f7370645a53b45d293352c6aeda366d302d1bfa86e2c3563dac910aafb38da  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
+sha256  ca6d20e0dd178aa6275d5e246b88141b3b66f46e7617f20ed78964542fa612ec  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
 sha256  34b84a2d85fcbf841318c7b84857d968f0b02eefd0339a2abcf9662836558fee  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  payload/el8.x86_64.glibc2p28/bin/head.bz2
 sha256  4f2692788e73b3b5c0370fd155109fd3cb3200f37b02e1fb6ae16e3bfb64c449  payload/el8.x86_64.glibc2p28/bin/htop.bz2
@@ -213,7 +213,7 @@ sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  payloa
 sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  payload/el8.x86_64.glibc2p28/bin/urxvtc.bz2
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  payload/el8.x86_64.glibc2p28/bin/urxvtd.bz2
 sha256  b4d98404a1dcf1919e6ca45fce522ff8eb194125f55bf97eebae74bc3ffed1e9  payload/el8.x86_64.glibc2p28/bin/uv.bz2
-sha256  cd6e4e1b196106d9c295dc8369208b28d416e0e2c4fc18c5e1369fc5cecfa5c2  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
+sha256  62511a3d5d88f0c7730890d1bcd1931e44c23e4e18dceca37e9f724f040bed8c  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  payload/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  payload/el8.x86_64.glibc2p28/bin/wc.bz2
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payload/el8.x86_64.glibc2p28/bin/whoami.bz2
@@ -409,7 +409,7 @@ tar-meta  3791513  1784306302  payload/el8.x86_64.glibc2p28/runtime/pdftotext.ta
 tar-meta  3992911  1785180018  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
-tar-meta  8133059  1784306306  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
+tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  937153  1785780848  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
