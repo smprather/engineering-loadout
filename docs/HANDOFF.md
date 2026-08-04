@@ -2,6 +2,41 @@
 
 Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
 
+## Crate store refreshed, 2026-08-04 -- and the three things still open
+
+Cleared the `rust-crate-store` debt the previous entry recorded. Root cause was
+**not** a stale store as such: `build/rust-tool-locks.txt`, which pins the refs
+the superset builder harvests, had drifted from `payload/packages.json` on 11
+tools. fish was pinned at 4.7.1 while the loadout shipped 4.8.1, so the store
+never saw 4.8.1's localization deps. `surfer` and `tokei` were absent entirely.
+Re-pinned, added, rebuilt: 2101 -> 2199 crates, assurance record re-pinned, and
+`build/verify-crate-store --check-policy` now gates ref-vs-registry drift in
+Tier 1.
+
+**Two builders, do not confuse them.** `build-crate-store.sh` makes the lean
+user-only store and legitimately bans `aws-lc-*`; `build-tool-crate-store.sh`
+makes the **shipped** superset and downgrades that ban to a warning because a
+bundled tool's lock may pin it (numr's does, via `reqwest -> rustls`). The
+`[build] script =` field in `assurance/records/crate-store.toml` is the
+authority on which one ships. Both now isolate `CARGO_HOME`, because each
+previously resolved against the store it was rebuilding and so could never add
+a crate -- a stale store could not be repaired by rebuilding it.
+
+Still open, deliberately recorded rather than hidden:
+
+- **fish cannot build fully offline from the store.** 4.8.1 takes `fluent`,
+  `fluent-bundle`, `fluent-syntax` and `intl-memoizer` from a git fork
+  (`danielrainer/fluent-rs` at a pinned rev). `cargo local-registry` mirrors
+  registry crates only, so git deps are structurally out of scope. Vendoring
+  that dep separately (a git mirror, as the nvim plugin stash does) is the only
+  route. `unic-langid` -- the crate the build actually failed on -- is a
+  registry crate and is now present.
+- **The builder skipped `surfer` with "sync failed".** Surfer vendors f128 and
+  instruction-decoder as git submodules (see `ADDING_BINARIES.md`), which is the
+  likely cause; its closure is therefore not in the store.
+- **`time-plot` and `text-serdes` skipped**: "no lock and generate-lockfile
+  failed". Both are first-party rolling repos tracked at HEAD.
+
 ## Currency sweep, 2026-08-03 -- what moved, what did not, and why
 
 Ran the sweep the previous entry said was owed. It cleared a good part of the
