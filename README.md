@@ -27,7 +27,7 @@ binary, library, font, and config file ready to install:
 ```bash
 tar xzf engineering-loadout-v*.tar.gz
 cd engineering-loadout-v*/
-./fetch-stash                        # Neovim plugins -- see below
+./tools/fetch-stash                        # Neovim plugins -- see below
 ./loadout install @engineering-loadout
 ```
 
@@ -40,14 +40,14 @@ finishes.
 
 The plugin stash is a **separate release asset**, not part of the tarball --
 it is ~328 MB of bz2'd git packfiles, so committing it would grow every clone
-permanently. `./fetch-stash` downloads and verifies it against the release.
+permanently. `./tools/fetch-stash` downloads and verifies it against the release.
 
 If this machine cannot reach GitHub, download `nvim-plugin-stash.tar.bz2` and
 `sha256sums.txt` from the release elsewhere (on Windows,
 `tools/download-release.ps1`), copy both over, and pair them by hand:
 
 ```bash
-./fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \
+./tools/fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \
               --sums     /path/to/sha256sums.txt
 ```
 

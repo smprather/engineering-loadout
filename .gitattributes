@@ -11,9 +11,11 @@
 # Git hooks (developer-only; install manually with cp hooks/* .git/hooks/)
 /hooks                          export-ignore
 
-# Build and maintenance scripts (payload/ ships; build tooling does not)
-/update                         export-ignore
-/release                        export-ignore
+# Build and maintenance scripts (payload/ ships; build tooling does not).
+# update, release, strip-all-elf-binaries, scan-for-malware, split-bz2,
+# dev-onboard and export all live under build/ now, so this one line covers
+# them -- they used to need an entry each, at the cost of cluttering the repo
+# root that GitHub shows first.
 /build                          export-ignore
 
 
@@ -25,14 +27,6 @@
 /.agents                        export-ignore
 /.codex-plugins                 export-ignore
 /.agentignore                   export-ignore
-/dev-onboard                    export-ignore
-/strip-all-elf-binaries         export-ignore
-/scan-for-malware               export-ignore
-/split-bz2                      export-ignore
-
-# ./export publishes a git-less tree by running `git archive`, so it cannot
-# function inside its own output -- there is no .git there to archive from.
-/export                         export-ignore
 
 # Linter configs for developing this repo. ruff and ty are shipped as bundled
 # BINARIES (payload/.../bin/), which users get regardless; these files only
@@ -40,9 +34,9 @@
 /ruff.toml                      export-ignore
 /ty.toml                        export-ignore
 
-# sha256/tar-mtime cache for strip-all-elf-binaries, which is itself
-# export-ignored. Nothing the installer runs reads it -- verified: the only
-# references are build/*.sh, ./update and strip-all-elf-binaries. Not covered by
+# sha256/tar-mtime cache for build/strip-all-elf-binaries, which is itself
+# export-ignored (via /build). Nothing the installer runs reads it -- verified: the only
+# references are build/*.sh, build/update and build/strip-all-elf-binaries. Not covered by
 # .content-manifest either (that pins payload/ only), so dropping it changes no
 # verification.
 /.strip-manifest                export-ignore

@@ -134,11 +134,11 @@ is a **GitHub release asset**, not part of the release tarball -- fetch it once
 into the checkout before staging the shared tree:
 
 ```bash
-./fetch-stash                      # from the latest release, verified
+./tools/fetch-stash                      # from the latest release, verified
 ./loadout install @shared-all --dest-dir /opt/engineering-loadout/releases/...
 ```
 
-Refresh plugins later without a new loadout release with `./refresh-stash`, and
+Refresh plugins later without a new loadout release with `./tools/refresh-stash`, and
 override the stash location with `LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR` if needed.
 Neovim itself needs `git` to clone from the stash; `git-nvim` (in `@shared-all`)
 provides a private one for boxes with no system git. See the full behavior in

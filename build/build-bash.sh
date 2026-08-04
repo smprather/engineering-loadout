@@ -117,7 +117,7 @@ print('packages.json: bash version -> ' + ver)
 " "$REPO/payload/packages.json" "$ver"
 
 echo "Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 MAXG="$(readelf -V bash 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1)"
 echo "Max glibc symbol: $MAXG (target <= GLIBC_2.28)"

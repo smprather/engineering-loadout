@@ -193,7 +193,7 @@ print('packages.json: urxvt* version -> ' + ver)
 
 # Update strip manifest
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 # glibc check (use the largest binary, urxvt)
 MAX_GLIBC="$(readelf -V "$INSTALL_PREFIX/bin/urxvt" 2>/dev/null \

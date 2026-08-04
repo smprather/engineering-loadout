@@ -523,7 +523,7 @@ def main(dry_run, strip_bin, no_manifest, chunk_only):
       - Tar archives are rewritten as *.tar.bz2 after stripping ELF contents.
       - .git is skipped.
     """
-    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     if chunk_only:
         n = chunk_large_payload(repo_dir, dry_run)

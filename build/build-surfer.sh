@@ -16,7 +16,7 @@
 #   build/build-surfer.sh --tag v0.7.0
 #   build/build-surfer.sh --tag v0.7.0 --source /path/to/checkout
 #
-# After running: ./strip-all-elf-binaries && \
+# After running: ./build/strip-all-elf-binaries && \
 #   ./loadout completion bash > envs/bash/global/completions/loadout.bash
 
 set -euo pipefail
@@ -142,6 +142,6 @@ echo "  $BIN_DIR/surfer.bz2       (wrapper)"
 echo "  $BIN_DIR/surfer.bin.bz2   (ELF $floor)"
 echo
 echo "Next:"
-echo "  ./strip-all-elf-binaries"
+echo "  ./build/strip-all-elf-binaries"
 echo "  ./loadout completion bash > envs/bash/global/completions/loadout.bash"
 echo "  git add payload/$PLATFORM/bin/surfer.bz2 payload/$PLATFORM/bin/surfer.bin.bz2 .strip-manifest"

@@ -199,7 +199,7 @@ def main():
 
     # 8. scan-for-malware target directories must exist. A rename that leaves a
     # stale path turns the scan into a silent no-op (this is exactly how the
-    # crate-store and the four ./update artifact paths drifted after the reorg).
+    # crate-store and the four ./build/update artifact paths drifted after the reorg).
     scan_targets = [
         os.path.join(REPO, "payload", "crate-store"),
         os.path.join(REPO, "payload", "yara"),

@@ -147,7 +147,7 @@ RPATH is pre-baked into each binary in the repo (see above), so no post-install 
 ### 5. Strip
 
 ```bash
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 Strips debug symbols from new `.bz2` payloads and records them in `.strip-manifest` so they're
@@ -311,7 +311,7 @@ cp /tmp/gnuplot-install/libexec/gnuplot/6.0/gnuplot_x11 "$DEST/gnuplot_x11"
 chmod 755 "$DEST/gnuplot_x11"
 tar -C "$STAGE" -cf - ./libexec | bzip2 -9 > "payload/$PLAT/runtime/gnuplot.tar.bz2"
 rm -rf "$STAGE"
-./strip-all-elf-binaries          # normalizes the archive, records it in .strip-manifest
+./build/strip-all-elf-binaries          # normalizes the archive, records it in .strip-manifest
 ```
 
 Wiring:
@@ -859,7 +859,7 @@ The build script:
 ### Post-build
 
 ```bash
-./strip-all-elf-binaries   # strips the Tcl launcher binaries; updates .strip-manifest
+./build/strip-all-elf-binaries   # strips the Tcl launcher binaries; updates .strip-manifest
 tests/install-modules
 git add payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2 .strip-manifest \
         payload/packages.json build/build-modules.sh
@@ -1246,7 +1246,7 @@ curl -fsSL -o cloc \
 bzip2 -kf cloc
 cp cloc.bz2 payload/el8.x86_64.glibc2p28/bin/cloc.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/cloc.bz2
-./strip-all-elf-binaries              # records cloc.bz2 as a non-ELF payload, skips stripping
+./build/strip-all-elf-binaries              # records cloc.bz2 as a non-ELF payload, skips stripping
 ```
 
 - Shebang is `#\!/usr/bin/env perl` -- resolves to EL8's `/usr/bin/perl` at runtime.
@@ -1274,7 +1274,7 @@ file scc                              # ELF ... version 1 (SYSV) -> statically l
 bzip2 -kf scc
 cp scc.bz2 payload/el8.x86_64.glibc2p28/bin/scc.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/scc.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 packages.json `kind: bin`, `tags: [dev,data]`, no libs.
@@ -1300,7 +1300,7 @@ strip "$TOK"
 bzip2 -kf "$TOK"
 cp "$TOK.bz2" payload/el8.x86_64.glibc2p28/bin/tokei.bz2   # (copy the stripped+bz2'd file)
 chmod 644 payload/el8.x86_64.glibc2p28/bin/tokei.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - System libs only -> no bundling, no RPATH. Max glibc 2.28 (native EL8 build).
@@ -1393,7 +1393,7 @@ Script:
   strip-all-elf-binaries' chunk0-sha manifest cache doesn't block a fresh
   rewrite.
 - `tar cjf` to `runtime/firefox.tar.bz2`, updates `packages.json`
-  version, runs `./strip-all-elf-binaries` which strips ELFs inside
+  version, runs `./build/strip-all-elf-binaries` which strips ELFs inside
   the archive and auto-chunks the final ~136 MB output into
   `firefox.tar.bz2.part-NNN` shards (4 x ~40 MiB).
 
@@ -1557,7 +1557,7 @@ then you run the strip normalizer (skips both via the RPATH guard):
 
 ```bash
 ./build/build-fio.sh --tag fio-3.42
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 git add payload/el8.x86_64.glibc2p28/bin/fio.bz2 \
         payload/el8.x86_64.glibc2p28/lib64/libaio.so.1.bz2 \
         .strip-manifest payload/packages.json \
@@ -1618,7 +1618,7 @@ patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' "$N"
 bzip2 -kf "$N"
 cp "$N.bz2" payload/el8.x86_64.glibc2p28/bin/numr.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/numr.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - System libs only (glibc + libgcc_s) -> no bundling. RPATH set anyway, harmless.
@@ -1648,7 +1648,7 @@ ldd  shellcheck-v0.11.0/shellcheck                # "not a dynamic executable"
 bzip2 -kf shellcheck-v0.11.0/shellcheck
 cp shellcheck-v0.11.0/shellcheck.bz2 payload/el8.x86_64.glibc2p28/bin/shellcheck.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/shellcheck.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - packages.json `kind: bin`, `tags: [shell,lint]`, no libs; member of `@dev-tools`
@@ -1680,7 +1680,7 @@ ldd  amux                                         # "not a dynamic executable"
 bzip2 -kf amux
 cp amux.bz2 payload/el8.x86_64.glibc2p28/bin/amux.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/amux.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - packages.json `kind: bin`, `tags: [agent,tui,dev]`, member of `@dev-tools`.
@@ -1714,7 +1714,7 @@ for b in yazi ya; do
     cp "$D/$b.bz2" "payload/el8.x86_64.glibc2p28/bin/$b.bz2"
     chmod 644 "payload/el8.x86_64.glibc2p28/bin/$b.bz2"
 done
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - packages.json `kind: bin`, `bins: [yazi, ya]`, `tags: [nav,tui,file]`, member of
@@ -1744,7 +1744,7 @@ file "$D/glow"; ldd "$D/glow"                      # statically linked
 bzip2 -kf "$D/glow"
 cp "$D/glow.bz2" payload/el8.x86_64.glibc2p28/bin/glow.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/glow.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - packages.json `kind: bin`, `tags: [markdown,viewer,tui]`, member of `@core-cli`.
@@ -1770,7 +1770,7 @@ file keyb; ldd keyb                                # statically linked
 bzip2 -kf keyb
 cp keyb.bz2 payload/el8.x86_64.glibc2p28/bin/keyb.bz2
 chmod 644 payload/el8.x86_64.glibc2p28/bin/keyb.bz2
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ```
 
 - packages.json `kind: bin`, `tags: [tui,reference]`, member of `@core-cli`.
@@ -2049,7 +2049,7 @@ libstdc++/libc), no RPATH/patchelf needed.
 
 **Packaging:** the build script tars the stage tree, stamps
 `packages.json` `vcd-toggle-profiler.version` to `git describe --tags --always
---dirty`, then runs `./strip-all-elf-binaries` (rewrites/normalizes the tar.bz2
+--dirty`, then runs `./build/strip-all-elf-binaries` (rewrites/normalizes the tar.bz2
 and records its size+mtime in `.strip-manifest`). Package kind `runtime`,
 sentinel `bin/vcd-toggle-profiler`, install_to `~/.local`, `recommends pigz` (so
 `.vcd.gz` input uses the fast bundled gzip path). Re-run
@@ -2073,7 +2073,7 @@ so it stays out of the full `@engineering-loadout` bundle.
 
 ```bash
 build/build-surfer.sh --tag v0.7.0
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ./loadout completion bash > envs/bash/global/completions/loadout.bash
 ```
 
@@ -2263,7 +2263,7 @@ added in OpenSSH **8.2**. Stock EL8 ships **8.0p1**, whose `ssh-keygen` has no
 dump. Bundling modern signer tools gives every node a working `ssh-keygen`.
 The package also exposes an explicit `ssh10` client for hosts like GitHub, but
 normal `ssh` stays the system `/usr/bin/ssh`. This is the tool that makes
-`./release` produce a signed tag on EL8 -- see docs/SECURITY.md section 6.
+`./build/release` produce a signed tag on EL8 -- see docs/SECURITY.md section 6.
 
 ```bash
 build/build-openssh.sh --tag V_10_4_P1
@@ -2297,7 +2297,7 @@ it to the release string `10.4p1` for the registry version and a banner check
 **Non-obvious quirks:**
 - `build-box masking`: the maintainer's own signer came from this same build.
   The dev box only had a working `ssh-keygen -Y sign` after this package existed;
-  before it, `./release` could not sign on EL8 at all. If you ever build on a
+  before it, `./build/release` could not sign on EL8 at all. If you ever build on a
   truly stock EL8 with only 8.0p1, `git tag -s` fails until `~/.local/bin/ssh-keygen`
   (this package) is on PATH ahead of `/usr/bin`.
 - **Passphrase-protected keys**: `ssh-keygen -Y sign` needs the private key
@@ -2310,7 +2310,7 @@ it to the release string `10.4p1` for the registry version and a banner check
   loadout-owned bare clients by hash so system SSH wins again.
 
 **Updating:** re-run `build-openssh.sh --tag V_<new>`; the version stamp and
-banner check derive from the tag. Then `./strip-all-elf-binaries` (the script
+banner check derive from the tag. Then `./build/strip-all-elf-binaries` (the script
 already calls it) and regenerate the bash completion.
 
 ## st 0.9.3 -- suckless terminal (EL8 SOURCE build; undercurl + runtime-config patch)
@@ -2441,7 +2441,7 @@ both the shipped archive and the sentinel -- the next tag bump would have
 installed to `~/.local/.terminfo` and failed its own sentinel check. Do not
 revert to `.terminfo`.
 
-`build-st.sh` then runs `./strip-all-elf-binaries`, regenerates
+`build-st.sh` then runs `./build/strip-all-elf-binaries`, regenerates
 `.content-manifest`, and bumps the `st` version in `packages.json`.
 
 **Registry (`payload/packages.json`):**
@@ -2609,7 +2609,7 @@ Nothing to bundle, no patchelf, no RPATH -- the simplest possible packaging.
 `tests/prebuilt-binaries` asserts `.p 3` from the majority PLA -- a mis-built binary
 could still run and mis-reduce, so `--version` is not enough.
 
-**Verify after building:** `./strip-all-elf-binaries && build/gen-content-manifest &&
+**Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
 ./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
 `./loadout install espresso --dest-dir <d>` and feed it a PLA.
 
@@ -2682,7 +2682,7 @@ EL8 floor. No runtime data files, so no runtime tarball.
 The registry `"bins"` entry MUST use the underscore form -- it names the payload
 stem `bin/spice_subckt_rc_reduce.bz2`, not the package.
 
-**Not `rolling_git`, despite being first-party.** `./update`'s rolling path
+**Not `rolling_git`, despite being first-party.** `./build/update`'s rolling path
 builds Python *wheels* (`uv build --wheel`), so it cannot produce a Rust binary.
 Bump it with the build script and a stable tag like any other `build`-class
 package.

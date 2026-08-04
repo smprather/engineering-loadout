@@ -121,4 +121,4 @@ rm -rf "$STAGING"
 
 echo "Installed: $RUNTIME_DIR/git.tar.bz2 ($(du -h "$RUNTIME_DIR/git.tar.bz2" | cut -f1))"
 echo ""
-echo "Next: ./strip-all-elf-binaries && build/gen-content-manifest, then commit."
+echo "Next: ./build/strip-all-elf-binaries && build/gen-content-manifest, then commit."

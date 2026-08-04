@@ -79,6 +79,6 @@ echo "Installed: $BIN_DIR/espresso.bz2"
 
 echo ""
 echo "Next:"
-echo "  $REPO/strip-all-elf-binaries && $REPO/build/gen-content-manifest"
+echo "  $REPO/build/strip-all-elf-binaries && $REPO/build/gen-content-manifest"
 echo "  $REPO/loadout completion bash > $REPO/envs/bash/global/completions/loadout.bash"
 echo "  git add $BIN_DIR/espresso.bz2 $REPO/payload/packages.json"

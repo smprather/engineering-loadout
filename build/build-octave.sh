@@ -197,6 +197,6 @@ echo "  runtime: $(ls -lh "$RUNTIME_DIR/octave.tar.bz2" | awk '{print $5}')"
 
 echo ""
 echo "=== Done. Run next steps: ==="
-echo "  cd $REPO && ./strip-all-elf-binaries"
+echo "  cd $REPO && ./build/strip-all-elf-binaries"
 echo "  git add payload/el8.x86_64.glibc2p28/ .strip-manifest"
 echo "  git commit"

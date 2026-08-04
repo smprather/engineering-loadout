@@ -104,7 +104,7 @@ loadout_stamp_version tmux "$ver"
 
 # Update strip manifest
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 # glibc check
 loadout_report_max_glibc "$INSTALL_PREFIX/bin/tmux"

@@ -15,7 +15,7 @@ assurance/
   profiles/<package>.toml   dynamic-analysis profile (invocations + fs/net allowlists)
   crate-store.lock          committed name/version/cksum closure of the offline crate store
   treesitter-parser-locks.json  per-grammar url + revision + shipped-.so sha256
-  downloads.log             append-only TSV of every ./update fetch: date  url  sha256
+  downloads.log             append-only TSV of every ./build/update fetch: date  url  sha256
 ```
 
 ## Record schema (schema = 1)

@@ -14,7 +14,7 @@ bzip2 -k /tmp/mybinary_tmp
 cp /tmp/mybinary_tmp.bz2 payload/el8.x86_64.glibc2p28/bin/mybinary.bz2
 
 # 2. Update strip manifest
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 
 # 3. Register in the package registry (payload/packages.json, schema_version 3)
 #    {"mybinary": {"kind": "bin", "bins": ["mybinary"], "version": "X.Y.Z",
@@ -24,7 +24,7 @@ cp /tmp/mybinary_tmp.bz2 payload/el8.x86_64.glibc2p28/bin/mybinary.bz2
 #    should ship in the curated bundled set.
 
 # 4. Smoke-test and commit
-tests/prebuilt-binaries --keep   # or just ./release --dry-run
+tests/prebuilt-binaries --keep   # or just ./build/release --dry-run
 git add payload/ .strip-manifest
 git commit
 ```
@@ -37,7 +37,7 @@ full workflow including dependency auditing, Go binary flags,
 
 ```bash
 build/import-portable-python /path/to/portable-python-X.Y.Z-tag/
-./strip-all-elf-binaries   # skips BOLT-optimized Python archive automatically
+./build/strip-all-elf-binaries   # skips BOLT-optimized Python archive automatically
 git add payload/ .strip-manifest
 git commit
 ```
@@ -45,7 +45,7 @@ git commit
 ## Updating tldr pages
 
 ```bash
-./update tldr-data
+./build/update tldr-data
 git add payload/tldr/ .content-manifest
 git commit
 ```
@@ -57,7 +57,7 @@ git commit
 ## Updating tmux plugins
 
 ```bash
-./update tmux-plugins
+./build/update tmux-plugins
 git add envs/tmux/vendor/
 git commit
 ```
@@ -74,7 +74,7 @@ git commit
 
 After extracting a release and running
 `./loadout install @engineering-loadout` to install the runtime, run
-`./dev-onboard` once to add the system-level packages, dev headers, and
+`./build/dev-onboard` once to add the system-level packages, dev headers, and
 per-user toolchains required to rebuild any bundled tool from source. Six
 phases: dnf repos -> toolchains (gcc-toolset-14, llvm, go) -> dev headers
 (X11 / Qt5 / GTK3 / ncurses / Octave) -> release / CI (gh, docker) ->
@@ -128,7 +128,7 @@ Tier 2 integration installs, Tier 3 clean-container smoke). Stock
 AlmaLinux 8 is the verification baseline for install behavior; the dev box
 is not.
 
-Run `./release --dry-run` before creating a release to smoke-test all
+Run `./build/release --dry-run` before creating a release to smoke-test all
 binaries via a temp install. When Docker is available, run
 `tests/prebuilt-binaries-almalinux8` for the
 maximum-coverage check against a clean AlmaLinux 8.10 base image. That Docker

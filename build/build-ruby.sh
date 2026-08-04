@@ -97,7 +97,7 @@ fetch() {
         echo "  (check --tag/--context against: dnf module info ruby:3.3)" >&2
         exit 1
     fi
-    # TOFU provenance, same as ./update and build/update-prebuilt.
+    # TOFU provenance, same as ./build/update and build/update-prebuilt.
     printf '%s\t%s\t%s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_f_url" "$(sha256sum "$_f_out" | cut -d' ' -f1)" \
         >> "$DOWNLOADS_LOG"
@@ -360,6 +360,6 @@ loadout_stamp_version ruby "$version"
 
 echo ""
 echo "Next:"
-echo "  ./strip-all-elf-binaries"
+echo "  ./build/strip-all-elf-binaries"
 echo "  python3.14 build/gen-content-manifest"
 echo "  tests/prebuilt-binaries --keep"

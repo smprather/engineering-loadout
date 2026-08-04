@@ -92,7 +92,7 @@ print('packages.json: gocheat version -> ' + ver)
 " "$REPO/payload/packages.json" "$ver"
 
 echo "Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Installed: $BIN_DIR/gocheat.bz2"

@@ -136,6 +136,6 @@ fi
 
 echo ""
 echo "Done. 'rust.tar.bz2' is in strip-all-elf-binaries' NOSTRIP list, so do NOT"
-echo "expect ./strip-all-elf-binaries to touch it. packages.json carries the"
+echo "expect ./build/strip-all-elf-binaries to touch it. packages.json carries the"
 echo "'rust' runtime package (sentinel bin/cargo, install_to ~/.local)."
 echo "Install with:  ./loadout install rust   (or @rust for the crate store too)"

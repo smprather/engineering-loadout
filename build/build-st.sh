@@ -322,7 +322,7 @@ print('packages.json: st version -> ' + ver)
 
 # Update strip manifest
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 # glibc check
 MAX_GLIBC="$(readelf -V "$SRCDIR/st" 2>/dev/null \

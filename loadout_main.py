@@ -592,7 +592,7 @@ def _load_content_manifest(repo_dir):
     repo -- today just the nvim plugin stash, which is a 328 MB release ASSET rather
     than a git payload (committing it added ~328 MB to history on every refresh).
 
-    A fetched entry is written ONLY by ./fetch-stash, and only after it has verified the
+    A fetched entry is written ONLY by ./tools/fetch-stash, and only after it has verified the
     downloaded bytes against sha256sums.txt from the release, which is itself covered by
     the signed tag. So the trust chain is unbroken:
 
@@ -2469,7 +2469,7 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
     if not archive:
         skipped(
             "payload/tldr/tldr-pages.tar.bz2 or payload/tldr/tldr-pages.tar.gz not found in repo",
-            "run ./update tldr-data on a connected machine to bundle the pages",
+            "run ./build/update tldr-data on a connected machine to bundle the pages",
         )
         record_result("tldr cache", "SKIP", "no bundled cache archive")
         return
@@ -3243,12 +3243,12 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
             "nvim plugins: no plugin stash found, so NO PLUGINS were installed.\n"
             "  The stash (bare git mirrors, ~328 MB) ships as a release ASSET, not in the repo.\n"
             "  Get it with:\n"
-            "    ./fetch-stash                      # online: from the latest release\n"
-            "    ./fetch-stash --from-file <file> --sums <sha256sums.txt>\n"
+            "    ./tools/fetch-stash                      # online: from the latest release\n"
+            "    ./tools/fetch-stash --from-file <file> --sums <sha256sums.txt>\n"
             "                                       # air-gapped: a copy you brought in\n"
             "  Then re-run this install. nvim itself works fine in the meantime."
         )
-        record_result("nvim plugins", "SKIP", "no plugin stash (fetch it: ./fetch-stash)")
+        record_result("nvim plugins", "SKIP", "no plugin stash (fetch it: ./tools/fetch-stash)")
         return
 
     git_bin = _resolve_git(home)
@@ -5559,10 +5559,10 @@ def main(argv):
             "  The payload on disk does not match .content-manifest (or is not listed in it).\n"
             "  Nothing was installed from that file.\n"
             "  If this is the nvim plugin stash: it is a release ASSET, not a git payload --\n"
-            "  fetch it with ./fetch-stash, which verifies it against the signed release and\n"
+            "  fetch it with ./tools/fetch-stash, which verifies it against the signed release and\n"
             "  records the hash in .content-manifest.fetched.\n"
             "  Otherwise your checkout may be corrupt or modified: re-clone, or re-run\n"
-            "  ./strip-all-elf-binaries if you changed the payload deliberately.",
+            "  ./build/strip-all-elf-binaries if you changed the payload deliberately.",
             file=sys.stderr,
         )
         return 1

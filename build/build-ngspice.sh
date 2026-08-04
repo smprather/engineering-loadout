@@ -236,7 +236,7 @@ with open(path, 'w') as f:
 " "$REPO/payload/packages.json" "$VERSION"
 
 echo "==> Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Done."

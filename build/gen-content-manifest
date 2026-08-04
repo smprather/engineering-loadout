@@ -49,7 +49,7 @@ def sha256_of(path):
 # PRESENT on a build box, so it must be excluded explicitly -- otherwise the committed
 # manifest would hash a file that most checkouts do not have, and `--check` would fail for
 # everyone who has not fetched it. Its integrity is covered by sha256sums.txt in the
-# signed release, and ./fetch-stash records the verified hash in .content-manifest.fetched.
+# signed release, and ./tools/fetch-stash records the verified hash in .content-manifest.fetched.
 EXCLUDE = {
     os.path.join("envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2"),
 }

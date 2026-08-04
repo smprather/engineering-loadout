@@ -258,7 +258,7 @@ def main(portable_dir, platform_override, output, dry_run):
         print()
         print("Next steps:")
         print("  cd <repo>")
-        print("  ./strip-all-elf-binaries   # skips BOLT-optimized portable-python archives")
+        print("  ./build/strip-all-elf-binaries   # skips BOLT-optimized portable-python archives")
         print("  git add payload/{}/{}".format(platform, os.path.basename(portable_dir) + ".tar.bz2"))
         print("  git commit")
 

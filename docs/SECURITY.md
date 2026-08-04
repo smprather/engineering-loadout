@@ -37,7 +37,7 @@ Two engines; the scan fails if **either** detects:
 - **ClamAV** (`clamscan`) when present; degrades to YARA-only with a warning if
   absent. Refresh signatures with `freshclam` on the build box.
 
-`./release` runs it as a mandatory Step 0 in parallel with the other
+`./build/release` runs it as a mandatory Step 0 in parallel with the other
 pre-release gates. The final tag/release step waits and aborts on detection.
 
 Coverage is the whole shipped tree -- **~69,000 files**: `bin`/`lib64`, runtime
@@ -48,12 +48,12 @@ crate store scanned a dead path and portable-python was skipped entirely --
 both fixed.)
 
 ```bash
-./scan-for-malware              # full scan (YARA + ClamAV)
-./scan-for-malware --fast       # bin/lib64 only (dev tier)
-./scan-for-malware --no-clamav  # YARA only
-./scan-for-malware --no-cache   # force a fresh scan and do not write cache
-./scan-for-malware --clear-cache # delete cached clean scan results first
-./scan-for-malware --path DIR   # scan an arbitrary staging tree (pre-pack)
+./build/scan-for-malware              # full scan (YARA + ClamAV)
+./build/scan-for-malware --fast       # bin/lib64 only (dev tier)
+./build/scan-for-malware --no-clamav  # YARA only
+./build/scan-for-malware --no-cache   # force a fresh scan and do not write cache
+./build/scan-for-malware --clear-cache # delete cached clean scan results first
+./build/scan-for-malware --path DIR   # scan an arbitrary staging tree (pre-pack)
 ```
 
 **Clean-result cache.** Clean scan results are cached under
@@ -72,7 +72,7 @@ any other rule on the same file, or that rule on any other file, still fails.
 Currently one entry: Firefox's `omni.ja` (its own resource zip trips a
 structural APPX/MSIX heuristic). The offensive-security tldr pages
 (mimikatz/certutil/msfvenom) that used to trip keyword rules are **not**
-allowlisted -- `./update tldr-data` prunes them from the bundled cache
+allowlisted -- `./build/update tldr-data` prunes them from the bundled cache
 entirely (`_TLDR_OFFENSIVE_GLOBS`).
 
 ## 3. Plugin pinning (Neovim)
@@ -89,7 +89,7 @@ that lockfile so `:Lazy restore` reproduces the exact vetted commits.
   scans it with `scan-for-malware --path`, and packs deterministically.
 
 The tmux plugin bundle is likewise commit-pinned, via
-`envs/tmux/vendor/plugins.lock` (4 plugins). `./update tmux-plugins` reads that
+`envs/tmux/vendor/plugins.lock` (4 plugins). `./build/update tmux-plugins` reads that
 lock, clones each plugin and checks out the pinned commit, then rewrites the file
 with the commits it actually landed on. The plugin list is scraped from the
 `set -g @plugin` lines in `envs/tmux/tmux.conf`; commented-out entries are
@@ -132,7 +132,7 @@ per-package assurance record instead.
 
 ## 6. Supply-chain provenance
 
-- `./update` hashes every download (`_download_file`) and appends
+- `./build/update` hashes every download (`_download_file`) and appends
   `date  url  sha256` to `assurance/downloads.log` (TOFU provenance);
   `expected_sha256` can pin a download and abort on mismatch.
 - The nodejs bundle is fetched via `nvm`, which verifies against nodejs.org
@@ -140,7 +140,7 @@ per-package assurance record instead.
 
 ### Release signing (active)
 
-`./release` runs the malware scan, binary smoke, version table, and checksum
+`./build/release` runs the malware scan, binary smoke, version table, and checksum
 generation as independent parallel gates, then signs the tag with `git tag -s`
 and attaches `sha256sums.txt` plus the `.content-manifest` asset. The trust
 chain (manifest in git -> signed tag) is tamper-evident. Verify with
@@ -169,7 +169,7 @@ For one-off GitHub transport with the bundled client, use
 
 A passphrase-protected key must be unlocked in an `ssh-agent` first
 (`ssh-add ~/.ssh/<key>`) -- otherwise `ssh-keygen -Y sign` falls back to a GUI
-askpass and fails on a headless box. `./release` inherits `SSH_AUTH_SOCK` from
+askpass and fails on a headless box. `./build/release` inherits `SSH_AUTH_SOCK` from
 its environment.
 
 Alternative signer sources (documented for reproducibility): build from the

@@ -16,7 +16,7 @@ Spec: `docs/superpowers/specs/2026-07-13-st-runtime-config-design.md`
 - **Stable tags only.** st stays at `--tag 0.9.3` (`https://dl.suckless.org/st/`). No HEAD, no nightly.
 - **Never bundle** glibc components, `libstdc++`/`libgcc_s`, or the OpenGL dispatcher. st links `libX11`/`libXft`/`libfontconfig`/`libfreetype` from the existing `gui_libs` bundle — no new libs in this work.
 - **ELF packaging order is strip → patchelf → bzip2.** Stripping after patchelf corrupts `.dynstr`.
-- **`./strip-all-elf-binaries` after any payload change.** It also regenerates `.content-manifest`. Both get committed.
+- **`./build/strip-all-elf-binaries` after any payload change.** It also regenerates `.content-manifest`. Both get committed.
 - **Registry changes require** `./loadout completion bash > envs/bash/global/completions/loadout.bash` (a Tier 2 test diffs it).
 - **Every bundled-binary change requires a `build/ADDING_BINARIES.md` note** complete enough to reproduce without re-deriving anything (CLAUDE.md mandate).
 - **Stock EL8 is the verification baseline, not this dev box.** Anything touching install behavior must pass `tests/run-all --container` (Tier 3, clean `almalinux:8.10`) before it is trusted.
@@ -1105,7 +1105,7 @@ Leave `depends`, `archive`, `sentinel`, `install_to`, and `version` as they are.
 - [ ] **Step 10: Re-strip, re-manifest, verify, and install-test**
 
 ```bash
-./strip-all-elf-binaries
+./build/strip-all-elf-binaries
 ./loadout completion bash > envs/bash/global/completions/loadout.bash
 build/verify-binaries st
 DEST=$(mktemp -d /tmp/st-dest.XXXXXX)

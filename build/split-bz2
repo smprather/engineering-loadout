@@ -69,9 +69,9 @@ def main(files, chunk_mb):
 
     Examples:
 
-      ./split-bz2 payload/el8.x86_64.glibc2p28/bin/clang.bz2
+      ./build/split-bz2 payload/el8.x86_64.glibc2p28/bin/clang.bz2
 
-      ./split-bz2 --chunk-mb 45 payload/el8.x86_64.glibc2p28/runtime/llvm.tar.bz2
+      ./build/split-bz2 --chunk-mb 45 payload/el8.x86_64.glibc2p28/runtime/llvm.tar.bz2
     """
     chunk_size = chunk_mb * 1024 * 1024
     rc = 0

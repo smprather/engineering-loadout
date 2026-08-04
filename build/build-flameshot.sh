@@ -219,7 +219,7 @@ with open(path, 'w') as f:
 " "$REPO/payload/packages.json" "$VERSION"
 
 echo "==> Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Done. Produced: $BIN_DIR/flameshot.bz2 (flameshot ${VERSION}, Qt5, glibc ${MAX_GLIBC})"

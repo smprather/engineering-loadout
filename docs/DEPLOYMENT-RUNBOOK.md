@@ -107,8 +107,8 @@ a **release asset**, not committed to git (committing it added 328 MB to
 
 ```bash
 # on nDPC, from the loadout checkout
-./fetch-stash                       # from the latest release
-# or: ./fetch-stash --tag v2026.07.14
+./tools/fetch-stash                       # from the latest release
+# or: ./tools/fetch-stash --tag v2026.07.14
 ```
 
 `fetch-stash` downloads `sha256sums.txt` and the stash asset, verifies the
@@ -152,7 +152,7 @@ Then on nDPC, install from the copied files -- still verified:
 
 ```bash
 # on nDPC, from the loadout checkout
-./fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \
+./tools/fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \
     --sums ~/loadout-release/sha256sums.txt
 ```
 
@@ -182,13 +182,13 @@ shared tree.
 ```bash
 # on nDPC (R/W on the shared FS, github reachable)
 # Point it at the INSTALLED stash in the shared tree:
-./refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash
+./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash
 
 # dry-run first if you want to see what would change:
-./refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --dry-run
+./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --dry-run
 
 # only mirror plugins that are missing (skip the in-place fetch of existing ones):
-./refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --add-only
+./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --add-only
 ```
 
 What it does:
@@ -220,7 +220,7 @@ Path depends on today's network state.
 ```bash
 # on nDPC, from a checkout (git pull, or extract a fresh release tarball)
 git pull                          # or: tar xzf engineering-loadout-v*.tar.gz
-./fetch-stash                     # if the release carries a new stash asset
+./tools/fetch-stash                     # if the release carries a new stash asset
 ./loadout install @shared-all --dest-dir "$SHARED" --no-backup
 ```
 
@@ -254,7 +254,7 @@ scp "C:/path/to/loadout-release/*" <user>@<ndpc-host>:~/loadout-release/
 # extract the new source tarball into a new checkout (or git pull if clone/pull works)
 tar xzf ~/loadout-release/engineering-loadout-v2026.07.15.tar.gz
 cd engineering-loadout-v2026.07.15
-./fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \
+./tools/fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \
     --sums ~/loadout-release/sha256sums.txt
 ./loadout install @shared-all --dest-dir "$SHARED" --no-backup
 ```
@@ -283,12 +283,12 @@ The payload on disk does not match `.content-manifest` (or is not listed in
 it). The installer installed nothing from that file. Two causes:
 
 - **The nvim plugin stash is present but not in a manifest.** The stash is a
-  release asset, not a git payload. `./fetch-stash` is the only thing that
+  release asset, not a git payload. `./tools/fetch-stash` is the only thing that
   may add it to `.content-manifest.fetched` (after verifying the sha256
-  against the signed release). Run `./fetch-stash` (online) or
-  `./fetch-stash --from-file <f> --sums <sha256sums.txt>` (scp'd copy).
+  against the signed release). Run `./tools/fetch-stash` (online) or
+  `./tools/fetch-stash --from-file <f> --sums <sha256sums.txt>` (scp'd copy).
 - **Your checkout is corrupt or was modified.** Re-clone, or re-run
-  `./strip-all-elf-binaries` if you changed the payload deliberately.
+  `./build/strip-all-elf-binaries` if you changed the payload deliberately.
 
 ### `ERROR: sha256 MISMATCH -- the stash does not match the signed release.`
 
@@ -364,11 +364,11 @@ still pin to `lazy-lock.json` until a release moves them.
 |---|---|---|
 | first shared tree | nDPC | `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
 | per-user Bash config | DPC (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local ./loadout install @envs --no-backup` |
-| fetch stash (online) | nDPC | `./fetch-stash` |
-| fetch stash (scp'd) | nDPC | `./fetch-stash --from-file <f> --sums <sha256sums.txt>` |
+| fetch stash (online) | nDPC | `./tools/fetch-stash` |
+| fetch stash (scp'd) | nDPC | `./tools/fetch-stash --from-file <f> --sums <sha256sums.txt>` |
 | download stash (Windows) | laptop | `tools/download-release.ps1 -Tag <tag>` |
-| refresh plugins (no release) | nDPC | `./refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash` |
-| update loadout | nDPC | pull + `./fetch-stash` + `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
+| refresh plugins (no release) | nDPC | `./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash` |
+| update loadout | nDPC | pull + `./tools/fetch-stash` + `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
 
 `<SHARED>` = the root dir on the shared filesystem. The installer writes to
 `<SHARED>/local/...`. Users set `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local`.

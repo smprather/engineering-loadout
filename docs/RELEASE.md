@@ -2,13 +2,13 @@
 
 The authoritative, ordered procedure for cutting a release. Release knowledge
 used to live scattered across `CLAUDE.md`, `docs/SECURITY.md`,
-`docs/MAINTENANCE.md`, `docs/HANDOFF.md` and the `./release` docstring; every
+`docs/MAINTENANCE.md`, `docs/HANDOFF.md` and the `./build/release` docstring; every
 release then reconstructed it from memory and missed something different. This
 file is the single source. If you change the release process, change it here.
 
-**`./release` is not the procedure.** It runs the *gates* — malware scan, binary
+**`./build/release` is not the procedure.** It runs the *gates* — malware scan, binary
 smoke, version table, checksums, tag, publish. Everything that makes the payload
-correct in the first place happens before you invoke it, and `./release` cannot
+correct in the first place happens before you invoke it, and `./build/release` cannot
 tell that you forgot it.
 
 ---
@@ -57,8 +57,8 @@ for s in /tmp/ssh-*/agent.*; do
 done
 ```
 
-Then export that socket for the whole session and run `./release` with it.
-`./release`'s `_preflight()` re-proves signing by signing a throwaway tag with no
+Then export that socket for the whole session and run `./build/release` with it.
+`./build/release`'s `_preflight()` re-proves signing by signing a throwaway tag with no
 tty, no askpass and no `DISPLAY`, and greps the object for a signature block — a
 zero exit from the signer is not proof. It blocks the release unless
 `--allow-unsigned`. Do not pass that flag; an unsigned tag breaks the top link of
@@ -72,19 +72,19 @@ the trust chain (`signed tag -> sha256sums.txt -> payload bytes`).
 
 ```bash
 build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
-./update --list-outdated                 # same, plus how each package updates
+./build/update --list-outdated                 # same, plus how each package updates
 ```
 
-`./update --list` classifies every package: `automated`, `rolling-git`,
+`./build/update --list` classifies every package: `automated`, `rolling-git`,
 `build`, `import-script`, `download`. That classification tells you the work:
 
 - **automated** (`yara-rules`, `nodejs`, `tldr-data`, `tmux-plugins`, `env-nvim`)
-  — `./update <name>` does it end to end. `env-nvim` is the expensive one: it
+  — `./build/update <name>` does it end to end. `env-nvim` is the expensive one: it
   re-mirrors all 79 plugins from upstream (~328 MB, network-bound), so do not
   run it casually. It is also the one with no safety net — the stash is
   gitignored *and* excluded from `.content-manifest`, so a bad rebuild has no
-  local baseline to diff and turns no gate red; recovery is `./fetch-stash`
-  against a published release. `./update` now delegates to
+  local baseline to diff and turns no gate red; recovery is `./tools/fetch-stash`
+  against a published release. `./build/update` now delegates to
   `build/build-nvim-plugin-stash` and asserts the result really is
   `<org>/<plugin>.git` bare mirrors, after a version that repacked this box's
   `~/.local/share/nvim/lazy` over the stash and shrank it 328 MB → 47 MB.
@@ -92,10 +92,10 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
   the pins are the source of truth, so an unchanged lockfile means an
   equivalent stash. Say so in the release notes if you skip it.
 - **rolling-git** (`liberty-tools`, `text-serdes`, `time-plot`, `lefdef-tools`)
-  — first-party; `./update <name>` rebuilds from source HEAD when the commit
+  — first-party; `./build/update <name>` rebuilds from source HEAD when the commit
   moved, `--rebuild` forces.
 - **build** — needs `build/build-<tool>.sh --tag vX.Y.Z` on this EL8 box.
-- **download** / **import-script** — `./update <name>` prints the exact recipe.
+- **download** / **import-script** — `./build/update <name>` prints the exact recipe.
 
 Bumping any of `nvim`, `rust`, `rust-crate-store`, `treesitter`, `git-nvim`,
 `crate-store` **also requires an assurance re-pin** — see §4.
@@ -103,16 +103,16 @@ Bumping any of `nvim`, `rust`, `rust-crate-store`, `treesitter`, `git-nvim`,
 ### 2b. Security data must be current, not merely present
 
 ```bash
-./update yara-rules              # YARA-Forge ruleset -> payload/yara/
+./build/update yara-rules              # YARA-Forge ruleset -> payload/yara/
 sudo freshclam                   # ClamAV signatures (needs sudo; do it yourself)
-./update tldr-data               # offline tldr cache
+./build/update tldr-data               # offline tldr cache
 ```
 
 A scan against stale signatures is a green light that means nothing. Check the
 ClamAV DB date before trusting a CLEAN verdict; `docs/SECURITY.md` covers what
 each layer does and what the allowlisted false positive is.
 
-`./update yara-rules` records the download in `assurance/downloads.log`
+`./build/update yara-rules` records the download in `assurance/downloads.log`
 (append-only TSV: ISO-8601 UTC timestamp, URL, sha256). That is trust-on-first-use
 provenance — it records what was fetched, it does not verify it against a
 published hash.
@@ -145,16 +145,16 @@ only; `build/*.sh` enforce `--tag`. The sole exception is the first-party
 ## 4. The post-payload chain — MANDATORY, IN THIS ORDER
 
 Any change under `payload/` requires all four, in order. Skipping the manifest
-step leaves Tier 1 red, and `./update --commit` will happily commit the drift.
+step leaves Tier 1 red, and `./build/update --commit` will happily commit the drift.
 
 ```bash
-./strip-all-elf-binaries                    # 1. strip/normalize/chunk; updates .strip-manifest
+./build/strip-all-elf-binaries                    # 1. strip/normalize/chunk; updates .strip-manifest
 ./loadout completion bash > envs/bash/global/completions/loadout.bash   # 2. only if verbs/flags/package names changed
 python3.14 build/gen-content-manifest       # 3. re-pin every payload sha256
 python3.14 build/gen-content-manifest --check   # 4. prove it
 ```
 
-`./update` now runs steps 1 and 3 automatically for the paths it mutates. A
+`./build/update` now runs steps 1 and 3 automatically for the paths it mutates. A
 manual build script does **not** — you run them.
 
 `.content-manifest` is regenerated **wholesale**; it cannot accept one file and
@@ -241,8 +241,8 @@ reformatting can dislodge.
 ## 8. Release
 
 ```bash
-SSH_AUTH_SOCK=<keyed-socket> ./release --dry-run    # gates only, no tag/publish
-SSH_AUTH_SOCK=<keyed-socket> ./release              # tag + publish
+SSH_AUTH_SOCK=<keyed-socket> ./build/release --dry-run    # gates only, no tag/publish
+SSH_AUTH_SOCK=<keyed-socket> ./build/release              # tag + publish
 ```
 
 Useful flags: `--tag vX.Y.Z` (default `v<today>`), `--no-cache` / `--clear-cache`
@@ -273,7 +273,7 @@ git tag -v <tag>          # must print a Good signature
 ```
 
 Confirm `isDraft=false` — deleting a tag drafts its release, and a draft is
-invisible to `/releases/latest`, which is what `./fetch-stash` resolves. Confirm
+invisible to `/releases/latest`, which is what `./tools/fetch-stash` resolves. Confirm
 all three assets are present (`sha256sums.txt`, `default.content-manifest`,
 `nvim-plugin-stash.tar.bz2`) and the stash size matches local.
 
@@ -293,18 +293,18 @@ what now catches it — where nothing does, that is the open risk.
 | 2 | Six scripts had `python3` shebangs but 3.14-only syntax; dead on stock EL8, masked by the dev box's `~/.local/bin/python3` | `tests/run-all` py_compiles every first-party Python file |
 | 3 | `ruff.toml` excludes were pre-reboot paths matching nothing, and `select` replaced ruff's defaults, disabling pyflakes entirely | excludes corrected; `F,E4,E7,E9,B` enabled |
 | 4 | Lint gate ran on one file behind `if command -v ruff` — a silent skip | gate covers all first-party Python; missing ruff is a hard FAIL |
-| 5 | `.content-manifest` never regenerated after `./update` mutated `payload/` | `./update` now regenerates it; Tier 1 `gen-content-manifest --check` |
+| 5 | `.content-manifest` never regenerated after `./build/update` mutated `payload/` | `./build/update` now regenerates it; Tier 1 `gen-content-manifest --check` |
 | 6 | Unsigned release tag shipped silently | `_preflight()` proves signing before any gate; post-tag re-read aborts |
 | 7 | `docs/SECURITY.md` claimed a tmux plugin pin whose lockfile had never been committed | lockfile now committed; **no automated check** that a documented control exists |
 | 8 | README package table: 30 stale versions, 6 missing packages | `build/gen-readme-table`, gated by `--check` in Tier 1 (**fixed** 2026-08-03; it immediately found 16 stale rows) |
 | 9 | Release-notes version table reports the **build box's installed binaries**, not the registry — 29 of 93 rows wrong | **NOT FIXED** — see below |
 | 10 | Test version literals (`0.5.0`) went stale on every bump | `tests/install-parity-plot` reads the expected version from `packages.json` |
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |
-| 12 | `./update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
+| 12 | `./build/update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
 
 ### Open defect: release-notes version table (entry 9)
 
-`./release` builds the "Pre-built binary versions" table from
+`./build/release` builds the "Pre-built binary versions" table from
 `build/farm-versions --format tsv`, which probes **binaries installed on the
 build box**, not `payload/packages.json`. On 2026-07-25 that published a table
 claiming parity-plot 0.2.0 while the release shipped 0.7.0; 29 of 93 rows

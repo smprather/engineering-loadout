@@ -32,8 +32,8 @@ resume_claude.sh
 
 # The nvim plugin stash is a RELEASE ASSET, not a git payload. It is 328 MB of bz2'd
 # git packfiles -- binary, no delta reuse -- so committing it added ~328 MB to history
-# on every refresh, permanently. Get it with ./fetch-stash (or refresh it in place in a
-# shared tree with ./refresh-stash). See docs/superpowers/specs/2026-07-14-stash-as-release-asset-design.md
+# on every refresh, permanently. Get it with ./tools/fetch-stash (or refresh it in place in a
+# shared tree with ./tools/refresh-stash). See docs/superpowers/specs/2026-07-14-stash-as-release-asset-design.md
 envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2
 envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2.part-*
 .content-manifest.fetched

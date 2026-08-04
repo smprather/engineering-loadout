@@ -33,11 +33,11 @@ the directory, pass --with-sums so they can check `.content-manifest` against th
 release independently.
 
 Usage:
-    ./export /path/to/install-dir
-    ./export /path/to/install-dir --with-sums        # also copy sha256sums.txt
-    ./export /path/to/install-dir --fetch-stash      # download the stash fresh
-    ./export /path/to/install-dir --no-stash         # skip the stash entirely
-    ./export /path/to/install-dir --allow-dirty      # ONLY archives HEAD regardless
+    ./build/export /path/to/install-dir
+    ./build/export /path/to/install-dir --with-sums        # also copy sha256sums.txt
+    ./build/export /path/to/install-dir --fetch-stash      # download the stash fresh
+    ./build/export /path/to/install-dir --no-stash         # skip the stash entirely
+    ./build/export /path/to/install-dir --allow-dirty      # ONLY archives HEAD regardless
 """
 
 import hashlib
@@ -56,7 +56,7 @@ if os.path.isdir(os.path.join(_d, "installer_vendor")):
 
 import rich_click as click  # noqa: E402
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STASH_REL = "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2"
 FETCHED_MANIFEST = ".content-manifest.fetched"
 SUMS_NAME = "sha256sums.txt"
@@ -244,7 +244,7 @@ def place_stash(dest, mode, from_file, sums):
         return True
 
     if mode == "fetch" or from_file:
-        cmd = [os.path.join(dest, "fetch-stash")]
+        cmd = [os.path.join(dest, "tools/fetch-stash")]
         if from_file:
             cmd += ["--from-file", os.path.abspath(from_file)]
             if sums:
@@ -258,7 +258,7 @@ def place_stash(dest, mode, from_file, sums):
 
     # Default: reuse the local copy when it is present AND still matches its record.
     if not os.path.isfile(src_stash):
-        info("  stash         : not present locally -- run ./fetch-stash in the export later")
+        info("  stash         : not present locally -- run ./tools/fetch-stash in the export later")
         return True
     recorded = None
     if os.path.isfile(src_fetched):
@@ -268,13 +268,13 @@ def place_stash(dest, mode, from_file, sums):
                 recorded = parts[1]
     if recorded is None:
         info("  stash         : present but not in .content-manifest.fetched -- NOT copied")
-        info("                  (run ./fetch-stash in the export; an unverified stash is refused)")
+        info("                  (run ./tools/fetch-stash in the export; an unverified stash is refused)")
         return True
     actual = _sha256(src_stash)
     if actual != recorded:
         eprint("  stash         : local copy does NOT match .content-manifest.fetched -- NOT copied")
         eprint(f"                  recorded {recorded[:16]}.. != on-disk {actual[:16]}..")
-        eprint("                  re-run ./fetch-stash here, then export again.")
+        eprint("                  re-run ./tools/fetch-stash here, then export again.")
         return False
     os.makedirs(os.path.dirname(dest_stash), exist_ok=True)
     shutil.copy2(src_stash, dest_stash)
@@ -305,7 +305,7 @@ def sums_available(with_sums):
         return True
     eprint(f"\nRefusing to export: --with-sums given but {SUMS_NAME} is not present and")
     eprint("no release tag is reachable from HEAD to download it from.")
-    eprint("Generate it with ./release, fetch it from the release page, or drop --with-sums.")
+    eprint("Generate it with ./build/release, fetch it from the release page, or drop --with-sums.")
     return False
 
 

@@ -234,7 +234,7 @@ backend avoids this.
 
 **Go binaries: build with `go build -ldflags="-w -s"`**, not post-build strip.
 
-**Release gate: `./release --dry-run`** runs independent pre-release gates in
+**Release gate: `./build/release --dry-run`** runs independent pre-release gates in
 parallel: `scan-for-malware`, `tests/prebuilt-binaries`,
 `build/farm-versions --format tsv`, and `sha256sums.txt` generation. Final
 tag/release work waits for those gates; malware scan, binary smoke, and
@@ -318,13 +318,13 @@ Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `envs/nvim/init.lua` disables the plugin layer cleanly
 instead of erroring.
 
-Use `./strip-all-elf-binaries` (Python 3.14) after adding vendored
+Use `./build/strip-all-elf-binaries` (Python 3.14) after adding vendored
 binaries, libraries, parser grammars, or tar archives. It walks the repo
 outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs
 are skipped later when size and modification time match the strip manifest.
 
-`./update tldr-data` writes `payload/tldr/tldr-pages.tar.bz2`; the installer also
+`./build/update tldr-data` writes `payload/tldr/tldr-pages.tar.bz2`; the installer also
 accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
 `--skip tldr-data` is passed (or `tldr-data` is not in the selected set).
 
@@ -336,7 +336,7 @@ Tmux and Vim plugins are vendored in-tree (no internet required):
 - `envs/vim/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
 - `envs/vim/vim/pack/vendor/opt/` -- optional plugins
 
-Run `./update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
+Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
 hook strips `.git` dirs on the next commit).
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
@@ -367,14 +367,14 @@ and copies metadata directories to `~/.local/share/nvim/tree-sitter-parsers/`.
 ### Pre-commit Hook
 
 `hooks/pre-commit` scans for nested `.git` directories (from bundled plugins),
-removes them, and re-stages. It also runs `./strip-all-elf-binaries` when
+removes them, and re-stages. It also runs `./build/strip-all-elf-binaries` when
 staged binary/archive candidates change. Install this hook when developing this
 repo or working with bundled plugins (`cp hooks/* .git/hooks/`). Normal
 end-user installs do not need repo git hooks. The embedded `.git` cleanup may
 broadly re-stage affected files; the binary stripping path restages only
 tracked updates, staged candidates, converted `.tar.bz2` archives, and strip
 manifests. Review staged files after it runs. For full binary smoke-testing
-use `./release --dry-run`, not the pre-commit hook. The scan must prune
+use `./build/release --dry-run`, not the pre-commit hook. The scan must prune
 `./.git/*`; sandbox/worktree internals such as `./.git/.git` are not vendored
 plugins.
 

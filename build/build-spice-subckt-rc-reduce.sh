@@ -23,7 +23,7 @@
 # edition = "2024" needs Rust >= 1.85; upstream's README asks for 1.96+.
 #
 # Policy: stable tagged releases only. `rolling_git` is NOT an option here even
-# though this is a first-party project -- ./update's rolling path builds Python
+# though this is a first-party project -- ./build/update's rolling path builds Python
 # WHEELS (`uv build --wheel`), so it cannot produce a Rust binary.
 #   https://github.com/smprather/spice-subckt-rc-reduce/releases
 #
@@ -129,7 +129,7 @@ ver="${tag#v}"
 loadout_stamp_version "$PKG" "$ver"
 
 echo "Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 loadout_report_max_glibc "$BIN"
 
@@ -140,6 +140,6 @@ readelf -d "$BIN" 2>/dev/null | grep NEEDED || true
 echo ""
 echo "Next:"
 echo "  python3.14 build/gen-content-manifest"
-echo "  tests/prebuilt-binaries --keep    # or ./release --dry-run"
+echo "  tests/prebuilt-binaries --keep    # or ./build/release --dry-run"
 echo "  git add payload/ .strip-manifest build/build-${PKG}.sh \\"
 echo "          build/farm-versions build/ADDING_BINARIES.md"

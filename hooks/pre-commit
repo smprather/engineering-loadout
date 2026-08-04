@@ -40,9 +40,9 @@ if [[ -n "$staged_strip_candidates" ]]; then
 
     if ! command -v strip >/dev/null; then
         echo "  WARNING: 'strip' not found in PATH -- skipping ELF stripping." >&2
-        echo "  Run ./strip-all-elf-binaries manually before committing binary/archive changes." >&2
+        echo "  Run ./build/strip-all-elf-binaries manually before committing binary/archive changes." >&2
     else
-        "$script_dir/strip-all-elf-binaries"
+        "$script_dir/build/strip-all-elf-binaries"
         # Re-stage candidate files, converted tar.bz2 names, removals, and updated manifests
         # without sweeping unrelated untracked files into the commit.
         git add -u
@@ -142,7 +142,7 @@ if [[ -n "$_staged_large_prebuilt" ]]; then
     while IFS= read -r _lf; do
         [[ -z "$_lf" ]] && continue
         echo "  Chunking: $_lf"
-        "$script_dir/strip-all-elf-binaries" --chunk-only 2>/dev/null || true
+        "$script_dir/build/strip-all-elf-binaries" --chunk-only 2>/dev/null || true
         # strip-all-elf-binaries --chunk-only processes all of payload/ at once;
         # run once then break -- the loop is just to print which file triggered it.
         break

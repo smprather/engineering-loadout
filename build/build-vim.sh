@@ -18,7 +18,7 @@
 #   ./build/build-vim.sh --tag v9.2.0901 --src /path/to/vim-9.2.0901.tar.gz
 #
 # Then, as for every payload change:
-#   ./strip-all-elf-binaries
+#   ./build/strip-all-elf-binaries
 #   python3.14 build/gen-content-manifest
 
 set -eu
@@ -207,5 +207,5 @@ echo "  payload/$PLATFORM/bin/gvim.bin.bz2"
 echo "  payload/$PLATFORM/runtime/vim92.tar.bz2"
 echo ""
 echo "Next:"
-echo "  ./strip-all-elf-binaries"
+echo "  ./build/strip-all-elf-binaries"
 echo "  python3.14 build/gen-content-manifest"

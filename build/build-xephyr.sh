@@ -67,7 +67,7 @@
 #                   <pkg>-<nvr>.x86_64.rpm so 32-bit (.i686) RPMs are ignored.
 #
 # Then, as for every payload change:
-#   ./strip-all-elf-binaries
+#   ./build/strip-all-elf-binaries
 #   ./loadout completion bash > envs/bash/global/completions/loadout.bash
 
 set -eu
@@ -480,5 +480,5 @@ echo ""
 echo "Provenance: $PROV"
 echo ""
 echo "Next:"
-echo "  ./strip-all-elf-binaries"
+echo "  ./build/strip-all-elf-binaries"
 echo "  ./loadout completion bash > envs/bash/global/completions/loadout.bash"

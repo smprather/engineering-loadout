@@ -2,16 +2,16 @@
 """update -- per-package updater for loadout.
 
 Usage:
-  ./update                        run all automated packages (no commit)
-  ./update nodejs yara-rules      run specific automated packages
-  ./update liberty-tools          rebuild a rolling-git wheel from fresh source
-  ./update liberty-tools --rebuild  force rebuild even if commit is unchanged
-  ./update nvim bat rg            show update guidance for those packages
-  ./update --list                 table: package | kind | version | latest
-  ./update --list-outdated        same table, only packages where latest > version
-  ./update --commit               stage + commit automated output
-  ./update --dry-run              print commands without executing
-  ./update --tag vX.Y.Z          version hint for nodejs and yara-rules
+  ./build/update                        run all automated packages (no commit)
+  ./build/update nodejs yara-rules      run specific automated packages
+  ./build/update liberty-tools          rebuild a rolling-git wheel from fresh source
+  ./build/update liberty-tools --rebuild  force rebuild even if commit is unchanged
+  ./build/update nvim bat rg            show update guidance for those packages
+  ./build/update --list                 table: package | kind | version | latest
+  ./build/update --list-outdated        same table, only packages where latest > version
+  ./build/update --commit               stage + commit automated output
+  ./build/update --dry-run              print commands without executing
+  ./build/update --tag vX.Y.Z          version hint for nodejs and yara-rules
 """
 
 import bz2
@@ -39,7 +39,7 @@ if os.path.isdir(os.path.join(_d, "installer_vendor")):
 
 import rich_click as click  # noqa: E402
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(REPO, "build")
 
 _YARA_DIR = os.path.join(REPO, "payload", "yara")
@@ -52,7 +52,7 @@ _YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
 
 # -- package registry ----------------------------------------------------------
 
-# Fully automated: ./update runs end-to-end.
+# Fully automated: ./build/update runs end-to-end.
 # Dev-only repo artifacts (yara-rules, tldr-data, tmux-plugins) are not
 # end-user-installed packages but are vendored into the repo by the dev and
 # bundled into the installer; they live alongside installable packages here.
@@ -183,7 +183,7 @@ def _load_packages():
 
 PACKAGES = _load_packages()
 
-# Rolling-git packages: built fresh from source on every ./update.  Tagged in
+# Rolling-git packages: built fresh from source on every ./build/update.  Tagged in
 # packages.json with "rolling_git": "<clone-url>".  The wheel is rebuilt only
 # when the source commit differs from the recorded version; the version stamped
 # back into packages.json is `git describe --tags --always --dirty` of HEAD.
@@ -513,7 +513,7 @@ def _run_env_nvim(dry_run=False):
     offline users a stash lazy cannot clone from. Nothing caught it -- the
     stash is deliberately excluded from .content-manifest and gitignored, so
     there was no local baseline to diff and no gate went red. Recovery needed
-    `./fetch-stash` against a published release.
+    `./tools/fetch-stash` against a published release.
 
     Delegate to build/build-nvim-plugin-stash, which is the documented builder
     and verifies every pinned commit is reachable in the mirror it produced.
@@ -528,7 +528,7 @@ def _run_env_nvim(dry_run=False):
     print(f"Rebuilding plugin stash via {os.path.relpath(builder, REPO)} ...")
     if dry_run:
         print(f"$ {builder}")
-        print("$ ./strip-all-elf-binaries")
+        print("$ ./build/strip-all-elf-binaries")
         return True
 
     rc = subprocess.call([builder], cwd=REPO)
@@ -563,7 +563,7 @@ def _run_env_nvim(dry_run=False):
     print(f"  {size_mb}M, {len(mirrors)} bare mirrors -> {catalog_archive}")
 
     # Step 3: strip ELF payloads inside the archive
-    rc = subprocess.call([os.path.join(REPO, "strip-all-elf-binaries")], cwd=REPO)
+    rc = subprocess.call([os.path.join(REPO, "build/strip-all-elf-binaries")], cwd=REPO)
     if rc != 0:
         print(f"WARNING: strip-all-elf-binaries exited rc={rc}")
 
@@ -583,7 +583,7 @@ def _run_automated(name, dry_run=False, tag=None):
             print(f"WARNING: {name} exited rc={rc}")
             return False
         print()
-        rc2 = _run([os.path.join(REPO, "strip-all-elf-binaries")], dry_run)
+        rc2 = _run([os.path.join(REPO, "build/strip-all-elf-binaries")], dry_run)
         if rc2 != 0:
             print(f"WARNING: strip-all-elf-binaries exited rc={rc2}")
         rc3 = _run_content_manifest(dry_run)
@@ -629,7 +629,7 @@ def _version_tuple(v):
 def _check_no_downgrade(name, before, allow_downgrade, dry_run):
     """Refuse a silent version regression. True when the result is acceptable.
 
-    Bare `./update` bundles whatever a package's importer finds locally when it
+    Bare `./build/update` bundles whatever a package's importer finds locally when it
     is given no target. `import-nodejs` with no --tag runs `nvm install --lts`,
     so a class C sweep run straight from docs/RELEASE.md rewrote node.tar.bz2
     from the build box's own v26.2.0 and stamped packages.json 26.5.0 -> 26.2.0
@@ -646,8 +646,8 @@ def _check_no_downgrade(name, before, allow_downgrade, dry_run):
     if b is None or a is None or a >= b:
         return True
     print(f"ERROR: {name}: version went BACKWARDS {before} -> {after}")
-    print("  A bare `./update` bundles whatever the importer finds locally when")
-    print(f"  given no target. Name the version you want: ./update --tag <ver> {name}")
+    print("  A bare `./build/update` bundles whatever the importer finds locally when")
+    print(f"  given no target. Name the version you want: ./build/update --tag <ver> {name}")
     print("  Pass --allow-downgrade if the regression is genuinely intended.")
     if allow_downgrade:
         print("  --allow-downgrade given; continuing anyway.")
@@ -840,7 +840,7 @@ def _show_build(name):
         print("    (also produces payload/<platform>/runtime/{})".format(info["runtime"]))
     print()
     print("  After building:")
-    print("    ./strip-all-elf-binaries")
+    print("    ./build/strip-all-elf-binaries")
     print("    build/gen-content-manifest")
     print("    git add payload/ .strip-manifest packages.json")
 
@@ -876,7 +876,7 @@ def _show_download(name):
     print(f"     patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' {name}")
     print(f"     bzip2 -k {name}")
     print(f"  2. cp {name}.bz2 payload/el8.x86_64.glibc2p28/bin/")
-    print("  3. ./strip-all-elf-binaries")
+    print("  3. ./build/strip-all-elf-binaries")
     print("  4. build/gen-content-manifest")
     print("  5. git add payload/ .strip-manifest packages.json")
 
@@ -995,7 +995,7 @@ def git_commit(succeeded, dry_run=False):
         print("No changes detected -- nothing to commit.")
         return
 
-    msg = "chore: update {}\n\nUpdated by ./update:\n{}".format(
+    msg = "chore: update {}\n\nUpdated by ./build/update:\n{}".format(
         ", ".join(succeeded),
         "\n".join("  - " + n for n in succeeded),
     )
@@ -1054,14 +1054,14 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, a
 
     Examples:
 
-      ./update                          # run all automated packages
-      ./update nodejs yara-rules        # update specific packages
-      ./update liberty-tools --rebuild  # force rebuild of a rolling-git wheel
-      ./update nvim bat rg              # show update guidance for those packages
-      ./update --list                   # table of every known package
-      ./update --list-outdated          # only outdated packages
-      ./update --commit                 # stage + commit automated output
-      ./update --tag v26.3.0 nodejs     # version hint for nodejs/yara
+      ./build/update                          # run all automated packages
+      ./build/update nodejs yara-rules        # update specific packages
+      ./build/update liberty-tools --rebuild  # force rebuild of a rolling-git wheel
+      ./build/update nvim bat rg              # show update guidance for those packages
+      ./build/update --list                   # table of every known package
+      ./build/update --list-outdated          # only outdated packages
+      ./build/update --commit                 # stage + commit automated output
+      ./build/update --tag v26.3.0 nodejs     # version hint for nodejs/yara
     """
     if show_list or list_outdated:
         cmd_list(outdated_only=list_outdated)

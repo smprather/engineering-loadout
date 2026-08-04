@@ -2,7 +2,7 @@
 """
 build-nvim-plugins -- rebuild the offline Neovim plugin bundle from the
 commit-pinned lockfile, in a clean staging directory, and scan it before
-packing. This replaces the old ./update path that tarred the maintainer's
+packing. This replaces the old ./build/update path that tarred the maintainer's
 LIVE ~/.local/share/nvim/lazy after an unpinned `Lazy! update`.
 
 Trust model: envs/nvim/lazy-lock.json is the source of truth. Each plugin is
@@ -19,7 +19,7 @@ Workflow to bump plugins (owner-reviewed):
      lazy-lock.json, review the per-plugin SHA changes).
   2. Commit the reviewed lazy-lock.json.
   3. Run this script to rebuild + scan + repack the bundle from those pins.
-  4. Run ./strip-all-elf-binaries and commit the new bundle + content manifest.
+  4. Run ./build/strip-all-elf-binaries and commit the new bundle + content manifest.
 
 Usage:
   build/build-nvim-plugins [--staging DIR] [--no-scan]
@@ -139,7 +139,7 @@ def main(argv):
 
     if do_scan:
         print("\nScanning staged plugins with scan-for-malware --path ...")
-        rc = subprocess.run([os.path.join(REPO, "scan-for-malware"), "--path", tmp]).returncode
+        rc = subprocess.run([os.path.join(REPO, "build/scan-for-malware"), "--path", tmp]).returncode
         if rc != 0:
             eprint("ERROR: scan-for-malware flagged the staged plugins; refusing to pack.")
             return 1
@@ -161,7 +161,7 @@ def main(argv):
         ],
         check=True,
     )
-    print("Done. Next: ./strip-all-elf-binaries (chunks + regenerates .content-manifest), then commit.")
+    print("Done. Next: ./build/strip-all-elf-binaries (chunks + regenerates .content-manifest), then commit.")
     if not staging:
         shutil.rmtree(tmp, ignore_errors=True)
     return 0

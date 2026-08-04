@@ -183,7 +183,7 @@ loadout_stamp_version openssh "$ver"
 
 echo ""
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Installed OpenSSH ${ver} client suite into $LOADOUT_BIN_DIR:"

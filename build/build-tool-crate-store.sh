@@ -220,7 +220,7 @@ tar -cjf "$OUT_ARCHIVE" -C "$STORE" .
 # the `[ "$packed_bytes" -gt ... ]` below dies with "integer expression
 # expected" -- which this script previously survived, exiting 0 while leaving a
 # TRUNCATED two-chunk store in payload/. That happened for real: a concurrent
-# ./strip-all-elf-binaries saw the freshly written 314 MB archive, chunked it
+# ./build/strip-all-elf-binaries saw the freshly written 314 MB archive, chunked it
 # mid-write, and this step never noticed. Never run two payload-mutating builds
 # at once, and fail loudly when the output is missing.
 [ -s "$OUT_ARCHIVE" ] || {

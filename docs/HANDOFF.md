@@ -89,7 +89,7 @@ Still open, deliberately recorded rather than hidden:
 ## Currency sweep, 2026-08-03 -- what moved, what did not, and why
 
 Ran the sweep the previous entry said was owed. It cleared a good part of the
-debt and turned up two destructive bugs in `./update` itself, both now fixed.
+debt and turned up two destructive bugs in `./build/update` itself, both now fixed.
 
 **Bumped and verified** (15 packages): `rg` 15.2.0, `fzf` 0.74.2, `uv` 0.12.1,
 `ruff` 0.16.1, `ty` 0.0.65, `just` 1.57.0, `lazygit` 0.63.1, `btm` 0.14.7,
@@ -97,18 +97,18 @@ debt and turned up two destructive bugs in `./update` itself, both now fixed.
 `fish` 4.8.1, `numr` 0.8.0, `flameshot` 14.0.0. Plus `text-serdes` -> `e624d2d`
 and the YARA-Forge ruleset.
 
-**Two `./update` bugs, both silent, both would have shipped:**
+**Two `./build/update` bugs, both silent, both would have shipped:**
 
-- `./update env-nvim` repacked *this box's* `~/.local/share/nvim/lazy` over the
+- `./build/update env-nvim` repacked *this box's* `~/.local/share/nvim/lazy` over the
   plugin stash: 328 MB of bare mirrors replaced by 47 MB of flat plugin dirs
   that lazy cannot clone from. The stash is gitignored *and* excluded from
   `.content-manifest`, so there was no baseline to diff and no gate to fail;
-  recovery needed `./fetch-stash` against a published release.
-- `./update nodejs` with no `--tag` runs `nvm install --lts` and bundled the
+  recovery needed `./tools/fetch-stash` against a published release.
+- `./build/update nodejs` with no `--tag` runs `nvm install --lts` and bundled the
   build box's own v26.2.0, stamping the registry *backwards* from 26.5.0. A
-  bare `./update` -- what the procedure told you to run -- did this.
+  bare `./build/update` -- what the procedure told you to run -- did this.
 
-Both are fixed, and `./update` now hard-errors on any version that goes
+Both are fixed, and `./build/update` now hard-errors on any version that goes
 backwards (`--allow-downgrade` to override).
 
 **Left undone, deliberately** -- the remaining packages are all source builds
@@ -152,9 +152,9 @@ deviation, not an oversight, and the debt is real:
   need `build/build-<tool>.sh` on this EL8 box: `fish` 4.8.0 -> 4.8.1,
   `vim`/`gvim` 9.2.0782 -> 9.2.0901, `octave` 11.1.0 -> 11.3.0. The rest are
   download-class one-liners. Re-derive the current list with
-  `build/check-versions --outdated-only` and `./update --list-outdated` --
+  `build/check-versions --outdated-only` and `./build/update --list-outdated` --
   do not trust this snapshot.
-- **`yara` itself is behind** (4.5.5 -> 4.5.8) and `./update yara-rules` was
+- **`yara` itself is behind** (4.5.5 -> 4.5.8) and `./build/update yara-rules` was
   **not** run.
 - **The ClamAV signature DB was 17 days stale** (`daily.cld` dated 2026-07-17)
   when the release scan ran. `sudo freshclam` needs sudo and was not run. Per
@@ -332,9 +332,9 @@ Lint infrastructure was the root enabler and is now fixed:
   blanket `[rules]` suppressions to make it go green** -- an investigation was
   first "fixed" that way and reverted.
 
-Also fixed: `./update` never regenerated `.content-manifest` after mutating
+Also fixed: `./build/update` never regenerated `.content-manifest` after mutating
 `payload/` (Tier 1 failed on drift as a result) -- now automatic on every
-payload-mutating path plus all three guidance printers; `./update tmux-plugins`
+payload-mutating path plus all three guidance printers; `./build/update tmux-plugins`
 cloned a commented-out `@plugin` line (unanchored `re.search`); two writers of
 `assurance/downloads.log` disagreed on date format (now ISO-8601 UTC);
 `vercomp` glob-matched its RHS; a duplicated unreachable gate in
@@ -381,16 +381,16 @@ lockfile had never been committed.
   ruff 0.15.21->0.16.0, ty 0.0.58->0.0.63, uv 0.11.28->0.11.32. Downloaded, stripped,
   patchelf'd (`$ORIGIN/../lib64:$ORIGIN/../lib`), bz2'd, versions stamped. Astral was
   acquired by OpenAI -- release cadence/URLs unchanged for now; watch for redirects.
-- Post-payload chain run: `./strip-all-elf-binaries` (3 new bz2 recorded),
+- Post-payload chain run: `./build/strip-all-elf-binaries` (3 new bz2 recorded),
   `build/gen-content-manifest` (4312 files, `--check` OK). Bash completion diff = no
   change (only versions/wheels moved, not package names/verbs).
 
 ## Release-time reduction (2026-07-23)
 
-Two structural wastes in `./release` removed, both on the release critical path:
+Two structural wastes in `./build/release` removed, both on the release critical path:
 
 - **nvim plugin stash reuse.** The ~328 MB stash asset was re-uploaded on every
-  re-release even when byte-identical. `./release` now keeps the existing release
+  re-release even when byte-identical. `./build/release` now keeps the existing release
   object (it holds the asset), moves only the tag, **undrafts** it (deleting a tag
   drafts its release; recreating the tag does not republish -- verified empirically),
   and clobbers only the small assets. Gated on a signed tag + a byte-match (present
@@ -402,7 +402,7 @@ Two structural wastes in `./release` removed, both on the release critical path:
   `payload/**` + `loadout` + `loadout_main.py` + `tests/prebuilt-binaries`, a
   deliberate superset) plus platform `uname`/glibc; pass-only, double-checked key.
   The hash (~a few seconds, parallelised) runs inside the smoke worker so it overlaps
-  the version gate. Cache lives in `./release`, so `tests/prebuilt-binaries` run
+  the version gate. Cache lives in `./build/release`, so `tests/prebuilt-binaries` run
   directly still always executes. `--no-cache` / `--clear-cache` force fresh.
 
 Net: a routine re-release whose payload is unchanged skips both the 328 MB upload and
@@ -412,13 +412,13 @@ false-green surface is only an *over*-cover (needless re-run), never an under-co
 ## Release signing: the 2026-07-22 unsigned-tag incident
 
 The first `v2026.07.22` release shipped an **unsigned** tag (GitHub reported
-`verification.reason = "unsigned"`), silently. `./release` decided whether to sign
+`verification.reason = "unsigned"`), silently. `./build/release` decided whether to sign
 from `_signing_configured()`, which only asked `git config --get user.signingkey`.
 When that resolved empty the script took the `git tag -a` fallback, printed a warning
 into a long unattended log, and dropped the `git tag -v` line from the release notes.
 Nobody was at the keyboard to notice. The top link of the trust chain was missing.
 
-`./release` now runs `_preflight()` **before any gate**, because the gates are slow and
+`./build/release` now runs `_preflight()` **before any gate**, because the gates are slow and
 the operator is only reliably present at kickoff:
 
 - checks `gh auth status`;
@@ -500,7 +500,7 @@ spawns a fresh **keyless** agent. Use `/usr/bin/ssh-add -l` against each
 - Focused `tests/install-parity-plot`: PASS after the v0.4.0 update. It
   verifies CLI/module 0.4.0, self-contained Plotly HTML, `farm-versions`
   reporting, and a local NiceGUI designer page with no external page assets.
-- Release gate components: PASS. `./scan-for-malware` reports cached CLEAN
+- Release gate components: PASS. `./build/scan-for-malware` reports cached CLEAN
   across 75051 files with the known Firefox `omni.ja` allowlisted FP;
   `tests/prebuilt-binaries` reports `All 255 binaries OK; runtimes OK`;
   release checksum/version steps passed and refreshed `sha256sums.txt`.
@@ -526,7 +526,7 @@ elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not rela
 
 1. **Exercise the laptop path for real**: use the current GitHub release tag with
    `tools/download-release.ps1 -Tag <release-tag>` on the Windows laptop, scp to nDPC,
-   then run `./fetch-stash --from-file`. Runbook section 2b documents it; this remains
+   then run `./tools/fetch-stash --from-file`. Runbook section 2b documents it; this remains
    unvalidated against a real asset-bearing release.
 2. Version bumps from the audit list, priority to the ones users notice: htop
    3.2.1→3.5.1, octave 11.1.0→11.3.0 (needs `build/build-octave.sh` + runtime re-pack),
@@ -535,11 +535,11 @@ elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not rela
    Version bumps of nvim/rust/rust-crate-store/treesitter/git-nvim also require a ledger
    re-pin (see "Assurance ledger interactions").
 
-Release mechanics (for #2 bumps): `./release` attaches the stash automatically when
+Release mechanics (for #2 bumps): `./build/release` attaches the stash automatically when
 present; build it first with `build/build-nvim-plugin-stash` if the checkout lacks it.
 Signing needs a usable agent socket — memory `release-tag-signing-wsl`: user runs
 `ssh-add`, probe `ls -t /tmp/ssh-*/agent.*` for one where `SSH_AUTH_SOCK=$s ssh-add -l`
-lists a key, run `SSH_AUTH_SOCK=<sock> ./release`. (Note: on WSL a bare `ssh-add` alias
+lists a key, run `SSH_AUTH_SOCK=<sock> ./build/release`. (Note: on WSL a bare `ssh-add` alias
 here re-spawns a fresh keyless agent each call — probe existing sockets for the keyed one
 rather than trusting `$SSH_AUTH_SOCK`.)
 

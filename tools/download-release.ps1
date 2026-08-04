@@ -153,7 +153,7 @@ function Write-TlsError {
     Write-Host '     certificate store (LocalMachine Root or CurrentUser Root).' -ForegroundColor Yellow
     Write-Host '  2. As a last resort, download the files in a browser (which trusts' -ForegroundColor Yellow
     Write-Host '     the corp CA) and copy them to Linux, then run fetch-stash there:' -ForegroundColor Yellow
-    Write-Host '       ./fetch-stash --from-file <stash> --sums <sha256sums.txt>' -ForegroundColor Yellow
+    Write-Host '       ./tools/fetch-stash --from-file <stash> --sums <sha256sums.txt>' -ForegroundColor Yellow
     Write-Host '  3. If github.com itself is blocked (not just TLS), no PowerShell' -ForegroundColor Yellow
     Write-Host '     setting will help -- try a different network.' -ForegroundColor Yellow
 }
@@ -425,7 +425,7 @@ Write-Host "  scp `"$winPath\*`" <user>@<linux-host>:~/loadout-release/" -Foregr
 Write-Host ''
 Write-Host 'Then on Linux, from the engineering-loadout checkout:' -ForegroundColor Cyan
 Write-Host ''
-Write-Host '  ./fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \' -ForegroundColor White
+Write-Host '  ./tools/fetch-stash --from-file ~/loadout-release/nvim-plugin-stash.tar.bz2 \' -ForegroundColor White
 Write-Host '      --sums ~/loadout-release/sha256sums.txt' -ForegroundColor White
 Write-Host '  ./loadout install @shared-all' -ForegroundColor White
 Write-Host ''

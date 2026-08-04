@@ -468,7 +468,7 @@ def main(node_dir, tag, platform_override, dry_run):
 
     print()
     print("Next steps:")
-    print("  ./strip-all-elf-binaries")
+    print("  ./build/strip-all-elf-binaries")
     print(f"  git add payload/{platform}/runtime/node.tar.bz2 payload/packages.json .strip-manifest")
     print("  git commit")
 

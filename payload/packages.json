@@ -28,7 +28,7 @@
     "uv_tool": "Base package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
     "uv_extras": "Optional Python extras included in the uv tool requirement. Their locked wheel closure must be bundled for offline installation.",
     "version": "Version of the bundled binary or package. Empty string when the payload has no meaningful upstream version.",
-    "rolling_git": "Clone URL for first-party rolling packages; './update' rebuilds the wheel from source HEAD and stamps 'version' with git describe.",
+    "rolling_git": "Clone URL for first-party rolling packages; './build/update' rebuilds the wheel from source HEAD and stamps 'version' with git describe.",
     "version_url": "Upstream URL './check-versions' (via build) queries for the latest release when the project is not on GitHub/PyPI.",
     "version_pattern": "Regex applied to the version_url response to extract the latest version string.",
     "version_scheme": "Version comparison scheme override for check-versions (e.g. 'date').",

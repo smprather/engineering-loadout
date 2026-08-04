@@ -51,7 +51,7 @@ Consequences, all of which are the point:
 - `lazy/<name>` becomes a **real git clone** whose `origin` is the stash.
 - `:Lazy update` fetches **from the stash** — offline, no github.
 - `:Lazy restore` checks out the pinned sha from `lazy-lock.json` — offline.
-- Refreshing the stash on a connected build box (`./update nvim-plugins`) is how the
+- Refreshing the stash on a connected build box (`./build/update nvim-plugins`) is how the
   fleet gets new plugin versions: users then `:Lazy update` against the new stash,
   fully air-gapped.
 

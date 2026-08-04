@@ -307,7 +307,7 @@ print('packages.json: expect version -> ' + ver)
 # -- strip manifest + glibc check ---------------------------------------------
 
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 MAX_GLIBC="$(readelf -V "$EXPECT_BIN" 2>/dev/null \
     | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1)"

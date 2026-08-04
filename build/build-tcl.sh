@@ -190,7 +190,7 @@ with open(path, 'w') as f:
 " "$REPO/payload/packages.json" "$VERSION" "$TCLLIB_NAME"
 
 echo "==> Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo "==> Checking glibc symbol requirements ..."
 MAX_GLIBC="$(readelf -V "$TCLSH_BIN" 2>/dev/null \

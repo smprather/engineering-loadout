@@ -264,7 +264,7 @@ with open(path, 'w') as f:
 " "$REPO/payload/packages.json" "$TAG"
 
 echo "==> Running strip-all-elf-binaries (this also auto-chunks the archive) ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Done."

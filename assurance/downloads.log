@@ -1,4 +1,4 @@
-# append-only supply-chain download log -- columns: iso8601_utc_timestamp  url  sha256 (populated by ./update in S1)
+# append-only supply-chain download log -- columns: iso8601_utc_timestamp  url  sha256 (populated by ./build/update in S1)
 2026-07-10	https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-unknown-linux-gnu.tar.gz	7ddba1886f39ba918587f9ca37de9651008726834811c19ee83991705bd3e56b
 2026-07-10	https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz	e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
 2026-07-10	https://github.com/astral-sh/ty/releases/download/0.0.58/ty-x86_64-unknown-linux-gnu.tar.gz	1e756543bc02420dbd63189ace4316fa7f3dbf7800b066d3b9db477b215894e0

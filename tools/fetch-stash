@@ -36,7 +36,7 @@ import sys
 import urllib.error
 import urllib.request
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SLUG = "smprather/engineering-loadout"
 STASH_NAME = "nvim-plugin-stash.tar.bz2"
 STASH_PATH = os.path.join(REPO, "envs", "nvim", "vendor", "plugins", STASH_NAME)
@@ -98,7 +98,7 @@ def release_assets(tag, token):
         eprint(f"ERROR: cannot reach github.com: {exc.reason}")
         eprint("  If this network blocks github, download the asset elsewhere (e.g. the")
         eprint("  Windows path: tools/download-release.ps1), copy it over, and re-run with:")
-        eprint(f"    ./fetch-stash --from-file <{STASH_NAME}> --sums <{SUMS_NAME}>")
+        eprint(f"    ./tools/fetch-stash --from-file <{STASH_NAME}> --sums <{SUMS_NAME}>")
         raise SystemExit(1) from exc
     return data["tag_name"], {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
 
@@ -120,7 +120,7 @@ def record_fetched(rel_path, digest):
             ln for ln in open(FETCHED_MANIFEST).read().splitlines() if ln.strip() and not ln.endswith(f" {rel_path}")
         ]
     header = "# Payload verified against a signed release and fetched out-of-band."
-    header2 = "# Written ONLY by ./fetch-stash, after the bytes matched sha256sums.txt."
+    header2 = "# Written ONLY by ./tools/fetch-stash, after the bytes matched sha256sums.txt."
     body = [ln for ln in lines if not ln.startswith("#")]
     body.append(f"sha256  {digest}  {rel_path}")
     with open(FETCHED_MANIFEST, "w") as f:

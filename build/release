@@ -3,12 +3,12 @@
 release: run pre-release gates, then create a GitHub release.
 
 Usage:
-    ./release                  # tag today's date, create release
-    ./release --tag v2026.05.12
-    ./release --dry-run        # run gates only, no tag or GitHub release
-    ./release --skip-scan      # skip the malware scan (NOT recommended; for a
+    ./build/release                  # tag today's date, create release
+    ./build/release --tag v2026.05.12
+    ./build/release --dry-run        # run gates only, no tag or GitHub release
+    ./build/release --skip-scan      # skip the malware scan (NOT recommended; for a
                                # known yara false positive only)
-    ./release --allow-unsigned # release with an UNSIGNED tag (breaks trust chain)
+    ./build/release --allow-unsigned # release with an UNSIGNED tag (breaks trust chain)
 
 A preflight runs FIRST, before any gate: it checks `gh` auth and proves the tag
 signer produces a real signature with no tty, askpass or DISPLAY. Authentication
@@ -146,7 +146,7 @@ def _print_signing_remediation():
     print("", file=sys.stderr)
     print("  then re-run the release with that agent's socket:", file=sys.stderr)
     print("", file=sys.stderr)
-    print("      SSH_AUTH_SOCK=$SSH_AUTH_SOCK ./release", file=sys.stderr)
+    print("      SSH_AUTH_SOCK=$SSH_AUTH_SOCK ./build/release", file=sys.stderr)
     print("", file=sys.stderr)
     print("  (From a background/tool shell SSH_AUTH_SOCK is usually unset -- find the", file=sys.stderr)
     print("  keyed agent with: for s in $(ls -t /tmp/ssh-*/agent.*); do", file=sys.stderr)
@@ -213,7 +213,7 @@ INTEGRITY_TARGETS = [
     "payload/packages.json",
     # The nvim plugin stash is NOT in .content-manifest (it is a release asset, not a git
     # payload), so its hash must be published here directly -- this is the link
-    # ./fetch-stash checks before the installer will accept the downloaded bytes.
+    # ./tools/fetch-stash checks before the installer will accept the downloaded bytes.
     STASH_REL,
 ]
 
@@ -547,10 +547,10 @@ def _stash_section_md():
             "cd engineering-loadout-*/",
             "",
             "# online: fetches + verifies the stash from this release",
-            "./fetch-stash",
+            "./tools/fetch-stash",
             "",
             "# air-gapped: stash + sha256sums.txt downloaded elsewhere and copied over",
-            f"./fetch-stash --from-file /path/to/{STASH_ASSET_NAME} \\",
+            f"./tools/fetch-stash --from-file /path/to/{STASH_ASSET_NAME} \\",
             f"              --sums     /path/to/{SHA256SUMS_NAME}",
             "",
             "./loadout install @engineering-loadout",
@@ -674,7 +674,7 @@ def _can_reuse_stash(tag, stash_path, local_stash_sha):
 
 def _verify_published_stash(tag, stash_path):
     """(ok, detail): confirm the release is PUBLISHED (not a draft -- a draft is
-    invisible to /releases/latest, which is what ./fetch-stash resolves) and
+    invisible to /releases/latest, which is what ./tools/fetch-stash resolves) and
     still carries the stash asset at the right size. Never trust an upload/edit
     exit code; re-read the release and check -- the 2026-07-22 lesson."""
     r = subprocess.run(["gh", "release", "view", tag, "--json", "isDraft,assets"], capture_output=True, text=True)
@@ -759,10 +759,10 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
 
     Requires: gh (GitHub CLI) authenticated, git repo with remote set.
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root; this script lives in build/
     smoke_test = os.path.join(script_dir, "tests", "prebuilt-binaries")
     farm_versions = os.path.join(script_dir, "build", "farm-versions")
-    malware_scan = os.path.join(script_dir, "scan-for-malware")
+    malware_scan = os.path.join(script_dir, "build/scan-for-malware")
     tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
 
     if clear_cache:
@@ -828,7 +828,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     # The nvim plugin stash rides as an ASSET, not a git payload: it is ~328 MB of bz2'd
     # git packfiles, so committing it added ~328 MB to history on EVERY refresh,
     # permanently. Its sha256 is in sha256sums.txt above, which this signed tag covers --
-    # that is the chain ./fetch-stash verifies before the installer will touch the bytes.
+    # that is the chain ./tools/fetch-stash verifies before the installer will touch the bytes.
     stash = os.path.join(script_dir, STASH_REL)
     local_stash_sha = dict(pairs).get(STASH_REL)
 

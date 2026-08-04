@@ -68,7 +68,7 @@ loadout_package_bin "$BIN" models
 loadout_stamp_version models "${tag#v}"
 
 echo "Running strip-all-elf-binaries ..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 loadout_report_max_glibc "$BIN"
 

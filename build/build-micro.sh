@@ -99,7 +99,7 @@ print('packages.json: micro version -> ' + ver)
 # -- strip manifest ------------------------------------------------------------
 
 echo "Running strip-all-elf-binaries..."
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 
 echo ""
 echo "Done. Commit with:"

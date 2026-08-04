@@ -13,9 +13,9 @@
 # repos, already-installed toolchains.
 #
 # Usage:
-#   ./dev-onboard            # interactive -- prompts before each phase
-#   ./dev-onboard --yes      # non-interactive
-#   ./dev-onboard --check    # print what would happen, change nothing
+#   ./build/dev-onboard            # interactive -- prompts before each phase
+#   ./build/dev-onboard --yes      # non-interactive
+#   ./build/dev-onboard --check    # print what would happen, change nothing
 #
 # Logs to /tmp/loadout-dev-onboard.log
 
@@ -204,7 +204,7 @@ cat <<'EOF' | tee -a "$LOG"
     ./loadout doctor
     build/check-versions --outdated-only
     build/verify-binaries
-    ./release --dry-run                  # full release smoke
+    ./build/release --dry-run                  # full release smoke
 
   Per-tool source builds (test each before relying on it):
     build/build-tmux.sh   --tag <tag>

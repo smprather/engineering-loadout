@@ -31,7 +31,7 @@ The shared filesystem is the bridge: **R/W from nDPC, R/O from DPC.**
 
 - `envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2*` is **removed from git** and
   gitignored. `.git` stops growing with every refresh.
-- `./release` attaches the stash to the GitHub release as a single asset (GitHub allows
+- `./build/release` attaches the stash to the GitHub release as a single asset (GitHub allows
   2 GB/asset; the 45 MB chunking existed only to dodge git's file-size warnings) and
   records its sha256 in `sha256sums.txt`, which is itself an asset covered by the
   **signed tag**.

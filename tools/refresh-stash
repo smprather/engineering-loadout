@@ -5,7 +5,7 @@ This is the piece that decouples plugin cadence from loadout cadence.
 
     nDPC (has github, clone/fetch only)          DPC (air-gapped)
         │                                             │
-        │  ./refresh-stash <shared>/.../plugin-stash  │
+        │  ./tools/refresh-stash <shared>/.../plugin-stash  │
         ▼                                             ▼
     shared filesystem  ── R/W from nDPC ──  R/O from DPC
         │
@@ -20,9 +20,9 @@ It only ever CLONES and FETCHES. It never pushes, so a "clone/pull only" network
 is enough.
 
 Usage:
-    ./refresh-stash <stash-dir>              # update every mirror in place
-    ./refresh-stash <stash-dir> --dry-run    # say what would change, touch nothing
-    ./refresh-stash <stash-dir> --add-only   # only mirror plugins that are missing
+    ./tools/refresh-stash <stash-dir>              # update every mirror in place
+    ./tools/refresh-stash <stash-dir> --dry-run    # say what would change, touch nothing
+    ./tools/refresh-stash <stash-dir> --add-only   # only mirror plugins that are missing
 
 The stash dir is the one the installer created, e.g.
     <shared>/local/share/nvim/loadout/vendor/plugin-stash
@@ -34,7 +34,7 @@ import re
 import subprocess
 import sys
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCKFILE = os.path.join(REPO, "envs", "nvim", "lazy-lock.json")
 SPECS_DIR = os.path.join(REPO, "envs", "nvim", "lua", "global", "plugins")
 KNOWN_SLUGS = {"lazy.nvim": "folke/lazy.nvim"}
@@ -168,7 +168,7 @@ def main(argv):
         eprint()
         eprint("Some mirrors could not be reached. If github is blocked on this box, fetch the")
         eprint("stash asset elsewhere (tools/download-release.ps1 on the Windows laptop), copy it")
-        eprint("over, and use ./fetch-stash --from-file instead.")
+        eprint("over, and use ./tools/fetch-stash --from-file instead.")
         return 1
 
     print()

@@ -73,7 +73,6 @@ sha256  051f44218e0fe25cd949dfccad80699d5456ee379c7c4cfa18a5165776ecab0e  payloa
 sha256  053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e  payload/el8.x86_64.glibc2p28/wheels/aiosignal-1.4.0-py3-none-any.whl
 sha256  054dc20fd2e3132b4c3883b4a00d72fd6e1f56fdaf89fccd12e8057d74cd74d7  payload/el8.x86_64.glibc2p28/wheels/watchfiles-1.2.0-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha256  054dda1d1aeae55744c3e34f6e824bf741b35051db6007b878fe32fb2eb0402a  envs/tmux/vendor/plugins/tmux-yank/yank.tmux
-sha256  054f94b35825db1bee7e04807198d552967eef8977afa60383c6497533a0d308  payload/packages.json
 sha256  0554c8b3658e57c9ad8ff732a9f18a57042704a02d765877cda644ae9dbf924e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hack/injections.scm
 sha256  0554c8b3658e57c9ad8ff732a9f18a57042704a02d765877cda644ae9dbf924e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/hack/injections.scm
 sha256  056974a5bb990df34453985ca040e7ee2612e845e5b3d9387adfa43d9ac2c8a2  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/proto.so.bz2
@@ -2280,6 +2279,7 @@ sha256  89c905f2966a3d76bed2acbdb3082c850a72116f5e25547ea0eb775e1c8f7b82  payloa
 sha256  89e9baf70b7b560441808981c5126c0bf5e28cf46804f37fbd4b671671bf2c3a  payload/treesitter/vendor/nvim-treesitter/lua/nvim-treesitter/install.lua
 sha256  89edcca0af43b52f8f084faa723aef345abf27ca6bacb0d6298b351f1e44af75  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ziggy_schema.lua
 sha256  8a043e09b183d42ee15df494ffce4b65e7833210a2c4cdbee55d4acdc469d67a  payload/treesitter/vendor/nvim-treesitter/tests/indent/gleam/assert.gleam
+sha256  8a0b6ce72f1697607a451e8c696c6e54c4b1f254024dba75bc8a55f807abbd84  payload/packages.json
 sha256  8a27dcbfda7bb6421793ca388f0c29f325efa74028f073a694af7d8b849ecf6d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/printf.lua
 sha256  8a33927089fee69a22e2d5cfd92d540d8de4f358da68ac2de97e0429459c8ba0  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/scheme.so.bz2
 sha256  8a36744162c8948edfbef2260bd82c8141afb66ec9d54398e70e40b23adc8eb4  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/string.c

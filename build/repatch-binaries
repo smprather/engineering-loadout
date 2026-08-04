@@ -4,7 +4,7 @@ repatch-binaries: pre-bake RPATH=$ORIGIN/../lib64:$ORIGIN/../lib into every ELF
 binary stored as .bz2 in payload/<platform>/bin/.
 
 Run once when migrating from post-install patchelf to pre-patched bundles.
-After this script completes, run ./strip-all-elf-binaries to update .strip-manifest
+After this script completes, run ./build/strip-all-elf-binaries to update .strip-manifest
 (manifest checksums change because the binaries change).
 
 Usage:
@@ -132,7 +132,7 @@ def main(dry_run):
     stored as .bz2 in payload/<platform>/bin/.
 
     Run once when migrating from post-install patchelf to pre-patched bundles.
-    After this script completes, run ./strip-all-elf-binaries to update
+    After this script completes, run ./build/strip-all-elf-binaries to update
     .strip-manifest (manifest checksums change because the binaries change).
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -165,7 +165,7 @@ def main(dry_run):
         )
     )
     if total_changed and not dry_run:
-        print("Next: run ./strip-all-elf-binaries to update .strip-manifest")
+        print("Next: run ./build/strip-all-elf-binaries to update .strip-manifest")
 
 
 if __name__ == "__main__":

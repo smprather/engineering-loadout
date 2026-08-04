@@ -142,5 +142,5 @@ with open(path, "w", encoding="utf-8") as fh:
 print(f"packages.json: vcd-toggle-profiler version -> {version}")
 PY
 
-"$REPO/strip-all-elf-binaries"
+"$REPO/build/strip-all-elf-binaries"
 ldd "$bin"

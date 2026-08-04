@@ -89,4 +89,4 @@ cp "${workdir}/libaio_tmp.bz2" "${LIB_DIR}/libaio.so.1.bz2"; chmod 644 "${LIB_DI
 echo "Installed: ${LIB_DIR}/libaio.so.1.bz2"
 
 echo
-echo "Done. Now run: ./strip-all-elf-binaries  (skips both via RPATH guard)"
+echo "Done. Now run: ./build/strip-all-elf-binaries  (skips both via RPATH guard)"
