@@ -259,14 +259,14 @@ OpenSSH for those.
 | gocheat | bin | 0.1.1 | Interactive terminal cheatsheet browser (EL8 source build, CGO_ENABLED=0 static) |
 | keyb | bin | 0.8.0 | Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export |
 | gping | bin | 1.20.4 | Ping with live graph visualization |
-| htop | bin | 3.2.1 | Interactive process viewer and manager |
+| htop | bin | 3.5.2 | Interactive process viewer and manager |
 | hx | bin | 25.07.1 | Modern modal text editor with tree-sitter and LSP |
 | hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
 | ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
 | openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
 | jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
-| just | bin | 1.57.0 | Command runner, ergonomic Makefile alternative |
-| lazygit | bin | 0.63.1 | TUI git client for staging, committing, rebasing |
+| just | bin | 1.58.0 | Command runner, ergonomic Makefile alternative |
+| lazygit | bin | 0.64.0 | TUI git client for staging, committing, rebasing |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
 | miller | bin | 6.20.2 | CSV/TSV/JSON/NDJSON data processor (mlr) |
@@ -280,7 +280,7 @@ OpenSSH for those.
 | pv | bin | 1.6.6 | Monitor and show progress of data through a pipe |
 | rg | bin | 15.2.0 | Extremely fast grep alternative (ripgrep) |
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
-| rsync | bin | 3.4.1 | Efficient file sync with delta-transfer algorithm |
+| rsync | bin | 3.4.4 | Efficient file sync with delta-transfer algorithm |
 | ruby | bin | 3.3.10 | Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher |
 | ruff | bin | 0.16.1 | Extremely fast Python linter and formatter |
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
@@ -291,8 +291,8 @@ OpenSSH for those.
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
 | tmux | bin | 3.7b | Terminal multiplexer with session management |
-| tree-sitter | bin | 0.26.10 | Incremental parser generator and query tool |
-| ty | bin | 0.0.65 | Fast Python type checker (Astral) |
+| tree-sitter | bin | 0.26.11 | Incremental parser generator and query tool |
+| ty | bin | 0.0.66 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.1 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.0901 | Vi IMproved text editor |
@@ -302,14 +302,14 @@ OpenSSH for those.
 | nvim-qt | bin | 0.2.19 | Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required) |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
-| xsel | bin | 1.2.0 | X11 clipboard command-line access tool |
-| yara | bin | 4.5.5 | Malware pattern matching and classification tool |
+| xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
+| yara | bin | 4.5.8 | Malware pattern matching and classification tool |
 | xterm | bin | 410 | X11 terminal emulator with Unicode and color |
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
 | wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
 | st | bin | 0.9.3 | suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
 | xephyr | bin | 1.20.11-28.el8_10.3 | Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port) |
-| yank | bin | 1.3.0 | Select terminal output and copy to clipboard |
+| yank | bin | 1.4.0 | Select terminal output and copy to clipboard |
 | yq | bin | 4.53.3 | YAML/JSON/XML/CSV processor (jq for YAML) |
 | zellij | bin | 0.44.3 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |

@@ -741,7 +741,7 @@
       "bins": [
         "htop"
       ],
-      "version": "3.2.1",
+      "version": "3.5.2",
       "platforms": [
         "linux"
       ],
@@ -851,7 +851,7 @@
       "bins": [
         "just"
       ],
-      "version": "1.57.0",
+      "version": "1.58.0",
       "platforms": [
         "linux"
       ],
@@ -865,7 +865,7 @@
       "bins": [
         "lazygit"
       ],
-      "version": "0.63.1",
+      "version": "0.64.0",
       "platforms": [
         "linux"
       ],
@@ -1084,7 +1084,7 @@
       "libs": [
         "libxxhash.so.0"
       ],
-      "version": "3.4.1",
+      "version": "3.4.4",
       "platforms": [
         "linux"
       ],
@@ -1277,7 +1277,7 @@
       "bins": [
         "tree-sitter"
       ],
-      "version": "0.26.10",
+      "version": "0.26.11",
       "platforms": [
         "linux"
       ],
@@ -1292,7 +1292,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.65",
+      "version": "0.0.66",
       "platforms": [
         "linux"
       ],
@@ -1655,7 +1655,7 @@
       "bins": [
         "xsel"
       ],
-      "version": "1.2.0",
+      "version": "1.2.1",
       "platforms": [
         "linux"
       ],
@@ -1670,7 +1670,7 @@
       "bins": [
         "yara"
       ],
-      "version": "4.5.5",
+      "version": "4.5.8",
       "platforms": [
         "linux"
       ],
@@ -1818,7 +1818,7 @@
       "bins": [
         "yank"
       ],
-      "version": "1.3.0",
+      "version": "1.4.0",
       "platforms": [
         "linux"
       ],

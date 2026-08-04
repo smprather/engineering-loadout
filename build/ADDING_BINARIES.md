@@ -2954,3 +2954,42 @@ root, brings up a nested display through `xdesk`, and asserts the size, that a
 cookie-less connection is refused, and that the server and its state dir are
 gone afterwards. It **skips** when `$DISPLAY` is unset, so the container and any
 headless CI stay green.
+
+## htop / rsync / xsel / yank / yara -- small C tools (EL8 source builds)
+
+These five shipped for months with **no build script and no note here**, which
+this file's own mandate forbids. Each bump therefore meant re-deriving the
+procedure from scratch; the 2026-08-04 sweep did exactly that and wrote it down.
+
+**Build:** `build/build-simple-c.sh --tool <name> --tag <version> --src <tarball>`
+
+One script, five recipes, because the configure flags genuinely differ. What is
+shared is the packaging contract every loadout binary owes: `strip` ->
+`patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib'` -> `bzip2`, plus a hard
+check that the result needs nothing newer than EL8's **glibc 2.28**. That last
+check is not ceremony -- an upstream prebuilt for three of the tools bumped in
+the same sweep needed glibc 2.34/2.35/2.39 and would have installed cleanly on
+the build box while being dead on a stock farm node.
+
+Per-tool notes, and why each flag is there:
+
+| tool | configure | why |
+|---|---|---|
+| `yara` | `./bootstrap.sh && ./configure --disable-magic --disable-cuckoo --without-crypto` | the magic and cuckoo modules need libmagic and jansson, which the loadout does not bundle and EL8 does not guarantee. `scan-for-malware` only uses the core scanner. |
+| `rsync` | `./configure --disable-md2man` | skips the man-page toolchain. Do **not** disable xxhash/lz4/zstd: `packages.json` ships `libxxhash.so.0` for rsync, and the rest are EL8 base. |
+| `htop` | `./autogen.sh && ./configure --disable-unicode --enable-static=no` | dynamic against the bundled ncurses. |
+| `xsel` | `./autogen.sh \|\| autoreconf -fi; ./configure` | upstream's `missing` script is older than the host automake, which prints a warning and is harmless. |
+| `yank` | plain `make` | no configure; pure C, `libc` only. |
+
+Verified NEEDED sets at the 2026-08-04 versions (yara 4.5.8, rsync 3.4.4,
+htop 3.5.2, xsel 1.2.1, yank 1.4.0):
+
+- `yank` -- `libc` only (max symbol GLIBC_2.3)
+- `xsel` -- `libX11`, `libc` (GLIBC_2.14); libX11 comes from `gui_libs`
+- `yara` -- `libm`, `libpthread`, `libc` (GLIBC_2.17)
+- `htop` -- `libcap`, `libncurses`, `libtinfo`, `libdl`, `libm`, `libc` (GLIBC_2.17)
+- `rsync` -- `libacl`, `libpopt`, `liblz4`, `libzstd`, `libxxhash`, `libcrypto`, `libc` (GLIBC_2.14)
+
+`libpopt`, `liblz4`, `libzstd`, `libcrypto` and `libacl` are EL8 base and are
+deliberately not bundled; only `libxxhash.so.0` is, because EL8 has no system
+xxhash.
