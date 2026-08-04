@@ -1917,7 +1917,7 @@
         "libvorbis.so.0",
         "libvorbisenc.so.2"
       ],
-      "version": "11.1.0",
+      "version": "11.3.0",
       "version_url": "https://ftp.gnu.org/gnu/octave/?C=M&O=D",
       "version_pattern": "octave-([0-9]+\\.[0-9]+\\.[0-9]+)\\.tar",
       "platforms": [
@@ -1931,12 +1931,12 @@
         "gnuplot"
       ],
       "description": "GNU scientific computing language (MATLAB-compatible)",
-      "sentinel": "share/octave/11.1.0/m",
+      "sentinel": "share/octave/11.3.0/m",
       "install_to": "~/.local",
       "remove_before_extract": [
-        "share/octave/11.1.0",
-        "lib/octave/11.1.0/oct",
-        "libexec/octave/11.1.0"
+        "share/octave/11.3.0",
+        "lib/octave/11.3.0/oct",
+        "libexec/octave/11.3.0"
       ],
       "missing_hint": "octave will NOT have its standard library at ~/.local/share/octave/"
     },

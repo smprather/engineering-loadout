@@ -325,7 +325,7 @@ The helper links `libX11`/`libxcb`/`libXau`. No hard dep on `gui_libs` is added:
 gnuplot binary is headless (no X linkage), and the helper resolves X libs from `gui_libs`
 (via RPATH) or the host's `/lib64`. Pure compute nodes with no X libs need `gui_libs`.
 
-## Octave build notes (11.1.0, added 2026-05-13)
+## Octave build notes (11.3.0; first packaged 11.1.0 on 2026-05-13)
 
 Built without Qt, Java, OpenGL, FLTK, or X11. Plots work via gnuplot backend (already bundled).
 RapidJSON disabled to avoid a GCC 14 read-only-member compile error.
@@ -352,7 +352,7 @@ See `build/build-octave.sh` for the full bundling recipe.
 - `bin/octave.bz2` -- thin 16K launcher (stripped), RPATH = `$ORIGIN/../lib64`
 - `lib64/liboctave.so.13.bz2`, `liboctinterp.so.15.bz2`, `liboctmex.so.1.bz2` -- core libs, RPATH = `$ORIGIN`
 - 35 exclusive dep libs in `lib64/` (FFTW, HDF5, BLAS, SuiteSparse, GFortran, audio, GLPK, QHull, ...)
-- `runtime/octave.tar.bz2` -- m-files (`share/octave/11.1.0/`) + compiled plugins (`lib/octave/11.1.0/oct/`, patchelf'd RPATH = `$ORIGIN/../../../../../lib64`)
+- `runtime/octave.tar.bz2` -- m-files (`share/octave/11.3.0/`) + compiled plugins (`lib/octave/11.3.0/oct/`, patchelf'd RPATH = `$ORIGIN/../../../../../lib64`)
 
 **What is NOT bundled:** doc (saves ~5.6 MB), Qt/FLTK/X11 (no display on headless machines).
 
@@ -375,7 +375,7 @@ Home directory quotas on shared compute systems are typically small (~4-10 GB). 
 | nedit-ng (optional)      | Qt5 NEdit rewrite                | ~8 MB                     |
 | Portable Python          | python3.14                       | ~40 MB                    |
 | Treesitter parsers       | all platforms                    | ~20 MB                    |
-| Octave (optional)        | octave 11.1.0                    | ~163 MB                   |
+| Octave (optional)        | octave 11.3.0                    | ~163 MB                   |
 
 Future: consider splitting payload into lightweight (-> `~/.local`) and heavyweight
 (-> shared filesystem, symlinked from `~/.local`). See memory file `project_prebuilt_bifurcation.md`.

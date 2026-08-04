@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build GNU Octave 11.1.0 from source for el8.x86_64.glibc2p28.
+# Build GNU Octave from source for el8.x86_64.glibc2p28. Version via --tag.
 #
 # Builds without Qt, Java, OpenGL, FLTK, or X11. Uses gnuplot as the
 # graphics backend (already bundled in the repo). Disables RapidJSON to
@@ -13,14 +13,15 @@
 #   pcre2-devel  curl-devel  hdf5-devel  bzip2-devel
 #
 # Usage:
-#   cd /path/to/octave-11.1.0   # extracted source tarball
+#   cd /path/to/octave-<VERSION>       # extracted source tarball
+#   /path/to/build-octave.sh --tag <VERSION>
 #   /path/to/build-octave.sh
 #
 # The script builds into /tmp/octave-install and then runs the bundling
 # steps automatically.
 #
 # Source tarball: https://gnu.mirror.constant.com/octave/
-# Version built: 11.1.0 (2026-05-13)
+# First packaged at 11.1.0 (2026-05-13); pass the version you are building via --tag.
 
 set -eu
 
@@ -29,7 +30,25 @@ BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 PATCHELF="$HOME/.local/bin/patchelf"
-INSTALL_PREFIX=/tmp/octave-install
+VERSION=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --tag) shift; [ "$#" -gt 0 ] || { echo "missing value for --tag" >&2; exit 2; }; VERSION="$1" ;;
+        -h|--help) sed -n '2,/^$/p' "$0"; exit 0 ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+if [ -z "$VERSION" ]; then
+    echo "ERROR: --tag is required, e.g. --tag 11.3.0" >&2
+    echo "  It must match the extracted source tree you are running this in," >&2
+    echo "  and the octave version recorded in payload/packages.json." >&2
+    exit 1
+fi
+
+# Version-scoped so successive builds cannot contaminate each other. The old
+# fixed /tmp/octave-install ended up holding both 11.1.0 and 11.3.0 trees.
+INSTALL_PREFIX=/tmp/octave-install-$VERSION
 
 if [ -r /opt/rh/gcc-toolset-14/enable ]; then
     # shellcheck disable=SC1091
@@ -55,7 +74,7 @@ echo "=== Installing ==="
 make install
 
 echo "=== Bundling binary ==="
-BIN="$INSTALL_PREFIX/bin/octave-cli-11.1.0"
+BIN="$INSTALL_PREFIX/bin/octave-cli-$VERSION"
 TMP=/tmp/octave_bin_tmp
 cp "$BIN" "$TMP"
 strip "$TMP"
@@ -66,8 +85,8 @@ chmod 644 "$BIN_DIR/octave.bz2"
 rm -f "$TMP" "${TMP}.bz2"
 echo "  binary: $(ls -lh "$BIN_DIR/octave.bz2" | awk '{print $5}')"
 
-echo "=== Bundling octave core libs (strip + RPATH=$ORIGIN) ==="
-OCTLIB="$INSTALL_PREFIX/lib/octave/11.1.0"
+echo '=== Bundling octave core libs (strip + RPATH=$ORIGIN) ==='
+OCTLIB="$INSTALL_PREFIX/lib/octave/$VERSION"
 for lib in liboctave.so.13 liboctinterp.so.15 liboctmex.so.1; do
     tmp="/tmp/oct_${lib}_tmp"
     cp "$OCTLIB/$lib" "$tmp"
@@ -159,10 +178,10 @@ echo "=== Creating runtime tarball ==="
 mkdir -p "$RUNTIME_DIR"
 cd "$INSTALL_PREFIX"
 tar -cjf /tmp/octave-runtime.tar.bz2 \
-    --exclude='./share/octave/11.1.0/doc' \
-    ./share/octave/11.1.0/ \
-    ./lib/octave/11.1.0/oct/ \
-    ./libexec/octave/11.1.0/
+    --exclude="./share/octave/$VERSION/doc" \
+    ./share/octave/$VERSION/ \
+    ./lib/octave/$VERSION/oct/ \
+    ./libexec/octave/$VERSION/
 cp /tmp/octave-runtime.tar.bz2 "$RUNTIME_DIR/octave.tar.bz2"
 chmod 644 "$RUNTIME_DIR/octave.tar.bz2"
 echo "  runtime: $(ls -lh "$RUNTIME_DIR/octave.tar.bz2" | awk '{print $5}')"

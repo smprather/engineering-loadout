@@ -295,8 +295,8 @@ OpenSSH for those.
 | ty | bin | 0.0.65 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.1 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.0782 | Vi IMproved text editor |
-| gvim | bin | 9.2.0782 | GTK3 GUI Vim with clipboard and font rendering |
+| vim | bin | 9.2.0901 | Vi IMproved text editor |
+| gvim | bin | 9.2.0901 | GTK3 GUI Vim with clipboard and font rendering |
 | nedit-ng | bin | 2025.1 | Qt5 GUI text editor, NEdit rewrite |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | nvim-qt | bin | 0.2.19 | Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required) |
@@ -313,7 +313,7 @@ OpenSSH for those.
 | yq | bin | 4.53.3 | YAML/JSON/XML/CSV processor (jq for YAML) |
 | zellij | bin | 0.44.3 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
-| octave | bin | 11.1.0 | GNU scientific computing language (MATLAB-compatible) |
+| octave | bin | 11.3.0 | GNU scientific computing language (MATLAB-compatible) |
 | ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
 | spice-subckt-rc-reduce | bin | 0.1.0 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
