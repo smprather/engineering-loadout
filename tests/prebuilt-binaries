@@ -57,6 +57,10 @@ FATAL_OUTPUT_PATTERNS = (
 HOST_REQUIRED_COMMANDS = {
     "cloc": ("perl", "host perl interpreter"),
     "meld": ("/usr/bin/python3.6", "host /usr/bin/python3.6 for EL8 PyGObject"),
+    # Verilator's driver and coverage front-end are upstream Perl scripts
+    # (#!/usr/bin/env perl). Perl is not bundled, same call as for cloc.
+    "verilator": ("perl", "host perl interpreter for the Verilator driver"),
+    "verilator_coverage": ("perl", "host perl interpreter for the Verilator driver"),
 }
 
 HOST_REQUIRED_SOS = {
@@ -384,6 +388,66 @@ def smoke_runtime_layout(tmpdir, env):
                     failures.append(("gtkwave runtime", detail))
                 else:
                     print("  OK   (convert):      gtkwave runtime")
+
+    if has_bin("verilator") and shutil.which("perl"):
+        # `verilator --version` passes even with a dead VERILATOR_ROOT, because
+        # the version string is compiled into verilator_bin. What must be proven
+        # is that the Perl driver resolved VERILATOR_ROOT from its own installed
+        # path and found the relocated share/verilator tree. Deliberately
+        # --lint-only and NOT --build: the clean container has no g++, and
+        # linting still exercises root resolution + the full SV front end.
+        require_path(
+            os.path.join(tmpdir, "local", "share", "verilator", "include", "verilated.mk"),
+            "verilator include tree",
+            failures,
+        )
+        rtl = os.path.join(tmpdir, "verilator-smoke.v")
+        with open(rtl, "w") as fh:
+            fh.write(
+                "module top(input logic clk, output logic [7:0] cnt);\n"
+                "   always_ff @(posedge clk) cnt <= cnt + 8'd1;\n"
+                "endmodule\n"
+            )
+        vl_env = env.copy()
+        vl_env.pop("VERILATOR_ROOT", None)
+        try:
+            good = subprocess.run(
+                [os.path.join(bin_dir, "verilator"), "--lint-only", rtl],
+                cwd=tmpdir,
+                env=vl_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+            # A lint that cannot fail is not a lint. Prove the front end
+            # actually analyzes by feeding it an undefined signal.
+            bad_rtl = os.path.join(tmpdir, "verilator-smoke-bad.v")
+            with open(bad_rtl, "w") as fh:
+                fh.write("module bad(output logic a); assign a = no_such_signal; endmodule\n")
+            bad = subprocess.run(
+                [os.path.join(bin_dir, "verilator"), "--lint-only", bad_rtl],
+                cwd=tmpdir,
+                env=vl_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (lint):         verilator runtime  {exc}")
+            failures.append(("verilator runtime", str(exc)))
+        else:
+            detail = None
+            if good.returncode != 0:
+                detail = output_excerpt(good.stdout)
+            elif b"Misinstalled" in good.stdout or b"VERILATOR_ROOT" in good.stdout:
+                detail = output_excerpt(good.stdout)
+            elif bad.returncode == 0 or b"no_such_signal" not in bad.stdout:
+                detail = "lint accepted an undefined signal: " + output_excerpt(bad.stdout)
+            if detail:
+                print(f"  FAIL (lint):         verilator runtime  {detail}")
+                failures.append(("verilator runtime", detail))
+            else:
+                print("  OK   (lint):         verilator runtime")
 
     if has_bin("ruby"):
         # `ruby --version` proves nothing here: the interpreter starts fine even

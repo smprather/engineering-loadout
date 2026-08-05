@@ -226,6 +226,12 @@ sha256  75900122798e7e52c60349c474ca4e88fb304f8b85d72b7f32e5c8abfaf613b4  payloa
 sha256  803841fa66baadba4b52d1e0f04668e97c9d0603e4dd88dbb80c3dc551aceda4  payload/el8.x86_64.glibc2p28/bin/vcd2lxt.bz2
 sha256  b03121f1946f7829e58ae27c317a1b24b3c9885c449efecb83794e5f4072b75c  payload/el8.x86_64.glibc2p28/bin/vcd2lxt2.bz2
 sha256  ef9c928b54b15750354a6cdc85e10bda44a65da576677003b11543aaef6607d5  payload/el8.x86_64.glibc2p28/bin/vcd2vzt.bz2
+sha256  68ef4b13da4ee72a6063dcb8dc5c939021847e3d64c044ab45b56ae85a2befb8  payload/el8.x86_64.glibc2p28/bin/verilator.bz2
+sha256  4a01f3373d5faccecb6ab2208dd58f2980c88d0a532662fc8ec474d68d03da83  payload/el8.x86_64.glibc2p28/bin/verilator_bin.bz2
+sha256  1a52c0ba1a8227fb63aa5c82f613665028026ab63fd3111712fd879e6f62c076  payload/el8.x86_64.glibc2p28/bin/verilator_coverage.bz2
+sha256  9160ce6f560ead5e48a4fafd9d926be5a213a17d0ad7b3a1270c925d939fa083  payload/el8.x86_64.glibc2p28/bin/verilator_coverage_bin_dbg.bz2
+sha256  bb72d0ee86242126a207c9645efa5e498a642068255fc4acea1f0673b12ab787  payload/el8.x86_64.glibc2p28/bin/verilator_gantt.bz2
+sha256  31967e4512985497231c4506961016e38c203eabb91f65b4d423ae36d662d0f8  payload/el8.x86_64.glibc2p28/bin/verilator_profcfunc.bz2
 sha256  62511a3d5d88f0c7730890d1bcd1931e44c23e4e18dceca37e9f724f040bed8c  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  payload/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  161570b306b30c4a5b87bc089b31bfeeeeb4e6458cf70c327193843630b64208  payload/el8.x86_64.glibc2p28/bin/vzt2vcd.bz2
@@ -426,6 +432,7 @@ tar-meta  3791513  1784306302  payload/el8.x86_64.glibc2p28/runtime/pdftotext.ta
 tar-meta  3992911  1785180018  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
+tar-meta  271233  1785955378  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  937153  1785780848  payload/tldr/tldr-pages.tar.bz2

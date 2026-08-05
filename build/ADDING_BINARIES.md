@@ -2723,6 +2723,97 @@ finds gtkwave on `PATH`), `man -w gtkwave`, and -- on a box with a display --
 `gtkwave <d>/local/share/gtkwave-gtk3/examples/des.fst`, which must report
 `FSTLOAD | Built 1287 signals and 145 aliases.` and open a window.
 
+## verilator 5.050 -- Verilog/SystemVerilog -> C++ simulator (EL8 SOURCE build)
+
+Compiles synthesizable Verilog/SystemVerilog into a C++ model that the user's own
+`g++` then compiles. Positioned here as a **lint / coverage / regression** tool, not
+a commercial-simulator replacement: the users this repo serves have paid simulators,
+and Verilator does not event-simulate non-synthesizable testbench code.
+
+**Tag: `v5.050`.** Upstream versions are `X.YYY` (not semver), so `farm-versions`
+matches `Verilator ([0-9]+\.[0-9]+)`.
+
+**Prerequisites:**
+```
+dnf install autoconf flex bison help2man gcc-c++ make perl python3
+```
+**`help2man` is required and easy to miss** -- `make` builds man pages and dies with
+`[Makefile:205: verilator_gantt.1] Error 127` without it.
+
+**Build:** `build/build-verilator.sh --tag v5.050` -- `autoconf` (the tag ships no
+`configure`), `./configure --prefix=...`, `make`, `make install`. No patches, no
+special flags.
+
+**NO WRAPPER -- and it is verified, not assumed.** `bin/verilator` is upstream's Perl
+driver and it resolves its own root:
+```perl
+my $verilator_pkgdatadir_relpath = "../share/verilator";
+my $verilator_root = realpath("$RealBin/$verilator_pkgdatadir_relpath");
+```
+so it works wherever the tree lands, and the shims in `share/verilator/bin/` exec
+through a relative `../../../bin`. The build script **proves** this by copying the
+staged tree to a completely different path and running a full
+RTL -> C++ -> `g++` -> execute cycle there, asserting the model prints `CNT=10`.
+`verilator --version` would pass with a dead root, so do not weaken that to a version
+check.
+
+**The one non-relocatable artifact is `share/pkgconfig/verilator.pc`**, whose
+`prefix=` is an absolute build path and which cannot self-derive. The build rewrites
+it to `/__LOADOUT_RELOC_ROOT__` and the registry carries
+`relocate_token` + `relocate_root: share/pkgconfig`, so the installer substitutes the
+real deployment root -- the same mechanism `modules` uses. `share/pkgconfig` is owned
+by no other package, and relocation only rewrites files that actually contain the
+token, so scanning that one directory is safe. Leaving the dead prefix instead would
+be worse than dropping the file: `pkg-config --cflags verilator` would emit
+`-I/tmp/verilator-install-5.050/...` and silently produce a broken build.
+`verilator-config.cmake` needs no fixup -- it is already relocatable.
+
+**NOTHING TO BUNDLE.** `verilator_bin` links only `libpthread`/`libm`/`libc`:
+Verilator builds with `-static-libstdc++ -static-libgcc`, so there is **no
+`libstdc++.so.6` dependency and no `GLIBCXX_*` requirement at all**, and max glibc
+symbol is `GLIBC_2.17`. No patchelf, no RPATH -- like espresso. The build script
+**asserts** the C++ runtime stays static: if a future release links `libstdc++.so.6`
+dynamically it would pick up gcc-toolset-14's newer copy, which this repo never
+bundles, and fail on a stock EL8 node. Better to fail the build than ship that.
+
+**HOST REQUIREMENT -- perl.** `bin/verilator` and `bin/verilator_coverage` are
+`#!/usr/bin/env perl`; `verilator_gantt`, `verilator_profcfunc` and
+`verilator_includer` are Python 3 (which resolves to the loadout's own 3.14). Perl is
+not bundled, so both Perl entry points are listed in `HOST_REQUIRED_COMMANDS` in
+`tests/prebuilt-binaries` -- the same call already made for `cloc`. Without perl on
+PATH the failure is loud: `/usr/bin/env: 'perl': No such file or directory`. Users
+also need their own `g++`; EL8's system g++ 8.5 is sufficient and is what the build
+script's smoke deliberately uses (not gcc-toolset-14, which a farm node lacks).
+
+**DELIBERATELY NOT SHIPPED -- `verilator_bin_dbg`.** 104 MB unstripped (~25 MB
+compressed), which is more than every other file in this package combined. It is the
+assertion-enabled build used only by `verilator --debug`, for debugging **Verilator
+itself**, not user RTL. Dropping it makes `--debug` fail loudly. `verilator_coverage_bin_dbg`
+IS shipped (320 KB): there is no release build of it, so `verilator_coverage` needs it.
+
+**Payload:** 6 `bin/*.bz2` (`verilator`, `verilator_bin`, `verilator_coverage`,
+`verilator_coverage_bin_dbg`, `verilator_gantt`, `verilator_profcfunc`; the two ELFs
+stripped, the four scripts shipped as non-ELF bz2 like `vim.bz2`) plus
+`runtime/verilator.tar.bz2` (~271 KB: `share/verilator/{include,bin,examples}`,
+`share/man`, `share/pkgconfig`). ~5 MB total.
+
+**Registry:** `verilator` (`kind: bin`), member of the **`@eda`** group, sentinel
+`share/verilator/include/verilated.mk` -- the file whose absence means every
+generated model fails to compile.
+
+**Smoke:** `tests/prebuilt-binaries` runs `verilator --lint-only` on a generated
+module, then lints a module referencing an **undefined signal** and requires that one
+to FAIL. A lint that cannot fail is not a lint. It deliberately does *not* `--build`:
+the clean almalinux:8.10 container has no `g++`, and linting already exercises root
+resolution plus the whole SystemVerilog front end.
+
+**Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
+./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
+`./loadout install verilator --dest-dir <d>` and check: `verilator.pc` contains the
+real prefix and zero `__LOADOUT_RELOC_ROOT__`; `PKG_CONFIG_PATH=<d>/local/share/pkgconfig
+pkg-config --cflags verilator` resolves; and a full `-cc ... --exe ... --build` cycle
+runs and prints `CNT=10`.
+
 ## restic 0.19.1 -- user-space backup (dedup / compression / incremental)
 
 Fast, secure backup to a repo on any filesystem: content-defined deduplication, zstd

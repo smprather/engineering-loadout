@@ -2007,6 +2007,38 @@
       ],
       "missing_hint": "GTKWave man pages, example waveforms, and desktop/MIME/icon registration will NOT be installed; the viewer and converters still work"
     },
+    "verilator": {
+      "kind": "bin",
+      "bins": [
+        "verilator",
+        "verilator_bin",
+        "verilator_coverage",
+        "verilator_coverage_bin_dbg",
+        "verilator_gantt",
+        "verilator_profcfunc"
+      ],
+      "archive": "payload/PLATFORM/runtime/verilator.tar.bz2",
+      "version": "5.050",
+      "version_url": "https://github.com/verilator/verilator/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "verilog",
+        "rtl",
+        "simulator"
+      ],
+      "install_to": "~/.local",
+      "sentinel": "share/verilator/include/verilated.mk",
+      "remove_before_extract": [
+        "share/verilator"
+      ],
+      "relocate_token": "/__LOADOUT_RELOC_ROOT__",
+      "relocate_root": "share/pkgconfig",
+      "missing_hint": "the Verilator C++ include tree (verilated.h / verilated.mk) will NOT be installed; `verilator` starts but every generated model fails to compile",
+      "description": "Verilator \u2014 Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models). Needs host perl for its driver and host g++ to compile the generated model. `verilator --debug` is unavailable: the 104 MB verilator_bin_dbg is deliberately not shipped"
+    },
     "spice-subckt-rc-reduce": {
       "kind": "bin",
       "bins": [
@@ -3384,7 +3416,8 @@
     "@eda": {
       "kind": "group",
       "members": [
-        "gtkwave"
+        "gtkwave",
+        "verilator"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },

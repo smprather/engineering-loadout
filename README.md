@@ -231,6 +231,7 @@ OpenSSH for those.
 | broot | bin | 1.58.0 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.15.0 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
+| verilator | bin | 5.050 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
 | yazi | bin | 26.5.6 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
 | btm | bin | 0.14.7 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
