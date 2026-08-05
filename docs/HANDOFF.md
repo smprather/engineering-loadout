@@ -53,6 +53,37 @@ Each of the three new packages therefore got a real functional probe in
 module and requires that to fail. Worth auditing the other silent-255 binaries
 the same way.
 
+## Environment Modules inconsistency flush (2026-08-05)
+
+`envs/bash/global/modules-init.bash` now detects an **inconsistent** inherited EM
+state before re-sourcing `init/bash` -- a loaded modulefile deleted on disk, or
+`LOADEDMODULES` and `_LMFILES_` not 1:1 (e.g. `LOADEDMODULES=foo` with an empty
+`_LMFILES_`, which makes the next `module load` error *"Loaded environment state
+is inconsistent"*). A healthy state is left alone; no purge.
+
+Two things about it are load-bearing:
+
+- **`MODULEPATH` must survive the flush.** It matches a naive `^MODULE` sweep,
+  and the first cut of this cleared it. That is worse than the bug being fixed
+  and it is *silent*: with `MODULEPATH` unset, upstream `init/bash` substitutes
+  its own default (`<local>/lib/modules/modulefiles`), so the site's modulefiles
+  are quietly swapped for the loadout's rather than obviously disappearing. The
+  narrow `unset MODULESHOME MODULES_CMD` immediately below documents the same
+  invariant.
+- **It is fork-free.** This runs in every interactive shell that sets
+  `LOADOUT_CFG_USE_LOADOUT_MODULES=1`, and the common case is "do nothing", so it
+  uses bash array splitting and `${!prefix@}` instead of `tr|grep` pipelines and
+  `printenv|grep|cut`. Same reasoning as `loadout_restore_echo` replacing its
+  forking `stty` snapshot.
+
+`tests/install-modules` gates both halves: one case poisons the state and asserts
+recovery *and* that `MODULEPATH` is intact, another asserts a healthy state
+survives a re-source with its module still loaded. Verified to fail against the
+pre-fix file. **Watch the subshell trap when extending it:** `module` is a
+function that `eval`s emitted shell code, so `$(module load demo)` applies the
+environment changes to a subshell and discards them -- capture stderr to a file,
+never with a command substitution.
+
 ## Where things stand right now
 
 - `main` = `868dc37`, **pushed**; working tree clean; `origin/main` in sync.

@@ -191,4 +191,83 @@ env -i \
     ' _ "$repo_dir/envs/bash/global/modules-init.bash" \
     || fail "bash config native-init selector"
 
+# An INCONSISTENT inherited Environment Modules state must be recovered, and the
+# recovery must not take MODULEPATH with it.
+#
+# Shape under test: LOADEDMODULES names a module while _LMFILES_ is EMPTY, which
+# is what a partial env inheritance leaves behind. Modules then refuses the next
+# `module load` with "Loaded environment state is inconsistent", so a plain
+# re-source of init/bash is not enough -- the stale state has to be cleared
+# first. MODULEPATH is asserted separately because it matches a naive ^MODULE
+# sweep: clearing it would trade the inconsistent-state error for an empty
+# modulefile search path, which is strictly worse and fails at exactly the
+# moment the user is already broken.
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    TERM=dumb \
+    MODULEPATH="$test_home/modulefiles" \
+    LOADEDMODULES=phantom \
+    _LMFILES_= \
+    LOADOUT_CFG_SHARED_PREFIX="$local_prefix" \
+    EXPECTED_MODULEPATH="$test_home/modulefiles" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        source "$1"
+        # MODULEPATH must have survived the flush.
+        [[ "${MODULEPATH:-}" == "$EXPECTED_MODULEPATH" ]] || {
+            echo "MODULEPATH lost by the inconsistency flush: ${MODULEPATH:-<unset>}" >&2
+            exit 1
+        }
+        # The stale marker must be gone, not carried into the new state.
+        [[ ":${LOADEDMODULES:-}:" != *":phantom:"* ]] || {
+            echo "stale LOADEDMODULES survived: $LOADEDMODULES" >&2
+            exit 1
+        }
+        # And a real load must now work rather than erroring on inconsistency.
+        #
+        # Capture stderr to a FILE, never with $(...). `module` is a function
+        # that eval\''s the shell code modulecmd emits, so running it inside a
+        # command substitution applies the environment changes to the subshell
+        # and throws them away -- the assertions below would then fail even
+        # though the code under test worked.
+        module load demo 2>"$HOME/em-load.err"
+        ! grep -qi inconsistent "$HOME/em-load.err" || {
+            echo "still inconsistent: $(cat "$HOME/em-load.err")" >&2
+            exit 1
+        }
+        [[ "${LOADOUT_MODULES_TEST:-}" == enabled ]] || {
+            echo "module load did not take effect after the flush" >&2
+            exit 1
+        }
+        module unload demo
+    ' _ "$repo_dir/envs/bash/global/modules-init.bash" \
+    || fail "inconsistent inherited Modules state was not recovered cleanly"
+
+# The healthy path must stay a genuine no-op: a consistent inherited state is
+# left alone (no purge), so an already-loaded module survives a re-source.
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    TERM=dumb \
+    MODULEPATH="$test_home/modulefiles" \
+    LOADOUT_CFG_SHARED_PREFIX="$local_prefix" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        source "$1"
+        module load demo
+        [[ "${LOADOUT_MODULES_TEST:-}" == enabled ]]
+        # Re-source over a HEALTHY state -- demo must still be loaded after.
+        source "$1"
+        [[ ":${LOADEDMODULES:-}:" == *":demo:"* ]] || {
+            echo "healthy state was purged by the flush: ${LOADEDMODULES:-<unset>}" >&2
+            exit 1
+        }
+        [[ "${LOADOUT_MODULES_TEST:-}" == enabled ]] || {
+            echo "re-source dropped the loaded module env" >&2
+            exit 1
+        }
+    ' _ "$repo_dir/envs/bash/global/modules-init.bash" \
+    || fail "healthy inherited Modules state was not left untouched"
+
 echo "Modules fresh-home smoke OK"
