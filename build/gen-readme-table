@@ -30,6 +30,11 @@ REGISTRY = os.path.join(REPO, "payload", "packages.json")
 # | name | kind | version | description |
 ROW = re.compile(r"^\|\s*([A-Za-z0-9._+-]+)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|(.*)\|\s*$")
 
+# Package classes the table deliberately does not enumerate: the 15 per-user
+# config bundles and the 12 vendored font archives are covered by prose
+# elsewhere in the README, not one row each.
+UNLISTED_PREFIXES = ("env-", "font-")
+
 
 def main():
     check = "--check" in sys.argv[1:]
@@ -60,15 +65,41 @@ def main():
         eol = "\n" if line.endswith("\n") else ""
         out.append(f"| {name} | {kind} | {want} |{rest}|{eol}")
 
+    # A stale-version check alone cannot see a package that has NO row, which is
+    # how four packages were added without ever reaching the table -- and the
+    # gate stayed green. The original failure this generator was written for was
+    # "30 stale versions, 6 MISSING packages"; check both.
+    listed = {m.group(1) for m in (ROW.match(line.rstrip("\n")) for line in lines) if m and m.group(1) in packages}
+    missing = sorted(
+        name
+        for name, entry in packages.items()
+        if not name.startswith("@")
+        and not name.startswith(UNLISTED_PREFIXES)
+        and "version" in entry
+        and name not in listed
+    )
+
     if check:
-        if stale:
-            print(f"README package table is stale ({len(stale)} row(s)):")
-            for name, have, want in stale:
-                print(f"  {name}: README says {have}, registry says {want}")
-            print("Run build/gen-readme-table to fix.")
+        if stale or missing:
+            if stale:
+                print(f"README package table is stale ({len(stale)} row(s)):")
+                for name, have, want in stale:
+                    print(f"  {name}: README says {have}, registry says {want}")
+                print("Run build/gen-readme-table to fix.")
+            if missing:
+                print(f"README package table is missing {len(missing)} package(s):")
+                for name in missing:
+                    print(f"  {name}: {packages[name].get('kind', '?')} {packages[name]['version']}")
+                print("Add a row by hand -- the description column is hand-owned,")
+                print("so this generator will not invent one.")
             return 1
         print("README package table OK")
         return 0
+
+    if missing:
+        # Not a rewrite this tool can do (descriptions are hand-owned), but it
+        # must not pass in silence either.
+        print(f"WARNING: {len(missing)} package(s) have no README row: {', '.join(missing)}")
 
     if stale:
         with open(README, "w") as fh:

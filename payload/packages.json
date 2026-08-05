@@ -1556,6 +1556,7 @@
         "libQt5Network.so.5",
         "libQt5PrintSupport.so.5",
         "libQt5Svg.so.5",
+        "libQt5WaylandClient.so.5",
         "libQt5Widgets.so.5",
         "libQt5XcbQpa.so.5",
         "libQt5Xml.so.5",
@@ -1572,11 +1573,11 @@
         "libXft.so.2",
         "libXi.so.6",
         "libXinerama.so.1",
+        "libXmu.so.6",
+        "libXpm.so.4",
         "libXrandr.so.2",
         "libXrender.so.1",
         "libXt.so.6",
-        "libXmu.so.6",
-        "libXpm.so.4",
         "libatk-1.0.so.0",
         "libatk-bridge-2.0.so.0",
         "libatspi.so.0",
@@ -1612,9 +1613,8 @@
         "libpcre2-8.so.0",
         "libpixman-1.so.0",
         "libpng16.so.16",
-        "libqxcb.so",
         "libqwayland-generic.so",
-        "libQt5WaylandClient.so.5",
+        "libqxcb.so",
         "libthai.so.0",
         "libtiff.so.5",
         "libuuid.so.1",
@@ -2221,6 +2221,44 @@
       "install_to": "~/.local",
       "archive_name": "node.tar.bz2",
       "missing_hint": "Run: ./build/import-nodejs"
+    },
+    "ipython": {
+      "kind": "python-tool",
+      "bins": [],
+      "wheels": [
+        "ipython",
+        "ipython_pygments_lexers",
+        "decorator",
+        "jedi",
+        "parso",
+        "matplotlib_inline",
+        "pexpect",
+        "ptyprocess",
+        "prompt_toolkit",
+        "wcwidth",
+        "psutil",
+        "pygments",
+        "stack_data",
+        "executing",
+        "asttokens",
+        "pure_eval",
+        "traitlets"
+      ],
+      "uv_tool": "ipython",
+      "version": "9.15.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "python",
+        "repl",
+        "shell"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "Enhanced interactive Python REPL (tab completion, magics, history, introspection)"
     },
     "jupyterlab": {
       "kind": "python-tool",
@@ -3334,6 +3372,7 @@
       "kind": "group",
       "members": [
         "visidata",
+        "ipython",
         "jupyterlab",
         "time-plot",
         "parity-plot",
