@@ -229,6 +229,7 @@ OpenSSH for those.
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
 | biome | bin | 2.5.6 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | broot | bin | 1.58.0 | Interactive tree navigator with fuzzy search |
+| gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.15.0 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
 | yazi | bin | 26.5.6 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
 | btm | bin | 0.14.7 | Cross-platform system resource monitor (TUI) |

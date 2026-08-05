@@ -1965,6 +1965,48 @@
       "install_to": "~/.local",
       "missing_hint": "ngspice spinit/code models will be missing"
     },
+    "gtkwave": {
+      "kind": "bin",
+      "bins": [
+        "gtkwave",
+        "twinwave",
+        "rtlbrowse",
+        "shmidcat",
+        "fst2vcd",
+        "vcd2fst",
+        "fstminer",
+        "vcd2lxt",
+        "vcd2lxt2",
+        "lxt2vcd",
+        "lxt2miner",
+        "vcd2vzt",
+        "vzt2vcd",
+        "vztminer",
+        "evcd2vcd",
+        "xml2stems"
+      ],
+      "archive": "payload/PLATFORM/runtime/gtkwave.tar.bz2",
+      "version": "3.3.116",
+      "version_url": "https://github.com/gtkwave/gtkwave/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "waveform",
+        "gui"
+      ],
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "GTKWave \u2014 VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); no wrapper needed, nothing embeds the build prefix. Tcl scripting (gtkwave -S) is not compiled in",
+      "sentinel": "share/gtkwave-gtk3/examples/des.fst",
+      "install_to": "~/.local",
+      "remove_before_extract": [
+        "share/gtkwave-gtk3"
+      ],
+      "missing_hint": "GTKWave man pages, example waveforms, and desktop/MIME/icon registration will NOT be installed; the viewer and converters still work"
+    },
     "spice-subckt-rc-reduce": {
       "kind": "bin",
       "bins": [
@@ -3339,6 +3381,13 @@
       ],
       "description": "Scientific computing (octave is opt-in)"
     },
+    "@eda": {
+      "kind": "group",
+      "members": [
+        "gtkwave"
+      ],
+      "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
+    },
     "@gui-suite": {
       "kind": "group",
       "members": [
@@ -3547,6 +3596,7 @@
         "@editor-gui",
         "@gui-suite",
         "@scientific",
+        "@eda",
         "@python-tools-extra",
         "@fonts-all",
         "@shells-optional",

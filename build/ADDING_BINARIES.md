@@ -2613,6 +2613,116 @@ could still run and mis-reduce, so `--version` is not enough.
 ./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
 `./loadout install espresso --dest-dir <d>` and feed it a PLA.
 
+## gtkwave 3.3.116 -- VCD/FST/LXT2/VZT waveform viewer + converters (EL8 SOURCE build, GTK3)
+
+The incumbent open-source waveform viewer. Bundled *alongside* `surfer` (modern
+Rust/egui) rather than instead of it, because industrial flows invoke `gtkwave` by
+name from Makefiles and regression wrappers, and because the converter suite
+(`fst2vcd`, `vcd2fst`, `vcd2vzt`, `vzt2vcd`, `vcd2lxt`, `lxt2vcd`, `fstminer`,
+`vztminer`, `lxt2miner`, `evcd2vcd`, `xml2stems`) is used **headless in batch** with
+no relation to the GUI.
+
+**WHICH TREE -- this repo has two.** `gtkwave3/` is the GTK2 build; `gtkwave3-gtk3/`
+is the GTK3 build and is the one we build, against the GTK3 3.22 stack already in
+`gui_libs`. The repo's `master` branch is the **GTK4 rewrite** (gtkwave 4.x): it has
+**no stable tag** (only a `nightly` tag and an `lts` branch), and GTK4 is not
+bundled, so it is out of scope under the stable-release policy. Do not "upgrade" to
+it by moving to `master`.
+
+**Tag: `v3.3.116`** (highest 3.3.x tag). Tag form is enforced -- the script rejects
+anything but `v3.3.*` with the GTK4 explanation, so nobody re-derives this.
+
+**Prerequisites:**
+```
+dnf install gtk3-devel glib2-devel bzip2-devel xz-devel zlib-devel gperf flex bison make gcc
+```
+`gperf` is a **hard configure error** even though `configure.ac` comments that it is
+"only needed if the user updates the gperf data". Install it or configure dies.
+
+**Build:** `build/build-gtkwave.sh --tag v3.3.116`. Real flags:
+```
+./configure --prefix=/tmp/gtkwave-install-3.3.116 \
+    --enable-gtk3 --disable-tcl --disable-mime-update --disable-schemas-compile \
+    CFLAGS="-O2 -pipe"
+```
+- `--disable-mime-update` / `--disable-schemas-compile` stop `make install` from
+  touching system-wide `/usr/share/mime` and the GSettings schema cache.
+- **Neither `--with-gsettings` nor `--with-gconf`.** Both default off, and that is
+  what we want: preferences then live in `~/.gtkwaverc`, needing neither a compiled
+  schema nor a settings daemon. Turning on gsettings would drag in the
+  `glib-compile-schemas` + `GSETTINGS_BACKEND=keyfile` dance that mate-terminal needs.
+- Install prefix is **version-scoped** (`/tmp/gtkwave-install-<VERSION>`) so
+  successive builds cannot contaminate each other, as with octave.
+
+**NO WRAPPER -- and that is verified, not assumed.** Unlike ngspice/gvim/st/fish,
+**nothing** in the GTKWave install embeds the configure prefix: `share/gtkwave-gtk3/`
+holds only the ODT manual and examples, the `.desktop` file uses a bare
+`Exec=gtkwave`, and `twinwave` locates gtkwave with `execvp()` from `PATH`. So the
+ELFs ship directly (strip -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> bzip2) with
+no launcher. The build script **enforces this as an invariant**: it greps every
+installed binary and every file under `share/` for the prefix and hard-fails if any
+hit appears. If that guard ever fires, GTKWave needs a prefix-deriving wrapper
+(model: `build/ngspice/ngspice`) -- do not weaken the guard instead.
+
+**Binary set is pinned, not globbed.** `EXPECTED_BINS` lists all 16; the script fails
+if upstream drops one *or* installs one not on the list, so a tool-set change is a
+build failure rather than a silent payload diff. Keep it in sync with the `bins`
+array in `packages.json`.
+
+**KNOWN LIMITATION -- Tcl scripting is off (`--disable-tcl`).** GTKWave's Tcl layer
+(`gtkwave -S script.tcl`, the `gtkwave::` command set) links system Tcl 8.6 and then
+needs a Tcl script library (`init.tcl`) at run time. The loadout already owns
+`<prefix>/lib/tcl8.6` for portable-python at a *different* Tcl patchlevel, and Tcl's
+`init.tcl` does `package require -exact`, so a second tcl8.6 script library in that
+tree breaks one side or the other -- the exact hazard documented for `expect` above.
+Enabling it later means giving GTKWave a private script-library prefix the way
+`build/build-expect.sh` does. Failure mode without it is **loud**: `gtkwave -S` exits
+with an unrecognized-option error; it does not silently ignore the script.
+
+**Deps:** GTK3/cairo/pango/glib/X11/Wayland from `gui_libs`; `libbz2.so.1`,
+`libz.so.1`, `libpcre.so.1` already in payload `lib64/`. The only new system
+assumption is **`liblzma.so.5`** (gtkwave's own `-llzma` for VZT), deliberately NOT
+bundled: `rpm`'s own `librpmio` links it, so it is on every EL8 node including a
+minimal install -- same class as `libsqlite3` / `libgnutls`. Everything else in the
+`ldd` closure (systemd, selinux, gnutls, blkid, mount, lz4, gcrypt, ...) arrives
+transitively via the glib/gio `gui_libs` already ships, so gtkwave adds nothing else.
+Max glibc symbol is `GLIBC_2.14`. The script's closure check walks **every** binary
+and not just `gtkwave` -- walking only one binary is how `libfontenc.so.1` shipped
+missing for Xephyr.
+
+**Runtime archive** (`runtime/gtkwave.tar.bz2`, ~370 KB): `share/gtkwave-gtk3`
+(examples), `share/man` (16 man1 + `gtkwaverc.5`), plus `share/mime`, `share/icons`,
+`share/applications` for desktop/MIME registration. The **1.7 MB `gtkwave.odt` user
+manual is deleted before tarring**, matching octave's excluded doc tree; the man
+pages are the offline reference actually usable from a terminal. man-db finds them
+with no `MANPATH` change because `<prefix>/bin` on `PATH` maps to
+`<prefix>/share/man`. `remove_before_extract` lists only `share/gtkwave-gtk3` --
+`share/man`, `share/mime`, `share/icons`, `share/applications` are shared namespaces
+and must not be deleted.
+
+**Registry:** `gtkwave` (`kind: bin`, 16 `bins` + `archive`), `depends: [gui_libs]`,
+sentinel `share/gtkwave-gtk3/examples/des.fst`, member of the new **`@eda`** group
+which rides in `@engineering-loadout`. No `mesa3d_libs`: GTK3 renders through
+cairo/X11 here, same as meld and mate-terminal. Total payload cost ~1.4 MB.
+
+**Smoke: `--version` alone is NOT enough, and the generic probe is actively
+misleading here.** `gtkwave --version` does exit 0 headless, but `rtlbrowse`,
+`shmidcat` and `twinwave` have no version flag and exit **255** printing
+`Could not open '--version'` -- 255 is not in `FATAL_EXIT_CODES`, so
+`tests/prebuilt-binaries` scores them green off an error message and a totally
+broken FST reader would pass. `smoke_runtime_layout` therefore round-trips the
+shipped example: `fst2vcd des.fst` (must produce >1000 lines containing
+`$enddefinitions`) -> `vcd2fst` -> `fst2vcd` again. The build script runs the same
+round-trip against the staged tree before packaging.
+
+**Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
+./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
+`./loadout install gtkwave --dest-dir <d>` and, with `<d>/local/bin` on `PATH`:
+`gtkwave --version`, the FST round-trip, `twinwave` (must print usage, proving it
+finds gtkwave on `PATH`), `man -w gtkwave`, and -- on a box with a display --
+`gtkwave <d>/local/share/gtkwave-gtk3/examples/des.fst`, which must report
+`FSTLOAD | Built 1287 signals and 145 aliases.` and open a window.
+
 ## restic 0.19.1 -- user-space backup (dedup / compression / incremental)
 
 Fast, secure backup to a repo on any filesystem: content-defined deduplication, zstd

@@ -326,6 +326,65 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (xspice):       ngspice runtime")
 
+    if has_bin("gtkwave"):
+        # `gtkwave --version` is a real exit-0 banner, but the converters are
+        # what runs in batch flows and the generic probe scores three of this
+        # package's binaries green off an error message: `rtlbrowse --version`
+        # exits 255 with "Could not open '--version'", which is not a fatal
+        # code, so a completely broken FST reader would still pass. Prove the
+        # reader and writer by round-tripping the shipped example waveform.
+        examples = os.path.join(tmpdir, "local", "share", "gtkwave-gtk3", "examples")
+        src_fst = os.path.join(examples, "des.fst")
+        if require_path(src_fst, "gtkwave examples", failures):
+            vcd = os.path.join(tmpdir, "gtkwave-des.vcd")
+            fst2 = os.path.join(tmpdir, "gtkwave-des2.fst")
+            try:
+                with open(vcd, "wb") as fh:
+                    p1 = subprocess.run(
+                        [os.path.join(bin_dir, "fst2vcd"), src_fst],
+                        cwd=tmpdir,
+                        env=env,
+                        stdout=fh,
+                        stderr=subprocess.PIPE,
+                        timeout=60,
+                    )
+                p2 = subprocess.run(
+                    [os.path.join(bin_dir, "vcd2fst"), vcd, fst2],
+                    cwd=tmpdir,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=60,
+                )
+                p3 = subprocess.run(
+                    [os.path.join(bin_dir, "fst2vcd"), fst2],
+                    cwd=tmpdir,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=60,
+                )
+            except Exception as exc:
+                print(f"  FAIL (convert):      gtkwave runtime  {exc}")
+                failures.append(("gtkwave runtime", str(exc)))
+            else:
+                with open(vcd, "rb") as fh:
+                    vcd_bytes = fh.read()
+                detail = None
+                if p1.returncode != 0:
+                    detail = output_excerpt(p1.stderr)
+                elif b"$enddefinitions" not in vcd_bytes:
+                    detail = "fst2vcd output has no $enddefinitions section"
+                elif p2.returncode != 0 or not os.path.getsize(fst2):
+                    detail = output_excerpt(p2.stdout) or "vcd2fst produced an empty FST"
+                elif p3.returncode != 0:
+                    detail = output_excerpt(p3.stdout)
+                if detail:
+                    print(f"  FAIL (convert):      gtkwave runtime  {detail}")
+                    failures.append(("gtkwave runtime", detail))
+                else:
+                    print("  OK   (convert):      gtkwave runtime")
+
     if has_bin("ruby"):
         # `ruby --version` proves nothing here: the interpreter starts fine even
         # when its whole stdlib is unreachable, because EL8's ruby is not built

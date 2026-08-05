@@ -45,6 +45,7 @@ sha256  d2c1570d81b342fe5d4884ee50336a8c9ab6ee28f5c7ab3e0343b50763ddbf9c  payloa
 sha256  8df4a4c03d3fcd5d763d2072dca47c6c36aed41f53746342a12f4079216469e3  payload/el8.x86_64.glibc2p28/bin/echo.bz2
 sha256  ce7f879c9afec121252063370d4eb29307c1cb6ee8a807f7c7ad8af04460b9e2  payload/el8.x86_64.glibc2p28/bin/env.bz2
 sha256  2ec0308875f7999deb2901bec7bf3fe927c49a3e11041c9db4040599d057faeb  payload/el8.x86_64.glibc2p28/bin/espresso.bz2
+sha256  2a4730aba6677e310e3e211304b418a97a72fd7f1b9e41a0a5f60a1474db3f7d  payload/el8.x86_64.glibc2p28/bin/evcd2vcd.bz2
 sha256  63315d9ddbefde2a8070ed2b56c7fc6fd3465b213fe885a1a428a2101c6200c4  payload/el8.x86_64.glibc2p28/bin/expand.bz2
 sha256  cb7bc7b9f9d39c1c53d50b2d8d5c438056a3337744a69e512795c37cc0b42a02  payload/el8.x86_64.glibc2p28/bin/expect.bz2
 sha256  afd1c585b1d3d7ddbe64e84b807ddba44d3e35ba8b4003eaeb8e3bd007fca5bf  payload/el8.x86_64.glibc2p28/bin/expr.bz2
@@ -59,6 +60,8 @@ sha256  d81e97dabe525b0fc3a8e0be31db95430fc2373024d342890b006516bf388d81  payloa
 sha256  71c69f9a5bcfd4e328674bf252d198b7ce3af6727b1f069c4a1dcf882d7e5088  payload/el8.x86_64.glibc2p28/bin/fmt.bz2
 sha256  ed02e52236b570b5cff3fd761dd404d44d082bf23134848befcc7cda497cf637  payload/el8.x86_64.glibc2p28/bin/fold.bz2
 sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  payload/el8.x86_64.glibc2p28/bin/fresh.bz2
+sha256  338cb2c9a815d77de2c8c9158b8752ebc927b61619eb7c80ed3fdf479e9bea43  payload/el8.x86_64.glibc2p28/bin/fst2vcd.bz2
+sha256  cf8867e865d26d7f4d7ef5af238e73711260995ac4c9420aed2195a53bab953c  payload/el8.x86_64.glibc2p28/bin/fstminer.bz2
 sha256  074cf79a14bb71d236a826e3aff7fd4f30dde606d8302877e3b532ae18e0d584  payload/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  0de4a8d5f65af764d5c3977b4d657b8ea696538dfd7c097f24aee7cfd5470e53  payload/el8.x86_64.glibc2p28/bin/gem.bz2
 sha256  20520e8ba435ab7f5c575f31924ebc3d189b13e84f80a6954dcc76b4a55fea36  payload/el8.x86_64.glibc2p28/bin/glow.bz2
@@ -67,6 +70,7 @@ sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  payloa
 sha256  b8f93f9c06449bc7d595bd56f280769747c3457ae6ac0b921d1098c8b7a48454  payload/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  4420caa461b042bb4c35bfc8d7580256479098c273a3f35b19edc33e6ac36ed6  payload/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  payload/el8.x86_64.glibc2p28/bin/groups.bz2
+sha256  a546e160cd55c973206eeba619137b8441a914d6e50b0fa25caed3c87975c445  payload/el8.x86_64.glibc2p28/bin/gtkwave.bz2
 sha256  ca6d20e0dd178aa6275d5e246b88141b3b66f46e7617f20ed78964542fa612ec  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
 sha256  34b84a2d85fcbf841318c7b84857d968f0b02eefd0339a2abcf9662836558fee  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  payload/el8.x86_64.glibc2p28/bin/head.bz2
@@ -103,6 +107,8 @@ sha256  ed482b219369a9047777c6dc33aa4d0dae6c89bfbdca2543cd2b72401988fdfd  payloa
 sha256  8102c0c85b02bee9f82648a610dbd1ee1ba9d732d5906b2da19ccd0e014a793b  payload/el8.x86_64.glibc2p28/bin/logname.bz2
 sha256  c46f4a6f49b0a9f296601da1e790a646fc954b364e4f662eab5b3b60ef1319c7  payload/el8.x86_64.glibc2p28/bin/ls.bz2
 sha256  019de42fcf3ad82ee0d056c33c4cd310ec1b29c059afa1d82780ec239a0d57be  payload/el8.x86_64.glibc2p28/bin/lua-language-server.bz2
+sha256  06998613da761f1f7d4b2c3373ecf7b031aa1fe180c662f5fbff1a20cbda9980  payload/el8.x86_64.glibc2p28/bin/lxt2miner.bz2
+sha256  af604b68fae4d1364f973701698109e1e3b9aa62971ae13e4afd15d39dacb26b  payload/el8.x86_64.glibc2p28/bin/lxt2vcd.bz2
 sha256  52dad89f3c4b4416b68882e700babc307051059dd5d87cb2dead0e0ae47456ad  payload/el8.x86_64.glibc2p28/bin/md5sum.bz2
 sha256  7baba7cb340fb4e19746d916fedcd601e8e02ee47a4c95c0e70814a38fc21216  payload/el8.x86_64.glibc2p28/bin/merge-fdata.bz2
 sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  payload/el8.x86_64.glibc2p28/bin/micro.bz2
@@ -148,6 +154,7 @@ sha256  81c5720b805adc7b2b5088c0c181e42d7f673bd8338e3eccba6e3bf930f4035e  payloa
 sha256  1891555602914f1583e3157c84cb0356aa3fd211134fc90cdf5db13d0ffb2f56  payload/el8.x86_64.glibc2p28/bin/rm.bz2
 sha256  34826810504c35ae76248e0e79495df8ff4b2f2191b8130fcd8aba8749b86726  payload/el8.x86_64.glibc2p28/bin/rmdir.bz2
 sha256  14cdef32a6689d7a7b5006312b0d46f49c09b707d86570c9944ff8e058b0f571  payload/el8.x86_64.glibc2p28/bin/rsync.bz2
+sha256  59386f8e44dc700a2b9dd57f0542bcb8e4679c2862af6fbd698eb2bb48907cb7  payload/el8.x86_64.glibc2p28/bin/rtlbrowse.bz2
 sha256  3aca0955fdf5800508d69888e67314159799927d355b5fa25166ea4717c4fd5f  payload/el8.x86_64.glibc2p28/bin/ruby.bin.bz2
 sha256  ecd1ac6aba18ff8dc55ed15b3d332bb0f36698bfa7c556e9ab21092c7fcee5d3  payload/el8.x86_64.glibc2p28/bin/ruby.bz2
 sha256  f4114f9bc1f4d3e9a81927e1b28eab01b52521d3b716686a1c1e50983b0a19e5  payload/el8.x86_64.glibc2p28/bin/ruff.bz2
@@ -162,6 +169,7 @@ sha256  4b8d42821be501da992d112a9de04c82005caf65a852ffaccaa60509b20c3436  payloa
 sha256  b2e0e43fad03d4da61b25d3aa11d8dea173c43187a1d05e04b47ac13ea4f6ea9  payload/el8.x86_64.glibc2p28/bin/sha512sum.bz2
 sha256  674d50920d6fa503da5413dc82662e9c41d24980c0fbd9de1d7f04d44c089dc5  payload/el8.x86_64.glibc2p28/bin/shellcheck.bz2
 sha256  ec4c250dea5e3d13f30f9466260ddf566964b166663b44737930e43af9a93f37  payload/el8.x86_64.glibc2p28/bin/shfmt.bz2
+sha256  2051407de643aae3ff9a13a2075f337b0a5f2540ed1f8da7e15b35d30674a275  payload/el8.x86_64.glibc2p28/bin/shmidcat.bz2
 sha256  dbbf84790650147c89ed1160b76649ee9e15f287a819a84b68ffcf373235ae7f  payload/el8.x86_64.glibc2p28/bin/shred.bz2
 sha256  48e98433780fd89d0c37675a2e008daebde3596c5da61ebeff935a65a3473a2f  payload/el8.x86_64.glibc2p28/bin/shuf.bz2
 sha256  a775723d28aa332a86aba19db28e370b4197b9a80c0b12fc250ee29ee8d7d49f  payload/el8.x86_64.glibc2p28/bin/sleep.bz2
@@ -203,6 +211,7 @@ sha256  518ea53d89593a42e135d08ad5f8e2e21f19b4f0121af62466acb139f43050b5  payloa
 sha256  b6e03a4ad5884474396246fed62c8b9d24f75bce1a1d7be01a1b5fb47523c25f  payload/el8.x86_64.glibc2p28/bin/truncate.bz2
 sha256  0071ab0a9f06e47046ff807b4cab3b0b6493ea35eada14f20bf157027ac179e1  payload/el8.x86_64.glibc2p28/bin/tsort.bz2
 sha256  da7d1cd8c8213f1f2fecd74bf77b389a9af00a69d258ebdf5b1661adf593162f  payload/el8.x86_64.glibc2p28/bin/tty.bz2
+sha256  18264a5d0f8157ad524a39be9e92f074d91a687de16c769e91a896c8b80ad0bf  payload/el8.x86_64.glibc2p28/bin/twinwave.bz2
 sha256  555b1b33ff2a3cf3cbcdc03070e240ae55d29596ec53f3fa056e5924b4f51d7d  payload/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  50057ac6b1bc300c3f583ee00dd7de0a68a5c3c4cfc3644a3a36c18a9b8f75f4  payload/el8.x86_64.glibc2p28/bin/uname.bz2
 sha256  e78e24b7ca307e5371d925aad486be6fe23467b08046c64f077ecacbc704bc1f  payload/el8.x86_64.glibc2p28/bin/unexpand.bz2
@@ -213,12 +222,19 @@ sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  payloa
 sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  payload/el8.x86_64.glibc2p28/bin/urxvtc.bz2
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  payload/el8.x86_64.glibc2p28/bin/urxvtd.bz2
 sha256  b4d98404a1dcf1919e6ca45fce522ff8eb194125f55bf97eebae74bc3ffed1e9  payload/el8.x86_64.glibc2p28/bin/uv.bz2
+sha256  75900122798e7e52c60349c474ca4e88fb304f8b85d72b7f32e5c8abfaf613b4  payload/el8.x86_64.glibc2p28/bin/vcd2fst.bz2
+sha256  803841fa66baadba4b52d1e0f04668e97c9d0603e4dd88dbb80c3dc551aceda4  payload/el8.x86_64.glibc2p28/bin/vcd2lxt.bz2
+sha256  b03121f1946f7829e58ae27c317a1b24b3c9885c449efecb83794e5f4072b75c  payload/el8.x86_64.glibc2p28/bin/vcd2lxt2.bz2
+sha256  ef9c928b54b15750354a6cdc85e10bda44a65da576677003b11543aaef6607d5  payload/el8.x86_64.glibc2p28/bin/vcd2vzt.bz2
 sha256  62511a3d5d88f0c7730890d1bcd1931e44c23e4e18dceca37e9f724f040bed8c  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  payload/el8.x86_64.glibc2p28/bin/vim.bz2
+sha256  161570b306b30c4a5b87bc089b31bfeeeeb4e6458cf70c327193843630b64208  payload/el8.x86_64.glibc2p28/bin/vzt2vcd.bz2
+sha256  f131dba1ad7a57e36858dccc0efd9bae8c761bf4ab4e5bac67c3c0c71d56758b  payload/el8.x86_64.glibc2p28/bin/vztminer.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  payload/el8.x86_64.glibc2p28/bin/wc.bz2
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payload/el8.x86_64.glibc2p28/bin/whoami.bz2
 sha256  4d398253083585ee9d673b71d2bb5f4baed44ac233f9ca5a44011bb9c0330665  payload/el8.x86_64.glibc2p28/bin/wish.bz2
 sha256  a2e425fb46ab2c5f2df09cc88092540b42847a27ee4e6cf2cc103ef821ae9f7f  payload/el8.x86_64.glibc2p28/bin/xdesk.bz2
+sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
 sha256  9aaa384a750b03d2672addfcda08ff13782688b844cf7ddf2c9646fc7a98a196  payload/el8.x86_64.glibc2p28/bin/xterm.bz2
 sha256  afedd364087fdaa110f10973f2c5b12103be435ca546d00e7bdeb0224c9dde66  payload/el8.x86_64.glibc2p28/bin/ya.bz2
@@ -395,6 +411,7 @@ tar-meta  417820  1784306255  payload/el8.x86_64.glibc2p28/runtime/expect.tar.bz
 tar-meta  209  1785788443  payload/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
 tar-meta  48974  1784306262  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
+tar-meta  311761  1785953595  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  2998406  1784306281  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
