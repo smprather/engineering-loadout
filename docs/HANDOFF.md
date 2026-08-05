@@ -1,6 +1,80 @@
 # Current Handoff
 
-Last updated: 2026-08-03 (deep review of the xephyr + xdesk package; 12 findings fixed).
+Last updated: 2026-08-05 (root reorganised; linux-process-resource-monitor pending upstream).
+
+## Where things stand right now
+
+- `main` = `868dc37`, **pushed**; working tree clean; `origin/main` in sync.
+- Last release **`v2026.08.04.1`** (`f895c36`) -- one commit behind `main`. The
+  root reorganisation below is deliberately unreleased and batches into the next
+  one.
+- **That next release is class C** by `docs/RELEASE.md` §0, because repo layout
+  changed. Container gate + assurance re-pin are mandatory; both were green at
+  `868dc37`, so it is mostly a matter of re-running them at release time.
+
+## Repo root reorganised (2026-08-05)
+
+GitHub renders the repo root first and nine utility scripts were burying the
+README. They moved along a line `.gitattributes` already drew:
+
+- **`build/`** (dev-only, already export-ignored wholesale): `update`, `release`,
+  `strip-all-elf-binaries`, `scan-for-malware`, `split-bz2`, `dev-onboard`,
+  `export`. Seven individual `export-ignore` entries collapsed into the one
+  `/build` line.
+- **`tools/`** (ships; deliberately *not* export-ignored): `fetch-stash`,
+  `refresh-stash`, joining `download-release.ps1`.
+
+Root now holds only entry points and config. **The trap:** every moved Python
+script derived its repo root as `dirname(abspath(__file__))`, which silently
+became `build/` or `tools/`. `build/release` was worst -- it built
+`tests/prebuilt-binaries` and `build/farm-versions` off that value, so the
+release gates would have searched `build/tests/` and `build/build/`. All fixed;
+verified by importing each module and printing the resolved root, not by reading
+the diff. `hooks/pre-commit` execs the new path. Commands are now
+`./build/update`, `./build/release`, `./build/strip-all-elf-binaries`,
+`./tools/fetch-stash`, etc.
+
+## PENDING: linux-process-resource-monitor (blocked on upstream)
+
+`github.com/smprather/linux-process-resource-monitor` is to be added as a
+first-party **rolling-git `python-tool`**, same class as `text-serdes`. Nothing
+has been committed for it yet -- no registry entry, no wheels.
+
+Shape: Python CLI (`process-monitor`, `resource_monitor` console scripts) that
+owns help and offline Plotly reports, and `os.execv`s a **Rust sampler binary**
+carried *inside* the wheel at `process_monitor_tool/bin/process-monitor`
+(resolved via `importlib.resources`, `PROCESS_MONITOR_CORE` overrides). No PATH
+collision despite both being named `process-monitor`.
+
+**The blocker, and it is upstream's to fix:** `uv build --wheel` *succeeds* but
+emits `py3-none-any` containing only the `.py` files -- **no Rust binary**.
+There is no `[build-system]` table, so PEP 517 falls back to setuptools and
+`scripts/build-wheel.py` (which runs `cargo build --release` and copies the
+binary in) never runs. `./build/update`'s rolling-git path calls exactly
+`uv build --wheel`, so it would ship a tool that installs cleanly and then dies
+with its own `missing Rust core binary` message. Owner has been asked to add a
+`[build-system]` whose backend does what `build-wheel.py` does, give the wheel a
+platform tag, and drop `[tool.uv] package = false`.
+
+Two things already settled, do not re-litigate:
+
+- **`kaleido==0.2.1` is fine, keep it.** It was wrongly flagged as a conflict
+  with the bundled `kaleido 1.3.0`. `uv tool install` isolates per tool and the
+  wheelhouse already carries multiple versions of several deps. 0.2.1 also
+  bundles its own headless Chromium, so PNG/PDF export works on a Chrome-less
+  farm node, which 1.x cannot do. Costs ~76 MB of payload, nothing else.
+- **plotly 6.9.0 still supports kaleido v0.** `plotly/io/_kaleido.py` keeps
+  `kaleido_major() < 1` branches and the `PlotlyScope` path; `kaleido>=1.3.0`
+  appears only under plotly's optional `[kaleido]` extra. Deprecation warnings,
+  but functional.
+
+Its other deps are already bundled: `plotly 6.9.0`, `rich_click 1.9.8`. Rust
+edition 2024 needs cargo >= 1.85; the box has 1.96.0.
+
+Also corrected in `CLAUDE.md` while diagnosing this: the claim that
+`--platform manylinux_2_28_x86_64` finds manylinux1/2010/2014 wheels. It does
+not -- pip matches tags exactly, which is what made kaleido 0.2.1 look like it
+had vanished from PyPI.
 
 ## Sweep finished, 2026-08-04 -- 21 packages, and what is genuinely left
 
