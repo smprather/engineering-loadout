@@ -547,6 +547,12 @@ TOOLS = [
         "https://github.com/verilator/verilator",
         strategy_flag(["--version"], r"Verilator ([0-9]+\.[0-9]+)"),
     ),
+    (
+        "klayout",
+        "klayout",
+        "https://github.com/KLayout/klayout",
+        strategy_flag(["-v"], r"KLayout ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     ("vd", "visidata", "https://www.visidata.org", strategy_flag(["--version"], r"VisiData ([0-9]+\.[0-9]+)")),
     ("jupyter-lab", "jupyterlab", "https://jupyter.org", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
     ("ipython", "ipython", "https://ipython.org", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),

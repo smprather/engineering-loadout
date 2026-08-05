@@ -2723,6 +2723,158 @@ finds gtkwave on `PATH`), `man -w gtkwave`, and -- on a box with a display --
 `gtkwave <d>/local/share/gtkwave-gtk3/examples/des.fst`, which must report
 `FSTLOAD | Built 1287 signals and 145 aliases.` and open a window.
 
+## klayout 0.30.10 -- GDSII/OASIS mask layout viewer + editor (EL8 SOURCE build, Qt5)
+
+The standard open-source mask-layout tool: GDS2, OASIS, DXF, CIF, MAG, LEF/DEF; a
+scriptable DRC and LVS engine; a Ruby and Python API; and the `strm*` batch
+converters. **This is what the `ruby` package was originally added for** -- the ruby
+note above calls it "the interpreter KLayout embeds for DRC/LVS scripting" -- but
+KLayout itself had never been built. That intent lived only in a build note, never in
+`docs/HANDOFF.md` and never in the registry.
+
+**Tag: `v0.30.10`.**
+
+**Prerequisites:**
+```
+dnf install qt5-qtbase-devel qt5-qtsvg-devel qt5-qtxmlpatterns-devel \
+            gcc-c++ make curl cpio rpm-build
+./loadout install portable-python     # headers + libpython3.14.so
+```
+`qt5-qtxmlpatterns-devel` is the easy miss: without it qmake stops with
+`Project ERROR: Unknown module(s) in QT: xmlpatterns` after reading ~40 .pro files.
+
+**Build:** `build/build-klayout.sh --tag v0.30.10` (~25 min). Real invocation:
+```
+./build.sh -qmake /usr/bin/qmake-qt5 -prefix /tmp/klayout-install-0.30.10 -release \
+   -rbinc <rbtree>/usr/include -rbinc2 <rbtree>/usr/include \
+   -rblib <rbtree>/usr/lib64/libruby.so.3.3.10 -rbvers 30310 \
+   -python ~/.local/bin/python3.14 -pyinc ~/.local/include/python3.14 \
+   -pylib ~/.local/lib/libpython3.14.so \
+   -without-qt-uitools -without-qt-designer -without-qt-multimedia -without-qt-sql \
+   -nolibgit2 -jN
+```
+
+### The five things that are not obvious
+
+**1. Ruby headers WITHOUT switching the build box's dnf module stream.** EL8's default
+ruby stream is 2.5 and the loadout ships 3.3, so
+`dnf module reset ruby && dnf module enable ruby:3.3 && dnf install ruby-devel` would
+**replace the system interpreter as a side effect**. Instead the script fetches
+`ruby-devel`, `ruby-libs`, `ruby` and `rubygems` from the ruby:3.3 stream **by direct
+URL** into a temp tree -- the technique `build/build-ruby.sh` already uses -- and
+logs each fetch to `assurance/downloads.log`. Nothing on the build machine changes.
+All four are needed: devel for headers, libs for the link + stdlib, `ruby` because the
+script derives the ABI version code from the real interpreter rather than hardcoding
+`30310`, and `rubygems` because ruby's `gem_prelude` requires it at startup.
+Probing that interpreter needs **`--disable-gems`**, or it loads the SYSTEM
+`/usr/share/rubygems` (2.5's) and dies with
+``undefined method `=~' for an instance of Integer``.
+
+**2. `LD_LIBRARY_PATH` is load-bearing at BUILD time.** libpython lives in
+`~/.local/lib`, which is not on `ld`'s search path. `libklayout_pya.so` links fine
+(shared objects tolerate undefined symbols) but when the `strm*` "buddy" executables
+link `-lklayout_pya`, `ld` must resolve its `DT_NEEDED libpython3.14.so.1.0`
+transitively, cannot find it, and the build dies with ~200
+``undefined reference to `PyList_GetItem'`` **after twenty minutes of compiling**.
+Exporting `LD_LIBRARY_PATH=~/.local/lib` fixes it. This is purely a link-time path;
+the baked RPATHs are what resolve libpython at run time.
+
+**3. `KLAYOUT_PYTHONHOME`, never `PYTHONHOME`.** `src/pya/pya/pya.cc` **deliberately
+unsets `PYTHONHOME`** ("Python is not easily convinced to use an external path
+properly. So we simply redirect PYTHONHOME") and honours only `KLAYOUT_PYTHONHOME`
+and `KLAYOUT_PYTHONPATH`. Setting `PYTHONHOME` in the launcher is silently discarded
+and the embedded interpreter aborts with
+```
+Could not find platform independent libraries <prefix>
+Fatal Python error: Failed to import encodings module
+```
+because libpython3.14 cannot derive its prefix from `argv[0]` (= `klayout`).
+
+**4. `RUBYLIB` must include `share/rubygems`.** KLayout embeds the loadout's
+`libruby.so.3.3`, and EL8's ruby is not built `--enable-load-relative`, so its
+compiled-in `$LOAD_PATH` points at `/usr`. Without `RUBYLIB` the embedded 3.3 loads
+the system 2.5 stdlib and dies with
+`ruby lib version (2.5.9) doesn't match executable version (3.3.10)`. Adding only
+`lib64/ruby:share/ruby` is not enough -- `gem_prelude` then reaches
+`/usr/share/rubygems` and fails the same way. The launcher exports the same
+`RUBYLIB`/`GEM_HOME`/`GEM_PATH` triple `bin/ruby` does.
+
+**5. Qt modules that are off, and why `-without-qt-xml` is NOT among them.** Disabled
+because their libs are not bundled: `uitools` (EL8 ships no such lib at all),
+`designer`, `multimedia`, `sql`. The cost is that KLayout macros cannot load `.ui`
+files at run time; the macro IDE itself still works. `HAVE_QT_XML` is **kept**, which
+pulls `Qt5XmlPatterns` -- a lib that was **not** previously bundled, so this build
+adds `libQt5XmlPatterns.so.5` to `gui_libs`. Do not "solve" the missing devel package
+with `-without-qt-xml`: KLayout reads `.lyp` layer-property files and `.lym` macros as
+XML, and with neither QtXml nor expat there is no XML parser at all.
+
+Also `-nolibgit2`: `HAVE_GIT2` defaults ON and drives KLayout's Salt package manager,
+which downloads packages over the network -- useless offline, and libgit2 is EPEL-only
+on EL8.
+
+### Packaging
+
+KLayout installs **flat**: one directory with the `klayout` binary, 12 `strm*` tools,
+~35 `libklayout_*.so` (plus `.so`/`.so.0`/`.so.0.30` symlink chains), `db_plugins/`,
+`lay_plugins/`, and `pymod/` (the standalone `import klayout` package). That tree ships
+verbatim as `<prefix>/lib/klayout/`, with **13 copies of `build/klayout/klayout` in
+`bin/`** that dispatch on their own basename -- one script, 13 names, the
+wezterm/vcd-toggle-profiler shape.
+
+RPATHs are per-depth, because the tree is flat and each level needs its own hop count
+back to `<prefix>/lib64` (bundled Qt5/ruby/X11) and `<prefix>/lib` (portable-python's
+`libpython3.14.so.1.0`):
+
+| location | RPATH |
+|---|---|
+| `lib/klayout/` | `$ORIGIN:$ORIGIN/../../lib64:$ORIGIN/../../lib` |
+| `lib/klayout/{db,lay}_plugins/` | `$ORIGIN:$ORIGIN/..:$ORIGIN/../../../lib64:$ORIGIN/../../../lib` |
+| `lib/klayout/pymod/{klayout,pya}/` | `$ORIGIN:$ORIGIN/../..:$ORIGIN/../../../../lib64:$ORIGIN/../../../../lib` |
+
+The build asserts no RUNPATH still points at the build prefix after patchelf, and that
+the tree contains **zero symlinks-to-directories** -- those do not survive
+`strip-all-elf-binaries`' re-tar (`add_tree_to_tar` walks with `followlinks=False` and
+never re-emits them; the firefox lesson). The ~171 file symlinks are fine.
+
+**Payload: ~53 MB** (186 MB uncompressed, already stripped by the release build), so
+`strip-all-elf-binaries` chunks `runtime/klayout.tar.bz2` into `.part-NNN` shards.
+Plus `lib64/libQt5XmlPatterns.so.5.bz2`.
+
+**GL:** `libGL.so.1`/`libGLX.so.0`/`libGLdispatch.so.0` are direct NEEDEDs, so the
+package `depends` on `mesa3d_libs` for the Mesa vendor side while the GLVND dispatcher
+stays host-provided -- the surfer/wezterm arrangement, and the launcher carries the
+same `LD_LIBRARY_PATH`/`LIBGL_DRIVERS_PATH`/`__EGL_VENDOR_LIBRARY_DIRS` block.
+Full `depends`: `gui_libs`, `mesa3d_libs`, `ruby`, `portable-python`.
+
+**Assumed present, not bundled** (beyond the usual glibc/libstdc++/GLVND): EL8 base
+`libssl.so.1.1`/`libcrypto.so.1.1` and the krb5 set
+(`libgssapi_krb5`, `libkrb5`, `libkrb5support`, `libk5crypto`, `libcom_err`,
+`libkeyutils`), which openssl/curl pull onto every node. The closure check walks
+**every** ELF in the tree, not just `bin/klayout` -- checking one binary is how
+`libfontenc.so.1` shipped missing for Xephyr.
+
+**`pymod` is not on `sys.path`.** Standalone `import klayout` from the user's own
+Python needs `export PYTHONPATH=<prefix>/lib/klayout/pymod`. It is deliberately not
+installed into portable-python's `site-packages`, which another package owns. The
+*embedded* interpreter (`klayout -zz -rm script.py`) needs nothing extra.
+
+**Smoke: `klayout -v` proves nothing** -- it prints a compiled-in string without
+touching the db plugins, the stream writers, or either interpreter. The build script
+instead runs a batch Ruby script (`-zz -r`) that writes a two-layer layout to **both**
+GDS2 and OASIS, reads each back, and asserts the layer 1/0 area is exactly 2000000 DBU²
+and layer 2/0 has one shape; then `strm2oas` converting GDS -> OASIS; then a batch
+**Python** script (`-zz -rm`) that writes a layout, asserting `PYTHON_OK`. `-zz` is
+batch mode with no GUI, so all of it runs headless.
+
+**Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
+./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
+`./loadout install klayout --dest-dir <d>` (pulls gui_libs, mesa3d_libs, ruby,
+portable-python) and re-run the Ruby/Python/strm2oas trio through
+`<d>/local/bin/klayout` with **nothing** in the environment -- that is what proves the
+launcher's own `RUBYLIB` and `KLAYOUT_PYTHONHOME` derivation, which the build-time
+smoke has to supply by hand. On a box with a display, `klayout <file>.gds` should open
+the layout window.
+
 ## verilator 5.050 -- Verilog/SystemVerilog -> C++ simulator (EL8 SOURCE build)
 
 Compiles synthesizable Verilog/SystemVerilog into a C++ model that the user's own

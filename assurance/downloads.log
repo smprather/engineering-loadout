@@ -38,3 +38,14 @@
 2026-07-27T19:19:47Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygem-psych-5.1.2-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	75451cb7374bc9de02fb635a7d25b5f71ad17f0eb2b5f66aff190f9364f1b997
 2026-07-27T19:19:48Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygem-rdoc-6.6.3.1-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	16609a745d44377dcc550a7f741a0ef935c40598893026521f52ebbbefd21468
 2026-08-03T18:12:51Z	https://github.com/YARAHQ/yara-forge/releases/download/20260802/yara-forge-rules-full.zip	b2d6ae823ae97088a79b94855e21c9795467d3618510a50f041a7bb9019f6f23
+2026-08-05T18:57:17Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-devel-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	11c56a5abd6188745b4a21b6f1aef438c84296475c60d7f048ed9691bdf12ab3
+2026-08-05T18:57:18Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
+2026-08-05T18:57:18Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
+2026-08-05T18:58:20Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-devel-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	11c56a5abd6188745b4a21b6f1aef438c84296475c60d7f048ed9691bdf12ab3
+2026-08-05T18:58:21Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
+2026-08-05T18:58:21Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
+2026-08-05T18:58:21Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
+2026-08-05T19:11:37Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-devel-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	11c56a5abd6188745b4a21b6f1aef438c84296475c60d7f048ed9691bdf12ab3
+2026-08-05T19:11:38Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
+2026-08-05T19:11:38Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
+2026-08-05T19:11:39Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9

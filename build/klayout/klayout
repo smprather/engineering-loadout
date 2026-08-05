@@ -1,0 +1,74 @@
+#!/bin/sh
+# loadout KLayout launcher.
+#
+# Installed under 13 names -- `klayout` plus the strm* batch tools -- and
+# dispatches on its own basename, so one script serves them all. The real
+# binaries live in <prefix>/lib/klayout/ next to the libklayout_*.so set, which
+# is KLayout's own flat layout; they are not on PATH.
+#
+# Library resolution is by baked RPATH ($ORIGIN + ../../lib64 + ../../lib), not
+# LD_LIBRARY_PATH -- the LD_LIBRARY_PATH set below is only for the Mesa vendor
+# libraries, which are dlopen'd by GLVND rather than linked.
+prefix=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+name=${0##*/}
+real="$prefix/lib/klayout/$name"
+if [ ! -x "$real" ]; then
+    echo "$name: missing $real -- the klayout runtime archive is not installed" >&2
+    exit 127
+fi
+
+libdir="$prefix/lib64"
+
+# OpenGL: bundled Mesa vendor side (mesa3d_libs); the GLVND dispatcher
+# (libGL.so.1 / libGLX.so.0 / libGLdispatch.so.0) stays host-provided. Same
+# block as the wezterm and surfer launchers.
+if [ -d "$libdir" ]; then
+    export LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -d "$libdir/dri" ]; then
+        export LIBGL_DRIVERS_PATH="$libdir/dri${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
+    fi
+fi
+if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
+    export __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+fi
+
+# Qt platform plugin, same convention envs/bash/global/bashrc uses for gui_libs
+# (the plugins are stored flat in lib64/, not in a platforms/ subdir).
+if [ -z "${QT_QPA_PLATFORM_PLUGIN_PATH:-}" ] && [ -f "$libdir/libqxcb.so" ]; then
+    export QT_QPA_PLATFORM_PLUGIN_PATH="$libdir"
+fi
+
+# KLayout embeds the loadout's libruby.so.3.3 for DRC/LVS scripting. EL8's ruby
+# is not built --enable-load-relative, so its compiled-in $LOAD_PATH points at
+# /usr no matter where the tree lives; export the same RUBYLIB/GEM_* the
+# bin/ruby launcher does, derived from this script's location. A caller who set
+# these already wins.
+#
+# Without this, KLayout's ruby 3.3 loads the SYSTEM ruby stdlib and dies with
+#   ruby lib version (2.5.9) doesn't match executable version (3.3.10)
+# on EL8, whose default ruby module stream is 2.5. share/rubygems must be on the
+# list too, or gem_prelude reaches /usr/share/rubygems and fails the same way.
+if [ -d "$prefix/share/ruby" ]; then
+    _rl="$prefix/lib64/ruby:$prefix/share/ruby:$prefix/share/rubygems"
+    if [ -n "${RUBYLIB:-}" ]; then
+        RUBYLIB="$_rl:$RUBYLIB"
+    else
+        RUBYLIB="$_rl"
+    fi
+    export RUBYLIB
+    [ -n "${GEM_HOME:-}" ] || { GEM_HOME="$prefix/share/gems"; export GEM_HOME; }
+    [ -n "${GEM_PATH:-}" ] || { GEM_PATH="$prefix/share/gems"; export GEM_PATH; }
+fi
+
+# KLAYOUT_PYTHONHOME, *not* PYTHONHOME. KLayout's Python init (src/pya/pya/pya.cc)
+# deliberately UNSETS PYTHONHOME -- "Python is not easily convinced to use an
+# external path properly, so we simply redirect PYTHONHOME" -- and honours only
+# KLAYOUT_PYTHONHOME / KLAYOUT_PYTHONPATH. Setting PYTHONHOME here would be
+# silently discarded and the embedded interpreter would abort with
+#   Fatal Python error: Failed to import encodings module
+# because libpython3.14 cannot derive its prefix from argv[0] (= klayout).
+if [ -z "${KLAYOUT_PYTHONHOME:-}" ] && [ -d "$prefix/lib/python3.14" ]; then
+    export KLAYOUT_PYTHONHOME="$prefix"
+fi
+
+exec "$real" "$@"

@@ -264,6 +264,7 @@ sha256  ff5d89cd8594fa0d2a9ce173d583aa7ddad7079ad2208f2a8eb3e54d9bf089be  payloa
 sha256  8d066d0c917a8ff38a986ff1fd4def2379e11574d3eab1eea0d3da3cc6cebdfe  payload/el8.x86_64.glibc2p28/lib64/libQt5Widgets.so.5.bz2
 sha256  ab729c4214b0cfc0e6941b9a3f4c80387a056fe928297ac703c031182fd207a1  payload/el8.x86_64.glibc2p28/lib64/libQt5XcbQpa.so.5.bz2
 sha256  98588614d174694224486bae73d83109e3c7de03481f300b083bdd9488024132  payload/el8.x86_64.glibc2p28/lib64/libQt5Xml.so.5.bz2
+sha256  b877217a36d8279691f01568035ab75c96d46216232ac20c3e2cc2a8002077a3  payload/el8.x86_64.glibc2p28/lib64/libQt5XmlPatterns.so.5.bz2
 sha256  3ec19e7079d7a91bbedeb81461628773845656658da3876d2e27f0ca2e195348  payload/el8.x86_64.glibc2p28/lib64/libSM.so.6.bz2
 sha256  c3f41b2559ca5664a30394bec73a9727314483d905f3d870b4d8ed00f70484e6  payload/el8.x86_64.glibc2p28/lib64/libX11-xcb.so.1.bz2
 sha256  16754c998855690a8066b5eb0bb74e9a3a5b4c6d3b5752cb14479a57dfab4037  payload/el8.x86_64.glibc2p28/lib64/libX11.so.6.bz2
@@ -419,6 +420,7 @@ tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
 tar-meta  48974  1784306262  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  311761  1785953595  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
+tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
 tar-meta  2998406  1784306281  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
 tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2

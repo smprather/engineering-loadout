@@ -389,6 +389,91 @@ def smoke_runtime_layout(tmpdir, env):
                 else:
                     print("  OK   (convert):      gtkwave runtime")
 
+    if has_bin("klayout"):
+        # `klayout -v` prints a compiled-in string without touching the db
+        # plugins, the stream writers, or either embedded interpreter -- and all
+        # 13 launchers exit 0 on --version, so the generic probe says nothing
+        # about whether KLayout actually works. What must be proven is that the
+        # launcher derived RUBYLIB (else the embedded ruby 3.3 loads EL8's 2.5
+        # stdlib and dies) and KLAYOUT_PYTHONHOME (else libpython cannot find
+        # its stdlib and aborts on "Failed to import encodings module"). Both
+        # are exercised by running real batch scripts through the launcher with
+        # nothing preset. -zz is batch mode, no GUI, so this runs headless.
+        require_path(
+            os.path.join(tmpdir, "local", "lib", "klayout", "libklayout_drc.so"),
+            "klayout DRC engine",
+            failures,
+        )
+        kl_dir = os.path.join(tmpdir, "klayout-smoke")
+        os.makedirs(kl_dir, exist_ok=True)
+        with open(os.path.join(kl_dir, "gen.rb"), "w") as fh:
+            fh.write(
+                "ly = RBA::Layout.new\n"
+                'top = ly.create_cell("TOP")\n'
+                "top.shapes(ly.layer(1, 0)).insert(RBA::Box.new(0, 0, 1000, 2000))\n"
+                'ly.write("out.gds"); ly.write("out.oas")\n'
+                "%w(out.gds out.oas).each do |f|\n"
+                '  r = RBA::Layout.new; r.read(f); c = r.cell("TOP")\n'
+                '  raise "#{f}: no TOP cell" unless c\n'
+                "  a = c.shapes(r.layer(1, 0)).each.map { |s| s.polygon.area }.inject(0) { |x, y| x + y }\n"
+                '  raise "#{f}: layer 1/0 area #{a}, expected 2000000" unless a == 2_000_000\n'
+                "end\n"
+                'puts "RUBY_OK"\n'
+            )
+        with open(os.path.join(kl_dir, "gen.py"), "w") as fh:
+            fh.write(
+                "import pya\n"
+                "ly = pya.Layout()\n"
+                'ly.create_cell("TOP").shapes(ly.layer(3, 0)).insert(pya.Box(0, 0, 100, 100))\n'
+                'ly.write("py.gds")\n'
+                'print("PYTHON_OK")\n'
+            )
+        kl_env = env.copy()
+        for leak in ("RUBYLIB", "GEM_HOME", "GEM_PATH", "KLAYOUT_PYTHONHOME", "DISPLAY", "WAYLAND_DISPLAY"):
+            kl_env.pop(leak, None)
+        kl = os.path.join(bin_dir, "klayout")
+        try:
+            rb = subprocess.run(
+                [kl, "-zz", "-r", "gen.rb"],
+                cwd=kl_dir,
+                env=kl_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+            py = subprocess.run(
+                [kl, "-zz", "-rm", "gen.py"],
+                cwd=kl_dir,
+                env=kl_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+            conv = subprocess.run(
+                [os.path.join(bin_dir, "strm2oas"), "out.gds", "conv.oas"],
+                cwd=kl_dir,
+                env=kl_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+        except Exception as exc:
+            print(f"  FAIL (batch):        klayout runtime  {exc}")
+            failures.append(("klayout runtime", str(exc)))
+        else:
+            detail = None
+            if rb.returncode != 0 or b"RUBY_OK" not in rb.stdout:
+                detail = output_excerpt(rb.stdout)
+            elif py.returncode != 0 or b"PYTHON_OK" not in py.stdout:
+                detail = output_excerpt(py.stdout)
+            elif conv.returncode != 0 or not os.path.getsize(os.path.join(kl_dir, "conv.oas")):
+                detail = output_excerpt(conv.stdout) or "strm2oas wrote nothing"
+            if detail:
+                print(f"  FAIL (batch):        klayout runtime  {detail}")
+                failures.append(("klayout runtime", detail))
+            else:
+                print("  OK   (batch):        klayout runtime")
+
     if has_bin("verilator") and shutil.which("perl"):
         # `verilator --version` passes even with a dead VERILATOR_ROOT, because
         # the version string is compiled into verilator_bin. What must be proven

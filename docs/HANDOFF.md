@@ -1,6 +1,57 @@
 # Current Handoff
 
-Last updated: 2026-08-05 (root reorganised; linux-process-resource-monitor pending upstream).
+Last updated: 2026-08-05 (four EDA/Python packages added; root reorganised;
+linux-process-resource-monitor pending upstream).
+
+## Four new packages (2026-08-05, UNCOMMITTED at time of writing)
+
+Added on request, after an audit of what a compute/EDA work environment was
+missing. The target users are **industrial** engineers who already have paid
+tooling, so this is deliberately not an open-source-EDA-flow push.
+
+| package | kind | payload | notes |
+|---|---|---|---|
+| `ipython` 9.15.0 | `python-tool` | **0** | whole wheel closure was already bundled for jupyterlab/pygwalker |
+| `gtkwave` 3.3.116 | `bin` + runtime | ~1.4 MB | GTK3 against `gui_libs`; 16 binaries; **no wrapper needed** |
+| `verilator` 5.050 | `bin` + runtime | ~5 MB | relocatable Perl driver; needs **host perl** + user's `g++` |
+| `klayout` 0.30.10 | `bin` + runtime | ~53 MB (chunked) | Qt5 + embedded Ruby 3.3 + portable Python 3.14 |
+
+New group **`@eda`** = `gtkwave`, `klayout`, `verilator`, and it is a member of
+`@engineering-loadout`. It is deliberately *only* the new tools: the older EDA
+packages (`ngspice`, `spice-subckt-rc-reduce`, `espresso`) stay in `@scientific`
+and `surfer`/`liberty-tools`/`lefdef-tools` stay reachable by name, so nothing
+existing changed behaviour. Migrating them into `@eda` is a reasonable follow-up
+but was out of scope.
+
+`gui_libs` gained **`libQt5XmlPatterns.so.5`** (KLayout's `HAVE_QT_XML` needs it
+and it had never been bundled). All three build scripts, plus full build notes,
+are in `build/` and `build/ADDING_BINARIES.md`.
+
+**`klayout` closes a loop that had been open in a build note only.** The `ruby`
+package's `ADDING_BINARIES.md` entry describes ruby as "the interpreter KLayout
+embeds for DRC/LVS scripting" -- but KLayout was never built, and that intent was
+recorded *nowhere else*: not here, not in the registry, not in a test. If you are
+adding a package because another package depends on it, say so in this file too.
+
+Everything was verified against real installs into `--dest-dir` trees, not just
+built: GTKWave opened `des.fst` on WSLg (1287 signals) and round-tripped
+FST->VCD->FST; Verilator elaborated, compiled with **system g++ 8.5** and ran
+(`CNT=10`), and its `verilator.pc` relocation token was confirmed substituted;
+KLayout wrote+read GDS2 and OASIS through its embedded Ruby, converted with
+`strm2oas`, and ran an embedded-Python script. `tests/prebuilt-binaries` gained
+functional probes for all three (see "Weak greens found" below) and reported
+`All 282 binaries OK` with the gtkwave probe green.
+
+### Weak greens found while adding these
+
+`tests/prebuilt-binaries`' generic probe returns OK on **any** exit code outside
+`{126,127,139}`. Three gtkwave binaries (`rtlbrowse`, `shmidcat`, `twinwave`)
+have no version flag and exit **255** printing `Could not open '--version'` --
+scored green off an error message. A totally broken FST reader would have passed.
+Each of the three new packages therefore got a real functional probe in
+`smoke_runtime_layout`, and the verilator one lints a **deliberately broken**
+module and requires that to fail. Worth auditing the other silent-255 binaries
+the same way.
 
 ## Where things stand right now
 

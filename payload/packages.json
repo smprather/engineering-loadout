@@ -1560,6 +1560,7 @@
         "libQt5Widgets.so.5",
         "libQt5XcbQpa.so.5",
         "libQt5Xml.so.5",
+        "libQt5XmlPatterns.so.5",
         "libSM.so.6",
         "libX11-xcb.so.1",
         "libX11.so.6",
@@ -2006,6 +2007,50 @@
         "share/gtkwave-gtk3"
       ],
       "missing_hint": "GTKWave man pages, example waveforms, and desktop/MIME/icon registration will NOT be installed; the viewer and converters still work"
+    },
+    "klayout": {
+      "kind": "bin",
+      "bins": [],
+      "version": "0.30.10",
+      "version_url": "https://github.com/KLayout/klayout/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "layout",
+        "gds",
+        "oasis",
+        "gui"
+      ],
+      "archive": "payload/PLATFORM/runtime/klayout.tar.bz2",
+      "depends": [
+        "gui_libs",
+        "mesa3d_libs",
+        "ruby",
+        "portable-python"
+      ],
+      "install_to": "~/.local",
+      "sentinel": "bin/klayout",
+      "chmod_sentinel": true,
+      "remove_before_extract": [
+        "lib/klayout",
+        "bin/klayout",
+        "bin/strm2cif",
+        "bin/strm2dxf",
+        "bin/strm2gds",
+        "bin/strm2gdstxt",
+        "bin/strm2lstr",
+        "bin/strm2mag",
+        "bin/strm2oas",
+        "bin/strm2txt",
+        "bin/strmclip",
+        "bin/strmcmp",
+        "bin/strmrun",
+        "bin/strmxor"
+      ],
+      "missing_hint": "KLayout will NOT be installed",
+      "description": "KLayout \u2014 GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.14; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
     },
     "verilator": {
       "kind": "bin",
@@ -3417,6 +3462,7 @@
       "kind": "group",
       "members": [
         "gtkwave",
+        "klayout",
         "verilator"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
