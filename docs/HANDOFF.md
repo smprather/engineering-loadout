@@ -1,61 +1,99 @@
 # Current Handoff
 
-Last updated: 2026-08-05 (four EDA/Python packages added; root reorganised;
-linux-process-resource-monitor pending upstream).
+Last updated: 2026-08-05 (four EDA/Python packages merged to main, unpushed;
+root reorganised; linux-process-resource-monitor pending upstream).
 
-## Four new packages (2026-08-05, UNCOMMITTED at time of writing)
+## Where things stand right now
 
-Added on request, after an audit of what a compute/EDA work environment was
-missing. The target users are **industrial** engineers who already have paid
-tooling, so this is deliberately not an open-source-EDA-flow push.
+- `main` is **8 commits ahead of `origin/main` (`f9e4495`) and NOT pushed**;
+  working tree clean. The tip is this docs commit; the last commit that changed
+  shipped or testable content is `7ec2577`. (Do not expect a literal tip hash
+  here -- writing this file moves it.)
+- Last release **`v2026.08.04.1`** (`f895c36`). The root reorganisation and the
+  four new packages below are deliberately unreleased and batch into the next one.
+- **That next release is class C** by `docs/RELEASE.md` §0 -- now for two
+  reasons: repo layout changed (root reorganisation) *and* the registry gained
+  four packages, a new `@eda` group, and a new `gui_libs` member
+  (`libQt5XmlPatterns.so.5`). Container gate + assurance re-pin are mandatory.
+- **Gate status at `7ec2577`:** Tier 1 green; Tier 2 green (including
+  `install-modules` and `install-split-shared-envs`); Tier 3
+  (`tests/prebuilt-binaries-almalinux8 --full`) green --
+  `All 279 binaries OK (22 skipped); runtimes OK`. The assurance ledger has NOT
+  been re-pinned for this batch.
+
+## Four new packages (gtkwave, klayout, verilator, ipython) -- 2026-08-05
+
+Added after an audit of what a compute/EDA environment was missing. Target users
+are **industrial** engineers who already have paid tooling, so this is
+deliberately not an open-source-EDA-flow push.
 
 | package | kind | payload | notes |
 |---|---|---|---|
 | `ipython` 9.15.0 | `python-tool` | **0** | whole wheel closure was already bundled for jupyterlab/pygwalker |
 | `gtkwave` 3.3.116 | `bin` + runtime | ~1.4 MB | GTK3 against `gui_libs`; 16 binaries; **no wrapper needed** |
-| `verilator` 5.050 | `bin` + runtime | ~5 MB | relocatable Perl driver; needs **host perl** + user's `g++` |
-| `klayout` 0.30.10 | `bin` + runtime | ~53 MB (chunked) | Qt5 + embedded Ruby 3.3 + portable Python 3.14 |
+| `verilator` 5.050 | `bin` + runtime | ~5 MB | relocatable Perl driver; needs **host perl** + the user's `g++` |
+| `klayout` 0.30.10 | `bin` + runtime | ~53 MB (2 shards) | Qt5 + embedded Ruby 3.3 + portable Python 3.14 |
 
-New group **`@eda`** = `gtkwave`, `klayout`, `verilator`, and it is a member of
-`@engineering-loadout`. It is deliberately *only* the new tools: the older EDA
-packages (`ngspice`, `spice-subckt-rc-reduce`, `espresso`) stay in `@scientific`
-and `surfer`/`liberty-tools`/`lefdef-tools` stay reachable by name, so nothing
-existing changed behaviour. Migrating them into `@eda` is a reasonable follow-up
-but was out of scope.
+New group **`@eda`** = those three tools (not ipython), and it is a member of
+`@engineering-loadout`. Deliberately *only* the new tools: `ngspice`,
+`spice-subckt-rc-reduce` and `espresso` stay in `@scientific`, and
+`surfer`/`liberty-tools`/`lefdef-tools` stay reachable by name, so no existing
+behaviour changed. Migrating them into `@eda` is a reasonable follow-up.
 
-`gui_libs` gained **`libQt5XmlPatterns.so.5`** (KLayout's `HAVE_QT_XML` needs it
-and it had never been bundled). All three build scripts, plus full build notes,
-are in `build/` and `build/ADDING_BINARIES.md`.
+Full build notes for all three source builds are in `build/ADDING_BINARIES.md`;
+per-package runtime behaviour is in `CLAUDE.md`.
 
 **`klayout` closes a loop that had been open in a build note only.** The `ruby`
-package's `ADDING_BINARIES.md` entry describes ruby as "the interpreter KLayout
-embeds for DRC/LVS scripting" -- but KLayout was never built, and that intent was
-recorded *nowhere else*: not here, not in the registry, not in a test. If you are
-adding a package because another package depends on it, say so in this file too.
+entry in `ADDING_BINARIES.md` calls ruby "the interpreter KLayout embeds for
+DRC/LVS scripting" -- but KLayout was never built, and that intent was recorded
+*nowhere else*: not here, not in the registry, not in a test. If you add a package
+because another package depends on it, say so in THIS file too.
 
-Everything was verified against real installs into `--dest-dir` trees, not just
-built: GTKWave opened `des.fst` on WSLg (1287 signals) and round-tripped
-FST->VCD->FST; Verilator elaborated, compiled with **system g++ 8.5** and ran
-(`CNT=10`), and its `verilator.pc` relocation token was confirmed substituted;
-KLayout wrote+read GDS2 and OASIS through its embedded Ruby, converted with
-`strm2oas`, and ran an embedded-Python script. `tests/prebuilt-binaries` gained
-functional probes for all three (see "Weak greens found" below) and reported
-`All 282 binaries OK` with the gtkwave probe green.
+### KLayout requires host GLVND even for BATCH use -- do not promise otherwise
+
+Its clean-container status is **skipped by host contract, not passing**. The 12
+`strm*` converters link the same `libklayout_lay`/`laybasic` set as the GUI, so a
+node with no OpenGL runs *nothing* in this package -- not `klayout -zz`, not
+`strm2gds`. EL8 supplies `libGL.so.1` via `mesa-libGL`; the same contract
+`nedit-ng`/`nvim-qt`/`flameshot`/`Xephyr` carry, but stronger, because the batch
+tools inherit it.
+
+This is the one thing Tier 3 caught that local testing could not: the dev box has
+`libGL`, so Tier 1, Tier 2 and hand-verification under `env -i` were all green
+while the container failed 14 checks. Textbook build-box masking. Two distinct
+findings came out of it -- the constraint above, and a **test gap**: the
+host-`.so` skip resolved a wrapper's real ELF only as `bin/<name>.bin`, which
+cannot find `lib/klayout/<name>`, so the launchers exec'd into a fatal 127
+instead of skipping. `real_elf_for_wrapper()` now also searches
+`lib/*/<name>[.bin]`; a `lib/<name>/<name>` guess would not work, because KLayout
+has one lib dir holding 13 differently-named launchers.
 
 ### Weak greens found while adding these
 
-`tests/prebuilt-binaries`' generic probe returns OK on **any** exit code outside
-`{126,127,139}`. Three gtkwave binaries (`rtlbrowse`, `shmidcat`, `twinwave`)
-have no version flag and exit **255** printing `Could not open '--version'` --
-scored green off an error message. A totally broken FST reader would have passed.
-Each of the three new packages therefore got a real functional probe in
-`smoke_runtime_layout`, and the verilator one lints a **deliberately broken**
-module and requires that to fail. Worth auditing the other silent-255 binaries
-the same way.
+- The generic binary probe returns OK on **any** exit code outside
+  `{126,127,139}`. Three gtkwave binaries (`rtlbrowse`, `shmidcat`, `twinwave`)
+  have no version flag and exit **255** printing `Could not open '--version'` --
+  scored green off an error message. A broken FST reader would have passed. All
+  three new packages now have real functional probes in `smoke_runtime_layout`,
+  and the verilator one lints a **deliberately broken** module and requires that
+  to fail. Worth auditing the other silent-255 binaries the same way.
+- `build/gen-readme-table --check` validated only the version cell of rows already
+  present, so it could not see a package with **no row at all** -- its own
+  docstring cites "30 stale versions, 6 missing packages" as the failure it was
+  written for. All four new packages would have gone undocumented with the gate
+  green. It now reports missing packages too, skipping the `env-*`/`font-*`
+  classes the table deliberately does not enumerate.
+
+### Cosmetic, not yet done
+
+The host-`.so` skip message repeats `libGL.so.1 (host OpenGL dispatcher)` once per
+`ldd` line -- 34 times for `klayout`. Harmless but it buries the signal;
+`host_required_sos()` should dedupe. Message-only, so it does not need a Tier 3
+re-run to change.
 
 ## Environment Modules inconsistency flush (2026-08-05)
 
-`envs/bash/global/modules-init.bash` now detects an **inconsistent** inherited EM
+`envs/bash/global/modules-init.bash` detects an **inconsistent** inherited EM
 state before re-sourcing `init/bash` -- a loaded modulefile deleted on disk, or
 `LOADEDMODULES` and `_LMFILES_` not 1:1 (e.g. `LOADEDMODULES=foo` with an empty
 `_LMFILES_`, which makes the next `module load` error *"Loaded environment state
@@ -63,13 +101,12 @@ is inconsistent"*). A healthy state is left alone; no purge.
 
 Two things about it are load-bearing:
 
-- **`MODULEPATH` must survive the flush.** It matches a naive `^MODULE` sweep,
-  and the first cut of this cleared it. That is worse than the bug being fixed
-  and it is *silent*: with `MODULEPATH` unset, upstream `init/bash` substitutes
-  its own default (`<local>/lib/modules/modulefiles`), so the site's modulefiles
-  are quietly swapped for the loadout's rather than obviously disappearing. The
-  narrow `unset MODULESHOME MODULES_CMD` immediately below documents the same
-  invariant.
+- **`MODULEPATH` must survive the flush.** It matches a naive `^MODULE` sweep, and
+  the first cut of this cleared it. That is worse than the bug being fixed and it
+  is *silent*: with `MODULEPATH` unset, upstream `init/bash` substitutes its own
+  default (`<local>/lib/modules/modulefiles`), so the site's modulefiles are
+  quietly swapped for the loadout's rather than obviously disappearing. The narrow
+  `unset MODULESHOME MODULES_CMD` immediately below documents the same invariant.
 - **It is fork-free.** This runs in every interactive shell that sets
   `LOADOUT_CFG_USE_LOADOUT_MODULES=1`, and the common case is "do nothing", so it
   uses bash array splitting and `${!prefix@}` instead of `tr|grep` pipelines and
@@ -83,16 +120,6 @@ pre-fix file. **Watch the subshell trap when extending it:** `module` is a
 function that `eval`s emitted shell code, so `$(module load demo)` applies the
 environment changes to a subshell and discards them -- capture stderr to a file,
 never with a command substitution.
-
-## Where things stand right now
-
-- `main` = `868dc37`, **pushed**; working tree clean; `origin/main` in sync.
-- Last release **`v2026.08.04.1`** (`f895c36`) -- one commit behind `main`. The
-  root reorganisation below is deliberately unreleased and batches into the next
-  one.
-- **That next release is class C** by `docs/RELEASE.md` §0, because repo layout
-  changed. Container gate + assurance re-pin are mandatory; both were green at
-  `868dc37`, so it is mostly a matter of re-running them at release time.
 
 ## Repo root reorganised (2026-08-05)
 
