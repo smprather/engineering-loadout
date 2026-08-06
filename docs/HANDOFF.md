@@ -5,21 +5,26 @@ root reorganised; linux-process-resource-monitor pending upstream).
 
 ## Where things stand right now
 
-- `main` is **8 commits ahead of `origin/main` (`f9e4495`) and NOT pushed**;
-  working tree clean. The tip is this docs commit; the last commit that changed
-  shipped or testable content is `7ec2577`. (Do not expect a literal tip hash
-  here -- writing this file moves it.)
+- `main` is **pushed and in sync with `origin/main`**; working tree clean. The
+  last commit that changed shipped or testable content is `7da4af1`. (Do not
+  expect a literal tip hash here -- writing this file moves it.)
 - Last release **`v2026.08.04.1`** (`f895c36`). The root reorganisation and the
   four new packages below are deliberately unreleased and batch into the next one.
 - **That next release is class C** by `docs/RELEASE.md` §0 -- now for two
   reasons: repo layout changed (root reorganisation) *and* the registry gained
   four packages, a new `@eda` group, and a new `gui_libs` member
   (`libQt5XmlPatterns.so.5`). Container gate + assurance re-pin are mandatory.
-- **Gate status at `7ec2577`:** Tier 1 green; Tier 2 green (including
-  `install-modules` and `install-split-shared-envs`); Tier 3
+- **Gate status at `7da4af1` (current tip):** Tier 1 green; Tier 2 green
+  (including `install-modules` and `install-split-shared-envs`); Tier 3
   (`tests/prebuilt-binaries-almalinux8 --full`) green --
-  `All 279 binaries OK (22 skipped); runtimes OK`. The assurance ledger has NOT
-  been re-pinned for this batch.
+  `All 279 binaries OK (22 skipped); runtimes OK`, zero failures.
+- **No assurance re-pin is needed for this batch, despite it being class C.**
+  Records exist only for `crate-store`, `git-nvim`, `nvim`, `rust` and
+  `treesitter`; §4 of `docs/RELEASE.md` defines the re-pin as updating a *bumped*
+  package's record, and none of those five was touched. `tests/assurance-check`
+  passes 33/0. The class table's "assurance re-pin: yes" for class C does not
+  manufacture work when no recorded package moved -- do not go looking for a
+  re-pin to perform here.
 
 ## Kebab-case executable migration (2026-08-05) -- COMPLETE
 
@@ -96,10 +101,12 @@ Other things worth keeping from this batch:
   both flags against the real 1308-cell library and asserts 1308 -> 149 cells.
 
 **Gate status:** Tier 1 green; `tests/prebuilt-binaries` green (`All 301 binaries
-OK`) after each rebuild, with every renamed tool probing under its new name; each
-verified from a real `--dest-dir` install. Tier 3 has **not** been re-run since
-`7ec2577`, which now predates four swapped wheels and three renamed payload stems.
-Re-run it plus the assurance re-pin before the class C release.
+OK`) after each rebuild, with every renamed tool probing under its new name, each
+verified from a real `--dest-dir` install. **Tier 3 green at `7da4af1`** --
+`All 279 binaries OK (22 skipped); runtimes OK`, zero failures, with
+`liberty-filter`, `liberty-format`, `liberty-view`, `spice-subckt-rc-reduce`,
+`text-serdes-enc/dec`, `time-plot` and `tmux-path-store` all probing under their new
+names inside the clean container.
 
 ## Four new packages (gtkwave, klayout, verilator, ipython) -- 2026-08-05
 
