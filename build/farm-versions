@@ -564,10 +564,10 @@ TOOLS = [
         strategy_flag(["--version"], r"Python ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
-        "liberty_filter",
         "liberty-filter",
-        "",
-        strategy_flag(["--help"], r"liberty-filter ([0-9]+\.[0-9]+\.[0-9]+)"),
+        "liberty-filter",
+        "https://github.com/smprather/liberty-filter",
+        strategy_flag(["--version"], r"liberty-filter ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
         "liberty-format",

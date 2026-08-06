@@ -3012,6 +3012,95 @@ roundtrip on the INSTALLED binary.
 **Usage:** `restic init --repo /path/repo`; `restic -r /path/repo backup ~/work`;
 `restic -r /path/repo snapshots`; `restic -r /path/repo restore latest --target DIR`.
 
+## liberty-filter 1.0.1 -- strip unneeded data from Liberty .lib files (EDA)
+
+First-party (github.com/smprather/liberty-filter). Streams a Liberty timing file
+and drops groups/cells by regex, so a multi-GB `.lib` becomes something a tool or
+a human can actually work with. Reads `.gz` directly.
+
+**A SEPARATE repo from `liberty-tools`**, which is the thing to get right here: the
+two ship related CLIs and share a version lineage, but liberty-tools is a Python
+wheel with a PyO3 cdylib (`rolling_git`, built by `./build/update`) while this is a
+standalone Rust binary. It cannot use the rolling path -- `./build/update` builds
+*wheels*, so it can never produce a Rust binary. Same reason `spice-subckt-rc-reduce`
+is not `rolling_git`.
+
+**This note exists because the package had none.** liberty-filter entered the
+payload in the `ad63c48` bootstrap snapshot with no build script and no entry here,
+so its provenance was recorded nowhere in this repo -- it had to be recovered from
+the shipped binary's own strings, which named `/tmp/liberty-rebuild-*/liberty-filter`.
+That is exactly what the "every tool gets a note" mandate at the top of this file is
+for.
+
+**Tag: `v2026.08.06.1`** (Cargo `version = 1.0.1`).
+
+**Build:** `build/build-liberty-filter.sh --tag v2026.08.06.1`
+
+**Prerequisites:** `rustc` + `cargo` (tested 1.96.0, `edition = "2021"`),
+`patchelf` at `~/.local/bin/patchelf`. No dev packages.
+
+### Offline build with no crate-store
+
+Unlike spice-subckt-rc-reduce (zero dependencies), this crate depends on `flate2`
+and `regex` -- but upstream **vendors the whole closure**: `vendor/` is committed
+(466 files) alongside a `.cargo/config.toml` with
+`replace-with = "vendored-sources"`. So the build runs `cargo build --release
+--locked --offline` and needs neither the network nor `rust-crate-store`. The script
+**asserts** both inputs before building, so a future upstream change that drops the
+vendor tree fails loudly here rather than silently reaching for the network on a
+build box that happens to have it.
+
+### The executable name is read from upstream, not assumed
+
+It was `liberty_filter` up to and including tag `v2026.06.01.1` and is
+`liberty-filter` from commit `1503846` ("Use kebab-case executable names") onward.
+The script parses `[[bin]] name` out of `Cargo.toml` and hard-fails if it is not the
+expected value, naming the mismatch -- because the registry `bins` entry names the
+payload stem `bin/<name>.bz2`, so a disagreement ships a package nothing can run.
+**When it changes, three places move together:** `EXPECT_BIN` here, `bins` in
+`payload/packages.json`, and both the binary-name key *and* the match regex in
+`build/farm-versions`. Renaming a stem also means deleting the old
+`bin/<old-name>.bz2`, or `doctor` reports an unregistered payload.
+
+### Version: Cargo's, not the tag's
+
+Upstream tags are date-based (`v2026.08.06.1`) while Cargo carries the semantic
+version (`1.0.1`), and `--version` prints the Cargo one. The script stamps **Cargo's**
+version so the registry agrees with what the binary reports; otherwise
+`check-versions` and `farm-versions` disagree forever. It also **refuses a `-dev`
+version**: HEAD after a release is a post-release bump (`1.0.2-dev`) and must not be
+shipped as a release. `--rev <ref>` remains available for a `git describe` build of
+untagged upstream state -- which is how the other first-party tools already ship
+here -- but prefer `--tag`.
+
+**Deps:** NEEDED is `libgcc_s.so.1`, `libpthread.so.0`, `libc.so.6` -- glibc and
+libgcc only, both on the never-bundle list in CLAUDE.md. Max glibc symbol
+`GLIBC_2.28`, exactly the EL8 floor. No lib64 artifacts, no runtime data, so no
+runtime tarball.
+
+### Smoke: mind the filter flag semantics
+
+`--filter-in-cells` is an **exception list to `--filter-out-cells`, not a standalone
+allowlist**. The drop rule in `src/main.rs` is
+`match_filter_out_cell && !match_filter_in_cell`, so `--filter-in-cells '^nand'`
+*by itself drops nothing* -- upstream's own unit test pairs `^KEEP$` with
+`filter_out_cells: ["."]`. Getting this wrong looks exactly like a pass-through bug
+in the tool. "Keep only nand" is:
+
+```sh
+liberty-filter --in-file lib.gz --out-file out.lib \
+    --filter-out-cells '.' --filter-in-cells '^nand'
+```
+
+The build script runs that against the real 1308-cell / 96 MB library upstream
+ships and asserts the output shrank (1308 -> 149 cells), that every surviving cell
+is a `nand`, and that the `library()` group is intact -- a pass-through or a
+truncating write would both sail past `--version`.
+
+**Verify after building:** `python3.14 build/gen-content-manifest &&
+python3.14 build/gen-readme-table`, then `./loadout install liberty-filter
+--dest-dir <d>` and run the filter above from the installed tree.
+
 ## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
 
 First-party (github.com/smprather). Simplifies parasitic RC networks inside

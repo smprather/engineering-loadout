@@ -209,7 +209,7 @@
     "liberty-filter": {
       "kind": "bin",
       "bins": [
-        "liberty_filter"
+        "liberty-filter"
       ],
       "version": "1.0.1",
       "platforms": [
@@ -219,7 +219,8 @@
         "eda",
         "liberty"
       ],
-      "description": "liberty-filter \u2014 strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only"
+      "description": "liberty-filter \u2014 strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only",
+      "version_url": "https://github.com/smprather/liberty-filter/tags"
     },
     "lefdef-tools": {
       "kind": "python-tool",

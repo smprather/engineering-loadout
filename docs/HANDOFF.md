@@ -21,10 +21,10 @@ root reorganised; linux-process-resource-monitor pending upstream).
   `All 279 binaries OK (22 skipped); runtimes OK`. The assurance ledger has NOT
   been re-pinned for this batch.
 
-## Kebab-case executable migration (2026-08-05) -- PARTIAL, 3 tools pending
+## Kebab-case executable migration (2026-08-05) -- PARTIAL, 2 tools pending
 
 Owner is standardising every first-party executable on kebab-case. Pulled what
-upstream had actually renamed; **three tools are still underscore** and cannot be
+upstream had actually renamed; **two tools are still underscore** and cannot be
 fixed from this repo, because the executable name comes from upstream's
 `[project.scripts]` / `[[bin]]`, not from the registry. Renaming `bins` here
 without the upstream change would just make the registry lie about what the wheel
@@ -37,6 +37,7 @@ wheels' `entry_points.txt` and then against a real `--dest-dir` install):
 |---|---|---|
 | `liberty-tools` | `liberty_format`, `liberty_view` | `liberty-format`, `liberty-view` |
 | `text-serdes` | `enc`, `dec` | `text-serdes-enc`, `text-serdes-dec` |
+| `liberty-filter` | `liberty_filter` | `liberty-filter` (tag `v2026.08.06.1`, Cargo 1.0.1) |
 | `time-plot`, `lefdef-tools` | already kebab | unchanged |
 
 `text-serdes` was more than a case change -- bare `enc`/`dec` became namespaced.
@@ -53,18 +54,46 @@ binary-name keys AND its match regexes updated. Both read `ok` again.
 |---|---|---|
 | `tmux-path-store` | upstream `pyproject.toml` still declares `tmux_path_store` (confirmed from the wheel's `entry_points.txt`, not just the repo file) | a commit upstream |
 | `spice-subckt-rc-reduce` | HEAD's `Cargo.toml` has `name = "spice-subckt-rc-reduce"`, but the only tag is `v0.1.0` from the underscore era and `build-spice-subckt-rc-reduce.sh` enforces `--tag` | a new upstream tag, or a deliberate decision to build from HEAD against the stable-tag policy that entry documents |
-| `liberty-filter` | HEAD is kebab and tag `v2026.06.01.1` exists, but **this repo has no build script and no `ADDING_BINARIES.md` note for it** | writing a build script; also decide what version it claims, since it reports `1.0.1-dev` in a stable-only repo |
 
-`liberty-filter` deserves attention beyond the rename: it entered in the
-`ad63c48` bootstrap snapshot, so its provenance was never recorded anywhere. It
-was identified only from the binary's own strings -- built from a *separate*
-`smprather/liberty-filter` repo under `/tmp/liberty-rebuild-*`. That is a standing
-violation of the "every tool has a build note" mandate, independent of casing.
+### liberty-filter -- done, and three gaps closed with it
+
+Built from the new upstream tag **`v2026.08.06.1`** (Cargo `1.0.1`). Deliberately
+NOT from HEAD: HEAD is the post-release bump `1.0.2-dev`, and the build script now
+**refuses a `-dev` version** rather than letting one into a stable-only repo.
+
+It had entered in the `ad63c48` bootstrap snapshot with **no build script and no
+note**, so its provenance existed nowhere in this repo -- it was recovered from the
+shipped binary's own strings (`/tmp/liberty-rebuild-*/liberty-filter`, a *separate*
+repo from liberty-tools). Now fixed: `build/build-liberty-filter.sh` exists, and
+`ADDING_BINARIES.md` has the note the mandate requires.
+
+Three things about it worth keeping:
+
+- **Offline build, no crate-store.** It depends on flate2 + regex, but upstream
+  commits `vendor/` (466 files) plus a `.cargo/config.toml` with
+  `replace-with = "vendored-sources"`, so it builds `--offline --locked`. The
+  script asserts both inputs, so a future de-vendoring fails loudly instead of
+  quietly hitting the network on a box that happens to have it.
+- **Renaming a stem moves four things**, and the script fails loudly naming the
+  mismatch if they drift: `EXPECT_BIN` in the build script, `bins` in
+  `payload/packages.json`, and the binary-name key *and* match regex in
+  `build/farm-versions`. Plus **delete the old `bin/<old-name>.bz2`** --
+  `loadout_package_bin` writes the new stem but does not remove the old, and
+  leaving it makes `doctor` report an unregistered payload.
+- **`--filter-in-cells` is an exception list to `--filter-out-cells`, not a
+  standalone allowlist.** The drop rule is
+  `match_filter_out_cell && !match_filter_in_cell`, so `--filter-in-cells` alone
+  drops nothing and misuse looks exactly like a pass-through bug in the tool
+  (it cost one false bug report here). "Keep only nand" needs both flags. The
+  build smoke uses both against the real 1308-cell library and asserts
+  1308 -> 149 cells with the `library()` group intact.
 
 **Gate status for this batch:** Tier 1 green; `tests/prebuilt-binaries` green
-(`All 301 binaries OK`). Tier 3 was **not** re-run for the three swapped wheels --
-the container gate last passed at `7ec2577`, before them. Re-run it before the
-class C release.
+(`All 301 binaries OK`), with `liberty-filter`, `liberty-format` and
+`liberty-view` all probing under their new names. Tier 3 was **not** re-run for
+the swapped wheels or the liberty-filter rebuild -- the container gate last passed
+at `7ec2577`, before both. Re-run it before the class C release, together with the
+assurance re-pin.
 
 ## Four new packages (gtkwave, klayout, verilator, ipython) -- 2026-08-05
 
