@@ -256,8 +256,8 @@
     "liberty-tools": {
       "kind": "python-tool",
       "bins": [
-        "liberty_format",
-        "liberty_view"
+        "liberty-format",
+        "liberty-view"
       ],
       "wheels": [
         "liberty-tools",
@@ -292,7 +292,7 @@
       ],
       "uv_tool": "liberty-tools",
       "rolling_git": "https://github.com/smprather/liberty-tools.git",
-      "version": "v2026.06.01.1-33-gdc193c1",
+      "version": "v2026.06.01.1-35-g73af358",
       "platforms": [
         "linux"
       ],
@@ -305,7 +305,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty_format and liberty_view CLI tools"
+      "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools"
     },
     "vcd-toggle-profiler": {
       "kind": "runtime",
@@ -2511,7 +2511,7 @@
       ],
       "uv_tool": "time-plot",
       "rolling_git": "https://github.com/smprather/time-plot.git",
-      "version": "4e94f23",
+      "version": "7e9859e",
       "platforms": [
         "linux"
       ],
@@ -2529,8 +2529,8 @@
     "text-serdes": {
       "kind": "python-tool",
       "bins": [
-        "enc",
-        "dec"
+        "text-serdes-enc",
+        "text-serdes-dec"
       ],
       "wheels": [
         "text-serdes",
@@ -2547,7 +2547,7 @@
       ],
       "uv_tool": "text-serdes",
       "rolling_git": "https://github.com/smprather/text-serdes.git",
-      "version": "e624d2d",
+      "version": "361bbf0",
       "platforms": [
         "linux"
       ],

@@ -21,6 +21,51 @@ root reorganised; linux-process-resource-monitor pending upstream).
   `All 279 binaries OK (22 skipped); runtimes OK`. The assurance ledger has NOT
   been re-pinned for this batch.
 
+## Kebab-case executable migration (2026-08-05) -- PARTIAL, 3 tools pending
+
+Owner is standardising every first-party executable on kebab-case. Pulled what
+upstream had actually renamed; **three tools are still underscore** and cannot be
+fixed from this repo, because the executable name comes from upstream's
+`[project.scripts]` / `[[bin]]`, not from the registry. Renaming `bins` here
+without the upstream change would just make the registry lie about what the wheel
+installs.
+
+**Done** (rolling-git rebuilds via `./build/update`, verified against the built
+wheels' `entry_points.txt` and then against a real `--dest-dir` install):
+
+| package | was | now |
+|---|---|---|
+| `liberty-tools` | `liberty_format`, `liberty_view` | `liberty-format`, `liberty-view` |
+| `text-serdes` | `enc`, `dec` | `text-serdes-enc`, `text-serdes-dec` |
+| `time-plot`, `lefdef-tools` | already kebab | unchanged |
+
+`text-serdes` was more than a case change -- bare `enc`/`dec` became namespaced.
+Good for PATH hygiene (those were collision bait) but it **breaks user aliases**,
+so it belongs in the release notes rather than passing as a rename.
+
+The program name changed too, not just the filename: `liberty-format --version`
+now prints `liberty-format 1.0.1.dev0`, so `build/farm-versions` needed both its
+binary-name keys AND its match regexes updated. Both read `ok` again.
+
+**Pending, each blocked on something outside this repo:**
+
+| tool | state | unblocks with |
+|---|---|---|
+| `tmux-path-store` | upstream `pyproject.toml` still declares `tmux_path_store` (confirmed from the wheel's `entry_points.txt`, not just the repo file) | a commit upstream |
+| `spice-subckt-rc-reduce` | HEAD's `Cargo.toml` has `name = "spice-subckt-rc-reduce"`, but the only tag is `v0.1.0` from the underscore era and `build-spice-subckt-rc-reduce.sh` enforces `--tag` | a new upstream tag, or a deliberate decision to build from HEAD against the stable-tag policy that entry documents |
+| `liberty-filter` | HEAD is kebab and tag `v2026.06.01.1` exists, but **this repo has no build script and no `ADDING_BINARIES.md` note for it** | writing a build script; also decide what version it claims, since it reports `1.0.1-dev` in a stable-only repo |
+
+`liberty-filter` deserves attention beyond the rename: it entered in the
+`ad63c48` bootstrap snapshot, so its provenance was never recorded anywhere. It
+was identified only from the binary's own strings -- built from a *separate*
+`smprather/liberty-filter` repo under `/tmp/liberty-rebuild-*`. That is a standing
+violation of the "every tool has a build note" mandate, independent of casing.
+
+**Gate status for this batch:** Tier 1 green; `tests/prebuilt-binaries` green
+(`All 301 binaries OK`). Tier 3 was **not** re-run for the three swapped wheels --
+the container gate last passed at `7ec2577`, before them. Re-run it before the
+class C release.
+
 ## Four new packages (gtkwave, klayout, verilator, ipython) -- 2026-08-05
 
 Added after an audit of what a compute/EDA environment was missing. Target users
