@@ -25,6 +25,7 @@ Usage:
     tests/prebuilt-binaries --keep   # don't delete tmpdir
 """
 
+import glob
 import os
 import re
 import shutil
@@ -176,6 +177,37 @@ def output_excerpt(data, limit=400):
     if len(text) > limit:
         return text[:limit] + "..."
     return text
+
+
+def real_elf_for_wrapper(wrapper_path, tmpdir):
+    """Resolve the real ELF a PATH wrapper execs. Returns (path, label) or (None, None).
+
+    Used ONLY to decide the host-required-.so skip: a wrapper is a shell script,
+    so ldd says nothing about the libraries its target needs, and a container
+    that legitimately lacks the host GLVND stack would score the package as a
+    hard 127 failure instead of a skip.
+
+    Two packaging conventions are covered, both already in the repo:
+      bin/<name> + bin/<name>.bin        -- Xephyr, ngspice, st, surfer, ...
+      bin/<name> + lib/<pkg>/<name>[.bin] -- wezterm, vcd-toggle-profiler, and
+                                            klayout, whose ONE lib dir holds 13
+                                            differently-named launchers
+                                            (klayout + the strm* tools), so a
+                                            lib/<name>/<name> guess cannot work.
+    """
+    name = os.path.basename(wrapper_path)
+    candidates = [(wrapper_path + ".bin", f"{name}.bin")]
+    lib_root = os.path.join(tmpdir, "local", "lib")
+    for pkg_dir in sorted(glob.glob(os.path.join(lib_root, "*"))):
+        if not os.path.isdir(pkg_dir):
+            continue
+        pkg = os.path.basename(pkg_dir)
+        for cand in (name, name + ".bin"):
+            candidates.append((os.path.join(pkg_dir, cand), f"lib/{pkg}/{cand}"))
+    for path, label in candidates:
+        if os.path.isfile(path) and is_elf(path):
+            return path, label
+    return None, None
 
 
 def require_path(path, label, failures):
@@ -389,7 +421,16 @@ def smoke_runtime_layout(tmpdir, env):
                 else:
                     print("  OK   (convert):      gtkwave runtime")
 
-    if has_bin("klayout"):
+    kl_real = os.path.join(tmpdir, "local", "lib", "klayout", "klayout")
+    kl_host_sos = host_required_sos(ldd_check(kl_real)) if os.path.isfile(kl_real) else []
+    if has_bin("klayout") and kl_host_sos:
+        # KLayout NEEDs the host GLVND dispatcher even for batch work: the strm*
+        # converters link the same libklayout_lay/laybasic set as the GUI, so a
+        # node with no OpenGL cannot run them at all. Same host contract as
+        # nedit-ng / nvim-qt / flameshot / Xephyr; the clean container has no
+        # mesa-libGL, so this is a skip and not a failure.
+        print(f"  SKIP (host .so):     klayout runtime  {', '.join(kl_host_sos)}")
+    elif has_bin("klayout"):
         # `klayout -v` prints a compiled-in string without touching the db
         # plugins, the stream writers, or either embedded interpreter -- and all
         # 13 launchers exit 0 on --version, so the generic probe says nothing
@@ -884,18 +925,17 @@ def main(keep):
                     failures.append((fname, msg))
                     continue
             else:
-                # Wrapper + real-ELF sibling (bin/<name> and bin/<name>.bin) is a
-                # repo-wide packaging convention. A wrapper cannot be ldd-checked,
-                # so exec'ing it in a container that legitimately lacks the host
-                # GLVND stack reports 127 for a package that is fine. Resolve to
-                # the sibling for the host-.so skip decision only: when anything
-                # is missing that is NOT host-required, fall through to the normal
-                # exec probe so real breakage still surfaces.
-                sibling = fpath + ".bin"
-                if os.path.isfile(sibling) and is_elf(sibling):
-                    host_sos = host_required_sos(ldd_check(sibling))
+                # A wrapper cannot be ldd-checked, so exec'ing it in a container
+                # that legitimately lacks the host GLVND stack reports 127 for a
+                # package that is fine. Resolve the real ELF for the host-.so
+                # skip decision only: when anything is missing that is NOT
+                # host-required, fall through to the normal exec probe so real
+                # breakage still surfaces.
+                real, via = real_elf_for_wrapper(fpath, tmpdir)
+                if real:
+                    host_sos = host_required_sos(ldd_check(real))
                     if host_sos:
-                        print(f"  SKIP (host .so):     {fname:20s}  {', '.join(host_sos)} (via {fname}.bin)")
+                        print(f"  SKIP (host .so):     {fname:20s}  {', '.join(host_sos)} (via {via})")
                         skipped += 1
                         continue
 

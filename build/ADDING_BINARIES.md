@@ -2846,6 +2846,26 @@ stays host-provided -- the surfer/wezterm arrangement, and the launcher carries 
 same `LD_LIBRARY_PATH`/`LIBGL_DRIVERS_PATH`/`__EGL_VENDOR_LIBRARY_DIRS` block.
 Full `depends`: `gui_libs`, `mesa3d_libs`, `ruby`, `portable-python`.
 
+**LIMITATION -- host GLVND is required even for BATCH use.** The 12 `strm*`
+converters link the same `libklayout_lay`/`libklayout_laybasic` set as the GUI, so
+on a node with no OpenGL at all *nothing* in this package runs -- not `klayout -zz`,
+not `strm2gds`. The clean-container gate showed exactly that: 13 launchers plus the
+batch runtime probe all reporting
+`libGL.so.1: cannot open shared object file`. That is the same host contract
+`nedit-ng`, `nvim-qt`, `flameshot` and `Xephyr` already carry (EL8 provides it via
+`mesa-libGL`/`libglvnd-glx`), and it is why those probes SKIP rather than FAIL --
+but note it is a stronger constraint here than for a pure GUI app, because the
+batch tools inherit it. Splitting the converters off would mean building a
+GUI-less second copy of the whole library set; not worth it, but do not promise a
+GL-less farm node that `strm2gds` will work.
+
+**The skip needed teaching, and that was a test gap, not a packaging bug.**
+`tests/prebuilt-binaries` resolved a wrapper's real ELF only as `bin/<name>.bin`,
+which cannot find KLayout's binaries at `lib/klayout/<name>` -- so all 13
+launchers exec'd and returned a hard 127 instead of skipping. `real_elf_for_wrapper()`
+now also searches `lib/*/<name>[.bin]`. A `lib/<name>/<name>` guess would NOT have
+worked: KLayout has one lib dir holding 13 differently-named launchers.
+
 **Assumed present, not bundled** (beyond the usual glibc/libstdc++/GLVND): EL8 base
 `libssl.so.1.1`/`libcrypto.so.1.1` and the krb5 set
 (`libgssapi_krb5`, `libkrb5`, `libkrb5support`, `libk5crypto`, `libcom_err`,
