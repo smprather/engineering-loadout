@@ -3012,6 +3012,55 @@ roundtrip on the INSTALLED binary.
 **Usage:** `restic init --repo /path/repo`; `restic -r /path/repo backup ~/work`;
 `restic -r /path/repo snapshots`; `restic -r /path/repo restore latest --target DIR`.
 
+## tmux-path-store 1.0.1 -- tmux window-name-keyed path store (first-party python-tool)
+
+First-party (github.com/smprather/tmux-path-store). Stores a directory or file path
+keyed by the current tmux window name, which is what the `p` / `cdp` aliases in
+`envs/bash/global/bashrc` drive. Pure Python, one runtime dependency (`rich`), so
+the wheel is `py3-none-any` -- no compiled artifact, nothing platform-specific.
+
+**This note exists because the package had none.** Like liberty-filter, it was
+bundled with no build script and no entry here, so nothing recorded where its wheel
+came from or how to refresh it. Two packages hit this same gap in one session; if
+you bundle a wheel by hand, write the script at the same time.
+
+**Tag: `v1.0.1`** (the release that renamed the console script to kebab-case; it was
+`tmux_path_store` through v1.0.0).
+
+**Build:** `build/build-tmux-path-store.sh --tag v1.0.1`
+
+**Prerequisites:** `git`, `uv`, `python3.14`. No compiler, no dev packages.
+
+**NOT `rolling_git`.** `./build/update`'s rolling path builds from source HEAD and
+stamps a `git describe` version, which is right for the first-party tools upstream
+does not tag (`text-serdes`, `time-plot`). This project tags releases, so it is
+pinned like `parity-plot`: `--tag` only, no HEAD builds. The script also refuses a
+version containing `dev`/`rc`.
+
+### Two things the script checks against the ARTIFACT, not the repo
+
+1. **The console-script name comes from the built wheel's `entry_points.txt`**, not
+   from `pyproject.toml` and never assumed. It must be exactly
+   `tmux-path-store`, and a mismatch hard-fails naming what was found -- the
+   registry `bins` entry names the launcher the installer expects, so a
+   disagreement ships a tool the user cannot run. When it changes, `EXPECT_SCRIPT`
+   in the script, `bins` in `payload/packages.json`, and the binary-name key in
+   `build/farm-versions` all move together.
+2. **The runtime dependency closure must already be in the payload wheelhouse.**
+   The script parses `Requires-Dist` out of the wheel's `METADATA` (skipping
+   `extra` markers) and refuses to bundle anything whose deps are missing. An
+   offline install cannot fetch a wheel later, so a new upstream dependency has to
+   be bundled deliberately rather than discovered by a user on an air-gapped box.
+
+It also prunes the previous `tmux_path_store-*.whl` before copying the new one: a
+stale sibling leaves two versions of the same dist in `--find-links` and lets `uv`
+resolve the wrong one.
+
+**Verify after building:** `python3.14 build/gen-content-manifest &&
+python3.14 build/gen-readme-table`, then `./loadout install tmux-path-store
+--dest-dir <d>` and check `<d>/local/bin/tmux-path-store --version` reports the
+tagged version and that no `tmux_path_store` launcher remains.
+
 ## liberty-filter 1.0.1 -- strip unneeded data from Liberty .lib files (EDA)
 
 First-party (github.com/smprather/liberty-filter). Streams a Liberty timing file
@@ -3114,7 +3163,7 @@ elimination, the default) and small-resistor merge.
 git clone --filter=blob:none https://github.com/smprather/spice-subckt-rc-reduce.git
 git checkout --detach v0.1.0
 cargo build --release --locked
-# -> target/release/spice_subckt_rc_reduce
+# -> target/release/spice-subckt-rc-reduce
 ```
 
 Prereqs: `cargo`/`rustc` (tested 1.96.0; `edition = "2024"` needs >= 1.85, and
@@ -3138,11 +3187,19 @@ EL8 floor. No runtime data files, so no runtime tarball.
 | thing | value |
 |---|---|
 | repo / registry package | `spice-subckt-rc-reduce` (dashes) |
-| installed binary, `[[bin]]` name | `spice_subckt_rc_reduce` (underscores) |
+| installed binary, `[[bin]]` name | `spice-subckt-rc-reduce` (kebab, since v0.1.1) |
 | cargo `[lib]` name | `rcreduce` |
 
 The registry `"bins"` entry MUST use the underscore form -- it names the payload
-stem `bin/spice_subckt_rc_reduce.bz2`, not the package.
+stem `bin/spice-subckt-rc-reduce.bz2`, not the package.
+
+**The asymmetry is gone as of v0.1.1.** Through v0.1.0 the `[[bin]]` name was
+`spice_subckt_rc_reduce` while the package was dashed, and the registry had to use
+the underscore form. v0.1.1 renamed the executable to kebab-case, so package, repo
+and executable now agree. The build script reads the stem out of `Cargo.toml`
+instead of assuming it and hard-fails on a mismatch; when it moves, `bins` in
+`payload/packages.json` moves with it and the stale `bin/<old-name>.bz2` must be
+deleted, or `doctor` reports an unregistered payload.
 
 **Not `rolling_git`, despite being first-party.** `./build/update`'s rolling path
 builds Python *wheels* (`uv build --wheel`), so it cannot produce a Rust binary.
@@ -3168,7 +3225,7 @@ probe feeds a 6-node RC chain at `--tau 1e-6` and requires `Nodes: N -> M` with
 which is itself a member of `@engineering-loadout`, so it ships in the curated
 set. Non-optional: 305 KB compressed, no dependencies.
 
-**Usage:** `spice_subckt_rc_reduce in.subckt -o out.subckt -a ticer --tau 1e-12 -v`;
+**Usage:** `spice-subckt-rc-reduce in.subckt -o out.subckt -a ticer --tau 1e-12 -v`;
 `--pg-tau` sets a separate threshold for power/ground nets; `--power-ports` /
 `--ground-ports` default to `auto`; `-a merge --r-threshold R` selects the
 small-resistor merge algorithm instead; `--subckt NAME` targets one subcircuit.

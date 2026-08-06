@@ -217,9 +217,17 @@ if command -v zoxide >/dev/null && is_truthy "${LOADOUT_CFG_ENABLE_ZOXIDE}"; the
     __zoxide_cd() { cd "$@" || return; }
 fi
 
-# tmux_path_store: create per-path tmux session aliases
-if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux_path_store >/dev/null; then
-    eval $(tmux_path_store --bash)
+# tmux-path-store: create per-path tmux session aliases.
+# The EXECUTABLE is kebab-case (upstream renamed it in v1.0.1); the CONFIG VARIABLE
+# stays LOADOUT_CFG_ENABLE_TMUX_PATH_STORE -- it is a shell variable name, so it
+# cannot take a dash. `${LOADOUT_CFG_ENABLE_tmux-path-store}` is not a typo bash
+# rejects: it parses as ${LOADOUT_CFG_ENABLE_tmux-...}, i.e. parameter
+# LOADOUT_CFG_ENABLE_tmux with the default "path-store", which is always unset, so
+# it expands to "path-store" -- and is_truthy() treats any non-empty string as true.
+# The toggle then silently stops working (always on, =0 ignored) and `bash -n` is
+# perfectly happy. Do not "finish" the rename here.
+if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux-path-store >/dev/null; then
+    eval $(tmux-path-store --bash)
 fi
 
 # Environment Modules (loadout-local install at ~/.local/bin/modulecmd)

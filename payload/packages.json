@@ -2088,9 +2088,9 @@
     "spice-subckt-rc-reduce": {
       "kind": "bin",
       "bins": [
-        "spice_subckt_rc_reduce"
+        "spice-subckt-rc-reduce"
       ],
-      "version": "0.1.0",
+      "version": "0.1.1",
       "version_url": "https://github.com/smprather/spice-subckt-rc-reduce/tags",
       "platforms": [
         "linux"
@@ -3767,7 +3767,7 @@
       "kind": "python-tool",
       "uv_tool": "tmux-path-store",
       "bins": [
-        "tmux_path_store"
+        "tmux-path-store"
       ],
       "depends": [
         "portable-python",
@@ -3777,7 +3777,7 @@
         "tmux-path-store",
         "rich"
       ],
-      "version": "1.0.0",
+      "version": "1.0.1",
       "platforms": [
         "linux"
       ],
@@ -3785,7 +3785,8 @@
         "tmux",
         "python"
       ],
-      "description": "Tmux window-name-keyed directory/file path store \u2014 shell aliases for per-window path bookmarks"
+      "description": "Tmux window-name-keyed directory/file path store \u2014 shell aliases for per-window path bookmarks",
+      "version_url": "https://github.com/smprather/tmux-path-store/releases"
     }
   }
 }

@@ -14,11 +14,15 @@
 # single self-contained binary with no runtime data files, hence no runtime
 # tarball.
 #
-# Note the name asymmetry, which is upstream's and is deliberate here:
-#   registry package / repo : spice-subckt-rc-reduce   (dashes)
-#   installed binary        : spice_subckt_rc_reduce   (underscores, [[bin]] name)
-# The registry entry's "bins" MUST use the underscore form -- it names the
-# payload stem `bin/spice_subckt_rc_reduce.bz2`, not the package.
+# NAME: package, repo and executable now all agree -- spice-subckt-rc-reduce.
+# Up to and including tag v0.1.0 the [[bin]] name was `spice_subckt_rc_reduce`
+# (underscores) while the package was dashed, and the registry `bins` entry had to
+# use the underscore form. That asymmetry is GONE as of v0.1.1. The stem is read
+# out of Cargo.toml below rather than assumed, so a future rename is a loud build
+# failure instead of a payload nothing can run; when it moves, `bins` in
+# payload/packages.json moves with it and the old bin/<old-name>.bz2 must be
+# deleted (loadout_package_bin writes the new stem but does not remove the old,
+# and leaving both makes `doctor` report an unregistered payload).
 #
 # edition = "2024" needs Rust >= 1.85; upstream's README asks for 1.96+.
 #
@@ -42,7 +46,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CLONE_URL="https://github.com/smprather/spice-subckt-rc-reduce.git"
 RELEASES_URL="https://github.com/smprather/spice-subckt-rc-reduce/releases"
 PKG="spice-subckt-rc-reduce"
-BIN_STEM="spice_subckt_rc_reduce"
+EXPECT_BIN="spice-subckt-rc-reduce"
 
 clean=0
 tag=""
@@ -79,6 +83,17 @@ if ! git rev-parse "$tag" > /dev/null 2>&1; then
     git fetch --tags
 fi
 git checkout --detach "$tag"
+
+# The executable name comes from upstream. Read it instead of assuming.
+BIN_STEM=$(awk '/^\[\[bin\]\]/{f=1;next} f&&/^name[[:space:]]*=/{gsub(/[",]/,"");print $3;exit}' Cargo.toml)
+[ -n "$BIN_STEM" ] || BIN_STEM=$(awk '/^\[package\]/{f=1;next} f&&/^name[[:space:]]*=/{gsub(/[",]/,"");print $3;exit}' Cargo.toml)
+if [ "$BIN_STEM" != "$EXPECT_BIN" ]; then
+    echo "ERROR: upstream declares the executable as '$BIN_STEM', expected '$EXPECT_BIN'." >&2
+    echo "  Update EXPECT_BIN here AND the 'bins' entry for $PKG in" >&2
+    echo "  payload/packages.json, then delete the stale bin/<old-name>.bz2." >&2
+    exit 1
+fi
+echo "  executable: $BIN_STEM"
 
 # Guard the no-dependency invariant this script's packaging relies on. If
 # upstream ever takes a crate dependency, the offline build assumption breaks

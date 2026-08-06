@@ -515,7 +515,7 @@ All variables exported scalars (`export LOADOUT_CFG_*=value`) -- propagate to ch
 | `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` | `1` | Source the loadout-owned `wezterm.sh` (OSC 133 semantic zones, OSC 7 cwd, user vars). Self-skips `dumb`/`linux` and non-interactive shells; off-WezTerm shells source it with WezTerm output hooks skipped, keeping bash-preexec without raw OSC output or `wezterm set-working-directory` prompt stalls |
 | `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | `""` | Explicit path to `wezterm.sh`; empty auto-resolves (vendored copy -> wezterm-binary-relative -> `${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}`). Set from a `--dest-dir` installer to pin it. Never `/etc` |
 | `LOADOUT_CFG_ENABLE_FASTNVIM` | `0` | Fast nvim mode |
-| `LOADOUT_CFG_ENABLE_TMUX_PATH_STORE` | `1` | tmux_path_store alias injection |
+| `LOADOUT_CFG_ENABLE_TMUX_PATH_STORE` | `1` | tmux-path-store alias injection (variable name stays SCREAMING_SNAKE -- a shell variable cannot take a dash) |
 | `LOADOUT_CFG_PROMPT_COLOR_NORMAL` | `$PROMPT_YELLOW` | Normal session prompt color |
 | `LOADOUT_CFG_PROMPT_COLOR_FARM` | `$PROMPT_RED` | Farm/LSF session prompt color |
 | `LOADOUT_CFG_PROMPT_INCLUDE_HOST` | `0` | Include hostname in prompt |

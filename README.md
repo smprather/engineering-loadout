@@ -319,7 +319,7 @@ OpenSSH for those.
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
 | octave | bin | 11.3.0 | GNU scientific computing language (MATLAB-compatible) |
 | ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
-| spice-subckt-rc-reduce | bin | 0.1.0 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
+| spice-subckt-rc-reduce | bin | 0.1.1 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
@@ -350,7 +350,7 @@ OpenSSH for those.
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
 | lua-language-server | bin | 3.18.2 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | pyright | python-tool | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions |
-| tmux-path-store | python-tool | 1.0.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
+| tmux-path-store | python-tool | 1.0.1 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots
 
 `./loadout install parity-plot` installs the CLI and its local designer, with no
