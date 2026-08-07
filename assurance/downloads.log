@@ -49,3 +49,7 @@
 2026-08-05T19:11:38Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
 2026-08-05T19:11:38Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
 2026-08-05T19:11:39Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
+2026-08-07T17:40:29Z	https://github.com/astral-sh/uv/releases/download/0.12.3/uv-x86_64-unknown-linux-gnu.tar.gz	600cf9a742aca00d292673b16b5acffaa7b8c269a364ad0c2e79498dcb1fe101
+2026-08-07T17:40:36Z	https://github.com/astral-sh/ruff/releases/download/0.16.2/ruff-x86_64-unknown-linux-gnu.tar.gz	3d2c355e641ceb5b608a158c603768fcc908c5009c56c6e78da7487da033b92a
+2026-08-07T17:40:38Z	https://github.com/astral-sh/ty/releases/download/0.0.69/ty-x86_64-unknown-linux-gnu.tar.gz	e0ca74dd95433ca6d0eb78291ff08d5bcffb5cea0e3a497583215e663c353444
+2026-08-07T17:40:42Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.5.7/biome-linux-x64-musl	4609a493068d7a84c61d01d5ed5ec8cafb805bcc520486be63f0a388bbe3c827

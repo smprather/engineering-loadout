@@ -129,7 +129,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.5.6",
+      "version": "2.5.7",
       "platforms": [
         "linux"
       ],
@@ -1135,7 +1135,7 @@
       "bins": [
         "ruff"
       ],
-      "version": "0.16.1",
+      "version": "0.16.2",
       "platforms": [
         "linux"
       ],
@@ -1293,7 +1293,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.66",
+      "version": "0.0.69",
       "platforms": [
         "linux"
       ],
@@ -1412,7 +1412,7 @@
       "bins": [
         "uv"
       ],
-      "version": "0.12.1",
+      "version": "0.12.3",
       "platforms": [
         "linux"
       ],
@@ -2327,7 +2327,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.6.0",
+      "version": "26.7.0",
       "platforms": [
         "linux"
       ],
@@ -2365,7 +2365,7 @@
         "traitlets"
       ],
       "uv_tool": "ipython",
-      "version": "9.15.0",
+      "version": "9.16.1",
       "platforms": [
         "linux"
       ],

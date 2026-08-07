@@ -183,6 +183,14 @@ def _load_packages():
 
 PACKAGES = _load_packages()
 
+# Pinned `python-tool` packages: bundled as a wheel closure, refreshed by hand.
+# Excludes the rolling-git ones, which ./build/update builds from source instead.
+PYPI_WHEEL = {
+    n
+    for n, p in PACKAGES.items()
+    if not n.startswith("@") and p.get("kind") == "python-tool" and not p.get("rolling_git")
+}
+
 # Rolling-git packages: built fresh from source on every ./build/update.  Tagged in
 # packages.json with "rolling_git": "<clone-url>".  The wheel is rebuilt only
 # when the source commit differs from the recorded version; the version stamped
@@ -224,6 +232,8 @@ def _classify(name):
         return "download"
     if name in PACKAGES and PACKAGES[name].get("kind") == "bin":
         return "download"
+    if name in PYPI_WHEEL:
+        return "pypi-wheel"
     return None
 
 
@@ -610,7 +620,7 @@ def _registry_version(name):
     try:
         with open(os.path.join(REPO, "payload", "packages.json")) as fh:
             return json.load(fh)["packages"].get(name, {}).get("version", "") or ""
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         return ""
 
 
@@ -881,6 +891,49 @@ def _show_download(name):
     print("  5. git add payload/ .strip-manifest packages.json")
 
 
+def _show_pypi_wheel(name):
+    """Guidance for a pinned `python-tool`: refresh its bundled wheel closure.
+
+    These are wheel-bundled, NOT rolling-git, so there is nothing to automate here
+    -- but they must still be addressable. check-versions flags them outdated from
+    PyPI, and before this they were "unknown package(s)" to update, so the only
+    signal a maintainer got was a number they could not act on.
+    """
+    _sep(name)
+    entry = PACKAGES.get(name, {})
+    ver = _pkg_version(name)
+    if ver:
+        print(f"  current: {ver}")
+    dist = entry.get("uv_tool", name)
+    print()
+    print("  Find the latest upstream version:")
+    print("    ./build/check-versions --outdated-only")
+    print()
+    print("  Refresh the bundled wheel closure on the EL8 build machine:")
+    print(f"    PIP_REQUIRE_VIRTUALENV=0 pip3.14 download '{dist}==<VERSION>' \\")
+    print("        --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \\")
+    print("        --platform manylinux2010_x86_64 --platform manylinux1_x86_64 \\")
+    print("        --platform any --python-version 3.14 --only-binary :all: -d <tmpdir>")
+    print()
+    print("  Pass EVERY acceptable platform tag. pip matches wheel tags EXACTLY and")
+    print("  does not imply older but still-compatible ones, so a lone")
+    print("  manylinux_2_28 silently hides a manylinux1/2010/2014 wheel that runs")
+    print("  fine on EL8 -- and reports the version as simply unavailable.")
+    print()
+    print("  Then copy in only what CHANGED, and prune the superseded wheel:")
+    print("    diff the tmpdir against payload/el8.x86_64.glibc2p28/wheels/")
+    print("    a shared dep (traitlets, prompt_toolkit, ...) that other tools also")
+    print("    resolve is best left alone unless this tool actually needs the bump;")
+    print("    the wheelhouse holds several versions side by side, so adding one")
+    print("    silently changes what OTHER tools resolve on their next install.")
+    print()
+    print("  After refreshing:")
+    print("    build/gen-content-manifest")
+    print("    build/gen-readme-table")
+    print(f"    ./loadout install {name} --dest-dir <d>   # prove it resolves OFFLINE")
+    print("    git add payload/ .content-manifest packages.json")
+
+
 # -- --list --------------------------------------------------------------------
 
 
@@ -1016,6 +1069,11 @@ ALL_KNOWN = (
     | set(ROLLING_GIT)
     | DOWNLOAD_ONLY
     | {n for n, p in PACKAGES.items() if not n.startswith("@") and p.get("kind") == "bin"}
+    # Pinned python-tools are wheel-bundled with nothing to automate, but they must
+    # still be addressable: check-versions flags them outdated from PyPI, and
+    # without this they were rejected as "unknown package(s)" -- a live signal with
+    # no way to act on it.
+    | PYPI_WHEEL
 )
 
 
@@ -1101,6 +1159,8 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, a
             _show_import(name)
         elif kind == "download":
             _show_download(name)
+        elif kind == "pypi-wheel":
+            _show_pypi_wheel(name)
         else:
             print(f"WARNING: no handler for '{name}'")
 
