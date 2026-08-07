@@ -273,9 +273,14 @@ keymap("n", "<leader>F",  "zR",        { desc = "Open all folds" })
 keymap("v", "<",  "<gv", noremap_silent)
 keymap("v", ">",  ">gv", noremap_silent)
 
--- Buffer navigation (overrides the split-nav <C-j>/<C-k> from early keymaps above)
-keymap("n", "<c-j>", ":bnext<cr>",     noremap_silent)
-keymap("n", "<c-k>", ":bprevious<cr>", noremap_silent)
+-- Buffer navigation: Pope Standard (vim-unimpaired), now a Neovim 0.10+ default.
+-- <C-Up>/<C-Down> mirror the tmux <C-Left>/<C-Right> "cycle through things"
+-- convention: horizontal arrows cycle tmux windows, vertical arrows cycle
+-- nvim buffers. Both keys freed from previous <C-j>/<C-k> bindings.
+keymap("n", "]b",     ":bnext<cr>",     noremap_silent)
+keymap("n", "[b",     ":bprevious<cr>", noremap_silent)
+keymap("n", "<C-Down>", ":bnext<cr>",     noremap_silent)
+keymap("n", "<C-Up>",   ":bprevious<cr>", noremap_silent)
 
 keymap("n", "<leader>q", ":BufDelAll<cr>",   { noremap = true, silent = true, desc = "Close all buffers and exit." })
 keymap("n", "<leader>d", ":BufDel<cr>",      { noremap = true, silent = true, desc = "Close the current buffer." })
@@ -285,7 +290,41 @@ keymap("n", "<leader>x", ":xa<cr>",          { noremap = true, desc = "Full exit
 
 keymap("n", "<leader>v", ":vsplit<cr>:bn<cr>", noremap_silent)
 keymap("n", "<leader>h", ":split<cr>:bn<cr>",  noremap_silent)
-keymap("n", "<leader>c", ":q<cr>",             { noremap = true, silent = true, desc = "Close current window" })
+
+-- Smart :q that skips Vim's "N more files to edit" arglist nag.
+-- The nag fires whenever nvim was launched with multiple file args and
+-- some remain unvisited. It's a non-destructive prompt (Vim doesn't lose
+-- anything by quitting), so it just adds friction.
+--
+-- Behavior:
+--   - If the current buffer has unsaved changes → :confirm quit (prompts,
+--     preserving the destructive-action safety net).
+--   - Otherwise → :quit! (skip both the arglist check AND the unsaved-
+--     changes check; the latter is safe because we already verified the
+--     buffer is clean).
+--
+-- Applies to :q, :Q, and <leader>c. Multi-window/multi-buffer variants
+-- (:qa, :wq, etc.) are intentionally NOT touched.
+vim.api.nvim_create_user_command("Q", function()
+    -- Kill the arglist first. Vim's :quit refuses when there are unvisited
+    -- args and asks "N more files to edit. Quit anyway?"  That question is
+    -- non-destructive and we never want it, so we drop the arglist before
+    -- any quit path runs. pcall because :argdelete errors on an empty list.
+    pcall(function() vim.cmd("argdelete *") end)
+    if vim.bo.modified then
+        vim.cmd("confirm quit")   -- now only prompts about unsaved changes
+    else
+        vim.cmd("quit!")
+    end
+end, { desc = "Quit current window, skipping the arglist nag" })
+
+-- Rewrite bare `:q<CR>` and `:q <CR>` to `:Q<CR>` at command-line time.
+-- Guarded so `:qa`, `:q!`, `:s/q/x/`, etc. are left alone.
+vim.cmd([[
+    cnoreabbrev <expr> q  (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'Q' : 'q'
+]])
+
+keymap("n", "<leader>c", ":Q<cr>",             { noremap = true, silent = true, desc = "Close current window (smart quit)" })
 
 keymap("n", "<leader>tw", ToggleWrap, { noremap = true, silent = true, desc = "Toggle line wrap" })
 keymap("n", "Q",  "@q",  noremap_silent)
