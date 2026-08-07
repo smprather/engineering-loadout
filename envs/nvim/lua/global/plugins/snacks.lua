@@ -7,11 +7,82 @@ return {
         animate      = { enabled = true },
         bigfile      = { enabled = true },
         dashboard    = { enabled = true },
-        explorer     = { enabled = true },
+        -- replace_netrw = false disables the BufEnter-on-directory autocmd that
+        -- would otherwise spawn the explorer any time :bnext (or similar) landed
+        -- on a directory-named buffer. Startup auto-open for `nvim <dir>` is
+        -- handled explicitly in init() below.
+        explorer     = { enabled = true, replace_netrw = false },
+        picker       = {
+            enabled = true,
+            -- Default layout for ALL pickers: full-terminal, list on top,
+            -- preview on bottom. Modeled on the built-in "vertical" preset
+            -- but widened to fill the whole screen (width/height = 1) with
+            -- min constraints dropped so nothing clips at small terminal
+            -- sizes. `preview = 0.5` gives an even top/bottom split.
+            layout = {
+                preset = "full_vertical",
+                preview = true,
+            },
+            layouts = {
+                -- IMPORTANT: In Snacks's window-size math, `width`/`height`
+                -- of 0 means "full parent size", values <1 are fractional,
+                -- and values >=1 are literal cells. `1` therefore renders a
+                -- 1x1 window (looks broken, empty). Use 0 for full-screen.
+                full_vertical = {
+                    layout = {
+                        backdrop = false,
+                        width    = 0,
+                        height   = 0,
+                        box      = "vertical",
+                        border   = "none",
+                        title    = "{title} {live} {flags}",
+                        title_pos = "center",
+                        { win = "input",   height = 1,     border = "bottom" },
+                        { win = "list",    border = "none" },
+                        { win = "preview", title = "{preview}", height = 0.5, border = "top" },
+                    },
+                },
+            },
+            -- Force the explorer to auto-close on focus loss. The explorer
+            -- source defaults to auto_close=false (so it lingers unfocused
+            -- like a traditional sidebar); we override that so it behaves
+            -- like every other picker: focus it, use it, focus elsewhere =
+            -- it closes. Reopen with <leader>e.
+            --
+            -- Also override the explorer's source-level layout so it inherits
+            -- our full-terminal preset instead of the built-in "sidebar" it
+            -- ships with.
+            sources = {
+                explorer = {
+                    auto_close = true,
+                    layout = { preset = "full_vertical", preview = true },
+                },
+            },
+            -- Give the picker its own <C-Up>/<C-Down> = list_up/list_down.
+            -- Without this, the user's GLOBAL <C-Up>/<C-Down> (bprevious/
+            -- bnext) fires inside the picker list window, which switches
+            -- the buffer, causes the picker to auto_close, and loads the
+            -- previewed file for real (bad when files are huge). Buffer-
+            -- local picker binds shadow the global maps, so the picker
+            -- stays open and the preview handles size limits sanely.
+            win = {
+                input = {
+                    keys = {
+                        ["<C-Up>"]   = { "list_up",   mode = { "i", "n" } },
+                        ["<C-Down>"] = { "list_down", mode = { "i", "n" } },
+                    },
+                },
+                list = {
+                    keys = {
+                        ["<C-Up>"]   = "list_up",
+                        ["<C-Down>"] = "list_down",
+                    },
+                },
+            },
+        },
         indent       = { enabled = false },
         input        = { enabled = true },
         notifier     = { enabled = true, timeout = 3000 },
-        picker       = { enabled = true },
         quickfile    = { enabled = true },
         scope        = { enabled = true },
         scroll       = { enabled = false },
@@ -29,7 +100,15 @@ return {
         { "<leader>/",       function() Snacks.picker.grep() end,            desc = "Grep" },
         { "<leader>:",       function() Snacks.picker.command_history() end, desc = "Command History" },
         { "<leader>n",       function() Snacks.picker.notifications() end,   desc = "Notification History" },
-        { "<leader>e",       function() Snacks.explorer() end,               desc = "File Explorer" },
+        {
+            "<leader>e",
+            function()
+                -- Toggle: if an explorer picker is already open, close it; else open one.
+                local existing = Snacks.picker.get({ source = "explorer" })[1]
+                if existing then existing:close() else Snacks.explorer() end
+            end,
+            desc = "File Explorer (toggle)",
+        },
         -- find
         { "<leader>fb",      function() Snacks.picker.buffers() end,         desc = "Buffers" },
         { "<leader>fc",      function() Snacks.picker.files({ cwd = vim.fn.stdpath("config") }) end, desc = "Find Config File" },
@@ -114,6 +193,40 @@ return {
         },
     },
     init = function()
+        -- ── Startup auto-open policy for the explorer ─────────────────────
+        -- Open the explorer ONLY when nvim was invoked with exactly one arg
+        -- and that arg is a directory. In every other case (no args, one file,
+        -- multiple files, mixed, multiple dirs), do not spawn the explorer.
+        -- Any leftover directory-named buffers are silently wiped so :ls stays
+        -- clean and :bnext / ]b never lands on one.
+        vim.api.nvim_create_autocmd("VimEnter", {
+            once     = true,
+            callback = function()
+                local argc = vim.fn.argc()
+                local single_dir = nil
+                if argc == 1 then
+                    local a = vim.fn.argv(0)
+                    if vim.fn.isdirectory(a) == 1 then single_dir = a end
+                end
+
+                -- Wipe any directory-named buffers that were created by argv
+                -- expansion (this is what causes the "explorer pops up on
+                -- :bnext" symptom when replace_netrw was true).
+                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                    if vim.api.nvim_buf_is_valid(buf) then
+                        local name = vim.api.nvim_buf_get_name(buf)
+                        if name ~= "" and vim.fn.isdirectory(name) == 1 then
+                            pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                        end
+                    end
+                end
+
+                if single_dir then
+                    Snacks.explorer({ cwd = single_dir })
+                end
+            end,
+        })
+
         vim.api.nvim_create_autocmd("User", {
             pattern  = "VeryLazy",
             callback = function()
