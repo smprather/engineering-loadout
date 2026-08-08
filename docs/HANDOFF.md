@@ -1,182 +1,199 @@
 # Current Handoff
 
-Last updated: 2026-08-05 (four EDA/Python packages merged to main, unpushed;
-root reorganised; linux-process-resource-monitor pending upstream).
+Last updated: 2026-08-08 (v2026.08.07 released; kebab migration complete;
+partial currency sweep done; linux-process-resource-monitor still pending upstream).
 
 ## Where things stand right now
 
-- `main` is **pushed and in sync with `origin/main`**; working tree clean. The
-  last commit that changed shipped or testable content is `7da4af1`. (Do not
-  expect a literal tip hash here -- writing this file moves it.)
-- Last release **`v2026.08.04.1`** (`f895c36`). The root reorganisation and the
-  four new packages below are deliberately unreleased and batch into the next one.
-- **That next release is class C** by `docs/RELEASE.md` §0 -- now for two
-  reasons: repo layout changed (root reorganisation) *and* the registry gained
-  four packages, a new `@eda` group, and a new `gui_libs` member
-  (`libQt5XmlPatterns.so.5`). Container gate + assurance re-pin are mandatory.
-- **Gate status at `7da4af1` (current tip):** Tier 1 green; Tier 2 green
-  (including `install-modules` and `install-split-shared-envs`); Tier 3
-  (`tests/prebuilt-binaries-almalinux8 --full`) green --
-  `All 279 binaries OK (22 skipped); runtimes OK`, zero failures.
-- **No assurance re-pin is needed for this batch, despite it being class C.**
-  Records exist only for `crate-store`, `git-nvim`, `nvim`, `rust` and
-  `treesitter`; §4 of `docs/RELEASE.md` defines the re-pin as updating a *bumped*
-  package's record, and none of those five was touched. `tests/assurance-check`
-  passes 33/0. The class table's "assurance re-pin: yes" for class C does not
-  manufacture work when no recorded package moved -- do not go looking for a
-  re-pin to perform here.
+- **Released: `v2026.08.07`** -- https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.07
+  Signed tag on `7e01b1e`, published (not a draft), assets verified:
+  `nvim-plugin-stash.tar.bz2` (343,752,246 B), `sha256sums.txt`,
+  `default.content-manifest`.
+- `main` == `origin/main` == the released commit; working tree clean.
+- That was a **class C** release (registry + layout changed). All three gates
+  satisfied: Tier 3 container green, currency sweep done (partial, see below),
+  assurance re-pin **not applicable** -- see the next bullet, and do not go
+  hunting for one.
+- **No assurance re-pin was needed, despite class C.** Records exist only for
+  `crate-store`, `git-nvim`, `nvim`, `rust` and `treesitter`; `RELEASE.md` §4
+  defines the re-pin as updating a *bumped* package's record, and none of those
+  five moved. `tests/assurance-check` passes 33/0. The class table's
+  "assurance re-pin: yes" does not manufacture work when nothing recorded moved.
 
-## Kebab-case executable migration (2026-08-05) -- COMPLETE
+### What shipped in v2026.08.07
 
-Every first-party executable is now kebab-case. The executable name always comes
-from upstream's `[project.scripts]` / `[[bin]]`, never from the registry, so each of
-these needed the upstream change first -- renaming `bins` here without it would make
-the registry lie about what the wheel or binary installs.
+| area | detail |
+|---|---|
+| new packages | `gtkwave` 3.3.116, `klayout` 0.30.10, `verilator` 5.050, `ipython` 9.16.1 |
+| new group | `@eda` (gtkwave + klayout + verilator), member of `@engineering-loadout` |
+| new bundled lib | `libQt5XmlPatterns.so.5` added to `gui_libs` (KLayout's `HAVE_QT_XML`) |
+| kebab migration | all five first-party executables renamed -- see below |
+| currency | `uv` 0.12.3, `ruff` 0.16.2, `ty` 0.0.69, `biome` 2.5.7, `nodejs` 26.7.0, `ipython` 9.16.1 |
+| new build scripts | `build-gtkwave.sh`, `build-verilator.sh`, `build-klayout.sh`, `build-liberty-filter.sh`, `build-tmux-path-store.sh` |
+| gate fixes | four, listed under *Test-gate fixes* below |
+| env fix | `modules-init.bash` inconsistency flush + `MODULEPATH` preservation |
+
+### Deferred, each with a reason (next currency sweep)
+
+| item | why deferred |
+|---|---|
+| `vim` / `gvim` 9.2.0901 -> 9.2.0920 | source build; vim tags patches daily, bump on a deliberate cadence |
+| `gnuplot` 6.0.2 -> 6.0.5 | source build |
+| `fresh` 0.3.8 -> 0.4.7 | major bump, deserves its own change |
+| `jupyterlab` 4.6.1 -> 4.6.2 | **blocked**, not forgotten: pip's `--platform` resolver backtracks into `httpcore 0.18.0` then reports no usable `anyio`; constrain that and it moves to `jupyterlab-server`. Not worth a hand-assembled wheel set for a patch bump |
+| `pdftotext` | correctly pinned: poppler >= 23.01 needs freetype >= 2.10, EL8 has 2.9.1 |
+
+### Unspecced idea the owner raised (2026-08-07)
+
+Expose the bundled wheelhouse (`payload/<platform>/wheels/`, 203 wheels + 5
+chunked, 549 MB) to *users*, not just the installer, so `uv pip install numpy`
+works air-gapped. Findings from the initial look, so it need not be re-derived:
+
+- uv has **no** online->offline fallback; an unreachable index is an error. But it
+  is fully env-var driven (`UV_FIND_LINKS`, `UV_NO_INDEX`, `UV_OFFLINE`), so
+  **do not write a `uv` wrapper** -- shadowing `uv` on PATH invites the same class
+  of breakage this repo already documents for `git` and `ssh`.
+- The repo already computes the online signal: `bashrc` sets `LOADOUT_ONLINE=1/0`
+  once per login and exports it to child shells and tmux panes. Wire the uv env
+  vars to that.
+- Two open decisions: the wheelhouse is **not installed today** (read from the repo
+  at install time), so exposing it means a new `kind: data` package (~549 MB per
+  shared tree) or pointing at the shared-prefix repo path; and `UV_FIND_LINKS` on
+  by default is a reproducibility footgun (a user's project could silently resolve
+  a loadout-pinned wheel), so it should be opt-in behind a `LOADOUT_CFG_*` toggle.
+- Only `scipy` and `sympy` are genuinely missing from the current wheel set.
+
+## Kebab-case executable migration (2026-08-05..07) -- COMPLETE
+
+Every first-party executable is kebab-case. The name always comes from upstream's
+`[project.scripts]` / `[[bin]]`, never from the registry, so each needed the
+upstream change first -- renaming `bins` here without it makes the registry lie
+about what the wheel or binary installs.
 
 | package | was | now | built from |
 |---|---|---|---|
-| `liberty-tools` | `liberty_format`, `liberty_view` | `liberty-format`, `liberty-view` | rolling HEAD (`v2026.06.01.1-35-g73af358`) |
-| `text-serdes` | `enc`, `dec` | `text-serdes-enc`, `text-serdes-dec` | rolling HEAD (`361bbf0`) |
+| `liberty-tools` | `liberty_format`, `liberty_view` | `liberty-format`, `liberty-view` | rolling HEAD |
+| `text-serdes` | `enc`, `dec` | `text-serdes-enc`, `text-serdes-dec` | rolling HEAD |
 | `liberty-filter` | `liberty_filter` | `liberty-filter` | tag `v2026.08.06.1` (Cargo 1.0.1) |
 | `spice-subckt-rc-reduce` | `spice_subckt_rc_reduce` | `spice-subckt-rc-reduce` | tag `v0.1.1` |
 | `tmux-path-store` | `tmux_path_store` | `tmux-path-store` | tag `v1.0.1` |
-| `time-plot`, `lefdef-tools` | already kebab | unchanged | -- |
 
-The only underscore executables left in the registry are `verilator_bin`,
-`verilator_coverage`, `verilator_coverage_bin_dbg`, `verilator_gantt` and
-`verilator_profcfunc` -- upstream Verilator's own names. **Do not "finish the job"
-by renaming those**; they are third-party and the payload stem must match what
-upstream builds.
+The only underscore executables left are `verilator_bin`, `verilator_coverage`,
+`verilator_coverage_bin_dbg`, `verilator_gantt`, `verilator_profcfunc` -- upstream
+Verilator's own names. **Do not "finish the job" on those.**
 
 `text-serdes` was more than a case change: bare `enc`/`dec` became namespaced. Good
-for PATH hygiene, but it **breaks user aliases**, so it belongs in the release notes.
+PATH hygiene, but it **breaks user aliases** -- mention it in user-facing notes.
 
-### Renaming an executable moves four things
+### Renaming an executable moves FOUR things
 
-Learned the hard way across three packages. When upstream renames:
+Learned across three packages in one session:
 
-1. `bins` in `payload/packages.json` (it names the payload stem `bin/<name>.bz2`
-   or the expected launcher, so a mismatch ships something unrunnable),
-2. the binary-name key in `build/farm-versions` **and** its match regex -- the
-   *program* name changes too, e.g. `liberty-format --version` now prints
-   `liberty-format 1.0.1.dev0`, so updating only the key leaves the probe blind,
+1. `bins` in `payload/packages.json` (names the payload stem / expected launcher),
+2. the binary-name key in `build/farm-versions` **and its match regex** -- the
+   *program* name changes too (`liberty-format --version` prints
+   `liberty-format 1.0.1.dev0`), so updating only the key leaves the probe blind,
 3. `EXPECT_BIN` / `EXPECT_SCRIPT` in the build script,
-4. **delete the old `bin/<old-name>.bz2` or the stale `<dist>-*.whl`.**
+4. **delete the old `bin/<old-name>.bz2` or the superseded `<dist>-*.whl`** --
    `loadout_package_bin` writes the new stem but does not remove the old, and
    leaving both makes `doctor` report an unregistered payload; a stale wheel
    sibling leaves two versions of one dist in `--find-links`.
 
-Every build script now reads the name from the ARTIFACT (Cargo.toml `[[bin]]`, or
-the built wheel's `entry_points.txt`) and hard-fails naming the mismatch, rather
-than hardcoding a stem that can silently drift.
+Every build script now reads the name from the ARTIFACT (`Cargo.toml [[bin]]`, or
+the built wheel's `entry_points.txt`) and hard-fails naming the mismatch.
 
-### Two packages had no build script at all
+### Two packages had NO build script at all
 
-`liberty-filter` and `tmux-path-store` were both bundled with **no build script and
-no `ADDING_BINARIES.md` note** -- the same provenance gap twice, both from the
+`liberty-filter` and `tmux-path-store` were bundled with no build script and no
+`ADDING_BINARIES.md` note -- the same provenance gap twice, both from the
 `ad63c48` bootstrap-snapshot era. liberty-filter's origin had to be recovered from
 the shipped binary's own strings (`/tmp/liberty-rebuild-*/liberty-filter`, a
-*separate* repo from liberty-tools). Both now have scripts and notes. If you bundle
-a wheel or binary by hand, write the script in the same change.
+*separate* repo from liberty-tools). Both now have scripts and notes. **If you
+bundle a wheel or binary by hand, write the script in the same change.**
 
-Other things worth keeping from this batch:
+Other things worth keeping:
 
-- **liberty-filter builds offline with no crate-store.** It depends on flate2 +
-  regex, but upstream commits `vendor/` (466 files) plus a `.cargo/config.toml`
-  redirecting crates-io to vendored-sources, so `--offline --locked` works. The
-  script asserts both inputs, so a future de-vendoring fails loudly instead of
-  quietly hitting the network on a box that happens to have it.
-- **Prefer the tag, and refuse `-dev`.** liberty-filter HEAD is the post-release
-  bump `1.0.2-dev`; the script refuses a `-dev`/`rc` version rather than letting one
-  into a stable-only repo. It stamps Cargo's semantic version, not the date-based
-  tag, because `--version` prints the Cargo one and a mismatch makes
-  `check-versions` permanent noise.
-- **`spice-subckt-rc-reduce`'s documented name asymmetry is gone** as of v0.1.1.
-  `ADDING_BINARIES.md` used to insist the registry MUST use the underscore form;
-  that is now recorded as history, not a rule.
+- **liberty-filter builds offline with no crate-store**: depends on flate2 + regex,
+  but upstream commits `vendor/` (466 files) + a `.cargo/config.toml` redirecting
+  crates-io to vendored-sources. The script asserts both, so a future de-vendoring
+  fails loudly rather than quietly hitting the network.
+- **Prefer the tag; refuse `-dev`.** liberty-filter HEAD is the post-release bump
+  `1.0.2-dev`. The script refuses `-dev`/`rc` and stamps Cargo's semantic version
+  (not the date-based tag) because `--version` prints the Cargo one -- a mismatch
+  makes `check-versions` permanent noise.
 - **liberty-filter flag trap:** `--filter-in-cells` is an exception list to
-  `--filter-out-cells`, not a standalone allowlist (`match_filter_out_cell &&
-  !match_filter_in_cell`). Used alone it drops nothing, which looks exactly like a
-  pass-through bug -- it produced one false bug report here. The build smoke passes
-  both flags against the real 1308-cell library and asserts 1308 -> 149 cells.
-
-**Gate status:** Tier 1 green; `tests/prebuilt-binaries` green (`All 301 binaries
-OK`) after each rebuild, with every renamed tool probing under its new name, each
-verified from a real `--dest-dir` install. **Tier 3 green at `7da4af1`** --
-`All 279 binaries OK (22 skipped); runtimes OK`, zero failures, with
-`liberty-filter`, `liberty-format`, `liberty-view`, `spice-subckt-rc-reduce`,
-`text-serdes-enc/dec`, `time-plot` and `tmux-path-store` all probing under their new
-names inside the clean container.
+  `--filter-out-cells`, not a standalone allowlist
+  (`match_filter_out_cell && !match_filter_in_cell`). Used alone it drops nothing,
+  which looks exactly like a pass-through bug -- it produced one false bug report
+  here. The build smoke passes both flags and asserts 1308 -> 149 cells.
+- **`spice-subckt-rc-reduce`'s documented name asymmetry is gone** as of v0.1.1;
+  `ADDING_BINARIES.md` records it as history, not a rule.
 
 ## Four new packages (gtkwave, klayout, verilator, ipython) -- 2026-08-05
 
-Added after an audit of what a compute/EDA environment was missing. Target users
-are **industrial** engineers who already have paid tooling, so this is
+Target users are **industrial** engineers who already have paid tooling, so this is
 deliberately not an open-source-EDA-flow push.
 
-| package | kind | payload | notes |
-|---|---|---|---|
-| `ipython` 9.15.0 | `python-tool` | **0** | whole wheel closure was already bundled for jupyterlab/pygwalker |
-| `gtkwave` 3.3.116 | `bin` + runtime | ~1.4 MB | GTK3 against `gui_libs`; 16 binaries; **no wrapper needed** |
-| `verilator` 5.050 | `bin` + runtime | ~5 MB | relocatable Perl driver; needs **host perl** + the user's `g++` |
-| `klayout` 0.30.10 | `bin` + runtime | ~53 MB (2 shards) | Qt5 + embedded Ruby 3.3 + portable Python 3.14 |
+| package | payload | notes |
+|---|---|---|
+| `ipython` | **0** | whole wheel closure was already bundled for jupyterlab/pygwalker |
+| `gtkwave` | ~1.4 MB | GTK3 against `gui_libs`; 16 binaries; **no wrapper needed** |
+| `verilator` | ~5 MB | relocatable Perl driver; needs **host perl** + the user's `g++` |
+| `klayout` | ~53 MB (2 shards) | Qt5 + embedded Ruby 3.3 + portable Python 3.14 |
 
-New group **`@eda`** = those three tools (not ipython), and it is a member of
-`@engineering-loadout`. Deliberately *only* the new tools: `ngspice`,
-`spice-subckt-rc-reduce` and `espresso` stay in `@scientific`, and
-`surfer`/`liberty-tools`/`lefdef-tools` stay reachable by name, so no existing
-behaviour changed. Migrating them into `@eda` is a reasonable follow-up.
+`@eda` is deliberately *only* the new tools: `ngspice`, `spice-subckt-rc-reduce`
+and `espresso` stay in `@scientific`, and `surfer`/`liberty-tools`/`lefdef-tools`
+stay reachable by name, so nothing existing changed behaviour. Migrating them in is
+a reasonable follow-up.
 
-Full build notes for all three source builds are in `build/ADDING_BINARIES.md`;
+Build notes for all five source builds are in `build/ADDING_BINARIES.md`;
 per-package runtime behaviour is in `CLAUDE.md`.
 
-**`klayout` closes a loop that had been open in a build note only.** The `ruby`
-entry in `ADDING_BINARIES.md` calls ruby "the interpreter KLayout embeds for
-DRC/LVS scripting" -- but KLayout was never built, and that intent was recorded
-*nowhere else*: not here, not in the registry, not in a test. If you add a package
-because another package depends on it, say so in THIS file too.
+**`klayout` closed a loop that had been open in a build note only.** The `ruby`
+entry called ruby "the interpreter KLayout embeds for DRC/LVS scripting" -- but
+KLayout was never built, and that intent was recorded *nowhere else*. If you add a
+package because another depends on it, say so in THIS file too.
 
 ### KLayout requires host GLVND even for BATCH use -- do not promise otherwise
 
 Its clean-container status is **skipped by host contract, not passing**. The 12
 `strm*` converters link the same `libklayout_lay`/`laybasic` set as the GUI, so a
 node with no OpenGL runs *nothing* in this package -- not `klayout -zz`, not
-`strm2gds`. EL8 supplies `libGL.so.1` via `mesa-libGL`; the same contract
-`nedit-ng`/`nvim-qt`/`flameshot`/`Xephyr` carry, but stronger, because the batch
-tools inherit it.
+`strm2gds`. EL8 supplies `libGL.so.1` via `mesa-libGL`.
 
 This is the one thing Tier 3 caught that local testing could not: the dev box has
 `libGL`, so Tier 1, Tier 2 and hand-verification under `env -i` were all green
-while the container failed 14 checks. Textbook build-box masking. Two distinct
-findings came out of it -- the constraint above, and a **test gap**: the
-host-`.so` skip resolved a wrapper's real ELF only as `bin/<name>.bin`, which
-cannot find `lib/klayout/<name>`, so the launchers exec'd into a fatal 127
-instead of skipping. `real_elf_for_wrapper()` now also searches
-`lib/*/<name>[.bin]`; a `lib/<name>/<name>` guess would not work, because KLayout
-has one lib dir holding 13 differently-named launchers.
+while the container failed 14 checks. **Textbook build-box masking.**
 
-### Weak greens found while adding these
+KLayout also blocks on a **first-run modal dialog** (`lay::TipDialog` via
+`MainWindow::about_to_exec`) until dismissed -- every user sees it once.
+Suppress with `tip-window-hidden` in `~/.klayout/klayoutrc` if rolling out to a farm.
 
-- The generic binary probe returns OK on **any** exit code outside
-  `{126,127,139}`. Three gtkwave binaries (`rtlbrowse`, `shmidcat`, `twinwave`)
-  have no version flag and exit **255** printing `Could not open '--version'` --
-  scored green off an error message. A broken FST reader would have passed. All
-  three new packages now have real functional probes in `smoke_runtime_layout`,
-  and the verilator one lints a **deliberately broken** module and requires that
-  to fail. Worth auditing the other silent-255 binaries the same way.
-- `build/gen-readme-table --check` validated only the version cell of rows already
-  present, so it could not see a package with **no row at all** -- its own
-  docstring cites "30 stale versions, 6 missing packages" as the failure it was
-  written for. All four new packages would have gone undocumented with the gate
-  green. It now reports missing packages too, skipping the `env-*`/`font-*`
-  classes the table deliberately does not enumerate.
+## Test-gate fixes (2026-08-05..07) -- four, all of the same family
 
-### Cosmetic, not yet done
+Each was a gate that was green when it should not have been:
 
-The host-`.so` skip message repeats `libGL.so.1 (host OpenGL dispatcher)` once per
-`ldd` line -- 34 times for `klayout`. Harmless but it buries the signal;
-`host_required_sos()` should dedupe. Message-only, so it does not need a Tier 3
-re-run to change.
+1. **The generic binary probe scores errors as success.** Any exit code outside
+   `{126,127,139}` passes, so gtkwave's `rtlbrowse`/`shmidcat`/`twinwave` -- which
+   exit **255** printing `Could not open '--version'` -- were green *off an error
+   message*. A broken FST reader would have shipped. All three new packages now
+   have real functional probes in `smoke_runtime_layout`; the verilator one lints a
+   **deliberately broken** module and requires that to fail. **Other silent-255
+   binaries deserve the same audit.**
+2. **`gen-readme-table --check` had no missing-row check** -- only stale versions,
+   so a package with *no row at all* passed. Its own docstring cites "6 missing
+   packages" as the failure it was written for. Now checks both.
+3. **The host-`.so` skip could not see through a wrapper** to `lib/<pkg>/<name>`,
+   only `bin/<name>.bin`, so KLayout's 13 launchers hit a fatal 127 instead of
+   skipping. `real_elf_for_wrapper()` now searches `lib/*/<name>[.bin]` too. A
+   `lib/<name>/<name>` guess would NOT work: one lib dir, 13 differently-named
+   launchers.
+4. **No pinned `python-tool` was addressable in `build/update`** -- `jupyterlab`,
+   `visidata`, `pygwalker`, `parity-plot` and `ipython` were all rejected as
+   "unknown package(s)" because `ALL_KNOWN` covered `kind: bin` but never
+   `python-tool`. `check-versions` flagged them outdated from PyPI while `update`
+   could not even print guidance: a live signal with no way to act on it. New
+   `PYPI_WHEEL` class + guidance printer.
 
 ## Environment Modules inconsistency flush (2026-08-05)
 
@@ -794,26 +811,79 @@ elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not rela
 
 ## Next steps
 
-1. **Exercise the laptop path for real**: use the current GitHub release tag with
-   `tools/download-release.ps1 -Tag <release-tag>` on the Windows laptop, scp to nDPC,
-   then run `./tools/fetch-stash --from-file`. Runbook section 2b documents it; this remains
-   unvalidated against a real asset-bearing release.
-2. Version bumps from the audit list, priority to the ones users notice: htop
-   3.2.1→3.5.1, octave 11.1.0→11.3.0 (needs `build/build-octave.sh` + runtime re-pack),
-   flameshot 13→14, fish 4.8.0→4.8.1 (patch; the sentinel is `vendor_functions.d`, do
-   NOT resurrect the stdlib check). Full list: `build/check-versions --outdated-only`.
-   Version bumps of nvim/rust/rust-crate-store/treesitter/git-nvim also require a ledger
-   re-pin (see "Assurance ledger interactions").
+1. **Exercise the laptop path for real -- now unblocked.** `v2026.08.07` is a real
+   asset-bearing release, so this is finally testable end to end:
+   `tools/download-release.ps1 -Tag v2026.08.07` on the Windows laptop, scp to
+   nDPC, then `./tools/fetch-stash --from-file <stash> --sums sha256sums.txt`.
+   Runbook section 2b documents it. Still unvalidated against a real release.
+2. **Finish the currency sweep.** The v2026.08.07 sweep was deliberately partial;
+   what is left and why is in *Where things stand right now* -> *Deferred*. Do not
+   re-derive the jupyterlab blocker -- it is recorded there.
+3. **Spec the user-facing wheelhouse / uv offline story** the owner raised
+   (2026-08-07). Findings so far, including why a `uv` wrapper is the wrong shape,
+   are in *Where things stand right now*.
+4. **Audit the other silent-255 binaries.** The generic probe scores any exit code
+   outside `{126,127,139}` as OK; three gtkwave binaries were green off an error
+   message until this release. Same trap likely exists elsewhere in `bin/`.
 
-Release mechanics (for #2 bumps): `./build/release` attaches the stash automatically when
-present; build it first with `build/build-nvim-plugin-stash` if the checkout lacks it.
-Signing needs a usable agent socket — memory `release-tag-signing-wsl`: user runs
-`ssh-add`, probe `ls -t /tmp/ssh-*/agent.*` for one where `SSH_AUTH_SOCK=$s ssh-add -l`
-lists a key, run `SSH_AUTH_SOCK=<sock> ./build/release`. (Note: on WSL a bare `ssh-add` alias
-here re-spawns a fresh keyless agent each call — probe existing sockets for the keyed one
-rather than trusting `$SSH_AUTH_SOCK`.)
+Release mechanics: `./build/release` attaches the stash automatically when present;
+build it first with `build/build-nvim-plugin-stash` if the checkout lacks it. It
+caches a clean malware scan and a passing binary smoke keyed on payload bytes, so a
+re-run with unchanged payload is fast.
+
+**Signing (settle this BEFORE the gates, not after).** `./build/release` preflights
+tag signing, but a 25-minute gate run that then fails on auth is pure waste. On WSL
+a bare `ssh-add` is aliased and re-spawns a fresh KEYLESS agent on every call, so
+never trust `$SSH_AUTH_SOCK` (it is usually unset here). Probe instead, with the
+real binary:
+
+```bash
+for s in /tmp/ssh-*/agent.*; do
+    printf '%s ' "$s"; SSH_AUTH_SOCK=$s /usr/bin/ssh-add -l 2>&1 | head -1
+done
+SSH_AUTH_SOCK=<the one listing a SHA256 key> ./build/release
+```
+
+Two further traps proven during the v2026.08.07 release: `git` resolves
+`ssh-keygen` from PATH to the loadout's OpenSSH 10 at `~/.local/bin/ssh-keygen`,
+which is what supports `-Y sign` -- stock `/usr/bin/ssh-keygen` (EL8's 8.0) does
+NOT, so testing with the absolute `/usr/bin` path fails misleadingly. And prove
+signing with a real throwaway `git tag -s` + `git tag -v`, not just
+`ssh-keygen -Y sign`.
 
 ## Lessons (all fixed; keep respecting them)
+
+### A rename is four edits, and the compiler cannot see any of them
+
+Executable renames (v2026.08.07) each needed: registry `bins`, the `farm-versions`
+key **and its regex**, the build script's `EXPECT_BIN`, and deletion of the old
+stem. Nothing type-checks these against each other, so every build script now reads
+the name from the built artifact and hard-fails on a mismatch. Full detail under
+*Kebab-case executable migration*.
+
+### A shell-variable rename that bash accepts is worse than one it rejects
+
+`${LOADOUT_CFG_ENABLE_tmux-path-store}` is not a syntax error: it parses as
+`${LOADOUT_CFG_ENABLE_tmux-path-store}`, i.e. parameter `LOADOUT_CFG_ENABLE_tmux`
+with default `path-store`. Always unset, so it always yields `path-store`, and
+`is_truthy()` treats any non-empty string as true -- the documented toggle died
+silently and ran unconditionally while `bash -n` stayed happy. Config variables are
+SCREAMING_SNAKE and cannot take a dash; a command rename must not follow them in.
+
+### Misusing a tool looks exactly like a bug in the tool
+
+`liberty-filter --filter-in-cells` alone drops nothing -- it is an exception list to
+`--filter-out-cells`, not a standalone allowlist. That produced a confident,
+incorrect "the filter is a pass-through" report here before the source was read.
+Check upstream's own unit tests for intended usage before blaming an artifact.
+
+### Test the artifact, not the repo file
+
+Upstream's `pyproject.toml` / `Cargo.toml` says what upstream *intends*; the built
+wheel's `entry_points.txt` and the ELF's `[[bin]]` say what actually ships. The
+build scripts now assert against the artifact. Same instinct caught the
+`tmux_path_store` console script still being underscored after a release claimed
+otherwise.
 
 ### A green test that never ran the code is the most dangerous result there is
 
