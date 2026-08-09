@@ -2150,6 +2150,20 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 "tool",
                 "install",
                 install_spec,
+                # WITHOUT --force, `uv tool install` NO-OPS on an already-installed
+                # tool -- it prints "`<pkg>` is already installed" and exits 0,
+                # whatever version the bundled wheel carries. That exit 0 was then
+                # reported below as "Installed Python tool: <name>", so `./loadout
+                # upgrade <python-tool>` could not upgrade ANY of the uv_tool
+                # packages and said it had. Found 2026-08-09 on a box pinned at
+                # tmux-path-store 1.0.0 across two releases that shipped 1.0.1 and
+                # 1.1.0. The rolling-git tools are the worst affected -- they move
+                # most often. Reinstalling from the local wheelhouse is cheap
+                # (measured: 5 packages in 46 ms), so this is unconditional rather
+                # than gated on a version comparison, which would be unreliable
+                # anyway: rolling-git packages carry `git describe` strings in the
+                # registry `version` while their wheels carry PEP440.
+                "--force",
                 "--python",
                 python_bin,
                 "--no-index",

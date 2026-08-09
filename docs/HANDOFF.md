@@ -214,6 +214,60 @@ All three paths (push, detached-HEAD refusal, push-failure refusal) were
 exercised against a scratch remote. `RELEASE.md` §8, §9 and failure-catalogue
 entry 13 record it.
 
+### python-tool installs now pass `--force` (2026-08-09), and the near-miss behind it
+
+`install_python_tools` now passes `--force` to `uv tool install`. The reasoning
+went wrong twice before it went right, so the corrected version is the one worth
+keeping:
+
+**What is actually true.** `uv tool install` no-ops on an already-installed tool
+(prints ``​`<pkg>` is already installed``, exits 0, changes nothing) **unless the
+requested options differ from the `[tool.options]` block in the tool's
+`uv-receipt.toml`** -- which records `find-links`. The payload has chunked wheels,
+so `_prepare_wheels_dir` rejoins into a fresh `/tmp/loadout-wheels.XXXXXX` every
+run; that path lands in the receipt, never matches next time, and uv reinstalls.
+**Upgrades land today by accident of the temp path, not by design.** Delete the
+last chunked wheel and `_prepare_wheels_dir` returns the stable payload `wheels/`
+dir, the options match, and all 12 `uv_tool` packages freeze silently while the
+installer still prints `Installed Python tool: <name>` off uv's exit 0.
+
+**Two claims I made and had to retract**, both stated confidently before being
+checked, both wrong:
+
+1. *"`./loadout upgrade <python-tool>` cannot upgrade anything."* False -- the
+   temp-dir difference means it does. The no-op reproduces only with a stable
+   `--find-links`.
+2. *"`tmux-path-store` is in no group, so the curated set never installs it."*
+   False -- `@engineering-loadout` pulls `@shared`, and the synthetic `@shared`
+   includes every non-optional non-env package, this one among them.
+   `./loadout resolve @engineering-loadout` lists all 11 python-tools.
+
+**Both retractions came from running the check instead of reasoning from the
+code** -- `./loadout resolve` and a receipt diff each took seconds and each
+overturned a confident conclusion.
+
+**The original symptom is still UNEXPLAINED, and that is recorded rather than
+papered over.** A box sat at `tmux-path-store` 1.0.0 across two releases that
+shipped 1.0.1 and 1.1.0. I then guessed a third time -- "no full install ran
+between the bumps" -- and the owner corrected it: they ran an install naming
+`tmux-path-store` explicitly ~20 minutes before, and did not get 1.1.0. That
+selection reaches `install_python_tools`, and the temp-`find-links` theory
+predicts a reinstall, so the theory does not account for what was observed.
+Something else no-opped that run. `--force` makes the question moot for users, so
+it was deliberately not chased further; if a python-tool is ever found stale
+again, start here rather than re-deriving. Candidates not yet excluded: the
+ETXTBSY/pending-daemon deferred-replace path, and a uv receipt comparison that
+ignores `find-links` under conditions not reproduced here.
+
+**The first version of the test was a no-op gate.** It installed twice and
+asserted the second run was not a no-op -- which passes with or without `--force`
+under today's chunked payload, because the temp path already forces a reinstall.
+It was caught by deliberately removing `--force` and watching it still pass.
+`tests/install-python-tool-upgrade` now asserts the flag reaches the logged uv
+command line, which is the property that survives the payload changing
+underneath it; removing `--force` fails it on the first assertion. Registered in
+Tier 2 of `tests/run-all`.
+
 ### Recorded deviation: ClamAV signatures 6 days stale at release
 
 The v2026.08.09 scan ran with ClamAV signatures 6 days old (YARA-Forge was

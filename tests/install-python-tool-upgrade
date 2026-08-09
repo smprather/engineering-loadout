@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Pins that install_python_tools passes --force to `uv tool install`, and that a
+# repeat install leaves a working tool at the registry's version.
+#
+# WHY --force MATTERS, precisely (established 2026-08-09 -- an earlier version of
+# this note overstated it, so here is what was actually measured):
+#
+#   `uv tool install` no-ops on an already-installed tool -- prints
+#   "`<pkg>` is already installed", exits 0, changes nothing -- UNLESS the
+#   requested options differ from the [tool.options] recorded in the tool's
+#   uv-receipt.toml. That receipt records find-links.
+#
+#   Today the payload has chunked wheels, so _prepare_wheels_dir rejoins into a
+#   FRESH /tmp/loadout-wheels.XXXXXX every run. The recorded find-links therefore
+#   never matches and uv reinstalls every time -- upgrades land, by accident of
+#   the temp path rather than by design. Remove the last chunked wheel and
+#   _prepare_wheels_dir returns the stable payload wheels/ dir, the options match,
+#   and every uv_tool package silently freezes at its installed version while the
+#   installer still prints "Installed Python tool: <name>" off uv's exit 0.
+#
+# So this test does NOT try to prove "a second install upgrades" -- under today's
+# payload that passes with or without --force, which makes it a no-op gate (it was
+# written that way first and was caught doing exactly that). It asserts the flag
+# reaches the command line, which is the property that survives the payload
+# changing underneath it.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-uvtool-home.XXXXXX)
+dest_dir=$(mktemp -d /tmp/loadout-uvtool-dest.XXXXXX)
+local_prefix="$dest_dir/local"
+
+cleanup() { rm -rf "$test_home" "$dest_dir"; }
+trap cleanup EXIT
+
+fail() {
+    echo "python-tool force-reinstall smoke failed: $*" >&2
+    exit 1
+}
+
+# tmux-path-store is the cheapest uv_tool package in the bundle: pure Python, one
+# runtime dependency (rich). Any uv_tool package exercises the same code path.
+pkg="tmux-path-store"
+
+do_install() {
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+        LANG="${LANG:-C.UTF-8}" \
+        "$repo_dir/loadout" install "$pkg" --dest-dir "$dest_dir" --no-backup \
+        > "$1" 2>&1 || {
+        tail -40 "$1" >&2
+        fail "install exited non-zero ($1)"
+    }
+}
+
+echo "First install into: $dest_dir"
+do_install "$test_home/install1.log"
+
+launcher="$local_prefix/bin/$pkg"
+receipt="$local_prefix/share/uv/tools/$pkg/uv-receipt.toml"
+[[ -x $launcher ]] || fail "$pkg launcher not installed"
+[[ -f $receipt ]] || fail "uv receipt missing at $receipt"
+
+# The installer echoes the exact uv command it runs. Assert the flag is in it --
+# drop --force from install_python_tools and this is the assertion that fires.
+uv_cmd=$(grep -F "uv tool install $pkg" "$test_home/install1.log" | head -1)
+[[ -n $uv_cmd ]] || fail "installer never logged a 'uv tool install $pkg' command"
+grep -qE -- "--force( |$)" <<< "$uv_cmd" || fail "uv tool install is missing --force:
+  $uv_cmd
+  Without it, uv no-ops whenever the recorded find-links matches the requested
+  one, and every uv_tool package freezes at its installed version while the
+  install still reports success. See the header of this test."
+
+echo "Second install (must leave a working tool)"
+do_install "$test_home/install2.log"
+
+grep -qF "Installed Python tool: $pkg" "$test_home/install2.log" \
+    || fail "second install did not report installing $pkg"
+# A --force reinstall that leaves a broken launcher would pass everything above.
+grep -qF "is already installed" "$test_home/install2.log" \
+    && fail "uv skipped the tool as already-installed despite --force"
+
+installed_version=$(
+    env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}" \
+        "$launcher" --version 2>&1 | head -1
+) || fail "$pkg failed to run after reinstall"
+
+# Expected version comes from the registry, never a literal -- a hard-coded one
+# goes stale on every bump and then either fails for the wrong reason or gets
+# edited reflexively (same rule as tests/install-parity-plot).
+expected=$(
+    "$repo_dir/loadout" info "$pkg" 2>/dev/null |
+        sed -n 's/.*[Vv]ersion[^0-9]*\([0-9][0-9.]*\).*/\1/p' | head -1
+)
+[[ -n $expected ]] || fail "could not read expected $pkg version from the registry"
+[[ $installed_version == *"$expected"* ]] \
+    || fail "installed $pkg reports '$installed_version', registry says $expected"
+
+echo "  $pkg reinstalled cleanly: $installed_version (registry: $expected)"
+echo "python-tool force-reinstall smoke: PASS"

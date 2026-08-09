@@ -123,6 +123,7 @@ run_test "install-env-tcsh" tests/install-env-tcsh
 run_test "install-env-zsh" tests/install-env-zsh
 run_test "optional-packages" tests/optional-packages
 run_test "install-parity-plot" tests/install-parity-plot
+run_test "install-python-tool-upgrade" tests/install-python-tool-upgrade
 run_test "install-linux-tmp-home" tests/install-linux-tmp-home
 run_test "install-split-shared-envs" tests/install-split-shared-envs
 run_test "install-nvim-deployments" tests/install-nvim-deployments
