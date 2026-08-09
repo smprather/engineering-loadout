@@ -1,8 +1,9 @@
 # Current Handoff
 
-Last updated: 2026-08-08 (v2026.08.07 released; kebab migration complete;
-partial currency sweep done; Windows/air-gapped laptop acquisition path validated
-end to end; linux-process-resource-monitor still pending upstream).
+Last updated: 2026-08-09 (v2026.08.09 released; tcsh + zsh at bash parity;
+4-package currency sweep done; `./build/release` now pushes the release branch,
+after v2026.08.09 shipped without it; linux-process-resource-monitor still
+pending upstream).
 
 ## POLICY REVERSAL: tcsh now tracks bash/zsh (2026-08-08)
 
@@ -171,20 +172,72 @@ support for each, and `tmux-path-store` joined them in v1.1.0.
 
 ## Where things stand right now
 
-- **Released: `v2026.08.07`** -- https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.07
-  Signed tag on `7e01b1e`, published (not a draft), assets verified:
-  `nvim-plugin-stash.tar.bz2` (343,752,246 B), `sha256sums.txt`,
-  `default.content-manifest`.
-- `main` == `origin/main` == the released commit; working tree clean.
-- That was a **class C** release (registry + layout changed). All three gates
-  satisfied: Tier 3 container green, currency sweep done (partial, see below),
-  assurance re-pin **not applicable** -- see the next bullet, and do not go
-  hunting for one.
+- **Released: `v2026.08.09`** -- https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.09
+  Signed tag (ED25519 `SHA256:XlxLB4kh...`) on `b4e954f`, published (not a
+  draft), assets verified by re-reading the release rather than trusting the
+  publish exit code: `nvim-plugin-stash.tar.bz2` (343,752,246 B, byte-matches
+  local), `sha256sums.txt`, `default.content-manifest`.
+- `main` == `origin/main` == the released commit `b4e954f`; working tree clean.
+  **That was true only after a manual push** -- see the next section.
+- Malware scan CLEAN, 0 detections across 77,051 files.
+- Class **C** (registry bumps + env packages). Tier 3 container green, currency
+  sweep done (4 packages, below), assurance re-pin **not applicable**.
 - **No assurance re-pin was needed, despite class C.** Records exist only for
-  `crate-store`, `git-nvim`, `nvim`, `rust` and `treesitter`; `RELEASE.md` §4
-  defines the re-pin as updating a *bumped* package's record, and none of those
-  five moved. `tests/assurance-check` passes 33/0. The class table's
-  "assurance re-pin: yes" does not manufacture work when nothing recorded moved.
+  `crate-store`, `git-nvim`, `nvim`, `rust` and `treesitter-parsers`;
+  `RELEASE.md` §4 defines the re-pin as updating a *bumped* package's record, and
+  none of those five moved. The `tree-sitter` **CLI** went 0.26.11 -> 0.26.12,
+  which does not touch the `treesitter-parsers` record: that record pins
+  `ts-0.26.8` as the runtime the parsers were *built* against, and the parsers
+  were not rebuilt. `tests/assurance-check` passes 33/0.
+
+### FIXED: the release commit was on no remote branch (2026-08-09)
+
+`./build/release` pushed the **tag** and nothing else. After v2026.08.09
+published, `origin/main` was still at `8969353` (the *previous* release) while the
+release advertised `b4e954f` -- a commit reachable only through the tag. Anyone
+pulling `main` got the pre-release tree. Pushed by hand at the time; `main` and
+the tag now agree.
+
+Every check in `RELEASE.md` §9 passes while this is true. The tag is real, its
+signature is good, all three assets are present and byte-correct. Same shape as
+the 2026-07-22 unsigned-tag incident: **invisible unless something re-reads state
+afterwards.**
+
+Fixed in the tool, not in the prose, because a documented step nothing enforces
+is the failure mode this repo keeps hitting. Step 4 of `build/release` now calls
+`_push_release_branch()` **before** creating the tag: it refuses a detached HEAD,
+pushes the current branch, and re-reads `git ls-remote origin refs/heads/<branch>`
+to confirm the remote ref moved. Ordering is deliberate -- a branch pushed without
+a release is an ordinary commit, a release published without its branch is the
+broken state -- so a failure blocks the release instead of half-publishing one.
+All three paths (push, detached-HEAD refusal, push-failure refusal) were
+exercised against a scratch remote. `RELEASE.md` §8, §9 and failure-catalogue
+entry 13 record it.
+
+### Recorded deviation: ClamAV signatures 6 days stale at release
+
+The v2026.08.09 scan ran with ClamAV signatures 6 days old (YARA-Forge was
+same-day). Verdict was CLEAN, but per `RELEASE.md` §2b that is weaker evidence
+than a fully-current scan. Recorded rather than left implicit; better than the
+xephyr release's 17 days. To clear it:
+
+```bash
+sudo freshclam && ./build/scan-for-malware --no-cache
+```
+
+`--no-cache` is load-bearing -- the clean verdict is cached and keyed on the
+ClamAV signature fingerprint, so a plain re-run reuses the cached pass.
+
+### What shipped in v2026.08.09
+
+| area | detail |
+|---|---|
+| tcsh | policy reversal + full port to bash parity (see top of this file); `tests/env-shell-parity` is the gate |
+| zsh | brought to bash parity by **reuse** of the shared bash files, not reimplementation |
+| shared-shell fixes | 7, all latent for bash users too -- `path_modify`/`path_trim`/`std_paths` `${!var}`, `pl` `${var,,}`, `a` `declare -f`, `check_extended_keys` type-ahead, `loadout_detect_online` job notices |
+| currency | `tmux-path-store` 1.1.0, `lua-language-server` 3.19.0, `gnuplot` 6.0.5, `tree-sitter` 0.26.12 |
+| new build scripts | `build-lua-language-server.sh`, `build-gnuplot.sh`, `build-tree-sitter.sh` |
+| gate change | `tests/prebuilt-binaries` now requires exit 0 (42 binaries had been passing on non-zero) |
 
 ### What shipped in v2026.08.07
 

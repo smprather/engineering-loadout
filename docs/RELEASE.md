@@ -253,6 +253,17 @@ SSH_AUTH_SOCK=<keyed-socket> ./build/release              # tag + publish
 Useful flags: `--tag vX.Y.Z` (default `v<today>`), `--no-cache` / `--clear-cache`
 (force fresh smoke + scan). Do **not** use `--skip-scan` or `--allow-unsigned`.
 
+**The branch is pushed before the tag, by the script.** Through v2026.08.09 this
+script pushed only the tag, so `origin/main` could still point at the *previous*
+release while the new release advertised a commit that was on no remote branch —
+reachable only through the tag. Anyone pulling `main` got the pre-release tree.
+Section 9's checks all pass while that is true, which is why it survived. Step 4
+now runs `_push_release_branch()` first: it refuses a detached HEAD, pushes the
+current branch, and re-reads `git ls-remote` to confirm the remote ref actually
+moved. Ordering is deliberate — a branch pushed without a release is an ordinary
+commit, a release published without its branch is the broken state — so a failure
+here blocks the release rather than half-publishing one.
+
 **What is incremental and what is not** (measured, 2026-07-25):
 
 - **Stash reuse works and is the big win.** The ~328 MB nvim plugin stash is
@@ -282,6 +293,13 @@ invisible to `/releases/latest`, which is what `./tools/fetch-stash` resolves. C
 all three assets are present (`sha256sums.txt`, `default.content-manifest`,
 `nvim-plugin-stash.tar.bz2`) and the stash size matches local.
 
+Also confirm the released commit is on the remote branch — every check above can
+pass while it is not (see section 8):
+
+```bash
+git ls-remote origin refs/heads/main    # must equal `git rev-parse <tag>^{commit}`
+```
+
 The 2026-07-22 release shipped an unsigned tag silently because nothing ever
 re-read the object. Re-read it.
 
@@ -306,6 +324,7 @@ what now catches it — where nothing does, that is the open risk.
 | 10 | Test version literals (`0.5.0`) went stale on every bump | `tests/install-parity-plot` reads the expected version from `packages.json` |
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |
 | 12 | `./build/update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
+| 13 | v2026.08.09 published with its commit on **no remote branch** — `./build/release` pushed the tag only, so `origin/main` still held the previous release while §9's checks all passed | `_push_release_branch()` runs first in Step 4: refuses a detached HEAD, pushes the branch, re-reads `git ls-remote` to confirm |
 
 ### Open defect: release-notes version table (entry 9)
 
