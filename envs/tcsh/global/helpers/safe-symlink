@@ -1,0 +1,20 @@
+#!/bin/sh
+# ln -s, removing an existing SYMLINK at the destination first.
+#
+# Backs the `lns` alias; mirrors lns() in envs/bash/global/aliases.sh.
+#
+# Only ever removes a symlink (-L). A real file or directory at the destination
+# is left alone and ln reports the collision itself -- this helper must never be
+# the reason someone loses a real file.
+
+[ $# -ge 1 ] || { echo "usage: lns TARGET [LINK_NAME]" >&2; exit 2; }
+
+if [ -n "$2" ]; then
+    dest=$2
+else
+    dest=$(basename -- "$1")
+fi
+
+[ -L "$dest" ] && rm -f -- "$dest"
+
+exec ln -s "$@"

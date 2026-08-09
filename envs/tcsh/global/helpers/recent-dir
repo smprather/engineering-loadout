@@ -1,0 +1,31 @@
+#!/bin/sh
+# Print the Nth most recently modified directory under $2 (default .).
+#
+# Backs the cdd / cddd / cdddd / ... aliases and `latest`. Mirrors
+# loadout_cd_recent_dir in envs/bash/global/aliases.sh.
+#
+# Prints nothing and exits 1 when there is no such directory, so the calling
+# alias's `cd ""` never happens -- csh would cd to $HOME, which is not what the
+# user asked for.
+
+index=${1:-1}
+root=${2:-.}
+
+case $index in
+    ''|*[!0-9]*) echo "recent-dir: index must be a positive integer" >&2; exit 2 ;;
+esac
+[ "$index" -ge 1 ] || { echo "recent-dir: index must be >= 1" >&2; exit 2; }
+
+# -printf is GNU find; every platform this ships to has it (the bash version
+# relies on it too). Sorting numerically on the epoch avoids any locale or
+# date-format dependency.
+target=$(
+    find "$root" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null |
+        sort -n |
+        tail -n "$index" |
+        head -n 1 |
+        cut -d' ' -f2-
+)
+
+[ -n "$target" ] || exit 1
+printf '%s\n' "$target"

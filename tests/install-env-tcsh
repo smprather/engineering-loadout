@@ -43,6 +43,32 @@ tcsh_i() {
         | tr -d '\r'
 }
 
+# THE THIRD HARNESS TRAP, and the nastiest: `script` gives the child a PTY, so
+# tcsh's OWN diagnostics come back on the PTY -- i.e. in stdout -- and $ERRFILE
+# stays EMPTY. The headline "empty stderr" assertion below therefore cannot see
+# a shell that is complaining on every startup. Two real bugs shipped through
+# that hole during the 2026-08-08 parity work:
+#
+#   * `PPID: Undefined variable.`  -- tcsh has no $PPID (that is bash's).
+#   * `0: Event not found.`        -- an unescaped `!` in a double-quoted alias
+#                                     body triggering history expansion.
+#
+# Both printed on every interactive startup while stderr was empty and the test
+# was green. So scan the OUTPUT for tcsh's error vocabulary too.
+assert_no_csh_noise() {
+    _label=$1
+    _text=$2
+    for _pat in 'Undefined variable' 'Event not found' 'Badly placed ()' \
+                'Missing }' 'Missing ]' 'Too many arguments' 'Expression Syntax' \
+                'Variable syntax' 'Unmatched' 'No match' 'if: Expression Syntax' \
+                'alias: Too dangerous' 'Command not found'; do
+        case $_text in
+            *"$_pat"*) fail "$_label: tcsh printed '$_pat':
+$_text" ;;
+        esac
+    done
+}
+
 HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
 
 [ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked"
@@ -52,9 +78,33 @@ HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
 
 # --- THE headline test: an env-only HOME (no loadout tools installed at all)
 # --- must start with EMPTY stderr. This is the farm-node case.
-tcsh_i 'echo alive' >/dev/null
+out=$(tcsh_i 'echo alive')
 [ ! -s "$ERRFILE" ] || fail "interactive tcsh wrote to stderr:
 $(cat "$ERRFILE")"
+assert_no_csh_noise "interactive startup" "$out"
+
+# --- Startup must ALSO be clean when the shell inherits a loadout BASH
+# --- environment, which is the common case: a user types `tcsh` inside their
+# --- loadout bash login shell and every LOADOUT_CFG_* is already exported.
+# --- Values the two shells share are bash-shaped, and consuming one blindly is
+# --- how the prompt ended up rendering readline's `\[` markers literally.
+out=$(
+    printf 'echo "P=$prompt"\nexit\n' \
+        | HOME="$TMPHOME" \
+          LOADOUT_CFG_PROMPT_COLOR_NORMAL='\[\e[38;2;255;255;0m\]' \
+          LOADOUT_CFG_PROMPT_COLOR_FARM='\[\e[38;2;255;0;0m\]' \
+          script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+)
+[ ! -s "$ERRFILE" ] || fail "tcsh inheriting a bash loadout env wrote to stderr:
+$(cat "$ERRFILE")"
+assert_no_csh_noise "inherited-bash-env startup" "$out"
+case $out in
+    *'\['*|*'\]'*) fail "bash readline markers leaked into the tcsh prompt: [$out]" ;;
+esac
+case $out in
+    *'\033'*|*'\e['*) fail "prompt color left as literal escape text, not a real ESC: [$out]" ;;
+esac
 
 # --- A non-interactive tcsh script must still run. tcsh sources ~/.tcshrc for
 # --- non-interactive shells too, so an `exit` in the rc file would kill every
@@ -84,6 +134,81 @@ if command -v git >/dev/null 2>&1; then
     [ ! -s "$ERRFILE" ] || fail "prompt in a fresh repo wrote to stderr:
 $(cat "$ERRFILE")"
 fi
+
+# --- The helper scripts are the mechanism that lets "csh has no functions" stop
+# --- being a reason to drop features, so they must install AND stay executable.
+# --- install_path() syncs global/ wholesale; a mode regression there would make
+# --- every helper-backed alias silently do nothing.
+HELPERS="$TMPHOME/.config/tcsh/global/helpers"
+[ -d "$HELPERS" ] || fail "helpers/ not installed"
+for h in is-truthy vercmp recent-dir recent-file recent-files path-list \
+         grep-all-history git-stash-pull safe-symlink latest-link seed-history \
+         prompt-color find-count zhead total-cpu lsf-queues vnc-start \
+         vnc-kill-newest detect-online; do
+    [ -x "$HELPERS/$h" ] || fail "helper not installed executable: $h"
+done
+
+# --- The helpers are POSIX sh and run as separate processes, so their behaviour
+# --- is testable directly. is_truthy in particular MUST agree with the bash
+# --- version -- both shells compare the same LOADOUT_CFG_* values, and a
+# --- disagreement would silently enable a feature in one shell only.
+"$HELPERS/is-truthy" 1        || fail "is-truthy: 1 should be true"
+"$HELPERS/is-truthy" enabled  || fail "is-truthy: enabled should be true"
+"$HELPERS/is-truthy" 0        && fail "is-truthy: 0 should be false"
+"$HELPERS/is-truthy" ""       && fail "is-truthy: empty should be false"
+"$HELPERS/is-truthy" anything || fail "is-truthy: non-empty string should be true"
+# Numeric, not lexical: 2.9 < 2.10. A string compare gets this backwards.
+"$HELPERS/vercmp" 2.9 -lt 2.10 || fail "vercmp: 2.9 should be < 2.10"
+"$HELPERS/vercmp" 1.2 -eq 1.2.0 || fail "vercmp: 1.2 should equal 1.2.0"
+"$HELPERS/vercmp" --between 1.0 1.5 2.0 || fail "vercmp: 1.5 should be within [1.0,2.0]"
+
+# --- A helper-backed alias must work END TO END inside tcsh. Testing the helper
+# --- alone proves nothing about the alias quoting, which is where csh bites.
+mkdir -p "$TMPHOME/probe/oldest" && sleep 1 && mkdir -p "$TMPHOME/probe/newest"
+out=$(cd "$TMPHOME/probe" && tcsh_i 'cdd ; pwd')
+assert_no_csh_noise "cdd alias" "$out"
+echo "$out" | grep -q "probe/newest" || fail "cdd did not cd to the newest dir: [$out]"
+
+# --- Every directory change lists. csh does this with cwdcmd, which fires for
+# --- cd, pushd, popd and implicitcd alike -- there is no call site that can
+# --- forget, unlike the bash cd() wrapper.
+touch "$TMPHOME/probe/newest/CWDCMD_MARKER"
+out=$(cd "$TMPHOME/probe" && tcsh_i 'cd newest')
+echo "$out" | grep -q "CWDCMD_MARKER" || fail "cwdcmd did not list after cd: [$out]"
+
+# --- `cd` gets the bash env's conveniences: a FILE argument goes to its parent.
+# --- Also a guard against the worst possible regression here -- an empty target
+# --- makes csh's builtin go to $HOME, so a typo'd path must NOT move you.
+touch "$TMPHOME/probe/newest/afile"
+out=$(cd "$TMPHOME/probe" && tcsh_i 'cd newest/afile ; pwd')
+assert_no_csh_noise "cd to a file" "$out"
+echo "$out" | grep -q "probe/newest$" || fail "cd FILE did not land in its parent dir: [$out]"
+
+out=$(cd "$TMPHOME/probe" && tcsh_i 'cd /nonexistent/definitely/not/here ; pwd')
+assert_no_csh_noise "cd to a missing path" "$out"
+echo "$out" | grep -q "probe$" || fail "cd to an uncreatable path moved us anyway: [$out]"
+
+# --- Environment parity with the bash env.
+out=$(tcsh_i 'echo "O=$LOADOUT_ONLINE" ; echo "PIP=$PIP_REQUIRE_VIRTUALENV" ; echo "ED=$EDITOR"')
+assert_no_csh_noise "environment" "$out"
+echo "$out" | grep -qE 'O=[01]'  || fail "LOADOUT_ONLINE not set to 0/1: [$out]"
+echo "$out" | grep -q  'PIP=1'   || fail "PIP_REQUIRE_VIRTUALENV not exported: [$out]"
+echo "$out" | grep -q  'ED=nvim' || fail "EDITOR not derived from LOADOUT_CFG_PREFERRED_VI: [$out]"
+
+# --- Completions and key bindings loaded (they are separate sourced files, so a
+# --- syntax error in either is silent unless something asserts they took).
+out=$(tcsh_i 'complete | grep -c loadout')
+assert_no_csh_noise "completions" "$out"
+echo "$out" | grep -qE '^[1-9]' || fail "completions.csh did not register anything: [$out]"
+out=$(tcsh_i 'bindkey "^I"')
+assert_no_csh_noise "keybinds" "$out"
+echo "$out" | grep -q 'complete-word-fwd' || fail "keybinds.csh did not bind TAB: [$out]"
+
+# --- Per-PID history with inheritance, mirroring the bash env. This is the
+# --- assertion that would have caught the $PPID bug at its source.
+out=$(tcsh_i 'echo "HF=$histfile"')
+assert_no_csh_noise "history" "$out"
+echo "$out" | grep -q 'HF=.*tcsh_history\.' || fail "per-PID histfile not set: [$out]"
 
 # --- Reinstall must not clobber a user-created layer (the env-st lesson).
 echo 'setenv LOADOUT_TEST_KEEPME 1' > "$TMPHOME/.config/tcsh/user/config.csh"

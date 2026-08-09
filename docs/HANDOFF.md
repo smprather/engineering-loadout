@@ -1,7 +1,173 @@
 # Current Handoff
 
 Last updated: 2026-08-08 (v2026.08.07 released; kebab migration complete;
-partial currency sweep done; linux-process-resource-monitor still pending upstream).
+partial currency sweep done; Windows/air-gapped laptop acquisition path validated
+end to end; linux-process-resource-monitor still pending upstream).
+
+## POLICY REVERSAL: tcsh now tracks bash/zsh (2026-08-08)
+
+`envs/tcsh/` is a **first-class tracked environment**. A change to the bash env is
+not finished until the tcsh form lands, or is recorded as one of the five
+upstream-has-no-tcsh-target exceptions.
+
+This reverses the policy that stood 2026-07-13..2026-08-08 ("deliberate ONE-TIME
+port, does NOT track, no drift test"). That policy's entire justification was an
+expected tcsh user count "near zero". **The owner's actual position is the
+opposite: the EE community this project serves is ~90% tcsh** -- the majority
+shell of the target audience, not a courtesy port. Every argument for not
+tracking rested on the bad premise, so none of them survive it.
+
+Consequences, so nobody re-derives them:
+
+- **"csh has no functions" is not an exemption.** It selects the implementation:
+  a one-line wrapper is an alias (aliases take args -- `\!:1`, `\!*`, `\!:2-`);
+  loops/locals/`case` go in a POSIX-sh helper under `envs/tcsh/global/helpers/`
+  and are aliased; anything mutating the caller's cwd/PATH/env is a helper that
+  *prints* the command, run through `` eval `helper` ``. `git-branch.sh` was
+  already this pattern.
+- **Genuinely absent, all because upstream ships no tcsh target:** Starship
+  (`starship init` has no tcsh), fzf keybindings (`--bash|--zsh|--fish` only),
+  zoxide (`zoxide init` has no tcsh), OSC 133 semantic zones (needs
+  bash-preexec; OSC 7 cwd *does* ship, via tcsh `precmd`), IceCream-Bash
+  (`${!var}` + `export -f`). Anything else missing is a bug.
+- **Prefer csh-native mechanisms where they beat the bash one:** `cwdcmd` fires
+  on every directory change, so "every cd lists" needs no `cd` wrapper at all;
+  `set implicitcd` replaces bash's ERR-trap directory-execution hack.
+- Project memory `tcsh-env-one-time-pass` was **deleted** and replaced by
+  `tcsh-env-tracks-bash`; `CLAUDE.md` and `envs/tcsh/README.md` are updated. The
+  July 2026 plan/spec under `docs/superpowers/` carry SUPERSEDED banners rather
+  than being edited -- they are a record of what was decided then.
+
+### What landed with the reversal (2026-08-08)
+
+The tcsh env went from 358 lines to a full port. New files under
+`envs/tcsh/global/`: `completions.csh`, `keybinds.csh`, `grc-aliases.csh`,
+`modules-init.csh`, and `helpers/` (19 POSIX-sh scripts, all shellcheck-clean).
+`aliases.csh` now carries the whole bash alias surface; `config.csh` carries
+every `LOADOUT_CFG_*` tcsh can act on; `tcshrc` carries the PATH list, the
+environment exports, shell options, per-PID history with parent inheritance, the
+online probe, GRC, Environment Modules, and a prompt with the farm/LSF colour
+swap and uid/host handling.
+
+**`tests/env-shell-parity` is the gate that makes "tracks" real** (Tier 1). It
+asserts every bash alias/function name has a tcsh alias, and every
+`LOADOUT_CFG_*` is handled -- with exception tables that require a written
+reason. The old policy refused exactly this gate; the premise it refused it on
+is gone. It also self-checks its own extractors, because a regex that silently
+matches nothing turns the whole gate into a no-op that always passes.
+
+**Four bugs it and the extended test caught, all of which would have shipped:**
+
+1. **tcsh has no `$PPID`.** Naming it printed `PPID: Undefined variable.` on
+   every interactive startup. `helpers/seed-history` derives the parent pid from
+   `/proc` instead.
+2. **`!` triggers history expansion inside DOUBLE quotes too**, so the rg
+   aliases' `--glob='!*.snapshot*'` produced `0: Event not found.` on every
+   startup. Must be `\!`.
+3. **`LOADOUT_CFG_PROMPT_COLOR_*` is shared with bash AND exported there**, so a
+   tcsh started from a loadout bash shell inherited a *bash* prompt string
+   wrapped in readline's `\[` / `\]` markers and printed them literally.
+   `helpers/prompt-color` strips them and converts a literal `\033`/`\e` to a
+   real ESC; `%{...%}` is tcsh's own zero-width wrapper.
+4. **The tcsh test's headline "empty stderr" assertion could not see any of
+   this.** `script -qec` gives the child a PTY, so tcsh's own diagnostics arrive
+   on **stdout** while the stderr file stays empty. Bugs 1 and 2 both printed on
+   every startup while the test was green. `assert_no_csh_noise` now scans the
+   captured output for tcsh's error vocabulary, and both bugs were deliberately
+   re-introduced to confirm it fails.
+
+**csh-native wins over porting the bash mechanism**, used deliberately:
+`cwdcmd` fires on every directory change (cd, pushd, popd, implicitcd), so
+"every cd lists" needs no `cd` wrapper and has no call site that can forget --
+strictly better than the bash env, which needs `cd()` plus a `__zoxide_cd`
+override plus care in `latest`. `set implicitcd` replaces the ERR-trap
+directory-execution hack. `cwdcmd` also carries OSC 7 (cwd reporting), which is
+the one piece of the WezTerm integration csh can do.
+
+**Gap CLOSED (2026-08-09):** `tmux-path-store` emitted `--bash` only, so
+`LOADOUT_CFG_ENABLE_TMUX_PATH_STORE` sat in the parity gate's exception table.
+Upstream v1.1.0 added `--zsh` and `--csh`/`--tcsh`; the loadout now bundles
+1.1.0 and wires it into all three shells, and the gate exception is gone.
+
+## zsh brought to bash parity (2026-08-08)
+
+The zsh env was a self-described MVP. It now tracks `envs/bash/` under the same
+policy as tcsh, but by a **different mechanism, and the difference matters**:
+zsh has functions, arrays and `local`, so it **REUSES** the bash env rather than
+reimplementing it. `envs/zsh/zshrc` sources `envs/bash/functions.sh`,
+`envs/bash/global/config.sh` (+ the corp..user layers) and
+`envs/bash/global/aliases.sh` directly. That is why `env-zsh` depends on
+`env-bash`, and why its alias surface tracks **automatically** instead of by
+discipline -- there is one alias file, not two.
+
+**The corollary is the important part: those three files are SHARED CODE, and a
+bashism in any of them is a zsh bug.** Running them under zsh found five, and
+every one was also a latent bug for bash users:
+
+1. **`path_modify` / `path_trim` / `std_paths`** used bash's `${!var}` indirect
+   expansion and 0-based array indexing. The documented two-arg form
+   (`path_append LD_LIBRARY_PATH /opt/lib`) died with `bad substitution` under
+   zsh -- while the one-arg PATH form worked, so it looked fine. The old
+   `envs/zsh/zshrc` hand-rolled its TERMINFO_DIRS handling to route around it.
+   Now eval-indirection + `setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT`,
+   verified byte-identical in both shells.
+2. **`pl`** lower-cased with bash-4 `${var,,}` -- a runtime parse error under
+   zsh, so `pl` simply did not work there. Now `tr`.
+3. **`a`** dumped functions with `declare -f`; `typeset -f` means the same in
+   bash and is the only spelling zsh knows.
+4. **`check_extended_keys` ate the user's type-ahead.** Its Secondary-DA probe
+   reads the reply with `read -r -d 'c'`; when the terminal does not answer,
+   that consumes whatever the user typed, up to their first literal `c`. Typing
+   `echo MARK-ALIVE` during startup ran `ho MARK-ALIVE` -- and `ho` is the
+   loadout's `hostname -s` alias, so it failed with a usage banner rather than
+   anything obviously wrong. **This affected bash equally** and had shipped for
+   as long as the function existed. It now answers from TERM/tmux *first*
+   (neither touches stdin) and refuses the probe when input is already pending.
+   `tests/shell-typeahead` (Tier 1) pins it in both shells.
+5. **`loadout_detect_online`** backgrounded its probes directly from the calling
+   shell; zsh reports jobs it owns, so every startup printed `[9] 2825450` /
+   `[9] + done (timeout ...)`. `NO_NOTIFY`/`NO_MONITOR` is NOT enough --
+   `LOCAL_OPTIONS` restores them on return and the reap notice lands afterwards
+   anyway. The fan-out now runs inside one subshell.
+
+**Two zsh-specific bugs of its own, both pre-existing:**
+
+- **`env-zsh` used the GENERIC installer**, whose `install_path()` syncs with
+  `delete=True` -- so every reinstall **deleted
+  `~/.config/zsh/{corp,site,team,project,user}`** while the shipped zshrc went
+  on sourcing them. Exactly the failure the env-st and env-tcsh handlers exist
+  to prevent. The registry's `supports_layers` field does not help: it is only
+  ever read by `loadout info` for display. New `_install_env_zsh` handler.
+- **Only `.zshrc` and `.zprofile` were linked.** zsh splits startup files by
+  shell TYPE and `.zshrc` is **interactive-only**, so `zsh script.zsh` got no
+  PATH and none of the exported environment. `.zshenv` is now linked too, with a
+  non-exported `_LOADOUT_ZSH_SOURCED` re-entry guard for the double-source that
+  causes in interactive shells.
+
+**Prefer zsh-native mechanisms** -- used deliberately, and better than the bash
+originals: `chpwd` gives "every cd lists" with no `cd` wrapper and no call site
+that can forget (bash needs the `ls` inside `cd()` plus a `__zoxide_cd`
+override); `AUTO_CD` replaces the `trap ... ERR` directory-execution hack; and
+native `precmd`/`preexec` carry **full OSC 133** semantic zones -- the vendored
+`wezterm.sh` is the bash-preexec variant with no zsh path at all, so
+`wezterm-integration.zsh` implements the protocol directly. Hooks are registered
+by appending to the `${hook}_functions` **arrays**, never via `add-zsh-hook`:
+that is an autoloaded function from the zsh function library, which an env-only
+HOME does not have, so hooks registered through it silently never fired.
+
+**starship needs the `zsh/mathfunc` MODULE** (its init calls `int()`), so it is
+probed with `zmodload -i` first; without that an env-only HOME failed loudly on
+every prompt with `failed to load module: zsh/mathfunc` / `unknown function: int`.
+
+`tests/env-shell-parity` gained a zsh section. It does not compare alias lists
+(they are the same list by construction) -- it asserts the **reuse wiring is
+still in place**, since a well-meaning "cleanup" that copied the aliases into a
+zsh-native file would silently end the tracking, and compares the bashrc-level
+export surface that zsh does have to reimplement.
+
+Absent by upstream limitation only: IceCream-Bash (`${!var}` + `export -f`).
+Unlike tcsh, **starship, fzf and zoxide all work** -- upstream ships real zsh
+support for each, and `tmux-path-store` joined them in v1.1.0.
 
 ## Where things stand right now
 
@@ -33,13 +199,128 @@ partial currency sweep done; linux-process-resource-monitor still pending upstre
 | gate fixes | four, listed under *Test-gate fixes* below |
 | env fix | `modules-init.bash` inconsistency flush + `MODULEPATH` preservation |
 
+### Fixed: the "no plugin stash" warning sent users in a loop (2026-08-08)
+
+`./tools/fetch-stash` succeeded, and the very next `./loadout install @envs-all`
+still printed `no plugin stash found, so NO PLUGINS were installed` with
+instructions to run `./tools/fetch-stash` and re-run — i.e. exactly what had just
+been done. Nothing in the message hinted at the real cause.
+
+**Fetching is step one of two.** `_resolve_nvim_stash` looks only at the
+INSTALLED tree (`<local>/share/nvim/loadout/vendor/plugin-stash`). Getting the
+archive into the repo does not extract it; that is `install_nvim_plugin_stash`,
+gated on the **`nvim-plugin-stash`** package. That package is `kind: data` and is
+a member of **no group at all**, so `@shared` reaches it only via the synthetic
+"every non-group, non-optional, non-env package" rule — and `@envs` / `@envs-all`,
+being env-only by definition, never do. A user installing env packages therefore
+gets `env-nvim` (which is what the plugin phase is gated on) with no stash.
+
+The warning now branches on whether the archive is actually present in the repo,
+and the archive-present message names the package instead of repeating the fetch
+advice. Fix for anyone hitting it:
+
+```bash
+./loadout install nvim-plugin-stash treesitter-parsers env-nvim
+```
+
+`treesitter-parsers` is worth naming alongside it — it is also `kind: data`, so
+an `@envs-all` install has no parsers either, for the same reason.
+
+### RESOLVED: the crate-store policy gate (was red since v2026.08.07)
+
+`tests/run-all` failed `crate-store policy` because the v2026.08.07 partial sweep
+bumped `uv` and `ty` in `payload/packages.json` without re-pinning
+`build/rust-tool-locks.txt`. Fixed properly -- re-pinned **and** rebuilt, because
+editing the pins alone would have turned a true failure into a false green while
+the shipped store stayed built from the old refs.
+
+Three things came out of it worth keeping:
+
+- **`tree-sitter` was absent from `rust-tool-locks.txt` entirely.** Its Cargo.lock
+  closure had therefore never been in the shipped store, so the tool was bundled
+  with **no offline rebuild path at all** -- on an air-gapped node you could not
+  have rebuilt it. Now pinned (295 crates); the store went 2195 -> 2272.
+- **`ty` is a new skip:** `no lock and generate-lockfile failed`, so its closure is
+  not in the store. It joins the documented skips (`time-plot`, `text-serdes` --
+  first-party HEAD; `surfer` -- vendored git submodules). `ty` ships as a
+  downloaded prebuilt, so nothing is broken today, but it cannot be source-built
+  offline.
+- **`assurance-check` passed while `assurance/crate-store.lock` was stale**, because
+  the record and the lock were stale *together* (both 2195). Only
+  `verify-crate-store --check-lock` compares the lock against the actual store.
+  Re-pinning means: `--emit-lock`, then update the record's count, `verified_utc`,
+  `yara_forge_tag` and all eight artifact hashes -- and do it **after**
+  `strip-all-elf-binaries`, since strip can rewrite archives and invalidate hashes
+  pinned before it runs.
+
+### Currency sweep done this release (2026-08-09)
+
+| package | move | how |
+|---|---|---|
+| `tmux-path-store` | 1.0.1 -> **1.1.0** | upstream added `--zsh` and `--csh`/`--tcsh`; now wired into all three shells |
+| `lua-language-server` | 3.18.2 -> **3.19.0** | upstream linux-x64 prebuilt, floor GLIBC_2.17 |
+| `gnuplot` | 6.0.2 -> **6.0.5** | EL8 source build, no Qt |
+| `tree-sitter` | 0.26.11 -> **0.26.12** | EL8 source build -- upstream prebuilt needs GLIBC_2.35 |
+
+**Three of those four had no build script.** `build-lua-language-server.sh`,
+`build-gnuplot.sh` (a prose note existed, no script) and `build-tree-sitter.sh`
+are new, each with an `ADDING_BINARIES.md` entry. Every one asserts the EL8 glibc
+floor and the dependency closure rather than assuming them.
+
+**The trap that cost a build:** `build-tree-sitter.sh` first failed with
+`failed to select a version for anyhow ^1.0.100 (locked to 1.0.103) ... perhaps a
+crate was updated and forgotten to be re-vendored?`. That reads as store
+corruption; it is not. `env-cargo` writes a `~/.cargo/config.toml` replacing
+crates-io with the loadout's offline store, so a plain `cargo build` on a machine
+with the loadout installed resolves against the **installed** store -- whatever
+was last deployed, not what you are about to ship. Fix is an isolated
+`CARGO_HOME`, the same bypass both crate-store builders and the surfer note use.
+The script now does it and says why.
+
+### The probe now requires exit 0 (2026-08-08/09)
+
+`tests/prebuilt-binaries` used to pass **any** exit code outside `{126,127,139}`,
+so a binary that never ran could score green off its own error message. Audited
+all 300 installed binaries: **42 were passing on a non-zero exit.**
+
+The rule is inverted: **exit 0 is the pass condition.** A non-zero exit is
+accepted only through an `EXPECT_NONZERO` entry that pins the flags, the code and
+a required output substring, so every acceptance is a written-down decision. 14
+entries; the rest gained correct `PROBE_FLAGS` (`xterm -version`, `pdftotext -v`,
+`restic version`, `lld -flavor gnu --version`, ...).
+
+**What it caught that had been shipping:**
+
+- **`jupyter-labhub` was a permanently dead command** on every user's PATH -- a
+  JupyterHub-only entry point from the jupyterlab wheel, and jupyterhub is
+  deliberately not bundled. The installer now prunes it.
+- **The `spice-subckt-rc-reduce` functional smoke had been dead since the kebab
+  rename** -- gated on the old underscore name, so the smoke written *because*
+  the tool has no `--version` never ran. That is a FIFTH edit the "a rename is
+  four edits" lesson does not list: functional smokes keyed on the binary name.
+- **`firefox` and `idle3`/`idle3.14` fail in the Tier 3 container** and always
+  had; the old rule scored them green off their error text in every container
+  run. firefox's sandbox calls `clone(CLONE_NEWUSER)` before it will print
+  `--version` and Docker blocks it; IDLE imports Tkinter at module scope, before
+  argument parsing, so it cannot reach exit 0 without a loadable Tk.
+
+Those last three needed a new mechanism, not an exception. They exit **0 on a
+normal host** and fail only in the container, so an `EXPECT_NONZERO` entry -- which
+pins one exit code -- would be wrong in both directions. `HOST_REQUIRED_CAPABILITIES`
+probes the facility (`unshare -U true`, `python3.14 -c "import tkinter"`) and
+skips only when it is genuinely absent, so on a host that HAS it the binary must
+still exit 0. That widens the skip set without weakening the gate.
+
+Also fixed: `real_elf_for_wrapper` could not resolve `lib/firefox/firefox-bin`
+(it knew `<name>` and `<name>.bin`, not upstream's `<name>-bin`), so the firefox
+wrapper was exec-probed instead of resolved for the host-`.so` skip.
+
 ### Deferred, each with a reason (next currency sweep)
 
 | item | why deferred |
 |---|---|
-| `vim` / `gvim` 9.2.0901 -> 9.2.0920 | source build; vim tags patches daily, bump on a deliberate cadence |
-| `gnuplot` 6.0.2 -> 6.0.5 | source build |
-| `fresh` 0.3.8 -> 0.4.7 | major bump, deserves its own change |
+| `vim` / `gvim` 9.2.0901 -> 9.2.0927 | source build; vim tags patches daily, bump on a deliberate cadence |
+| `fresh` 0.3.8 -> 0.4.7 | major bump, deserves its own change; the upstream prebuilt also needs GLIBC_2.35 against EL8's 2.28, so it is an EL8 source build |
 | `jupyterlab` 4.6.1 -> 4.6.2 | **blocked**, not forgotten: pip's `--platform` resolver backtracks into `httpcore 0.18.0` then reports no usable `anyio`; constrain that and it moves to `jupyterlab-server`. Not worth a hand-assembled wheel set for a patch bump |
 | `pdftotext` | correctly pinned: poppler >= 23.01 needs freetype >= 2.10, EL8 has 2.9.1 |
 
@@ -811,18 +1092,21 @@ elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not rela
 
 ## Next steps
 
-1. **Exercise the laptop path for real -- now unblocked.** `v2026.08.07` is a real
-   asset-bearing release, so this is finally testable end to end:
+1. ~~**Exercise the laptop path for real.**~~ **DONE 2026-08-08** -- validated end
+   to end against `v2026.08.07`, the first real asset-bearing release:
    `tools/download-release.ps1 -Tag v2026.08.07` on the Windows laptop, scp to
-   nDPC, then `./tools/fetch-stash --from-file <stash> --sums sha256sums.txt`.
-   Runbook section 2b documents it. Still unvalidated against a real release.
+   nDPC, `./tools/fetch-stash --from-file <stash> --sums sha256sums.txt`. The
+   whole air-gapped acquisition path (runbook section 2b) is no longer
+   theoretical. Do not re-open this as unvalidated.
 2. **Finish the currency sweep.** The v2026.08.07 sweep was deliberately partial;
    what is left and why is in *Where things stand right now* -> *Deferred*. Do not
    re-derive the jupyterlab blocker -- it is recorded there.
 3. **Spec the user-facing wheelhouse / uv offline story** the owner raised
    (2026-08-07). Findings so far, including why a `uv` wrapper is the wrong shape,
    are in *Where things stand right now*.
-4. **Audit the other silent-255 binaries.** The generic probe scores any exit code
+4. ~~**Audit the other silent-255 binaries.**~~ **DONE 2026-08-08/09** -- see
+   *The probe now requires exit 0* below. Original note kept for context:
+   The generic probe scores any exit code
    outside `{126,127,139}` as OK; three gtkwave binaries were green off an error
    message until this release. Same trap likely exists elsewhere in `bin/`.
 
@@ -914,6 +1198,12 @@ copies `config.def.h` when absent).
 `--version` proves nothing. Fatal-banner patterns plus functional smokes (XSPICE
 netlist, tkinter `Tcl()`, pdftotext CJK, restic backup/restore roundtrip) live in
 `tests/prebuilt-binaries` — extend that set.
+
+**The exit code proved nothing either, until 2026-08-08.** The probe passed any
+code outside `{126,127,139}`, so 42 of 300 binaries were green on a NON-ZERO
+exit — several off their own error text. Exit 0 is now the pass condition and
+every non-zero acceptance is a written-down `EXPECT_NONZERO` entry. See *The
+probe now requires exit 0*.
 
 ### The pre-commit hook stages everything
 

@@ -1,0 +1,172 @@
+#!/bin/sh
+# env-zsh: installs, links the entrypoints, preserves user layers, and starts
+# SILENTLY.
+#
+# The same acceptance criterion as the tcsh env: a warning on startup is a bug.
+# An env-only HOME -- config installed, no loadout tools at all -- is the farm
+# node case and must produce empty stderr and no shell diagnostics.
+#
+# HARNESS TRAPS, all of which give a green run that proves nothing:
+#
+#   1. `zsh -i -c CMD` does not go through the interactive line editor, so
+#      several code paths never run. Commands are fed on stdin.
+#   2. zsh with a piped stdin and no controlling terminal behaves differently
+#      from a real session, so a PTY is required -- hence `script -qec`.
+#   3. `script` gives the child a PTY, which means zsh's OWN diagnostics come
+#      back on STDOUT while stderr stays empty. A stderr-only assertion cannot
+#      see a shell complaining on every startup. This is not hypothetical: the
+#      zsh env shipped `no matches found: .../zsh_history.*`, a failed
+#      zsh/mathfunc load, and background-job notices, all on stdout. So the
+#      output is scanned too.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v zsh >/dev/null 2>&1; then
+    echo "SKIP: native zsh smoke (no zsh interpreter)"
+    exit 0
+fi
+if ! command -v script >/dev/null 2>&1; then
+    echo "SKIP: native zsh smoke (no 'script' for a PTY; cannot test startup silence honestly)"
+    exit 0
+fi
+
+ZSH_BIN="$(command -v zsh)"
+TMPHOME="$(mktemp -d /tmp/loadout-env-zsh.XXXXXX)"
+trap 'rm -rf "$TMPHOME"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+ERRFILE="$TMPHOME/stderr.txt"
+
+# Run an interactive zsh under a real PTY with a CLEAN environment, feeding it
+# CMDS on stdin. `env -i` matters: without it the surrounding loadout bash
+# session's exported LOADOUT_CFG_*/PATH leak in and the test silently measures
+# the developer's shell instead of a fresh farm HOME.
+zsh_i() {
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$1" \
+        | env -i HOME="$TMPHOME" TERM=xterm PATH=/usr/bin:/bin \
+              script -qec "$ZSH_BIN -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r' \
+        | strip_escapes
+}
+
+# Strip OSC sequences BEFORE CSI ones. The zsh env emits OSC 133 semantic zones
+# and OSC 7 cwd, so command output arrives glued to a marker
+# ("<ESC>]133;C<ESC>\alive") and a CSI-only filter leaves the marker text in
+# place -- making an anchored ^alive$ assertion fail on a perfectly good run.
+strip_escapes() {
+    sed -e 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g' \
+        -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+        -e 's/\x1b[()][A-Za-z0-9]//g'
+}
+
+assert_no_zsh_noise() {
+    _label=$1
+    _text=$2
+    for _pat in 'no matches found' 'failed to load module' 'unknown function' \
+                'command not found' 'bad substitution' 'parse error' \
+                'bad pattern' 'no such file or directory' 'not valid in this context'; do
+        case $_text in
+            *"$_pat"*) fail "$_label: zsh printed '$_pat':
+$_text" ;;
+        esac
+    done
+    # Background-job notices ("[9] 2825450", "[9]  + done ..."). loadout_detect_online
+    # backgrounds its probes; zsh reports jobs it owns, so the fan-out has to stay
+    # inside a subshell or every startup prints job control noise.
+    if echo "$_text" | grep -qE '^\[[0-9]+\]'; then
+        fail "$_label: zsh printed background-job notices:
+$_text"
+    fi
+}
+
+HOME="$TMPHOME" "$REPO/loadout" install env-zsh env-bash --no-backup >/dev/null
+
+[ -e "$TMPHOME/.zshrc" ] || fail ".zshrc not linked"
+[ -e "$TMPHOME/.zprofile" ] || fail ".zprofile not linked"
+[ -f "$TMPHOME/.config/zsh/zshrc" ] || fail "entry point not installed"
+[ -f "$TMPHOME/.config/zsh/global/zshrc" ] || fail "global layer not installed"
+for f in config.zsh keybinds.zsh completions.zsh modules-init.zsh wezterm-integration.zsh; do
+    [ -f "$TMPHOME/.config/zsh/global/$f" ] || fail "global/$f not installed"
+done
+
+# --- THE headline test: an env-only HOME must start clean, on both channels.
+out=$(zsh_i 'echo alive')
+[ ! -s "$ERRFILE" ] || fail "interactive zsh wrote to stderr:
+$(cat "$ERRFILE")"
+assert_no_zsh_noise "interactive startup" "$out"
+echo "$out" | grep -q '^alive$' || fail "zsh did not run the command: [$out]"
+
+# --- A non-interactive zsh must still get PATH and the exported environment,
+# --- and must not run any of the interactive setup.
+: > "$ERRFILE"
+echo 'echo "script-ran PIP=$PIP_REQUIRE_VIRTUALENV"' > "$TMPHOME/s.zsh"
+out=$(env -i HOME="$TMPHOME" PATH=/usr/bin:/bin "$ZSH_BIN" "$TMPHOME/s.zsh" 2>"$ERRFILE") \
+    || fail "non-interactive zsh script exited non-zero"
+echo "$out" | grep -q 'script-ran PIP=1' \
+    || fail "non-interactive zsh did not get the exported env: [$out]"
+[ ! -s "$ERRFILE" ] || fail "non-interactive zsh wrote to stderr:
+$(cat "$ERRFILE")"
+
+# --- The shared bash layers are reused. This is the whole tracking mechanism:
+# --- aliases and LOADOUT_CFG_* come from envs/bash, not a zsh copy.
+out=$(zsh_i 'echo "VI=$LOADOUT_CFG_PREFERRED_VI"; alias b')
+assert_no_zsh_noise "shared layers" "$out"
+echo "$out" | grep -q 'VI=nvim' || fail "shared LOADOUT_CFG_* not loaded: [$out]"
+echo "$out" | grep -q 'cd \.\.'  || fail "shared aliases.sh not loaded: [$out]"
+
+# --- The shared function library must WORK under zsh, not merely parse. The
+# --- path_* family used bash's ${!var} indirection and 0-based indexing, so the
+# --- documented two-arg form died with "bad substitution" under zsh while the
+# --- one-arg PATH form appeared fine -- a partial failure that reads as working.
+out=$(zsh_i 'FOO=/aaa:/bbb; path_append FOO /ccc; path_prepend FOO /zzz; path_remove FOO /bbb; echo "P=$FOO"')
+assert_no_zsh_noise "shared path functions" "$out"
+echo "$out" | grep -q 'P=/zzz:/aaa:/ccc' \
+    || fail "path_* two-arg form is broken under zsh: [$out]"
+out=$(zsh_i 'D=/a:/tmp:/a:/tmp; path_trim D; echo "T=$D"')
+echo "$out" | grep -q 'T=/a:/tmp$' || fail "path_trim is broken under zsh: [$out]"
+
+# --- `pl` uses ${var,,} in the shared aliases.sh, which is a bash-4-only
+# --- expansion and a runtime parse error under zsh.
+out=$(zsh_i 'pl usr')
+assert_no_zsh_noise "pl" "$out"
+echo "$out" | grep -q '/usr' || fail "pl produced no output under zsh: [$out]"
+
+# --- Environment parity with the bash env.
+out=$(zsh_i 'echo "O=$LOADOUT_ONLINE ED=$EDITOR PG=${PAGER%% *} CT=$COLORTERM"')
+assert_no_zsh_noise "environment" "$out"
+echo "$out" | grep -qE 'O=[01]'      || fail "LOADOUT_ONLINE not set: [$out]"
+echo "$out" | grep -q  'ED=nvim'     || fail "EDITOR not derived from LOADOUT_CFG_PREFERRED_VI: [$out]"
+echo "$out" | grep -q  'PG=less'     || fail "PAGER not set: [$out]"
+echo "$out" | grep -q  'CT=truecolor' || fail "COLORTERM not set: [$out]"
+
+# --- Per-PID history, matching the bash env's model (and what `gah` searches).
+out=$(zsh_i 'echo "HF=$HISTFILE"')
+assert_no_zsh_noise "history" "$out"
+echo "$out" | grep -q 'HF=.*zsh_history\.' || fail "per-PID histfile not set: [$out]"
+
+# --- Every directory change lists, via zsh's native chpwd hook.
+mkdir -p "$TMPHOME/probe/sub"
+touch "$TMPHOME/probe/sub/CHPWD_MARKER"
+out=$(zsh_i "cd $TMPHOME/probe/sub")
+assert_no_zsh_noise "chpwd" "$out"
+echo "$out" | grep -q 'CHPWD_MARKER' || fail "chpwd hook did not list after cd: [$out]"
+
+# --- cd conveniences from the bash env: a FILE argument goes to its parent.
+out=$(zsh_i "cd $TMPHOME/probe/sub/CHPWD_MARKER; pwd")
+assert_no_zsh_noise "cd to a file" "$out"
+echo "$out" | grep -q 'probe/sub$' || fail "cd FILE did not land in its parent: [$out]"
+
+# --- Reinstall must not clobber a user-created layer. env-zsh used the GENERIC
+# --- installer, whose install_path() syncs the whole tree with delete=True --
+# --- so every reinstall deleted ~/.config/zsh/{corp,site,team,project,user}
+# --- while the shipped zshrc went on sourcing them. Same failure the env-st and
+# --- env-tcsh handlers exist to prevent.
+echo 'export LOADOUT_TEST_KEEPME=1' > "$TMPHOME/.config/zsh/user/zshrc"
+HOME="$TMPHOME" "$REPO/loadout" install env-zsh --no-backup >/dev/null
+[ -f "$TMPHOME/.config/zsh/user/zshrc" ] || fail "reinstall deleted the user layer"
+out=$(zsh_i 'echo "KEEP=$LOADOUT_TEST_KEEPME"')
+echo "$out" | grep -q 'KEEP=1' || fail "user layer is not sourced: [$out]"
+
+echo "install-env-zsh: OK"

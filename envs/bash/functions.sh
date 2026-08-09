@@ -5,14 +5,30 @@
 loadout_detect_online() {
     local _t="${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}"
     local _hosts="${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}"
-    local _tmp _pids=() _hp _result
+    local _tmp _result
     _tmp=$(mktemp 2>/dev/null) || return 1
-    for _hp in $_hosts; do
-        (timeout "$_t" bash -c "echo >/dev/tcp/${_hp%%:*}/${_hp##*:}" 2>/dev/null &&
-            echo 1 >"$_tmp") &
-        _pids+=($!)
-    done
-    wait "${_pids[@]}" 2>/dev/null
+
+    # The whole parallel fan-out runs inside ONE subshell, so the background
+    # jobs are that subshell's, not the interactive shell's.
+    #
+    # This is not stylistic. zsh reports background jobs as they start and as
+    # they are reaped -- "[9] 2825450", "[9] + done (timeout ...)" -- so
+    # backgrounding directly from the interactive shell printed job-control
+    # noise into every zsh startup, and startup silence is a hard requirement.
+    # Setting NO_NOTIFY/NO_MONITOR around it is NOT enough: LOCAL_OPTIONS
+    # restores them when this function returns, and the reap notice then lands
+    # afterwards anyway (observed at shell exit). Keeping the jobs out of the
+    # interactive shell's job table is the only version with nothing to leak.
+    # bash is quieter about this, which is why it went unnoticed until the zsh
+    # env started using the shared function.
+    (
+        for _hp in $_hosts; do
+            (timeout "$_t" bash -c "echo >/dev/tcp/${_hp%%:*}/${_hp##*:}" 2>/dev/null &&
+                echo 1 >"$_tmp") &
+        done
+        wait
+    ) >/dev/null 2>&1
+
     _result=$(cat "$_tmp" 2>/dev/null)
     rm -f "$_tmp"
     [[ "$_result" == "1" ]]
@@ -44,11 +60,41 @@ auto_attach_to_tmux() {
 # LOADOUT_CFG_* vars are exported scalars -- they survive into child processes intentionally.
 unset_bashrc_local_vars() {
     # Unset all local variables that start with '_'.
-    for var in $(compgen -v _); do
-        # Check if the variable is NOT exported
-        if [[ $(declare -p "$var" 2>/dev/null) != "declare -x"* ]]; then
-            unset "$var"
+    #
+    # `compgen` is a BASH builtin with no zsh equivalent, and this function is
+    # reached from auto_attach_to_tmux, which the zsh env calls -- so a zsh user
+    # with LOADOUT_CFG_ATTACH_TO_TMUX enabled got
+    # "unset_bashrc_local_vars:2: command not found: compgen" on every login.
+    # zsh lists parameter names through the `parameters` association instead.
+    # The zsh-only expansions below go through `eval` so that this file, which
+    # is bash-shaped and gets read by bash tooling, stays free of syntax bash
+    # and shellcheck do not recognise (SC2296). Both shells parse it either way;
+    # this is about not handing a reviewer a spurious error.
+    local var
+    local -a _lo_names
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        eval '_lo_names=(${(Mk)parameters:#_*})'
+    else
+        _lo_names=($(compgen -v _))
+    fi
+    for var in "${_lo_names[@]}"; do
+        # Skip exported variables -- LOADOUT_CFG_* and friends are meant to
+        # survive into child processes.
+        #
+        # The two shells report "is exported" differently and there is no shared
+        # spelling: bash's `declare -p` prints `declare -x NAME=...`, while
+        # zsh's `typeset -p` prints `export NAME=...` with no -x anywhere. A
+        # single `*" -x"*` test therefore matched nothing under zsh and unset
+        # every exported variable it looked at. zsh's ${(t)} type string is the
+        # reliable test there.
+        _lo_exported=0
+        if [ -n "${ZSH_VERSION:-}" ]; then
+            eval '[[ ${(tP)var} == *export* ]] && _lo_exported=1'
+        else
+            case $(declare -p "$var" 2>/dev/null) in "declare -x"*) _lo_exported=1 ;; esac
         fi
+        [ "$_lo_exported" = 1 ] && continue
+        unset "$var"
     done
 }
 
@@ -180,8 +226,34 @@ is_in() {
     echo -n "$2" | /bin/grep -w -q "$1"
 }
 
+# zsh compatibility shim for the path_* family below.
+#
+# This file is sourced by BOTH envs/bash and envs/zsh -- it is the shared
+# library, not a bash-private one. Three things in the path functions are
+# bash-shaped and silently wrong under zsh:
+#
+#   * arrays are 1-based in zsh, and these functions index from 0;
+#   * unquoted `${val}` does NOT word-split in zsh, so `newdirs=(${val})`
+#     yields one element instead of the split list;
+#   * `${!var}` is bash's indirect expansion; zsh has no equivalent, and ksh
+#     emulation gives ksh93's meaning (the variable NAME) instead of its value.
+#
+# The first two are fixed by zsh's own local options; the third by the eval
+# indirection this file already prefers elsewhere (see source_if_exists). The
+# result is byte-identical behaviour in both shells -- verified by
+# tests/env-shell-parity.
+#
+# Before this, `path_append LD_LIBRARY_PATH /opt/lib` -- the documented two-arg
+# form -- died with "bad substitution" under zsh, which is why envs/zsh/zshrc
+# used to hand-roll its TERMINFO_DIRS handling instead of calling path_prepend.
+#
+# The setopt line is REPEATED in each function rather than factored into a
+# helper: LOCAL_OPTIONS restores the options when the function that set them
+# returns, so a helper would undo them before its caller ever ran a line.
+
 # Path type variable manipulation. Copied from https://www.runscripts.com/support/guides/scripting/bash/path-functions
 path_modify() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
     typeset opt_op opt_once
 
     OPTIND=1
@@ -212,7 +284,7 @@ path_modify() {
 
     IFS="${sep}"
     typeset origdirs
-    origdirs=(${!var})
+    eval "origdirs=(\${$var})"
 
     typeset newdirs
     newdirs=(${val})
@@ -230,7 +302,7 @@ path_modify() {
                 f) [[ ! -f "${newdirs[n]}" ]] ;;
                 esac
             then
-                unset newdirs[n]
+                unset "newdirs[n]"
             fi
         done
     fi
@@ -247,6 +319,7 @@ path_modify() {
     fi
 
     typeset vardirs
+    vardirs=()
     case "${act}" in
     first | start)
         vardirs=("${newdirs[@]}" "${origdirs[@]}")
@@ -266,13 +339,13 @@ path_modify() {
             if [[ "${todo}" && "${origdirs[o]}" = "${wrt}" ]]; then
                 case "${act}" in
                 after)
-                    vardirs=("${vardirs[@]}" "${origdirs[o]}" "${newdirs[@]}")
+                    vardirs+=("${origdirs[o]}" "${newdirs[@]}")
                     ;;
                 before)
-                    vardirs=("${vardirs[@]}" "${newdirs[@]}" "${origdirs[o]}")
+                    vardirs+=("${newdirs[@]}" "${origdirs[o]}")
                     ;;
                 replace)
-                    vardirs=("${vardirs[@]}" "${newdirs[@]}")
+                    vardirs+=("${newdirs[@]}")
                     ;;
                 remove)
                     ;;
@@ -282,7 +355,7 @@ path_modify() {
                     todo=
                 fi
             else
-                vardirs=("${vardirs[@]}" "${origdirs[o]}")
+                vardirs+=("${origdirs[o]}")
             fi
         done
         ;;
@@ -403,6 +476,7 @@ path_remove() {
 }
 
 path_trim() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
     typeset var=$1
     typeset sep="${2:-:}"
 
@@ -411,31 +485,39 @@ path_trim() {
 
     IFS="${sep}"
     typeset origdirs
-    origdirs=(${!var})
+    eval "origdirs=(\${$var})"
 
     IFS="${OIFS}"
 
     typeset o
     typeset maxo=${#origdirs[*]}
     typeset seen=
+    # Build the kept list rather than `unset`-ing duplicates in place. bash's
+    # `unset arr[i]` REMOVES the element, so "${arr[*]}" skips it; zsh's blanks
+    # the slot but keeps it, so the same code trimmed "/a:/tmp:/a:/tmp" to
+    # "/a:/tmp::" -- correct entries plus two empty fields. Appending to a second
+    # array means the same thing in both shells.
+    typeset keptdirs
+    keptdirs=()
     for ((o = 0; o < ${maxo}; o++)); do
         case "${sep}${seen}${sep}" in
         *"${sep}${origdirs[o]:-.}${sep}"*)
-            unset origdirs[o]
             ;;
         *)
             seen="${seen+${seen}${sep}}${origdirs[o]:-.}"
+            keptdirs+=("${origdirs[o]}")
             ;;
         esac
     done
 
     IFS="${sep}"
-    read ${var} <<<"${origdirs[*]}"
+    read ${var} <<<"${keptdirs[*]}"
 
     IFS="${OIFS}"
 }
 
 std_paths() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
     typeset act="$1"
     typeset val="$2"
     typeset sep="${3:-:}"
@@ -445,7 +527,7 @@ std_paths() {
 
     IFS="${sep}"
     typeset origdirs
-    origdirs=(${!var})
+    eval "origdirs=(\${$var})"
 
     IFS="${OIFS}"
 
@@ -734,11 +816,46 @@ fpcmp() {
     esac
 }
 
-# Function to check terminal keyboard capabilities
+# Function to check terminal keyboard capabilities.
+#
+# THE SECONDARY-DA PROBE CONSUMES STDIN, so it is the last thing tried, not the
+# first. `read -r -d 'c' -t 0.1` reads until the letter `c`; if the terminal
+# never answers the query -- no real terminal, or one that ignores Secondary DA
+# -- that read swallows whatever the USER typed ahead, up to their first `c`.
+# Typing `echo MARK` during shell startup ran `ho MARK` (the `ec` eaten, and
+# `ho` is the hostname alias). Reproduced in BOTH bash and zsh.
+#
+# So: answer from TERM and tmux FIRST, since neither touches stdin, and only
+# fall through to the probe when it can be run safely.
 check_extended_keys() {
+    # Cheap, side-effect-free answers first.
+    case "$TERM" in
+    *kitty* | *alacritty*) return 0 ;;
+    esac
+    if [[ -n "$TMUX" ]]; then
+        if tmux show-options -s extended-keys 2>/dev/null | grep -q "on"; then
+            return 0
+        fi
+    fi
+
     # Ensure we are attached to a real TTY before querying
     if [[ ! -t 0 || ! -t 1 ]]; then
         return 1
+    fi
+
+    # Refuse the probe when input is ALREADY pending -- that input is the user's
+    # and must not be eaten. The readability test has to be non-consuming, and
+    # the two shells differ:
+    #   bash: `read -t 0` reports readability and consumes nothing.
+    #   zsh:  `read -t 0` CONSUMES the pending line, so it cannot be used here;
+    #         zsh/zselect is the non-consuming test, and when that module is
+    #         unavailable (an env-only install has no module_path) the probe is
+    #         skipped rather than risking the user's keystrokes.
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        zmodload zsh/zselect 2>/dev/null || return 1
+        zselect -t 0 -r 0 >/dev/null 2>&1 && return 1
+    else
+        read -t 0 2>/dev/null && return 1
     fi
 
     local response
@@ -754,21 +871,9 @@ check_extended_keys() {
     # Restore original TTY settings immediately
     stty "$old_stty"
 
-    # Check if the terminal reports a modern capability.
-    # Inside Tmux with extended keys enabled, the response starts with >84 (tmux id)
-    # Kitty, Alacritty, iTerm2, and Ghostty will return distinct vendor IDs here.
-    if [[ "$response" == *">84;"* ]] || [[ "$TERM" == *"kitty"* ]] || [[ "$TERM" == *"alacritty"* ]]; then
-        return 0
-    fi
-
-    # Fallback: Check if we are inside tmux and extended-keys is globally on
-    if [[ -n "$TMUX" ]]; then
-        if tmux show-options -s extended-keys 2>/dev/null | grep -q "on"; then
-            return 0
-        fi
-    fi
-
-    return 1
+    # Inside Tmux with extended keys enabled, the response starts with >84 (tmux id).
+    # Kitty, Alacritty, iTerm2, and Ghostty return distinct vendor IDs here.
+    [[ "$response" == *">84;"* ]]
 }
 
 # vim: ft=bash

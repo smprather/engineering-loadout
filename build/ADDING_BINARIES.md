@@ -267,7 +267,19 @@ Runtime archive (`nvim.tar.bz2`): 27 MB uncompressed -> 4.8 MB compressed.
 Installer extracts runtime to `~/.local/share/nvim/runtime/`.
 See `build/build-nvim.sh` for the full rebuild recipe.
 
-## Gnuplot build notes (6.0.2, added 2026-05-10)
+## Gnuplot build notes (6.0.5; first packaged 6.0.2 on 2026-05-10)
+
+**Build:** `build/build-gnuplot.sh --tag 6.0.5`
+
+The script was added 2026-08-09. Until then this note was prose with no script,
+so every bump meant re-deriving the configure line by hand -- the gap HANDOFF
+called out for the 2026-08-03 sweep. The script encodes the flags below, asserts
+the EL8 glibc floor and the dependency closure, packages BOTH artifacts, and
+stamps the registry version.
+
+**VERSION-BEARING PATH:** the runtime archive and the registry `sentinel` both
+embed MAJOR.MINOR (`libexec/gnuplot/6.0/gnuplot_x11`). A 6.1 bump must move the
+sentinel with it; the script prints a reminder.
 
 Built from source to avoid Qt5 dep chain. Configure flags used:
 ```bash
@@ -1971,7 +1983,7 @@ Two builders write the same archive; the **superset** is what ships.
   union the per-crate index lines (the local-registry index is one JSON line per
   version, so this is a clean merge; re-resolving to latest would drift off the
   tools' pins). Here the ban is a WARNING, not a failure: a tool may legitimately
-  pin aws-lc (uv does). **17 stores -> 2101 crates, ~301 MB bz2 / 8 chunks.**
+  pin aws-lc (uv does). **19 stores -> 2272 crates, ~320 MB bz2 / 8 chunks.**
   Covered: seeds + bat eza fd just ripgrep zoxide starship delta hyperfine stylua
   uv fish numr models liberty-tools lefdef-tools. NOT covered (lock-gen failed at
   build, fix later): `ty`, `time-plot`, `text-serdes` (uv's closure overlaps most
@@ -3012,7 +3024,7 @@ roundtrip on the INSTALLED binary.
 **Usage:** `restic init --repo /path/repo`; `restic -r /path/repo backup ~/work`;
 `restic -r /path/repo snapshots`; `restic -r /path/repo restore latest --target DIR`.
 
-## tmux-path-store 1.0.1 -- tmux window-name-keyed path store (first-party python-tool)
+## tmux-path-store 1.1.0 -- tmux window-name-keyed path store (first-party python-tool)
 
 First-party (github.com/smprather/tmux-path-store). Stores a directory or file path
 keyed by the current tmux window name, which is what the `p` / `cdp` aliases in
@@ -3024,10 +3036,18 @@ bundled with no build script and no entry here, so nothing recorded where its wh
 came from or how to refresh it. Two packages hit this same gap in one session; if
 you bundle a wheel by hand, write the script at the same time.
 
-**Tag: `v1.0.1`** (the release that renamed the console script to kebab-case; it was
-`tmux_path_store` through v1.0.0).
+**Tag: `v1.1.0`** (added `--zsh` and `--csh`/`--tcsh` alias emitters alongside
+`--bash`; v1.0.1 was the release that renamed the console script to kebab-case, and
+it was `tmux_path_store` through v1.0.0).
 
-**Build:** `build/build-tmux-path-store.sh --tag v1.0.1`
+**Build:** `build/build-tmux-path-store.sh --tag v1.1.0`
+
+**Why v1.1.0 mattered here.** Through v1.0.1 the tool emitted `--bash` only, so
+`LOADOUT_CFG_ENABLE_TMUX_PATH_STORE` was a documented gap in both the tcsh and zsh
+envs and sat in `tests/env-shell-parity`'s exception table. v1.1.0 closed it, and
+all three shells now wire it up: `--bash`, `--zsh`, and `--csh` for tcsh. The csh
+emitter escapes its argument marker as `\!*` so csh stores a literal `!` rather
+than expanding history -- do not re-quote that at the call site.
 
 **Prerequisites:** `git`, `uv`, `python3.14`. No compiler, no dev packages.
 
@@ -3512,3 +3532,84 @@ htop 3.5.2, xsel 1.2.1, yank 1.4.0):
 `libpopt`, `liblz4`, `libzstd`, `libcrypto` and `libacl` are EL8 base and are
 deliberately not bundled; only `libxxhash.so.0` is, because EL8 has no system
 xxhash.
+
+## lua-language-server 3.19.0 -- LSP server for Lua (upstream linux-x64 prebuilt)
+
+**This note exists because the package had none.** It was bundled with no build
+script and no entry here, so nothing recorded where its payload came from or how
+to refresh it -- the same provenance gap liberty-filter, tmux-path-store and the
+five small C tools had. If you bundle a binary by hand, write the script in the
+same change.
+
+**Build:** `build/build-lua-language-server.sh --tag 3.19.0`
+
+**Tag format is a BARE version, no leading `v`** -- that is upstream's convention
+(github.com/LuaLS/lua-language-server/releases). The script rejects a `v` prefix
+rather than silently 404ing on the asset URL.
+
+**NOT a source build.** Upstream's `lua-language-server-<tag>-linux-x64.tar.gz`
+has an ELF floor of `GLIBC_2.17`, comfortably under EL8's 2.28, so the prebuilt
+is usable as-is. The script **asserts** that instead of assuming it: a future
+release built against a newer toolchain would install cleanly on this box and be
+dead on a stock farm node. That is not hypothetical -- the same check rejected
+`bottom` (2.34), `fresh` (2.35), `tree-sitter` (2.39 at 0.26.11, 2.35 at
+0.26.12) and `htop`, each of which had to become an EL8 source build.
+
+**Packaging shape -- TWO artifacts that must stay in sync:**
+
+| artifact | contents |
+|---|---|
+| `bin/lua-language-server.bz2` | POSIX-sh wrapper |
+| `runtime/lua-language-server.tar.bz2` | `./share/lua-language-server/` tree |
+
+The server is **not a lone binary**: it needs `main.lua`, `meta/`, `script/` and
+`locale/` beside it and resolves them relative to its own path. So the real ELF
+lives at `share/lua-language-server/bin/lua-language-server` and the wrapper
+execs it from there, deriving its prefix from its own installed location so that
+`--dest-dir` and shared-tree installs work with no build-time prefix baked in.
+The registry `sentinel` is that inner binary, not the wrapper.
+
+**No RPATH and nothing bundled.** The ELF NEEDs only glibc components
+(`libc`, `libm`, `libpthread`, `libdl`, `ld-linux`), which are never bundled --
+they must match the host `ld.so` exactly. The script fails on any other NEEDED
+entry rather than letting a new shared-library dependency be discovered by a
+user at runtime.
+
+**Smoke:** run the WRAPPER, not the inner ELF -- `lua-language-server --version`
+should print the bare version (`3.19.0`). Running the inner binary directly would
+pass even if the wrapper's relative path were wrong.
+
+
+## tree-sitter 0.26.12 -- CLI (EL8 source build, Rust)
+
+**This note exists because the package had none.** tree-sitter was source-built
+for 0.26.11 during the 2026-08-04 sweep with no build script and no entry here,
+so the procedure existed nowhere at all.
+
+**Build:** `build/build-tree-sitter.sh --tag v0.26.12`
+(add `--offline` to prove the shipped crate store can rebuild it with no network)
+
+**Tag carries a leading `v`** -- upstream's convention. The script rejects a bare
+version rather than failing obscurely on the clone.
+
+**SOURCE BUILD, and not optional.** Upstream ships a `tree-sitter-linux-x64.gz`
+prebuilt, but its glibc floor is far above EL8's 2.28 -- **GLIBC_2.39 at 0.26.11,
+GLIBC_2.35 at 0.26.12**. Either would install cleanly on the dev box and be dead
+on a stock farm node. That is the build-box masking the floor check exists to
+catch, and it is why this must never be "simplified" into a download. The script
+re-asserts the floor on every build rather than trusting the toolchain.
+
+**Offline-rebuildable -- and it was NOT, until 2026-08-09.** `tree-sitter` was
+absent from `build/rust-tool-locks.txt` entirely, so its Cargo.lock closure was
+never folded into the shipped crate store: the tool was bundled but could not
+have been rebuilt offline by anyone. It is now pinned there (295 crates in the
+store). **If you bump the version here, re-pin it there and rebuild the store**
+with `build/build-tool-crate-store.sh`, or `tests/run-all`'s crate-store policy
+check fails on the drift -- which is exactly how the stale `uv`/`ty` pins from
+v2026.08.07 were caught.
+
+**Nothing bundled.** Rust static-links its own runtime, so the binary NEEDs only
+glibc components plus `libgcc_s.so.1`. The script fails on anything else.
+
+**Packaging:** `strip` -> `patchelf --set-rpath` -> `bzip2`, via
+`loadout_package_bin`. That order is load-bearing -- never strip after patchelf.

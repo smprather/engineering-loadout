@@ -1,0 +1,71 @@
+#!/bin/sh
+# Resolve a `cd` argument the way the bash env's cd() does, and print the
+# directory to change to.
+#
+# Mirrors cd() in envs/bash/global/bashrc:
+#   * no argument            -> $HOME
+#   * "-"                    -> "-" (previous directory; csh understands it)
+#   * an existing directory  -> itself
+#   * an existing FILE       -> its parent directory
+#   * a missing path         -> offer to `mkdir -p` it, then use it
+#
+# The follow-up `ls` that bash's cd() runs is NOT done here: tcsh has cwdcmd,
+# which fires on every directory change including pushd/popd/implicitcd, so the
+# listing is handled there and cannot be skipped by a call site.
+#
+# Prints the target on stdout and exits 0, or prints nothing and exits non-zero
+# when the change should not happen. Printing nothing matters: the calling alias
+# guards on the empty string, because `cd ""` in csh silently goes to $HOME --
+# turning "you typo'd a path" into "you are now somewhere else entirely".
+#
+# All prompting and diagnostics go to /dev/tty, never stdout, or they would end
+# up being treated as the directory name.
+
+target=$1
+
+if [ -z "$target" ]; then
+    printf '%s\n' "$HOME"
+    exit 0
+fi
+
+if [ "$target" = "-" ]; then
+    printf '%s\n' "-"
+    exit 0
+fi
+
+if [ -d "$target" ]; then
+    printf '%s\n' "$target"
+    exit 0
+fi
+
+# A symlink (even a dangling one) or a regular file: go to the containing dir.
+if [ -e "$target" ] || [ -L "$target" ]; then
+    printf '%s\n' "$(dirname -- "$target")"
+    exit 0
+fi
+
+# Missing. Walk up to the nearest existing ancestor; only offer to create when
+# that ancestor is a directory we can write to -- otherwise mkdir would fail and
+# the prompt would be a lie.
+base=$target
+while [ "$base" != "/" ] && [ "$base" != "." ] && [ ! -e "$base" ]; do
+    base=$(dirname -- "$base")
+done
+
+if [ -d "$base" ] && [ -w "$base" ] && [ -r /dev/tty ]; then
+    printf '%s does not exist. Create it with parent directories? [y]/n ' "$target" > /dev/tty
+    read -r answer < /dev/tty
+    case $answer in
+        ''|y|Y)
+            if mkdir -p -- "$target" 2>/dev/tty; then
+                printf '%s\n' "$target"
+                exit 0
+            fi
+            ;;
+    esac
+    exit 1
+fi
+
+# Nothing sensible to do: say so and let the caller stay put.
+printf 'cd: no such file or directory: %s\n' "$target" > /dev/tty
+exit 1

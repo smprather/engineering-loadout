@@ -1,0 +1,24 @@
+#!/bin/sh
+# git pull, stashing tracked changes first ONLY if there are any.
+#
+# Backs the `gsp` alias; mirrors gsp() in envs/bash/global/aliases.sh.
+#
+# The conditional stash is the whole point: an unconditional `git stash pop`
+# after the pull would pop somebody's older, unrelated stash when this run had
+# nothing of its own to save.
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "gsp: not inside a git repository" >&2
+    exit 1
+fi
+
+stashed=0
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    git stash push || exit
+    stashed=1
+fi
+
+git pull || exit
+
+[ "$stashed" -eq 1 ] && git stash pop
+exit 0

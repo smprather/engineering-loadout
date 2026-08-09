@@ -15,17 +15,32 @@ aliases, a git-aware prompt, and the same six-layer override chain as bash.
 
 ## Read this before "fixing" anything
 
-**This is a deliberate one-time port. It does not track `envs/bash/`.**
+**This environment tracks `envs/bash/`. A bash-env change is not finished until the
+tcsh form lands.**
 
-There is no generator and no drift test between the two. That is on purpose: a sync
-gate would fail CI on every future bash-env change and impose ongoing maintenance
-cost on a shell whose expected user count is close to zero. If the bash env gains a
-feature, tcsh does not automatically need it.
+This reverses the policy that stood from 2026-07-13 to 2026-08-08. That policy called
+this a deliberate one-time port, refused a drift test, and justified both on an
+expected user count "close to zero". **That premise was wrong.** The EE community this
+project serves is roughly **90% tcsh** — it is the majority shell of the target
+audience, not a courtesy port. Every argument for not tracking rested on the bad
+premise, so all of them go with it.
 
-It exists because most of the engineers this project serves are on tcsh only because
-it is their site's default — not by choice, and not by interest. The bar is: **it
-works, it is quiet, and it never gets in their way.** A warning on startup is a bug.
-A missing feature is not.
+If you are adding an alias, a `LOADOUT_CFG_*` variable, or an environment export to
+the bash env, add the tcsh equivalent in the same change.
+
+**"csh has no functions" is not an exemption.** It selects the implementation, not
+whether the feature ships:
+
+| what the bash version needs | the tcsh form |
+|---|---|
+| a one-line wrapper around a command | an alias — they take args (`\!:1`, `\!*`, `\!:2-`) |
+| loops, locals, `case`, arithmetic | a POSIX-sh helper in `global/helpers/`, aliased |
+| to change the caller's cwd/PATH/env | a helper that *prints* the command, run through `` eval `helper` `` |
+
+`global/git-branch.sh` is the original precedent for the second row.
+
+Startup silence is still a hard requirement — a warning on startup is a bug — but it
+is now the floor rather than the goal.
 
 ## The layer chain
 
@@ -46,23 +61,78 @@ touches them.
 
 ## What you get
 
-- **PATH** — the loadout's `bin` (honoring `LOADOUT_CFG_SHARED_PREFIX` for shared
-  installs), plus `~/.cargo/bin`, `~/go/bin`, added only when they exist.
-- **terminfo** — `~/.local/share/terminfo` on `TERMINFO_DIRS`, so `st-256color` and
-  friends resolve.
-- **Aliases** — `b`/`bb`/`bbb`… (cd up), `ll`/`la`/`lh` (eza, falling back to ls),
-  `g` (rg, falling back to grep), `f` (fd, falling back to find), `vi`, `cat` (bat),
-  `gs`/`gc`/`gp`/`gd`/`ga`, `h`, `x`, `rp`, `t`, `w`. Each tool alias is defined
-  **only if the tool is installed**, so an alias never points at a missing binary.
-- **Prompt** — cwd plus the git branch when you are in a repo.
+Files, all under `global/`:
+
+| file | what it does |
+|---|---|
+| `tcshrc` | PATH, environment, shell options, history, prompt, integrations |
+| `config.csh` | the `LOADOUT_CFG_*` defaults |
+| `aliases.csh` | the alias set |
+| `completions.csh` | hand-written `complete` rules |
+| `keybinds.csh` | `bindkey` bindings |
+| `grc-aliases.csh` | Generic Colorizer aliases, csh form |
+| `modules-init.csh` | Environment Modules selector |
+| `git-branch.sh`, `helpers/` | the sh helpers behind the aliases |
+
+Behaviour:
+
+- **PATH** — the loadout's `bin` (honoring `LOADOUT_CFG_SHARED_PREFIX`), plus
+  `/usr/local/bin`, `~/.cargo/bin`, `~/go/bin`, `~/.venv/bin`, `~/.opencode/bin`,
+  `~/node_modules/.bin` and NVM's `$NVM_BIN`, each added only when it exists.
+- **Environment** — `EDITOR`/`VISUAL`/`GIT_EDITOR`, `PAGER`, `MANPAGER`, the
+  `LESS_TERMCAP_*` colours, `PIP_REQUIRE_VIRTUALENV`, `PYTHONPYCACHEPREFIX`,
+  `COLORTERM`, `EGL_LOG_LEVEL`, `TERMINFO_DIRS`, `GI_TYPELIB_PATH`,
+  `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`, `GNUPLOT_DRIVER_DIR` —
+  the same values the bash env exports.
+- **Aliases** — the bash alias set: navigation (`b`…`bbbbbbbbbb`, `cdd`…`cdddddd`,
+  `p`/`cdp`, `latest`), listing (`ls`/`ll`/`la`/`lh`/`lg`/`lah`/`tree`), editing
+  (`vi`/`vim`/`vic`/`vid`/`vii`/`v`/`new`), search (`g`/`sg`/`gv`/`gf`/`gpy`/`gtcl`/
+  `f`/`fc`/`h`/`hg`/`gah`), git (`gs`/`gc`/`gp`/`gd`/`ga`/`gr`/`gsp`), LSF/EDA
+  (`bq`/`bjobsv`/`bkillall`/`mli`/`ms`/`ma`/`pg`/`pk`/`ipy`…), VNC (`vnc`/`killvnc`…)
+  and the utility set. Each tool alias is defined **only if the tool is installed**.
+- **Prompt** — cwd, git branch, optional hostname, the username when it is
+  highlighted or differs from `$USER`, and the red farm colour under `$LSB_JOBID`.
+- **Every directory change lists**, via csh's native `cwdcmd`. It also carries
+  OSC 7 (cwd reporting) to the terminal.
+- **`set implicitcd`** — typing a bare directory name changes to it.
+- **History** — per-PID, inherited from the parent shell, 10000 entries, dedup'd.
+- **`LOADOUT_ONLINE`** — the same parallel TCP probe the bash env runs.
+
+### The helper scripts
+
+`global/helpers/` is what lets "csh has no functions" stop being a reason to drop
+a feature. Each is POSIX sh, shellcheck-clean, and silent on the boring path;
+`helpers/README.md` explains the three calling shapes. A helper that must change
+the shell's own cwd or environment *prints* the csh command and the alias
+`eval`s it — that is how `latest` and `cdd` work.
+
+Two of them are worth knowing about specifically:
+
+- **`prompt-color`** — `LOADOUT_CFG_PROMPT_COLOR_*` is shared with the bash env
+  and **exported** there, so a tcsh launched from a loadout bash shell inherits a
+  *bash* prompt string wrapped in readline's `\[` / `\]` zero-width markers. tcsh
+  prints those literally. This strips them and turns a literal `\033`/`\e` into a
+  real ESC byte; `%{…%}` in the prompt is tcsh's own zero-width wrapper.
+- **`seed-history`** — derives the parent pid from `/proc` because **tcsh has no
+  `$PPID`**. Naming `$PPID` in the rc file makes every interactive shell print
+  `PPID: Undefined variable.` on startup.
 
 ## What you do not get, and why
 
+These are absent because **upstream provides no tcsh support at all** — not because
+the port stopped early. Each is a dependency on a generated shell snippet that only
+exists for bash/zsh/fish.
+
 | | why |
 |---|---|
-| The `functions.sh` library (26 of 28) | **csh has no functions.** Not a gap in the port — the language has no function construct. Aliases cannot do loops, locals, or return values, and a standalone script cannot change the calling shell's PATH or cwd. `path_prepend` / `path_append` survive as aliases because they only touch `$path`, which csh has natively. `is_truthy`, `vercomp`, `array_slice`, `join_by`, `loadout_detect_online`, the custom `cd`, and the rest are **absent by design**. |
-| Starship | No upstream tcsh support. The prompt here is hand-rolled and does not match the bash one. |
-| Shell integration (OSC 133), fzf/zoxide keybindings, tmux auto-attach | No csh equivalent worth the maintenance. |
+| Starship | `starship init` has no tcsh target. The prompt here is hand-rolled and does not match the bash one. |
+| fzf keybindings (`Ctrl+T`, `Ctrl+R`, `Alt+C`) | `fzf --bash` / `--zsh` / `--fish` only. fzf itself works fine as a command. |
+| zoxide (`z` / `zi`) | `zoxide init` has no tcsh target. |
+| OSC 133 semantic zones / OSC 7 cwd | Needs a preexec framework (bash-preexec). tcsh's `precmd`/`postcmd` can carry OSC 7, which the prompt block does; full 133 zoning needs per-command hooks csh does not expose. |
+| IceCream-Bash (`ic`/`icp`/`ict`/`ictp`) | A bash function library that relies on `${!var}` indirect expansion and `export -f`. |
+
+Everything else in the bash env has a tcsh form and should have one here. If you find
+a gap that is not in this table, it is a bug, not a design decision.
 
 ## The prompt, and why there is a shell script next to it
 
@@ -85,9 +155,20 @@ runs for real in the Tier 3 `almalinux:8.10` container.
 The headline assertion is **empty stderr** on startup — interactive and login, on a
 HOME with no loadout tools installed at all.
 
-Two harness traps are documented in that file and are worth knowing before you touch
-it: `tcsh -i -c CMD` does **not** set `$prompt`, so it silently skips the entire
-interactive block (a silence test written that way passes without running the code
-under test); and a piped tcsh with no controlling terminal prints
-`Warning: no access to tty` to stderr, which looks exactly like the noise you are
-testing for. The test uses a real PTY (`script -qec`) for that reason.
+**Three** harness traps are documented in that file, and every one of them produces
+a green run that proves nothing:
+
+1. `tcsh -i -c CMD` does **not** set `$prompt`, so it silently skips the entire
+   interactive block — a silence test written that way passes without running the
+   code under test.
+2. A piped tcsh with no controlling terminal prints `Warning: no access to tty` to
+   stderr, which looks exactly like the noise you are testing for. Hence the real
+   PTY (`script -qec`).
+3. **`script` gives the child a PTY, so tcsh's own diagnostics come back on
+   stdout and `$ERRFILE` stays empty.** The headline "empty stderr" assertion
+   cannot see a shell that complains on every startup. Two real bugs shipped
+   through that hole during the 2026-08-08 parity work — `PPID: Undefined
+   variable.` and `0: Event not found.` — both printing on every interactive
+   start while the test was green. `assert_no_csh_noise` now scans the output for
+   tcsh's error vocabulary, and both bugs were re-introduced deliberately to
+   confirm it fails.

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Normalise a LOADOUT_CFG_PROMPT_COLOR_* value into bytes tcsh can print.
+#
+# LOADOUT_CFG_PROMPT_COLOR_NORMAL / _FARM are SHARED with the bash env by
+# design -- a user who sets one should get the same colour in both shells. But
+# the bash env's values are bash prompt strings, and two things in them are
+# wrong for tcsh:
+#
+#   1. `\[` and `\]` are READLINE's zero-width markers. They are meaningful only
+#      inside bash's PS1; tcsh prints them literally, so an inherited bash value
+#      renders as `\[<esc>[38;2;255;255;0m\]` in the prompt. tcsh's equivalent is
+#      `%{...%}`, which global/tcshrc wraps around this helper's output.
+#   2. The escape may arrive as the LITERAL text `\e`, `\033` or `\x1b` rather
+#      than a real ESC byte -- csh's `setenv` does not interpret backslash
+#      escapes, so a value set in config.csh is literal text.
+#
+# Reads the raw value as $1 and prints the cleaned form with no trailing
+# newline. Empty in, empty out.
+
+[ -n "${1:-}" ] || exit 0
+
+printf '%s' "$1" |
+    sed -e 's/\\\[//g' -e 's/\\\]//g' |
+    sed -e 's/\\e/\o033/g' -e 's/\\033/\o033/g' -e 's/\\x1[bB]/\o033/g'

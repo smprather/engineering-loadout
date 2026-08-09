@@ -218,8 +218,13 @@ scripts with `python3` shebangs contained 3.14-only syntax and "worked" solely
 because `~/.local/bin/python3` is 3.14.
 
 Expected Tier 3 skips, all host-contract and all fine: `cloc` (host perl),
-`meld` (host `/usr/bin/python3.6`), and the GL GUI apps (`flameshot`,
-`nedit-ng`, `nvim-qt` — host OpenGL dispatcher).
+`meld` (host `/usr/bin/python3.6`), the GL GUI apps (`flameshot`, `nedit-ng`,
+`nvim-qt` — host OpenGL dispatcher), and — since 2026-08-09 — `firefox` (needs
+user namespaces; its sandbox calls `clone(CLONE_NEWUSER)` before it will print
+`--version`, and Docker blocks that) plus `idle3`/`idle3.14` (need a loadable
+Tk; IDLE imports Tkinter before it parses arguments). Those last three are
+skipped via a PROBE, not a hardcoded exception, so on a host that has the
+capability they must still exit 0.
 
 Before believing any pass, ask what the test would have printed had the feature
 been absent.

@@ -1,0 +1,54 @@
+#!/bin/sh
+# Seed this shell's history file from the right predecessor, then print its path.
+#
+# Mirrors the ### History ### block in envs/bash/global/bashrc, which the bash
+# env relies on for two behaviours users notice immediately:
+#   * a child shell inherits its parent's history, so `exec tcsh` / a subshell
+#     does not start blank;
+#   * a fresh login starts from the most recently used history rather than an
+#     arbitrary one.
+#
+# Usage: seed-history <pid>
+# Prints the histfile path on stdout; the caller does `set histfile = "`...`"`.
+#
+# The parent pid is derived here rather than passed in, because **tcsh has no
+# $PPID** -- that is a bash variable, and referencing it in the rc file makes
+# every interactive shell print "PPID: Undefined variable." on startup.
+
+pid=$1
+[ -n "$pid" ] || { echo "usage: seed-history PID" >&2; exit 2; }
+
+# Field 4 of /proc/<pid>/stat is ppid. The comm field (2) can contain spaces and
+# parentheses, so cut everything up to the last ')' before splitting -- the
+# standard way to parse this file safely.
+ppid=''
+if [ -r "/proc/$pid/stat" ]; then
+    ppid=$(sed 's/^.*) //' "/proc/$pid/stat" 2>/dev/null | cut -d' ' -f2)
+fi
+# Non-Linux or an unreadable procfs: ask ps instead.
+if [ -z "$ppid" ]; then
+    ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+fi
+[ -n "$ppid" ] || ppid=0
+
+runtime=${XDG_RUNTIME_DIR:-}
+if [ -z "$runtime" ] || [ ! -d "$runtime" ]; then
+    runtime="/dev/shm/$(id -u)"
+    mkdir -p "$runtime" 2>/dev/null || runtime=$HOME
+fi
+
+histfile="$runtime/tcsh_history.$pid"
+
+# Already present means this PID has been here before -- an `exec tcsh` reuses
+# the PID, and its history is exactly the one to keep.
+if [ ! -f "$histfile" ]; then
+    parent="$runtime/tcsh_history.$ppid"
+    if [ -f "$parent" ]; then
+        cp "$parent" "$histfile" 2>/dev/null
+    else
+        newest=$(/bin/ls -rt1 "$runtime"/tcsh_history.* 2>/dev/null | tail -n 1)
+        [ -n "$newest" ] && cp "$newest" "$histfile" 2>/dev/null
+    fi
+fi
+
+printf '%s\n' "$histfile"

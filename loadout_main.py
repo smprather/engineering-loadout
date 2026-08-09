@@ -2051,6 +2051,40 @@ def _uv_tool_spec(info):
     return f"{package}[{','.join(extras)}]" if extras else package
 
 
+# Launchers a wheel installs that CANNOT work in this bundle, keyed by uv_tool
+# distribution name. `uv tool install` creates an entry point for every console
+# script the wheel declares, including ones whose imports we deliberately do not
+# ship -- so without this the loadout puts a permanently-broken command on every
+# user's PATH. Each entry records why the launcher is dead.
+_UV_TOOL_DEAD_LAUNCHERS = {
+    "jupyterlab": {
+        "jupyter-labhub": (
+            "JupyterHub-only entry point; jupyterhub is a multi-user server and "
+            "is deliberately not bundled, so the launcher dies with "
+            "\"No module named 'jupyterhub'\""
+        ),
+    },
+}
+
+
+def _prune_dead_uv_launchers(pkg_name, bin_home):
+    """Remove launchers that a wheel ships but this bundle cannot support.
+
+    Returns the list of launcher names actually removed.
+    """
+    removed = []
+    for launcher in _UV_TOOL_DEAD_LAUNCHERS.get(pkg_name, {}):
+        path = os.path.join(bin_home, launcher)
+        if os.path.lexists(path):
+            try:
+                os.remove(path)
+            except OSError as exc:
+                warn(f"could not remove dead launcher {path}: {exc}")
+            else:
+                removed.append(launcher)
+    return removed
+
+
 def install_python_tools(repo_dir, home, selected_tools, registry):
     """Install Python tools via 'uv tool install' using bundled offline wheels."""
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
@@ -2143,6 +2177,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             else:
                 installed.append(tool_name)
                 print(f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']}")
+                for launcher in _prune_dead_uv_launchers(pkg_name, _env["XDG_BIN_HOME"]):
+                    print(f"  Removed unsupported launcher: {launcher}")
     finally:
         _wheels_cleanup()
 
@@ -3236,9 +3272,40 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
 
     stash = _resolve_nvim_stash(home)
     if not stash:
-        # The stash is a RELEASE ASSET now, not a git payload, so a fresh checkout simply
-        # does not have it. That is expected -- but it must never be silent: the user ends
-        # up with nvim and zero plugins and no idea why.
+        # Two DIFFERENT causes land here, and they need different fixes. Telling a
+        # user to run ./tools/fetch-stash when they already have the archive sends
+        # them round the same loop again -- observed exactly that way: fetch-stash
+        # reported success, the very next install repeated "no plugin stash found",
+        # and nothing in the message hinted that the missing piece was a package
+        # SELECTION rather than the file.
+        #
+        # _resolve_nvim_stash looks only at the INSTALLED tree. Getting the archive
+        # into the repo is step one; extracting it is install_nvim_plugin_stash,
+        # which is gated on the `nvim-plugin-stash` package. That package is
+        # `kind: data` and belongs to no group, so `@shared` reaches it only through
+        # the synthetic "every non-group, non-optional, non-env package" rule --
+        # and `@envs` / `@envs-all`, being env-only by definition, never do.
+        archive_rel = os.path.join("envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+        have_archive = os.path.isfile(os.path.join(repo_dir, archive_rel))
+        if have_archive:
+            warn(
+                "nvim plugins: the plugin stash is in the repo but was NOT INSTALLED, so\n"
+                "  NO PLUGINS were installed. This selection did not include the package\n"
+                "  that unpacks it -- `nvim-plugin-stash` is a data package, and env-only\n"
+                "  groups (@envs, @envs-all) never contain it.\n"
+                "  Name it explicitly:\n"
+                "    ./loadout install nvim-plugin-stash\n"
+                "  or use a selection that already includes it:\n"
+                "    ./loadout install @engineering-loadout      # curated bundle\n"
+                "    ./loadout install @shared                   # shared/read-only tree\n"
+                "  Do NOT re-run ./tools/fetch-stash -- the archive is already here."
+            )
+            record_result(
+                "nvim plugins",
+                "SKIP",
+                "stash archive present but nvim-plugin-stash was not selected",
+            )
+            return
         warn(
             "nvim plugins: no plugin stash found, so NO PLUGINS were installed.\n"
             "  The stash (bare git mirrors, ~328 MB) ships as a release ASSET, not in the repo.\n"
@@ -3246,7 +3313,9 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
             "    ./tools/fetch-stash                      # online: from the latest release\n"
             "    ./tools/fetch-stash --from-file <file> --sums <sha256sums.txt>\n"
             "                                       # air-gapped: a copy you brought in\n"
-            "  Then re-run this install. nvim itself works fine in the meantime."
+            "  Then install the package that unpacks it -- fetching alone is not enough:\n"
+            "    ./loadout install nvim-plugin-stash\n"
+            "  nvim itself works fine in the meantime."
         )
         record_result("nvim plugins", "SKIP", "no plugin stash (fetch it: ./tools/fetch-stash)")
         return
@@ -3850,6 +3919,43 @@ def _install_env_tcsh(repo_dir, home):
         lns(os.path.join(tcsh_dir, "tcshrc"), dest, verbose=True)
 
 
+def _install_env_zsh(repo_dir, home):
+    """Install the zsh config layers and point ~/.zshrc / ~/.zprofile at them.
+
+    global/ and site-functions/ are loadout-owned and synced with delete
+    semantics; the five override layers are user-created and must survive a
+    reinstall, so this cannot use the generic handler. _install_env_generic
+    calls install_path() on the whole source dir, which syncs with delete=True
+    -- that DELETED ~/.config/zsh/{corp,site,team,project,user} on every
+    reinstall while the shipped zshrc went on sourcing them. Same failure the
+    env-st and env-tcsh handlers exist to prevent.
+
+    The registry entry's "supports_layers" field does not prevent this: it is
+    only ever read by `loadout info` for display.
+    """
+    src = os.path.join(repo_dir, "envs", "zsh")
+    if not os.path.isdir(src):
+        return
+    zsh_dir = os.path.join(home, ".config", "zsh")
+    if os.path.islink(zsh_dir):
+        os.unlink(zsh_dir)
+    ensure_dir(zsh_dir, "zsh config")
+    install_path(os.path.join(src, "global"), os.path.join(zsh_dir, "global"), False)
+    install_path(os.path.join(src, "site-functions"), os.path.join(zsh_dir, "site-functions"), False)
+    install_path(os.path.join(src, "zshrc"), os.path.join(zsh_dir, "zshrc"), False)
+    for layer in ("corp", "site", "team", "project", "user"):
+        ensure_dir(os.path.join(zsh_dir, layer), "zsh config layer")
+    # .zshenv is the one zsh reads for NON-interactive shells (a plain
+    # `zsh script.zsh` reads it and nothing else), so a script gets PATH and
+    # the exported environment. .zshrc is interactive-only and .zprofile is
+    # login-only; linking just those two left scripts with no loadout env at
+    # all. The entry point guards against the resulting double-source.
+    for entrypoint in (".zshenv", ".zshrc", ".zprofile"):
+        dest = os.path.join(home, entrypoint)
+        remove_if_exists(dest)
+        lns(os.path.join(zsh_dir, "zshrc"), dest, verbose=True)
+
+
 def _install_env_cargo(repo_dir, home):
     """Write ~/.cargo/config.toml pointing Cargo at the bundled offline
     local-registry (installed by the rust-crate-store data package).
@@ -3899,6 +4005,7 @@ ENV_HANDLERS = {
     "env-helix": _install_env_helix,
     "env-st": _install_env_st,
     "env-tcsh": _install_env_tcsh,
+    "env-zsh": _install_env_zsh,
     "env-cargo": _install_env_cargo,
 }
 
@@ -3915,6 +4022,7 @@ ENV_INSTALL_ORDER = (
     "env-helix",
     "env-st",
     "env-tcsh",
+    "env-zsh",
     "env-cargo",
 )
 

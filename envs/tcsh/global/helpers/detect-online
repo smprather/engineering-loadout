@@ -1,0 +1,39 @@
+#!/bin/sh
+# Probe network reachability in parallel. Exit 0 = online, 1 = offline/blocked.
+#
+# Backs LOADOUT_ONLINE in global/tcshrc; mirrors loadout_detect_online() in
+# envs/bash/functions.sh, including its default host list and timeout.
+#
+# The bash version uses /dev/tcp, which is a bash feature -- neither /bin/sh nor
+# csh has it. This shells out to bash for that one primitive when bash exists,
+# and otherwise falls back to whichever of nc / timeout+curl is present. If none
+# of them is available the answer is "offline", which is the safe default for a
+# setting that only ever gates online update checks.
+
+timeout_s=${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}
+hosts=${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}
+
+command -v timeout >/dev/null 2>&1 || exit 1
+
+tmp=$(mktemp 2>/dev/null) || exit 1
+# Clean up on any exit path, including the interrupt that a slow login might get.
+trap 'rm -f "$tmp"' EXIT INT TERM
+
+probe_one() {
+    _host=${1%%:*}
+    _port=${1##*:}
+    if command -v bash >/dev/null 2>&1; then
+        timeout "$timeout_s" bash -c "echo >/dev/tcp/${_host}/${_port}" 2>/dev/null
+    elif command -v nc >/dev/null 2>&1; then
+        timeout "$timeout_s" nc -z "$_host" "$_port" >/dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+for hp in $hosts; do
+    { probe_one "$hp" && echo 1 >"$tmp"; } &
+done
+wait
+
+[ "$(cat "$tmp" 2>/dev/null)" = "1" ]

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Search every per-PID shell history file this user owns.
+#
+# Backs the `gah` alias; mirrors gah() in envs/bash/global/aliases.sh, extended
+# to cover tcsh's own per-PID history files as well as bash's -- a user on tcsh
+# still accumulates bash histories from scripts and from tmux panes running bash.
+
+[ $# -ge 1 ] || { echo "usage: gah PATTERN..." >&2; exit 2; }
+
+# A glob that matches nothing stays literal in sh, so every candidate is tested
+# with -e before it is used. These are runtime-dir paths with no spaces, so the
+# word-split of $files below is intentional.
+files=''
+for candidate in /run/user/*/bash_history.* /run/user/*/tcsh_history.* \
+                 "${XDG_RUNTIME_DIR:-/nonexistent}"/bash_history.* \
+                 "${XDG_RUNTIME_DIR:-/nonexistent}"/tcsh_history.*; do
+    [ -e "$candidate" ] || continue
+    files="$files $candidate"
+done
+
+[ -n "$files" ] || exit 1
+
+if command -v rg >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    rg "$@" $files 2>/dev/null
+else
+    # shellcheck disable=SC2086
+    grep -i --color=auto "$@" $files 2>/dev/null
+fi

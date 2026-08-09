@@ -1,0 +1,11 @@
+#!/bin/sh
+# Print this user's summed CPU% once per second until interrupted.
+# Backs the `my_total_cpu` alias; mirrors my_total_cpu() in
+# envs/bash/global/aliases.sh.
+
+user=$(/bin/whoami)
+
+while true; do
+    top -b -n 1 -u "$user" | awk 'NR > 7 { sum += $9 } END { print sum + 0 }'
+    sleep 1
+done

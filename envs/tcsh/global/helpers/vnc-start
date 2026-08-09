@@ -1,0 +1,9 @@
+#!/bin/sh
+# With no arguments, start a VNC server with no security types. With arguments,
+# pass straight through to vncserver.
+# Backs the `vnc` alias; mirrors vnc() in envs/bash/global/aliases.sh.
+
+if [ $# -eq 0 ]; then
+    exec vncserver -SecurityTypes None
+fi
+exec vncserver "$@"

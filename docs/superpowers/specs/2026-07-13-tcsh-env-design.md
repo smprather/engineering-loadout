@@ -1,5 +1,12 @@
 # tcsh environment — design
 
+> **SUPERSEDED 2026-08-08.** This document's core premise -- that the tcsh env
+> is a one-time port that does NOT track `envs/bash/`, justified by a near-zero
+> expected user count -- was reversed by the owner. The EE community this project
+> serves is ~90% tcsh, and `envs/tcsh/` now tracks the bash env. Kept as a record
+> of what was decided in July 2026; do not follow its "does not track" guidance.
+> See `docs/HANDOFF.md` -> "POLICY REVERSAL: tcsh now tracks bash/zsh".
+
 Date: 2026-07-13
 Status: approved (design)
 

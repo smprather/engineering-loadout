@@ -1,151 +1,75 @@
-# loadout zsh config (MVP). Companion to bash/bashrc.
+# Loadout zsh entry point. ~/.zshrc and ~/.zprofile link here.
 #
-# Strategy: REUSE the portable bash layers (functions.sh, config.sh, aliases.sh)
-# and add only zsh-specific adapters here. This is NOT a bash file -- do not
-# `bash -n` or shellcheck it; validate by running zsh.
+# This environment TRACKS envs/bash/. A bash-env change is not finished until
+# the zsh form lands -- see envs/zsh/README.md and docs/HANDOFF.md.
 #
-# Native zsh completion (compinit), the starship prompt, history and prefix
-# keybindings are wired below. Deferred (bash-only for now): the full bash
-# keybinding set and the startup-trace / icecream debug machinery.
+# The strategy differs from the tcsh port, and deliberately so. csh has no
+# functions, so envs/tcsh/ must REIMPLEMENT everything. zsh has functions,
+# arrays and `local`, so it REUSES the bash env's shared library and alias file
+# directly:
+#
+#     envs/bash/functions.sh        -> sourced as-is
+#     envs/bash/global/config.sh    -> sourced as-is (one home for the defaults)
+#     envs/bash/global/aliases.sh   -> sourced as-is
+#
+# That is what makes the alias surface track automatically instead of by
+# discipline. Those three files are therefore SHARED code, not bash-private: a
+# bashism added to any of them breaks zsh, which is why the path_* family uses
+# eval indirection and `pl` lower-cases with `tr` rather than ${var,,}.
+# tests/env-shell-parity enforces the rest.
+#
+# Layers are sourced lowest-first: global -> corp -> site -> team -> project ->
+# user, in two passes (config, then rc), the same shape as bash and tcsh. Every
+# source is guarded: a layer you have not created is normal, not an error.
 
-# --- zsh compat ---------------------------------------------------------------
-# INTERACTIVE_COMMENTS: allow `#` comments interactively (bash-like).
-# NOTE: do NOT enable SH_WORD_SPLIT globally -- it breaks zsh's own completion
-# system (compinit/compdump loops). The shared bash bits we reuse (the PATH loop
-# iterates literal words; config.sh/aliases.sh are plain defs) don't need it.
+# ~/.zshenv, ~/.zshrc and ~/.zprofile all link here, which is deliberate and
+# needs the guard below.
+#
+# zsh splits its startup files by shell TYPE, unlike bash:
+#     .zshenv    every zsh, including a non-interactive `zsh script.zsh`
+#     .zprofile  login shells
+#     .zshrc     INTERACTIVE shells only
+#
+# Linking only .zshrc/.zprofile -- which is what this package used to do -- left
+# scripts with no PATH and none of the exported environment, because a script
+# reads .zshenv and nothing else. Linking .zshenv fixes that, but then an
+# interactive shell sources this file twice (.zshenv, then .zshrc). The guard
+# makes the second pass a no-op. It is deliberately NOT exported: a child zsh
+# must run the config itself.
+if [[ -n ${_LOADOUT_ZSH_SOURCED:-} ]]; then
+    return 0
+fi
+_LOADOUT_ZSH_SOURCED=1
+
+ZSH_CONFIG_ROOT_DIR="${ZSH_CONFIG_ROOT_DIR:-$HOME/.config/zsh}"
+BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
+
+# INTERACTIVE_COMMENTS: allow `#` comments interactively, as bash does.
+# Do NOT enable SH_WORD_SPLIT globally -- it breaks zsh's own completion system
+# (compinit/compdump loops). The shared bash files that need it set it locally.
 setopt INTERACTIVE_COMMENTS 2>/dev/null
 
-# --- config root (mirror the bash dispatcher's default) -----------------------
-BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
-ZSH_CONFIG_ROOT_DIR="${ZSH_CONFIG_ROOT_DIR:-$HOME/.config/zsh}"
-
-# --- shared helpers + config (portable; verified to source under zsh) ---------
-# functions.sh defines source_if_exists / path_* / is_truthy / join_by.
+# --- shared function library (must come first; everything below uses it) ------
 [[ -r "$BASH_CONFIG_ROOT_DIR/functions.sh" ]] && source "$BASH_CONFIG_ROOT_DIR/functions.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
-for _layer in corp site team project user; do
-    source_if_exists "$BASH_CONFIG_ROOT_DIR/$_layer/config.sh"
-done
 
-# --- PATH + terminfo (ported from global/bashrc; nvm is bash-gated) -----------
-# nvm.sh hangs when sourced under zsh via its auto-use path -- load it in bash
-# only. (Not yet ported to a zsh-safe lazy loader.)
-if [[ -n "${BASH_VERSION:-}" && -r "$HOME/.nvm/nvm.sh" ]]; then
-    export NVM_DIR="$HOME/.nvm"
-    source "$NVM_DIR/nvm.sh"
-fi
-for _bin_dir in \
-    /usr/local/bin \
-    $NVM_BIN \
-    ~/.cargo/bin \
-    ~/.venv/bin \
-    ~/.opencode/bin \
-    ~/node_modules/.bin \
-    ~/go/bin \
-    "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" \
-    ~/.local/bin; do
-    path_prepend_if_dir "$_bin_dir"
-done
-# terminfo: zsh-native prepend. (path_*_if_dir are bash+zsh portable, but the
-# TERMINFO_DIRS export below also needs typeset -gx, so keep it native.)
-typeset -gx TERMINFO_DIRS
-for _ti in "$HOME/.local/share/terminfo" "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/share/terminfo}"; do
-    [[ -n "$_ti" && -d "$_ti" && ":$TERMINFO_DIRS:" != *":$_ti:"* ]] && \
-        TERMINFO_DIRS="$_ti${TERMINFO_DIRS:+:$TERMINFO_DIRS}"
-done
+# --- Pass 1a: shared LOADOUT_CFG_* defaults, from the BASH layers -------------
+# Deliberately the bash files: the defaults live in exactly one place so a value
+# a user sets for bash also applies to zsh. zsh-only settings go in pass 1b.
+if typeset -f source_if_exists >/dev/null 2>&1; then
+    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
+    for _layer in corp site team project user; do
+        source_if_exists "$BASH_CONFIG_ROOT_DIR/$_layer/config.sh"
+    done
 
-# GUI/runtime helpers live under the shared prefix for split deployments, or
-# under ~/.local for normal single-user installs.
-_zsh_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
-if [[ -f "$_zsh_local_prefix/lib64/libqxcb.so" ]]; then
-    export QT_QPA_PLATFORM_PLUGIN_PATH="$_zsh_local_prefix/lib64"
-fi
-if [[ -d "$_zsh_local_prefix/share/nvim-qt/runtime" ]]; then
-    export NVIM_QT_RUNTIME_PATH="$_zsh_local_prefix/share/nvim-qt/runtime"
-fi
-if [[ -d "$_zsh_local_prefix/lib/girepository-1.0" ]]; then
-    export GI_TYPELIB_PATH="$_zsh_local_prefix/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+    # --- Pass 1b: zsh-specific config, every layer ----------------------------
+    for _layer in global corp site team project user; do
+        source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/config.zsh"
+    done
+
+    # --- Pass 2: the shell config itself, every layer -------------------------
+    for _layer in global corp site team project user; do
+        source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/zshrc"
+    done
 fi
 
-# Non-interactive shells need PATH but nothing below.
-[[ -o interactive ]] || return 0
-
-# --- history (zsh-native) -----------------------------------------------------
-HISTFILE="$HOME/.zsh_history"
-HISTSIZE=10000
-SAVEHIST=10000
-setopt HIST_IGNORE_SPACE HIST_IGNORE_ALL_DUPS SHARE_HISTORY INC_APPEND_HISTORY
-
-# Silence the zsh beep: no beep on history errors, list-ambiguous, or completion.
-# no_beep is the umbrella; hist_beep / list_beep are named explicitly for clarity.
-unsetopt beep hist_beep list_beep
-
-# --- zsh function library (fpath) + completion + module_path ------------------
-# Dynamic modules (zsh/regex, zsh/pcre, etc.) ship via runtime/zsh.tar.bz2 ->
-# <root>/lib/zsh. The shell functions (compinit, add-zsh-hook, the _*
-# completions) ship via the same archive -> <root>/share/zsh. The binary's
-# built-in fpath and module_path are the gone build prefix, so point both at
-# the installed library (under the shared prefix when set). If the library
-# isn't present, skip completion/integrations rather than error.
-_zsh_root="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
-_zsh_share="${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/share/zsh}"
-_zsh_share="${_zsh_share:-$HOME/.local/share/zsh}"
-_zsh_module_dir="$_zsh_root/lib/zsh/$ZSH_VERSION"
-if [[ -d "$_zsh_module_dir" ]]; then
-    module_path=("$_zsh_module_dir" $module_path)
-fi
-_zsh_fns_ok=0
-_zsh_extra_fpath=()
-if [[ -d "$ZSH_CONFIG_ROOT_DIR/site-functions" ]]; then
-    _zsh_extra_fpath+=("$ZSH_CONFIG_ROOT_DIR/site-functions")
-fi
-if [[ -d "$_zsh_share/$ZSH_VERSION/functions" ]]; then
-    _zsh_extra_fpath+=("$_zsh_share/site-functions" "$_zsh_share/$ZSH_VERSION/functions")
-    _zsh_fns_ok=1
-fi
-if (( ${#_zsh_extra_fpath[@]} )); then
-    fpath=("${_zsh_extra_fpath[@]}" $fpath)
-fi
-# Completion system. The dump is cached per zsh version (its format is
-# version-specific) under the cache dir. -u skips the insecure-dir check (the
-# bundled function tree is group-writable on a shared install).
-if is_truthy "${LOADOUT_CFG_ZSH_ENABLE_COMPLETION:-1}"; then
-    _zsh_cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
-    [[ -d "$_zsh_cache" ]] || mkdir -p "$_zsh_cache" 2>/dev/null
-    if autoload -Uz +X compinit 2>/dev/null; then
-        compinit -u -d "$_zsh_cache/zcompdump-$ZSH_VERSION"
-    fi
-fi
-
-# --- key bindings (built-in zle widgets only; no autoload -> no fpath need) ---
-# prefix history search on arrows (bash history-search-* analog), Shift-Tab back.
-bindkey '^[[A' history-beginning-search-backward
-bindkey '^[[B' history-beginning-search-forward
-bindkey '^[[Z' reverse-menu-complete
-
-# --- ls (minimal; the full env-var-driven bash ls() is deferred) --------------
-# aliases.sh chains ll/lr/lh/... onto `ls`; give it the preferred backend so the
-# common cases work (human_readable=1 etc. degrade silently to a plain listing).
-if command -v "${LOADOUT_CFG_PREFERRED_LS:-eza}" >/dev/null; then
-    alias ls="${LOADOUT_CFG_PREFERRED_LS:-eza}"
-fi
-
-# --- tool integrations (zsh init variants) ------------------------------------
-# starship/zoxide/fzf zsh hooks need add-zsh-hook from the function library, so
-# gate on _zsh_fns_ok plus the same shared LOADOUT_CFG_ENABLE_* flags bash uses.
-if (( _zsh_fns_ok )); then
-    if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP:-1}" && command -v starship >/dev/null; then
-        export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
-        eval "$(starship init zsh)"
-    fi
-    is_truthy "${LOADOUT_CFG_ENABLE_ZOXIDE:-0}" && command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
-    is_truthy "${LOADOUT_CFG_ENABLE_FZF:-0}" && command -v fzf >/dev/null && eval "$(fzf --zsh)"
-fi
-
-# --- shared aliases + command-shortcut functions (zsh-compatible) -------------
-source_if_exists "$BASH_CONFIG_ROOT_DIR/global/aliases.sh"
-
-# --- zsh layer overrides (corp/site/team/project/user), if present ------------
-for _layer in corp site team project user; do
-    source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/zshrc"
-done
+unset _layer

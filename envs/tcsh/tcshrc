@@ -1,10 +1,13 @@
 # Loadout tcsh entry point.  ~/.tcshrc and ~/.cshrc link here.
 #
-# This environment is a deliberate ONE-TIME port of the bash environment. It does
-# NOT track envs/bash/ and there is no drift test between the two -- see
-# envs/tcsh/README.md before "fixing" anything that looks out of date.
+# This environment TRACKS envs/bash/ (and envs/zsh/). A bash-env change is not
+# finished until the tcsh form lands -- see envs/tcsh/README.md.
 #
-# csh has no functions, so most of envs/bash/functions.sh is intentionally absent.
+# csh has no functions. That selects the IMPLEMENTATION, not whether a feature
+# ships: one-line wrappers are aliases (they take args -- \!:1, \!*, \!:2-),
+# anything needing loops/locals goes in a POSIX-sh helper under global/helpers/
+# and is aliased, and anything that must mutate this shell's cwd/PATH/env is a
+# helper that PRINTS the command, run through `eval \`helper\``.
 #
 # Layers are sourced lowest-first: global -> corp -> site -> team -> project -> user.
 # Every source is guarded: a missing layer is normal, not an error, and must stay

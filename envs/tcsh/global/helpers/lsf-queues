@@ -1,0 +1,9 @@
+#!/bin/sh
+# LSF queue summary. With -l, the full bqueues -l dump; otherwise this user's
+# queues in a compact format.
+# Backs the `bq` / `bqs` aliases; mirrors bq() in envs/bash/global/aliases.sh.
+
+if [ "$1" = "-l" ]; then
+    exec bqueues -l "$@"
+fi
+exec bqueues -u "$(/bin/whoami)" -o 'queue_name: status: njobs: pend: run:'

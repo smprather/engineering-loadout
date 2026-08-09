@@ -1,0 +1,56 @@
+#!/bin/sh
+# Version and floating-point comparison, exit-status style.
+#
+# Covers vercomp / verlte / verlt / ver_between / fpcmp from
+# envs/bash/functions.sh. csh callers use the command-status form:
+#     if ( { vercmp 2.17 -gt 2.0 } ) then ... endif
+#     if ( { vercmp --between 1.0 1.5 2.0 } ) then ... endif
+#
+# Comparison is numeric field-by-field, so 2.9 < 2.10 (the string compare that
+# `sort -V` avoids and a naive `expr` gets wrong). Non-numeric leading junk in a
+# field is stripped; a missing field counts as 0, so 1.2 == 1.2.0.
+
+usage() {
+    echo "usage: vercmp V1 (-eq|-ne|-gt|-ge|-lt|-le) V2" >&2
+    echo "       vercmp --between LOW V HIGH   (LOW <= V <= HIGH)" >&2
+    exit 2
+}
+
+# Print -1, 0 or 1 for v1 vs v2.
+compare() {
+    _v1=$1
+    _v2=$2
+    while [ -n "$_v1" ] || [ -n "$_v2" ]; do
+        _f1=${_v1%%.*}
+        _f2=${_v2%%.*}
+        # Strip anything that is not a digit (e.g. the rc in 1.2rc3).
+        _n1=$(printf '%s' "$_f1" | tr -cd '0-9')
+        _n2=$(printf '%s' "$_f2" | tr -cd '0-9')
+        [ -n "$_n1" ] || _n1=0
+        [ -n "$_n2" ] || _n2=0
+        if [ "$_n1" -lt "$_n2" ]; then echo -1; return; fi
+        if [ "$_n1" -gt "$_n2" ]; then echo 1; return; fi
+        case $_v1 in *.*) _v1=${_v1#*.} ;; *) _v1='' ;; esac
+        case $_v2 in *.*) _v2=${_v2#*.} ;; *) _v2='' ;; esac
+    done
+    echo 0
+}
+
+if [ "$1" = "--between" ]; then
+    [ $# -eq 4 ] || usage
+    [ "$(compare "$3" "$2")" -ge 0 ] && [ "$(compare "$3" "$4")" -le 0 ]
+    exit $?
+fi
+
+[ $# -eq 3 ] || usage
+
+result=$(compare "$1" "$3")
+case $2 in
+    -eq) [ "$result" -eq  0 ] ;;
+    -ne) [ "$result" -ne  0 ] ;;
+    -gt) [ "$result" -eq  1 ] ;;
+    -ge) [ "$result" -ge  0 ] ;;
+    -lt) [ "$result" -eq -1 ] ;;
+    -le) [ "$result" -le  0 ] ;;
+    *)   usage ;;
+esac

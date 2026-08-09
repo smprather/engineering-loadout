@@ -188,7 +188,7 @@ pins:
 - **nvim** -- per-plugin commit pins (`envs/nvim/lazy-lock.json`).
 - **rust-crate-store** -- the full `name version cksum` closure in
   `assurance/crate-store.lock`. `build/verify-crate-store` re-hashes every one of
-  the 2101 `.crate` files against the crates.io SHA-256 embedded in the store's
+  the 2272 `.crate` files against the crates.io SHA-256 embedded in the store's
   own registry index (run in Tier 2 as `--check-lock`), so a tampered crate
   fails against both the store index and the signed-tag'd lock.
 - **treesitter-parsers** -- per-grammar `url + revision + shipped-.so sha256` for

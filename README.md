@@ -258,7 +258,7 @@ OpenSSH for those.
 | fd | bin | 10.4.2 | Fast and user-friendly find alternative |
 | fio | bin | 3.42 | Flexible I/O tester — storage and filesystem performance benchmark |
 | fzf | bin | 0.74.2 | General-purpose command-line fuzzy finder |
-| gnuplot | bin | 6.0.2 | Command-line graphing and plotting utility |
+| gnuplot | bin | 6.0.5 | Command-line graphing and plotting utility |
 | glow | bin | 2.1.2 | Terminal markdown renderer/pager with styles |
 | gocheat | bin | 0.1.1 | Interactive terminal cheatsheet browser (EL8 source build, CGO_ENABLED=0 static) |
 | keyb | bin | 0.8.0 | Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export |
@@ -295,7 +295,7 @@ OpenSSH for those.
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
 | tmux | bin | 3.7b | Terminal multiplexer with session management |
-| tree-sitter | bin | 0.26.11 | Incremental parser generator and query tool |
+| tree-sitter | bin | 0.26.12 | Incremental parser generator and query tool |
 | ty | bin | 0.0.69 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.3 | Extremely fast Python package and project manager |
@@ -348,9 +348,9 @@ OpenSSH for those.
 | espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
-| lua-language-server | bin | 3.18.2 | Lua language server (LSP) — useful for nvim config and Lua tooling |
+| lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | pyright | python-tool | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions |
-| tmux-path-store | python-tool | 1.0.1 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
+| tmux-path-store | python-tool | 1.1.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots
 
 `./loadout install parity-plot` installs the CLI and its local designer, with no

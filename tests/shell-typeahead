@@ -1,0 +1,91 @@
+#!/bin/sh
+# Startup must never eat the user's keystrokes.
+#
+# check_extended_keys() in envs/bash/functions.sh probes the terminal with a
+# Secondary DA query and reads the reply with `read -r -d 'c' -t 0.1`. When the
+# terminal does not answer -- no real terminal, or one that ignores Secondary DA
+# -- that read consumes whatever the USER typed ahead, up to their first literal
+# `c`. Typing `echo MARK-ALIVE` during startup therefore ran `ho MARK-ALIVE`:
+# the `ec` swallowed, and `ho` happens to be the loadout's `hostname -s` alias,
+# so it failed with a usage message instead of an obvious error.
+#
+# It shipped in BOTH shells. It was found while bringing the zsh env to bash
+# parity, not by anyone noticing it in bash, because "the first command I typed
+# while the shell was starting did something odd" reads as a fluke.
+#
+# The test types a command whose FIRST 'c' is early (so a regression is
+# guaranteed to corrupt it) and asserts the command ran intact.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+FUNCS="$REPO/envs/bash/functions.sh"
+
+if ! command -v script >/dev/null 2>&1; then
+    echo "SKIP: shell-typeahead (no 'script' for a PTY; cannot test honestly)"
+    exit 0
+fi
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Feed CMDS to an interactive SHELL under a real PTY and echo what came back.
+#
+# Two things about the environment are load-bearing, and getting either wrong
+# gives a green run that proves nothing:
+#
+#   * A REAL PTY. With a pipe, the `[[ -t 0 ]]` guard short-circuits the probe
+#     and the code under test never executes. Hence `script -qec`.
+#   * TMUX unset and a plain TERM. check_extended_keys answers from tmux and
+#     from kitty/alacritty TERMs BEFORE it reaches the stdin-consuming probe --
+#     which is the fix working as intended -- so on a developer box inside tmux
+#     (`extended-keys on`) the probe is never reached and the bug cannot
+#     reproduce. This was caught by a negative control that failed to fail.
+run_shell() {
+    _shell=$1
+    printf 'source %s\ncheck_extended_keys\necho MARK-ALIVE\nexit\n' "$FUNCS" \
+        | env -u TMUX -u KITTY_WINDOW_ID TERM=xterm \
+              script -qec "$_shell" /dev/null 2>/dev/null \
+        | tr -d '\r' \
+        | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g'
+}
+
+checked=0
+
+for entry in "bash:bash --norc -i" "zsh:zsh -f -i"; do
+    name=${entry%%:*}
+    cmdline=${entry#*:}
+    command -v "$name" >/dev/null 2>&1 || {
+        echo "  SKIP  $name not installed"
+        continue
+    }
+    out=$(run_shell "$cmdline")
+    checked=$((checked + 1))
+
+    # The queued command must have run, intact.
+    echo "$out" | grep -q '^MARK-ALIVE$' \
+        || fail "$name: type-ahead was corrupted by startup; 'echo MARK-ALIVE' never ran.
+Output was:
+$out"
+
+    # And the specific corruption must not appear: with 'ec' eaten the line
+    # becomes 'ho MARK-ALIVE', which is either an unknown command or -- in a
+    # shell that has sourced the loadout aliases -- `hostname -s MARK-ALIVE`.
+    #
+    # Do NOT pattern-match on "ho MARK-ALIVE": the correct echoed line
+    # "echo MARK-ALIVE" contains it as a substring, so that check fails on a
+    # perfectly good run. Match the CONSEQUENCES instead.
+    case $out in
+        *"Usage: hostname"* | *"command not found"* | *"not found: ho"*)
+            fail "$name: startup ate the leading characters of the typed command.
+Output was:
+$out"
+            ;;
+    esac
+    echo "  PASS  $name preserved type-ahead across startup"
+done
+
+[ "$checked" -gt 0 ] || {
+    echo "SKIP: shell-typeahead (neither bash nor zsh available)"
+    exit 0
+}
+
+echo "shell-typeahead: OK"

@@ -658,7 +658,7 @@
       "bins": [
         "gnuplot"
       ],
-      "version": "6.0.2",
+      "version": "6.0.5",
       "version_url": "https://sourceforge.net/projects/gnuplot/rss?path=/gnuplot",
       "version_pattern": "/gnuplot/([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)/",
       "platforms": [
@@ -1278,7 +1278,7 @@
       "bins": [
         "tree-sitter"
       ],
-      "version": "0.26.11",
+      "version": "0.26.12",
       "platforms": [
         "linux"
       ],
@@ -2864,6 +2864,10 @@
       "extra_links": [
         {
           "from": "~/.config/zsh/zshrc",
+          "to": "~/.zshenv"
+        },
+        {
+          "from": "~/.config/zsh/zshrc",
           "to": "~/.zshrc"
         },
         {
@@ -2872,6 +2876,7 @@
         }
       ],
       "supports_layers": [
+        "global",
         "corp",
         "site",
         "team",
@@ -2892,7 +2897,7 @@
       "recommends": [
         "env-starship"
       ],
-      "description": "Zsh config that reuses the bash layers (functions.sh/config.sh/aliases.sh) plus zsh-native completion, starship prompt, history and keybindings"
+      "description": "Zsh config tracking the bash env: reuses the shared functions.sh/config.sh/aliases.sh, plus zsh-native completion, prompt, history, keybindings and OSC 133 integration"
     },
     "env-nvim": {
       "kind": "env",
@@ -3055,7 +3060,7 @@
         "env",
         "shell"
       ],
-      "description": "tcsh config (one-time best-effort port of the bash env; PATH, aliases, prompt, six-layer chain)"
+      "description": "tcsh config tracking the bash env (PATH, environment, aliases, helpers, prompt, six-layer chain)"
     },
     "env-wezterm": {
       "kind": "env",
@@ -3719,7 +3724,7 @@
       "bins": [
         "lua-language-server"
       ],
-      "version": "3.18.2",
+      "version": "3.19.0",
       "platforms": [
         "linux"
       ],
@@ -3777,7 +3782,7 @@
         "tmux-path-store",
         "rich"
       ],
-      "version": "1.0.1",
+      "version": "1.1.0",
       "platforms": [
         "linux"
       ],

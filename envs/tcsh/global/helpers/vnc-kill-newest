@@ -1,0 +1,28 @@
+#!/bin/sh
+# Kill the highest-numbered running VNC display owned by anyone on this host.
+# Backs the `killvnc` alias; mirrors killvnc() in envs/bash/global/aliases.sh.
+
+max_display=$(
+    ps -ef | awk '
+        /Xtigervnc|Xvnc/ && $0 !~ /awk/ {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^:[0-9]+/) {
+                    gsub(":", "", $i)
+                    print $i
+                }
+            }
+        }
+    ' | sort -n | tail -1
+)
+
+if [ -z "$max_display" ]; then
+    echo "No VNC sessions found."
+    exit 1
+fi
+
+echo "Killing VNC session :$max_display"
+if command -v vncserver >/dev/null 2>&1; then
+    vncserver -kill ":$max_display"
+else
+    pkill -f "X.*:$max_display"
+fi

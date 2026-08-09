@@ -1,0 +1,24 @@
+#!/bin/sh
+# zcat the LAST argument, passing every earlier argument to head.
+#   zhead -50 foo.gz   ->  zcat foo.gz | head -50
+# Backs the `zhead` alias; mirrors zhead() in envs/bash/global/aliases.sh, whose
+# `array_slice 0:-1` this replaces (csh has no arrays of that shape).
+
+[ $# -ge 1 ] || { echo "usage: zhead [head-opts...] FILE" >&2; exit 2; }
+
+# Peel the last argument off by rotating the list $#-1 times.
+file=''
+n=$#
+i=1
+while [ $i -le $n ]; do
+    arg=$1
+    shift
+    if [ $i -eq $n ]; then
+        file=$arg
+    else
+        set -- "$@" "$arg"
+    fi
+    i=$((i + 1))
+done
+
+zcat "$file" | head "$@"

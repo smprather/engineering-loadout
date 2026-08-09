@@ -1,0 +1,15 @@
+#!/bin/sh
+# Exit 0 if $1 is truthy, 1 otherwise. Mirrors is_truthy() in
+# envs/bash/functions.sh EXACTLY, including the "any other non-empty string is
+# true" rule -- config values are compared by both shells and they must not
+# disagree.
+#
+# csh has no functions and no way to return a status from an alias, so callers
+# in csh use the command-status form:
+#     if ( { is_truthy "$LOADOUT_CFG_ENABLE_GRC" } ) then ... endif
+
+case "$1" in
+    true|1|yes|on|enabled)          exit 0 ;;
+    false|0|no|off|disabled|'')     exit 1 ;;
+    *)                              [ -n "$1" ] ;;
+esac

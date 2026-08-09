@@ -8,15 +8,19 @@ cut-down PATH containing only <dest>/local/bin plus basic system directories.
 This catches wrappers that accidentally rely on tools from the user's
 ~/.local/bin or the build host.
 
-Each executable is probed for:
-  - exit 127  (loader failure / broken ELF)
-  - exit 139  (SIGSEGV)
-  - "symbol lookup error" / "undefined symbol" in output
+Each executable must **exit 0** from one of its probe invocations (PROBE_FLAGS,
+else DEFAULT_PROBE). A non-zero exit is accepted only through an EXPECT_NONZERO
+entry, which pins the flags, the exit code and a required output substring.
+Fatal output patterns ("symbol lookup error", "undefined symbol", a broken
+Tcl_Init) fail even on exit 0. A timeout still counts as OK -- an interactive
+binary that blocks has demonstrably loaded and started.
+
+The rule used to be the other way round: any exit outside {126, 127, 139}
+passed. That scored a binary green off its own error message, and three gtkwave
+tools shipped that way -- see the comment on EXPECT_NONZERO.
+
 It also checks runtime sentinels for shipped editor payloads and runs Neovim
 headless against the installed runtime.
-
-Any other outcome (including "bad option" exit 1/2, or timeout on an interactive
-binary) counts as OK -- the binary loaded and ran.
 
 Exit 0: all clean.  Exit 1: failures detected (fails the pre-commit).
 
@@ -43,8 +47,6 @@ import rich_click as click  # noqa: E402
 
 BASIC_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
-FATAL_EXIT_CODES = {126, 127, 139}
-
 FATAL_OUTPUT_PATTERNS = (
     "symbol lookup error",
     "undefined symbol",
@@ -64,6 +66,35 @@ HOST_REQUIRED_COMMANDS = {
     "verilator_coverage": ("perl", "host perl interpreter for the Verilator driver"),
 }
 
+# Binaries that need a host CAPABILITY the loadout does not provide and cannot
+# ship. Unlike HOST_REQUIRED_SOS these are not libraries -- they are kernel or
+# toolkit facilities, so there is nothing to bundle and nothing to fix.
+#
+# Each entry is PROBED. The binary is skipped only when the probe fails, so on a
+# host that has the capability it must still exit 0 -- this widens the skip set
+# without weakening the gate. That distinction matters: both entries below exit
+# 0 on a normal desktop and fail only in the Tier 3 container, so an
+# EXPECT_NONZERO entry (which pins one exit code) would be wrong in both
+# directions.
+#
+# Both were found by inverting the probe's pass condition to exit 0. Under the
+# old rule -- anything outside {126,127,139} passes -- they were scored GREEN off
+# their own error text, in every container run, for as long as they had shipped.
+#
+# probe argv[0] may be a bare command (resolved on the probe PATH, which puts the
+# staged bin dir first) or an absolute path.
+HOST_REQUIRED_CAPABILITIES = {
+    "firefox": (
+        ["unshare", "-U", "true"],
+        "user namespaces -- firefox's sandbox calls clone(CLONE_NEWUSER) before it "
+        "will even print --version, and Docker blocks that by default",
+    ),
+    # IDLE imports Tkinter at module scope, before it parses arguments, so it
+    # cannot reach exit 0 without a loadable Tk -- not even for -h.
+    "idle3": (["python3.14", "-c", "import tkinter"], "a loadable Tk for IDLE"),
+    "idle3.14": (["python3.14", "-c", "import tkinter"], "a loadable Tk for IDLE"),
+}
+
 HOST_REQUIRED_SOS = {
     # GLVND/OpenGL dispatchers must come from the host display stack. Bundling
     # them can select the wrong vendor driver.
@@ -81,10 +112,15 @@ NO_EXEC = {
     # Pinned NO_EXEC until reproducible on a non-WSL2 EL8 box.
 }
 
-# Per-binary probe flags tried in order. First non-fatal result wins.
+# Per-binary probe flags tried in order. First flag set that exits 0 wins.
+#
+# An entry here is required whenever a tool's working version/help flag is not
+# reached by DEFAULT_PROBE -- which happens whenever an EARLIER flag in that
+# list exits non-zero rather than erroring out fatally. `xterm --version` for
+# example prints `bad command line option` and exits 1, so without the entry
+# below the probe never reaches the `-version` that actually works.
 PROBE_FLAGS = {
     "tmux": [["-V"]],
-    "resize": [["--help"]],
     "bzip2": [["--help"]],
     "nvim": [["--version"]],
     # X servers take single-dash options only; --version exits 1 with
@@ -93,8 +129,121 @@ PROBE_FLAGS = {
     "Xephyr": [["-help"]],
     "Xephyr.bin": [["-help"]],
     "xdesk": [["--help"]],
+    # --- X clients: single-dash -version, --version exits 1 ---------------
+    "xterm": [["-version"]],
+    "resize": [["-version"]],
+    "nedit-ng": [["-V"]],
+    # --- Tcl/poppler/util tools whose flag is single-dash ------------------
+    # expect treats `--version` as a SCRIPT PATH and exits 1 with
+    # `couldn't read file "--version"`. -version is the real flag.
+    "expect": [["-version"]],
+    # pdftotext reads `--version` as an input filename (I/O Error, exit 1).
+    "pdftotext": [["-v"]],
+    "pdftotext.bin": [["-v"]],
+    "yank": [["-version"]],
+    # restic has no --version FLAG; `version` is a subcommand.
+    "restic": [["version"]],
+    # lld is a multiplexer: bare `--version` prints "lld is a generic driver"
+    # and exits 1. It needs a flavor selected before it will answer.
+    "lld": [["-flavor", "gnu", "--version"]],
+    # --- tools with no version flag at all; --help is the real probe -------
+    "7za": [["--help"]],
+    "dasel": [["--help"]],
+    "idle3": [["-h"]],
+    "idle3.14": [["-h"]],
+    "pygwalker": [["--help"]],
+    "python3-config": [["--help"]],
+    "python3.14-config": [["--help"]],
+    "spice-subckt-rc-reduce": [["--help"]],
+    "st-reload": [["--help"]],
+    "strip-ansi-escapes": [["--help"]],
+    "text-serdes-dec": [["--help"]],
+    "text-serdes-enc": [["--help"]],
+    "time-plot": [["--help"]],
+    "vcd-toggle-profiler": [["--help"]],
+    "verilator_gantt": [["--help"]],
+    "verilator_profcfunc": [["--help"]],
+    # gtkwave batch helpers: no flags at all, bare invocation prints usage
+    # and exits 0. These are the binaries that used to score green off
+    # `*** Could not open '--version'` (exit 255).
+    "rtlbrowse": [[]],
+    "shmidcat": [[]],
 }
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
+
+# Output substrings that identify a headless-display refusal. A GUI binary
+# that gets this far has loaded, resolved every .so and started running -- it
+# is refusing for want of an X/Wayland display, which the probe env removes on
+# purpose. Shared by the DISPLAY_REQUIRED entries in EXPECT_NONZERO below.
+DISPLAY_REFUSALS = (
+    "Unable to init server",
+    "XOpenDisplay failed",
+    "couldn't connect to display",
+    "Can't open display",
+    "cannot open display",
+)
+
+# Binaries with NO zero-exit invocation available.
+#
+# The probe's pass condition is exit 0. Before this table existed the rule was
+# inverted -- ANY exit code outside {126,127,139} scored green -- so a binary
+# that never ran at all passed off its own error message: gtkwave's rtlbrowse /
+# shmidcat / twinwave were green off `Could not open '--version'` (exit 255)
+# for as long as they had shipped. Non-zero is now accepted ONLY here, only for
+# the pinned flags, only with the pinned exit code, and only when the output
+# still carries the recorded pattern -- so accepting one is a written-down
+# decision rather than a silent default.
+#
+# Entry: name -> (flags, expected_exit, (required_substrings...), why)
+# expected_exit is an int, or a tuple of ints when the failure code legitimately
+# varies with the environment rather than with the binary's health.
+EXPECT_NONZERO = {
+    # --- GUI clients: loaded fine, refusing for want of a display ----------
+    "twinwave": ([], 255, DISPLAY_REFUSALS, "GTK viewer launcher; needs a display"),
+    "meld": (["--version"], 1, DISPLAY_REFUSALS, "GTK diff viewer; needs a display"),
+    "tkdiff": (["--version"], 1, DISPLAY_REFUSALS, "Tk diff viewer; needs a display"),
+    "open-wezterm-here": (["--version"], 1, DISPLAY_REFUSALS, "wezterm-gui helper; needs a display"),
+    # st prints its usage banner to stderr and exits 1 for any unknown option;
+    # there is no version flag. The banner proves the binary ran.
+    "st": (["--version"], 1, ("[-aiv] [-c class]",), "no version flag; usage banner proves it ran"),
+    "st.bin": (["--version"], 1, ("[-aiv] [-c class]",), "no version flag; usage banner proves it ran"),
+    "urxvt": (["--version"], 1, ("unknown or malformed option",), "no version flag; rejects it by name"),
+    "urxvtd": (["--version"], 1, ("unknown option",), "no version flag; rejects it by name"),
+    # urxvtc is a client for the urxvtd daemon and cannot reach exit 0 without
+    # one. WHICH failure it hits depends on the environment, not on the
+    # binary's health: exit 2 when no daemon is listening, exit 1 when the
+    # socket name derived from $HOME overflows sun_path (a long temp HOME does
+    # this). Both messages prove the client started and parsed its arguments,
+    # so both codes are accepted -- pinning either one alone fails on the other
+    # kind of host.
+    "urxvtc": (
+        ["--version"],
+        (1, 2),
+        ("socket name too long", "unable to connect to the rxvt-unicode daemon", "unknown or malformed option"),
+        "daemon client; needs a running urxvtd",
+    ),
+    # --- flagless CLI tools whose banner proves execution ------------------
+    # espresso is a 1988 Berkeley tool with no version flag; it rejects the
+    # option and then prints its own release banner. Covered functionally by
+    # the espresso smoke below.
+    "espresso": (["--version"], 1, ("Espresso Version",), "1988 tool, no version flag; prints its release banner"),
+    "false": (["--version"], 1, ("GNU coreutils",), "GNU false exits 1 unconditionally, by definition"),
+    # --- servers that need a transport before they will talk ---------------
+    "pyright-langserver": (
+        ["--version"],
+        1,
+        ("Connection input stream is not set",),
+        "LSP server; requires --stdio/--node-ipc to start",
+    ),
+    "pyright-python-langserver": (
+        ["--version"],
+        1,
+        ("Connection input stream is not set",),
+        "LSP server; requires --stdio/--node-ipc to start",
+    ),
+    # gocheat is a TUI; it opens /dev/tty before parsing arguments.
+    "gocheat": (["--version"], 1, ("could not open a new TTY",), "TUI; opens /dev/tty before argument parsing"),
+}
 
 
 def test_env(tmpdir):
@@ -136,6 +285,27 @@ def command_available(command, env):
         if os.path.exists(candidate) and os.access(candidate, os.X_OK):
             return True
     return False
+
+
+def capability_available(argv, env, cwd):
+    """Run a HOST_REQUIRED_CAPABILITIES probe; True when the capability is present.
+
+    A missing probe binary counts as "capability absent" rather than an error:
+    the point is to decide whether the tool under test can possibly work here,
+    and if we cannot even ask, we must not assert that it should.
+    """
+    try:
+        proc = subprocess.run(
+            argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=cwd,
+            env=env,
+            timeout=15,
+        )
+    except OSError, subprocess.TimeoutExpired:
+        return False
+    return proc.returncode == 0
 
 
 def ldd_check(path):
@@ -194,6 +364,11 @@ def real_elf_for_wrapper(wrapper_path, tmpdir):
                                             differently-named launchers
                                             (klayout + the strm* tools), so a
                                             lib/<name>/<name> guess cannot work.
+      bin/<name> + lib/<pkg>/<name>-bin   -- firefox, whose real ELF is
+                                            lib/firefox/firefox-bin. Upstream's
+                                            suffix, not ours; without it the
+                                            wrapper was exec-probed instead of
+                                            resolved.
     """
     name = os.path.basename(wrapper_path)
     candidates = [(wrapper_path + ".bin", f"{name}.bin")]
@@ -202,7 +377,7 @@ def real_elf_for_wrapper(wrapper_path, tmpdir):
         if not os.path.isdir(pkg_dir):
             continue
         pkg = os.path.basename(pkg_dir)
-        for cand in (name, name + ".bin"):
+        for cand in (name, name + ".bin", name + "-bin"):
             candidates.append((os.path.join(pkg_dir, cand), f"lib/{pkg}/{cand}"))
     for path, label in candidates:
         if os.path.isfile(path) and is_elf(path):
@@ -219,49 +394,85 @@ def require_path(path, label, failures):
     return False
 
 
-def probe_binary(binary_path, env, cwd):
-    """Return (ok, detail)."""
-    name = os.path.basename(binary_path)
-    flag_list = PROBE_FLAGS.get(name, DEFAULT_PROBE)
+def _run_probe(binary_path, flags, env, cwd):
+    """Run one probe invocation. Returns (returncode, combined_output) or
+    raises TimeoutExpired / OSError for the caller to classify."""
+    proc = subprocess.run(
+        [binary_path] + flags,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        cwd=cwd,
+        env=env,
+        timeout=4,
+    )
+    return proc.returncode, proc.stdout.decode("utf-8", "replace")
 
+
+def probe_binary(binary_path, env, cwd):
+    """Return (ok, detail).
+
+    Pass condition is **exit 0**. A non-zero exit passes only via an
+    EXPECT_NONZERO entry, which pins the flags, the code and a required output
+    substring -- see the comment on that table for why the rule is this way
+    round.
+    """
+    name = os.path.basename(binary_path)
+
+    expect = EXPECT_NONZERO.get(name)
+    if expect is not None:
+        flags, want_code, patterns, why = expect
+        want_codes = want_code if isinstance(want_code, tuple) else (want_code,)
+        try:
+            code, combined = _run_probe(binary_path, flags, env, cwd)
+        except subprocess.TimeoutExpired:
+            return False, f"expected exit {want_code}, timed out instead"
+        except OSError as exc:
+            return False, f"OSError: {exc}"
+        for pat in FATAL_OUTPUT_PATTERNS:
+            if pat in combined:
+                return False, combined[:200].strip()
+        if code not in want_codes:
+            return False, (
+                f"expected exit {'/'.join(str(c) for c in want_codes)} ({why}), got "
+                f"{'signal ' + str(-code) if code < 0 else 'exit ' + str(code)}"
+                f" -- {combined[:150].strip()}"
+            )
+        if not any(pat in combined for pat in patterns):
+            return False, (
+                f"exit {code} as expected but output lost its marker {patterns[0]!r} -- {combined[:150].strip()}"
+            )
+        return True, f"(expected exit {code}: {why})"
+
+    flag_list = PROBE_FLAGS.get(name, DEFAULT_PROBE)
     last_code = None
     last_out = ""
 
     for flags in flag_list:
         try:
-            proc = subprocess.run(
-                [binary_path] + flags,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=cwd,
-                env=env,
-                timeout=4,
-            )
-            combined = proc.stdout.decode("utf-8", "replace")
-            last_code = proc.returncode
-            last_out = combined
-
-            # Negative returncode = killed by signal (e.g. -11 = SIGSEGV)
-            if proc.returncode in FATAL_EXIT_CODES or proc.returncode < 0:
-                continue  # try next flag set before declaring failure
-
-            for pat in FATAL_OUTPUT_PATTERNS:
-                if pat in combined:
-                    return False, combined[:200].strip()
-
-            first_line = combined.split("\n")[0][:100].strip()
-            return True, first_line or f"(exit {proc.returncode})"
-
+            code, combined = _run_probe(binary_path, flags, env, cwd)
         except subprocess.TimeoutExpired:
             return True, "(interactive -- timeout counts as OK)"
         except OSError as exc:
             return False, f"OSError: {exc}"
 
-    for pat in FATAL_OUTPUT_PATTERNS:
-        if pat in last_out:
-            return False, last_out[:200].strip()
+        last_code = code
+        last_out = combined
+
+        for pat in FATAL_OUTPUT_PATTERNS:
+            if pat in combined:
+                return False, combined[:200].strip()
+
+        if code != 0:
+            continue  # try the next flag set before declaring failure
+
+        first_line = combined.split("\n")[0][:100].strip()
+        return True, first_line or "(exit 0)"
+
     code_str = f"signal {-last_code}" if last_code is not None and last_code < 0 else f"exit {last_code}"
-    return False, f"{code_str} -- {last_out[:200].strip()}"
+    return False, (
+        f"no probe exited 0 (last: {code_str}) -- {last_out[:150].strip()}"
+        " [add a PROBE_FLAGS or EXPECT_NONZERO entry if this is expected]"
+    )
 
 
 def smoke_runtime_layout(tmpdir, env):
@@ -643,7 +854,7 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (gem):          ruby gem resolves inside the staged tree")
 
-    if has_bin("spice_subckt_rc_reduce"):
+    if has_bin("spice-subckt-rc-reduce"):
         # Functional smoke: the tool has NO --version flag, and an exit-0 run
         # proves nothing about a reduction engine -- a mis-built binary can
         # happily parse a netlist and reduce nothing. So feed it a real RC mesh
@@ -664,7 +875,7 @@ def smoke_runtime_layout(tmpdir, env):
         try:
             proc = subprocess.run(
                 [
-                    os.path.join(bin_dir, "spice_subckt_rc_reduce"),
+                    os.path.join(bin_dir, "spice-subckt-rc-reduce"),
                     netlist,
                     "-o",
                     reduced_out,
@@ -764,6 +975,20 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  FAIL (roundtrip):    restic  restored content mismatch")
                 failures.append(("restic", "restore mismatch"))
+
+    if has_bin("jupyter-lab"):
+        # The jupyterlab wheel also declares a `jupyter-labhub` console script,
+        # which imports jupyterhub -- a multi-user server this bundle
+        # deliberately does not ship. Left in place it is a permanently-broken
+        # command on the user's PATH that dies with "No module named
+        # 'jupyterhub'", and the generic probe scored it green because it exits
+        # 1. The installer prunes it; assert it stayed pruned.
+        if has_bin("jupyter-labhub"):
+            detail = "dead jupyter-labhub launcher was not pruned (needs unbundled jupyterhub)"
+            print(f"  FAIL (launcher):     jupyterlab  {detail}")
+            failures.append(("jupyterlab", detail))
+        else:
+            print("  OK   (launcher):     jupyterlab  dead jupyter-labhub launcher pruned")
 
     if has_bin("pdftotext"):
         # CJK extraction via bundled poppler-data: a predefined-CMap PDF with
@@ -942,6 +1167,12 @@ def main(keep):
             host_command = HOST_REQUIRED_COMMANDS.get(fname)
             if host_command and not command_available(host_command[0], probe_env):
                 print(f"  SKIP (host cmd):     {fname:20s}  {host_command[1]} missing")
+                skipped += 1
+                continue
+
+            host_cap = HOST_REQUIRED_CAPABILITIES.get(fname)
+            if host_cap and not capability_available(host_cap[0], probe_env, tmpdir):
+                print(f"  SKIP (host cap):     {fname:20s}  needs {host_cap[1]}")
                 skipped += 1
                 continue
 

@@ -1,16 +1,37 @@
-# Loadout tcsh: PATH, environment, prompt.
+# Loadout tcsh: PATH, environment, shell options, prompt, integrations.
 #
-# Snapshot of the bash env; see envs/tcsh/README.md. Not synced with envs/bash/.
+# TRACKS envs/bash/global/bashrc. See envs/tcsh/README.md.
 #
-# Two csh rules this file obeys, both of which are easy to get wrong:
+# Three csh rules this file obeys, all easy to get wrong:
 #   * NEVER `exit` from here. tcsh sources ~/.tcshrc for NON-interactive shells too,
 #     so an early `exit` would kill every tcsh script the user runs. Interactive-only
 #     work goes inside `if ( $?prompt ) then ... endif`.
 #   * NEVER use `!` unquoted (e.g. `!~`). In an interactive shell it triggers history
 #     expansion. Membership tests below are written as explicit loops for that reason.
+#   * `set` is shell-local, `setenv` is exported. Anything a helper script under
+#     global/helpers/ must see has to be `setenv` -- helpers are separate processes.
 #
 # Everything is guarded: on a machine with no loadout install, this file sets nothing
-# and prints nothing. Silence is the requirement.
+# and prints nothing. Startup silence is a hard requirement.
+
+set _loadout_global = "$HOME/.config/tcsh/global"
+set _loadout_helpers = "${_loadout_global}/helpers"
+
+# ---- re-exec into a preferred tcsh, if one is configured and different --------
+# Mirrors LOADOUT_CFG_PREFERRED_BASH. Guarded against a re-exec loop by comparing
+# against the shell actually running.
+if ( $?LOADOUT_CFG_PREFERRED_TCSH && $?prompt ) then
+    if ( "$LOADOUT_CFG_PREFERRED_TCSH" != "" && -x "$LOADOUT_CFG_PREFERRED_TCSH" ) then
+        if ( "$LOADOUT_CFG_PREFERRED_TCSH" != "$shell" ) then
+            # Capture the target BEFORE clearing the variable: clearing it is what
+            # stops the replacement shell from re-execing again forever, but the
+            # exec still needs the value, so the order matters.
+            set _loadout_target_shell = "$LOADOUT_CFG_PREFERRED_TCSH"
+            setenv LOADOUT_CFG_PREFERRED_TCSH ""
+            exec "$_loadout_target_shell"
+        endif
+    endif
+endif
 
 # ---- resolve the local root (shared tree if configured, else ~/.local) --------
 set _loadout_prefix = "$HOME/.local"
@@ -21,7 +42,10 @@ if ( $?LOADOUT_CFG_SHARED_PREFIX ) then
 endif
 
 # ---- PATH: prepend the dirs that exist, without duplicating -------------------
-foreach _loadout_dir ( "$HOME/go/bin" "$HOME/.cargo/bin" "$HOME/.local/bin" "${_loadout_prefix}/bin" )
+# Same list and same order as envs/bash/global/bashrc. Reversed relative to that
+# file because each iteration prepends, and the bash loop prepends too -- so the
+# LAST entry here ends up first on PATH, matching bash's final ordering.
+foreach _loadout_dir ( /usr/local/bin "$HOME/node_modules/.bin" "$HOME/.opencode/bin" "$HOME/.venv/bin" "$HOME/go/bin" "$HOME/.cargo/bin" "${_loadout_prefix}/bin" "$HOME/.local/bin" )
     if ( -d "$_loadout_dir" ) then
         set _loadout_seen = 0
         foreach _loadout_p ( $path:q )
@@ -34,64 +58,340 @@ foreach _loadout_dir ( "$HOME/go/bin" "$HOME/.cargo/bin" "$HOME/.local/bin" "${_
 end
 unset _loadout_dir
 
-# ---- terminfo: ncurses does not search ~/.local/share/terminfo by default -----
-if ( -d "${_loadout_prefix}/share/terminfo" ) then
-    if ( $?TERMINFO_DIRS ) then
-        setenv TERMINFO_DIRS "${_loadout_prefix}/share/terminfo:${TERMINFO_DIRS}"
-    else
-        setenv TERMINFO_DIRS "${_loadout_prefix}/share/terminfo"
+# NVM (Node Version Manager): nvm.sh is a bash/sh script and cannot be sourced by
+# csh, so the shell function is unavailable -- but the toolchain on PATH is the
+# part that matters for running node/npm, and that needs no shell support.
+if ( -d "$HOME/.nvm" ) then
+    setenv NVM_DIR "$HOME/.nvm"
+    if ( $?NVM_BIN ) then
+        if ( -d "$NVM_BIN" ) set path = ( "$NVM_BIN" $path:q )
     endif
 endif
 
+# ---- terminfo: ncurses does not search ~/.local/share/terminfo by default -----
+foreach _loadout_ti ( "${_loadout_prefix}/share/terminfo" "$HOME/.local/share/terminfo" )
+    if ( -d "$_loadout_ti" ) then
+        if ( $?TERMINFO_DIRS ) then
+            setenv TERMINFO_DIRS "${_loadout_ti}:${TERMINFO_DIRS}"
+        else
+            setenv TERMINFO_DIRS "${_loadout_ti}"
+        endif
+    endif
+end
+unset _loadout_ti
+
 # ---- GUI / runtime helpers (only when actually present) -----------------------
 if ( -d "${_loadout_prefix}/lib/girepository-1.0" ) then
-    setenv GI_TYPELIB_PATH "${_loadout_prefix}/lib/girepository-1.0"
+    if ( $?GI_TYPELIB_PATH ) then
+        setenv GI_TYPELIB_PATH "${_loadout_prefix}/lib/girepository-1.0:${GI_TYPELIB_PATH}"
+    else
+        setenv GI_TYPELIB_PATH "${_loadout_prefix}/lib/girepository-1.0"
+    endif
 endif
 if ( -f "${_loadout_prefix}/lib64/libqxcb.so" ) then
     setenv QT_QPA_PLATFORM_PLUGIN_PATH "${_loadout_prefix}/lib64"
+endif
+if ( -d "${_loadout_prefix}/share/nvim-qt/runtime" ) then
+    setenv NVIM_QT_RUNTIME_PATH "${_loadout_prefix}/share/nvim-qt/runtime"
+endif
+# gnuplot's x11 terminal spawns a separate gnuplot_x11 helper; point gnuplot at
+# the bundled one so it does not look for the build-time libexec path.
+if ( -x "${_loadout_prefix}/libexec/gnuplot/6.0/gnuplot_x11" ) then
+    setenv GNUPLOT_DRIVER_DIR "${_loadout_prefix}/libexec/gnuplot/6.0"
+endif
+
+# ---- environment shared by interactive and non-interactive shells -------------
+# These are exported in the bash env BEFORE its non-interactive early return, so
+# scripts see them. Same here.
+setenv PIP_REQUIRE_VIRTUALENV 1
+setenv PYTHON_KEYRING_BACKEND keyring.backends.null.Keyring
+setenv PYTHONPYCACHEPREFIX "/dev/shm/${USER}/pycache"
+# Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
+# on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
+setenv EGL_LOG_LEVEL fatal
+
+# Fall back when the preferred editor is not installed, so every `vi`/`vim`/`new`
+# alias below points at something real.
+if ( $?LOADOUT_CFG_PREFERRED_VI ) then
+    if ( ! -X "$LOADOUT_CFG_PREFERRED_VI" ) then
+        if ( -X nvim ) then
+            setenv LOADOUT_CFG_PREFERRED_VI nvim
+        else if ( -X vim ) then
+            setenv LOADOUT_CFG_PREFERRED_VI vim
+        else
+            setenv LOADOUT_CFG_PREFERRED_VI vi
+        endif
+    endif
+    setenv EDITOR   "$LOADOUT_CFG_PREFERRED_VI"
+    setenv VISUAL   "$LOADOUT_CFG_PREFERRED_VI"
+    setenv GIT_EDITOR "$LOADOUT_CFG_PREFERRED_VI"
+endif
+
+# Fall back when the preferred ls tool is not installed.
+if ( $?LOADOUT_CFG_PREFERRED_LS ) then
+    if ( ! -X "$LOADOUT_CFG_PREFERRED_LS" ) setenv LOADOUT_CFG_PREFERRED_LS ls
 endif
 
 # ---- everything below is interactive-only ------------------------------------
 if ( $?prompt ) then
 
-    set history = 10000
-    set savehist = ( 10000 merge )
-    set autolist
+    # ---- shell options --------------------------------------------------------
+    set autolist                    # list completions on ambiguous TAB
+    set autoexpand                  # expand history/completions in place
     set nobeep
     set color
     set colorcat
+    set complete = enhance          # case-insensitive, treats - and _ alike
+    set listjobs = long
+    set notify                      # report job completion immediately
+    set rmstar                      # confirm before `rm *`
+    set implicitcd                  # a bare directory name cd's to it.
+                                    # This is csh's NATIVE answer to the ERR trap
+                                    # envs/bash/global/bashrc uses for the same
+                                    # thing -- prefer it, it cannot misfire on a
+                                    # failed command the way a trap can.
+    set histdup = erase             # matches bash HISTCONTROL=...:erasedups
+    set savedirs
+    unset autologout                # never time out an idle interactive shell
 
-    # Aliases (guarded per tool -- an alias never points at a missing binary).
-    if ( -r "$HOME/.config/tcsh/global/aliases.csh" ) then
-        source "$HOME/.config/tcsh/global/aliases.csh"
+    # ---- history --------------------------------------------------------------
+    # Per-PID history with parent inheritance, mirroring the bash env: a child
+    # shell (or `exec tcsh`) continues the parent's history instead of starting
+    # blank, and a fresh login picks up the most recently used one.
+    set history = 10000
+    set savehist = ( 10000 merge )
+    # NOTE: only $$ is passed. tcsh has NO $PPID -- that is a bash variable, and
+    # naming it here makes every interactive shell print
+    # "PPID: Undefined variable." on startup. The helper reads the parent pid
+    # from /proc itself.
+    if ( -x "${_loadout_helpers}/seed-history" ) then
+        set _loadout_hf = "`${_loadout_helpers}/seed-history $$`"
+        if ( "$_loadout_hf" != "" ) set histfile = "$_loadout_hf"
+        unset _loadout_hf
     endif
 
+    # ---- terminal -------------------------------------------------------------
+    setenv COLORTERM truecolor
+    # Disable ctrl-s terminal pausing; leave the tty in a known-good state.
+    /bin/stty sane >& /dev/null
+    /bin/stty -ixon >& /dev/null
+
+    if ( ! $?XDG_RUNTIME_DIR ) then
+        setenv XDG_RUNTIME_DIR "/dev/shm/`id -u`"
+        mkdir -p "$XDG_RUNTIME_DIR" >& /dev/null
+    else if ( ! -r "$XDG_RUNTIME_DIR" ) then
+        setenv XDG_RUNTIME_DIR "/dev/shm/`id -u`"
+        mkdir -p "$XDG_RUNTIME_DIR" >& /dev/null
+    endif
+
+    # ---- pager / man ----------------------------------------------------------
+    setenv PAGER 'less --incsearch --use-color --no-init --ignore-case --mouse'
+    setenv MANPAGER /usr/bin/less
+    setenv MANROFFOPT -c
+    setenv LESS_TERMCAP_mb "\033[1;32m"
+    setenv LESS_TERMCAP_md "\033[1;32m"
+    setenv LESS_TERMCAP_me "\033[0m"
+    setenv LESS_TERMCAP_se "\033[0m"
+    setenv LESS_TERMCAP_so "\033[01;33m"
+    setenv LESS_TERMCAP_ue "\033[0m"
+    setenv LESS_TERMCAP_us "\033[1;4;31m"
+    if ( -X bat ) then
+        setenv BAT_PAGER "$PAGER -RF"
+    else if ( -X batcat ) then
+        setenv BAT_PAGER "$PAGER -RF"
+    endif
+
+    # ---- listing arg sets (consumed by the ls aliases) ------------------------
+    # Same variable names and same values as envs/bash/global/bashrc, so both
+    # shells list identically and a user override applies to both.
+    setenv EZA_ARGS "--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
+    setenv LSD_ARGS "--sort time --long --reverse"
+
+    # ---- online connectivity detection ---------------------------------------
+    # Sets LOADOUT_ONLINE=1/0 once per login; inherited by child shells and tmux
+    # panes. Mirrors the bash env, including the auto/1/0 tri-state.
+    if ( ! $?LOADOUT_ONLINE ) then
+        set _loadout_mode = "auto"
+        if ( $?LOADOUT_CFG_ENABLE_ONLINE_UPDATES ) set _loadout_mode = "$LOADOUT_CFG_ENABLE_ONLINE_UPDATES"
+        switch ( "$_loadout_mode" )
+            case 0:
+            case false:
+            case no:
+            case off:
+            case disabled:
+                setenv LOADOUT_ONLINE 0
+                breaksw
+            case 1:
+            case true:
+            case yes:
+            case on:
+            case enabled:
+                setenv LOADOUT_ONLINE 1
+                breaksw
+            default:
+                if ( -x "${_loadout_helpers}/detect-online" ) then
+                    if ( { "${_loadout_helpers}/detect-online" } ) then
+                        setenv LOADOUT_ONLINE 1
+                    else
+                        setenv LOADOUT_ONLINE 0
+                    endif
+                else
+                    setenv LOADOUT_ONLINE 0
+                endif
+                breaksw
+        endsw
+        unset _loadout_mode
+    endif
+
+    # ---- GRC (Generic Colorizer) ---------------------------------------------
+    # The vendored grc.sh is sh syntax and cannot be sourced by csh, so
+    # grc-aliases.csh defines the same alias set natively.
+    if ( $?LOADOUT_CFG_ENABLE_GRC ) then
+        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_GRC" } ) then
+            if ( -d "${_loadout_global}/grc/bin" ) then
+                set path = ( "${_loadout_global}/grc/bin" $path:q )
+            endif
+            setenv GRC_ALIASES true
+            if ( -r "${_loadout_global}/grc-aliases.csh" ) source "${_loadout_global}/grc-aliases.csh"
+        endif
+    endif
+
+    # ---- tmux-path-store ------------------------------------------------------
+    # Per-tmux-window directory/file bookmarks. Upstream gained --csh/--tcsh in
+    # v1.1.0; before that it emitted --bash only and this was a recorded gap.
+    #
+    # The EXECUTABLE is kebab-case; the CONFIG VARIABLE stays
+    # LOADOUT_CFG_ENABLE_TMUX_PATH_STORE -- a shell variable name cannot take a
+    # dash (see the warning in envs/bash/global/bashrc, where spelling it the
+    # other way silently disabled the toggle and bash never complained).
+    #
+    # The emitted aliases contain `\!*` for argument insertion; csh stores that
+    # as a literal `!` rather than expanding history, which is why upstream
+    # escapes it and why this must NOT be re-quoted here.
+    #
+    # Evaluated BEFORE aliases.csh is sourced, matching the bash env's ordering,
+    # so the loadout's own alias wins on a name collision in every shell.
+    if ( $?LOADOUT_CFG_ENABLE_TMUX_PATH_STORE ) then
+        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_TMUX_PATH_STORE" } && -X tmux-path-store ) then
+            eval `tmux-path-store --csh`
+        endif
+    endif
+
+    # ---- Environment Modules --------------------------------------------------
+    if ( $?LOADOUT_CFG_USE_LOADOUT_MODULES ) then
+        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_USE_LOADOUT_MODULES" } ) then
+            if ( -r "${_loadout_global}/modules-init.csh" ) source "${_loadout_global}/modules-init.csh"
+        endif
+    endif
+
+    # ---- aliases, key bindings, completions -----------------------------------
+    if ( -r "${_loadout_global}/aliases.csh" )     source "${_loadout_global}/aliases.csh"
+    if ( -r "${_loadout_global}/keybinds.csh" )    source "${_loadout_global}/keybinds.csh"
+    if ( -r "${_loadout_global}/completions.csh" ) source "${_loadout_global}/completions.csh"
+
+    # ---- every directory change lists -----------------------------------------
+    # csh's NATIVE hook for this. It fires for cd, pushd, popd, implicitcd and any
+    # alias that changes directory -- so unlike the bash env, which needs a cd()
+    # wrapper and has to route zoxide and `latest` back through it, there is no
+    # call site here that can forget to list.
+    #
+    # It also carries OSC 7 (report cwd to the terminal), which is the one piece
+    # of the WezTerm shell integration csh can do: OSC 7 is tied to cwd changes,
+    # which is exactly what this hook is. OSC 133 semantic zones need per-command
+    # hooks csh does not expose, and are not attempted.
+    alias cwdcmd 'ls ; printf "\033]7;file://%s%s\033\\" "$HOST" "$cwd"'
+
     # ---- prompt ---------------------------------------------------------------
-    # cwd + git branch. precmd runs before EVERY prompt, so this must stay cheap:
-    # `git` is resolved once, here, and the branch lookup is a single fork whose
-    # stderr is discarded (a non-repo directory must print nothing).
+    # cwd + git branch, with the farm/LSF color swap and optional host and uid
+    # from the same LOADOUT_CFG_* variables the bash prompt uses.
+    #
+    # precmd runs before EVERY prompt, so it must stay cheap: git is resolved once
+    # here, and the branch lookup is a single fork whose stderr is discarded.
     #
     # Starship has no tcsh support upstream, so this is hand-rolled and does not
-    # match the bash prompt. That is expected -- see envs/tcsh/README.md.
+    # match the bash prompt glyph for glyph. That is expected -- see
+    # envs/tcsh/README.md.
     set _loadout_host = ""
     if ( $?LOADOUT_CFG_PROMPT_INCLUDE_HOST ) then
         if ( "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" == "1" ) set _loadout_host = "%m:"
     endif
 
+    # Show the username when it is in the highlight list, or when the effective
+    # user differs from $USER (a sudo/su session) -- the same two cases the bash
+    # env's get_prompt_uid covers.
+    set _loadout_uid = ""
+    set _loadout_whoami = "`/bin/whoami`"
+    if ( "$_loadout_whoami" != "${USER}" ) set _loadout_uid = "${_loadout_whoami} "
+    if ( $?LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT ) then
+        foreach _loadout_u ( $LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT )
+            if ( "$_loadout_u" == "$_loadout_whoami" ) set _loadout_uid = "${_loadout_whoami} "
+        end
+        unset _loadout_u
+    endif
+    unset _loadout_whoami
+
+    # An LSF job turns the prompt red so an expensive farm shell is never mistaken
+    # for a local one.
+    #
+    # The colour value goes through helpers/prompt-color, which is NOT cosmetic:
+    # LOADOUT_CFG_PROMPT_COLOR_* is shared with the bash env and is EXPORTED
+    # there, so a tcsh started from a loadout bash shell inherits bash's value --
+    # which is wrapped in readline's `\[` / `\]` zero-width markers. tcsh has no
+    # idea what those are and prints them literally, giving a prompt that starts
+    # `\[<esc>[38;2;255;255;0m\]`. The helper strips them and turns a literal
+    # `\033`/`\e` into a real ESC byte; `%{...%}` below is tcsh's own zero-width
+    # wrapper and replaces what `\[`/`\]` were doing for bash.
+    set _loadout_raw_color = ""
+    if ( $?LOADOUT_CFG_PROMPT_COLOR_NORMAL ) set _loadout_raw_color = "$LOADOUT_CFG_PROMPT_COLOR_NORMAL"
+    if ( $?LSB_JOBID ) then
+        set _loadout_host = "LSF:${_loadout_host}"
+        if ( $?LOADOUT_CFG_PROMPT_COLOR_FARM ) set _loadout_raw_color = "$LOADOUT_CFG_PROMPT_COLOR_FARM"
+    endif
+    set _loadout_color = ""
+    if ( "$_loadout_raw_color" != "" && -x "${_loadout_helpers}/prompt-color" ) then
+        set _loadout_color = "`${_loadout_helpers}/prompt-color '$_loadout_raw_color'`"
+    endif
+    unset _loadout_raw_color
+
+    # loadout_prompt_lead / _tail deliberately SURVIVE this file (no unset): the
+    # precmd alias below reads them on every prompt, and `sp1` / `sp2` in
+    # aliases.csh toggle the hostname by reassigning the lead. The bash env gets
+    # the same effect by re-running its set_prompt function; csh has no
+    # functions, so the pieces have to stay addressable as variables.
+    set loadout_prompt_lead = "%{${_loadout_color}%}${_loadout_uid}${_loadout_host}"
+    set loadout_prompt_lead_nohost = "%{${_loadout_color}%}${_loadout_uid}"
+    set loadout_prompt_lead_host = "%{${_loadout_color}%}${_loadout_uid}%m:"
+    set loadout_prompt_tail = "%{\033[0m%} "
+    set _loadout_gitbranch = "${_loadout_global}/git-branch.sh"
+
     # git-branch.sh does the stderr suppression csh cannot do itself (csh has no
     # `2>/dev/null`; an inline `|&` merges git's error text into the prompt -- an
     # unborn HEAD then prints git's "Use '--' to separate paths" hint at you).
-    set _loadout_gitbranch = "$HOME/.config/tcsh/global/git-branch.sh"
-
     if ( -X git && -x "$_loadout_gitbranch" ) then
-        set prompt = "%B${_loadout_host}%~%b %# "
-        alias precmd 'set _lb = "`'"$_loadout_gitbranch"'`" ; if ( "$_lb" != "" ) set prompt = "%B'"$_loadout_host"'%~%b (${_lb}) %# " ; if ( "$_lb" == "" ) set prompt = "%B'"$_loadout_host"'%~%b %# "'
+        set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
+        alias precmd 'set _lb = "`'"$_loadout_gitbranch"'`" ; if ( "$_lb" != "" ) set prompt = "${loadout_prompt_lead}%B%~%b (${_lb}) %#${loadout_prompt_tail}" ; if ( "$_lb" == "" ) set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
     else
-        set prompt = "%B${_loadout_host}%~%b %# "
+        set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
     endif
     unset _loadout_host
+    unset _loadout_uid
+    unset _loadout_color
     unset _loadout_gitbranch
+
+    # ---- tmux auto-attach (last, so a failure cannot skip prompt setup) -------
+    if ( $?LOADOUT_CFG_ATTACH_TO_TMUX && ! $?TMUX ) then
+        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ATTACH_TO_TMUX" } && -X tmux ) then
+            set _loadout_detach = ""
+            if ( $?LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS ) then
+                if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS" } ) set _loadout_detach = "-d"
+            endif
+            tmux attach $_loadout_detach >& /dev/null || tmux
+            unset _loadout_detach
+        endif
+    endif
 
 endif
 
 unset _loadout_prefix
+unset _loadout_helpers
+unset _loadout_global

@@ -104,6 +104,8 @@ run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" "$PY" build/gen-readme-table --check
 run_test "assurance-check" "$PY" tests/assurance-check
+run_test "env-shell-parity" "$PY" tests/env-shell-parity
+run_test "shell-typeahead" tests/shell-typeahead
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper
 
@@ -118,6 +120,7 @@ run_test "install-fonts-rejoin" "$PY" tests/install-fonts-rejoin
 run_test "install-modules" tests/install-modules
 run_test "install-env-st" tests/install-env-st
 run_test "install-env-tcsh" tests/install-env-tcsh
+run_test "install-env-zsh" tests/install-env-zsh
 run_test "optional-packages" tests/optional-packages
 run_test "install-parity-plot" tests/install-parity-plot
 run_test "install-linux-tmp-home" tests/install-linux-tmp-home

@@ -65,7 +65,7 @@ sha256  cf8867e865d26d7f4d7ef5af238e73711260995ac4c9420aed2195a53bab953c  payloa
 sha256  074cf79a14bb71d236a826e3aff7fd4f30dde606d8302877e3b532ae18e0d584  payload/el8.x86_64.glibc2p28/bin/fzf.bz2
 sha256  0de4a8d5f65af764d5c3977b4d657b8ea696538dfd7c097f24aee7cfd5470e53  payload/el8.x86_64.glibc2p28/bin/gem.bz2
 sha256  20520e8ba435ab7f5c575f31924ebc3d189b13e84f80a6954dcc76b4a55fea36  payload/el8.x86_64.glibc2p28/bin/glow.bz2
-sha256  455265303233ae088b06d5d2c4613c1401f0c8342e106b03effc8825d4632258  payload/el8.x86_64.glibc2p28/bin/gnuplot.bz2
+sha256  eaa6f0897bb74b51c8dbd647f91e1646a25662b93790fe25423bd7f586b6e6b4  payload/el8.x86_64.glibc2p28/bin/gnuplot.bz2
 sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  payload/el8.x86_64.glibc2p28/bin/gocheat.bz2
 sha256  b8f93f9c06449bc7d595bd56f280769747c3457ae6ac0b921d1098c8b7a48454  payload/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  4420caa461b042bb4c35bfc8d7580256479098c273a3f35b19edc33e6ac36ed6  payload/el8.x86_64.glibc2p28/bin/gping.bz2
@@ -206,7 +206,7 @@ sha256  d2574299300ae75bce6e70b31aec49277b0b643a1169f55bad8acd1c3823a159  payloa
 sha256  5af8a36c9de273207ac3007adbaa0cacfe1c649e5dd616ec1fea1f149bf274e9  payload/el8.x86_64.glibc2p28/bin/tokei.bz2
 sha256  e4882b9e915b954a7af639b05cef427bc83490a67af2e85cea780d6a2cbf64ac  payload/el8.x86_64.glibc2p28/bin/touch.bz2
 sha256  48ee6841d1fef6ef1a4f2d12c5ddd339cd4aa65014391ce78435de38fa120c1c  payload/el8.x86_64.glibc2p28/bin/tr.bz2
-sha256  5cb7112d3b7c489fb422c4a8518a96ee864979e5ba5a4ed960aaf6ce4db20523  payload/el8.x86_64.glibc2p28/bin/tree-sitter.bz2
+sha256  96aec913e9bfa9ac8eabf47c79be4374479a4c06658445f36c94381d74d634f8  payload/el8.x86_64.glibc2p28/bin/tree-sitter.bz2
 sha256  518ea53d89593a42e135d08ad5f8e2e21f19b4f0121af62466acb139f43050b5  payload/el8.x86_64.glibc2p28/bin/true.bz2
 sha256  b6e03a4ad5884474396246fed62c8b9d24f75bce1a1d7be01a1b5fb47523c25f  payload/el8.x86_64.glibc2p28/bin/truncate.bz2
 sha256  0071ab0a9f06e47046ff807b4cab3b0b6493ea35eada14f20bf157027ac179e1  payload/el8.x86_64.glibc2p28/bin/tsort.bz2
@@ -417,11 +417,11 @@ tar-meta  288777  1784306255  payload/el8.x86_64.glibc2p28/runtime/bash-docs.tar
 tar-meta  417820  1784306255  payload/el8.x86_64.glibc2p28/runtime/expect.tar.bz2
 tar-meta  209  1785788443  payload/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
-tar-meta  48974  1784306262  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
+tar-meta  48862  1786294905  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  311761  1785979682  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
-tar-meta  2998406  1784306281  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
+tar-meta  3021429  1786294907  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
 tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
@@ -764,4 +764,4 @@ sha256  c52891aae13f34d05c509c114a3e92e97c26938fac67e14ce32b578c4c6ff5b2  payloa
 sha256  e342cf73d0933f8bfe60b7a6587786cd4bf53ce8d5608ddf5f89efc1215f4702  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy.so.bz2
 sha256  ba384ab03a65cbd5e4e9c7f8159aef7c8c2975fc38d3732b3b60b79ee14ebc80  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy_schema.so.bz2
 sha256  3a8f97cc4768000e6e3e349ea0ad1cfa8531a2cb1765619696da7f9c4cc592d3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/zsh.so.bz2
-sha256  acc02922530198d50c3dde9ec3ffd246250dc88517a7811e3fcb068dfd75720e  payload/yara/yara-rules-full.yar.bz2
+sha256  b01c2995f63a9ccb12951e6e20744ee4383f9707236491d74c430d350e19f314  payload/yara/yara-rules-full.yar.bz2

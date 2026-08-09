@@ -1,0 +1,37 @@
+#!/bin/sh
+# Create or follow a `latest` symlink, then print the csh command to cd into it.
+#
+# Backs the `latest` alias; mirrors latest() in envs/bash/global/aliases.sh.
+#
+# This is the "prints shell code" helper shape (see helpers/README.md): a child
+# process cannot change the caller's cwd, so it emits `cd '<dir>'` on stdout and
+# the alias runs it through eval. Everything that is NOT a cd -- the symlink
+# work, the errors -- happens here, and diagnostics go to stderr so they cannot
+# end up being eval'd.
+
+if [ -e latest ] && [ ! -L latest ]; then
+    echo "latest exists and is not a symlink" >&2
+    exit 1
+fi
+
+rm -f -- latest
+
+if [ -n "$1" ]; then
+    mkdir -p -- "$1" || exit
+    ln -s -- "$1" latest || exit
+    target=$1
+else
+    target=$(
+        find . -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null |
+            sort -n |
+            tail -n 1 |
+            cut -d' ' -f2-
+    )
+    [ -n "$target" ] || { echo "latest: no subdirectory to link to" >&2; exit 1; }
+    ln -s -- "$target" latest || exit
+fi
+
+# Single-quote for csh and escape any embedded single quote, so a directory name
+# containing a quote or a space cannot break out of the eval.
+escaped=$(printf '%s' "$target" | sed "s/'/'\\\\''/g")
+printf "cd '%s'\n" "$escaped"

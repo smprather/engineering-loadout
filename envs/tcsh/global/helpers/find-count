@@ -1,0 +1,17 @@
+#!/bin/sh
+# Count matches, using fd when available and find otherwise.
+# Backs the `fc` alias; mirrors fc() in envs/bash/global/aliases.sh.
+#
+# NOTE the name collision: `fc` is a POSIX shell builtin (fix command). tcsh has
+# no `fc` builtin, so the alias is unambiguous there -- unlike bash, where the
+# function shadows the builtin. Kept named `fc` for parity with the bash env.
+
+if command -v fdfind >/dev/null 2>&1; then
+    fdfind --exclude .snapshot --unrestricted --full-path "$@" | wc -l
+elif command -v fd >/dev/null 2>&1 && fd --help 2>/dev/null | grep -q sharkdp; then
+    fd --exclude .snapshot --unrestricted --full-path "$@" | wc -l
+elif [ $# -eq 0 ]; then
+    find . | wc -l
+else
+    find . -iname "*$1*" | wc -l
+fi

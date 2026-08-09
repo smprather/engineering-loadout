@@ -1,0 +1,25 @@
+#!/bin/sh
+# Print $PATH one entry per line, numbered. With arguments, print only entries
+# matching any of them case-insensitively.
+#
+# Backs the `pl` alias; mirrors pl() in envs/bash/global/aliases.sh.
+#
+# Reads PATH from the environment rather than taking it as an argument: csh
+# exports PATH alongside its own $path, so the value is always current here.
+
+if [ $# -eq 0 ]; then
+    printf '%s\n' "$PATH" | tr ':' '\n' | nl
+    exit 0
+fi
+
+# Lower-case both sides for the comparison. `tr` rather than ${var,,} -- that is
+# a bashism and this runs under /bin/sh.
+printf '%s\n' "$PATH" | tr ':' '\n' | while IFS= read -r entry; do
+    lower_entry=$(printf '%s' "$entry" | tr '[:upper:]' '[:lower:]')
+    for pattern in "$@"; do
+        lower_pattern=$(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')
+        case $lower_entry in
+            *"$lower_pattern"*) printf '%s\n' "$entry"; break ;;
+        esac
+    done
+done | nl

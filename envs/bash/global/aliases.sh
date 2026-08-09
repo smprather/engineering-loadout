@@ -241,12 +241,20 @@ pl() {
         return
     fi
 
+    # Lower-case via tr, NOT ${var,,}: this file is sourced by envs/zsh too, and
+    # ${var,,} is bash-4-only -- under zsh it is a parse error at call time
+    # ("pl:8: bad substitution"), so pl was simply broken for every zsh user.
+    local lower_entry lower_pattern
     echo "$PATH" | tr ":" "\n" | while IFS= read -r path_entry; do
+        lower_entry=$(printf '%s' "$path_entry" | tr '[:upper:]' '[:lower:]')
         for pattern in "$@"; do
-            if [[ ${path_entry,,} == *${pattern,,}* ]]; then
+            lower_pattern=$(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')
+            case $lower_entry in
+            *"$lower_pattern"*)
                 printf '%s\n' "$path_entry"
                 break
-            fi
+                ;;
+            esac
         done
     done | nl
 }
@@ -275,7 +283,9 @@ alias gmw='chmod -R g-w'
 a() {
     local alias_file="/tmp/alias.$$"
     alias | sort >"$alias_file"
-    declare -f >>"$alias_file"
+    # `typeset -f`, not `declare -f`: identical in bash, and the only spelling
+    # zsh understands (this file is sourced by envs/zsh too).
+    typeset -f >>"$alias_file"
     vi "$alias_file"
     rm -f -- "$alias_file"
 }
@@ -286,8 +296,10 @@ alias sp1="set_prompt"
 alias sp2="set_prompt include_host"
 alias fsbm='fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test; rm ./fio_test'
 # I was getting a weird completion failure for `x <tab>`. This is the work-around.
+# `complete` is a bash builtin with no zsh equivalent, and this file is sourced
+# by envs/zsh too -- gate it so zsh does not report an unknown command.
 unalias x 2>/dev/null
-complete -r x 2>/dev/null
+[[ -n ${BASH_VERSION:-} ]] && complete -r x 2>/dev/null
 x() { chmod +x -- "$@"; }
 rp() {
     if [[ -n $1 ]]; then

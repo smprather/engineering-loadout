@@ -1,0 +1,480 @@
+# Loadout zsh: PATH, environment, shell options, prompt, integrations.
+#
+# TRACKS envs/bash/global/bashrc. See envs/zsh/README.md.
+#
+# This is a ZSH file. Do NOT run `bash -n` or shellcheck against it -- validate
+# by running zsh. The shared files it sources (functions.sh, aliases.sh) ARE
+# bash-checked, because they must parse under both.
+#
+# Non-interactive shells return early, after PATH and the exported environment,
+# exactly as the bash env does -- scripts need those and nothing below.
+
+# --- re-exec into a preferred zsh, if one is configured and different ---------
+if [[ -n ${LOADOUT_CFG_PREFERRED_ZSH:-} && -x ${LOADOUT_CFG_PREFERRED_ZSH} \
+      && ${LOADOUT_CFG_PREFERRED_ZSH} != ${SHELL:-} && -o interactive ]]; then
+    # Clear it first so the replacement shell does not re-exec forever; capture
+    # the target before clearing, since the exec still needs the value.
+    _loadout_target_shell=$LOADOUT_CFG_PREFERRED_ZSH
+    export LOADOUT_CFG_PREFERRED_ZSH=""
+    exec "$_loadout_target_shell"
+fi
+
+# --- NVM ----------------------------------------------------------------------
+# nvm.sh hangs under zsh via its auto-use path, so the shell function is loaded
+# in bash only. The toolchain on PATH is the part that matters for running
+# node/npm, and that needs no shell support.
+if [[ -n ${BASH_VERSION:-} && -r "$HOME/.nvm/nvm.sh" ]]; then
+    export NVM_DIR="$HOME/.nvm"
+    source "$NVM_DIR/nvm.sh"
+elif [[ -d "$HOME/.nvm" ]]; then
+    export NVM_DIR="$HOME/.nvm"
+fi
+
+# --- PATH ---------------------------------------------------------------------
+# Same list and order as envs/bash/global/bashrc. path_prepend_if_dir is in the
+# shared functions.sh and is verified to behave identically in both shells.
+for _bin_dir in \
+    /usr/local/bin \
+    $NVM_BIN \
+    ~/.cargo/bin \
+    ~/.venv/bin \
+    ~/.opencode/bin \
+    ~/node_modules/.bin \
+    ~/go/bin \
+    "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" \
+    ~/.local/bin; do
+    path_prepend_if_dir "$_bin_dir"
+done
+
+# --- terminfo -----------------------------------------------------------------
+# ncurses does not search ~/.local/share/terminfo by default, and a
+# non-interactive login shell returns below before the interactive block.
+#
+# This uses the SHARED path_prepend, which it could not before 2026-08-08: the
+# two-arg named-variable form died under zsh with "bad substitution" because
+# path_modify used bash's ${!var}. It was worked around here with a hand-rolled
+# loop; the shared function is fixed now, so the workaround is gone.
+typeset -gx TERMINFO_DIRS
+path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
+if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
+    path_prepend TERMINFO_DIRS "$LOADOUT_CFG_SHARED_PREFIX/share/terminfo"
+fi
+
+# --- GUI / runtime helpers (only when actually present) -----------------------
+_loadout_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+if [[ -f $_loadout_local_prefix/lib64/libqxcb.so ]]; then
+    export QT_QPA_PLATFORM_PLUGIN_PATH=$_loadout_local_prefix/lib64
+fi
+if [[ -d $_loadout_local_prefix/share/nvim-qt/runtime ]]; then
+    export NVIM_QT_RUNTIME_PATH=$_loadout_local_prefix/share/nvim-qt/runtime
+fi
+if [[ -d $_loadout_local_prefix/lib/girepository-1.0 ]]; then
+    export GI_TYPELIB_PATH=$_loadout_local_prefix/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
+fi
+# gnuplot's x11 terminal spawns a separate gnuplot_x11 helper; point gnuplot at
+# the bundled one so it does not look for the build-time libexec path.
+if [[ -x $_loadout_local_prefix/libexec/gnuplot/6.0/gnuplot_x11 ]]; then
+    export GNUPLOT_DRIVER_DIR=$_loadout_local_prefix/libexec/gnuplot/6.0
+fi
+
+# --- environment shared by interactive and non-interactive shells -------------
+export PIP_REQUIRE_VIRTUALENV=1
+export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
+export PYTHONPYCACHEPREFIX=/dev/shm/$USER/pycache
+# Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
+# on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
+export EGL_LOG_LEVEL=fatal
+
+# Non-interactive shells need everything above and nothing below.
+[[ -o interactive ]] || return 0
+
+####################################################################################################
+###################################    Interactive   ###############################################
+####################################################################################################
+
+### Hook registration ###
+# The zsh analogue of loadout_add_precmd in the shared functions.sh.
+#
+# Deliberately NOT `add-zsh-hook`: that is an autoloaded FUNCTION from the zsh
+# function library (share/zsh/$VERSION/functions), which an env-only HOME does
+# not have -- the config installs, the runtime does not. Every hook registered
+# through it then silently never fires, so on a farm node the "every cd lists"
+# behaviour and the OSC 133 zones just quietly did not happen.
+#
+# zsh consults the ${hook}_functions ARRAYS natively, with no library involved;
+# add-zsh-hook is only a convenience wrapper that appends to them. Appending
+# directly works everywhere and still coexists with starship, which appends to
+# the same arrays.
+loadout_add_zsh_hook() {
+    local _hook="$1" _fn="$2" _existing
+    local _arr="${_hook}_functions"
+    typeset -ga "$_arr"
+    for _existing in ${(P)_arr}; do
+        [[ $_existing == "$_fn" ]] && return 0
+    done
+    eval "${_arr}+=(\"\$_fn\")"
+}
+
+### Detection ###
+_is_ssh_connection=$(ps -f $PPID 2>/dev/null | grep -c sshd)
+_glibc=$(/usr/bin/ldd --version 2>/dev/null | /bin/grep -Po "\d\.\d+" | /bin/head -n 1)
+
+### Colors ###
+# Raw escapes, same values as the bash env. The PROMPT_* variants use zsh's
+# %{...%} zero-width wrapper rather than bash readline's \[...\]; that is the
+# one place the two shells MUST differ, because each prompt engine only
+# understands its own marker (see helpers/prompt-color in the tcsh env, which
+# exists to undo the bash markers for a shell that has neither).
+export WHITE=$'\e[38;2;255;255;255m'
+export GREEN=$'\e[38;2;0;255;0m'
+export RED=$'\e[38;2;255;0;0m'
+export BLUE=$'\e[38;2;135;215;255m'
+export VIOLET=$'\e[38;2;255;0;255m'
+export YELLOW=$'\e[38;2;255;255;0m'
+export CYAN=$'\e[38;2;0;255;255m'
+export BOLD=$'\e[1m'
+export NORMAL=$'\e[22m'
+export PROMPT_WHITE="%{$WHITE%}"
+export PROMPT_GREEN="%{$GREEN%}"
+export PROMPT_RED="%{$RED%}"
+export PROMPT_BLUE="%{$BLUE%}"
+export PROMPT_VIOLET="%{$VIOLET%}"
+export PROMPT_YELLOW="%{$YELLOW%}"
+export PROMPT_CYAN="%{$CYAN%}"
+export PROMPT_BOLD="%{$BOLD%}"
+export PROMPT_NORMAL="%{$NORMAL%}"
+
+### Environment ###
+if [[ ! -r ${XDG_RUNTIME_DIR:-} ]]; then
+    export XDG_RUNTIME_DIR=/dev/shm/$(id -u)
+    mkdir -p "$XDG_RUNTIME_DIR"
+fi
+
+export COLORTERM=truecolor
+export PAGER='less --incsearch --use-color --no-init --ignore-case --mouse'
+export EDITOR="${LOADOUT_CFG_PREFERRED_VI}"
+export VISUAL=$EDITOR
+export GIT_EDITOR=$EDITOR
+
+export LESS_TERMCAP_mb=$'\e[1;32m'
+export LESS_TERMCAP_md=$'\e[1;32m'
+export LESS_TERMCAP_me=$'\e[0m'
+export LESS_TERMCAP_se=$'\e[0m'
+export LESS_TERMCAP_so=$'\e[01;33m'
+export LESS_TERMCAP_ue=$'\e[0m'
+export LESS_TERMCAP_us=$'\e[1;4;31m'
+export MANPAGER="/usr/bin/less"
+export MANROFFOPT="-c"
+
+### Online connectivity detection ###
+# Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells and
+# tmux panes. loadout_detect_online is the shared implementation.
+if [[ -z "${LOADOUT_ONLINE+x}" ]]; then
+    case "${LOADOUT_CFG_ENABLE_ONLINE_UPDATES:-auto}" in
+    0 | false | no | off | disabled) LOADOUT_ONLINE=0 ;;
+    1 | true | yes | on | enabled) LOADOUT_ONLINE=1 ;;
+    *) loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
+    esac
+    export LOADOUT_ONLINE
+fi
+
+### History ###
+# Per-PID history with parent inheritance, matching the bash env: a child shell
+# continues the parent's history rather than starting blank, and a fresh login
+# picks up the most recently used one. `gah` greps every one of these files
+# across all shells, which is why the naming convention matters.
+#
+# This deliberately does NOT use SHARE_HISTORY. Sharing one file live between
+# every open shell is the more common zsh default, but it is a DIFFERENT model
+# from bash's and would make the two shells behave visibly differently on the
+# same machine -- and `gah` would have one file to search instead of the set.
+export HISTFILE="$XDG_RUNTIME_DIR/zsh_history.$$"
+export HISTSIZE=10000
+export SAVEHIST=10000
+if [[ ! -f "$HISTFILE" ]]; then
+    if [[ -f "$XDG_RUNTIME_DIR/zsh_history.$PPID" ]]; then
+        cp "$XDG_RUNTIME_DIR/zsh_history.$PPID" "$HISTFILE" 2>/dev/null
+    else
+        # (Nom): N = null_glob, so a first-ever shell with no history files does
+        # not die on zsh's NOMATCH ("no matches found: .../zsh_history.*") --
+        # bash quietly leaves an unmatched glob alone, zsh treats it as an error,
+        # and 2>/dev/null cannot suppress it because the shell raises it before
+        # the command runs. om = sort by modification time, newest first.
+        _loadout_hist_candidates=("$XDG_RUNTIME_DIR"/zsh_history.*(Nom))
+        if (( ${#_loadout_hist_candidates[@]} )); then
+            cp "${_loadout_hist_candidates[1]}" "$HISTFILE" 2>/dev/null
+        fi
+        unset _loadout_hist_candidates
+    fi
+fi
+# HIST_IGNORE_SPACE + HIST_IGNORE_ALL_DUPS are zsh's HISTCONTROL=ignorespace:erasedups.
+setopt HIST_IGNORE_SPACE HIST_IGNORE_ALL_DUPS APPEND_HISTORY INC_APPEND_HISTORY
+unsetopt SHARE_HISTORY
+
+### Shell options ###
+# Silence the beep (bash: `bind 'set bell-style none'`).
+unsetopt beep hist_beep list_beep
+# AUTO_CD: a bare directory name changes to it. This is zsh's native answer to
+# the ERR trap envs/bash/global/bashrc uses for the same thing -- prefer it, it
+# cannot misfire on an unrelated failed command the way a trap can. (csh calls
+# the same feature `implicitcd`.)
+setopt AUTO_CD
+setopt EXTENDED_GLOB NO_NOMATCH
+# bash's `shopt -s direxpand` (expand $VAR on tab-complete rather than escaping
+# it). zsh does this natively when completing, so there is nothing to set.
+
+### Key bindings ###
+source_if_exists "$ZSH_CONFIG_ROOT_DIR/global/keybinds.zsh"
+
+### Terminal tools ###
+[[ -r "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
+# bat: detect executable name (Debian uses 'batcat')
+if command -v batcat >/dev/null 2>&1; then
+    _bat_exec="batcat"
+elif command -v bat >/dev/null 2>&1; then
+    _bat_exec="bat"
+fi
+if [[ -n ${_bat_exec:-} ]]; then
+    alias bat="$_bat_exec"
+    export BAT_PAGER="$PAGER -RF"
+fi
+
+# Fall back if the preferred ls tool is not installed.
+if ! command -v "${LOADOUT_CFG_PREFERRED_LS}" >/dev/null 2>&1; then
+    LOADOUT_CFG_PREFERRED_LS="ls"
+fi
+
+### Optional integrations ###
+# GRC: adds color to many basic linux commands. grc.sh is sh syntax ending in a
+# bare `return 0`, which zsh sources correctly (unlike csh, which needs the
+# hand-written grc-aliases.csh).
+if is_truthy "${LOADOUT_CFG_ENABLE_GRC}"; then
+    path_prepend PATH "$BASH_CONFIG_ROOT_DIR/global/grc/bin"
+    export GRC_ALIASES="true"
+    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/grc/etc/profile.d/grc.sh"
+fi
+
+# tmux-path-store: per-tmux-window directory/file bookmarks.
+#
+# The EXECUTABLE is kebab-case; the CONFIG VARIABLE stays
+# LOADOUT_CFG_ENABLE_TMUX_PATH_STORE because a shell variable name cannot take a
+# dash -- see the warning in envs/bash/global/bashrc, where writing it the other
+# way silently disabled the toggle.
+#
+# Evaluated BEFORE aliases.sh is sourced, matching the bash env's ordering, so
+# that on a name collision the loadout's own alias wins in both shells.
+if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux-path-store >/dev/null 2>&1; then
+    eval "$(tmux-path-store --zsh)"
+fi
+
+# Environment Modules (upstream ships init/zsh alongside init/bash).
+if is_truthy "${LOADOUT_CFG_USE_LOADOUT_MODULES}"; then
+    source_if_exists "$ZSH_CONFIG_ROOT_DIR/global/modules-init.zsh"
+fi
+
+### Prompt / terminal state ###
+/bin/stty sane
+# Disable ctrl-s terminal pausing
+/bin/stty -ixon
+
+# Re-enable terminal echo if a foreground program was killed (e.g. ctrl-c at a
+# password prompt) and left -echo on. Same rationale and same no-fork test as
+# loadout_restore_echo in the bash env: only call stty when echo is ACTUALLY
+# off, so an unconditional tcsetattr cannot swallow type-ahead.
+loadout_restore_echo() {
+    local _stty=" $(stty -a 2>/dev/null | tr '\n' ' ') "
+    [[ $_stty == *" -echo "* ]] && stty echo 2>/dev/null
+    return 0
+}
+
+/bin/stty sane
+
+# Completion + the fzf/zoxide integrations. This runs before the prompt block
+# because starship, zoxide and fzf all register precmd/preexec hooks, and the
+# fpath/module_path this sets up is what makes their zsh init work at all.
+source_if_exists "$ZSH_CONFIG_ROOT_DIR/global/completions.zsh"
+
+# starship's zsh init calls int() from the zsh/mathfunc MODULE, so it needs the
+# dynamic modules as well as the binary. On an env-only install -- a farm HOME
+# with the config but no loadout zsh runtime -- module_path points at nothing and
+# starship fails LOUDLY on every prompt:
+#     (eval):20: failed to load module: zsh/mathfunc
+#     __starship_get_time:1: unknown function: int
+# Probing the module first turns that into a silent fall back to the built-in
+# prompt, which is what an env-only HOME is supposed to get.
+_loadout_starship_ok=0
+if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null 2>&1; then
+    if zmodload -i zsh/mathfunc 2>/dev/null; then
+        _loadout_starship_ok=1
+    fi
+fi
+# Fallback prompt, mirroring the bash env's set_prompt: the farm/LSF color swap
+# and the uid shown when the effective user differs from $USER.
+#
+# Defined UNCONDITIONALLY, exactly as in envs/bash/global/bashrc, even when
+# starship will overwrite PROMPT a moment later. `sp1` / `sp2` call it to switch
+# back to the built-in prompt at runtime, so defining it only in the else branch
+# would leave both aliases pointing at a nonexistent function whenever starship
+# is enabled -- which is the default.
+set_prompt() {
+    local prompt_color=${LOADOUT_CFG_PROMPT_COLOR_NORMAL:-$PROMPT_YELLOW}
+    local prompt_joined=""
+    if [[ -n ${LSB_JOBID:-} ]]; then
+        prompt_joined="LSF"
+        prompt_color="${LOADOUT_CFG_PROMPT_COLOR_FARM:-$PROMPT_RED}"
+    fi
+    [[ ${LOADOUT_CFG_PROMPT_INCLUDE_HOST} == "1" ]] && prompt_joined+=":%m"
+    local whoiam=$(/bin/whoami)
+    local uid_part=""
+    [[ $whoiam != "$USER" ]] && uid_part="$whoiam "
+    PROMPT="${PROMPT_YELLOW}${uid_part}${prompt_color}${prompt_joined}%~ \$ ${PROMPT_WHITE}"
+}
+
+if (( _loadout_starship_ok )); then
+    export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
+    eval "$(starship init zsh)"
+else
+    set_prompt
+fi
+alias sp1="set_prompt"
+alias sp2="LOADOUT_CFG_PROMPT_INCLUDE_HOST=1 set_prompt"
+
+# WezTerm / OSC 133 semantic zones + OSC 7 cwd. The vendored wezterm.sh is the
+# BASH-PREEXEC variant and has no zsh path at all, so this is implemented on
+# zsh's native precmd/preexec hooks instead of sourcing it. zsh gets the full
+# set (133 zones + 7 cwd); the tcsh env can only manage OSC 7.
+#
+# Sourced AFTER the prompt is established, not before: the OSC 133 "B" marker
+# (end of prompt / start of typed input) is appended to $PROMPT, and starship's
+# init assigns PROMPT wholesale -- so running this first would have the marker
+# silently overwritten and the zone protocol would be subtly wrong.
+if is_truthy "${LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION}"; then
+    source_if_exists "$ZSH_CONFIG_ROOT_DIR/global/wezterm-integration.zsh"
+fi
+
+# Restore echo before every prompt. add-zsh-hook is the zsh analogue of
+# loadout_add_precmd: it appends to the precmd hook array without clobbering
+# whatever starship already registered there.
+loadout_add_zsh_hook precmd loadout_restore_echo
+
+### ls function ###
+# The full env-var-driven listing wrapper, matching envs/bash/global/bashrc.
+# The bash version builds this with eval to bake in the realpath lookup; here it
+# is a plain function because zsh has no measurable win from that and a readable
+# function is worth more than the microseconds.
+if fpcmp "$_glibc" -gt 2.17; then
+    export EZA_ARGS="--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
+    export LSD_ARGS="--sort time --long --reverse --date '+%D %H:%M:%S'"
+    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "lsd" ]]; then
+        ls() {
+            if [[ $1 == '-1' ]]; then
+                command ls "$@"
+                return
+            fi
+            local option_size
+            [[ ${human_readable:-} == 1 ]] && option_size=short || option_size=bytes
+            command lsd --size $option_size ${=LSD_ARGS} --date '+%D %H:%M:%S' "$@"
+        }
+    elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
+        ls() {
+            if [[ $1 == '-1' ]]; then
+                /bin/ls -1 "$@"
+                return
+            fi
+            local -a opts
+            [[ ${list_all:-} == 1 ]] && opts+=(-a)
+            [[ ${human_readable:-} == 1 ]] || opts+=(-B)
+            [[ ${show_group:-} == 1 ]] && opts+=(-g)
+            command eza --time-style '+%D %H:%M:%S' "${opts[@]}" ${=EZA_ARGS} "$@"
+        }
+    else
+        ls() {
+            local -a opts
+            [[ ${list_all:-} == 1 ]] && opts+=(-a)
+            [[ ${human_readable:-} == 1 ]] || opts+=(--human-readable)
+            [[ ${show_group:-} == 1 ]] || opts+=(--no-group)
+            /bin/ls --color -lrt "${opts[@]}" "$@"
+        }
+    fi
+fi
+
+##############################################################################
+###                              Aliases                                   ###
+##############################################################################
+# The SHARED alias file. This is why the zsh alias surface tracks the bash one
+# automatically rather than by discipline.
+source_if_exists "$BASH_CONFIG_ROOT_DIR/global/aliases.sh"
+
+##############################################################################
+###                             Functions                                  ###
+##############################################################################
+
+cd() {
+    if [[ "$1" == "cd" ]]; then
+        shift
+    fi
+
+    local target="$1"
+    local response=""
+    local create_base=""
+
+    if [[ -d "$1" ]]; then
+        target=$1
+    elif [[ -z "$1" ]]; then
+        target=$HOME
+    elif [[ "$1" == "-" ]]; then
+        target="-"
+    elif [[ -L "$1" || -e "$1" ]]; then
+        target=$(dirname -- "$1")
+    elif [[ -n "$target" ]]; then
+        create_base=$target
+        while [[ $create_base != "/" && $create_base != "." && ! -e "$create_base" ]]; do
+            create_base=$(dirname -- "$create_base")
+        done
+
+        if [[ -d "$create_base" && -w "$create_base" ]]; then
+            read -r "response?$target does not exist. Create it with parent directories? [y]/n "
+            if [[ -z "$response" || $response == [Yy] ]]; then
+                mkdir -p -- "$target" || return
+            else
+                return
+            fi
+        fi
+    fi
+
+    builtin cd "$target"
+}
+
+# Every directory change lists. zsh's chpwd hook fires for cd, pushd, popd and
+# AUTO_CD alike, so -- unlike the bash env, which needs the listing inside cd()
+# and therefore has to route zoxide and `latest` back through that function --
+# there is no call site here that can forget. (csh's cwdcmd is the same idea.)
+loadout_chpwd_ls() {
+    human_readable=0 ls
+}
+loadout_add_zsh_hook chpwd loadout_chpwd_ls
+
+extract_rpm() {
+    rpm2cpio "$1" | cpio -idmv
+}
+
+zhead() {
+    zcat "${@[-1]}" | head "${@[1,-2]}"
+}
+
+# If this terminal supports extended keys, set the var ~/.tmux.conf queries.
+if check_extended_keys; then
+    export EXTENDED_KEYS_SUPPORTED=1
+else
+    export EXTENDED_KEYS_SUPPORTED=0
+fi
+
+# Auto-attach to tmux if configured (shared implementation).
+if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX}"; then
+    auto_attach_to_tmux
+fi
+
+unset _bin_dir _loadout_local_prefix _loadout_newest_hist _loadout_target_shell
+
+# vim: ft=zsh ts=4

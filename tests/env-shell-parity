@@ -1,0 +1,276 @@
+#!/usr/bin/env python3.14
+"""env-shell-parity: the tcsh env must track the bash env.
+
+Policy, set 2026-08-08 (docs/HANDOFF.md -> "POLICY REVERSAL: tcsh now tracks
+bash/zsh"): `envs/tcsh/` is a first-class tracked environment, because the EE
+community this project serves is ~90% tcsh. A bash-env change is not finished
+until the tcsh form lands.
+
+That policy needs a gate or it decays into a comment nobody reads. This is the
+gate. It checks two mechanical things:
+
+  1. every user-facing alias/function the bash env defines has a tcsh alias of
+     the same name, and
+  2. every LOADOUT_CFG_* the bash env defines is either defined in the tcsh
+     config or explicitly recorded as inapplicable.
+
+Anything genuinely impossible in csh goes in the EXPECTED_* tables below WITH A
+REASON. That is the point: the exception is cheap to add but has to be written
+down, so "csh can't do that" stops being an unexamined reflex. The previous
+policy refused this gate on the grounds that tcsh had ~zero users; that premise
+was wrong, and so was the conclusion.
+
+Deliberately NOT checked: that the two implementations behave identically. They
+cannot -- one is a function calling `builtin cd`, the other an alias calling a
+helper script. Behaviour is covered by tests/install-env-tcsh, which drives a
+real PTY. This gate only answers "does the tcsh env know this name exists".
+"""
+
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+BASH_ALIASES = os.path.join(REPO, "envs", "bash", "global", "aliases.sh")
+BASH_BASHRC = os.path.join(REPO, "envs", "bash", "global", "bashrc")
+BASH_CONFIG = os.path.join(REPO, "envs", "bash", "global", "config.sh")
+TCSH_ALIASES = os.path.join(REPO, "envs", "tcsh", "global", "aliases.csh")
+TCSH_TCSHRC = os.path.join(REPO, "envs", "tcsh", "global", "tcshrc")
+TCSH_CONFIG = os.path.join(REPO, "envs", "tcsh", "global", "config.csh")
+ZSH_ENTRY = os.path.join(REPO, "envs", "zsh", "zshrc")
+ZSH_ZSHRC = os.path.join(REPO, "envs", "zsh", "global", "zshrc")
+ZSH_COMPLETIONS = os.path.join(REPO, "envs", "zsh", "global", "completions.zsh")
+
+# The zsh env tracks bash by a DIFFERENT mechanism than tcsh. zsh has functions,
+# arrays and `local`, so instead of reimplementing the bash env it SOURCES it:
+# functions.sh, global/config.sh and global/aliases.sh are read as-is. That is
+# what makes its alias surface track automatically rather than by discipline --
+# and it means those three files are shared code, where a bashism is a zsh bug.
+#
+# So the zsh checks below are shaped differently from the tcsh ones: rather than
+# comparing alias lists (which are the same list by construction), they assert
+# that the reuse is still wired up, and compare the bashrc-level env surface
+# that zsh does have to reimplement.
+ZSH_REQUIRED_SOURCES = {
+    "functions.sh": (ZSH_ENTRY, "the shared function library (path_*, is_truthy, vercomp, ...)"),
+    "global/config.sh": (ZSH_ENTRY, "the shared LOADOUT_CFG_* defaults -- one home for the values"),
+    "global/aliases.sh": (ZSH_ZSHRC, "the shared alias set -- this is what makes aliases track automatically"),
+}
+
+# Environment variables exported by envs/bash/global/bashrc that global/zshrc
+# does not export, with the reason.
+EXPECTED_MISSING_ZSH_EXPORTS = {
+    "HISTCONTROL": "bash-only variable; zsh spells it setopt HIST_IGNORE_SPACE + HIST_IGNORE_ALL_DUPS",
+    "HISTFILESIZE": "bash-only variable; zsh's equivalent is SAVEHIST, which global/zshrc does set",
+}
+
+# Bash command names with no tcsh alias of the same name, each with the reason.
+# A reason of the form "upstream ships no tcsh target" is the only kind that
+# should be common; anything else deserves a second look before it is added.
+EXPECTED_MISSING_COMMANDS = {
+    # --- internal implementation detail, not a command a user types -----------
+    "loadout_cd_recent_dir": "internal helper behind cdd/cddd/...; tcsh uses helpers/recent-dir",
+    "set_prompt": "internal; tcsh's equivalent is the loadout_prompt_lead variables + sp1/sp2",
+    "get_prompt_uid": "internal to set_prompt; tcsh builds the uid into the prompt directly",
+    "loadout_restore_echo": "bash-preexec/PROMPT_COMMAND hook; tcsh's precmd has no $? to preserve "
+    "and tcsh restores echo itself between commands",
+    "loadout_add_precmd": "registers into bash's precmd_functions array; tcsh has one precmd alias",
+    "nvim_wrapper": "bash-only wrapper name referenced by test_nvim; the tcsh alias calls nvim directly",
+    # --- upstream ships no tcsh target ---------------------------------------
+    "__fzf_cd__": "fzf generates bash/zsh/fish only; the tcsh fcd alias calls fzf --walker=dir instead",
+    "__zoxide_cd": "zoxide's generated internal; zoxide init has no tcsh target at all",
+}
+
+# LOADOUT_CFG_* variables the bash env defines that the tcsh config does not.
+EXPECTED_MISSING_CONFIG = {
+    "LOADOUT_CFG_PREFERRED_BASH": "shell-specific; the tcsh analogue is LOADOUT_CFG_PREFERRED_TCSH",
+    "LOADOUT_CFG_ENABLE_STARSHIP": "starship init has no tcsh target",
+    "LOADOUT_CFG_ENABLE_FZF": "fzf --bash/--zsh/--fish only; no tcsh keybinding script exists",
+    "LOADOUT_CFG_ENABLE_ZOXIDE": "zoxide init has no tcsh target",
+    "LOADOUT_CFG_ENABLE_ICECREAM": "IceCream-Bash needs ${!var} indirection and export -f",
+    "LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION": "OSC 133 zones need bash-preexec; tcsh carries "
+    "OSC 7 via cwdcmd instead",
+    "LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION": "path to the bash-preexec integration script",
+    "LOADOUT_CFG_PRESERVE_FUNCTIONS": "csh has no functions to preserve",
+}
+
+FAILURES = []
+PASSED = 0
+
+
+def check(label, ok, detail=""):
+    global PASSED
+    if ok:
+        PASSED += 1
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append((label, detail))
+
+
+def read(path):
+    """Return the file with comment lines removed.
+
+    Stripping comments is load-bearing in both directions. The tcsh config's
+    header LISTS the LOADOUT_CFG_* variables it deliberately omits, and the
+    alias files discuss `alias foo` in prose -- so a scanner that reads comments
+    reports those as implemented and the gate passes on documentation rather
+    than on code.
+    """
+    with open(path, encoding="utf-8") as fh:
+        lines = [ln for ln in fh.read().splitlines() if not ln.lstrip().startswith("#")]
+    return "\n".join(lines)
+
+
+def bash_command_names(text):
+    """alias NAME=... and NAME() { ... }, at any indentation.
+
+    Indentation matters: several are defined inside `if command -v ...` blocks,
+    and an anchored ^ pattern silently misses every one of them -- which would
+    make this gate pass by looking at a third of the real surface.
+    """
+    names = set(re.findall(r"^[ \t]*alias[ \t]+([A-Za-z_][A-Za-z0-9_+-]*)=", text, re.M))
+    names |= set(re.findall(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\(\)[ \t]*\{", text, re.M))
+    return names
+
+
+def tcsh_alias_names(text):
+    """`alias NAME ...`, anywhere on the line -- NOT anchored to line start.
+
+    csh's one-line `if` puts the alias mid-line:
+        if ( "$LOADOUT_CFG_PREFERRED_CAT" == "bat" ) alias cat 'bat --paging=never'
+    An anchored pattern misses every conditionally-defined alias and then
+    reports it as an unimplemented gap. Comments are already stripped by read(),
+    so matching anywhere cannot pick up prose.
+    """
+    return set(re.findall(r"\balias[ \t]+([A-Za-z_][A-Za-z0-9_+-]*)[ \t]", text))
+
+
+def config_names(text):
+    return set(re.findall(r"(LOADOUT_CFG_[A-Za-z0-9_]+)", text))
+
+
+def exported_names(text):
+    """Environment variables the file exports.
+
+    `typeset -gx` counts: it is how zsh exports a variable it also needs to
+    declare global, and TERMINFO_DIRS is set that way -- an `export`-only
+    pattern reports it as an unimplemented gap that is actually implemented.
+    """
+    names = set(re.findall(r"^[ \t]*export[ \t]+([A-Z_][A-Z0-9_]*)", text, re.M))
+    names |= set(re.findall(r"^[ \t]*typeset[ \t]+-g?x[ \t]+([A-Z_][A-Z0-9_]*)", text, re.M))
+    return names
+
+
+def main():
+    for path in (BASH_ALIASES, BASH_BASHRC, BASH_CONFIG, TCSH_ALIASES, TCSH_TCSHRC, TCSH_CONFIG):
+        if not os.path.isfile(path):
+            print(f"  FAIL  missing input file: {path}")
+            return 1
+
+    bash_cmds = bash_command_names(read(BASH_ALIASES)) | bash_command_names(read(BASH_BASHRC))
+    tcsh_cmds = tcsh_alias_names(read(TCSH_ALIASES))
+
+    # Sanity-check the extractors themselves. A regex that quietly matches
+    # nothing turns this whole gate into a no-op that always passes -- the exact
+    # failure family this repo keeps hitting. Bounds are loose on purpose; they
+    # only have to catch "the pattern broke", not track the real counts.
+    check(
+        "bash extractor found a plausible command set",
+        len(bash_cmds) > 80,
+        f"only found {len(bash_cmds)} -- did the alias/function regex break?",
+    )
+    check(
+        "tcsh extractor found a plausible command set",
+        len(tcsh_cmds) > 80,
+        f"only found {len(tcsh_cmds)} -- did the alias regex break?",
+    )
+
+    missing = sorted(bash_cmds - tcsh_cmds - set(EXPECTED_MISSING_COMMANDS))
+    check(
+        "every bash command has a tcsh alias",
+        not missing,
+        "no tcsh form for: "
+        + ", ".join(missing)
+        + "\n        Add the alias to envs/tcsh/global/aliases.csh (helpers/ for anything"
+        "\n        needing loops or locals), or add it to EXPECTED_MISSING_COMMANDS with"
+        "\n        a reason. See docs/HANDOFF.md -> POLICY REVERSAL.",
+    )
+
+    # A stale exception is worse than none: it documents a gap that no longer
+    # exists and trains the next reader to skim the table.
+    stale = sorted(n for n in EXPECTED_MISSING_COMMANDS if n in tcsh_cmds)
+    check(
+        "no stale command exceptions",
+        not stale,
+        "these now EXIST in tcsh; drop them from EXPECTED_MISSING_COMMANDS: " + ", ".join(stale),
+    )
+
+    bash_cfg = config_names(read(BASH_CONFIG))
+    tcsh_cfg = config_names(read(TCSH_CONFIG)) | config_names(read(TCSH_TCSHRC))
+
+    missing_cfg = sorted(bash_cfg - tcsh_cfg - set(EXPECTED_MISSING_CONFIG))
+    check(
+        "every LOADOUT_CFG_* is handled or excused",
+        not missing_cfg,
+        "not handled in tcsh: "
+        + ", ".join(missing_cfg)
+        + "\n        Add it to envs/tcsh/global/config.csh, or to EXPECTED_MISSING_CONFIG"
+        "\n        with the reason tcsh cannot act on it.",
+    )
+
+    stale_cfg = sorted(n for n in EXPECTED_MISSING_CONFIG if n in tcsh_cfg)
+    check(
+        "no stale config exceptions",
+        not stale_cfg,
+        "these are now handled in tcsh; drop them from EXPECTED_MISSING_CONFIG: " + ", ".join(stale_cfg),
+    )
+
+    # ---- zsh -----------------------------------------------------------------
+    for path in (ZSH_ENTRY, ZSH_ZSHRC, ZSH_COMPLETIONS):
+        if not os.path.isfile(path):
+            check(f"zsh file present: {os.path.relpath(path, REPO)}", False, "missing")
+            return 1
+
+    # The reuse wiring IS the tracking mechanism. If someone "cleans up" one of
+    # these source lines -- say by copying the aliases into a zsh-native file --
+    # the zsh env silently stops following bash, and nothing else would notice.
+    for needle, (path, why) in ZSH_REQUIRED_SOURCES.items():
+        text = read(path)
+        check(
+            f"zsh still sources {needle}",
+            needle in text and "source" in text,
+            f"{os.path.relpath(path, REPO)} no longer sources it -- {why}",
+        )
+
+    bash_exports = exported_names(read(BASH_BASHRC))
+    zsh_exports = exported_names(read(ZSH_ZSHRC)) | exported_names(read(ZSH_COMPLETIONS))
+
+    missing_exports = sorted(bash_exports - zsh_exports - set(EXPECTED_MISSING_ZSH_EXPORTS))
+    check(
+        "every env var the bash rc exports is exported by zsh",
+        not missing_exports,
+        "not exported by zsh: "
+        + ", ".join(missing_exports)
+        + "\n        Add it to envs/zsh/global/zshrc, or to EXPECTED_MISSING_ZSH_EXPORTS"
+        "\n        with the reason zsh does not need it.",
+    )
+
+    stale_exports = sorted(n for n in EXPECTED_MISSING_ZSH_EXPORTS if n in zsh_exports)
+    check(
+        "no stale zsh export exceptions",
+        not stale_exports,
+        "these are now exported by zsh; drop them from EXPECTED_MISSING_ZSH_EXPORTS: " + ", ".join(stale_exports),
+    )
+
+    print()
+    if FAILURES:
+        print(f"{PASSED} passed, {len(FAILURES)} failed")
+        return 1
+    print(f"{PASSED} passed, 0 failed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

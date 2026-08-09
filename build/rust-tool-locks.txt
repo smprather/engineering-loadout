@@ -20,9 +20,10 @@ zoxide       https://github.com/ajeetdsouza/zoxide          0.10.0
 starship     https://github.com/starship/starship           1.26.0
 delta        https://github.com/dandavison/delta            0.19.2
 hyperfine    https://github.com/sharkdp/hyperfine           1.20.0
+tree-sitter  https://github.com/tree-sitter/tree-sitter    0.26.12
 stylua       https://github.com/JohnnyMorganz/StyLua        2.5.2
-ty           https://github.com/astral-sh/ty                0.0.66
-uv           https://github.com/astral-sh/uv                0.12.1
+ty           https://github.com/astral-sh/ty                0.0.69
+uv           https://github.com/astral-sh/uv                0.12.3
 
 # --- source-built rust tools (already built from source in the loadout) ---
 fish         https://github.com/fish-shell/fish-shell       4.8.1
