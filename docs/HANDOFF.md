@@ -173,12 +173,16 @@ support for each, and `tmux-path-store` joined them in v1.1.0.
 ## Where things stand right now
 
 - **Released: `v2026.08.09`** -- https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.09
-  Signed tag (ED25519 `SHA256:XlxLB4kh...`) on `b4e954f`, published (not a
-  draft), assets verified by re-reading the release rather than trusting the
-  publish exit code: `nvim-plugin-stash.tar.bz2` (343,752,246 B, byte-matches
-  local), `sha256sums.txt`, `default.content-manifest`.
-- `main` == `origin/main` == the released commit `b4e954f`; working tree clean.
-  **That was true only after a manual push** -- see the next section.
+  Signed tag (ED25519 `SHA256:XlxLB4kh...`), published (not a draft), assets
+  verified by re-reading the release rather than trusting the publish exit code:
+  `nvim-plugin-stash.tar.bz2` (343,752,246 B, stash asset REUSED -- sha256
+  unchanged, not re-uploaded), `sha256sums.txt`, `default.content-manifest`.
+- **Re-released the same day**, per the date-based-tag policy: the tag first
+  pointed at `b4e954f` (the tcsh/zsh parity release), then moved to `7388727`
+  when the `uv tool install --force` fix landed. Binary smoke re-ran from scratch
+  (`loadout_main.py` is in the smoke fingerprint): all 300 binaries OK.
+- `origin/main` == the released commit `7388727`; working tree clean. The first
+  publish that day needed a manual branch push; the second did not -- see below.
 - Malware scan CLEAN, 0 detections across 77,051 files.
 - Class **C** (registry bumps + env packages). Tier 3 container green, currency
   sweep done (4 packages, below), assurance re-pin **not applicable**.
@@ -202,6 +206,16 @@ Every check in `RELEASE.md` §9 passes while this is true. The tag is real, its
 signature is good, all three assets are present and byte-correct. Same shape as
 the 2026-07-22 unsigned-tag incident: **invisible unless something re-reads state
 afterwards.**
+
+**The fix ran for real on the same-day re-release** and did exactly what it should,
+before the tag existed:
+
+```
+To https://github.com/smprather/engineering-loadout.git
+   b4e954f..7388727  main -> main
+  pushing branch main (7388727) ...
+  origin/main verified at 7388727
+```
 
 Fixed in the tool, not in the prose, because a documented step nothing enforces
 is the failure mode this repo keeps hitting. Step 4 of `build/release` now calls
@@ -270,10 +284,12 @@ Tier 2 of `tests/run-all`.
 
 ### Recorded deviation: ClamAV signatures 6 days stale at release
 
-The v2026.08.09 scan ran with ClamAV signatures 6 days old (YARA-Forge was
-same-day). Verdict was CLEAN, but per `RELEASE.md` §2b that is weaker evidence
-than a fully-current scan. Recorded rather than left implicit; better than the
-xephyr release's 17 days. To clear it:
+Both v2026.08.09 publishes scanned with ClamAV signatures 6 days old
+(`/var/lib/clamav/daily.cld` dated 2026-08-03; YARA-Forge was same-day). The scan
+is a blocking gate and passed both times, but per `RELEASE.md` §2b that is weaker
+evidence than a fully-current scan. Recorded rather than left implicit; better
+than the xephyr release's 17 days. Still outstanding -- `freshclam` needs root,
+so it did not run during either release. To clear it:
 
 ```bash
 sudo freshclam && ./build/scan-for-malware --no-cache
