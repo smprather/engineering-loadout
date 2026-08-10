@@ -136,7 +136,7 @@ sha256  6b1a470da0f0258a2c25fd12c8dcc2bb1ae852765b734fdb3e21cc71c6256685  payloa
 sha256  41af2495fa5ede6a9d67c56f79e5fab4fba1b8e029c63e35f5171056ebaab317  payload/el8.x86_64.glibc2p28/bin/od.bz2
 sha256  a8f71c8f873a41eb1fcfdfcfea75f29c5c96955e8c4b80a5db9cdd0ff5a9540f  payload/el8.x86_64.glibc2p28/bin/paste.bz2
 sha256  32fefa25d1f8378cfd840f49ca2b9a16a8b7c44a4f7ecbd0a13d6fc1496308a5  payload/el8.x86_64.glibc2p28/bin/patchelf.bz2
-sha256  b033003f579154c3885ed5e9d10e7c50e8ef53d6c9b2640780b51a54baff22f7  payload/el8.x86_64.glibc2p28/bin/pdftotext.bin.bz2
+sha256  221b55274edcb5a4c20c9351dc5c563d3dd40e1043ec6b53e32ea5a67fa5b666  payload/el8.x86_64.glibc2p28/bin/pdftotext.bin.bz2
 sha256  80312c650110dc778ebc9763fc3656173861e2096e8ba1284612dbcd3b5f4366  payload/el8.x86_64.glibc2p28/bin/pdftotext.bz2
 sha256  993bd8d0fe6bf3b006cc5ac4ae70958bbfda6a8d92201e0b1fac6b144c8aa9c0  payload/el8.x86_64.glibc2p28/bin/perf2bolt.bz2
 sha256  9f067987f751cef72283d71f05c319153098ffe27443072d6689dd2032d1a2d1  payload/el8.x86_64.glibc2p28/bin/pigz.bz2
@@ -316,7 +316,7 @@ sha256  5a11db0dde6935af722daf74e181bbcfde71033cb7b6626dc252f264b5d00c2e  payloa
 sha256  6687a6ebe648df0ca66f3dc6db669ae1e6089994350679272c430d9078689ae2  payload/el8.x86_64.glibc2p28/lib64/libfftw3f_threads.so.3.bz2
 sha256  f901b533c7114a5638051a9762085b24ab49dc26b136bbf2b41bc8a36c4d4b70  payload/el8.x86_64.glibc2p28/lib64/libfontconfig.so.1.bz2
 sha256  a797de8f9f25f0430fce7eb6277eb07b121e6cf544ff8067d95d4b118c03d22c  payload/el8.x86_64.glibc2p28/lib64/libfontenc.so.1.bz2
-sha256  153b6a4639640e8bdac678270a75bb1ed0deecb77e5e368ae67bf0978f51924d  payload/el8.x86_64.glibc2p28/lib64/libfreetype.so.6.bz2
+sha256  2d84c96ac9019fc2d190b49742841f3ed59b58c287df32cf458eb063dbf06dc6  payload/el8.x86_64.glibc2p28/lib64/libfreetype.so.6.bz2
 sha256  e79e70d5a9dc5cecc6cc23435e7ec3825ced9fe03eaac5b66c92ae7483a2f158  payload/el8.x86_64.glibc2p28/lib64/libfribidi.so.0.bz2
 sha256  d064c511792a46c8cbe8b8ee2086ba04de8a98dbbe3cb14eb1d18413d2536cc8  payload/el8.x86_64.glibc2p28/lib64/libgdk-3.so.0.bz2
 sha256  5dce8aa40a597fd8f0a13be2cd0a2a350a94cca670d34f484a20d7696065c202  payload/el8.x86_64.glibc2p28/lib64/libgdk_pixbuf-2.0.so.0.bz2
@@ -430,7 +430,7 @@ tar-meta  39018530  1786124507  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz
 tar-meta  5831  1784306296  payload/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
 tar-meta  4854855  1784306298  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
-tar-meta  3791513  1784306302  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
+tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
 tar-meta  3992911  1785180018  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2

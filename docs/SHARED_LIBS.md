@@ -10,7 +10,7 @@ Runtime dependencies vendored alongside binaries -- no system library assumption
 | `libevent_core-2.1.so.6` | Event loop (tmux) |
 | `libexpat.so.1` | XML parsing |
 | `libfontconfig.so.1` | Font discovery (xterm) |
-| `libfreetype.so.6` | Font rendering (xterm) |
+| `libfreetype.so.6` | Font rasterizer shared by every GUI/terminal tool (xterm, st, gvim, Qt5, GTK3, cairo, pango, firefox, pdftotext). **Source-built**, not shanghai'd from EL8 -- see `build/build-freetype.sh` |
 | `libICE.so.6` | Inter-Client Exchange (X11) |
 | `libjq.so` | jq shared library |
 | `libncurses.so.6` | Terminal UI (gnuplot, htop) |

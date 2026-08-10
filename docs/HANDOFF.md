@@ -1,9 +1,100 @@
 # Current Handoff
 
-Last updated: 2026-08-09 (v2026.08.09 released; tcsh + zsh at bash parity;
-4-package currency sweep done; `./build/release` now pushes the release branch,
-after v2026.08.09 shipped without it; linux-process-resource-monitor still
-pending upstream).
+Last updated: 2026-08-10 (freetype is now source-built and bundled at 2.14.3,
+replacing EL8's shanghai'd 2.9.1; pdftotext unpinned 22.12.0 -> 26.04.0 as a
+result; linux-process-resource-monitor still pending upstream).
+
+## freetype 2.9.1 -> 2.14.3, source-built (2026-08-10)
+
+`libfreetype.so.6` was EL8's system 2.9.1, shanghai'd into `gui_libs` like the
+other 90 GUI libs. It is now source-built by the new
+**`build/build-freetype.sh --tag 2.14.3`**. Two reasons: it is a 2018 rasterizer
+carrying six years of unpatched upstream CVEs *and* it is the shared font engine
+for every GUI/terminal tool in the bundle (xterm, st, urxvt, gvim, Qt5, GTK3,
+cairo, pango, `libxul.so`, Xephyr, the octave fltk plugins); and it was the sole
+reason `pdftotext` sat on poppler 22.12.0.
+
+Build is ~9 s and the payload got *smaller* (380K -> 356K bz2). Nothing else in
+the tree needed rebuilding -- everything links by SONAME and the direction
+(older consumer, newer lib) is the compatible one.
+
+**The ABI was never the risk; the pixels were, so they were measured.**
+`build/freetype/compare-rendering.c` renders a glyph set under each lib and
+reports bitmap dims, pixel bytes and advance *separately*. Over 8 faces x 24
+chars x 7 sizes: `normal` 1.9% of glyphs differ with **0** advance and **0**
+dimension changes; `light` 4.3% with **0** advance; `mono` 38.4% (the v35 ->
+v40 interpreter change, 1-bit only, unused by modern toolkits). Every advance
+change is confined to *forced-autohint* mode on *proportional* faces -- never a
+`NerdFontMono-*` face -- so no terminal cell grid can shift. Two traps worth
+keeping:
+
+- **A one-font check gives a false all-clear.** `DejaVuSans`/`DejaVuSansMono`
+  were **bit-identical** across the whole jump while every CascadiaCode face
+  moved. Test the bundled Nerd Fonts.
+- **A dropped export is the failure that would actually bite**, silently, at
+  first font load on a farm node. 2.14.3 removes `FT_Outline_New_Internal` and
+  `FT_Outline_Done_Internal`. The build script proves no consumer wants them
+  rather than asserting it: it collects every undefined `FT_*` symbol across
+  `bin/` and `lib64/` (and, under `--deep-check`, the runtime archives) and
+  fails if the new lib does not export one. Closure is 66 distinct symbols from
+  14 consumers. The guard was negative-tested by doctoring the export list.
+
+`--with-harfbuzz=no` and `--with-brotli=no` are load-bearing, not tidiness:
+harfbuzz would be a circular bundled dep (EL8's 1.7.5 is below what 2.10+ wants
+anyway), and brotli would add a NEEDED this repo does not bundle -- textbook
+build-box masking, since `brotli-devel` is installed here and absent on a stock
+node. The script hard-fails on any NEEDED outside the allowlist.
+
+### pdftotext 22.12.0 -> 26.04.0, and the ceiling that replaced freetype
+
+The old pin is gone; the new one is **fontconfig**. poppler's requirements by
+release: 23.12 wants freetype 2.10 / fontconfig 2.13; 24.08..**26.04** want
+2.11 / 2.13; **26.06+** wants 2.13 / **2.15**. EL8 has fontconfig 2.13.1, so
+26.04.0 is the last buildable release. Going further means bundling fontconfig
+too -- a bigger blast radius than freetype was, because fontconfig 2.15 also
+moves the font-cache format and would force a cache rebuild for every user.
+
+`build-pdftotext.sh` now **requires** `--with-freetype <prefix>` (the
+`build-modules.sh --with-tcl` convention), and `build-freetype.sh` leaves its
+install tree at the version-scoped `/tmp/loadout-freetype-instdir-<TAG>` to
+supply it. EL8's `freetype-devel` headers are still 2.9.1, so without the flag
+cmake configures against those and fails -- and, more insidiously, if a future
+EL8 point release nudged the system version past the minimum, the build would
+silently link against a freetype that is *not* the one shipped in `lib64/`.
+
+Three things bit during the bump, all now encoded in the script:
+
+- **The `GlobalParams` sed silently matched nothing.** The constructor went
+  from `const char *customPopplerDataDir` to `std::string` between 22.x and
+  26.04. A pdftotext built without that patch does not crash -- it extracts
+  CJK as garbage -- so nothing downstream would have noticed. The script greps
+  for the applied expression *and* the injected `#include <cstdlib>` and
+  hard-fails on either.
+- **`ENABLE_GPGME=OFF` is mandatory**, not cosmetic: poppler added signature
+  support wanting Gpgmepp >= 1.19, which EL8 has no package for, and configure
+  *errors* rather than degrading.
+- **`ENABLE_LIBTIFF=OFF`**: poppler >= 25.x wants tiff >= 4.3, EL8 has 4.0.9.
+  TIFF only feeds `pdfimages`/`pdftoppm`, which this package does not ship.
+
+The build's CJK smoke now stages the **patchelf'd** binary next to a populated
+`lib64/`, so it exercises the deployed `$ORIGIN/../lib64` resolution instead of
+the build box's `/usr/lib64`. It previously staged the unpatched binary, which
+would have tested against EL8's *older* freetype. Verified with a negative
+control: same binary without poppler-data returns
+`Missing language pack for 'Adobe-Japan1'`, so the smoke is load-bearing.
+
+### Gates for this change
+
+- Tier 1 + Tier 2 (`tests/run-all`): green.
+- Tier 3 (`tests/prebuilt-binaries-almalinux8 --full`, clean `almalinux:8.10`):
+  **275/275 binaries OK**, 25 expected host-contract skips (klayout + the 12
+  `strm*` converters need host GLVND). `pdftotext 26.04.0` and its CJK runtime
+  probe both OK; xterm/`resize` and gvim -- direct freetype consumers -- OK.
+  This is the gate that matters: the dev box's freetype-2.9.1 headers and
+  `brotli-devel` are exactly the masking this change had to avoid.
+- `build/verify-binaries` provenance and `check-versions` were **not** re-run;
+  do that at release time. `pdftotext` stays `pinned` in `check-versions`
+  output, now against 26.06+ rather than 23.01+.
 
 ## POLICY REVERSAL: tcsh now tracks bash/zsh (2026-08-08)
 
@@ -445,7 +536,7 @@ wrapper was exec-probed instead of resolved for the host-`.so` skip.
 | `vim` / `gvim` 9.2.0901 -> 9.2.0927 | source build; vim tags patches daily, bump on a deliberate cadence |
 | `fresh` 0.3.8 -> 0.4.7 | major bump, deserves its own change; the upstream prebuilt also needs GLIBC_2.35 against EL8's 2.28, so it is an EL8 source build |
 | `jupyterlab` 4.6.1 -> 4.6.2 | **blocked**, not forgotten: pip's `--platform` resolver backtracks into `httpcore 0.18.0` then reports no usable `anyio`; constrain that and it moves to `jupyterlab-server`. Not worth a hand-assembled wheel set for a patch bump |
-| `pdftotext` | correctly pinned: poppler >= 23.01 needs freetype >= 2.10, EL8 has 2.9.1 |
+| ~~`pdftotext`~~ | **RESOLVED 2026-08-10** -- was "correctly pinned: poppler >= 23.01 needs freetype >= 2.10, EL8 has 2.9.1". The loadout now source-builds freetype 2.14.3 and pdftotext moved 22.12.0 -> 26.04.0. New (real) ceiling is fontconfig 2.15 at poppler 26.06+; see below |
 
 ### Unspecced idea the owner raised (2026-08-07)
 

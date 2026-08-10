@@ -8,10 +8,33 @@
 # poppler releases: https://poppler.freedesktop.org/releases.html
 # Version format: YY.MM.patch (e.g. 22.12.0)
 #
-# EL8 freetype version constraint: EL8 ships freetype 2.9.1. poppler 23.01+
-# requires freetype 2.10+; poppler 22.12.0 is the last release requiring
-# only 2.8. Use --tag 22.12.0 (or any 22.x release) on EL8.
-# If EL8 is ever updated past freetype 2.9.x, later releases become viable.
+# FREETYPE. This used to pin poppler at 22.12.0, because EL8 ships freetype
+# 2.9.1 and poppler 23.01+ wants 2.10+. The loadout now source-builds freetype
+# (build/build-freetype.sh) and bundles it in lib64/, so that pin is gone --
+# but EL8's *headers* are still 2.9.1, so cmake configures against the system
+# freetype and fails unless you point it at the loadout build:
+#
+#   ./build/build-freetype.sh --tag 2.14.3
+#   ./build/build-pdftotext.sh --tag 26.04.0 \
+#       --with-freetype /tmp/loadout-freetype-instdir-2.14.3
+#
+# THE CEILING IS NOW FONTCONFIG, NOT FREETYPE. poppler's own requirements by
+# release (grep FREETYPE_VERSION / FONTCONFIG_VERSION in its CMakeLists.txt):
+#
+#   poppler        freetype   fontconfig   C++
+#   23.12          2.10       2.13         17
+#   24.08 .. 26.04 2.11       2.13         20 / 23
+#   26.06+         2.13       2.15         23
+#
+# EL8 has fontconfig 2.13.1, so 26.04.0 is the last buildable release. Going
+# past it means source-building and bundling fontconfig too -- a much bigger
+# blast radius than freetype, since fontconfig 2.15 also moves the font-cache
+# format and would force a cache rebuild for every user. Do not raise --tag
+# past 26.04.0 without doing that work.
+#
+# libtiff is disabled (-DENABLE_LIBTIFF=OFF): poppler >= 25.x wants tiff 4.3
+# and EL8 has 4.0.9. TIFF only feeds pdfimages/pdftoppm output formats, which
+# this package does not ship, so turning it off costs nothing here.
 #
 # This script builds libpoppler as a STATIC library so that pdftotext
 # is fully self-contained (no companion libpoppler.so to bundle).
@@ -35,7 +58,8 @@
 #   # dnf config-manager --set-enabled powertools
 #
 # Usage (run from any directory):
-#   ./build/build-pdftotext.sh --tag 22.12.0
+#   ./build/build-pdftotext.sh --tag 26.04.0 \
+#       --with-freetype /tmp/loadout-freetype-instdir-2.14.3
 
 set -eu
 
@@ -43,6 +67,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
 TAG=""
+WITH_FREETYPE=""
 DATA_VERSION="0.4.12"
 
 while [ "$#" -gt 0 ]; do
@@ -57,6 +82,11 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -gt 0 ] || { echo "missing value for --data-tag" >&2; exit 2; }
             DATA_VERSION="$1"
             ;;
+        --with-freetype)
+            shift
+            [ "$#" -gt 0 ] || { echo "missing value for --with-freetype" >&2; exit 2; }
+            WITH_FREETYPE="$1"
+            ;;
         -h|--help)
             sed -n '2,/^$/p' "$0"
             exit 0
@@ -68,13 +98,32 @@ done
 
 if [ -z "$TAG" ]; then
     echo "ERROR: --tag is required. Specify a stable release tag, e.g.:" >&2
-    echo "  $0 --tag 26.05.0" >&2
+    echo "  $0 --tag 26.04.0 --with-freetype /tmp/loadout-freetype-instdir-2.14.3" >&2
     echo "" >&2
     echo "Stable releases: https://poppler.freedesktop.org/releases.html" >&2
     echo "" >&2
     echo "Policy: this project ships stable releases only." >&2
+    echo "NOTE: 26.04.0 is the EL8 ceiling -- 26.06+ needs fontconfig 2.15." >&2
     exit 1
 fi
+
+# EL8's freetype-devel is 2.9.1. Without an explicit prefix cmake finds those
+# headers and either fails the version check (poppler >= 23.01) or -- worse, if
+# a future EL8 point release nudges the system version -- silently builds
+# against a freetype that is NOT the one shipped in lib64/.
+if [ -z "$WITH_FREETYPE" ]; then
+    echo "ERROR: --with-freetype is required." >&2
+    echo "       EL8's system freetype-devel is 2.9.1; poppler needs >= 2.11." >&2
+    echo "       Build the loadout's freetype first, then pass its install dir:" >&2
+    echo "         ./build/build-freetype.sh --tag 2.14.3" >&2
+    echo "         $0 --tag $TAG --with-freetype /tmp/loadout-freetype-instdir-2.14.3" >&2
+    exit 1
+fi
+[ -f "$WITH_FREETYPE/include/freetype2/freetype/freetype.h" ] || {
+    echo "ERROR: no freetype headers under $WITH_FREETYPE" >&2
+    echo "       expected $WITH_FREETYPE/include/freetype2/freetype/freetype.h" >&2
+    exit 1
+}
 
 VERSION="$TAG"
 
@@ -111,17 +160,31 @@ SRC_DIR="$WORK_DIR/poppler-${VERSION}"
 echo "==> Patching GlobalParams for a POPPLER_DATADIR runtime override ..."
 # Upstream Unix poppler resolves poppler-data only from the compile-time
 # POPPLER_DATADIR macro, which here is the temp build prefix -- dead once
-# deployed. Every use site already prefers the constructor-supplied
-# popplerDataDir, so falling back to getenv covers CMap/cidToUnicode/
-# nameToUnicode/unicodeMap lookups uniformly. The bin/pdftotext wrapper
-# exports POPPLER_DATADIR from the install prefix.
+# deployed. The single use site already prefers the constructor-supplied
+# popplerDataDir, so seeding that member from the environment when the caller
+# passed nothing covers CMap/cidToUnicode/nameToUnicode/unicodeMap lookups
+# uniformly. The bin/pdftotext wrapper exports POPPLER_DATADIR from the
+# install prefix.
+#
+# The constructor signature is version-sensitive: it took `const char *` up to
+# poppler 22.x and takes `std::string` from (at least) 26.04. The grep below is
+# what turns a silent no-op patch into a hard failure -- a pdftotext built
+# without it extracts CJK as garbage rather than crashing, so nothing
+# downstream would notice. If a bump lands here, re-read GlobalParams.cc and
+# update the expression; do not relax the check.
 GP="$SRC_DIR/poppler/GlobalParams.cc"
 sed -i \
-    -e 's|^#include <cstdio>$|#include <cstdio>\n#include <cstdlib>|' \
-    -e 's|GlobalParams::GlobalParams(const char \*customPopplerDataDir) : popplerDataDir(customPopplerDataDir)|GlobalParams::GlobalParams(const char *customPopplerDataDir) : popplerDataDir(customPopplerDataDir ? customPopplerDataDir : getenv("POPPLER_DATADIR"))|' \
+    -e 's|^#include <config.h>$|#include <config.h>\n#include <cstdlib>|' \
+    -e 's|GlobalParams::GlobalParams(std::string customPopplerDataDir) : popplerDataDir(std::move(customPopplerDataDir))|GlobalParams::GlobalParams(std::string customPopplerDataDir) : popplerDataDir(customPopplerDataDir.empty() \&\& getenv("POPPLER_DATADIR") ? std::string(getenv("POPPLER_DATADIR")) : std::move(customPopplerDataDir))|' \
     "$GP"
 grep -q 'getenv("POPPLER_DATADIR")' "$GP" || {
     echo "ERROR: POPPLER_DATADIR patch did not apply to $GP" >&2
+    echo "       The GlobalParams constructor signature likely changed;" >&2
+    echo "       inspect it and update the sed expression above." >&2
+    exit 1
+}
+grep -q '^#include <cstdlib>$' "$GP" || {
+    echo "ERROR: <cstdlib> include not added to $GP (getenv would not declare)" >&2
     exit 1
 }
 
@@ -132,6 +195,9 @@ echo "==> Configuring (static libpoppler, utils only, no Qt/GLib) ..."
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$WORK_DIR/install" \
+    -DCMAKE_PREFIX_PATH="$WITH_FREETYPE" \
+    -DFreetype_ROOT="$WITH_FREETYPE" \
+    -DENABLE_LIBTIFF=OFF \
     -DBUILD_SHARED_LIBS=OFF \
     -DENABLE_UTILS=ON \
     -DENABLE_GLIB=OFF \
@@ -141,6 +207,7 @@ cmake \
     -DENABLE_GTK_DOC=OFF \
     -DBUILD_GTK_TESTS=OFF \
     -DENABLE_NSS3=OFF \
+    -DENABLE_GPGME=OFF \
     -DENABLE_LIBOPENJPEG=openjpeg2 \
     -DENABLE_LIBCURL=OFF \
     -DENABLE_BOOST=OFF \
@@ -158,14 +225,17 @@ if [ ! -f "$PDFTOTEXT_BIN" ]; then
 fi
 
 echo "==> Verifying binary ..."
-VER_OUT=$("$PDFTOTEXT_BIN" -v 2>&1 | head -2)
+# The freshly linked binary needs the loadout freetype, not EL8's 2.9.1:
+# newer-linked against older is the direction that is NOT compatible.
+VER_OUT=$(LD_LIBRARY_PATH="$WITH_FREETYPE/lib" "$PDFTOTEXT_BIN" -v 2>&1 | head -2)
 echo "$VER_OUT"
 echo "$VER_OUT" | grep -qi "pdftotext\|poppler" || {
     echo "WARNING: unexpected output from 'pdftotext -v'" >&2
 }
 
 echo "==> Checking runtime library requirements ..."
-ldd "$PDFTOTEXT_BIN" | grep -v "linux-vdso\|ld-linux" | awk '{print "  " $0}'
+LD_LIBRARY_PATH="$WITH_FREETYPE/lib" ldd "$PDFTOTEXT_BIN" \
+    | grep -v "linux-vdso\|ld-linux" | awk '{print "  " $0}'
 
 echo "==> Checking glibc symbol requirements ..."
 MAX_GLIBC="$(readelf -V "$PDFTOTEXT_BIN" 2>/dev/null \
@@ -237,9 +307,25 @@ echo "==> Verifying staged CJK extraction (predefined CMap, no ToUnicode) ..."
 # ToUnicode needs poppler-data for both CMap and CID->Unicode resolution;
 # without it extraction is silent garbage. Build the layout an install
 # produces, then require the reference text back.
-mkdir -p "$STAGE/bin"
+mkdir -p "$STAGE/bin" "$STAGE/lib64"
 install -m 755 "$REPO/build/pdftotext/pdftotext" "$STAGE/bin/pdftotext"
-cp "$PDFTOTEXT_BIN" "$STAGE/bin/pdftotext.bin"
+# Stage the PATCHELF'd binary and a lib64/ beside it, so this exercises the
+# deployed resolution path ('$ORIGIN/../lib64') rather than whatever the build
+# box happens to have in /usr/lib64. That matters most for freetype: EL8's
+# 2.9.1 is OLDER than what this binary was linked against, and the env -i
+# below strips LD_LIBRARY_PATH, so an unpatched copy would silently be tested
+# against the wrong lib -- or pass here and die on a farm node.
+cp "$WORK_BIN" "$STAGE/bin/pdftotext.bin"
+for so in "$LIB_DIR"/libfreetype.so.6.bz2 "$LIB_DIR"/liblcms2.so.2.bz2 \
+          "$LIB_DIR"/libopenjp2.so.7.bz2; do
+    [ -f "$so" ] || continue
+    bzip2 -dc "$so" > "$STAGE/lib64/$(basename "$so" .bz2)"
+done
+[ -f "$STAGE/lib64/libfreetype.so.6" ] || {
+    echo "ERROR: no bundled libfreetype.so.6 in $LIB_DIR --" >&2
+    echo "       run ./build/build-freetype.sh first" >&2
+    exit 1
+}
 python3 "$REPO/build/pdftotext/make-cjk-smoke-pdf.py" "$WORK_DIR/cjk-smoke.pdf"
 SMOKE_OUT=$(cd /tmp && env -i PATH=/usr/bin:/bin HOME="$WORK_DIR" \
     "$STAGE/bin/pdftotext" "$WORK_DIR/cjk-smoke.pdf" - 2>&1) || {

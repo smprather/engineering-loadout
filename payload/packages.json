@@ -352,10 +352,10 @@
       "sentinel": "share/poppler/cidToUnicode/Adobe-Japan1",
       "install_to": "~/.local",
       "missing_hint": "pdftotext CJK/CMap text extraction will be missing",
-      "version": "22.12.0",
+      "version": "26.04.0",
       "version_url": "https://poppler.freedesktop.org/releases.html",
       "version_pattern": "poppler-([0-9]+\\.[0-9]+\\.[0-9]+)",
-      "pin_reason": "poppler >=23.01 needs freetype >=2.10; EL8 ships 2.9.1",
+      "pin_reason": "poppler >=26.06 needs fontconfig >=2.15; EL8 ships 2.13.1. Freetype is no longer the blocker -- the loadout source-builds and bundles 2.14.3 (build/build-freetype.sh)",
       "platforms": [
         "linux"
       ],

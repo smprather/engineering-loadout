@@ -240,7 +240,7 @@ OpenSSH for those.
 | lefdef-tools | python-tool | b9ac43e | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | liberty-tools | python-tool | v2026.06.01.1-35-g73af358 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
-| pdftotext | bin | 22.12.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
+| pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
 | p7zip | bin | 16.02 | p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.) |
 | bzip2 | bin | 1.0.8 | Block-sorting file compressor |
 | choose | bin | 1.3.7 | awk/cut alternative for column field selection |

@@ -1132,9 +1132,143 @@ Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
 
 ---
 
-## pdftotext (poppler 22.12.0) -- EL8 source build
+## freetype 2.14.3 -- shared font rasterizer (EL8 SOURCE build)
 
-**Why 22.12.0, not latest**: poppler >= 23.01.0 requires Freetype >= 2.10; EL8 ships Freetype 2.9.1. Version 22.12.0 is the latest release requiring only Freetype 2.8. When EL8 advances its Freetype, rebuild with a newer poppler tag.
+**`build/build-freetype.sh` is the version authority for this lib.** `gui_libs`
+owns `libfreetype.so.6` and is a `lib-bundle` with an empty `version` field, and
+the payload file is named for the SONAME (`libfreetype.so.6.bz2`), so the
+`6.20.6` minor is not recoverable from the tree. Bump the version here when you
+bump `--tag`.
+
+### Why it stopped being a shanghai'd EL8 lib (2026-08-10)
+
+It was EL8's system freetype 2.9.1, extracted like the other 90 `gui_libs`
+members. Two reasons that changed:
+
+- 2.9.1 is a 2018 rasterizer, and it is the shared font engine for **every** GUI
+  and terminal tool in the bundle: xterm, st, urxvt, gvim, Qt5, GTK3, cairo,
+  pango, `libxul.so` (firefox), Xephyr, the octave fltk plugins.
+- It pinned `pdftotext` at poppler 22.12.0 (poppler >= 23.01 wants freetype
+  >= 2.10), stranding three years of poppler releases.
+
+### Prerequisites
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+sudo dnf install -y gcc make pkg-config bzip2-devel zlib-devel libpng-devel
+# patchelf at ~/.local/bin/patchelf (bundled in this repo)
+```
+
+### Build
+
+```bash
+./build/build-freetype.sh --tag 2.14.3
+./build/build-freetype.sh --tag 2.14.3 --deep-check   # + runtime archives, ~4 min
+```
+
+Source: `https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz`.
+Build is ~9 s. The install tree is deliberately **left behind** at
+`/tmp/loadout-freetype-instdir-<TAG>` (version-scoped, per the `build-octave.sh`
+lesson about fixed `/tmp` prefixes accumulating versions) because EL8's own
+`freetype-devel` is 2.9.1, so anything that must *compile* against the loadout
+freetype needs those headers -- see `build-pdftotext.sh --with-freetype`.
+
+### Configure flags, all load-bearing
+
+| Flag | Reason |
+|------|--------|
+| `--with-harfbuzz=no` | freetype >= 2.10 wants harfbuzz >= 2.0 for the autohinter; EL8 has harfbuzz 1.7.5, and harfbuzz links freetype **back** -- a circular bundled dep. EL8's own freetype is built the same way (the 2.9.1 payload copy had no `libharfbuzz` NEEDED), so this is not a regression. Cost: autohinter loses harfbuzz script coverage for complex scripts. |
+| `--with-brotli=no` | WOFF2 only, and it would add `libbrotlidec.so.1` to NEEDED -- a lib this repo does not bundle. Leaving it on is textbook build-box masking: `brotli-devel` is installed on the build box and absent from a stock farm node. |
+| `--with-png/zlib/bzip2=yes` | Matches the NEEDED set of the 2.9.1 payload copy exactly; all three are already in `lib64/`. |
+| `--disable-static` | Only the shared lib ships. |
+
+### The ABI is safe; the PIXELS are the risk -- so measure them
+
+freetype keeps SONAME `libfreetype.so.6` and stays backwards-compatible across
+this span, so the failure mode to expect from a bump is **cosmetic** -- glyph
+rendering shifts across every GUI app -- not link errors. `ldd` clean proves
+nothing about rendering, and eyeballing GUI apps is unreliable here (WSLg
+caveats: Qt goes native Wayland and Weston reparents to an unnamed frame, so
+`xwininfo` is not a verification tool either).
+
+`build/freetype/compare-rendering.c` measures it instead. Compile it **once
+against the OLD headers** and run it against each lib, which also exercises
+the ABI claim directly (an old-header consumer driving the new shared object
+-- what every already-built payload binary does after the swap). It reports
+bitmap dimensions, pixel bytes and advance **separately**, because those have
+very different blast radii.
+
+Measured for 2.9.1 -> 2.14.3, over 8 faces x 24 chars x 7 pixel sizes:
+
+| hint mode | pixels differ | bitmap dims | **advance** |
+|---|---|---|---|
+| `normal` (antialiased -- what GTK/Qt/cairo use) | 1.9% | 0 | **0** |
+| `light` (`hintslight`, common fontconfig default) | 4.3% | 18 | **0** |
+| `autohint` (forced) | 3.2% | 6 | 31 |
+| `mono` (1-bit, unused by modern toolkits) | 38.4% | 16 | **0** |
+
+Read that as: **no metric movement in the modes real applications use.**
+Every advance change is confined to forced-autohint mode *and* to the
+proportional `NerdFont-*` faces -- never the `NerdFontMono-*` ones, so a
+terminal's cell grid cannot shift. The 38% in `mono` is the v35 -> v40
+bytecode-interpreter change and only affects 1-bit unantialiased rendering.
+What is left is sub-pixel antialiasing differences on a few percent of glyphs.
+
+**Do not sanity-check a bump with one system font.** `DejaVuSans` and
+`DejaVuSansMono` were **bit-identical** across this entire jump while every
+`CascadiaCode`/`CaskaydiaCove` face moved -- a DejaVu-only check would have
+reported a false all-clear. Test the bundled Nerd Fonts from
+`payload/fonts/*.zip`.
+
+2.14.3 removes exactly two exported symbols relative to 2.9.1 --
+`FT_Outline_New_Internal` and `FT_Outline_Done_Internal`, both deprecated
+internals. **Do not take that on faith on the next bump.** The script's
+symbol-closure guard collects every undefined `FT_*` symbol across `bin/` and
+`lib64/` (plus the runtime archives under `--deep-check`) and fails if the new
+lib does not export one of them. A dropped symbol some consumer imports is an
+undefined-symbol crash at first font load on a stock farm node, long after the
+release -- precisely the build-box-masking class this repo keeps hitting.
+Current closure: **66 distinct `FT_*` imports** from 14 consumers (`libcairo`,
+`libXfont2`, `libQt5XcbQpa`, `libQt5WaylandClient`, `libfontconfig`,
+`libharfbuzz`, `libpangoft2`, `liboctinterp`, `libXft`, `pdftotext.bin`,
+`libpangocairo`, `xterm`, `libxul.so`, the octave fltk `.oct` plugins).
+
+### Packaging
+
+`strip` -> `patchelf --set-rpath '$ORIGIN'` -> `bzip2` ->
+`payload/el8.x86_64.glibc2p28/lib64/libfreetype.so.6.bz2` (356K). Note the RPATH
+is bare `$ORIGIN`, not the `$ORIGIN/../lib64` a `bin/` binary gets: `lib64/`
+libs resolve their siblings in the same directory.
+
+NEEDED: `libbz2.so.1 libpng16.so.16 libz.so.1 libpthread.so.0 libc.so.6`.
+Max glibc symbol **GLIBC_2.14**. The script hard-fails on any NEEDED outside
+that allowlist, which is what catches an accidental harfbuzz or brotli link.
+
+---
+
+## pdftotext (poppler 26.04.0) -- EL8 source build
+
+**Why 26.04.0, not latest**: the ceiling is now **fontconfig**, not freetype.
+poppler's own requirements by release (grep `FREETYPE_VERSION` /
+`FONTCONFIG_VERSION` in its `CMakeLists.txt`):
+
+| poppler | freetype | fontconfig | C++ |
+|---|---|---|---|
+| 23.12 | 2.10 | 2.13 | 17 |
+| 24.08 .. 26.04 | 2.11 | 2.13 | 20 / 23 |
+| 26.06+ | 2.13 | **2.15** | 23 |
+
+EL8 has fontconfig 2.13.1, so **26.04.0 is the last buildable release**. Going
+further means source-building and bundling fontconfig too -- a bigger blast
+radius than freetype was, because fontconfig 2.15 also moves the font-cache
+format and would force a cache rebuild for every user.
+
+**This needs the loadout freetype, not EL8's.** EL8's `freetype-devel` headers
+are 2.9.1, so cmake configures against those and fails the `>= 2.11` check.
+`--with-freetype` is mandatory for that reason, and also guards the subtler
+case: if a future EL8 point release nudged the system freetype just past the
+minimum, the build would silently link against a freetype that is **not** the
+one shipped in `lib64/`.
 
 ### Prerequisites
 
@@ -1149,11 +1283,14 @@ sudo dnf install -y cmake gcc-c++ pkg-config \
 ### Build
 
 ```bash
-./build/build-pdftotext.sh --tag 22.12.0            # poppler-data 0.4.12 default
-./build/build-pdftotext.sh --tag 22.12.0 --data-tag 0.4.12
+./build/build-freetype.sh --tag 2.14.3              # prerequisite, see above
+./build/build-pdftotext.sh --tag 26.04.0 \
+    --with-freetype /tmp/loadout-freetype-instdir-2.14.3
+./build/build-pdftotext.sh --tag 26.04.0 \
+    --with-freetype /tmp/loadout-freetype-instdir-2.14.3 --data-tag 0.4.12
 ```
 
-Source: `https://poppler.freedesktop.org/poppler-22.12.0.tar.xz` plus
+Source: `https://poppler.freedesktop.org/poppler-26.04.0.tar.xz` plus
 `https://poppler.freedesktop.org/poppler-data-0.4.12.tar.gz`.
 
 ### Relocation + poppler-data (do not regress this)
@@ -1164,9 +1301,16 @@ temp build prefix, dead once deployed. Without the data, PDFs using
 predefined CMaps with no embedded ToUnicode silently extract garbage
 (`Missing language pack for 'Adobe-Japan1' mapping`). Three pieces fix it:
 
-1. The build seds `poppler/GlobalParams.cc` so the constructor falls back to
-   `getenv("POPPLER_DATADIR")` -- every datadir use site already prefers the
-   constructor value, so one line covers all lookups.
+1. The build seds `poppler/GlobalParams.cc` so the constructor seeds
+   `popplerDataDir` from `getenv("POPPLER_DATADIR")` when the caller passed
+   nothing -- the single datadir use site already prefers the constructor
+   value, so one line covers all lookups. **The constructor signature is
+   version-sensitive**: it took `const char *customPopplerDataDir` through
+   poppler 22.x and takes `std::string` by 26.04, so the 22.12-era sed silently
+   matched nothing on the first 26.04 attempt. The script greps for the applied
+   expression *and* for the injected `#include <cstdlib>` and hard-fails --
+   keep both, because a pdftotext built without the patch does not crash, it
+   extracts CJK as garbage, so nothing downstream would notice.
 2. `bin/pdftotext` is a POSIX-sh wrapper (`build/pdftotext/pdftotext`) that
    exports `POPPLER_DATADIR=<prefix>/share/poppler` (user override wins) and
    execs `bin/pdftotext.bin`; poppler-data ships as
@@ -1174,7 +1318,12 @@ predefined CMaps with no embedded ToUnicode silently extract garbage
 3. The build and `tests/prebuilt-binaries` both extract a generated
    predefined-CMap PDF (`build/pdftotext/make-cjk-smoke-pdf.py`, UniJIS-UCS2-H,
    no ToUnicode) and require the hiragana back -- `-v` probes cannot catch a
-   dead datadir.
+   dead datadir. The build's copy stages the **patchelf'd** binary next to a
+   populated `lib64/` and runs it under `env -i`, so it exercises the deployed
+   `$ORIGIN/../lib64` resolution rather than whatever the build box has in
+   `/usr/lib64`. That matters most for freetype: EL8's 2.9.1 is *older* than
+   what this binary links against, so an unpatched staged copy would be tested
+   against the wrong lib, or pass here and die on a farm node.
 
 ### Key CMake flags
 
@@ -1185,32 +1334,34 @@ predefined CMaps with no embedded ToUnicode silently extract garbage
 | `ENABLE_GLIB` | OFF | No GLib/GObject bindings needed; avoids glib >= 2.88 dep |
 | `ENABLE_QT5/QT6` | OFF | No Qt bindings needed |
 | `ENABLE_NSS3` | OFF | No PDF encryption support; avoids NSS dep |
+| `ENABLE_GPGME` | OFF | Digital-signature support poppler added after 22.12; wants Gpgmepp >= 1.19, which EL8 has no package for. Configure **errors** rather than degrading, so this is mandatory, not cosmetic. |
+| `ENABLE_LIBTIFF` | OFF | poppler >= 25.x wants tiff >= 4.3; EL8 has 4.0.9. TIFF only feeds `pdfimages`/`pdftoppm` output formats, which this package does not ship, so it costs nothing here. |
 | `ENABLE_LIBCURL` | OFF | No remote PDF URI support; avoids libcurl and transitive SSL deps |
 | `ENABLE_LIBOPENJPEG` | openjpeg2 | JPEG2000 support (bundles libopenjp2.so.7) |
 | `ENABLE_CPP` | OFF | No C++ wrapper lib; only utils needed |
 | `ENABLE_BOOST` | OFF | No Boost dep |
+| `CMAKE_PREFIX_PATH` / `Freetype_ROOT` | `--with-freetype` | Point cmake at the loadout freetype; see above |
 
 ### Runtime library table
 
 | Library | Source | On EL8 base? |
 |---------|--------|--------------|
-| libfreetype.so.6 | EL8 system | OK always |
+| **libfreetype.so.6** | **bundled** (2.14.3, source-built) | EL8's own is 2.9.1 -- too old to link against |
 | libfontconfig.so.1 | EL8 system | OK always |
 | libjpeg.so.62 | EL8 system | OK always |
 | libpng16.so.16 | EL8 system | OK always |
-| libtiff.so.5 | EL8 system | OK almost always |
 | libpthread.so.0 | EL8 system (glibc) | OK always |
 | libm.so.6, libc.so.6 | EL8 system (glibc) | OK always |
-| libbz2.so.1 | EL8 system | OK always |
 | libz.so.1 | EL8 system | OK always |
-| libexpat.so.1 | EL8 system | OK always |
-| libuuid.so.1 | EL8 system | OK always |
-| libjbig.so.2.1 | EL8 system (libtiff dep) | OK with libtiff |
 | libgcc_s.so.1, libstdc++.so.6 | EL8 system | OK always |
 | **liblcms2.so.2** | **bundled** | X powertools only |
 | **libopenjp2.so.7** | **bundled** | X powertools only |
 
-Max glibc symbol: **GLIBC_2.14** -- compatible with all EL8 machines.
+`libtiff.so.5` and its `libjbig.so.2.1` dep dropped out of NEEDED with
+`ENABLE_LIBTIFF=OFF`; `libbz2`/`libexpat`/`libuuid` are no longer direct NEEDED
+either (they arrive transitively through fontconfig and the bundled freetype).
+
+Max glibc symbol: **GLIBC_2.17** -- compatible with all EL8 machines.
 
 ### Packaging
 
@@ -1471,7 +1622,11 @@ env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
   build + dest, never security-bumped, so safe to leave external
 - `libtasn1.so.6` -- nssckbi dep; EL8 base, stable
 - libasound2 -- alsa-lib, present on every EL8 desktop/farm node
-- libfreetype, libfontconfig -- already declared in gui_libs anyway
+- libfontconfig -- already declared in gui_libs anyway
+
+`libfreetype` used to be on this list. It is now **bundled and source-built**
+(2.14.3, see the freetype section) and still reached through `gui_libs`, so
+`libxul.so` resolves the loadout copy rather than EL8's 2.9.1.
 
 `depends: ["gui_libs"]` pulls in the GTK3 / cairo / pango / X11 /
 Wayland stack libxul.so dlopens at runtime.
