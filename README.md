@@ -349,6 +349,7 @@ OpenSSH for those.
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
 | lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
+| markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |
 | pyright | python-tool | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions |
 | tmux-path-store | python-tool | 1.1.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots

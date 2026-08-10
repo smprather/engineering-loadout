@@ -1025,6 +1025,36 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (cjk):          pdftotext runtime  {detail}")
                 failures.append(("pdftotext runtime", detail))
 
+    if has_bin("markdown-oxide"):
+        # `markdown-oxide --version` exits 0 from a binary that cannot resolve a
+        # single wikilink, and the generic probe would score that green. Drive
+        # the real protocol instead (initialize -> didOpen -> definition against
+        # a temp .obsidian vault) -- same reasoning as the pdftotext CJK probe
+        # above. This is what makes envs/nvim/lsp/markdown_oxide.lua worth
+        # shipping; without it the LSP config is inert.
+        smoke = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "build", "markdown-oxide", "lsp-smoke.py"
+        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, smoke, os.path.join(bin_dir, "markdown-oxide")],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+        except Exception as exc:
+            print(f"  FAIL (lsp):          markdown-oxide  {exc}")
+            failures.append(("markdown-oxide", str(exc)))
+        else:
+            if proc.returncode == 0:
+                print("  OK   (lsp):          markdown-oxide  wikilink resolved")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (lsp):          markdown-oxide  {detail}")
+                failures.append(("markdown-oxide", detail))
+
     if has_bin("python3.14"):
         # Display-free Tcl interp smoke: the bundle's sitecustomize must point
         # TCL_LIBRARY at the shipped lib/tcl8.6 tree (a stale/clobbered tree

@@ -109,6 +109,7 @@ sha256  c46f4a6f49b0a9f296601da1e790a646fc954b364e4f662eab5b3b60ef1319c7  payloa
 sha256  019de42fcf3ad82ee0d056c33c4cd310ec1b29c059afa1d82780ec239a0d57be  payload/el8.x86_64.glibc2p28/bin/lua-language-server.bz2
 sha256  06998613da761f1f7d4b2c3373ecf7b031aa1fe180c662f5fbff1a20cbda9980  payload/el8.x86_64.glibc2p28/bin/lxt2miner.bz2
 sha256  af604b68fae4d1364f973701698109e1e3b9aa62971ae13e4afd15d39dacb26b  payload/el8.x86_64.glibc2p28/bin/lxt2vcd.bz2
+sha256  ea4bdba4d248034b919df58e22876a96827cd321a01463d57580067c72ab4cb7  payload/el8.x86_64.glibc2p28/bin/markdown-oxide.bz2
 sha256  52dad89f3c4b4416b68882e700babc307051059dd5d87cb2dead0e0ae47456ad  payload/el8.x86_64.glibc2p28/bin/md5sum.bz2
 sha256  7baba7cb340fb4e19746d916fedcd601e8e02ee47a4c95c0e70814a38fc21216  payload/el8.x86_64.glibc2p28/bin/merge-fdata.bz2
 sha256  92cf9c4752f510ee7c34ef4c8a1485a7987213d50ce856c9d3658f8d207a1f04  payload/el8.x86_64.glibc2p28/bin/micro.bz2

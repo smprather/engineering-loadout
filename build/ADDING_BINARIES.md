@@ -3735,6 +3735,84 @@ should print the bare version (`3.19.0`). Running the inner binary directly woul
 pass even if the wrapper's relative path were wrong.
 
 
+## markdown-oxide 0.25.12 -- PKM language server (upstream x86_64 prebuilt)
+
+**Build:** `build/build-markdown-oxide.sh --tag v0.25.12`
+(leading `v` -- upstream's convention, unlike lua-language-server above).
+
+### Why this package exists
+
+`envs/nvim/lsp/markdown_oxide.lua` had shipped for some time with
+`cmd = { 'markdown-oxide' }` and
+`root_markers = { '.git', '.obsidian', '.moxide.toml' }`, but the binary was
+never in the payload -- so the config resolved to nothing and was **dead**. This
+package makes it live: wikilinks, backlinks, daily notes and unresolved-link
+creation over a plain directory of markdown, on an EL8 farm node.
+
+### Why Obsidian itself is NOT bundled, and cannot be
+
+Obsidian's terms grant a **"non-sublicensable, non-transferable"** license to
+install and execute it **"on machines operated by or for you"**, and separately
+forbid the customer to **"distribute or share the Services or Software or make
+any of them available for access by third parties"**. Bundling it into
+`payload/` and publishing that as a GitHub release is exactly what those clauses
+prohibit. Being free for commercial *use* is not permission to *redistribute*.
+
+For the record, it would otherwise have fit: the main `obsidian` ELF floors at
+**GLIBC_2.25** against EL8's 2.28, its bundled `.so`s at 2.17, and a plain
+129 MB `tar.gz` exists in the GitHub release (it is not listed on the download
+page). Only the `obsidian-cli` helper, at **GLIBC_2.34**, would have been dead on
+EL8. So if an enterprise agreement ever permits internal redistribution, the
+packaging path is a shanghai of that tarball -- not a research project.
+
+Users install Obsidian themselves, under their own acceptance of its terms, and
+point it at their own vault; markdown-oxide indexes that same vault from
+nvim/helix. **The vault is org content and never belongs in this repo** -- that
+is what the unbundled `corp/`/`site/`/`team/`/`project/`/`user/` layers and
+`--post-install-hook` are for. The loadout ships tools and config, not content.
+
+### Not a source build
+
+Upstream ships an x86_64 binary that is already EL8-clean:
+
+| check | value |
+|---|---|
+| max glibc symbol | **GLIBC_2.18** (EL8 provides 2.28) |
+| NEEDED | `libgcc_s`, `librt`, `libpthread`, `libm`, `libdl`, `libc` |
+
+Every NEEDED is glibc or `libgcc_s` -- all on the never-bundle list -- so
+**nothing ships alongside it**: no `lib64/` additions, no wrapper, no runtime
+archive. It is the cheapest package shape in the repo, a lone `kind: bin`.
+
+The script **asserts** both properties rather than assuming them. A future
+release built against a newer toolchain would install cleanly on the dev box and
+be dead on a stock farm node -- how `tree-sitter` and `bottom` got rejected. If
+the glibc assertion ever fires, this becomes an EL8 Rust source build and needs a
+`build/rust-tool-locks.txt` pin so the offline crate store covers it (it has no
+pin today, correctly, because nothing is built from source).
+
+### Smoke: `--version` is not enough
+
+`markdown-oxide --version` exits 0 from a binary that cannot resolve a single
+wikilink -- the same false-green shape as gtkwave's converters (exit 255 printing
+an error, scored OK) and ngspice with a dead datadir (silent). So
+`build/markdown-oxide/lsp-smoke.py` drives the real protocol against a two-note
+temp vault with an `.obsidian/` root:
+
+```
+initialize -> (skip window/logMessage) -> initialized -> didOpen -> textDocument/definition
+```
+
+and requires `[[note-b]]` to resolve to `note-b.md`. Two details that bit while
+writing it, both fixed and worth not rediscovering: the server emits
+`window/logMessage` **before** the initialize result, so the reader must match on
+request **id** rather than taking the first message; and the server is spawned
+with `cwd=<vault>`, so the binary path must be made **absolute** or a relative
+path silently resolves against the temp vault and vanishes. The smoke was
+negative-tested against `/bin/cat` (speaks no LSP) and `/bin/true` (exits
+immediately); both fail it.
+
+
 ## tree-sitter 0.26.12 -- CLI (EL8 source build, Rust)
 
 **This note exists because the package had none.** tree-sitter was source-built

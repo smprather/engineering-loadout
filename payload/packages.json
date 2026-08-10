@@ -3739,6 +3739,23 @@
       "chmod_sentinel": true,
       "missing_hint": "lua-language-server wrapper will be installed but binary data will be missing"
     },
+    "markdown-oxide": {
+      "kind": "bin",
+      "bins": [
+        "markdown-oxide"
+      ],
+      "version": "0.25.12",
+      "version_url": "https://github.com/Feel-ix-343/markdown-oxide/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "lsp",
+        "markdown",
+        "notes"
+      ],
+      "description": "PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
+    },
     "pyright": {
       "kind": "python-tool",
       "uv_tool": "pyright",
