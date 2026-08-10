@@ -3624,6 +3624,7 @@ def backup_existing(home, repo_dir):
             ".config/starship",
             ".config/editorconfig",
             ".config/helix/config.toml",
+            ".config/helix/languages.toml",
             ".config/pip/pip.conf",
             ".config/tealdeer/config.toml",
         ]:
@@ -3868,11 +3869,19 @@ def _install_env_starship(repo_dir, home):
 
 
 def _install_env_helix(repo_dir, home):
-    _helix_cfg = os.path.join(repo_dir, "envs", "helix", "config.toml")
-    if not os.path.isfile(_helix_cfg):
+    # Per-file on purpose: install_path() on the directory would sync with
+    # delete semantics and wipe anything the user keeps beside these (the
+    # env-st lesson). Add new shipped helix files to this tuple -- a file left
+    # out of it is silently never installed, which is how languages.toml was
+    # missed when it was first added.
+    _shipped = ("config.toml", "languages.toml")
+    _src_dir = os.path.join(repo_dir, "envs", "helix")
+    _present = [name for name in _shipped if os.path.isfile(os.path.join(_src_dir, name))]
+    if not _present:
         return
     ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
-    install_path(_helix_cfg, os.path.join(home, ".config", "helix", "config.toml"), False)
+    for name in _present:
+        install_path(os.path.join(_src_dir, name), os.path.join(home, ".config", "helix", name), False)
 
 
 def _install_env_st(repo_dir, home):

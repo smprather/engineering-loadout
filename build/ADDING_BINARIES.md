@@ -3744,10 +3744,28 @@ pass even if the wrapper's relative path were wrong.
 
 `envs/nvim/lsp/markdown_oxide.lua` had shipped for some time with
 `cmd = { 'markdown-oxide' }` and
-`root_markers = { '.git', '.obsidian', '.moxide.toml' }`, but the binary was
-never in the payload -- so the config resolved to nothing and was **dead**. This
-package makes it live: wikilinks, backlinks, daily notes and unresolved-link
-creation over a plain directory of markdown, on an EL8 farm node.
+`root_markers = { '.git', '.obsidian', '.moxide.toml' }`, but it was **dead for
+two independent reasons**, and fixing only one changes nothing:
+
+1. the binary was never in the payload, so `cmd` resolved to nothing; and
+2. `envs/nvim/lsp/` is the **entire upstream nvim-lspconfig catalogue** (~300
+   files, almost all inert). A file being present there does not enable it --
+   only the explicit `vim.lsp.enable({...})` list in
+   `envs/nvim/lua/global/init.lua` does, and `markdown_oxide` was not in it.
+
+Both are fixed together: this package supplies the binary, and the enable list
+now names `markdown_oxide`. Result: wikilinks, backlinks, daily notes and
+unresolved-link creation over a plain directory of markdown, on an EL8 farm
+node. User-facing docs are `docs/KNOWLEDGE-BASE.md`.
+
+**`marksman` was removed from that enable list in the same change.** It is also
+a markdown language server, and it was the mirror-image bug: *enabled but never
+bundled*, so on an offline node nvim tried to spawn a binary that does not exist
+and failed silently. Leaving both enabled would attach two servers to every
+markdown buffer and double completions and go-to-definition results. Helix has
+the same trap -- its built-in default for markdown is also `marksman` -- so
+`envs/helix/languages.toml` names `markdown-oxide` explicitly, and listing
+`language-servers` there replaces the default list rather than appending to it.
 
 ### Why Obsidian itself is NOT bundled, and cannot be
 

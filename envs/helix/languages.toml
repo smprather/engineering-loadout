@@ -1,0 +1,21 @@
+# Helix language configuration -> ~/.config/helix/languages.toml
+#
+# Mirrors the nvim LSP selection in envs/nvim/lua/global/init.lua so the two
+# bundled editors behave the same on the same files. Keep them in sync: an
+# engineer who opens a vault in `hx` and then in `nvim` should get the same
+# go-to-definition on a wikilink.
+#
+# markdown: Helix's BUILT-IN default for markdown is `marksman`, which this
+# repo does not bundle -- on an offline farm node that server simply never
+# starts and the failure is silent. markdown-oxide is bundled (see
+# build/build-markdown-oxide.sh) and is Obsidian-vault compatible, so it is
+# named explicitly here. Listing `language-servers` REPLACES the built-in list
+# rather than appending, which is what we want: two markdown servers would
+# attach to every buffer and double the completions and definition results.
+
+[language-server.markdown-oxide]
+command = "markdown-oxide"
+
+[[language]]
+name = "markdown"
+language-servers = ["markdown-oxide"]

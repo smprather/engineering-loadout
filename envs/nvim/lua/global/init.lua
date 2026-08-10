@@ -159,7 +159,14 @@ vim.cmd([[
 
 -- ── LSP ──────────────────────────────────────────────────────────────────
 if vim.g.cfg_enable_lsp then
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "marksman", "biome" })
+    -- markdown_oxide replaced marksman here (2026-08-10). Both are markdown
+    -- language servers and enabling both attaches two servers to every
+    -- markdown buffer, doubling completions and go-to-def results. marksman
+    -- was never bundled -- it was an enabled server with no binary on an
+    -- offline-first box, so it silently never started. markdown-oxide IS
+    -- bundled (payload bin/, see build/build-markdown-oxide.sh) and is
+    -- Obsidian-vault compatible, which is the PKM story this repo wants.
+    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "markdown_oxide", "biome" })
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {

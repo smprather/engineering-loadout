@@ -2,7 +2,126 @@
 
 Last updated: 2026-08-10 (freetype is now source-built and bundled at 2.14.3,
 replacing EL8's shanghai'd 2.9.1; pdftotext unpinned 22.12.0 -> 26.04.0 as a
-result; linux-process-resource-monitor still pending upstream).
+result; markdown-oxide added and both markdown LSPs un-broken;
+linux-process-resource-monitor still pending upstream).
+
+## markdown-oxide added; BOTH markdown LSPs were broken (2026-08-10)
+
+New package `markdown-oxide` 0.25.12 (`kind: bin`, upstream x86_64 prebuilt,
+Apache-2.0) -- a PKM language server giving wikilinks, backlinks, daily notes
+and unresolved-link creation over a directory of markdown. User-facing docs:
+`docs/KNOWLEDGE-BASE.md`. Build: `build/build-markdown-oxide.sh --tag v0.25.12`.
+
+**Obsidian itself is NOT bundled and cannot be, on licence grounds.** Its terms
+grant a "non-sublicensable, non-transferable" licence to install and execute it
+"on machines operated by or for you" and separately forbid the customer to
+"distribute or share the Services or Software or make any of them available for
+access by third parties". Bundling it into `payload/` and publishing that as a
+release is exactly that. **Free for commercial USE is not permission to
+REDISTRIBUTE** -- an easy and expensive thing to conflate. For the record it
+would otherwise have fit (main ELF floors at GLIBC_2.25 vs EL8's 2.28; a plain
+129 MB `tar.gz` exists in its GitHub release though not on the download page;
+only `obsidian-cli` at GLIBC_2.34 would be dead), so if an enterprise agreement
+ever permits internal redistribution the path is a shanghai of that tarball, not
+a research project. Users install Obsidian themselves and point it at their own
+vault; markdown-oxide indexes the same plain files from nvim/helix. **The vault
+is org content and never belongs in this repo** -- that is what the unbundled
+corp/site/team/project/user layers and `--post-install-hook` are for.
+
+### The finding worth keeping: a shipped LSP config proves nothing
+
+`markdown_oxide.lua` had been in `envs/nvim/lsp/` for ages and was dead for
+**two independent reasons**. Fixing either alone changes nothing:
+
+1. the binary was never in the payload, so `cmd = { 'markdown-oxide' }`
+   resolved to nothing; and
+2. `envs/nvim/lsp/` is the **entire upstream nvim-lspconfig catalogue** (~300
+   files, almost all inert). Presence there does not enable a server -- only the
+   explicit `vim.lsp.enable({...})` list in `envs/nvim/lua/global/init.lua`
+   does, and `markdown_oxide` was not in it.
+
+**`marksman` was the mirror-image bug in the same list: enabled but never
+bundled**, so nvim tried to spawn a binary that does not exist and failed
+silently on every markdown buffer. It has been replaced by `markdown_oxide`
+rather than added alongside -- two markdown servers attach to the same buffer
+and double completions and go-to-definition results. Helix had the same trap
+from the other direction: its *built-in* default for markdown is also
+`marksman`, so `envs/helix/languages.toml` (new) names `markdown-oxide`
+explicitly, and listing `language-servers` there replaces the default list
+rather than appending.
+
+That audit was then run against the other five enabled servers, and **it found
+one more**:
+
+| enabled server | `cmd` | bundled? |
+|---|---|---|
+| `lua_ls` | `lua-language-server` | yes |
+| `ruff` | `ruff` | yes |
+| `ty` | `ty` | yes |
+| `biome` | `biome` | yes |
+| `markdown_oxide` | `markdown-oxide` | yes (new) |
+| **`yamlls`** | **`/home/myles/node_modules/.bin/yaml-language-server`** | **NO** |
+
+### OPEN: `yamlls` points at a hardcoded personal home directory
+
+`envs/nvim/lsp/yamlls.lua:64` hardcodes
+`/home/myles/node_modules/.bin/yaml-language-server` -- an absolute path into
+somebody's personal `$HOME` (note it is not even the current dev user,
+`mylesp`). It is in the `vim.lsp.enable` list, so every user gets an enabled
+YAML server that can never start. Deliberately **not** fixed as part of the
+markdown-oxide change: it is a different package and the fix is a real choice,
+not a typo repair.
+
+Two options, both defensible:
+
+- **Drop `yamlls` from the enable list**, as was done for `marksman`. Zero
+  payload cost, and honest about what is shipped.
+- **Bundle `yaml-language-server`** and point `cmd` at the bare name. It is an
+  npm package and `nodejs` is already bundled, so this is feasible -- but it
+  means owning a node-based LSP and its `node_modules` closure offline.
+
+Either way the hardcoded path must go.
+
+### Packaging notes
+
+Nothing ships alongside it: upstream's binary floors at **GLIBC_2.18** and its
+NEEDED set is glibc plus `libgcc_s`, all on the never-bundle list -- no `lib64/`
+additions, no wrapper, no runtime archive. The build script asserts both rather
+than assuming, since a future release built against a newer toolchain would
+install cleanly on the dev box and be dead on a farm node. No
+`rust-tool-locks.txt` pin is needed while it stays a prebuilt import; if the
+glibc assertion ever fires it becomes an EL8 Rust source build and *then* needs
+one.
+
+`markdown-oxide --version` exits 0 from a binary that cannot resolve a single
+wikilink, so `build/markdown-oxide/lsp-smoke.py` drives the real protocol
+(initialize -> didOpen -> textDocument/definition) against a two-note temp
+vault and requires `[[note-b]]` to resolve. It runs at build time **and** from
+`tests/prebuilt-binaries`, so the release gate cannot false-green either.
+Two protocol details cost time: the server emits `window/logMessage` **before**
+the initialize result, so the reader must match on request **id**; and it is
+spawned with `cwd=<vault>`, so the server path must be absolute or a relative
+one silently resolves against the temp vault and vanishes.
+
+`gen-readme-table` only **syncs existing rows** -- it warns about a new package
+rather than adding one, so the README row was added by hand. Expect that on the
+next new package.
+
+### `_install_env_helix` installed exactly one hardcoded filename
+
+Adding `envs/helix/languages.toml` was not enough to ship it: `env-helix` has a
+custom handler that named `config.toml` **literally**, so any other file in
+`envs/helix/` was silently never installed. Caught only because the install was
+verified into a temp `--dest-dir` and the file was checked for -- a repo-file
+diff looks identical either way. The handler now iterates a `_shipped` tuple,
+and the post-install verification list gained `.config/helix/languages.toml`.
+It stays per-file rather than a directory sync **on purpose**: `install_path()`
+on a directory syncs with `delete=True` and would wipe anything the user keeps
+beside these, which is the env-st lesson. **Adding a new shipped helix file
+means editing that tuple.**
+
+Gates: Tier 1 + 2 green (30/30); Tier 3 clean container exit 0, 276 binaries OK
+(up from 275) including `OK (lsp): markdown-oxide wikilink resolved`.
 
 ## freetype 2.9.1 -> 2.14.3, source-built (2026-08-10)
 
