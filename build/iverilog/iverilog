@@ -1,0 +1,45 @@
+#!/bin/sh
+# Relocatable iverilog launcher.
+#
+# WHY THIS EXISTS -- and it is not the reason you would guess.
+#
+# The iverilog ELF has a compiled-in path to its code-generator tree
+# (<build-prefix>/lib/ivl) and falls back to deriving it from its own location
+# ONLY when that path does not exist. So the compiled-in build prefix WINS
+# whenever it happens to be present. On a clean farm node it is absent and the
+# fallback does the right thing; on the build machine the freshly built tree is
+# still sitting in /tmp and the installed binary silently uses THAT instead of
+# the tree it was installed with.
+#
+# That is build-box masking in reverse -- the dev box is the one that breaks --
+# and it is not cosmetic. iverilog reads lib/ivl/vvp.conf to get
+# VVP_EXECUTABLE, which it writes into the SHEBANG of the compiled .vvp file.
+# Picking up the wrong lib/ivl means every `./sim.vvp` gets a dead interpreter
+# path. Passing -B explicitly removes the ambiguity: the tree we installed is
+# the tree that is used, present build prefix or not.
+#
+# An explicit user -B still wins: if the caller passed one, this adds nothing.
+#
+# vvp is deliberately NOT wrapped. It is the interpreter named in that shebang,
+# and Linux does not honour a shebang pointing at another script, so bin/vvp
+# must stay a real ELF.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+real="$prefix/bin/iverilog.bin"
+[ -x "$real" ] || {
+    echo "iverilog: missing $real" >&2
+    exit 127
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -B | -B*) exec "$real" "$@" ;;
+    esac
+done
+
+exec "$real" -B "$prefix/lib/ivl" "$@"

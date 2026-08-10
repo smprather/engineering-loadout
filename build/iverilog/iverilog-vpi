@@ -1,0 +1,86 @@
+#!/bin/sh
+# Relocatable iverilog-vpi -- compile a VPI module against the installed
+# Icarus Verilog headers.
+#
+# Upstream's iverilog-vpi is generated at configure time with the build prefix
+# baked into CFLAGS/CXXFLAGS/LDFLAGS and into the `--install-dir` output:
+#
+#   CFLAGS="... -I/tmp/iverilog-inst-13_0/include/iverilog"
+#   LDFLAGS=" -shared -L/tmp/iverilog-inst-13_0/lib"
+#   echo "/tmp/iverilog-inst-13_0/lib/ivl$SUFFIX"
+#
+# Those are dead paths once deployed. The two ELFs (iverilog, vvp) resolve
+# their own root from /proc/self/exe so they do not care, but this is a shell
+# script and has no such trick -- so the loadout ships its own, deriving the
+# prefix from its installed location the same way build/ngspice/ngspice and
+# build/pdftotext/pdftotext do. Explicit user CFLAGS/LDFLAGS still win.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+CC=${CC:-gcc}
+CXX=${CXX:-g++}
+IVL_INC="$prefix/include/iverilog"
+IVL_LIB="$prefix/lib"
+IVL_MODDIR="$prefix/lib/ivl"
+
+usage() {
+    cat <<USAGE
+Usage: iverilog-vpi [options] srcfile [srcfile...]
+  --name=base      output base name (default: first source's base name)
+  --install-dir    print the VPI module directory and exit
+  --cflags         print the include flags and exit
+  --ldflags        print the link flags and exit
+  -m32|-m64        pass through to the compiler
+USAGE
+}
+
+name=""
+srcs=""
+mflag=""
+for arg in "$@"; do
+    case "$arg" in
+        --install-dir) echo "$IVL_MODDIR"; exit 0 ;;
+        --cflags) echo "-I$IVL_INC"; exit 0 ;;
+        --ldflags) echo "-shared -L$IVL_LIB"; exit 0 ;;
+        --name=*) name=${arg#--name=} ;;
+        -m32 | -m64) mflag=$arg ;;
+        -h | --help) usage; exit 0 ;;
+        -*) echo "iverilog-vpi: unknown option: $arg" >&2; exit 2 ;;
+        *) srcs="$srcs $arg" ;;
+    esac
+done
+
+[ -n "$srcs" ] || { usage >&2; exit 2; }
+if [ -z "$name" ]; then
+    for s in $srcs; do
+        name=$(basename "$s"); name=${name%.*}
+        break
+    done
+fi
+
+objs=""
+rc=0
+for s in $srcs; do
+    o="${s%.*}.o"
+    case "$s" in
+        *.cc | *.cpp | *.cxx | *.C)
+            # shellcheck disable=SC2086  # word splitting of flag lists is intended
+            $CXX -fPIC $mflag ${CXXFLAGS:--O2} -I"$IVL_INC" -c "$s" -o "$o" || rc=$? ;;
+        *)
+            # shellcheck disable=SC2086
+            $CC -fPIC $mflag ${CFLAGS:--O2} -I"$IVL_INC" -c "$s" -o "$o" || rc=$? ;;
+    esac
+    [ "$rc" -eq 0 ] || exit "$rc"
+    objs="$objs $o"
+done
+
+# shellcheck disable=SC2086
+$CC $mflag -shared -o "${name}.vpi" $objs -L"$IVL_LIB" $LDFLAGS -lveriuser -lvpi 2>/dev/null ||
+    # -lveriuser/-lvpi are only present when the build shipped them; the
+    # modern module ABI does not need them, so retry without.
+    # shellcheck disable=SC2086
+    $CC $mflag -shared -o "${name}.vpi" $objs -L"$IVL_LIB" $LDFLAGS

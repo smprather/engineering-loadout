@@ -1025,6 +1025,49 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (cjk):          pdftotext runtime  {detail}")
                 failures.append(("pdftotext runtime", detail))
 
+    if has_bin("iverilog"):
+        # `iverilog -V` prints a version banner from an install whose lib/ivl is
+        # dead, and `vvp file.vvp` bypasses the generated shebang entirely --
+        # the shebang carries VVP_EXECUTABLE out of lib/ivl/vvp.conf, which is
+        # relocated at install time and is the thing most likely to be wrong.
+        # So: compile, run the .vvp DIRECTLY, and require the arithmetic back.
+        smoke_v = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "iverilog", "smoke.v")
+        work = os.path.join(tmpdir, "iverilog-smoke")
+        try:
+            os.makedirs(work, exist_ok=True)
+            shutil.copy(smoke_v, os.path.join(work, "smoke.v"))
+            subprocess.run(
+                [os.path.join(bin_dir, "iverilog"), "-o", "smoke.vvp", "smoke.v"],
+                cwd=work,
+                env=env,
+                check=True,
+                timeout=120,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            vvp_path = os.path.join(work, "smoke.vvp")
+            os.chmod(vvp_path, 0o755)
+            proc = subprocess.run(
+                [vvp_path],
+                cwd=work,
+                env=env,
+                timeout=120,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as exc:
+            print(f"  FAIL (sim):          iverilog  {exc}")
+            failures.append(("iverilog", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            vcd = os.path.join(work, "smoke.vcd")
+            if "SMOKE_OK" in out and os.path.isfile(vcd) and os.path.getsize(vcd) > 0:
+                print("  OK   (sim):          iverilog  compiled, ./smoke.vvp ran, VCD written")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (sim):          iverilog  {detail}")
+                failures.append(("iverilog", detail))
+
     if has_bin("markdown-oxide"):
         # `markdown-oxide --version` exits 0 from a binary that cannot resolve a
         # single wikilink, and the generic probe would score that green. Drive

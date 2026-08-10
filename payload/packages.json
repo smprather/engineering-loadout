@@ -3467,6 +3467,7 @@
     "@eda": {
       "kind": "group",
       "members": [
+        "iverilog",
         "gtkwave",
         "klayout",
         "verilator"
@@ -3739,6 +3740,36 @@
       "chmod_sentinel": true,
       "missing_hint": "lua-language-server wrapper will be installed but binary data will be missing"
     },
+    "iverilog": {
+      "kind": "bin",
+      "bins": [
+        "iverilog",
+        "iverilog.bin",
+        "vvp",
+        "iverilog-vpi"
+      ],
+      "archive": "payload/PLATFORM/runtime/iverilog.tar.bz2",
+      "version": "13.0",
+      "version_url": "https://github.com/steveicarus/iverilog/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "verilog",
+        "rtl",
+        "simulator"
+      ],
+      "install_to": "~/.local",
+      "sentinel": "lib/ivl/ivl",
+      "remove_before_extract": [
+        "lib/ivl"
+      ],
+      "relocate_token": "/__LOADOUT_RELOC_ROOT__",
+      "relocate_root": "lib/ivl",
+      "missing_hint": "the Icarus Verilog code-generator tree (lib/ivl) will NOT be installed; `iverilog` starts but cannot compile anything",
+      "description": "Icarus Verilog \u2014 Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design"
+    },
     "markdown-oxide": {
       "kind": "bin",
       "bins": [
@@ -3754,7 +3785,7 @@
         "markdown",
         "notes"
       ],
-      "description": "PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
+      "description": "PKM markdown language server \u2014 wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
     },
     "pyright": {
       "kind": "python-tool",

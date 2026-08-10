@@ -3735,6 +3735,92 @@ should print the bare version (`3.19.0`). Running the inner binary directly woul
 pass even if the wrapper's relative path were wrong.
 
 
+## iverilog 13.0 -- Icarus Verilog simulator (EL8 SOURCE build)
+
+**Build:** `build/build-iverilog.sh --tag v13_0`
+(upstream's tag format uses an underscore: `v13_0`, `v12_0`.)
+
+Unlike verilator, which lints and emits a C++ model you then compile, iverilog
+is an event simulator you run directly:
+`iverilog -o sim.vvp design.v && ./sim.vvp`. It needs no host `g++` at runtime.
+
+### EL8 fit: nothing new to bundle
+
+| check | value |
+|---|---|
+| max glibc symbol | **GLIBC_2.14** (EL8 provides 2.28) |
+| max libstdc++ | **GLIBCXX_3.4.21** (EL8 provides 3.4.25) |
+| NEEDED | `libbz2`, `libz`, `libreadline.so.7`, `libtinfo.so.6` -- all already in `lib64/` -- plus glibc/libstdc++/libgcc_s, never bundled by policy |
+| payload | 79 MB built -> 6.3 MB stripped -> **2.3 MB** (bins + 1.9 MB runtime archive) |
+
+The script asserts both floors and the NEEDED allowlist rather than assuming
+them.
+
+### The compiled-in prefix WINS when it exists -- this is the whole story
+
+The `iverilog` ELF has its code-generator tree (`<build-prefix>/lib/ivl`)
+compiled in, and derives it from its own location **only when that path does
+not exist**. So the build prefix wins whenever it is still on disk. That is
+build-box masking *in reverse*: a clean farm node is fine, and the developer's
+own machine is the one that silently breaks, because `/tmp/iverilog-inst-v13_0`
+is still sitting there from the build.
+
+It is not cosmetic. iverilog reads `lib/ivl/vvp.conf` for `VVP_EXECUTABLE` and
+writes that into the **shebang** of the compiled `.vvp`. Resolving the wrong
+`lib/ivl` means every `./sim.vvp` gets a dead interpreter path.
+
+So `bin/iverilog` is a wrapper (`build/iverilog/iverilog`) that derives its
+prefix from `$0` and passes **`-B <prefix>/lib/ivl`**, removing the ambiguity.
+An explicit user `-B` still wins.
+
+**`vvp` is deliberately NOT wrapped.** It is the interpreter named in that
+shebang, and Linux does not honour a shebang pointing at another script, so
+`bin/vvp` must stay a real ELF.
+
+### Relocation: one token, one root
+
+Three files embed the build prefix; the two ELFs do not count because of the
+`-B` wrapper above. Handling:
+
+- `bin/iverilog-vpi` -- upstream generates it with the prefix baked into
+  `CFLAGS`/`LDFLAGS` and its `--install-dir` output. Replaced with
+  `build/iverilog/iverilog-vpi`, a repo-owned wrapper deriving its prefix from
+  `$0` (the ngspice / pdftotext idiom). This removes one relocation root.
+- `lib/ivl/vvp.conf`, `lib/ivl/vvp-s.conf` -- rewritten at build time to the
+  standard `/__LOADOUT_RELOC_ROOT__` token, substituted at install time via
+  `relocate_token` + `relocate_root: lib/ivl`. Because those two files are now
+  the *only* thing needing it, `relocate_root` stays a single path, which is
+  all the installer accepts.
+
+The ELFs keep the **real** build prefix as an unused fallback and must never
+contain the token -- `relocate_runtime_token()` hard-errors on a token found in
+an ELF, by design. The script asserts that separation explicitly.
+
+### Smoke: three things `-V` cannot see
+
+`build/iverilog/smoke.v` is compiled and run, and the check requires
+`SMOKE_OK sum=42 acc=42` plus a non-empty VCD. Critically it runs the generated
+file **both** ways:
+
+1. `vvp smoke.vvp` -- explicit interpreter, and
+2. `./smoke.vvp` -- **the only thing that exercises the shebang**, i.e. the
+   relocated `VVP_EXECUTABLE`. A smoke that only does (1) cannot see the bug
+   this package exists to avoid.
+
+The build script runs that twice: once with the build prefix **present** (the
+hostile case that catches a missing `-B`) and once with it moved away (what a
+farm node looks like). `tests/prebuilt-binaries` runs the direct-execution form
+against the installed tree.
+
+Two shell traps hit while writing the script, both worth not repeating:
+`sort` collates `vvp.conf` vs `vvp-s.conf` differently by locale, so the token
+placement assertion needs `LC_ALL=C` on **both** sides; and a trailing
+`[ test ] && { ...; }` as the last command in a `while` body makes the loop
+return non-zero on the common case, which `set -e` then treats as a build
+failure (and an `exit` inside a piped `while` runs in a subshell and would not
+have stopped the script anyway).
+
+
 ## markdown-oxide 0.25.12 -- PKM language server (upstream x86_64 prebuilt)
 
 **Build:** `build/build-markdown-oxide.sh --tag v0.25.12`

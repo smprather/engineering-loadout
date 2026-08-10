@@ -81,6 +81,9 @@ sha256  42fad859c74810617c7f0f892cbffd5553170b9b09750d8793daf74f23520f70  payloa
 sha256  428f2b8edf83239e0906c3a4c464e5966601e61dcc0329e22888c90f005f6930  payload/el8.x86_64.glibc2p28/bin/id.bz2
 sha256  6242ea1674a5bf13e6ada11c9088b60bb8f035f5107fbbc1869906d954b309f8  payload/el8.x86_64.glibc2p28/bin/install.bz2
 sha256  46e8b3eb35bcb11b77fcc1b2a52dd3c0c377fcaa62ee6782090bfddefac37453  payload/el8.x86_64.glibc2p28/bin/irb.bz2
+sha256  a347e9c2cc3b0ef91cefc29df6198d2d1675c5c479c8d6b262215c4cfd8ddb92  payload/el8.x86_64.glibc2p28/bin/iverilog-vpi.bz2
+sha256  c1de48205ff1b3bb5ebf5979c4440b81efe6d16d1969f610b2e986734accbbfb  payload/el8.x86_64.glibc2p28/bin/iverilog.bin.bz2
+sha256  14deadbf0c7bc34f06a2df067666cd0af791e3ba44d995aa04c1e8214c51c9fd  payload/el8.x86_64.glibc2p28/bin/iverilog.bz2
 sha256  4a0397c5823ee9dbed7191d4d1653293954cec86becc2587097fb315e46862d4  payload/el8.x86_64.glibc2p28/bin/join.bz2
 sha256  8686cdae22e94a99706c3e2a3c2c05fa4442ff7788f7a63cb6f915777600f963  payload/el8.x86_64.glibc2p28/bin/jq.bz2
 sha256  d749bb5adc3cd1128a276c828994df28f572a87150c48c7ef395449e3b8cc00f  payload/el8.x86_64.glibc2p28/bin/just.bz2
@@ -235,6 +238,7 @@ sha256  bb72d0ee86242126a207c9645efa5e498a642068255fc4acea1f0673b12ab787  payloa
 sha256  31967e4512985497231c4506961016e38c203eabb91f65b4d423ae36d662d0f8  payload/el8.x86_64.glibc2p28/bin/verilator_profcfunc.bz2
 sha256  62511a3d5d88f0c7730890d1bcd1931e44c23e4e18dceca37e9f724f040bed8c  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  payload/el8.x86_64.glibc2p28/bin/vim.bz2
+sha256  9d05d1ba86a1b3d78285f9c7585cacfeb852cbd2a7f957a7602425b850a7f140  payload/el8.x86_64.glibc2p28/bin/vvp.bz2
 sha256  161570b306b30c4a5b87bc089b31bfeeeeb4e6458cf70c327193843630b64208  payload/el8.x86_64.glibc2p28/bin/vzt2vcd.bz2
 sha256  f131dba1ad7a57e36858dccc0efd9bae8c761bf4ab4e5bac67c3c0c71d56758b  payload/el8.x86_64.glibc2p28/bin/vztminer.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  payload/el8.x86_64.glibc2p28/bin/wc.bz2
@@ -421,6 +425,7 @@ tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
 tar-meta  48862  1786294905  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  311761  1785979682  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
+tar-meta  1891503  1786399302  payload/el8.x86_64.glibc2p28/runtime/iverilog.tar.bz2
 tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
 tar-meta  3021429  1786294907  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2

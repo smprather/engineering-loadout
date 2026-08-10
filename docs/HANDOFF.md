@@ -5,6 +5,66 @@ replacing EL8's shanghai'd 2.9.1; pdftotext unpinned 22.12.0 -> 26.04.0 as a
 result; markdown-oxide added and both markdown LSPs un-broken;
 linux-process-resource-monitor still pending upstream).
 
+## iverilog 13.0 added (2026-08-10); the compiled-in prefix WINS when it exists
+
+New package `iverilog` (Icarus Verilog 13.0, GPL-2.0, EL8 source build), now a
+member of `@eda` alongside gtkwave/klayout/verilator. Build:
+`build/build-iverilog.sh --tag v13_0`. Cheap: 79 MB built -> **2.3 MB** shipped,
+max GLIBC_2.14 / GLIBCXX_3.4.21, and every NEEDED (`libbz2`, `libz`,
+`libreadline.so.7`, `libtinfo.so.6`) was already in `lib64/` -- nothing new
+bundled. Unlike verilator it *simulates*, so it needs no host `g++` at runtime.
+
+### The finding worth keeping
+
+The `iverilog` ELF has `<build-prefix>/lib/ivl` compiled in and derives it from
+its own location **only when that path does not exist**. The build prefix
+therefore *wins whenever it is still on disk*. That is **build-box masking in
+reverse**: a clean farm node is fine and the developer's own machine is the one
+that silently breaks, because `/tmp/iverilog-inst-v13_0` is still there from the
+build.
+
+Not cosmetic: `lib/ivl/vvp.conf` carries `VVP_EXECUTABLE`, which iverilog writes
+into the **shebang** of the compiled `.vvp`. Wrong `lib/ivl` means every
+`./sim.vvp` gets `bad interpreter: No such file or directory`. Fixed by shipping
+`bin/iverilog` as a wrapper passing `-B <prefix>/lib/ivl` (explicit user `-B`
+still wins). **`vvp` is deliberately NOT wrapped** -- it is the interpreter
+named in that shebang and Linux does not honour a shebang pointing at another
+script, so it must stay a real ELF.
+
+**Three of my own tests passed for bad reasons before this surfaced**, which is
+the transferable lesson:
+
+1. copied the tree and ran the copy while the **original still existed**;
+2. hid a directory named `iverilog-inst-13_0` while the build actually used
+   `iverilog-inst-v13_0` -- so nothing was hidden at all;
+3. smoked with `vvp file.vvp`, which **bypasses the shebang entirely**.
+
+Only inspecting the *installed* artifact caught it. The build script now runs
+the smoke twice -- once with the build prefix **present** (the hostile case) and
+once with it moved away -- and both passes execute the generated file via
+`./smoke.vvp` as well as `vvp smoke.vvp`, and assert the shebang text.
+
+### Relocation shape
+
+`relocate_token` + `relocate_root: lib/ivl`, covering `vvp.conf` / `vvp-s.conf`
+only. `bin/iverilog-vpi` (upstream generates it with the prefix baked into
+CFLAGS/LDFLAGS) was replaced with a repo-owned `$0`-deriving wrapper, which is
+what collapses relocation to the single root the installer accepts. The ELFs
+keep the real build prefix as an unused fallback and must never contain the
+token -- `relocate_runtime_token()` hard-errors on that by design, and the build
+script asserts the separation.
+
+Two shell traps, both fixed: `sort` collates `vvp.conf` vs `vvp-s.conf`
+differently by locale, so the token-placement assertion needs `LC_ALL=C` on
+**both** sides; and a trailing `[ test ] && { ...; }` as the last command in a
+`while` body returns non-zero on the common case, which `set -e` treats as a
+build failure (and an `exit` inside a piped `while` is a subshell and would not
+have stopped the script anyway).
+
+Gates: Tier 1 + 2 green (30/30). Tier 3 clean container exit 0, **280 binaries**
+OK (up from 276), including `OK (sim): iverilog compiled, ./smoke.vvp ran, VCD
+written` -- the container is the only environment with no build prefix present.
+
 ## markdown-oxide added; BOTH markdown LSPs were broken (2026-08-10)
 
 New package `markdown-oxide` 0.25.12 (`kind: bin`, upstream x86_64 prebuilt,
