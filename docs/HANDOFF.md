@@ -7,6 +7,29 @@ miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
 (yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
 layout (klayout). linux-process-resource-monitor still pending upstream.
 
+## Released: v2026.08.11 (class C)
+
+https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.11 —
+signed tag (ED25519 `SHA256:XlxLB4kh...`, `git tag -v` = Good signature),
+**verified published, not a draft**, by re-reading the release rather than
+trusting the publish exit code. Tag and `origin/main` both at `7b0460a`. Assets:
+`nvim-plugin-stash.tar.bz2` (343.8 MB), `sha256sums.txt`,
+`default.content-manifest`.
+
+Class **C** — forced by `loadout_main.py` (the `_install_env_helix` fix) *and*
+`packages.json` group membership (`@eda` gained iverilog + yosys); the class
+table says that is C regardless of diff size. All three tiers green (32/32),
+Tier 3 clean container 285 binaries OK, `tests/prebuilt-binaries` 310 binaries
+OK on the dev box. Malware scan CLEAN, 0 detections across **77,434** files
+(YARA-Forge 20260809 + ClamAV signatures refreshed to 2026-08-11 the same day —
+a scan against stale signatures is a green light that means nothing).
+Assurance 33/0; **re-pin N/A** — records exist only for `crate-store`,
+`git-nvim`, `nvim`, `rust`, `treesitter-parsers` and none of them moved.
+
+**The first release attempt was BLOCKED** by the flaky meld probe (below). It
+stopped before tagging, so there was no partial state — the gate behaved
+correctly.
+
 ## THE ONE PATTERN WORTH CARRYING FORWARD
 
 **Every real bug this session was caught by testing the INSTALLED artifact, and
@@ -24,6 +47,38 @@ the real bug surfaced: copying a tree while the ORIGINAL still existed; hiding
 `iverilog-inst-13_0` when the build used `iverilog-inst-v13_0`; and smoking with
 `vvp file.vvp`, which bypasses the shebang entirely. **Before believing a pass,
 ask what the test would have printed had the feature been absent.**
+
+## OPEN — the `meld` smoke probe is FLAKY and it blocked a release
+
+`./build/release` was blocked once by:
+
+```
+FAIL: meld  expected exit 1, timed out instead
+```
+
+Re-running `tests/prebuilt-binaries` alone immediately afterwards passed
+(`OK: meld (expected exit 1)`, all 310 binaries OK), with **no change to meld or
+anything else** — its payload has not been touched since the repo snapshot. So
+it is a **transient timeout, not a regression**. Worth knowing before anyone
+chases a phantom meld bug.
+
+Two things make this worth fixing rather than shrugging at:
+
+- **`EXPECT_NONZERO["meld"]` pins exit 1**, but run by hand on this box (both
+  with `DISPLAY=:0` and with it unset) `meld --version` exits **0** in under a
+  second. The pin only holds under the probe's stripped environment (cut-down
+  PATH, no session D-Bus), which makes it environment-dependent in a way the
+  entry does not say.
+- **A timeout does not satisfy a pinned exit code.** The harness normally treats
+  a timeout as OK ("an interactive binary that blocks has demonstrably loaded"),
+  but an `EXPECT_NONZERO` entry pins one code, so a slow probe becomes a hard
+  release blocker.
+
+Likely fix: accept a timeout for this entry, or widen it to `(0, 1)` and drop
+the display-refusal requirement — but confirm what meld actually does under the
+probe env first rather than loosening the gate blind. **Measure it without a
+pipe**: `meld --version | head -3; echo $?` reports *head's* status, not meld's,
+which is how the exit code got misread the first time.
 
 ## OPEN — needs a decision, not a fix
 
