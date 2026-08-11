@@ -3735,6 +3735,115 @@ should print the bare version (`3.19.0`). Running the inner binary directly woul
 pass even if the wrapper's relative path were wrong.
 
 
+## yosys 0.68 -- RTL synthesis (EL8 SOURCE build)
+
+**Build:** `build/build-yosys.sh --tag v0.68`
+(ISC licence; upstream publishes **source only** -- no prebuilt binaries --
+tarball at `https://github.com/YosysHQ/yosys/releases/download/v0.68/yosys.tar.gz`).
+
+Yosys is the standard open-source RTL **synthesis** tool. It complements the
+simulators already bundled: `iverilog` (event simulation) and `verilator`
+(lint / C++ model generation). Member of the `@eda` group.
+
+### What ships, and the one thing that does not
+
+Shipped: `yosys`, `yosys-abc`, `yosys-config`, `yosys-filterlib`,
+`yosys-smtbmc`, plus the `share/yosys/` techlib tree.
+
+**`yosys-witness` is deliberately NOT shipped.** It is a Python script that does
+`import click` at module scope, and click is not present on a stock EL8 system
+python -- on an air-gapped farm node it cannot even print its help, it dies with
+`ModuleNotFoundError`. Shipping a binary guaranteed to crash is worse than
+omitting it (the same call this repo makes for `verilator_bin_dbg`). It was
+caught by the Tier 3 clean-container gate, not on the dev box. `yosys-smtbmc`
+IS shipped and works: it imports only stdlib plus its own siblings `smtio` and
+`ywio`. If `yosys-witness` is ever wanted, the fix is to bundle click for the
+system python or reroute the script at portable-python -- **not** to relax the
+probe.
+
+### Two binaries need probe metadata, and neither is a defect
+
+- **`yosys-abc`** is ABC with its own CLI. It rejects `--version`/`--help` with
+  `unknown option` and takes `-c <cmd>`/`-q <cmd>` instead, so its probe is
+  `-c quit`, which exits 0.
+- **`yosys-filterlib`** has NO zero-exit invocation at all, so it needs an
+  `EXPECT_NONZERO` pin: every flag is read as a rules-file *path*, so `--help`
+  fails to open it and prints the usage banner (exit 1) -- and that banner is
+  what proves the binary ran. **Do not pin the bare invocation instead**: with
+  no arguments it reads the liberty file from **stdin**, which yields a
+  different message (`No entries found in liberty file.`) and would block on a
+  tty.
+
+### EL8 fit: nothing new to bundle
+
+| check | value |
+|---|---|
+| max glibc symbol | **GLIBC_2.27** (EL8 provides 2.28) |
+| max libstdc++ | **GLIBCXX_3.4.22** (EL8 provides 3.4.25) |
+| NEEDED | `libdl.so.2`, `libffi.so.6`, `libz.so.1`, `libtcl8.6.so`, `libedit.so.0`, `libpthread.so.0`, `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`, `libc.so.6` -- `libz`/`libtcl8.6`/`libedit` already in `lib64/`, `libffi.so.6` is EL8 base, the rest are glibc/libstdc++/libgcc_s never bundled by policy |
+| payload | 76 MB installed -> 69 MB stripped -> **~22.7 MB** bz2 |
+
+C++20 did **not** push GLIBCXX over EL8's ceiling, so no `-static-libstdc++`
+trick is needed (verilator needs one; this does not). **Nothing new is
+bundled.** Everything else on EL8 already satisfies Yosys: cmake 4.3.2 (needs
+3.28), flex 2.6.1 (needs 2.6), python 3.14 (needs 3.7), and gcc-toolset-14 for
+the required **C++20**.
+
+### bison is the only gap -- and it is a BUILD-time gap, not a runtime one
+
+Yosys requires bison >= 3.6; EL8 ships **3.0.4**. The build script builds
+**bison 3.8.2** into a temp prefix and prepends it to PATH. Stress that bison
+is a **build-time tool only -- it generates the parser and is never packaged or
+shipped.** Contrast this with OpenROAD, which was scoped and rejected for EL8
+because EIGHT of its *runtime* dependencies are below floor (Boost 1.89 vs
+EL8's 1.66, CMake 3.31, SWIG 4.3, spdlog 1.15, Eigen 3.4, OR-Tools 9.14, LEMON
+1.3.1, CUDD 3.0). A build-time gap is cheap; a runtime dependency stack is a
+project.
+
+### Three traps not in any upstream doc
+
+1. **The release tarball extracts FLAT** -- no top-level directory. Extract
+   into an empty dir. A `cd $(find -maxdepth 1 -type d | head -1)` after
+   extraction lands in a random subdirectory and fails.
+2. **v0.68 moved to CMake.** There is no top-level Makefile and the old
+   `make config-gcc` incantation is gone. Any older note or blog post saying
+   otherwise is stale.
+3. **`abc/` is vendored in the tarball** (47 MB). Older Yosys fetched ABC from
+   git during the build, which would have made an offline/reproducible build
+   much harder. Do not "clean up" by removing it.
+
+### `yosys` relocates; `yosys-config` does not
+
+**`yosys` itself relocates correctly** -- verified by copying the tree, hiding
+the original, and synthesizing successfully from the copy. It resolves
+`share/yosys` from its own location, so it needs **no wrapper**.
+
+Installed artifacts: `yosys`, `yosys-abc`, `yosys-config`, `yosys-filterlib`,
+`yosys-smtbmc`, `yosys-witness`, plus a `share/yosys/` data tree (techlibs).
+
+**`bin/yosys-config` is the exception and needs a repo-owned replacement**
+(`build/yosys/yosys-config`), for TWO reasons:
+
+1. upstream generates it with the build prefix baked in at 5+ places, and
+2. it reports `--cxx` as `/opt/rh/gcc-toolset-14/root/usr/bin/c++` -- a path
+   that exists only on the build box. A user compiling a Yosys plugin on a
+   farm node needs their own `g++`, so the replacement reports `${CXX:-g++}`.
+
+This is the same idiom as `build/iverilog/iverilog-vpi` -- a shell script has
+no `/proc/self/exe` trick, so it derives its prefix from `$0`.
+
+### Smoke: `-V` is not enough -- SYNTHESIZE from a relocated copy
+
+`yosys -V` prints a version banner from an install whose `share/yosys` techlib
+tree is missing, so the packaging smoke actually **SYNTHESIZES**
+`build/yosys/smoke.v` (a 4-bit adder) with `write_json` and requires a
+non-empty `cells` object back. The build script runs that smoke against a
+**RELOCATED copy with the original build prefix moved away** -- running a
+copy while the original still exists proves nothing, because a binary that
+silently fell back to the build prefix would pass. Note that this exact
+false-green is what bit the `iverilog` packaging (see its section).
+
+
 ## iverilog 13.0 -- Icarus Verilog simulator (EL8 SOURCE build)
 
 **Build:** `build/build-iverilog.sh --tag v13_0`

@@ -348,6 +348,7 @@ OpenSSH for those.
 | espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
+| yosys | bin | 0.68 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
 | iverilog | bin | 13.0 | Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design |
 | lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |

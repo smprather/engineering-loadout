@@ -344,6 +344,12 @@ TOOLS = [
         strategy_flag(["-V"], r"Icarus Verilog version ([0-9]+\.[0-9]+)"),
     ),
     (
+        "yosys",
+        "yosys",
+        "https://github.com/YosysHQ/yosys",
+        strategy_flag(["-V"], r"Yosys ([0-9]+\.[0-9]+)"),
+    ),
+    (
         "markdown-oxide",
         "markdown-oxide",
         "https://github.com/Feel-ix-343/markdown-oxide",

@@ -30,6 +30,7 @@ Usage:
 """
 
 import glob
+import json
 import os
 import re
 import shutil
@@ -168,6 +169,10 @@ PROBE_FLAGS = {
     # `*** Could not open '--version'` (exit 255).
     "rtlbrowse": [[]],
     "shmidcat": [[]],
+    # yosys-abc is ABC with its own CLI -- it takes `-c <cmd>`/`-q <cmd>` and
+    # rejects `--version`/`--help` with "unknown option". Running the `quit`
+    # command exits 0 and proves the interpreter came up.
+    "yosys-abc": [["-c", "quit"]],
 }
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
 
@@ -221,6 +226,18 @@ EXPECT_NONZERO = {
         (1, 2),
         ("socket name too long", "unable to connect to the rxvt-unicode daemon", "unknown or malformed option"),
         "daemon client; needs a running urxvtd",
+    ),
+    # yosys-filterlib is a Liberty-file filter with NO zero-exit invocation.
+    # Every flag is read as a rules-file PATH, so `--help` fails to open it and
+    # then prints the usage banner -- which is what proves the binary ran.
+    # Do NOT pin the bare invocation instead: with no arguments it reads the
+    # liberty file from STDIN, which changes the message ("No entries found in
+    # liberty file.") and would block on a tty.
+    "yosys-filterlib": (
+        ["--help"],
+        1,
+        ("Usage: filterlib",),
+        "Liberty filter; every flag is read as a rules-file path, bare form reads stdin",
     ),
     # --- flagless CLI tools whose banner proves execution ------------------
     # espresso is a 1988 Berkeley tool with no version flag; it rejects the
@@ -1024,6 +1041,55 @@ def smoke_runtime_layout(tmpdir, env):
                 detail = output_excerpt(proc.stdout)
                 print(f"  FAIL (cjk):          pdftotext runtime  {detail}")
                 failures.append(("pdftotext runtime", detail))
+
+    if has_bin("yosys"):
+        # `yosys -V` prints a version banner from an install whose share/yosys
+        # techlib tree is missing -- every synth pass would then fail. So the
+        # probe actually SYNTHESISES and requires cells back, same reasoning as
+        # the pdftotext CJK and iverilog simulation probes.
+        # Yosys installs its share tree FLAT -- share/yosys/simlib.v, with no
+        # techlibs/common/ subdirectory (that is the SOURCE layout, not the
+        # installed one). Pointing a sentinel at the source path is the fish
+        # bug: the install works, but every run prints a bogus "not found".
+        require_path(
+            os.path.join(tmpdir, "local", "share", "yosys", "simlib.v"),
+            "yosys techlibs",
+            failures,
+        )
+        smoke_v = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "yosys", "smoke.v")
+        work = os.path.join(tmpdir, "yosys-smoke")
+        try:
+            os.makedirs(work, exist_ok=True)
+            shutil.copy(smoke_v, os.path.join(work, "smoke.v"))
+            proc = subprocess.run(
+                [
+                    os.path.join(bin_dir, "yosys"),
+                    "-q",
+                    "-p",
+                    "read_verilog smoke.v; synth; write_json smoke.json",
+                ],
+                cwd=work,
+                env=env,
+                timeout=300,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            cells = 0
+            out_json = os.path.join(work, "smoke.json")
+            if proc.returncode == 0 and os.path.isfile(out_json):
+                with open(out_json) as fh:
+                    design = json.load(fh)
+                cells = sum(len(m.get("cells") or {}) for m in design.get("modules", {}).values())
+        except Exception as exc:
+            print(f"  FAIL (synth):        yosys  {exc}")
+            failures.append(("yosys", str(exc)))
+        else:
+            if proc.returncode == 0 and cells > 0:
+                print(f"  OK   (synth):        yosys  synthesised smoke.v -> {cells} cells")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (synth):        yosys  rc={proc.returncode} cells={cells} {detail}")
+                failures.append(("yosys", detail))
 
     if has_bin("iverilog"):
         # `iverilog -V` prints a version banner from an install whose lib/ivl is

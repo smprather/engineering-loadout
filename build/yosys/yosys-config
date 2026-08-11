@@ -1,0 +1,131 @@
+#!/bin/sh
+# Replacement for upstream's generated yosys-config.
+#
+# Two reasons it exists:
+#   1. Upstream yosys-config bakes the build prefix into five or more
+#      places (--cxxflags include path, --bindir, --datdir, etc.). On a
+#      farm/deploy node that prefix does not exist, so any downstream
+#      build using yosys-config picks up stale or missing paths. This
+#      wrapper derives the prefix from $0 instead, so it is correct
+#      wherever the package is installed.
+#   2. Upstream reports --cxx as the build-box compiler path
+#      (/opt/rh/gcc-toolset-14/root/usr/bin/c++), which is absent on a
+#      farm node. We substitute ${CXX:-g++} so consumers get a compiler
+#      that actually exists on the target machine.
+#
+# Tokens --cxx, --cxxflags, --linkflags, --ldflags, --libs, --ldlibs,
+# --bindir, and --datdir are rewritten to relocatable values; every
+# other argument passes through unchanged.
+
+usage() {
+    cat <<'EOF'
+Usage: yosys-config [OPTION] ... [--exec CMD ARGS... | --build MOD.so SRC...]
+
+Token rewriting (each prints its value unless --exec is given):
+  --cxx        C++ compiler (default: g++)
+  --cxxflags   C++ compile flags (includes <prefix>/share/yosys/include)
+  --linkflags  link flags (PIC)
+  --ldflags    alias for --linkflags
+  --libs       (empty -- Yosys links statically against its own libs)
+  --ldlibs     (empty -- alias for --libs)
+  --bindir     <prefix>/bin
+  --datdir     <prefix>/share/yosys
+
+Modes:
+  --exec           Execute the remaining args as a command after substitution
+  --build MOD.so SRC...
+                   Shorthand for:
+                   --exec --cxx --cxxflags --ldflags -o MOD.so -shared SRC... --libs
+  -h, --help       Show this message
+EOF
+}
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+# shellcheck disable=SC1007  # CDPATH= cd is the standard unset-CDPATH idiom
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+
+cxx=${CXX:-g++}
+# shellcheck disable=SC2089  # embedded quotes are intentional: config-script tokens
+cxxflags="-std=c++20 -fPIC -D_YOSYS_ -DYOSYS_VER=\"0.68+post\" -DYOSYS_MAJOR=0 -DYOSYS_MINOR=68 -DYOSYS_COMMIT= -I${prefix}/share/yosys/include"
+linkflags="-fPIC"
+ldflags="-fPIC"
+libs=""
+ldlibs=""
+bindir="${prefix}/bin"
+datdir="${prefix}/share/yosys"
+
+do_exec=0
+build_mode=0
+
+# Detect --exec / --build / --help so we know how to consume the args.
+for arg in "$@"; do
+    case "$arg" in
+        --exec) do_exec=1 ;;
+        --build) build_mode=1 ;;
+        -h|--help) usage; exit 0 ;;
+    esac
+done
+
+expand_token() {
+    case "$1" in
+        --cxx) printf '%s' "$cxx" ;;
+        --cxxflags) printf '%s' "$cxxflags" ;;
+        --linkflags) printf '%s' "$linkflags" ;;
+        --ldflags) printf '%s' "$ldflags" ;;
+        --libs) printf '%s' "$libs" ;;
+        --ldlibs) printf '%s' "$ldlibs" ;;
+        --bindir) printf '%s' "$bindir" ;;
+        --datdir) printf '%s' "$datdir" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+if [ "$build_mode" -eq 1 ]; then
+    # --build MOD.so SRC...  == --exec --cxx --cxxflags --ldflags -o MOD.so -shared SRC... --libs
+    shift_arg=0
+    mod=
+    srcs=
+    for arg in "$@"; do
+        if [ "$shift_arg" -eq 0 ]; then
+            case "$arg" in
+                --build) shift_arg=1; continue ;;
+                *) ;;  # ignore anything before --build
+            esac
+        fi
+        # first post-build arg is MOD.so
+        if [ -z "$mod" ]; then
+            mod=$arg
+        else
+            srcs="$srcs $arg"
+        fi
+    done
+    [ -n "$mod" ] || { echo "yosys-config: --build requires MOD.so SRC..." >&2; exit 2; }
+    # shellcheck disable=SC2086,SC2090  # intentional word-splitting of config tokens
+    exec $cxx $cxxflags $ldflags -o "$mod" -shared $srcs $libs
+fi
+
+# Normal mode: rewrite known tokens, pass others through.
+expanded=
+for arg in "$@"; do
+    case "$arg" in
+        --exec) ;;
+        --cxx|--cxxflags|--linkflags|--ldflags|--libs|--ldlibs|--bindir|--datdir)
+            expanded="$expanded $(expand_token "$arg")"
+            ;;
+        *)
+            expanded="$expanded $arg"
+            ;;
+    esac
+done
+
+if [ "$do_exec" -eq 1 ]; then
+    # shellcheck disable=SC2086
+    exec $expanded
+else
+    # shellcheck disable=SC2086
+    printf '%s\n' $expanded
+fi
+exit 0

@@ -3470,7 +3470,8 @@
         "iverilog",
         "gtkwave",
         "klayout",
-        "verilator"
+        "verilator",
+        "yosys"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
@@ -3739,6 +3740,35 @@
       "remove_before_extract": "share/lua-language-server",
       "chmod_sentinel": true,
       "missing_hint": "lua-language-server wrapper will be installed but binary data will be missing"
+    },
+    "yosys": {
+      "kind": "bin",
+      "bins": [
+        "yosys",
+        "yosys-abc",
+        "yosys-config",
+        "yosys-filterlib",
+        "yosys-smtbmc"
+      ],
+      "archive": "payload/PLATFORM/runtime/yosys.tar.bz2",
+      "version": "0.68",
+      "version_url": "https://github.com/YosysHQ/yosys/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "verilog",
+        "rtl",
+        "synthesis"
+      ],
+      "install_to": "~/.local",
+      "sentinel": "share/yosys/simlib.v",
+      "remove_before_extract": [
+        "share/yosys"
+      ],
+      "missing_hint": "the Yosys techlib tree (share/yosys) will NOT be installed; `yosys` starts but every synth pass fails",
+      "description": "Yosys \u2014 open-source RTL synthesis (Verilog/SystemVerilog \u2192 netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"
     },
     "iverilog": {
       "kind": "bin",

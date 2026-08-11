@@ -253,6 +253,11 @@ sha256  65e55d72de119c2da0ee9c5e097a409dfbbdade86e4aa5155c5f4e523a516d9f  payloa
 sha256  80523168988b841861fe6925c17d404975488400f612445d666876c43e375892  payload/el8.x86_64.glibc2p28/bin/yara.bz2
 sha256  852aef2c0524fd51419e6caae4b278f4d60b0504aee08bee9fa97dfddd8d4175  payload/el8.x86_64.glibc2p28/bin/yazi.bz2
 sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  payload/el8.x86_64.glibc2p28/bin/yes.bz2
+sha256  d02cb63f2b0fe26134b4e9be42f12369a704e08154ed78cadc5c55858e54c1c1  payload/el8.x86_64.glibc2p28/bin/yosys-abc.bz2
+sha256  7313a562e31ba5f9e7148794d7bd2017ca0cb555c44fbcc5ec088dfc19861733  payload/el8.x86_64.glibc2p28/bin/yosys-config.bz2
+sha256  2c28d9d93957d38b8348a8493addb47b87fa231a9c19e645a9030bc9bd504e15  payload/el8.x86_64.glibc2p28/bin/yosys-filterlib.bz2
+sha256  46198e106cf92e41a25d015808f1d66434f600752a4e284912fbeb60fab35ae8  payload/el8.x86_64.glibc2p28/bin/yosys-smtbmc.bz2
+sha256  259f74e08d869f2911a371458e66404cc919ce27738878b78970e68534c7b0c6  payload/el8.x86_64.glibc2p28/bin/yosys.bz2
 sha256  6a653ad5efe5af50f171d9835a04933b60bdd51c3904b4d7253a11e5e42c11cb  payload/el8.x86_64.glibc2p28/bin/yq.bz2
 sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  payload/el8.x86_64.glibc2p28/bin/zellij.bz2
 sha256  cbef7b3593475cd091629645c10bb141e375c7d89afdfae226b784e17e271718  payload/el8.x86_64.glibc2p28/bin/zoxide.bz2
@@ -425,7 +430,7 @@ tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
 tar-meta  48862  1786294905  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  311761  1785979682  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
-tar-meta  1891503  1786399302  payload/el8.x86_64.glibc2p28/runtime/iverilog.tar.bz2
+tar-meta  1891503  1786420088  payload/el8.x86_64.glibc2p28/runtime/iverilog.tar.bz2
 tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
 tar-meta  3021429  1786294907  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
 tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
@@ -442,6 +447,7 @@ tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  271233  1785979682  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
+tar-meta  648856  1786420089  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  937153  1785780848  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
