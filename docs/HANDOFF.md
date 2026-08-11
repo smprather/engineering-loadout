@@ -1,9 +1,112 @@
 # Current Handoff
 
-Last updated: 2026-08-10 (freetype is now source-built and bundled at 2.14.3,
-replacing EL8's shanghai'd 2.9.1; pdftotext unpinned 22.12.0 -> 26.04.0 as a
-result; markdown-oxide added and both markdown LSPs un-broken;
-linux-process-resource-monitor still pending upstream).
+Last updated: 2026-08-11. Five packages landed since v2026.08.09 — freetype
+2.14.3 (source-built, replacing EL8's 2.9.1), pdftotext 22.12.0 -> 26.04.0,
+markdown-oxide 0.25.12, iverilog 13.0, yosys 0.68 — plus currency bumps for
+miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
+(yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
+layout (klayout). linux-process-resource-monitor still pending upstream.
+
+## THE ONE PATTERN WORTH CARRYING FORWARD
+
+**Every real bug this session was caught by testing the INSTALLED artifact, and
+none by reading the repo file.** Four of them, each invisible to a diff:
+
+| bug | how it hid |
+|---|---|
+| `_install_env_helix` named `config.toml` literally | a new `envs/helix/languages.toml` would silently never install; the repo diff looks identical either way |
+| iverilog's compiled-in prefix WINS when it exists | worked on a clean node, silently broke on the dev box, writing a dead interpreter into every `.vvp` shebang |
+| yosys sentinel pointed at the SOURCE layout | install works, warns on every run, red row in the summary (the fish bug) |
+| `yosys-witness` imports `click` | passes here because this box has click; `ModuleNotFoundError` on a stock farm node |
+
+Three of my own iverilog "relocation" tests also passed for bad reasons before
+the real bug surfaced: copying a tree while the ORIGINAL still existed; hiding
+`iverilog-inst-13_0` when the build used `iverilog-inst-v13_0`; and smoking with
+`vvp file.vvp`, which bypasses the shebang entirely. **Before believing a pass,
+ask what the test would have printed had the feature been absent.**
+
+## OPEN — needs a decision, not a fix
+
+### `yamlls` points at a personal home directory
+
+`envs/nvim/lsp/yamlls.lua:64` hardcodes
+`/home/myles/node_modules/.bin/yaml-language-server` — an absolute path into
+somebody's `$HOME`, and not even the current dev user (`mylesp`). It is in the
+`vim.lsp.enable` list, so **every user gets an enabled YAML server that can
+never start**. Deliberately not fixed: it is a different package and the fix is
+a real choice, not a typo repair. Either **drop `yamlls` from the enable list**
+(as was done for `marksman`, zero payload cost) or **bundle
+`yaml-language-server`** (feasible — `nodejs` is already bundled — but it means
+owning a node LSP and its `node_modules` closure offline). Either way the
+hardcoded path must go.
+
+Found by auditing the whole enable list after markdown_oxide; the other five
+(`lua_ls`, `ruff`, `ty`, `biome`, `markdown_oxide`) are all correctly bundled.
+
+### DigitalJS / OpenROAD — scoped, not started
+
+- **DigitalJS**: the cheap part. It is a browser JS library (BSD-2-Clause, no
+  CLI). The chain is `design.v -> yosys -> yosys2digitaljs -> browser`, and
+  **yosys was the only hard piece — it is now done**. Remaining: `yosys2digitaljs`
+  (BSD-2-Clause npm CLI that shells out to yosys) plus the digitaljs assets and a
+  launcher, ~1-2 days. The genuine unknown is vendoring a `node_modules` closure
+  offline — **no precedent in this repo**; every JS-adjacent thing today
+  (`lua-language-server`, `biome`) ships as a self-contained binary.
+- **OpenROAD**: BSD-3-Clause and viable, but a 3-5 day project, not a package.
+  Prebuilts are DEAD on EL8 — verified by running one: needs **GLIBC_2.29** and
+  **GLIBCXX_3.4.26**, EL8 has 2.28 / 3.4.25, both miss by one version. A source
+  build fixes both automatically, but eight RUNTIME deps are below floor (Boost
+  1.89 vs EL8's 1.66, CMake 3.31, SWIG 4.3, spdlog 1.15, Eigen 3.4, OR-Tools
+  9.14, LEMON 1.3.1, CUDD 3.0) and **OR-Tools is the monster**. Contrast yosys,
+  whose only gap was BUILD-TIME bison. Settle **OpenROAD proper vs
+  OpenROAD-flow-scripts** before anyone starts.
+
+### Deferred currency, unchanged reasons
+
+`vim`/`gvim` 9.2.0933 (upstream tags patches daily), `fresh` 0.4.7 (major bump +
+EL8 source build; its prebuilt wants GLIBC_2.35), `jupyterlab` 4.6.3 (blocked on
+pip's `--platform` resolver backtracking into httpcore/anyio). `pdftotext` is
+correctly **pinned** — the blocker is now fontconfig 2.15 at poppler 26.06+, not
+freetype.
+
+**`ty` 0.0.70 was bumped and then DELIBERATELY REVERTED to 0.0.69.** `ty` is a
+Rust tool, and `verify-crate-store --check-policy` correctly failed the release
+gate: `build/rust-tool-locks.txt` still pinned 0.0.69, and the shipped crate
+store is built from those refs, so a stale ref means the store can no longer
+rebuild that tool **offline**. Re-pinning the locks alone would have made the
+gate pass while leaving the store genuinely missing 0.0.70's dependency
+closure — papering over exactly what the gate is for. A real bump needs
+`build/build-tool-crate-store.sh` (320 MB payload churn, network, ~2199 crates)
+**plus** a `crate-store` assurance re-pin, because that package has a record.
+Deliberately not done immediately before a context clear; the store rebuild is
+also the operation that once produced a silently truncated archive from a
+concurrent payload job. **Bundle the ty bump with the next crate-store refresh.**
+`mlr` is Go, is not in the store, and bumped freely.
+
+## miller 6.21.0 + ty 0.0.70, and a new prebuilt-import script (2026-08-11)
+
+Both were bundled with **no build script and no ADDING_BINARIES note** — the
+provenance gap `lua-language-server`, `liberty-filter`, `tmux-path-store` and
+the five small C tools each had. Now covered by
+`build/build-prebuilt-bin.sh --tool {ty|mlr} --tag X`, multi-tool in the style
+of `build-simple-c.sh`. Three traps encoded in it:
+
+- **Tag format differs per tool**: `ty` uses a bare `0.0.70`, miller uses
+  `v6.21.0`.
+- **Binary name != registry key for miller**: the binary is `mlr`, the
+  `packages.json` key is `miller`. `loadout_package_bin` wants the binary name,
+  `loadout_stamp_version` the registry key — the wrong one fails with a bare
+  `KeyError`.
+- **`loadout_package_bin` ABORTS on a static binary.** It always runs
+  `patchelf --set-rpath`, which dies with `cannot find section '.dynamic'` on
+  static Go binaries like `mlr`. Those need `strip` -> `bzip2`, no patchelf, no
+  RPATH. The script branches on an empty NEEDED set.
+
+Smokes are functional, not `--version`: `ty` must REPORT a genuine type error
+(a checker that silently passes everything would sail through a version probe),
+`mlr` must round-trip CSV to JSON. `ty` publishes a sibling `.sha256` for its
+asset and the script verifies against it; miller publishes none, so the script
+prints the hash it computed.
 
 ## iverilog 13.0 added (2026-08-10); the compiled-in prefix WINS when it exists
 

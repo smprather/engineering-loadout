@@ -3735,6 +3735,56 @@ should print the bare version (`3.19.0`). Running the inner binary directly woul
 pass even if the wrapper's relative path were wrong.
 
 
+## ty / mlr -- upstream single-binary prebuilt imports
+
+**Build:** `build/build-prebuilt-bin.sh --tool ty --tag 0.0.70`
+and `build/build-prebuilt-bin.sh --tool mlr --tag v6.21.0`.
+
+> **`ty` is currently held at 0.0.69, and the script is not the reason.** `ty` is
+> a Rust tool, so bumping the registry without re-pinning
+> `build/rust-tool-locks.txt` makes `verify-crate-store --check-policy` fail:
+> the shipped crate store is built from those refs, so a stale one means the
+> store can no longer rebuild that tool **offline**. Re-pinning the locks alone
+> would silence the gate while leaving the store genuinely missing the new
+> dependency closure — do not do that. A real bump means
+> `build/build-tool-crate-store.sh` (320 MB of payload churn) **and** a
+> `crate-store` assurance re-pin, since that package has a record. `mlr` is Go
+> and is not in the crate store, so it bumps freely.
+
+**This note exists because both packages had none.** `ty` and `mlr` were each
+bundled with no build script and no entry here, so nothing recorded where their
+payload came from or how to refresh it — the same provenance gap
+`lua-language-server`, `liberty-filter`, `tmux-path-store` and the five small C
+tools each had. Multi-tool via `--tool`, following `build-simple-c.sh`.
+
+Neither is a source build: upstream ships x86_64 binaries below EL8's glibc
+2.28 floor (`ty` GLIBC_2.17; `mlr` is fully static). The script **asserts** that
+rather than assuming it — a release built against a newer toolchain would
+install cleanly here and be dead on a farm node, which is how `tree-sitter`,
+`bottom` and `fresh` got rejected.
+
+Three things worth not rediscovering:
+
+- **Tag format differs per tool.** `ty` uses a bare version (`0.0.70`), miller
+  uses a leading `v` (`v6.21.0`). The registry version is derived by stripping
+  the `v`.
+- **The binary name and the registry key are not the same for miller**: the
+  binary is `mlr`, the `packages.json` key is `miller`. `loadout_package_bin`
+  takes the binary name, `loadout_stamp_version` takes the registry key —
+  passing the wrong one fails with a bare `KeyError`.
+- **`loadout_package_bin` aborts on a static binary.** It always runs
+  `patchelf --set-rpath`, which dies with `cannot find section '.dynamic'` on
+  static Go binaries like `mlr`. Those take `strip` → `bzip2` with no patchelf
+  and no RPATH — they load nothing. The script branches on an empty NEEDED set.
+
+**Smoke is functional, not `--version`.** A type checker that silently passes
+everything, or a data processor that emits nothing, both sail through a version
+probe. `ty` is given a file with a genuine type error and must report it; `mlr`
+must round-trip CSV to JSON. `ty` also publishes a sibling `.sha256` for its
+release asset and the script verifies against it; miller publishes none, so the
+script prints the hash it computed instead.
+
+
 ## yosys 0.68 -- RTL synthesis (EL8 SOURCE build)
 
 **Build:** `build/build-yosys.sh --tag v0.68`

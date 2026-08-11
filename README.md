@@ -273,7 +273,7 @@ OpenSSH for those.
 | lazygit | bin | 0.64.0 | TUI git client for staging, committing, rebasing |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
-| miller | bin | 6.20.2 | CSV/TSV/JSON/NDJSON data processor (mlr) |
+| miller | bin | 6.21.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.3.8 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
