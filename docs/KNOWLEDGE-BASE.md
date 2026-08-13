@@ -97,6 +97,33 @@ does **not** bundle -- on an offline node that server never starts and fails
 silently. Naming one server also avoids attaching two markdown servers to the
 same buffer, which doubles completions and go-to-definition results.
 
+### helix asks before it starts any language server
+
+The first time you open a workspace in helix you get a modal:
+
+> Trust this workspace? Trusted workspaces may load local config files and
+> auto-start language servers. Config and language servers can execute
+> arbitrary code.
+
+**Until you answer it, helix starts NO language server** -- not
+`markdown-oxide`, not `taplo`. Dismissing it leaves you with a working editor
+and silently no LSP, which looks like a broken install and is not one. If you
+are already in that state, run `:workspace-trust`.
+
+The answer **persists**: helix records it in `trusted_workspaces` under its
+data dir (`~/.local/share/helix`), so this is once per workspace, not once per
+session. `:workspace-untrust` reverses it.
+
+This is deliberately left as a prompt. helix's `[editor] insecure = true` would
+skip it globally, but on a shared farm filesystem that means any directory you
+open -- including another user's -- may have its local `.helix/` config honoured
+and its language servers launched, which is exactly the arbitrary-code path the
+warning describes. Upstream's narrower `[editor.workspace-trust] level =
+"servers"` is the right answer and **no released helix has it** (25.07.1 is
+latest as of 2026-08-13, and it rejects the key -- which makes helix discard the
+whole config file and fall back to defaults). See the comment block at the top
+of `envs/helix/config.toml`.
+
 ## Why this is not Obsidian
 
 markdown-oxide covers the linking and navigation layer, not the GUI: no graph

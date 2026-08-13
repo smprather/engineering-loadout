@@ -411,7 +411,31 @@ def require_path(path, label, failures):
     return False
 
 
-def _run_probe(binary_path, flags, env, cwd):
+PROBE_TIMEOUT = 4
+
+# Retry budget for an EXPECT_NONZERO probe that times out at PROBE_TIMEOUT.
+#
+# A timeout is OK on the default path ("an interactive binary that blocks has
+# demonstrably loaded"), but an EXPECT_NONZERO entry pins ONE exit code, so a
+# slow probe there is a hard failure -- and that made `meld` block a release
+# once, with nothing wrong with meld.
+#
+# Measured under the exact probe env on 2026-08-13: meld exits 1 with its
+# `Unable to init server` marker in 0.08 s warm, 0.67 s cold -- 12/12 runs, no
+# flake at all in isolation. The pin is RIGHT. What it cannot survive is
+# `./build/release`, which runs the malware scan (hashing ~77k files), this
+# smoke, the version table and sha256sums CONCURRENTLY: meld is a Python 3.6
+# launcher importing the whole GTK/gi stack, so a cold-cache start competing
+# with that I/O can cross 4 s.
+#
+# So the fix is patience, not a looser assertion: on a timeout, retry once with
+# a much longer budget. The pinned exit code and the required output marker
+# still have to hold -- a binary that genuinely hangs still fails, it just takes
+# longer to say so.
+SLOW_PROBE_TIMEOUT = 60
+
+
+def _run_probe(binary_path, flags, env, cwd, timeout=PROBE_TIMEOUT):
     """Run one probe invocation. Returns (returncode, combined_output) or
     raises TimeoutExpired / OSError for the caller to classify."""
     proc = subprocess.run(
@@ -420,7 +444,7 @@ def _run_probe(binary_path, flags, env, cwd):
         stderr=subprocess.STDOUT,
         cwd=cwd,
         env=env,
-        timeout=4,
+        timeout=timeout,
     )
     return proc.returncode, proc.stdout.decode("utf-8", "replace")
 
@@ -442,7 +466,14 @@ def probe_binary(binary_path, env, cwd):
         try:
             code, combined = _run_probe(binary_path, flags, env, cwd)
         except subprocess.TimeoutExpired:
-            return False, f"expected exit {want_code}, timed out instead"
+            # Slow start, not a hang -- see SLOW_PROBE_TIMEOUT. Retry once with
+            # a wide budget; the pinned code and marker still have to hold.
+            try:
+                code, combined = _run_probe(binary_path, flags, env, cwd, timeout=SLOW_PROBE_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                return False, (f"expected exit {want_code}, timed out instead (retried at {SLOW_PROBE_TIMEOUT}s)")
+            except OSError as exc:
+                return False, f"OSError: {exc}"
         except OSError as exc:
             return False, f"OSError: {exc}"
         for pat in FATAL_OUTPUT_PATTERNS:

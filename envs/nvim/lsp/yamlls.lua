@@ -61,7 +61,11 @@
 
 ---@type vim.lsp.Config
 return {
-    cmd = { "/home/myles/node_modules/.bin/yaml-language-server", "--stdio" },
+    -- Upstream nvim-lspconfig default. This used to hardcode an absolute path
+    -- into a personal $HOME, which resolved on exactly one machine. The server
+    -- is not bundled, so this config is inert unless a user installs
+    -- yaml-language-server themselves and enables it from their own layer.
+    cmd = { "yaml-language-server", "--stdio" },
     filetypes = { "yaml", "yaml.docker-compose", "yaml.gitlab", "yaml.helm-values" },
     root_markers = { ".git" },
     settings = {

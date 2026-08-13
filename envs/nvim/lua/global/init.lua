@@ -170,7 +170,15 @@ if vim.g.cfg_enable_lsp then
     -- also ships in lsp/ and is deliberately NOT enabled: it is a second TOML
     -- server, and two of them attach to every .toml buffer -- the same
     -- double-attach that markdown_oxide/marksman is avoiding above.
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "markdown_oxide", "biome", "taplo" })
+    --
+    -- yamlls was dropped from this list (2026-08-13) for the marksman reason:
+    -- yaml-language-server is an npm package and is NOT bundled, so every user
+    -- got an enabled server that could never start. Its lsp/yamlls.lua also
+    -- hardcoded an absolute path into a personal $HOME, which has been reverted
+    -- to the upstream bare command name. Re-enabling it means BUNDLING the
+    -- server and its node_modules closure offline first -- nodejs is already in
+    -- the payload, so it is feasible, but it is a package, not a config edit.
+    vim.lsp.enable({ "lua_ls", "ruff", "ty", "markdown_oxide", "biome", "taplo" })
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {
