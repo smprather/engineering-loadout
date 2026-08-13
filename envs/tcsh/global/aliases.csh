@@ -277,6 +277,24 @@ alias runvnc    'vncserver -SecurityTypes None'
 alias stopvnc   'vncserver -kill'
 alias killvnc   "$_lo_helpers/vnc-kill-newest"
 
+# ---- history -----------------------------------------------------------------
+# The csh form of the bash env's loadout_save_history precmd hook: flush the
+# in-memory history list to $histfile without waiting for the shell to exit, so
+# a `kill -9`, a crashed tmux server or a dropped connection does not take the
+# session's history with it, and so `gah` can see commands from shells that are
+# still running.
+#
+# tcsh has NO incremental append. `history -S` rewrites the WHOLE file (10k
+# lines), where bash's `history -a` writes only what is new -- which is why
+# tcshrc drives this from `periodic`/$tperiod rather than from precmd. Per
+# prompt it would rewrite the file on every keystroke-to-enter cycle, and on an
+# NFS farm home that cost is real. Every few minutes buys nearly all of the
+# crash-survival benefit for a bounded fraction of the writes.
+#
+# Safe against clobber: seed-history gives each shell its own per-PID $histfile,
+# so this shell is the only writer of that file.
+alias loadout_save_history 'history -S'
+
 # ---- the csh forms of envs/bash/functions.sh ---------------------------------
 # path_prepend / path_append only touch $path, which csh has natively.
 # path_remove / path_trim need a filtering loop, which an alias can express.

@@ -169,6 +169,18 @@ if ( $?prompt ) then
         if ( "$_loadout_hf" != "" ) set histfile = "$_loadout_hf"
         unset _loadout_hf
     endif
+    # Flush history to $histfile without waiting for exit, so a kill -9 or a
+    # dropped connection does not take the session's history with it. tcsh runs
+    # `periodic` before a prompt once $tperiod minutes have elapsed.
+    #
+    # NOT on precmd, unlike the bash env's loadout_save_history: tcsh has no
+    # incremental append, so `history -S` rewrites all 10k lines where bash's
+    # `history -a` writes only what is new. Per prompt that is a full rewrite per
+    # command on an NFS farm home. The alias itself lives in aliases.csh (which
+    # is sourced further down) because that is the file tests/env-shell-parity
+    # reads; alias bodies resolve at run time, so the forward reference is fine.
+    set tperiod = 5
+    alias periodic loadout_save_history
 
     # ---- terminal -------------------------------------------------------------
     setenv COLORTERM truecolor

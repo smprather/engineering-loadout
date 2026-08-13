@@ -152,6 +152,13 @@ if [[ ! -f "$HISTFILE" ]]; then
         fi
     fi
 fi
+loadout_save_history() {
+    local _rc=$?
+    case $- in
+    *i*) builtin history -a 2>/dev/null || true ;;
+    esac
+    return "$_rc"
+}
 
 ### Shell options ###
 # Silence readline's bell (e.g. double-tab on ambiguous completion).
@@ -357,6 +364,7 @@ fi
 # loadout_add_precmd registers it via precmd_functions when a framework is
 # active, else PROMPT_COMMAND -- without clobbering starship's own precmd.
 loadout_add_precmd loadout_restore_echo
+loadout_add_precmd loadout_save_history
 
 export LESS_TERMCAP_mb=$'\e[1;32m'
 export LESS_TERMCAP_md=$'\e[1;32m'
