@@ -13,26 +13,45 @@ theme = "tokyonight-night"
 # be changed later from inside the editor with `:workspace-trust` /
 # `:workspace-untrust`. It is not a per-session prompt.
 #
-# `insecure = true` in [editor] below would skip the modal globally. It is
-# deliberately NOT set. This loadout targets SHARED FARM FILESYSTEMS, where it
-# means any directory you open -- including one owned by another user -- may
-# have its local .helix/ config honoured and its language servers launched.
-# That is the arbitrary-code path helix's own warning describes, and one
-# keystroke per workspace is a small price next to it.
+# `insecure = true` in [editor] below skips that modal globally, and IS SET --
+# a deliberate, owner-made call (2026-08-13), not a default anybody drifted
+# into. Record of what was traded away, so it can be re-judged rather than
+# re-derived:
 #
-# The clean fix is upstream's `[editor.workspace-trust] level = "servers"`,
-# which trusts server launches while still gating local config. NO RELEASED
-# helix has it -- it is master-only. 25.07.1 (published 2025-07-18) is still
-# upstream's newest release as of 2026-08-13, and it REJECTS the key as an
-# unknown field, which makes helix fall back to the ENTIRE default config and
-# silently discard every other setting in this file. Do not add it
-# speculatively; check `helix-editor/helix` releases first, and note that the
-# 13-month gap means the next release will likely carry it.
+#   COST: on a SHARED FARM FILESYSTEM this means any directory a user opens --
+#   including one owned by someone else -- has its local .helix/ config honoured
+#   and its language servers launched. That is the arbitrary-code path helix's
+#   own warning above describes.
+#
+#   WHY IT IS ACCEPTED HERE: the deployment target is a closed, highly
+#   controlled engineering environment (TSMC and comparable self-imposed
+#   constraints), where who can place files on the shared tree is already tightly
+#   governed by controls outside this editor. Against that, the modal is pure
+#   friction: bundled taplo and markdown-oxide silently never spawn until it is
+#   answered, and a dismissed prompt looks exactly like a broken install.
+#
+# REVISIT IF the loadout is ever deployed somewhere the shared filesystem is not
+# governed that way -- an untrusted multi-tenant box, a contractor share, a
+# machine reachable by people outside the controlled environment. There the
+# right answer flips back to leaving this off and answering the prompt once per
+# workspace (`:workspace-trust`).
+#
+# The narrower fix, when it becomes available, is upstream's
+# `[editor.workspace-trust] level = "servers"` -- it trusts server launches
+# while STILL gating local config, which is strictly better than `insecure` for
+# this use and would let the cost paragraph above go away. NO RELEASED helix has
+# it; it is master-only. 25.07.1 (published 2025-07-18) is still upstream's
+# newest release as of 2026-08-13, and it REJECTS the key as an unknown field,
+# which makes helix fall back to the ENTIRE default config and silently discard
+# every other setting in this file. Do not add it speculatively -- check
+# `helix-editor/helix` releases first. The 13-month gap means the next release
+# will likely carry it; prefer it over `insecure` when it lands.
 #
 # NOTE: this file is loadout-owned and `_install_env_helix` overwrites it on
 # every install, so editing the INSTALLED copy does not survive a reinstall.
 
 [editor]
+insecure = true               # see "Workspace trust" above -- deliberate, owner-decided
 line-number = "relative"
 cursorline = true
 mouse = false

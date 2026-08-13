@@ -151,9 +151,47 @@ marker still have to hold. Negative-tested all four paths — slow-but-correct
 passes; slow-with-wrong-code, slow-with-marker-missing and a genuine hang all
 still fail.
 
-### 4. helix workspace trust: documented, `insecure` deliberately still OFF (`2ed6627`)
+### 4. helix workspace trust: documented, then `insecure = true` TURNED ON by owner decision
 
-Two facts closed this, both previously unchecked:
+Landed in two steps. `2ed6627` documented the trade and left the setting off;
+the owner then decided to enable it, and it is on as of 2026-08-13.
+
+**The decision.** `[editor] insecure = true` is set in `envs/helix/config.toml`.
+The cost is real and is recorded in the comment block there: on a shared
+filesystem, any directory a user opens -- including another user's -- has its
+local `.helix/` config honoured and its language servers launched. It is
+accepted because this loadout's deployment target is a closed, highly controlled
+engineering environment (TSMC and comparable self-imposed constraints), where
+who can place files on the shared tree is governed by controls outside the
+editor. **Revisit if the loadout is ever deployed somewhere that is not true** --
+an untrusted multi-tenant box, a contractor share, anything reachable from
+outside the controlled environment.
+
+**VERIFIED FUNCTIONALLY, with a negative control, because the failure mode here
+is silent and severe.** An unknown key in `config.toml` makes helix discard the
+ENTIRE file and fall back to defaults -- losing theme, keybindings, soft-wrap,
+everything -- with no error. Two checks that did NOT establish this, both
+abandoned after their controls came back identical:
+
+* `hx --health` reports `Config file: <path>` whether the config parsed or not.
+* `insecure` appearing in the binary's strings proves nothing -- `workspace-trust`
+  appears there too and is NOT a valid config key (those are the `:workspace-trust`
+  COMMAND strings).
+
+What settled it was running the real thing on a real installed tree with
+`hx -vv` and reading `helix.log`:
+
+| config | result |
+|---|---|
+| `insecure = true` | `Starting lsp "taplo"`, with the catalog passed as `file:///<shared>/share/taplo/schemas/catalog.json` |
+| flag removed (control) | zero taplo hits; `Current workspace is not trusted. Run :workspace-trust` |
+
+So the key is valid, the config is not discarded, and the setting does what it
+claims. That run also re-verified taplo's schema relocation through
+`LOADOUT_CFG_SHARED_PREFIX` end to end.
+
+The two facts below are what made the ORIGINAL (leave-it-off) recommendation,
+and both still hold -- they are why `insecure` rather than something narrower:
 
 * **The upgrade option is BLOCKED, not pending.** `[editor.workspace-trust]
   level = "servers"` is master-only. **25.07.1 (published 2025-07-18) is still
@@ -165,20 +203,18 @@ Two facts closed this, both previously unchecked:
   dir (`~/.local/share/helix`). The cost is one answer per workspace, **ever** —
   not a per-session prompt.
 
-One keystroke per workspace does not justify `insecure = true`, which on a
-shared farm filesystem lets any directory a user opens — including another
-user's — have its local `.helix/` config honoured and its language servers
-launched. That is the arbitrary-code path helix's own modal warns about.
+Together those said: leave it off, since the cost was one keystroke per
+workspace and the narrower upstream fix does not exist yet. **The owner
+overrode that on the deployment-environment grounds above**, which is the input
+the recommendation did not have — the controlled-environment premise is the
+owner's to assert, not something derivable from the repo.
 
 Documented where a user will hit it: a comment block atop
 `envs/helix/config.toml` (which also records that `_install_env_helix`
 overwrites that file every install, so editing the INSTALLED copy does not
 survive a reinstall) and a subsection in `docs/KNOWLEDGE-BASE.md` under *Editor
-behaviour*. Both name `:workspace-trust` as the fix for anyone already stuck.
-
-Config edit verified with `hx --health` reporting `Config file: <path>` rather
-than `default` — the check that matters, since helix silently discards the whole
-file and falls back to defaults on one unknown key.
+behaviour*. Both name `:workspace-trust` as the fix for anyone in a tree where
+LSP is dead, and both carry the revisit condition.
 
 ## STILL NEEDS THE OWNER
 

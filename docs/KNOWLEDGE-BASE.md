@@ -105,24 +105,32 @@ The first time you open a workspace in helix you get a modal:
 > auto-start language servers. Config and language servers can execute
 > arbitrary code.
 
-**Until you answer it, helix starts NO language server** -- not
-`markdown-oxide`, not `taplo`. Dismissing it leaves you with a working editor
-and silently no LSP, which looks like a broken install and is not one. If you
-are already in that state, run `:workspace-trust`.
+**Until it is answered, helix starts NO language server** -- not
+`markdown-oxide`, not `taplo`. Dismissing it leaves a working editor with
+silently no LSP, which looks like a broken install and is not one.
 
-The answer **persists**: helix records it in `trusted_workspaces` under its
-data dir (`~/.local/share/helix`), so this is once per workspace, not once per
-session. `:workspace-untrust` reverses it.
+**The shipped config turns that prompt off**: `envs/helix/config.toml` sets
+`[editor] insecure = true`, so servers start immediately and you should never
+see the modal. If you are ever in a tree where LSP is dead and the status line
+says *"Current workspace is not trusted"*, run `:workspace-trust`
+(`:workspace-untrust` reverses it; the answer persists in `trusted_workspaces`
+under `~/.local/share/helix`).
 
-This is deliberately left as a prompt. helix's `[editor] insecure = true` would
-skip it globally, but on a shared farm filesystem that means any directory you
-open -- including another user's -- may have its local `.helix/` config honoured
-and its language servers launched, which is exactly the arbitrary-code path the
-warning describes. Upstream's narrower `[editor.workspace-trust] level =
-"servers"` is the right answer and **no released helix has it** (25.07.1 is
-latest as of 2026-08-13, and it rejects the key -- which makes helix discard the
-whole config file and fall back to defaults). See the comment block at the top
-of `envs/helix/config.toml`.
+That setting is a deliberate, owner-made decision for this deployment, not a
+default. What it trades: on a shared filesystem, any directory you open --
+including another user's -- has its local `.helix/` config honoured and its
+language servers launched, which is the arbitrary-code path helix's own warning
+describes. It is accepted here because the target is a closed, highly controlled
+engineering environment where who can place files on the shared tree is already
+governed by controls outside the editor. **Deploying this loadout anywhere that
+is not true means turning it back off.** The full rationale and the revisit
+conditions live in the comment block at the top of `envs/helix/config.toml`.
+
+Upstream's narrower `[editor.workspace-trust] level = "servers"` would trust
+server launches while still gating local config -- strictly better here -- but
+**no released helix has it**: 25.07.1 (2025-07-18) is still latest as of
+2026-08-13 and rejects the key, which makes helix discard the whole config file
+and fall back to defaults. Prefer it over `insecure` once it ships.
 
 ## Why this is not Obsidian
 
