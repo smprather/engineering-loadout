@@ -7,6 +7,103 @@ miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
 (yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
 layout (klayout). linux-process-resource-monitor still pending upstream.
 
+## UNRELEASED on main: taplo 0.10.0 — TOML lint / format / LSP (2026-08-12)
+
+One package, two payload artifacts: the static-pie musl binary (wrapper split,
+`bin/taplo` + `bin/taplo.bin`) and `runtime/taplo-schemas.tar.bz2`, an **offline
+JSON Schema catalog** of 49 SchemaStore-upstream schemas (388 KiB). Enabled in
+nvim (`vim.lsp.enable`), formatted through conform, added to `@dev-tools`, and
+wired into helix. Build with `build/build-taplo.sh --tag 0.10.0`; refresh the
+schemas with `./build/update taplo-schemas`. Full note in `ADDING_BINARIES.md`.
+
+**Why the schema half exists at all.** taplo's default schema catalogs are
+remote (schemastore.org, taplo.tamasfe.dev). On an air-gapped node they are
+dead — and a dead catalog **does not error**. taplo silently drops to
+grammar-only checking and exits 0 on a Cargo.toml full of misspelled keys. Same
+silent-degrade class as the ngspice dead datadir. Hence: vendor the catalog,
+point `lint` at it from the wrapper, and gate it with a probe that validates a
+real document (`tests/prebuilt-binaries` now lints a bogus `Cargo.toml` and
+requires the unknown key to be caught).
+
+Three constraints that are not obvious and cost real time to find:
+
+* taplo **rejects a catalog with relative URLs** outright (`data did not match
+  any variant of untagged enum SchemaCatalog`), so entries must be absolute
+  `file://`. That cannot be baked at build time, so the catalog ships with
+  `/__LOADOUT_RELOC_ROOT__` and rides the existing `relocate_token` machinery.
+* `taplo lsp stdio` takes **no catalog flag**, so the wrapper's mechanism cannot
+  serve the editors. They pass catalogs as LSP *client settings* — a separate
+  code path, separately smoke-tested (`build/taplo/lsp-smoke.py` with a catalog
+  argument).
+* `taplo format` accepts no schema options at all, so the wrapper injects only
+  for `lint`/`check`/`validate`.
+
+**VERIFIED:** CLI format/lint, offline schema lint through the installed wrapper
+in a network namespace, and the **nvim** path end to end — a headless nvim on a
+real installed tree produced `Additional properties are not allowed
+('not_a_real_cargo_key' was unexpected)`. Install-time relocation verified in a
+temp HOME with no residual tokens.
+
+**helix VERIFIED too, and the earlier "the sandbox blocks helix" diagnosis was
+WRONG.** helix 25.07.1 gates language-server launch behind a **workspace-trust
+modal** — *"Trusted workspaces may load local config files and auto-start
+language servers"*. Under `script` with stdin at `/dev/null` nobody answers it,
+so no server ever spawned and `helix.log` stayed empty. It looked exactly like a
+sandbox restriction and was not one. Setting `insecure = true` inside the
+existing `[editor]` table made taplo start immediately and the shipped
+`languages.toml` render `Additional properties are not allowed
+('not_a_real_cargo_key' …)` on a real installed tree.
+
+The duplicated schema block is **resolved and pruned**. Captured from a live
+session: taplo asks `{"items":[{"section":"evenBetterToml"}, …]}` and helix
+answers by INDEXING `config` with that section. Both spellings were then ablated
+in isolation with a fresh cache and HOME per case:
+
+| config | diagnostic |
+|---|---|
+| only `config.evenBetterToml.schema` | present |
+| only `config.schema` | present (helix also passes `config` as initializationOptions, and taplo takes a top-level `schema` from there) |
+| neither | **absent** — the control that proves the test can see the difference |
+
+The section-indexed form is kept (documented mechanism, same channel as nvim);
+the flat one is deleted. **The first ablation attempt scored both as passing for
+a bad reason** — a shared `XDG_CACHE_HOME` let taplo serve the second case from
+schemas cached by the first. Isolate the cache when re-testing this.
+
+## OPEN — helix 25.07.1 blocks EVERY language server until the workspace is trusted
+
+Not a taplo issue; it applies to `markdown-oxide` too, which this repo has
+shipped and enabled in helix since 2026-08-10. On first open of any workspace
+helix shows a trust modal and starts **no** language server until the user picks
+*Always*. Anyone who dismisses it gets a silently server-less editor.
+
+Options, in order of preference — **this is a security decision and was left to
+the repo owner rather than being enabled silently**:
+
+* document it and let users answer the modal once per workspace (status quo);
+* set `[editor] insecure = true` in `envs/helix/config.toml` — trusts *any*
+  workspace's local `.helix/` config and LSP launches, which is a real
+  downgrade on a shared farm filesystem;
+* upgrade helix: newer versions have `[editor.workspace-trust]` with
+  `level = "servers"`, which trusts LSP launches while still gating local
+  config — exactly the right default here. **25.07.1 does not have that key**
+  (it rejects it as an unknown field and falls back to the whole default
+  config, silently losing every other setting in `config.toml`).
+
+## PRE-EXISTING FAILURE on main, not from the taplo work
+
+`tests/run-all` Tier 1 fails `env-shell-parity`:
+
+```
+FAIL  every bash command has a tcsh alias  no tcsh form for: loadout_save_history
+```
+
+`envs/bash/global/bashrc` has an **uncommitted** addition of
+`loadout_save_history` (a `history -a` precmd hook) with no tcsh counterpart.
+That is in-flight work by the repo owner, predating this change and untouched by
+it. Per the tcsh-tracks-bash policy it needs an `aliases.csh` form (or an
+`EXPECTED_MISSING_COMMANDS` entry with a reason) before the suite is green.
+
 ## Released: v2026.08.11 (class C)
 
 https://github.com/smprather/engineering-loadout/releases/tag/v2026.08.11 —

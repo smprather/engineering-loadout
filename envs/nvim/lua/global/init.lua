@@ -166,7 +166,11 @@ if vim.g.cfg_enable_lsp then
     -- offline-first box, so it silently never started. markdown-oxide IS
     -- bundled (payload bin/, see build/build-markdown-oxide.sh) and is
     -- Obsidian-vault compatible, which is the PKM story this repo wants.
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "markdown_oxide", "biome" })
+    -- taplo is the TOML server (bundled; see build/build-taplo.sh). tombi.lua
+    -- also ships in lsp/ and is deliberately NOT enabled: it is a second TOML
+    -- server, and two of them attach to every .toml buffer -- the same
+    -- double-attach that markdown_oxide/marksman is avoiding above.
+    vim.lsp.enable({ "lua_ls", "ruff", "ty", "yamlls", "markdown_oxide", "biome", "taplo" })
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {

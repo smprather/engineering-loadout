@@ -590,6 +590,62 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (xspice):       ngspice runtime")
 
+    if has_bin("taplo"):
+        # `taplo --version` is a real exit-0 banner, so the generic probe cannot
+        # see the thing most likely to break: the OFFLINE JSON Schema catalog.
+        # taplo's built-in catalogs are remote URLs, dead on a farm node, and a
+        # dead catalog does NOT error -- it silently drops to grammar-only
+        # checking and exits 0 on a file full of misspelled keys. The wrapper
+        # points `lint` at the bundled catalog, whose absolute file:// URLs are
+        # rewritten from a relocation token at install time; any link in that
+        # chain breaking is invisible except by validating a real document.
+        require_path(
+            os.path.join(tmpdir, "local", "share", "taplo", "schemas", "catalog.json"),
+            "taplo schema catalog",
+            failures,
+        )
+        crate = os.path.join(tmpdir, "taplo-smoke")
+        os.makedirs(crate, exist_ok=True)
+        manifest = os.path.join(crate, "Cargo.toml")
+        with open(manifest, "w") as fh:
+            fh.write('[package]\nname = "demo"\nversion = "0.1.0"\nnot_a_real_cargo_key = 3\n')
+        try:
+            # Grammatically valid, schema-invalid. --no-auto-config keeps a
+            # stray .taplo.toml on the build host out of the result.
+            grammar = subprocess.run(
+                [os.path.join(bin_dir, "taplo"), "lint", "--no-auto-config", "--no-schema", "Cargo.toml"],
+                cwd=crate,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+            schema = subprocess.run(
+                [os.path.join(bin_dir, "taplo"), "lint", "--no-auto-config", "Cargo.toml"],
+                cwd=crate,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (schema):       taplo runtime  {exc}")
+            failures.append(("taplo runtime", str(exc)))
+        else:
+            out = schema.stdout.decode("utf-8", "replace")
+            if grammar.returncode != 0:
+                # The fixture must be accepted by the grammar, or a schema
+                # "catch" below would just be a syntax error wearing a hat.
+                detail = output_excerpt(grammar.stdout)
+                print(f"  FAIL (schema):       taplo runtime  fixture is not valid TOML: {detail}")
+                failures.append(("taplo runtime", detail))
+            elif schema.returncode == 0 or "not_a_real_cargo_key" not in out:
+                detail = output_excerpt(schema.stdout)
+                print(f"  FAIL (schema):       taplo runtime  unknown Cargo.toml key not caught: {detail}")
+                failures.append(("taplo runtime", detail))
+            else:
+                print("  OK   (schema):       taplo runtime")
+
     if has_bin("gtkwave"):
         # `gtkwave --version` is a real exit-0 banner, but the converters are
         # what runs in batch flows and the generic probe scores three of this

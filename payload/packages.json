@@ -3382,6 +3382,7 @@
         "stylua",
         "ruff",
         "ty",
+        "taplo",
         "uv",
         "tree-sitter",
         "patchelf"
@@ -3816,6 +3817,33 @@
         "notes"
       ],
       "description": "PKM markdown language server \u2014 wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
+    },
+    "taplo": {
+      "kind": "bin",
+      "bins": [
+        "taplo",
+        "taplo.bin"
+      ],
+      "version": "0.10.0",
+      "version_url": "https://github.com/tamasfe/taplo/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "lsp",
+        "lint",
+        "format",
+        "toml"
+      ],
+      "archive": "payload/PLATFORM/runtime/taplo-schemas.tar.bz2",
+      "archive_name": "taplo-schemas.tar.bz2",
+      "description": "taplo \u2014 the TOML toolkit: `taplo lint`, `taplo format` and `taplo lsp stdio` in one static binary. Ships an OFFLINE JSON Schema catalog (49 SchemaStore-upstream schemas covering Cargo.toml, pyproject.toml, ruff/uv/rustfmt/starship and friends); without it taplo's remote catalogs are dead on a farm node and lint silently degrades to grammar-only. bin/taplo is a wrapper that points `lint` at the bundled catalog; any explicit --schema/--no-schema/--default-schema-catalogs wins. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml. Refresh schemas with ./build/update taplo-schemas",
+      "sentinel": "share/taplo/schemas/catalog.json",
+      "install_to": "~/.local",
+      "remove_before_extract": "share/taplo/schemas",
+      "relocate_token": "/__LOADOUT_RELOC_ROOT__",
+      "relocate_root": "share/taplo/schemas",
+      "missing_hint": "taplo will work but `taplo lint` degrades to grammar-only checking (no Cargo.toml/pyproject.toml key validation)"
     },
     "pyright": {
       "kind": "python-tool",

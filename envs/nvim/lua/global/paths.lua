@@ -43,6 +43,27 @@ function M.has(rel)
     return vim.fn.isdirectory(M.data(rel)) == 1
 end
 
+--- Resolve a FILE under the loadout's share/ root, user-copy-first.
+---
+--- Same user-then-shared rule as M.data, but for payloads that are not nvim's
+--- own -- e.g. taplo's offline JSON Schema catalog at share/taplo/schemas/. Those
+--- live under the install prefix, not under stdpath("data"), so M.data cannot
+--- reach them.
+--- @param rel string  e.g. "taplo/schemas/catalog.json"
+--- @return string|nil absolute path, or nil when the file exists in neither tree
+function M.share(rel)
+    local candidates = { vim.fn.expand("~/.local/share/") .. rel }
+    if shared and shared ~= "" then
+        table.insert(candidates, shared .. "/share/" .. rel)
+    end
+    for _, path in ipairs(candidates) do
+        if vim.fn.filereadable(path) == 1 then
+            return path
+        end
+    end
+    return nil
+end
+
 --- The offline plugin stash (bare git mirrors), or nil when there is none.
 --- With a stash present, lazy clones plugins FROM IT instead of github, and
 --- :Lazy update fetches from it -- so plugin updates work with no network.

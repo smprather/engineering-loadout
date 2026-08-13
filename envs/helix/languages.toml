@@ -19,3 +19,45 @@ command = "markdown-oxide"
 [[language]]
 name = "markdown"
 language-servers = ["markdown-oxide"]
+
+# toml: taplo, the same server envs/nvim/lsp/taplo.lua enables. Helix has no
+# built-in TOML language server, so this adds one rather than replacing one.
+#
+# The catalog path below is written with this repo's relocation token and is
+# rewritten to the deployed prefix by _install_env_helix() at install time.
+# It has to be absolute: taplo REJECTS a catalog whose entries carry relative
+# URLs, and helix's languages.toml is static TOML with no ~ or $VAR expansion.
+# See envs/nvim/lsp/taplo.lua for why the offline catalog matters at all (short
+# version: taplo's default catalogs are remote, and a dead catalog does not
+# error -- it silently degrades to grammar-only checking).
+
+[language-server.taplo]
+command = "taplo"
+args = ["lsp", "stdio"]
+
+# taplo asks for its settings over `workspace/configuration` with the section
+# name `evenBetterToml` -- its default `configurationSection`, inherited from
+# the VS Code extension. Helix answers that request by INDEXING this `config`
+# table with the requested section, so the nesting below is what reaches the
+# server. Captured from a real session (helix 25.07.1):
+#
+#   server ->  {"items":[{"section":"evenBetterToml"}, ...]}
+#   helix  ->  [{"schema":{"enabled":true,...}}, ...]
+#
+# Helix also passes the whole `config` table as initializationOptions, and
+# taplo happens to accept a top-level `schema` key from there too -- so a flat
+# `[language-server.taplo.config.schema]` works as well. Both spellings were
+# tested in isolation (each alone produces the diagnostic; neither produces it
+# with both removed, which is the control that proves the test can see the
+# difference at all). The section-indexed form is kept because it is the
+# documented mechanism, and because it is the same channel the nvim config
+# uses -- one shape to reason about across both editors.
+
+[language-server.taplo.config.evenBetterToml.schema]
+enabled = true
+repositoryEnabled = false
+catalogs = ["file:///__LOADOUT_RELOC_ROOT__/share/taplo/schemas/catalog.json"]
+
+[[language]]
+name = "toml"
+language-servers = ["taplo"]

@@ -34,6 +34,7 @@ return {
             yaml       = { "yamlfmt" },
             json       = { "biome" },
             jsonc      = { "biome" },
+            toml       = { "taplo" },
         },
         formatters = {
             stylua   = { prepend_args = { "--indent-type", "Spaces", "--collapse-simple-statement", "Always" } },

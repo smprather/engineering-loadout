@@ -2676,6 +2676,15 @@ def pv_extract_tar(archive_path, dest_dir):
             p.stop()
 
 
+# The build-time placeholder every relocatable artifact carries in place of its
+# deployed local root. Runtime archives declare it per package as
+# `relocate_token` in packages.json (modules, verilator, iverilog, taplo); this
+# constant is for the one artifact the registry cannot cover -- envs/helix's
+# languages.toml, a `kind: env` config file rather than an archive member. Keep
+# the two spellings identical.
+RELOCATION_TOKEN = "/__LOADOUT_RELOC_ROOT__"
+
+
 def _relocate_root_error(relocate_root):
     """Return a message if *relocate_root* is not a safe relative subtree, else None.
 
@@ -3882,6 +3891,44 @@ def _install_env_helix(repo_dir, home):
     ensure_dir(os.path.join(home, ".config", "helix"), "helix config")
     for name in _present:
         install_path(os.path.join(_src_dir, name), os.path.join(home, ".config", "helix", name), False)
+    _relocate_helix_languages(home)
+
+
+def _relocate_helix_languages(home):
+    """Rewrite the relocation token in the installed helix languages.toml.
+
+    helix's languages.toml is static TOML with no `~` or `$VAR` expansion, so
+    taplo's offline schema catalog -- which taplo requires as an ABSOLUTE
+    file:// URL -- cannot be expressed portably in the shipped file. It carries
+    the same token the runtime archives use, and this rewrites it to whichever
+    tree actually holds the catalog.
+
+    The catalog belongs to the `taplo` package, which may live in a separate
+    shared/read-only tree installed by a different run than this per-user
+    @envs one; LOADOUT_CFG_SHARED_PREFIX is how that path is carried across
+    (see _mirror_shared_prefix). Falls back to this install's own local root.
+
+    Silent no-op when the token is absent -- an env-only install whose helix
+    config predates taplo is not an error.
+    """
+    path = os.path.join(home, ".config", "helix", "languages.toml")
+    # Only ever edit a real installed file, never follow a symlink back into
+    # the repo and rewrite the shipped source.
+    if not os.path.isfile(path) or os.path.islink(path):
+        return
+    shared = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    root = os.path.abspath(os.path.expanduser(shared)) if shared else _resolve_install_to("~/.local", home)
+    try:
+        with open(path) as fh:
+            text = fh.read()
+        if RELOCATION_TOKEN not in text:
+            return
+        with open(path, "w") as fh:
+            fh.write(text.replace(RELOCATION_TOKEN, root))
+    except OSError as exc:
+        warn(f"helix languages.toml: could not resolve the schema catalog path: {exc}")
+        return
+    print(f"  helix languages.toml: schema catalog -> {root}/share/taplo/schemas/")
 
 
 def _install_env_st(repo_dir, home):

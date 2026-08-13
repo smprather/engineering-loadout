@@ -1,0 +1,98 @@
+#!/bin/sh
+# Relocatable taplo entry point.
+#
+# taplo's JSON Schema validation -- the layer that knows a Cargo.toml key from a
+# typo -- resolves schemas from a *catalog*, and upstream's default catalogs are
+# schemastore.org and taplo.tamasfe.dev. On an air-gapped farm node those are
+# dead, so `taplo lint` silently degrades to grammar-only checking: it still
+# exits 0 on `[package] nmae = "x"`, which is the exact false-green this repo
+# keeps getting bitten by.
+#
+# The loadout ships the catalog offline (the `taplo-schemas` package, installed
+# to <prefix>/share/taplo/schemas/) and this wrapper points taplo at it. The
+# catalog's own schema URLs are absolute file:// paths, rewritten to the
+# deployed prefix at install time by the registry's relocate_token mechanism --
+# taplo REJECTS a catalog with relative URLs ("data did not match any variant of
+# untagged enum SchemaCatalog"), so absolute-plus-relocation is the only shape
+# that works across $HOME, --dest-dir and shared-tree installs.
+#
+# Deliberately narrow:
+#   * only `lint` (and its check/validate aliases) gets the flag -- `taplo
+#     format` accepts no schema options at all, and passing one is a hard
+#     argument error;
+#   * any user-supplied schema flag wins untouched, including --no-schema and
+#     --default-schema-catalogs (the escape hatch for a networked box that wants
+#     live schemastore);
+#   * a missing catalog is not an error -- taplo then behaves exactly as an
+#     unwrapped upstream binary with no catalog configured.
+#
+# The LSP is configured separately: `taplo lsp stdio` takes no catalog flag, so
+# the editors pass catalogs through LSP client settings instead. See
+# envs/nvim/lsp/taplo.lua and envs/helix/languages.toml.
+
+case "$0" in
+    /*) script=$0 ;;
+    *) script=$(command -v "$0") || exit 127 ;;
+esac
+
+prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
+catalog="$prefix/share/taplo/schemas/catalog.json"
+
+# Find the subcommand: the first bare word that is not an option and not the
+# value of a value-taking global option. Tracked by POSITION, not by text -- a
+# file literally named "lint" must not be mistaken for the verb.
+subidx=0
+i=0
+skip=0
+for arg in "$@"; do
+    i=$((i + 1))
+    if [ "$skip" -eq 1 ]; then
+        skip=0
+        continue
+    fi
+    case "$arg" in
+        --colors | -c | --config) skip=1 ;;
+        -*) ;;
+        *)
+            subidx=$i
+            sub=$arg
+            break
+            ;;
+    esac
+done
+
+inject=0
+if [ "$subidx" -gt 0 ] && [ -r "$catalog" ]; then
+    case "$sub" in
+        lint | check | validate) inject=1 ;;
+    esac
+fi
+
+# An explicit schema choice anywhere on the line disables ours entirely.
+if [ "$inject" -eq 1 ]; then
+    for arg in "$@"; do
+        case "$arg" in
+            --schema | --schema=* | --schema-catalog | --schema-catalog=* | --no-schema | --default-schema-catalogs)
+                inject=0
+                break
+                ;;
+        esac
+    done
+fi
+
+if [ "$inject" -eq 1 ]; then
+    # Rotate the argument list, splicing the flag in after the subcommand.
+    n=$#
+    i=0
+    while [ "$i" -lt "$n" ]; do
+        arg=$1
+        shift
+        i=$((i + 1))
+        set -- "$@" "$arg"
+        if [ "$i" -eq "$subidx" ]; then
+            set -- "$@" --schema-catalog "file://$catalog"
+        fi
+    done
+fi
+
+exec "$prefix/bin/taplo.bin" "$@"

@@ -73,6 +73,10 @@ AUTOMATED = {
         "git_paths": ["envs/tmux/vendor/plugins/"],
         "desc": "Vendored tmux plugins (envs/tmux/vendor/plugins/)",
     },
+    "taplo-schemas": {
+        "git_paths": ["payload/", ".strip-manifest", ".content-manifest"],
+        "desc": "Offline JSON Schema catalog for taplo (payload/<platform>/runtime/taplo-schemas.tar.bz2)",
+    },
     "env-nvim": {
         "git_paths": ["envs/nvim/vendor/plugins/", ".strip-manifest"],
         "desc": "Neovim offline plugin stash -- bare git mirrors (build/build-nvim-plugin-stash)",
@@ -444,6 +448,37 @@ def _load_tmux_lock():
     return pins
 
 
+def _run_taplo_schemas(dry_run=False):
+    """Refresh taplo's offline JSON Schema catalog from SchemaStore.
+
+    The archive is a payload artifact, so it needs the same post-payload chain
+    every other payload change does: strip-all-elf-binaries normalises the tar
+    (pinned mtime/ownership, so identical content yields identical bytes and
+    the assurance ledger stays reproducible), then gen-content-manifest records
+    the new hash -- without which the installer refuses the file outright as
+    "payload file not in .content-manifest".
+    """
+    fetch = os.path.join(BUILD, "taplo", "fetch-schemas.py")
+    if dry_run:
+        print(f"$ {fetch}")
+        print("$ ./build/strip-all-elf-binaries")
+        _run_content_manifest(dry_run=True)
+        return True
+
+    rc = _run([sys.executable, fetch], dry_run)
+    if rc != 0:
+        print(f"ERROR: fetch-schemas exited rc={rc}")
+        return False
+    rc = _run([os.path.join(REPO, "build/strip-all-elf-binaries")], dry_run)
+    if rc != 0:
+        print(f"WARNING: strip-all-elf-binaries exited rc={rc}")
+    rc = _run_content_manifest(dry_run=False)
+    if rc != 0:
+        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        return False
+    return True
+
+
 def _run_tmux_plugins(dry_run=False):
     tmux_conf = os.path.join(REPO, "envs", "tmux", "tmux.conf")
     plugin_dir = os.path.join(REPO, "envs", "tmux", "vendor", "plugins")
@@ -603,6 +638,8 @@ def _run_automated(name, dry_run=False, tag=None):
         return True
     elif name == "tldr-data":
         return _run_tldr_data(dry_run=dry_run)
+    elif name == "taplo-schemas":
+        return _run_taplo_schemas(dry_run=dry_run)
     elif name == "tmux-plugins":
         return _run_tmux_plugins(dry_run=dry_run)
     elif name == "env-nvim":

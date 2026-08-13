@@ -200,6 +200,8 @@ sha256  66570d88c48d7b347f39c21dda2d137908b1b1d2573ae7bd6451c1d2cbe9a241  payloa
 sha256  0685493a201147e1bf8e62d9102d39c8a624d9b4837e2593daec4c73e1760f0a  payload/el8.x86_64.glibc2p28/bin/sync.bz2
 sha256  5eacac3388fae845870fa103a742a0bbf83397476ea844085d825f78ba3d21dc  payload/el8.x86_64.glibc2p28/bin/tac.bz2
 sha256  6c68418ef5fa20f1a20693b29f9a631c6be0f4d3f9bcdb74a978be1d98bb2ae4  payload/el8.x86_64.glibc2p28/bin/tail.bz2
+sha256  8c6c609c49c385c292086720a7dc44467e3b9c24bdabb4c74d90e80e84f0fbf9  payload/el8.x86_64.glibc2p28/bin/taplo.bin.bz2
+sha256  31742137b4798ef4b2fa1a9885afdfb687452249e7469781253501e5785fd1be  payload/el8.x86_64.glibc2p28/bin/taplo.bz2
 sha256  14fcf3a2596e833b711aa3e20496c2f85e87284f3bb0cb406ac54a9aca7ce394  payload/el8.x86_64.glibc2p28/bin/tclsh.bz2
 sha256  41433f6f6d2cf70f23e2ae1ffdfc4fa8946d346acadf3a2b9dc32d1bb6636b78  payload/el8.x86_64.glibc2p28/bin/tee.bz2
 sha256  fea4da869c4abd53a3e8b177585465e363a0a634ca3287bcb558394405a269ef  payload/el8.x86_64.glibc2p28/bin/test.bz2
@@ -444,6 +446,7 @@ tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.b
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
 tar-meta  3992911  1785180018  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
+tar-meta  396496  1786552712  payload/el8.x86_64.glibc2p28/runtime/taplo-schemas.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  271233  1785979682  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2

@@ -431,6 +431,12 @@ TOOLS = [
         strategy_flag(["--version"], r"stylua ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "taplo",
+        "taplo",
+        "https://github.com/tamasfe/taplo",
+        strategy_flag(["--version"], r"taplo ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "tkdiff",
         "tkdiff",
         "https://sourceforge.net/projects/tkdiff/",

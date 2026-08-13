@@ -4109,3 +4109,147 @@ glibc components plus `libgcc_s.so.1`. The script fails on anything else.
 
 **Packaging:** `strip` -> `patchelf --set-rpath` -> `bzip2`, via
 `loadout_package_bin`. That order is load-bearing -- never strip after patchelf.
+
+---
+
+## taplo 0.10.0 -- TOML linter + formatter + language server (upstream x86_64 prebuilt)
+
+**Build:** `build/build-taplo.sh --tag 0.10.0`
+(**bare version, no leading `v`** -- upstream's CLI-release convention. The
+script rejects a `v`-prefixed tag rather than 404-ing obscurely on the download.)
+
+**Refresh the schema cache separately:** `./build/update taplo-schemas`.
+The binary and the schemas move on different clocks -- taplo itself is released
+roughly yearly, SchemaStore changes weekly.
+
+### What ships
+
+Two payload artifacts, one registry entry (the `st` / `ngspice` shape: a `bin`
+package that also carries a runtime archive):
+
+| artifact | what it is |
+|---|---|
+| `bin/taplo.bin.bz2` | the upstream ELF, stripped |
+| `bin/taplo.bz2` | POSIX-sh wrapper, `build/taplo/taplo` |
+| `runtime/taplo-schemas.tar.bz2` | 49 JSON schemas + a catalog, ~388 KiB |
+
+`taplo lint`, `taplo format` and `taplo lsp stdio` are one binary, which is why
+this single package covers all three of "lint, format, language server".
+
+### NOT a source build -- and the assertion matters
+
+Upstream's `taplo-linux-x86_64.gz` is **static-pie (musl)**: no `NEEDED`
+entries at all, no glibc floor to clear, the same shape as the bundled `biome`.
+The script does not assume that -- it asserts it, and **fails if a future
+release links dynamically**. A glibc build produced by a newer toolchain would
+install cleanly on this box and be dead on a stock farm node (the tree-sitter
+and bottom rejection, again), and it would also need an RPATH and a bundling
+decision that the current packaging path does not make.
+
+Packaging is therefore `strip` -> `bzip2` with **no patchelf** -- `patchelf
+--set-rpath` aborts on a binary with no `.dynamic` section, the same reason the
+static Go `mlr` is special-cased in `build-prebuilt-bin.sh`.
+
+### The offline schema cache -- the whole point of the wrapper
+
+taplo validates TOML at two independent levels:
+
+* the **grammar**, compiled into the binary, always available; and
+* **JSON Schema**, which knows that `[package] nmae = "x"` is a typo in a
+  Cargo.toml. Schemas are resolved through a *catalog*, and upstream's default
+  catalogs are `schemastore.org` and `taplo.tamasfe.dev`.
+
+On an air-gapped farm node those are dead -- and **a dead catalog does not
+error**. taplo quietly drops to grammar-only checking and exits 0 on a file full
+of misspelled keys. That silent degrade is the failure class this repo keeps
+getting bitten by (gtkwave's converters, ngspice's dead datadir), so the catalog
+is vendored and the wrapper points `taplo lint` at it.
+
+Three constraints shape how, and each was found the hard way:
+
+1. **Catalog URLs must be ABSOLUTE `file://`.** A relative URL is rejected
+   outright with `data did not match any variant of untagged enum SchemaCatalog`
+   -- the catalog schema declares `format: uri`.
+2. **Absolute cannot be baked at build time**, because the prefix varies
+   (`$HOME/.local`, a `--dest-dir` staging tree, a shared read-only tree). So
+   the shipped catalog carries `/__LOADOUT_RELOC_ROOT__` and the installer
+   rewrites it, via the same `relocate_token` / `relocate_root` registry fields
+   `modules` and `verilator` use.
+3. **`taplo lsp stdio` accepts no catalog flag at all**, so the editors cannot
+   use the wrapper's mechanism. They pass catalogs as LSP *client settings*
+   instead -- see `envs/nvim/lsp/taplo.lua` and `envs/helix/languages.toml`.
+   That is a genuinely separate code path, and it is smoke-tested separately.
+
+The wrapper is deliberately narrow: it injects `--schema-catalog` for `lint`
+(and its `check`/`validate` aliases) **only**. `taplo format` accepts no schema
+options -- passing one is a hard argument error. Any user-supplied
+`--schema` / `--schema-catalog` / `--no-schema` / `--default-schema-catalogs`
+wins untouched, which is the escape hatch for a networked box that wants live
+schemastore. A missing catalog is not an error; taplo then behaves exactly as
+the unwrapped upstream binary.
+
+### Which schemas, and why only those
+
+`build/taplo/fetch-schemas.py` filters schemastore's catalog to entries claiming
+a `*.toml` file (113 of them) and then keeps only what comes from **one trust
+anchor**:
+
+* `https://www.schemastore.org/...` and `https://json.schemastore.org/...`
+* `https://raw.githubusercontent.com/SchemaStore/schemastore/...` -- the SAME
+  upstream by repo path, and **not a loophole**: pyproject.toml, uv.toml and
+  hatch.toml live only under that form and are three of the most valuable
+  schemas in the set.
+* plus a one-entry allowlist: `starship.rs`, for a tool this repo bundles and
+  whose schema it already vendors at `envs/starship/config-schema.json`.
+
+That drops 64 entries across ~20 third-party hosts, most of them
+`raw.githubusercontent.com/<user>/<repo>/master` URLs that are mutable by
+definition. Vendoring those would mean adopting 20 more upstreams whose bytes
+can change under a fixed URL. The skipped hosts are **printed with counts** on
+every run, so the exclusion is visible rather than silent. Net result is 49
+schemas, 3.6 MiB raw, 388 KiB compressed.
+
+The fetcher refuses to write a cache when fewer than 80% of the planned schemas
+download, so a proxy hiccup or a rate limit cannot silently gut the catalog, and
+it verifies after tarring that every catalog entry still carries the relocation
+token.
+
+### Smoke -- `--version` proves nothing here
+
+`taplo --version` exits 0 from a binary that cannot lint anything, so the build
+runs four functional checks, the last two inside a network namespace
+(`unshare -Umrn`) where available, so an accidental dependence on schemastore.org
+cannot pass on the build box:
+
+1. `format` normalises `a=1` to `a = 1`
+2. `lint` rejects a grammatically broken document
+3. `lint` rejects an **unknown Cargo.toml key** through a fully staged install
+   tree -- wrapper, extracted schema archive, token already rewritten. This is
+   the check that catches a catalog shipped with relative URLs. It first asserts
+   the fixture is grammatically *valid*, so the test cannot pass for the wrong
+   reason.
+4. the **LSP** (`build/taplo/lsp-smoke.py`) drives
+   `initialize -> didOpen -> textDocument/formatting` plus diagnostics, and with
+   a catalog argument also requires the schema diagnostic to arrive over the
+   client-settings channel. The whole exchange is capped by `SIGALRM`, because a
+   language server that never answers would otherwise wedge a release gate
+   forever.
+
+**Watch out when debugging this by hand:** relocating the catalog with
+`open(p,"w").write(open(p).read().replace(...))` truncates the file *before*
+reading it, leaving an empty catalog and a very confusing
+`EOF while parsing a value at line 1 column 0` out of taplo. Read first, write
+second.
+
+### Editor wiring
+
+`vim.lsp.enable({...})` in `envs/nvim/lua/global/init.lua` names `taplo`.
+`envs/nvim/lsp/tombi.lua` also ships (it is part of the vendored lspconfig
+catalogue) and is deliberately **not** enabled -- a second TOML server would
+attach to every `.toml` buffer and double completions and diagnostics, exactly
+the markdown_oxide/marksman problem. conform formats `toml` with `taplo`.
+
+Helix gets the same server through `envs/helix/languages.toml`, whose catalog
+path carries the relocation token and is rewritten by `_install_env_helix()` --
+helix's languages.toml is static TOML with no `~` or `$VAR` expansion, so there
+is no other way to express an absolute path portably.
