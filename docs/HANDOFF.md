@@ -1,13 +1,35 @@
 # Current Handoff
 
-Last updated: 2026-08-11. Five packages landed since v2026.08.09 — freetype
+Last updated: 2026-08-13. **Three commits sit unreleased on `main`**: taplo
+0.10.0 (`aaadf10`), the shell history flush (`dc5f5c1`), and three open-item
+fixes (`2ed6627`). Details in the next two sections; what still needs the owner
+is at the end of them.
+
+All three tiers green:
+
+* **Tier 1 + Tier 2** (`tests/run-all`): exit 0, every test PASS, no FAIL lines.
+* **Tier 3** (`tests/prebuilt-binaries-almalinux8 --full`, clean
+  `almalinux:8.10`): exit 0, **287 binaries OK** (up from 285 — `taplo` and
+  `taplo.bin`), 25 expected host-contract skips. taplo's catalog is proven in
+  BOTH deployment shapes: `Relocated taplo runtime: 1 text files` fires for the
+  temp-HOME install and again for the split shared-tree install, and the probes
+  report `OK (path): taplo schema catalog` / `OK (schema): taplo runtime`.
+
+**Caveat on the meld fix: Tier 3 does NOT cover it.** The container skips meld
+(`SKIP (host cmd): meld  host /usr/bin/python3.6 for EL8 PyGObject missing`), so
+the probe never runs there. The change rests on dev-box evidence instead — 12
+timed runs under the exact probe env, plus a four-case negative test of the
+retry path. Re-check it on the next release run, which is where the original
+failure appeared.
+
+Last released: 2026-08-11. Five packages landed since v2026.08.09 — freetype
 2.14.3 (source-built, replacing EL8's 2.9.1), pdftotext 22.12.0 -> 26.04.0,
 markdown-oxide 0.25.12, iverilog 13.0, yosys 0.68 — plus currency bumps for
 miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
 (yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
 layout (klayout). linux-process-resource-monitor still pending upstream.
 
-## UNRELEASED on main: taplo 0.10.0 — TOML lint / format / LSP (2026-08-12)
+## UNRELEASED on main: taplo 0.10.0 — TOML lint / format / LSP (2026-08-12, committed `aaadf10`)
 
 One package, two payload artifacts: the static-pie musl binary (wrapper split,
 `bin/taplo` + `bin/taplo.bin`) and `runtime/taplo-schemas.tar.bz2`, an **offline
@@ -70,39 +92,105 @@ the flat one is deleted. **The first ablation attempt scored both as passing for
 a bad reason** — a shared `XDG_CACHE_HOME` let taplo serve the second case from
 schemas cached by the first. Isolate the cache when re-testing this.
 
-## OPEN — helix 25.07.1 blocks EVERY language server until the workspace is trusted
+## CLOSED 2026-08-13 — four open items, and the fact that settled each
 
-Not a taplo issue; it applies to `markdown-oxide` too, which this repo has
-shipped and enabled in helix since 2026-08-10. On first open of any workspace
-helix shows a trust modal and starts **no** language server until the user picks
-*Always*. Anyone who dismisses it gets a silently server-less editor.
+None of these needed a judgement call in the end. Three of them had a *fact*
+nobody had checked, and the fact decided it. That is the transferable part.
 
-Options, in order of preference — **this is a security decision and was left to
-the repo owner rather than being enabled silently**:
+### 1. `loadout_save_history` has its tcsh form — Tier 1 is green (`dc5f5c1`)
 
-* document it and let users answer the modal once per workspace (status quo);
-* set `[editor] insecure = true` in `envs/helix/config.toml` — trusts *any*
-  workspace's local `.helix/` config and LSP launches, which is a real
-  downgrade on a shared farm filesystem;
-* upgrade helix: newer versions have `[editor.workspace-trust]` with
-  `level = "servers"`, which trusts LSP launches while still gating local
-  config — exactly the right default here. **25.07.1 does not have that key**
-  (it rejects it as an unknown field and falls back to the whole default
-  config, silently losing every other setting in `config.toml`).
+`tests/env-shell-parity` had been failing on `no tcsh form for:
+loadout_save_history`, the in-flight `history -a` precmd hook in
+`envs/bash/global/bashrc`.
 
-## PRE-EXISTING FAILURE on main, not from the taplo work
+**zsh needed nothing** — `envs/zsh/global/zshrc` has carried
+`INC_APPEND_HISTORY` since the parity work; that is the same property, native.
 
-`tests/run-all` Tier 1 fails `env-shell-parity`:
+**tcsh has NO incremental append.** `history -S` rewrites the whole 10k-line
+file where bash's `history -a` writes only what is new, so it hangs off
+`periodic` with `set tperiod = 5`, **not** `precmd` — per prompt it would be a
+full rewrite after every command on an NFS farm home. The alias lives in
+`aliases.csh` because that is the only file the parity gate reads; `tperiod` and
+`alias periodic` sit in `tcshrc` with the rest of the history block, and the
+forward reference across files is fine because alias bodies resolve at run time.
 
-```
-FAIL  every bash command has a tcsh alias  no tcsh form for: loadout_save_history
-```
+**Verified by KILLING the shell, not exiting it.** `exit` saves anyway via
+`savehist`, so an exit-based test proves nothing — it passes with the feature
+removed. Under a real PTY with `kill -9 $$`: flushed shell's histfile holds the
+canary; the negative control leaves **no history file at all**.
 
-`envs/bash/global/bashrc` has an **uncommitted** addition of
-`loadout_save_history` (a `history -a` precmd hook) with no tcsh counterpart.
-That is in-flight work by the repo owner, predating this change and untouched by
-it. Per the tcsh-tracks-bash policy it needs an `aliases.csh` form (or an
-`EXPECTED_MISSING_COMMANDS` entry with a reason) before the suite is green.
+### 2. `yamlls` dropped from the nvim enable list (`2ed6627`)
+
+It hardcoded `/home/myles/node_modules/.bin/yaml-language-server` while being in
+`vim.lsp.enable`, so every user got an enabled server that could never start.
+Dropped from the list (the marksman precedent); `cmd` reverted to upstream's
+bare name so the file is inert rather than wrong. Re-enabling means **bundling**
+the server and its `node_modules` closure offline — feasible (`nodejs` is
+already in the payload) but a package, not a config edit. A repo-wide sweep for
+`/home/myles*` now returns nothing outside `ADDING_BINARIES.md` prose.
+
+### 3. The `meld` probe: **the PIN WAS RIGHT**, the TIMEOUT was wrong (`2ed6627`)
+
+This file previously suspected `EXPECT_NONZERO["meld"] = 1` of being
+environment-dependent and wrong. **It is not.** Measured under the exact probe
+env (staged install, `DISPLAY=""`, cut-down PATH), 12 runs: exit **1** every
+time, **0.08 s** warm / 0.67 s cold, always carrying `Unable to init server`.
+meld exits 0 by hand only because a real DISPLAY is present. The remedy this
+file used to suggest — widen to `(0, 1)` and drop the display-refusal
+requirement — would have **thrown away a working assertion**.
+
+What actually failed is the **4-second probe timeout**. `./build/release` runs
+its gates CONCURRENTLY (the malware scan hashes ~77k files while this smoke
+runs) and meld is a Python 3.6 launcher importing the whole GTK/gi stack, so a
+cold-cache start under that I/O can cross 4 s. A timeout does not satisfy a
+pinned exit code, hence a hard block.
+
+Fix is patience, not a weaker assertion: an `EXPECT_NONZERO` probe that times
+out retries once at `SLOW_PROBE_TIMEOUT = 60`; the pinned code and the output
+marker still have to hold. Negative-tested all four paths — slow-but-correct
+passes; slow-with-wrong-code, slow-with-marker-missing and a genuine hang all
+still fail.
+
+### 4. helix workspace trust: documented, `insecure` deliberately still OFF (`2ed6627`)
+
+Two facts closed this, both previously unchecked:
+
+* **The upgrade option is BLOCKED, not pending.** `[editor.workspace-trust]
+  level = "servers"` is master-only. **25.07.1 (published 2025-07-18) is still
+  upstream's newest release** as of 2026-08-13 — a 13-month gap — and the
+  stable-release policy forbids building HEAD. There is nothing to bump to.
+* **Trust PERSISTS and has commands.** The 25.07.1 binary carries
+  `:workspace-trust` / `:workspace-untrust` and a `helix_loader::workspace_trust`
+  module writing `trusted_workspaces` / `excluded_workspaces` under helix's data
+  dir (`~/.local/share/helix`). The cost is one answer per workspace, **ever** —
+  not a per-session prompt.
+
+One keystroke per workspace does not justify `insecure = true`, which on a
+shared farm filesystem lets any directory a user opens — including another
+user's — have its local `.helix/` config honoured and its language servers
+launched. That is the arbitrary-code path helix's own modal warns about.
+
+Documented where a user will hit it: a comment block atop
+`envs/helix/config.toml` (which also records that `_install_env_helix`
+overwrites that file every install, so editing the INSTALLED copy does not
+survive a reinstall) and a subsection in `docs/KNOWLEDGE-BASE.md` under *Editor
+behaviour*. Both name `:workspace-trust` as the fix for anyone already stuck.
+
+Config edit verified with `hx --health` reporting `Config file: <path>` rather
+than `default` — the check that matters, since helix silently discards the whole
+file and falls back to defaults on one unknown key.
+
+## STILL NEEDS THE OWNER
+
+* **The release.** All three commits are gated but unreleased. Tag signing needs
+  the ssh-agent socket (see the release-signing notes below).
+* **`sudo freshclam`**, still outstanding from v2026.08.09, then
+  `./build/scan-for-malware --no-cache` — `--no-cache` is load-bearing, the
+  clean verdict is keyed on the signature fingerprint.
+* **`ty` 0.0.70 + crate-store refresh**, unchanged and deliberately not started
+  unattended: `build/build-tool-crate-store.sh` is 320 MB of churn over ~2199
+  crates plus a `crate-store` assurance re-pin, and it is the operation that
+  once produced a silently truncated archive from a concurrent payload job.
 
 ## Released: v2026.08.11 (class C)
 
@@ -145,7 +233,7 @@ the real bug surfaced: copying a tree while the ORIGINAL still existed; hiding
 `vvp file.vvp`, which bypasses the shebang entirely. **Before believing a pass,
 ask what the test would have printed had the feature been absent.**
 
-## OPEN — the `meld` smoke probe is FLAKY and it blocked a release
+## RESOLVED — the `meld` smoke probe (was: FLAKY, blocked a release)
 
 `./build/release` was blocked once by:
 
@@ -153,47 +241,21 @@ ask what the test would have printed had the feature been absent.**
 FAIL: meld  expected exit 1, timed out instead
 ```
 
-Re-running `tests/prebuilt-binaries` alone immediately afterwards passed
-(`OK: meld (expected exit 1)`, all 310 binaries OK), with **no change to meld or
-anything else** — its payload has not been touched since the repo snapshot. So
-it is a **transient timeout, not a regression**. Worth knowing before anyone
-chases a phantom meld bug.
+**Fixed 2026-08-13 in `2ed6627`, and the diagnosis in the original entry was
+wrong** — it is kept here because the wrong theory is instructive. This section
+suspected the *pin*; the pin was right and the *timeout* was the bug. Full
+account in *CLOSED 2026-08-13* above. Short version: under the exact probe env
+meld exits 1 in 0.08 s, 12/12, always carrying `Unable to init server`; the
+4-second budget just could not survive `./build/release` running its gates
+concurrently. `EXPECT_NONZERO` probes now retry once at 60 s with the pinned
+code and marker still enforced.
 
-Two things make this worth fixing rather than shrugging at:
-
-- **`EXPECT_NONZERO["meld"]` pins exit 1**, but run by hand on this box (both
-  with `DISPLAY=:0` and with it unset) `meld --version` exits **0** in under a
-  second. The pin only holds under the probe's stripped environment (cut-down
-  PATH, no session D-Bus), which makes it environment-dependent in a way the
-  entry does not say.
-- **A timeout does not satisfy a pinned exit code.** The harness normally treats
-  a timeout as OK ("an interactive binary that blocks has demonstrably loaded"),
-  but an `EXPECT_NONZERO` entry pins one code, so a slow probe becomes a hard
-  release blocker.
-
-Likely fix: accept a timeout for this entry, or widen it to `(0, 1)` and drop
-the display-refusal requirement — but confirm what meld actually does under the
-probe env first rather than loosening the gate blind. **Measure it without a
-pipe**: `meld --version | head -3; echo $?` reports *head's* status, not meld's,
-which is how the exit code got misread the first time.
+The measurement advice from the original entry stands and is why the retraction
+was possible: **measure without a pipe** — `meld --version | head -3; echo $?`
+reports *head's* status, not meld's, which is how the exit code got misread in
+the first place.
 
 ## OPEN — needs a decision, not a fix
-
-### `yamlls` points at a personal home directory
-
-`envs/nvim/lsp/yamlls.lua:64` hardcodes
-`/home/myles/node_modules/.bin/yaml-language-server` — an absolute path into
-somebody's `$HOME`, and not even the current dev user (`mylesp`). It is in the
-`vim.lsp.enable` list, so **every user gets an enabled YAML server that can
-never start**. Deliberately not fixed: it is a different package and the fix is
-a real choice, not a typo repair. Either **drop `yamlls` from the enable list**
-(as was done for `marksman`, zero payload cost) or **bundle
-`yaml-language-server`** (feasible — `nodejs` is already bundled — but it means
-owning a node LSP and its `node_modules` closure offline). Either way the
-hardcoded path must go.
-
-Found by auditing the whole enable list after markdown_oxide; the other five
-(`lua_ls`, `ruff`, `ty`, `biome`, `markdown_oxide`) are all correctly bundled.
 
 ### DigitalJS / OpenROAD — scoped, not started
 
@@ -377,25 +439,26 @@ one more**:
 | `markdown_oxide` | `markdown-oxide` | yes (new) |
 | **`yamlls`** | **`/home/myles/node_modules/.bin/yaml-language-server`** | **NO** |
 
-### OPEN: `yamlls` points at a hardcoded personal home directory
+### RESOLVED 2026-08-13: `yamlls` pointed at a hardcoded personal home directory
 
-`envs/nvim/lsp/yamlls.lua:64` hardcodes
+`envs/nvim/lsp/yamlls.lua` hardcoded
 `/home/myles/node_modules/.bin/yaml-language-server` -- an absolute path into
-somebody's personal `$HOME` (note it is not even the current dev user,
-`mylesp`). It is in the `vim.lsp.enable` list, so every user gets an enabled
-YAML server that can never start. Deliberately **not** fixed as part of the
-markdown-oxide change: it is a different package and the fix is a real choice,
-not a typo repair.
+somebody's personal `$HOME` (note it was not even the current dev user,
+`mylesp`). It was in the `vim.lsp.enable` list, so every user got an enabled
+YAML server that could never start. It was deliberately **not** fixed as part of
+the markdown-oxide change: a different package, and a real choice rather than a
+typo repair.
 
-Two options, both defensible:
+**Fixed in `2ed6627` by taking the first of the two options below** -- dropped
+from the enable list, `cmd` reverted to upstream's bare name so the file is
+inert rather than wrong. Kept for the record:
 
 - **Drop `yamlls` from the enable list**, as was done for `marksman`. Zero
-  payload cost, and honest about what is shipped.
+  payload cost, and honest about what is shipped. *(chosen)*
 - **Bundle `yaml-language-server`** and point `cmd` at the bare name. It is an
   npm package and `nodejs` is already bundled, so this is feasible -- but it
-  means owning a node-based LSP and its `node_modules` closure offline.
-
-Either way the hardcoded path must go.
+  means owning a node-based LSP and its `node_modules` closure offline. This
+  remains the path if YAML LSP is wanted later.
 
 ### Packaging notes
 
