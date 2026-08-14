@@ -107,6 +107,18 @@ def test_expand_groups(m):
     )
     check("@envs and @shared stay disjoint", not (envs & eg(["@shared"], REGISTRY)))
 
+    # @all means LITERALLY everything, and is defined as the union of the two
+    # full sweeps so a third answer to "what is everything?" cannot drift from
+    # them. If someone ever reintroduces a narrower @all, this fails.
+    all_set = eg(["@all"], REGISTRY)
+    check("@all == @shared-all + @envs-all", all_set == shared_all | envs_all)
+    check("@all holds back no optional", {"surfer", "env-opt"} <= all_set)
+    check(
+        "@all is a strict superset of @shared-all and of @envs-all",
+        all_set > shared_all and all_set > envs_all,
+    )
+    check("@all is idempotent", eg(["@all", "@all", "@shared"], REGISTRY) == all_set)
+
     check("group listing an optional pulls it", "surfer" in eg(["@with-optional"], REGISTRY))
     check("optional installable by explicit name", eg(["surfer"], REGISTRY) == {"surfer"})
 

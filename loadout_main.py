@@ -246,6 +246,7 @@ _SYNTHETIC_GROUPS = {
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, rust, ...).",
     "@envs": "Bash configuration only (env-bash); install other per-user config bundles explicitly.",
     "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh, env-cargo).",
+    "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
 
 
@@ -283,13 +284,15 @@ def expand_groups(names, registry, _stack=None):
             # -all suffix everywhere else (@shared-all / @envs-all = "+ optionals").
             # A name that means the opposite of what it says is a trap; say what you mean.
             raise ResolverError(
-                "'all' was removed -- its name lied: it meant 'every non-optional package', "
-                "while the -all suffix elsewhere means '+ optionals'.\n"
+                "bare 'all' is not a group -- did you mean '@all'?\n"
+                "  (the old bare 'all' meant 'every NON-optional package', the opposite of\n"
+                "   what the -all suffix means elsewhere, so it was removed. '@all' now\n"
+                "   means literally everything.)\n"
                 "  curated loadout  : @engineering-loadout\n"
                 "  bash config      : @envs\n"
                 "  everything shared: @shared-all\n"
                 "  every env bundle : @envs-all\n"
-                "  truly everything : @shared-all @envs-all"
+                "  truly everything : @all"
             )
         if name == "@shared":
             out |= {
@@ -309,6 +312,24 @@ def expand_groups(names, registry, _stack=None):
         if name == "@envs-all":
             # Full per-user env set, including optional env packages.
             out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") == "env"}
+            continue
+        if name == "@all":
+            # Literally everything. Defined as the union of the two full sweeps
+            # rather than as its own filter, so there can never be a third
+            # answer to "what is everything?" that drifts from those two.
+            #
+            # There is deliberately NO "@all minus the offline caches" variant.
+            # The caches (nvim-plugin-stash, treesitter-parsers,
+            # rust-crate-store, tldr-data) are ~23% of the payload and it is
+            # tempting to treat them as an optimisation for connected machines.
+            # They are not: this project ships a KNOWN-WORKING configuration of
+            # tools and their external dependencies, the way a distribution
+            # does. The pinned plugin set and the pinned crate set ARE the
+            # product. Dropping them does not yield a lighter loadout, it yields
+            # a different one that drifts against whatever upstream serves that
+            # day -- which is the problem this repo exists to solve. Someone
+            # online who wants newer plugins can still run `:Lazy update`.
+            out |= expand_groups(["@shared-all", "@envs-all"], registry, _stack + (name,))
             continue
         if name.startswith("@"):
             if name in _stack:
