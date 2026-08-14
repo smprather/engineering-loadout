@@ -805,6 +805,40 @@
       ],
       "description": "NCurses disk usage \u2014 interactive disk space analyzer (Zig v2)"
     },
+    "openroad": {
+      "kind": "bin",
+      "bins": [
+        "openroad",
+        "sta"
+      ],
+      "libs": [
+        "libCbcSolver.so.2",
+        "libOsiCbc.so.2",
+        "libCbc.so.2",
+        "libCgl.so.0",
+        "libClpSolver.so.1",
+        "libOsiClp.so.1",
+        "libClp.so.1",
+        "libOsi.so.0",
+        "libCoinUtils.so.2",
+        "libscip.so.9.2"
+      ],
+      "version": "26Q3",
+      "version_url": "https://github.com/The-OpenROAD-Project/OpenROAD/tags",
+      "platforms": [
+        "linux"
+      ],
+      "depends": [
+        "portable-python"
+      ],
+      "tags": [
+        "eda",
+        "place-and-route",
+        "timing"
+      ],
+      "description": "OpenROAD \u2014 RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.14 and the matching Tcl 8.6.17 script library \u2014 mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
+      "missing_hint": "openroad will not run: it needs the bundled COIN-OR/SCIP solver libs in lib64"
+    },
     "openssh": {
       "kind": "bin",
       "bins": [
@@ -3490,6 +3524,7 @@
     "@eda": {
       "kind": "group",
       "members": [
+        "openroad",
         "iverilog",
         "gtkwave",
         "klayout",

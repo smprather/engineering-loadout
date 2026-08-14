@@ -4480,3 +4480,123 @@ including `[editor.workspace-trust] level = "insecure"`. The reasoning, the cost
 on a shared farm filesystem, and the narrower `level = "servers"` alternative
 are all recorded in the comment block at the top of that file -- read it there
 rather than duplicating it here.
+
+## OpenROAD 26Q3 -- RTL-to-GDS place & route (EL8 SOURCE build, C++20)
+
+Build script: `build/build-openroad.sh --tag 26Q3` (add `--reuse-build` to
+re-package an existing build tree without the ~60-90 min rebuild).
+
+Ships `bin/openroad` + `bin/sta` (standalone OpenSTA) and 10 COIN-OR/SCIP
+solver libs in `lib64/`. **No wrapper** -- see the Tcl section below for why
+that is a deliberate, verified outcome rather than an oversight.
+
+### Ten dependencies are built from source, and that is not gold-plating
+
+Nothing OpenROAD 26Q3 needs exists on EL8 at a usable version: gcc 8.5 (needs
+C++20), bison 3.0.4 (needs >= 3.2), swig 3.0.12 (needs >= 4.3), Boost 1.66 with
+no CMake config at all, and no OR-Tools whatsoever. Upstream's own
+`DependencyInstaller.sh` has a RHEL-8 branch, but its **x86_64 path 404s**: it
+downloads a prebuilt or-tools named for the distro, and google/or-tools
+publishes an AlmaLinux-8 asset for **aarch64 only**. The aarch64 branch
+source-builds instead, and that is the recipe this script follows.
+
+Version pins that are load-bearing, not arbitrary:
+
+| dep | pin | why not the obvious choice |
+|---|---|---|
+| Boost | **1.87** | not upstream's 1.89 -- OR-Tools compiles its internals against 1.87, and one Boost in the link beats two ODR-conflicting ones |
+| yaml-cpp | **0.6.3** | not 0.8.0 -- 0.8 exports only `yaml-cpp::yaml-cpp`, but OpenROAD links the **bare** `yaml-cpp` target, so 0.8 dies at link with `cannot find -lyaml-cpp`. 0.6.3 is what EL8's EPEL ships and what upstream tests |
+| lemon | 1.3.1 **+ patch** | hardcodes `CMAKE_POLICY(SET CMP0048 OLD)`; CMake 4 **removed** that policy, so it is a hard error. Deleting the line is safe -- lemon's `project()` passes no VERSION |
+| flex | **not needed** | upstream pins 2.6.4, but `find_package(FLEX)` has no `REQUIRED` and the version line is commented out. (flex 2.6.4 also fails to build under GCC 14 -- wasted effort to discover) |
+| gtest | 1.17.0 | required even with `-DENABLE_TESTS=OFF` |
+
+Every `cmake` call passes `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`: this box has
+CMake 4.x, which hard-refuses projects declaring `cmake_minimum_required < 3.5`,
+and several deps still do.
+
+### TRAP 1 -- OR-Tools must be built with STATIC deps
+
+`cmake/dependencies/CMakeLists.txt` **hardcodes** `set(BUILD_SHARED_LIBS ON)`
+for its FetchContent deps. It is not an option, and `-DBUILD_SHARED_LIBS=OFF` at
+the top level reaches `libortools` but not them. Left alone, `openroad` needs
+**111 shared libraries** -- about 100 of them abseil -- none present on EL8.
+Patching that one line (plus `protobuf_BUILD_SHARED_LIBS`) drops the closure to
+**26 NEEDED, 15 of which are EL8 base**.
+
+`-DBUILD_ZLIB=OFF` does **not** work: it is a `CMAKE_DEPENDENT_OPTION` forced
+back ON by `BUILD_DEPS`. It is harmless only because the static build emits
+`libz.a` instead of the `libz.so` whose absence broke an earlier link.
+
+The build script asserts the patch applied and that `libortools.a` exists,
+because a silent revert here produces a binary that works perfectly on this box
+and cannot start anywhere else.
+
+### TRAP 2 -- the Tcl collision (this is the `expect` hazard, same shape)
+
+`openroad` resolves **both** `libpython3.14.so.1.0` and `libtcl8.6.so` out of
+portable-python's lib dir. portable-python owns `<prefix>/lib/tcl8.6` at Tcl
+**8.6.17**, and its `init.tcl` does `package require -exact Tcl 8.6.17`. EL8's
+system Tcl is **8.6.8**. The two therefore cannot be mixed in either direction:
+
+* portable `libtcl8.6` with no matching script tree -> `Can't find a usable
+  init.tcl`, having searched the dead compiled-in prefix
+  `/opt/cpython3144-portablelib/lib/tcl8.6`;
+* system `libtcl8.6` (8.6.8) with the 8.6.17 script tree -> rejected by the
+  exact-version check once installed under `~/.local`.
+
+**Resolution: lean INTO portable-python -- and note the RPATH ORDER.** A full
+install holds THREE Tcl 8.6 patchlevels:
+
+| path | version | owner |
+|---|---|---|
+| `lib64/libtcl8.6.so` | 8.6.16 | bundled for `expect` |
+| `lib/libtcl8.6.so` | 8.6.17 | portable-python |
+| `lib/tcl8.6/` (scripts) | 8.6.17 | portable-python -- the only script tree on the search path |
+| `/usr/lib64/libtcl8.6.so` | 8.6.8 | EL8 system |
+
+`init.tcl` does `package require -exact`, so library and script tree must match,
+and only the `lib/` pair does. RPATH is therefore
+**`$ORIGIN/../lib:$ORIGIN/../lib64` -- lib FIRST**, deliberately the reverse of
+this repo's usual pair. With the usual order the 8.6.16 copy wins and openroad
+dies with `Can't find a usable init.tcl`.
+
+**This shipped past a green dev-box smoke and was caught only by the clean
+container.** The build script had smoked the BUILD-TREE binary, whose RUNPATH
+pointed straight at portable-python's lib dir, rather than the PACKAGED binary,
+whose RPATH did not -- it passed for a reason unrelated to what ships. The smoke
+now runs after packaging, on the decompressed payload `.bz2` artifacts in a
+staged install tree, and fails specifically on `init.tcl` naming the RPATH
+order. Verified with **no wrapper and no `TCL_LIBRARY` export**, so this repo's
+standing rule against exporting it (see `expect`) survives intact. **Do not
+"fix" a future Tcl failure by adding either** -- fix the portable-python depend
+or the RPATH order.
+
+### TRAP 3 -- `openroad -version` proves nothing
+
+It prints `26Q3` from a binary that cannot load Tcl, cannot read a LEF, and
+would fail on the first real command -- exactly the state trap 2 produces. Both
+`build-openroad.sh` and `tests/prebuilt-binaries` instead read a real LEF + DEF
+(`build/openroad/gscl45nm.lef`, `design.def`, BSD-3-Clause, from upstream's odb
+test data) and require the resulting database to report **12 instances / 24
+nets** through the Tcl API. The test also fails specifically on `init.tcl`
+appearing in the output, so a Tcl regression is named rather than showing up as
+a generic mismatch.
+
+### Floors
+
+`-static-libstdc++ -static-libgcc` is mandatory: gcc-toolset-14 is required for
+C++20, and without them the binary requires `GLIBCXX` symbols newer than stock
+EL8's 3.4.25 -- and would still run fine on this build box. The script asserts
+**zero** `GLIBCXX` symbols and a glibc floor at or under 2.28 (currently
+`GLIBC_2.27`). Same build-box-masking class as the firefox/NSS and octave
+support-lib incidents.
+
+### Not built
+
+`-DBUILD_GUI=OFF` for now. The only blocker is Qt5Charts, and it is cheap: EPEL
+ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
+`gui_libs`. `find_package(Qt5 ... Charts)` in `src/gui` is QUIET, and
+`BUILD_GUI` is a normal option, so enabling it later is additive.
+
+OpenROAD-flow-scripts (ORFS) is a scripts + PDK layer **on top of** this binary;
+it changes nothing here and only decides whether the PDK data also ships.

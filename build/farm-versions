@@ -362,6 +362,14 @@ TOOLS = [
         strategy_flag(["-V"], r"Yosys ([0-9]+\.[0-9]+)"),
     ),
     (
+        "openroad",
+        "openroad",
+        "https://github.com/The-OpenROAD-Project/OpenROAD",
+        # Quarterly stable tags (26Q1/26Q2/26Q3), not semver: `-version` prints
+        # the bare tag, so no dotted-numeric pattern applies.
+        strategy_flag(["-version"], r"([0-9]{2}Q[0-9])"),
+    ),
+    (
         "markdown-oxide",
         "markdown-oxide",
         "https://github.com/Feel-ix-343/markdown-oxide",

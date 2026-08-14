@@ -153,13 +153,14 @@ Post-payload chain ran (`strip-all-elf-binaries`: 301 ELFs stripped, 1 archive
 rewritten → `gen-content-manifest` → `gen-readme-table`). Test results at the top
 of this file.
 
-## IN PROGRESS (nothing committed): OpenROAD 26Q3 builds and RUNS on EL8
+## UNCOMMITTED: OpenROAD 26Q3 -- packaged, gated, RTL-to-GDS place & route
 
 The old scoping below ("3-5 day project, prebuilts DEAD on EL8, OR-Tools is the
 monster") was right about the shape and too pessimistic about several specifics.
-Status: **a working `openroad` binary exists and passes a real LEF/DEF smoke.**
-Nothing is packaged, nothing is committed. Build artifacts are in this session's
-scratchpad and will not survive; the recipe below is what matters.
+**Status: PACKAGED.** `build/build-openroad.sh --tag 26Q3` reproduces it end to
+end, the payload carries `bin/{openroad,sta}` plus 10 COIN-OR/SCIP libs, and
+`tests/prebuilt-binaries` drives a real LEF/DEF smoke. Full build note in
+`build/ADDING_BINARIES.md`; the detail below is the reasoning behind the pins.
 
 ### What is settled
 
@@ -229,24 +230,54 @@ system Tcl is **8.6.8**. So the two CANNOT be mixed in either direction:
 * forcing system `libtcl8.6` (8.6.8) would then be rejected by the 8.6.17
   script tree once installed under `~/.local`.
 
-**The resolution is to lean INTO portable-python rather than away from it.**
-Installed at `~/.local`, Tcl's `<prefix>/lib/tcl8.6` fallback finds the 8.6.17
-tree, which matches the 8.6.17 `libtcl8.6.so` that RPATH resolves from the same
-place. Verified with a fake prefix supplying that library: the smoke passes with
-**no wrapper and no `TCL_LIBRARY` export**, so the repo's standing rule against
-exporting it (see `expect`) is respected.
+**The resolution is to lean INTO portable-python rather than away from it** --
+but the RPATH ORDER is load-bearing, and getting it wrong is what shipped past
+the dev box. A full install holds THREE Tcl 8.6 patchlevels:
 
-So the package is: `depends: [portable-python]`, standard RPATH
-`$ORIGIN/../lib64:$ORIGIN/../lib`, 10 bundled libs, **no wrapper**.
+| path | version | owner |
+|---|---|---|
+| `lib64/libtcl8.6.so` | 8.6.16 | bundled for `expect` |
+| `lib/libtcl8.6.so` | 8.6.17 | portable-python |
+| `lib/tcl8.6/` (scripts) | 8.6.17 | portable-python -- the only script tree on the search path |
+| `/usr/lib64/libtcl8.6.so` | 8.6.8 | EL8 system |
+
+`init.tcl` does `package require -exact`, so library and script tree must be the
+SAME patchlevel, and only the `lib/` pair is. RPATH is therefore
+**`$ORIGIN/../lib:$ORIGIN/../lib64` -- lib FIRST**, the reverse of this repo's
+usual pair. With the usual order the 8.6.16 copy in `lib64` wins and openroad
+dies with `Can't find a usable init.tcl` on the first real command, while
+`-version` keeps printing `26Q3`.
+
+**How that got past a green dev-box smoke, because the lesson generalises:** the
+build script smoked the BUILD-TREE binary, whose RUNPATH pointed straight at
+portable-python's lib dir, not the PACKAGED binary, whose RPATH did not. It
+passed for a reason unrelated to what ships. Only the clean-container gate
+caught it. The smoke now runs after packaging, on the decompressed payload
+`.bz2` artifacts in a staged install tree, and fails specifically on `init.tcl`
+with a message naming the RPATH order.
+
+So the package is: `depends: [portable-python]`, RPATH
+`$ORIGIN/../lib:$ORIGIN/../lib64`, 10 bundled libs, **no wrapper**, no
+`TCL_LIBRARY` export.
+
+### What shipped
+
+`build/build-openroad.sh` (carries the lemon CMP0048 patch, the OR-Tools
+static-deps patch and the yaml-cpp 0.6.3 pin, and asserts each one applied),
+`build/openroad/` smoke fixtures, registry entry with `depends:
+[portable-python]` + `@eda` membership, `farm-versions` entry, README row, the
+mandatory `ADDING_BINARIES.md` note, and a `tests/prebuilt-binaries` probe that
+reads LEF+DEF and requires 12 instances / 24 nets -- failing specifically on
+`init.tcl` so a Tcl regression names itself.
+
+Payload cost: `openroad.bz2` 39.5 MB, `sta.bz2` 2.7 MB, 7.6 MB of solver libs.
 
 ### Still to do
 
-`build/build-openroad.sh` (carrying the lemon patch, the OR-Tools static patch,
-and the yaml-cpp 0.6.3 pin), registry entry + `@eda` membership, the mandatory
-`ADDING_BINARIES.md` note, a `tests/prebuilt-binaries` smoke driving a real
-LEF/DEF (never `-version`), and the GUI pass. **Qt5Charts is the only GUI
-blocker and it is cheap**: EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact
-match for the Qt5 already in `gui_libs`. `-DBUILD_GUI=OFF` was used throughout.
+**The GUI.** `-DBUILD_GUI=OFF` throughout. The only blocker is Qt5Charts and it
+is cheap: EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5
+already in `gui_libs`. `find_package(Qt5 ... Charts)` in `src/gui` is QUIET and
+`BUILD_GUI` is a normal option, so enabling it is additive.
 
 Unsettled and deferred: OpenROAD proper vs OpenROAD-flow-scripts. ORFS is a
 scripts+PDK layer ON TOP of this binary, so it changes nothing above; it only

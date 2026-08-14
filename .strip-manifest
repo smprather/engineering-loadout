@@ -141,6 +141,7 @@ sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  payloa
 sha256  5af93582ed4b8886a24eec3d2ca8b7711be6ca85606d23e8946a7e35b29e8df1  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  6b1a470da0f0258a2c25fd12c8dcc2bb1ae852765b734fdb3e21cc71c6256685  payload/el8.x86_64.glibc2p28/bin/octave.bz2
 sha256  41af2495fa5ede6a9d67c56f79e5fab4fba1b8e029c63e35f5171056ebaab317  payload/el8.x86_64.glibc2p28/bin/od.bz2
+sha256  f5cb8ec7c2beadbead7b65ae1febb3182e18e9f1e53f83b93d93ce9a70263566  payload/el8.x86_64.glibc2p28/bin/openroad.bz2
 sha256  a8f71c8f873a41eb1fcfdfcfea75f29c5c96955e8c4b80a5db9cdd0ff5a9540f  payload/el8.x86_64.glibc2p28/bin/paste.bz2
 sha256  32fefa25d1f8378cfd840f49ca2b9a16a8b7c44a4f7ecbd0a13d6fc1496308a5  payload/el8.x86_64.glibc2p28/bin/patchelf.bz2
 sha256  221b55274edcb5a4c20c9351dc5c563d3dd40e1043ec6b53e32ea5a67fa5b666  payload/el8.x86_64.glibc2p28/bin/pdftotext.bin.bz2
@@ -192,6 +193,7 @@ sha256  de1e4d3904087cbdb8daf2b25f01f6c390a2ee1a1d1b200792b4355877f35c7f  payloa
 sha256  10e483b7bb39fedc1f2ee675ebc99f7f957f2e4f1652f83f91fbc6b1937a6869  payload/el8.x86_64.glibc2p28/bin/st-reload.bz2
 sha256  a55a437266fbe39ae1bfd66b8dd5d2166ca5c33ebf08c9fe7aba0b719a3cef6f  payload/el8.x86_64.glibc2p28/bin/st.bin.bz2
 sha256  8ecc50499450ddd94b2ebdaffde30f5ab1e5ef2d1ec2dba88cbbdb72623190be  payload/el8.x86_64.glibc2p28/bin/st.bz2
+sha256  dc0c4daa5cc73d17c8bd40bcdc862e90cfe3952fa155d6c139be190cf7bb25a0  payload/el8.x86_64.glibc2p28/bin/sta.bz2
 sha256  7cadf150bf0560c77e66c16d999a673dd10db88af720796e522c5e1a1900b996  payload/el8.x86_64.glibc2p28/bin/starship.bz2
 sha256  292e6a25f2f5cd0ee18154b5729f944b50b20da7f7457b70190295581d1dbcef  payload/el8.x86_64.glibc2p28/bin/stat.bz2
 sha256  32cb5b2719fd0f50a76a63e92ed0d81f2770d4a260bcc1c096f7d8cec3dc0dc7  payload/el8.x86_64.glibc2p28/bin/stdbuf.bz2
@@ -267,8 +269,17 @@ sha256  6a653ad5efe5af50f171d9835a04933b60bdd51c3904b4d7253a11e5e42c11cb  payloa
 sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  payload/el8.x86_64.glibc2p28/bin/zellij.bz2
 sha256  cbef7b3593475cd091629645c10bb141e375c7d89afdfae226b784e17e271718  payload/el8.x86_64.glibc2p28/bin/zoxide.bz2
 sha256  1dbbfa9deba10e9fbcc2d1c34386fa2841bba95d52132678a4efbf265fbabf1f  payload/el8.x86_64.glibc2p28/bin/zsh.bz2
+sha256  792a5feb10b7c06d903f086c056ea0172dfc8cf2f9728570fb72731e29cd6bce  payload/el8.x86_64.glibc2p28/lib64/libCbc.so.2.bz2
+sha256  6f66f7410f736051f9e797d3f75a95cb1074701b04f9f2934259c1335601e531  payload/el8.x86_64.glibc2p28/lib64/libCbcSolver.so.2.bz2
+sha256  78fc630348eb1e3915fecacfafaba541cda9af1e0ee23c814ffaae60d02b9855  payload/el8.x86_64.glibc2p28/lib64/libCgl.so.0.bz2
+sha256  0ee25505ea8d4ae1ed93265db00518f053513625acefb28b62971daba9cb9988  payload/el8.x86_64.glibc2p28/lib64/libClp.so.1.bz2
+sha256  f365bb7354a3eeee4903f136be687cb1fa64f2c5083df1ceb242e896cbd5839b  payload/el8.x86_64.glibc2p28/lib64/libClpSolver.so.1.bz2
+sha256  f64edd1032ae16c41721b86242e9e3406e69a915f42f91a3d1989dad7227e46e  payload/el8.x86_64.glibc2p28/lib64/libCoinUtils.so.2.bz2
 sha256  4e716fa491657670e2f22ef075be94983f6ba903e9ae04df8ec263750afb5987  payload/el8.x86_64.glibc2p28/lib64/libFLAC.so.8.bz2
 sha256  54330f302e614b36ef96097b916689645108bdaacdb43e5ae4218312eaf725be  payload/el8.x86_64.glibc2p28/lib64/libICE.so.6.bz2
+sha256  049d4106af32438f364f868888b3858f368c56e5e9a02eea00c1e67c6f8e82dc  payload/el8.x86_64.glibc2p28/lib64/libOsi.so.0.bz2
+sha256  d0f63198474dc6209266f286db0d4e46d1569a6a17eb1ab4935adcbb34c7662e  payload/el8.x86_64.glibc2p28/lib64/libOsiCbc.so.2.bz2
+sha256  7ff54417354d6220e8635e7d5487378b84952cdab6d30142ba066719d8e8646d  payload/el8.x86_64.glibc2p28/lib64/libOsiClp.so.1.bz2
 sha256  dcf68a31eb6eaf7cdc6e264472daeb94302fedd383659a96a6109314b9319c00  payload/el8.x86_64.glibc2p28/lib64/libQt5Core.so.5.bz2
 sha256  b739d953087cf6bd655dc8cd7a346e210d309ddac1cc7cbec808aa90764eecad  payload/el8.x86_64.glibc2p28/lib64/libQt5DBus.so.5.bz2
 sha256  3d9990a7f74459ce9310c8ade69af3efc25f1a85bf40ef03825bd60399b4c768  payload/el8.x86_64.glibc2p28/lib64/libQt5Gui.so.5.bz2
@@ -387,6 +398,7 @@ sha256  ad37a844bfcfc017aebed179204551cd2e8a39ec2b9b37674a58aebe15acf9f2  payloa
 sha256  a20dd8cfb688d489cba27f1bfec6cd2d87a5122875245ee2a98f49d5c4e42d3f  payload/el8.x86_64.glibc2p28/lib64/libreadline.so.7.bz2
 sha256  4cbeb5994fd20a7734a16ff3d5b410a8a4dd28b772e64ae0f3c5708edafebb02  payload/el8.x86_64.glibc2p28/lib64/libruby.so.3.3.bz2
 sha256  33d82e1cc29ed5da845e33a12612e9d27259be91a93d3571f52b439842bcecbe  payload/el8.x86_64.glibc2p28/lib64/libsatlas.so.3.bz2
+sha256  b1be18fe9e94eb6db197e62778783e05cc4eabf4df609c866e9542859c1108d8  payload/el8.x86_64.glibc2p28/lib64/libscip.so.9.2.bz2
 sha256  d47819830416f5f81007ecabcb29ca652bc542ad32a9efb3f278a156b2c6fa8b  payload/el8.x86_64.glibc2p28/lib64/libsndfile.so.1.bz2
 sha256  c5d15f3afbad4ea61f29a2a4d83e5e7b006e527558777a556bac133276fd3538  payload/el8.x86_64.glibc2p28/lib64/libspqr.so.2.bz2
 sha256  ebaa74c68f7b9baaf4c7546477cfd52c2c889a9b2e3f6bf100a9af478483c1d3  payload/el8.x86_64.glibc2p28/lib64/libsuitesparseconfig.so.4.bz2

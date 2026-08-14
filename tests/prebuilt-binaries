@@ -641,6 +641,48 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (health):       helix config")
 
+    if has_bin("openroad"):
+        # `openroad -version` prints "26Q3" from a binary that cannot load Tcl at
+        # all -- and that is the failure most likely to ship, because openroad
+        # resolves BOTH libpython3.14 and libtcl8.6 out of portable-python's lib
+        # dir. portable-python owns lib/tcl8.6 at Tcl 8.6.17 and its init.tcl
+        # does `package require -exact Tcl 8.6.17`, while EL8's system Tcl is
+        # 8.6.8, so the two cannot be mixed in either direction. If the
+        # portable-python depend is ever dropped, or RPATH stops reaching its
+        # lib dir, openroad dies with "Can't find a usable init.tcl" on the
+        # first real command while -version keeps printing a version.
+        #
+        # So: read a real LEF + DEF and query the resulting database.
+        or_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "openroad")
+        work = os.path.join(tmpdir, "openroad-smoke")
+        try:
+            os.makedirs(work, exist_ok=True)
+            for name in ("gscl45nm.lef", "design.def", "smoke.tcl"):
+                shutil.copy(os.path.join(or_dir, name), os.path.join(work, name))
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "openroad"), "-no_init", "-exit", "smoke.tcl"],
+                cwd=work,
+                env=env,
+                timeout=180,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as exc:
+            print(f"  FAIL (pnr):          openroad runtime  {exc}")
+            failures.append(("openroad runtime", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "init.tcl" in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (tcl):          openroad runtime  Tcl library unresolved: {detail}")
+                failures.append(("openroad runtime", detail))
+            elif "SMOKE_INSTANCES=12" not in out or "SMOKE_NETS=24" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (pnr):          openroad runtime  {detail}")
+                failures.append(("openroad runtime", detail))
+            else:
+                print("  OK   (pnr):          openroad  read LEF+DEF, 12 insts / 24 nets")
+
     if has_bin("less"):
         # less is built --with-regex=posix deliberately: the PCRE2 backend adds
         # libpcre2-8.so.0 to NEEDED, and that lib is owned by gui_libs. Coupling
