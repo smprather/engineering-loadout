@@ -264,13 +264,14 @@ OpenSSH for those.
 | keyb | bin | 0.8.0 | Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export |
 | gping | bin | 1.20.4 | Ping with live graph visualization |
 | htop | bin | 3.5.2 | Interactive process viewer and manager |
-| hx | bin | 25.07.1 | Modern modal text editor with tree-sitter and LSP |
+| hx | bin | 25.07-984-g079a789e | Modern modal text editor with tree-sitter and LSP |
 | hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
 | ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
 | openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
 | jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
 | just | bin | 1.58.0 | Command runner, ergonomic Makefile alternative |
 | lazygit | bin | 0.64.0 | TUI git client for staging, committing, rebasing |
+| less | bin | 704 | less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling) |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
 | miller | bin | 6.21.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |

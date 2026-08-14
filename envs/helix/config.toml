@@ -1,22 +1,39 @@
 theme = "tokyonight-night"
 
+# ── Configuration goal: maximum functionality ─────────────────────────────────
+# This file deliberately spends safety margin to buy capability. Where helix
+# ships a feature switched off, or gated behind a prompt, the intent here is ON.
+# That is an owner-made call (2026-08-13) for a closed, tightly-controlled
+# engineering environment; "Workspace trust" below records what it costs and the
+# conditions under which it should be re-judged.
+#
+# Two things this goal does NOT extend to, so the omissions read as decisions
+# rather than oversights:
+#   - `[editor.auto-save]` stays off. It writes files to disk without being
+#     asked, and with auto-format = true that means reformatting on the way out.
+#     "More functional" should not mean "edits files you did not save".
+#   - `kitty-keyboard-protocol` stays "auto". Forcing "enabled" on a terminal
+#     that lacks the protocol garbles input -- here the maximally functional
+#     setting IS the autodetecting one.
+#
+# NOTE: this file is loadout-owned and `_install_env_helix` overwrites it on
+# every install, so editing the INSTALLED copy does not survive a reinstall.
+
 # ── Workspace trust ───────────────────────────────────────────────────────────
-# helix 25.07.1 starts NO language server in an untrusted workspace. On first
-# open it shows a modal -- "Trusted workspaces may load local config files and
+# helix starts NO language server in an untrusted workspace. On first open it
+# shows a modal -- "Trusted workspaces may load local config files and
 # auto-start language servers. Config and language servers can execute
 # arbitrary code." -- and until it is answered, taplo and markdown-oxide (both
 # bundled and enabled in languages.toml) simply never spawn. A user who
 # dismisses it gets a silently server-less editor and no hint why.
 #
-# Answer it ONCE per workspace. The decision PERSISTS -- helix records it in
-# `trusted_workspaces` under its data dir (~/.local/share/helix) -- and it can
-# be changed later from inside the editor with `:workspace-trust` /
-# `:workspace-untrust`. It is not a per-session prompt.
+# `[editor.workspace-trust] level` takes three values:
+#   none      prompt for every new workspace
+#   servers   (upstream default) auto-start LSP/DAP, still gate workspace .helix/
+#   insecure  trust everything implicitly; explicit excludes still win
 #
-# `insecure = true` in [editor] below skips that modal globally, and IS SET --
-# a deliberate, owner-made call (2026-08-13), not a default anybody drifted
-# into. Record of what was traded away, so it can be re-judged rather than
-# re-derived:
+# `insecure` is set below, deliberately. Record of what was traded away, so it
+# can be re-judged rather than re-derived:
 #
 #   COST: on a SHARED FARM FILESYSTEM this means any directory a user opens --
 #   including one owned by someone else -- has its local .helix/ config honoured
@@ -30,30 +47,31 @@ theme = "tokyonight-night"
 #   friction: bundled taplo and markdown-oxide silently never spawn until it is
 #   answered, and a dismissed prompt looks exactly like a broken install.
 #
-# REVISIT IF the loadout is ever deployed somewhere the shared filesystem is not
-# governed that way -- an untrusted multi-tenant box, a contractor share, a
-# machine reachable by people outside the controlled environment. There the
-# right answer flips back to leaving this off and answering the prompt once per
-# workspace (`:workspace-trust`).
+#   `servers` is the NARROWER setting and would settle the language-server
+#   complaint on its own, while still gating workspace-local config. It is not
+#   used here only because the stated goal for this file is maximum
+#   functionality. Anyone deploying somewhere the shared filesystem is not
+#   governed as above -- an untrusted multi-tenant box, a contractor share, a
+#   machine reachable from outside -- should change that one word to "servers"
+#   (or "none") and need change nothing else in this file.
 #
-# The narrower fix, when it becomes available, is upstream's
-# `[editor.workspace-trust] level = "servers"` -- it trusts server launches
-# while STILL gating local config, which is strictly better than `insecure` for
-# this use and would let the cost paragraph above go away. NO RELEASED helix has
-# it; it is master-only. 25.07.1 (published 2025-07-18) is still upstream's
-# newest release as of 2026-08-13, and it REJECTS the key as an unknown field,
-# which makes helix fall back to the ENTIRE default config and silently discard
-# every other setting in this file. Do not add it speculatively -- check
-# `helix-editor/helix` releases first. The 13-month gap means the next release
-# will likely carry it; prefer it over `insecure` when it lands.
-#
-# NOTE: this file is loadout-owned and `_install_env_helix` overwrites it on
-# every install, so editing the INSTALLED copy does not survive a reinstall.
+# HISTORY, because the spelling moved and the failure mode is silent: this was
+# `[editor] insecure = true` in the helix that shipped before 2026-08-13.
+# Upstream replaced that flag with the `[editor.workspace-trust]` table, so the
+# old key is now an UNKNOWN FIELD -- and an unknown [editor] field makes helix
+# discard THIS ENTIRE FILE and fall back to stock defaults without a word. The
+# two spellings must therefore move in lockstep with the bundled binary;
+# `tests/env-helix-config` pins that by running `hx --health` on the payload
+# helix and failing on "Configuration file malformed".
 
 [editor]
-insecure = true               # see "Workspace trust" above -- deliberate, owner-decided
 line-number = "relative"
 cursorline = true
+# mouse stays OFF against the maximum-functionality goal, and on purpose: with
+# helix grabbing the mouse, the TERMINAL loses it, and with it click-drag
+# selection, middle-click paste and tmux copy-mode over a helix pane. Off is the
+# setting that leaves more working, not less. Flip it in a user layer if you
+# want helix-side mouse support instead.
 mouse = false
 idle-timeout = 250
 rulers = []
@@ -65,6 +83,16 @@ text-width = 130              # matches textwidth = 130
 color-modes = true            # colorize mode indicator per mode
 rainbow-brackets = true
 true-color = true             # matches termguicolors = true
+undercurl = true              # real curly underlines for diagnostics; helix cannot
+                              # probe for support, so its default is a conservative
+                              # false. Every terminal this repo bundles or targets
+                              # (wezterm, st, xterm, mate-terminal, tmux) renders them
+completion-trigger-len = 1    # default 2: completion after ONE character
+end-of-line-diagnostics = "hint"  # show the diagnostic at end of its line, down to hints
+
+[editor.workspace-trust]
+level = "insecure"            # see "Workspace trust" above -- deliberate, owner-decided
+prompt = false                # nothing left to ask; statusline indicator still shows
 
 [editor.soft-wrap]
 enable = true                 # matches wrap = true
@@ -109,14 +137,50 @@ mode.normal = "NORMAL"
 mode.insert = "INSERT"
 mode.select = "SELECT"
 
+# The picker is deliberately made to see EVERYTHING, matching the `g` alias in
+# envs/bash/global/bashrc (`rg --hidden --no-ignore`): on this codebase the
+# files you most need to open in a hurry -- a generated wheel, something under a
+# build tree, a vendored payload -- are exactly the ones an ignore file hides,
+# and a picker that silently cannot find a file that exists is the same silent
+# degrade this repo keeps designing against.
+#
+# This does NOT flood the picker with VCS internals: helix excludes .git, .hg,
+# .svn, .jj and .pijul unconditionally, in filter_picker_entry(), precisely
+# because turning `ignore` off would otherwise bury the results. Measured on
+# this repo: 5780 files with the defaults, 9932 with the settings below.
+#
+# The cost that IS real: in a tree carrying a big build output -- Rust target/,
+# node_modules/ -- the picker walks all of it and gets slower. Narrow it there
+# with a per-workspace .helix/config.toml, or in a user layer; not here.
 [editor.file-picker]
 hidden = false                # show dotfiles (matches rg --hidden in global aliases)
+ignore = false                # do not honour .ignore
+git-ignore = false            # do not honour .gitignore
+git-global = false            # do not honour core.excludesFile
+git-exclude = false           # do not honour .git/info/exclude
 
 [editor.lsp]
 display-messages = true
 auto-signature-help = true
-display-inlay-hints = false
+display-inlay-hints = true    # inferred types/param names inline; helix default is off
+auto-document-highlight = true  # highlight other uses of the symbol under the cursor
+display-progress-messages = true  # show server indexing/progress instead of a silent wait
 snippets = true
+
+# Inline diagnostics are helix's virtual-text diagnostics. Stock helix shows
+# them only on the cursor line and only at warning severity; everything else is
+# reachable solely through `:diagnostics` or the gutter. Both are widened to
+# "hint" so every diagnostic the servers produce is visible where it applies.
+[editor.inline-diagnostics]
+cursor-line = "hint"
+other-lines = "hint"
+
+# Buffer-word completion, so completion still works in files no language server
+# handles. Upstream's trigger-length of 7 means it effectively never fires;
+# 3 makes it useful without firing on every keystroke.
+[editor.word-completion]
+enable = true
+trigger-length = 3
 
 [keys.normal]
 # mirrors nvim C-h/j/k/l window navigation

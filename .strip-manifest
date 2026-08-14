@@ -75,8 +75,8 @@ sha256  ca6d20e0dd178aa6275d5e246b88141b3b66f46e7617f20ed78964542fa612ec  payloa
 sha256  34b84a2d85fcbf841318c7b84857d968f0b02eefd0339a2abcf9662836558fee  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  payload/el8.x86_64.glibc2p28/bin/head.bz2
 sha256  b6d3e27839f4f7d17d30978e89b855331b632ab2bec6ca2607690ba492770d7f  payload/el8.x86_64.glibc2p28/bin/htop.bz2
-sha256  188029470d1efb3e66d1af90da078c9a5abe107767343972e08d017663867d8d  payload/el8.x86_64.glibc2p28/bin/hx.bin.bz2
-sha256  98e2c25f09757fa165e958ca94b148032d2ca0cc4ca33ca365dbfaec54277056  payload/el8.x86_64.glibc2p28/bin/hx.bz2
+sha256  05c876e9c6a8f3cab63c0bbd4210d0c72e9376ce00f29086f35176aff36064c0  payload/el8.x86_64.glibc2p28/bin/hx.bin.bz2
+sha256  09ac39e65fa1f3dfb8968f4380bfa4c817448a0ccb9a9166bc2482ad484ac2cc  payload/el8.x86_64.glibc2p28/bin/hx.bz2
 sha256  42fad859c74810617c7f0f892cbffd5553170b9b09750d8793daf74f23520f70  payload/el8.x86_64.glibc2p28/bin/hyperfine.bz2
 sha256  428f2b8edf83239e0906c3a4c464e5966601e61dcc0329e22888c90f005f6930  payload/el8.x86_64.glibc2p28/bin/id.bz2
 sha256  6242ea1674a5bf13e6ada11c9088b60bb8f035f5107fbbc1869906d954b309f8  payload/el8.x86_64.glibc2p28/bin/install.bz2
@@ -90,6 +90,9 @@ sha256  d749bb5adc3cd1128a276c828994df28f572a87150c48c7ef395449e3b8cc00f  payloa
 sha256  0905c124d68839a4438cf831295b0a31b2ef11d45600a4f0e022e7ea13026fb3  payload/el8.x86_64.glibc2p28/bin/keyb.bz2
 sha256  a64aa68fa3022d16efb6e9a60de1e7bd058caeef8d61a2c05d2d7b79652463e4  payload/el8.x86_64.glibc2p28/bin/lazygit.bz2
 sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  payload/el8.x86_64.glibc2p28/bin/ld.lld.bz2
+sha256  d4f1c0de33ea305fa9eea310ff62ded4f25293279df86f936c740317293077ab  payload/el8.x86_64.glibc2p28/bin/less.bz2
+sha256  ec144bf5b792e8e89af1edb31ae429096035f1abd2d5e4e72f613e480902dd69  payload/el8.x86_64.glibc2p28/bin/lessecho.bz2
+sha256  28740946a0389dc5395180aecdc808d73729b30d206e2448d1676c9c301f6883  payload/el8.x86_64.glibc2p28/bin/lesskey.bz2
 sha256  017fa921c470f6a616753ef179aa343811e47997d7997b81416bd8bde3bcfbb8  payload/el8.x86_64.glibc2p28/bin/liberty-filter.bz2
 sha256  7c7e32b41dfa78894edea565ff33dabbcd425dddf2dcbda16441564cc10cb2b5  payload/el8.x86_64.glibc2p28/bin/link.bz2
 sha256  30e6e28149d99d6fc2fe00a24d314d0145699fcc1f5d75cd00f30c67d60000a7  payload/el8.x86_64.glibc2p28/bin/lld.bz2
@@ -431,7 +434,7 @@ tar-meta  209  1785788443  payload/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
 tar-meta  10349889  1784306262  payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2
 tar-meta  48862  1786294905  payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2
 tar-meta  311761  1785979682  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
-tar-meta  20451592  1784306278  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
+tar-meta  20725924  1786646654  payload/el8.x86_64.glibc2p28/runtime/helix.tar.bz2
 tar-meta  1891503  1786420088  payload/el8.x86_64.glibc2p28/runtime/iverilog.tar.bz2
 tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
 tar-meta  3021429  1786294907  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2

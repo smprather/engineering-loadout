@@ -1063,6 +1063,109 @@ Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scr
 
 ---
 
+## less 704
+
+**Tool:** less -- the standard terminal file pager
+**Version:** 704 (upstream RECOMMENDED release)
+**Source:** http://www.greenwoodsoftware.com/less/less-704.tar.gz
+**Build script:** `build/build-less.sh --tag 704`
+
+### Why 704 and not v708
+
+upstream's own download page says "Download RECOMMENDED version 704".
+`gwsw/less` publishes ZERO GitHub releases -- the v705-v708 git tags are
+DEVELOPMENT tags with no release tarball. This repo's stable-release policy
+forbids dev builds, so 704 is the only acceptable version until a new tarball
+appears on www.greenwoodsoftware.com.
+
+### Why POSIX regex and not PCRE2
+
+`--with-regex=posix` is load-bearing. PCRE2 would add `libpcre2-8.so.0` to
+NEEDED, and that lib is owned by the `gui_libs` package. Coupling a core CLI
+pager to the GUI bundle is wrong -- a headless compute node with no gui_libs
+would lose its pager. The POSIX regex backend needs only libc, so minimal
+closure wins.
+
+### Prerequisites (EL8)
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+dnf install -y gcc make ncurses-devel
+# patchelf at ~/.local/bin/patchelf (bundled in this repo)
+```
+
+### Configure flags
+
+```bash
+./configure \
+    --prefix=/tmp/loadout-less-instdir-704 \
+    --libexecdir=/tmp/loadout-less-instdir-704/bin \
+    --with-regex=posix
+```
+
+`--libexecdir=$PREFIX/bin`: upstream installs `lessecho` to libexecdir and
+`less`/`lesskey` to bindir. Setting libexecdir=bindir puts all three in bin/
+so they can be packaged uniformly. The compiled-in `LIBEXECDIR` macro (used by
+`less` to find `lessecho` for glob expansion and `less-osc8-open` for OSC8
+hyperlink clicks) then points at the temp build prefix, which is dead once
+deployed. That is acceptable:
+- `lessecho` is installed to `~/.local/bin/` (on PATH), and the `LESSECHO` env
+  var can override the compiled-in path if glob expansion is needed. When the
+  dead path fails, `filename.c` falls back gracefully (returns the original
+  filename) -- it does not crash.
+- `less-osc8-open` is a shell script not shipped (scope: 3 binaries). OSC8
+  hyperlink clicking is opt-in via `LESS_OSC8_OPEN_ANY` env var; without it,
+  links simply are not clickable -- not a crash, not a regression versus EL8's
+  less 530 which predates OSC8 support.
+
+### Packaging (strip -> patchelf -> bzip2, all three binaries)
+
+```bash
+for b in less lessecho lesskey; do
+    cp $INST_DIR/bin/$b /tmp/${b}_work
+    strip /tmp/${b}_work
+    ~/.local/bin/patchelf --set-rpath '$ORIGIN/../lib64' /tmp/${b}_work
+    bzip2 -kf /tmp/${b}_work
+    cp /tmp/${b}_work.bz2 payload/el8.x86_64.glibc2p28/bin/${b}.bz2
+    chmod 644 payload/el8.x86_64.glibc2p28/bin/${b}.bz2
+done
+```
+
+RPATH `$ORIGIN/../lib64` (repo standard for `bin/` binaries).
+
+### Runtime library requirements
+
+| Library | Source | Notes |
+|---------|--------|-------|
+| `libtinfo.so.6` | Bundled (lib64/) | RPATH `$ORIGIN/../lib64` picks it up |
+| `libc.so.6` | EL8 glibc | Never bundle (per policy) |
+
+All three binaries (`less`, `lessecho`, `lesskey`) have the same NEEDED closure:
+`libtinfo.so.6`, `libc.so.6`. No `depends` on `gui_libs` or any other package.
+
+### glibc
+
+Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
+
+### Functional verification (not --version)
+
+The build script verifies by actually paging: pipes multi-line input through
+the built `less` with `-F` (quit-if-one-screen, exits without a tty) and
+asserts every input line comes back out. Also runs `lesskey -V` and `lessecho`
+with real arguments. A `--version` probe proves nothing -- a mis-built less can
+print its banner and fail to page.
+
+### Install
+
+```bash
+./loadout install less
+```
+
+Installs `less`, `lessecho`, and `lesskey` to `~/.local/bin/`. No runtime
+archive; all three are self-contained binaries. Member of `@core-cli`.
+
+---
+
 ## p7zip 16.02
 
 **Tool:** p7zip -- Unix port of 7-Zip; standalone `7za` binary  
@@ -4253,3 +4356,127 @@ Helix gets the same server through `envs/helix/languages.toml`, whose catalog
 path carries the relocation token and is rewritten by `_install_env_helix()` --
 helix's languages.toml is static TOML with no `~` or `$VAR` expansion, so there
 is no other way to express an absolute path portably.
+
+## helix (hx) 25.07-984-g079a789e -- modal editor with tree-sitter + LSP (EL8 SOURCE build, Rust)
+
+Build script: `build/build-helix.sh --rev <git-ref>` (or `--source <checkout>`).
+
+### This is the one `--rev` build in the repo. Read this before "fixing" it.
+
+Every other `build-*.sh` requires `--tag vX.Y.Z` and this repo's policy is
+stable releases only. helix is a deliberate, documented exception:
+
+* Upstream's newest **release** is `25.07.1`, published **2025-07-18**. Helix
+  releases rarely; that tag has been the newest for over a year.
+* The config surface `envs/helix/config.toml` depends on **does not exist in
+  it**: `[editor.workspace-trust]`, `rainbow-brackets`,
+  `[editor.word-completion]`, `auto-document-highlight` and
+  `display-progress-messages` are all master-only.
+* The binary this replaced was **also a master build** -- `25.07.1 (87d5c05c)`,
+  committed 2026-05-03. It entered `payload/` through a bulk snapshot commit
+  with no build script, no note here, and no recorded provenance, and
+  `packages.json` recorded it as version `25.07.1` as though it were the
+  release. This script exists to make that state explicit and reproducible, not
+  to introduce it.
+
+**`hx --version` prints the last release tag plus the commit** -- `helix 25.07.1
+(079a789e)`. The tag half is not evidence of a release build; the sha is the
+only part that identifies what you have. That is precisely how the previous
+binary came to be mislabelled, so `build/farm-versions` now captures the whole
+string, and `packages.json` carries `git describe` (`25.07-984-g079a789e` --
+note master's nearest ancestor tag is `25.07`, not `25.07.1`, which is a patch
+release off a side branch).
+
+If upstream ever ships a release carrying the keys above, switch the script back
+to `--tag` and delete the exception.
+
+### Prerequisites
+
+```sh
+# system gcc (8.5) ONLY -- do NOT enable gcc-toolset-14 for this build.
+# Grammars are compiled C/C++; a newer toolset raises the GLIBCXX floor above
+# what stock EL8 provides and the .so files die on a farm node.
+cargo --version   # 1.96.0 used for this build
+```
+
+### Build
+
+```sh
+./build/build-helix.sh --rev master
+```
+
+What it does, and the three things that are load-bearing:
+
+1. **Fresh `CARGO_HOME`.** The loadout's own `~/.cargo/config.toml` (installed
+   by `env-cargo`) replaces crates.io with the offline local-registry store,
+   which cannot resolve helix's dependency graph. The script exports a private
+   `CARGO_HOME` under its work dir, so the user's offline config is neither used
+   nor modified. Same workaround as `build-surfer.sh`.
+2. **Full clone, never `--depth 1`.** `git describe --tags` supplies the version
+   string; a shallow clone has no tags and the script hard-fails rather than
+   stamping something meaningless.
+3. **`runtime/grammars/sources/` is excluded from the archive.** That directory
+   is the fetched git checkout of every grammar: **2.2 GB** against ~200 MB of
+   built `.so`. The script stages only `grammars/*.so`, `queries/`, `themes/`
+   and `tutor`, and fails if `sources` leaks into the stage.
+
+Grammars come from `hx --grammar fetch && hx --grammar build` with
+`HELIX_RUNTIME` pointed at the source tree. 301 grammars built for this revision
+(the previous payload had 291); the script fails below 200, because a partial
+grammar set ships an editor with silently dead highlighting for whatever failed.
+
+### Packaging
+
+gvim-style wrapper split:
+
+| artifact | what |
+|---|---|
+| `bin/hx.bz2` | POSIX-sh wrapper, source at `build/helix/hx` |
+| `bin/hx.bin.bz2` | real ELF, stripped, RPATH `$ORIGIN/../lib64:$ORIGIN/../lib` |
+| `runtime/helix.tar.bz2` | `./runtime/{grammars/*.so,queries,themes,tutor}` (~20 MB) |
+
+The wrapper exists because helix resolves its runtime relative to the executable
+and a compiled-in prefix, neither of which works for a relocatable `$HOME`
+install. It derives the prefix from its own installed path and exports
+`HELIX_RUNTIME`; an explicit caller value wins.
+
+Nothing is bundled: the ELF floors at **GLIBC_2.28** (exactly EL8) and its
+NEEDED set is glibc plus `libgcc_s` -- all on the never-bundle list. The script
+asserts both, because a build that picked up a newer toolchain would run fine on
+this box and be dead on a stock farm node.
+
+### Smoke -- why `--version` is not enough
+
+`hx --version` exits 0 from a binary that will discard the entire shipped config
+and start as stock helix. The real check is **`hx --health` run against this
+repo's `envs/helix/{config,languages}.toml`**:
+
+* helix parses `config.toml` with `deny_unknown_fields`. **One** unrecognised
+  key makes it throw away the **whole file** and fall back to defaults, printing
+  a message that scrolls past at startup. Theme, keymaps, LSP display, workspace
+  trust -- all silently gone, editor still starts, still looks fine.
+* `--health` **exits 0 on a malformed config**, so the assertion has to be on
+  its text (`Configuration file malformed` / `unknown field`), never the status.
+
+This is not hypothetical. Upstream replaced `[editor] insecure` with the
+`[editor.workspace-trust]` table between the old bundled build and this one, so
+**binary and config must move together in both directions**: a new binary with
+the old config, or the old binary with the new config, silently yields a
+stock-default helix. `tests/env-helix-config` runs the same assertion against
+the payload binary on every Tier 1 run, and carries a negative control that
+injects the retired `insecure` key **inside** the existing `[editor]` table --
+appending a second `[editor]` table instead would be a TOML *duplicate-table*
+error, which helix also calls malformed, so a control written that way passes
+while proving nothing about the rename.
+
+The script also runs `hx --health <lang>` for rust/python/toml/markdown/bash and
+requires highlight support, which fails if grammars or queries did not land
+where the wrapper looks for them.
+
+### Config posture
+
+`envs/helix/config.toml` is deliberately set to **maximum functionality**,
+including `[editor.workspace-trust] level = "insecure"`. The reasoning, the cost
+on a shared farm filesystem, and the narrower `level = "servers"` alternative
+are all recorded in the comment block at the top of that file -- read it there
+rather than duplicating it here.

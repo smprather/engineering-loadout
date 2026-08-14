@@ -587,6 +587,95 @@ def smoke_runtime_layout(tmpdir, env):
             "helix runtime",
             failures,
         )
+        # `hx --version` exits 0 from a helix with no grammars, no queries and a
+        # config it silently threw away, so the banner proves nothing. Two things
+        # actually need proving on a stock node:
+        #   1. the wrapper's HELIX_RUNTIME resolves to the installed tree, and the
+        #      grammars + queries are really in it (a dead runtime means no
+        #      highlighting anywhere, with no error);
+        #   2. this helix ACCEPTS the config env-helix ships. helix parses
+        #      config.toml with deny_unknown_fields -- one unrecognised key and it
+        #      discards the WHOLE file for stock defaults, exiting 0. Upstream has
+        #      already renamed one key we set ([editor] insecure ->
+        #      [editor.workspace-trust]), so binary and config must stay in step.
+        # `--health` exits 0 on a malformed config, hence the text assertions.
+        grammar_dir = os.path.join(tmpdir, "local", "share", "helix", "runtime", "grammars")
+        n_grammars = len(glob.glob(os.path.join(grammar_dir, "*.so")))
+        if n_grammars < 200:
+            detail = f"only {n_grammars} grammars in {grammar_dir}"
+            print(f"  FAIL (grammars):     helix runtime  {detail}")
+            failures.append(("helix runtime", detail))
+        else:
+            print(f"  OK   (grammars):     helix runtime ({n_grammars} parsers)")
+
+        hx_cfg = os.path.join(tmpdir, "helix-health-cfg")
+        os.makedirs(os.path.join(hx_cfg, "helix"), exist_ok=True)
+        helix_env_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "envs", "helix")
+        for name in ("config.toml", "languages.toml"):
+            src = os.path.join(helix_env_dir, name)
+            if os.path.exists(src):
+                shutil.copy(src, os.path.join(hx_cfg, "helix", name))
+        hx_env = dict(env, XDG_CONFIG_HOME=hx_cfg)
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "hx"), "--health", "rust"],
+                cwd=tmpdir,
+                env=hx_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (health):       helix config  {exc}")
+            failures.append(("helix config", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "malformed" in out or "unknown field" in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (health):       helix config  {detail}")
+                failures.append(("helix config", detail))
+            elif "Highlight queries" not in out or "✓" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (health):       helix config  no highlight support: {detail}")
+                failures.append(("helix config", detail))
+            else:
+                print("  OK   (health):       helix config")
+
+    if has_bin("less"):
+        # less is built --with-regex=posix deliberately: the PCRE2 backend adds
+        # libpcre2-8.so.0 to NEEDED, and that lib is owned by gui_libs. Coupling
+        # the pager to the GUI bundle would leave a headless compute node with no
+        # gui_libs installed and no working pager.
+        #
+        # The generic ldd probe CANNOT catch a regression here: the clean-container
+        # run installs @shared, which includes gui_libs, so a PCRE2-linked less
+        # resolves fine there and scores green -- and only breaks on the machines
+        # this repo actually targets. build-less.sh asserts the closure, but only
+        # when someone runs it.
+        #
+        # Unusually, `--version` is a real gate for once: less names its backend
+        # in the banner ("less 704 (POSIX regular expressions)"), so a PCRE2 build
+        # is visible without inspecting the ELF.
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "less"), "--version"],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (regex):        less backend  {exc}")
+            failures.append(("less backend", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if "POSIX regular expressions" not in out:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (regex):        less backend  not a POSIX-regex build: {detail}")
+                failures.append(("less backend", detail))
+            else:
+                print("  OK   (regex):        less backend (POSIX, no gui_libs coupling)")
 
     if has_bin("ngspice"):
         # Functional XSPICE smoke: the wrapper must find spinit via
@@ -1042,6 +1131,84 @@ def smoke_runtime_layout(tmpdir, env):
                 failures.append(("espresso", detail))
             else:
                 print("  OK   (minimize):     espresso")
+
+    if has_bin("less"):
+        # Functional smoke: `less --version` proves nothing -- a mis-built less
+        # can print its banner and fail to page. Pipe multi-line input through
+        # `less -F` (quit-if-one-screen, so it exits without a tty) and assert
+        # every input line comes back out. Also exercise `lesskey -V` and
+        # `lessecho` with real arguments -- same reasoning as the miller CSV
+        # round-trip and gtkwave FST round-trip probes.
+        less_bin = os.path.join(bin_dir, "less")
+        smoke_lines = ["alpha", "bravo", "charlie", "delta", "echo"]
+        smoke_input = "\n".join(smoke_lines) + "\n"
+        try:
+            proc = subprocess.run(
+                [less_bin, "-F"],
+                input=smoke_input.encode(),
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=10,
+            )
+        except Exception as exc:
+            print(f"  FAIL (page):         less  {exc}")
+            failures.append(("less", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if proc.returncode != 0 or out != smoke_input:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (page):         less  rc={proc.returncode} {detail}")
+                failures.append(("less", detail))
+            else:
+                print("  OK   (page):         less  paged 5 lines, content matched")
+
+        # lesskey -V prints "lesskey  version 704" and exits 0.
+        if has_bin("lesskey"):
+            try:
+                proc = subprocess.run(
+                    [os.path.join(bin_dir, "lesskey"), "-V"],
+                    cwd=tmpdir,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                )
+            except Exception as exc:
+                print(f"  FAIL (version):      lesskey  {exc}")
+                failures.append(("lesskey", str(exc)))
+            else:
+                out = proc.stdout.decode("utf-8", "replace")
+                if proc.returncode != 0 or "lesskey" not in out or "704" not in out:
+                    detail = output_excerpt(proc.stdout)
+                    print(f"  FAIL (version):      lesskey  {detail}")
+                    failures.append(("lesskey", detail))
+                else:
+                    print("  OK   (version):      lesskey")
+
+        # lessecho: invoke with a real argument and assert output contains it.
+        if has_bin("lessecho"):
+            try:
+                proc = subprocess.run(
+                    [os.path.join(bin_dir, "lessecho"), "smoke_test"],
+                    cwd=tmpdir,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                )
+            except Exception as exc:
+                print(f"  FAIL (echo):         lessecho  {exc}")
+                failures.append(("lessecho", str(exc)))
+            else:
+                out = proc.stdout.decode("utf-8", "replace")
+                if proc.returncode != 0 or "smoke_test" not in out:
+                    detail = output_excerpt(proc.stdout)
+                    print(f"  FAIL (echo):         lessecho  {detail}")
+                    failures.append(("lessecho", detail))
+                else:
+                    print("  OK   (echo):         lessecho")
 
     if has_bin("restic"):
         # Roundtrip smoke: a backup tool that runs but can't restore is worthless, and

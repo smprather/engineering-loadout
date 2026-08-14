@@ -1,0 +1,147 @@
+#!/bin/sh
+# Does the helix we SHIP accept the helix config we SHIP?
+#
+# This exists because the failure it catches is silent. helix parses
+# config.toml with `deny_unknown_fields`: ONE unrecognised key makes it discard
+# the ENTIRE file and fall back to stock defaults, printing a message that
+# scrolls past on startup and exiting 0. Every other setting in the file --
+# theme, keymaps, LSP display, workspace trust -- is gone, and the editor still
+# starts and still looks fine. `hx --version` cannot see this. Nothing else in
+# the suite could either.
+#
+# It is not hypothetical. Upstream renamed `[editor] insecure` to the
+# `[editor.workspace-trust]` table between the helix bundled before 2026-08-13
+# and the one bundled after. Bumping the binary without migrating the config --
+# or migrating the config without bumping the binary -- silently produces a
+# stock-default helix in either direction.
+#
+# The probe is `hx --health`, which validates the config and reports which files
+# it resolved. Note that it EXITS 0 on a malformed config, so the assertion has
+# to be on the text, not the status.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PLATFORM="${LOADOUT_PLATFORM:-el8.x86_64.glibc2p28}"
+BIN_BZ2="$REPO/payload/$PLATFORM/bin/hx.bin.bz2"
+CFG_SRC="$REPO/envs/helix/config.toml"
+LANG_SRC="$REPO/envs/helix/languages.toml"
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-helix-config.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+[ -f "$CFG_SRC" ] || fail "missing $CFG_SRC"
+[ -f "$LANG_SRC" ] || fail "missing $LANG_SRC"
+
+if [ ! -f "$BIN_BZ2" ]; then
+    echo "env-helix-config: SKIP (no hx.bin.bz2 for platform $PLATFORM)"
+    exit 0
+fi
+
+HX="$TMP/hx.bin"
+bzip2 -dc "$BIN_BZ2" > "$HX"
+chmod +x "$HX"
+
+# An empty runtime dir keeps --health from warning about a missing one; the
+# runtime archive itself is covered by tests/prebuilt-binaries.
+mkdir -p "$TMP/runtime" "$TMP/cfg/helix"
+export HELIX_RUNTIME="$TMP/runtime"
+
+health_of() {
+    XDG_CONFIG_HOME="$TMP/cfg" "$HX" --health 2>&1 || true
+}
+
+# ── 1. the shipped config, on the shipped binary ──────────────────────────────
+cp "$CFG_SRC" "$TMP/cfg/helix/config.toml"
+cp "$LANG_SRC" "$TMP/cfg/helix/languages.toml"
+out=$(health_of)
+
+case "$out" in
+    *malformed* | *"Bad config"*)
+        echo "$out" | sed -n '/malformed/,+2p' >&2
+        fail "the bundled hx REJECTS envs/helix/config.toml or languages.toml.
+      helix discards the WHOLE file on an unknown field and falls back to
+      stock defaults SILENTLY. Reconcile the config with the bundled binary
+      (build/build-helix.sh runs this same check before packaging)."
+        ;;
+esac
+
+echo "$out" | grep -qF "$TMP/cfg/helix/config.toml" \
+    || fail "--health did not resolve our config.toml; the probe is not testing what it claims"
+echo "$out" | grep -qF "$TMP/cfg/helix/languages.toml" \
+    || fail "--health did not resolve our languages.toml (a rejected language file falls back to 'default')"
+
+# ── 2. negative control ───────────────────────────────────────────────────────
+# Without this, assertion 1 passes just as happily against a probe that cannot
+# see a broken config at all. Feed it the OLD spelling -- the exact key this
+# migration removed -- and require the probe to notice.
+#
+# The key is inserted INSIDE the existing [editor] table, not appended as a new
+# one. Appending `[editor]` a second time is a TOML duplicate-table error, which
+# helix also calls malformed -- so a control written that way passes while
+# proving only that the probe can spot invalid TOML, never that it can spot a
+# valid-TOML-but-unknown-field rename, which is the whole failure this test is
+# for.
+awk '/^\[editor\]$/ && !done { print; print "insecure = true"; done = 1; next } { print }' \
+    "$CFG_SRC" > "$TMP/cfg/helix/config.toml"
+grep -qx 'insecure = true' "$TMP/cfg/helix/config.toml" \
+    || fail "negative control could not be built: no [editor] table found in $CFG_SRC"
+out=$(health_of)
+case "$out" in
+    *"unknown field"*) ;;
+    *malformed* | *"Bad config"*)
+        fail "negative control tripped on the wrong error.
+      Expected helix to reject \`insecure\` as an unknown FIELD; it reported a
+      different config problem, so this control is not testing the rename."
+        ;;
+    *)
+        fail "negative control did not trip: the retired \`insecure\` key was accepted.
+      This probe cannot detect a broken config, so assertion 1 above proves nothing."
+        ;;
+esac
+cp "$CFG_SRC" "$TMP/cfg/helix/config.toml"
+
+# ── 3. the owner's trust decision is still the one in the file ────────────────
+# Not style policing: this is the single most consequential line in the config
+# and it is deliberately the insecure choice (see the comment block in
+# config.toml). If someone reverts it, that should be a visible decision.
+PY="${PY:-python3.14}"
+command -v "$PY" > /dev/null 2>&1 || PY=python3
+"$PY" - "$CFG_SRC" "$LANG_SRC" <<'PYEOF' || exit 1
+import sys
+import tomllib
+
+cfg_path, lang_path = sys.argv[1], sys.argv[2]
+cfg = tomllib.load(open(cfg_path, "rb"))
+trust = cfg.get("editor", {}).get("workspace-trust")
+if trust is None:
+    sys.exit(
+        "FAIL: [editor.workspace-trust] is absent from config.toml.\n"
+        "      Without it helix gates EVERY language server behind a modal and\n"
+        "      bundled taplo/markdown-oxide silently never start."
+    )
+if trust.get("level") != "insecure":
+    sys.exit(
+        f"FAIL: workspace-trust level is {trust.get('level')!r}, expected 'insecure'.\n"
+        "      That is the owner-decided setting recorded in config.toml. If the\n"
+        "      deployment target changed, change this test with it -- but change\n"
+        "      it deliberately."
+    )
+if "insecure" in cfg.get("editor", {}):
+    sys.exit(
+        "FAIL: the retired `[editor] insecure` key is back in config.toml.\n"
+        "      Current helix rejects it and discards the whole file."
+    )
+
+# languages.toml carries the taplo schema catalog as an absolute file:// URL
+# built from this repo's relocation token, rewritten by _install_env_helix at
+# install time. Exactly one token: zero means the catalog path was hardcoded to
+# a build-box path, more than one means a copy escaped review.
+token = "/__LOADOUT_RELOC_ROOT__"
+n = open(lang_path).read().count(token)
+if n != 1:
+    sys.exit(f"FAIL: {lang_path} has {n} relocation tokens, expected exactly 1")
+PYEOF
+
+echo "env-helix-config: OK"

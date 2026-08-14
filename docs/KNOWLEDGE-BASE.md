@@ -110,11 +110,17 @@ The first time you open a workspace in helix you get a modal:
 silently no LSP, which looks like a broken install and is not one.
 
 **The shipped config turns that prompt off**: `envs/helix/config.toml` sets
-`[editor] insecure = true`, so servers start immediately and you should never
-see the modal. If you are ever in a tree where LSP is dead and the status line
-says *"Current workspace is not trusted"*, run `:workspace-trust`
-(`:workspace-untrust` reverses it; the answer persists in `trusted_workspaces`
-under `~/.local/share/helix`).
+
+```toml
+[editor.workspace-trust]
+level = "insecure"
+prompt = false
+```
+
+so servers start immediately and you should never see the modal. If you are ever
+in a tree where LSP is dead and the status line says *"Current workspace is not
+trusted"*, run `:workspace-trust` (`:workspace-untrust` reverses it; the answer
+persists in `trusted_workspaces` under `~/.local/share/helix`).
 
 That setting is a deliberate, owner-made decision for this deployment, not a
 default. What it trades: on a shared filesystem, any directory you open --
@@ -126,11 +132,21 @@ governed by controls outside the editor. **Deploying this loadout anywhere that
 is not true means turning it back off.** The full rationale and the revisit
 conditions live in the comment block at the top of `envs/helix/config.toml`.
 
-Upstream's narrower `[editor.workspace-trust] level = "servers"` would trust
-server launches while still gating local config -- strictly better here -- but
-**no released helix has it**: 25.07.1 (2025-07-18) is still latest as of
-2026-08-13 and rejects the key, which makes helix discard the whole config file
-and fall back to defaults. Prefer it over `insecure` once it ships.
+`level` has a narrower setting: **`"servers"`** (upstream's own default) trusts
+language-server launches while still gating workspace-local `.helix/` config.
+That is strictly safer and would settle the dead-LSP complaint on its own. It is
+not used here only because this config's stated goal is maximum functionality --
+switching that one word is the entire change needed, and nothing else in the
+file has to move with it.
+
+> **Bumping helix and editing this config are ONE change, not two.** helix parses
+> `config.toml` with `deny_unknown_fields`: a single unrecognised key makes it
+> discard the **whole file** and start with stock defaults, exiting 0 and
+> printing a message that scrolls past. `[editor] insecure` (the old spelling,
+> shipped until 2026-08-13) and `[editor.workspace-trust]` (current) are exactly
+> such a pair, so mixing an old binary with a new config -- or the reverse --
+> silently gives you a default helix. `tests/env-helix-config` fails the build on
+> that, and `build/build-helix.sh` runs the same check before packaging.
 
 ## Why this is not Obsidian
 

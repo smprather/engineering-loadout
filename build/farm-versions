@@ -303,7 +303,13 @@ TOOLS = [
         "hx",
         "helix",
         "https://github.com/helix-editor/helix",
-        strategy_flag(["--version"], r"helix ([0-9]+\.[0-9]+\.[0-9]+)"),
+        # The commit is part of the version ON PURPOSE. helix is a --rev build
+        # (see build/build-helix.sh for why), and a master build reports the
+        # LAST RELEASE TAG plus the commit -- "helix 25.07.1 (079a789e)".
+        # Capturing only the "25.07.1" half reads as though a release is
+        # installed, which is exactly how the previously bundled master build
+        # came to be recorded as the 25.07.1 release.
+        strategy_flag(["--version"], r"helix ([0-9]+\.[0-9.]+ \([0-9a-f]+\))"),
     ),
     (
         "hyperfine",
@@ -318,6 +324,12 @@ TOOLS = [
         "lazygit",
         "https://github.com/jesseduffield/lazygit",
         strategy_flag(["--version"], r"version=([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
+        "less",
+        "less",
+        "http://www.greenwoodsoftware.com/less/",
+        strategy_flag(["--version"], r"less ([0-9]+)"),
     ),
     (
         "gopls",

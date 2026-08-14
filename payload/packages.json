@@ -757,7 +757,7 @@
         "hx",
         "hx.bin"
       ],
-      "version": "25.07.1",
+      "version": "25.07-984-g079a789e",
       "platforms": [
         "linux"
       ],
@@ -765,7 +765,9 @@
         "editor"
       ],
       "archive": "payload/PLATFORM/runtime/helix.tar.bz2",
-      "description": "Modern modal text editor with tree-sitter and LSP",
+      "description": "Modern modal text editor with tree-sitter and LSP. Built from upstream master, NOT a release: helix has not tagged one since 25.07.1 (2025-07-18) and the config surface this repo relies on -- [editor.workspace-trust], rainbow-brackets, word-completion -- exists only on master. `hx --version` reports the last release tag plus the commit, so the \"25.07.1\" it prints is NOT evidence of a release build. Rebuild with build/build-helix.sh --rev <ref>; envs/helix/config.toml must stay in step with the binary (tests/env-helix-config)",
+      "version_url": "https://github.com/helix-editor/helix/releases",
+      "pin_reason": "master build on purpose -- upstream has no release carrying [editor.workspace-trust]; do NOT 'fix' this row by moving to 25.07.1, that binary rejects envs/helix/config.toml. See build/build-helix.sh",
       "sentinel": "runtime/tutor",
       "install_to": "~/.local/share/helix",
       "archive_name": "helix.tar.bz2",
@@ -875,6 +877,25 @@
         "tui"
       ],
       "description": "TUI git client for staging, committing, rebasing"
+    },
+    "less": {
+      "kind": "bin",
+      "bins": [
+        "less",
+        "lessecho",
+        "lesskey"
+      ],
+      "version": "704",
+      "version_url": "https://www.greenwoodsoftware.com/less/download.html",
+      "version_pattern": "RECOMMENDED</strong>\\s*version\\s*([0-9]+)",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "pager",
+        "viewer"
+      ],
+      "description": "less pager \u2014 the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling)"
     },
     "llvm-bolt": {
       "kind": "bin",
@@ -3352,7 +3373,8 @@
         "glow",
         "keyb",
         "gocheat",
-        "models"
+        "models",
+        "less"
       ],
       "description": "Small, fast, daily-use CLI tools"
     },

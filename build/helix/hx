@@ -1,0 +1,18 @@
+#!/bin/sh
+# hx launcher. helix finds its runtime (grammars, queries, themes, tutor) by
+# looking next to the executable and in a compiled-in prefix; neither resolves
+# for a relocatable $HOME install, so the runtime is named explicitly here.
+#
+# The prefix is derived from THIS SCRIPT's installed location, never from $HOME,
+# so `--dest-dir` staging and shared-tree deploys work with no post-install
+# rename. An explicit HELIX_RUNTIME from the caller always wins.
+
+# shellcheck disable=SC1007  # `CDPATH=` is a one-shot env assignment for cd
+bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
+# shellcheck disable=SC1007
+prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
+
+HELIX_RUNTIME=${HELIX_RUNTIME:-"$prefix/share/helix/runtime"}
+export HELIX_RUNTIME
+
+exec "$bin_dir/hx.bin" "$@"

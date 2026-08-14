@@ -2,18 +2,31 @@
 
 Last updated: 2026-08-13. **Three commits sit unreleased on `main`**: taplo
 0.10.0 (`aaadf10`), the shell history flush (`dc5f5c1`), and three open-item
-fixes (`2ed6627`). Details in the next two sections; what still needs the owner
-is at the end of them.
+fixes (`2ed6627`) — plus the **uncommitted helix rebuild** described in the next
+section. Details below; what still needs the owner is at the end of them.
 
-All three tiers green:
+All three tiers green, re-run clean after the helix rebuild:
 
 * **Tier 1 + Tier 2** (`tests/run-all`): exit 0, every test PASS, no FAIL lines.
+  Includes the new `env-helix-config`.
 * **Tier 3** (`tests/prebuilt-binaries-almalinux8 --full`, clean
-  `almalinux:8.10`): exit 0, **287 binaries OK** (up from 285 — `taplo` and
-  `taplo.bin`), 25 expected host-contract skips. taplo's catalog is proven in
-  BOTH deployment shapes: `Relocated taplo runtime: 1 text files` fires for the
-  temp-HOME install and again for the split shared-tree install, and the probes
-  report `OK (path): taplo schema catalog` / `OK (schema): taplo runtime`.
+  `almalinux:8.10`): exit 0, **290 binaries OK**, 25 expected host-contract
+  skips. helix reports `OK: hx  helix 25.07.1 (079a789e)`,
+  `OK (grammars): helix runtime (301 parsers)` and `OK (health): helix config`
+  — the last of those being the check that the shipped binary accepts the
+  shipped config. taplo's catalog is still proven in BOTH deployment shapes
+  (`Relocated taplo runtime: 1 text files` for the temp-HOME install and again
+  for the split shared-tree install, plus `OK (path): taplo schema catalog` /
+  `OK (schema): taplo runtime`).
+
+> Binary count moved 287 → 290: `less`, `lessecho`, `lesskey`. That is the
+> **less 704** package, also uncommitted — see its section below.
+
+**A methodology note on how these numbers were obtained.** An earlier full run
+also exited 0, but `packages.json` and `.content-manifest` were edited *while*
+Tier 2 was in flight — the "no concurrent payload jobs" hazard. That result was
+discarded rather than reported, and the numbers above come from a clean
+serialised re-run. A green from a run that raced its own inputs is not evidence.
 
 **Caveat on the meld fix: Tier 3 does NOT cover it.** The container skips meld
 (`SKIP (host cmd): meld  host /usr/bin/python3.6 for EL8 PyGObject missing`), so
@@ -28,6 +41,158 @@ markdown-oxide 0.25.12, iverilog 13.0, yosys 0.68 — plus currency bumps for
 miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
 (yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
 layout (klayout). linux-process-resource-monitor still pending upstream.
+
+## UNCOMMITTED: helix rebuilt from master, config moved to max functionality (2026-08-13)
+
+Asked for: "update helix and default to *highly insecure, most functional*
+configuration goals."
+
+### The finding that reframed the task
+
+**The bundled helix was never the 25.07.1 release.** It was a **master build** at
+commit `87d5c05c` (2026-05-03) that *reports itself* as `helix 25.07.1
+(87d5c05c)` — a master build prints the last release tag plus the commit. It
+entered `payload/` through a bulk snapshot commit with no build script, no
+`ADDING_BINARIES.md` note and no recorded provenance, and `packages.json`
+recorded it as version `25.07.1` as though it were the release.
+
+Proof, not inference: upstream's `25.07.1` tag source has **no**
+`rainbow_brackets`, `word_completion` or `insecure` field, yet the bundled binary
+accepted all three (`hx --health` dumps its full accepted field list on an
+unknown key). The repo has been shipping — and documenting — a master build as a
+release for months. That also invalidated the previous handoff's conclusion that
+`level = "servers"` was "BLOCKED, not pending": nothing was blocking it, we were
+already on master.
+
+Upstream state as of today: newest **release** is still `25.07.1`
+(2025-07-18, 13 months old); master HEAD is `079a789e` (2026-07-23).
+
+### What changed
+
+* **helix rebuilt** from master `079a789e`, EL8, rust 1.96.0. glibc floor
+  **2.28** (exactly EL8), NEEDED = glibc + `libgcc_s` only. 301 grammars (payload
+  had 291). Runtime archive 20 MB.
+* **`build/build-helix.sh` written** — it did not exist. Takes `--rev`, and
+  explicitly **rejects `--tag`** with a pointer to the rationale. It is the one
+  documented exception to the stable-release policy; every other build script
+  still requires `--tag`. Full note appended to `build/ADDING_BINARIES.md`
+  (MANDATORY rule, previously unsatisfied for this package).
+* **`build/helix/hx`** — the wrapper source, extracted from the payload where it
+  only existed bzip2'd. Logic byte-identical; comments added.
+* **`envs/helix/config.toml` migrated and widened** (below).
+* **`packages.json`** version is now `git describe` — `25.07-984-g079a789e`
+  (master's nearest ancestor tag is `25.07`; `25.07.1` is a patch off a side
+  branch). Description and `farm-versions` regex both now carry the commit, so
+  the tag half can never again read as "a release is installed".
+
+### The coupling that makes this one change, not two
+
+Upstream **removed `[editor] insecure`** and replaced it with
+`[editor.workspace-trust] { level, prompt, trusted }`. helix parses `config.toml`
+with `deny_unknown_fields`: one unrecognised key and it discards the **entire
+file**, falls back to stock defaults, and **exits 0**. So:
+
+| | old config | new config |
+|---|---|---|
+| **old binary** | works | whole config discarded |
+| **new binary** | whole config discarded | works |
+
+Verified in both directions with a live negative control — the retired
+`insecure` key on the new binary produces ``unknown field `insecure` `` and
+`Configuration file malformed`. Bumping the binary alone would have silently
+reverted every helix setting this repo ships.
+
+**Two gates now pin it**, because nothing did before:
+
+* `tests/env-helix-config` (new, Tier 1) — decompresses the payload `hx.bin`,
+  runs `--health` against the shipped `config.toml` + `languages.toml`, and
+  fails on `malformed`/`unknown field`. Also asserts the trust level is still the
+  owner's `insecure`, and that `languages.toml` carries exactly one relocation
+  token.
+* `build/build-helix.sh` runs the same assertion **before packaging**, so a bad
+  pairing cannot reach the payload.
+
+`tests/prebuilt-binaries` gained the matching runtime check: `>= 200` installed
+grammars and `hx --health rust` reporting highlight support. The old smoke only
+checked that `runtime/tutor` existed, which a helix with zero grammars passes.
+
+**A trap worth remembering:** `--health` **exits 0 on a malformed config**, so
+every assertion here is on its *text*. And the negative control must inject the
+bogus key **inside** the existing `[editor]` table — appending a second
+`[editor]` is a TOML *duplicate-table* error, which helix also calls "malformed",
+so a control written that way passes while proving nothing about the rename. The
+first draft of the test had exactly that bug; a mutation run caught it.
+
+### Config posture: maximum functionality
+
+`[editor.workspace-trust] level = "insecure"`, `prompt = false`. Everything the
+previous handoff entry recorded about *why* still applies unchanged — the cost on
+a shared filesystem, the controlled-environment premise, the revisit condition —
+except that the narrower `level = "servers"` is **now available and deliberately
+not taken**, on the stated goal. Changing that one word is the whole rollback;
+nothing else in the file moves with it.
+
+Also flipped toward capability: inline diagnostics on all lines down to hint
+severity, `display-inlay-hints`, `auto-document-highlight`,
+`display-progress-messages`, `undercurl`, `completion-trigger-len = 1`,
+buffer-word completion at `trigger-length = 3`, and a file picker that ignores
+`.gitignore`/`.ignore` entirely (matching the repo's own `rg --hidden
+--no-ignore` alias).
+
+**Three deliberate non-flips**, recorded in the file so they read as decisions:
+`auto-save` stays off (it writes files unprompted, and with `auto-format` that
+means reformatting on the way out); `kitty-keyboard-protocol` stays `auto`
+(forcing `enabled` *breaks* input on terminals lacking it — here the maximally
+functional setting is the autodetecting one); `mouse` stays `false` (helix
+grabbing the mouse takes it *from* the terminal, losing click-drag selection and
+tmux copy-mode — off leaves more working).
+
+### Verification
+
+Post-payload chain ran (`strip-all-elf-binaries`: 301 ELFs stripped, 1 archive
+rewritten → `gen-content-manifest` → `gen-readme-table`). Test results at the top
+of this file.
+
+## UNCOMMITTED: less 704 — current pager, replacing EL8's 2017 build
+
+Three binaries (`less`, `lessecho`, `lesskey`), `kind: bin`, in `@core-cli`.
+EL8 ships less 530 from 2017; this bundles upstream's current **RECOMMENDED**
+release so farm nodes get six years of search/filter/key-binding work without
+root. `build/build-less.sh --tag 704`, with a build note in
+`build/ADDING_BINARIES.md`.
+
+Two version decisions in the build script are load-bearing and should not be
+"upgraded" casually:
+
+* **704, not the v705–v708 git tags.** gwsw/less publishes **zero** GitHub
+  releases, so those tags are development tags, which the stable-release policy
+  forbids. 704 stands until a new tarball appears on greenwoodsoftware.com.
+* **`--with-regex=posix`, not PCRE2.** PCRE2 puts `libpcre2-8.so.0` in NEEDED,
+  and that lib belongs to **gui_libs** — coupling the pager to the GUI bundle
+  would leave a headless compute node with no gui_libs and no working pager.
+  Shipped closure is `libtinfo.so.6` (bundled) + `libc.so.6`; glibc floor 2.14.
+
+### Two gaps closed while adopting it
+
+* **It was invisible to the release currency sweep.** The registry had a
+  `version_url` but no `version_pattern`, so `check-versions` marked it `n/a`
+  and filtered it out — a package whose entire rationale is "upstream moved on
+  and EL8 did not" would never have been flagged when upstream moved again. Now
+  scraped: `less 704 704 scrape current`. The pattern is anchored on the word
+  **RECOMMENDED** (`RECOMMENDED</strong>\s*version\s*([0-9]+)`) rather than a
+  bare `version ([0-9]+)`, because the download page also lists older *and*
+  sometimes newer development versions, and the naive pattern takes the highest
+  number on the page — which would report exactly the dev build the script
+  refuses to ship.
+* **Nothing at test time guarded the regex-backend choice.** `build-less.sh`
+  asserts the NEEDED closure, but only when someone runs it, and the generic
+  `ldd` probe cannot catch a PCRE2 regression: the clean-container run installs
+  `@shared`, which **includes gui_libs**, so a PCRE2-linked less resolves fine
+  there and scores green — breaking only on the headless nodes this repo
+  targets. `tests/prebuilt-binaries` now asserts the backend. Pleasant surprise:
+  `--version` is a genuine gate here for once, because less names its backend in
+  the banner (`less 704 (POSIX regular expressions)`), so no ELF inspection is
+  needed.
 
 ## UNRELEASED on main: taplo 0.10.0 — TOML lint / format / LSP (2026-08-12, committed `aaadf10`)
 
@@ -153,6 +318,11 @@ still fail.
 
 ### 4. helix workspace trust: documented, then `insecure = true` TURNED ON by owner decision
 
+> **SPELLING SUPERSEDED 2026-08-13.** Everything below about the *decision* still
+> holds, but the key is no longer `[editor] insecure`; upstream replaced it with
+> `[editor.workspace-trust] level = "insecure"`. See the helix-rebuild section at
+> the top of this file.
+
 Landed in two steps. `2ed6627` documented the trade and left the setting off;
 the owner then decided to enable it, and it is on as of 2026-08-13.
 
@@ -190,14 +360,16 @@ So the key is valid, the config is not discarded, and the setting does what it
 claims. That run also re-verified taplo's schema relocation through
 `LOADOUT_CFG_SHARED_PREFIX` end to end.
 
-The two facts below are what made the ORIGINAL (leave-it-off) recommendation,
-and both still hold -- they are why `insecure` rather than something narrower:
+The two facts below are what made the ORIGINAL (leave-it-off) recommendation.
 
-* **The upgrade option is BLOCKED, not pending.** `[editor.workspace-trust]
-  level = "servers"` is master-only. **25.07.1 (published 2025-07-18) is still
-  upstream's newest release** as of 2026-08-13 — a 13-month gap — and the
-  stable-release policy forbids building HEAD. There is nothing to bump to.
-* **Trust PERSISTS and has commands.** The 25.07.1 binary carries
+* ~~**The upgrade option is BLOCKED, not pending.**~~ **SUPERSEDED same day —
+  this was WRONG, see the helix-rebuild section at the top of this file.** It
+  assumed the bundled binary was the 25.07.1 release and that the stable-release
+  policy therefore ruled master out. The bundled binary **was already a master
+  build**; nothing was blocking `level = "servers"`. The reasoning below is kept
+  only to show where the error entered: `hx --version` printing `25.07.1` was
+  read as evidence of a release build, and a master build prints exactly that.
+* **Trust PERSISTS and has commands.** The bundled binary carries
   `:workspace-trust` / `:workspace-untrust` and a `helix_loader::workspace_trust`
   module writing `trusted_workspaces` / `excluded_workspaces` under helix's data
   dir (`~/.local/share/helix`). The cost is one answer per workspace, **ever** —

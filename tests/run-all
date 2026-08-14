@@ -108,6 +108,7 @@ run_test "env-shell-parity" "$PY" tests/env-shell-parity
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper
+run_test "env-helix-config" tests/env-helix-config
 
 if [ "$FAST" -eq 1 ]; then
     echo
