@@ -153,6 +153,105 @@ Post-payload chain ran (`strip-all-elf-binaries`: 301 ELFs stripped, 1 archive
 rewritten → `gen-content-manifest` → `gen-readme-table`). Test results at the top
 of this file.
 
+## IN PROGRESS (nothing committed): OpenROAD 26Q3 builds and RUNS on EL8
+
+The old scoping below ("3-5 day project, prebuilts DEAD on EL8, OR-Tools is the
+monster") was right about the shape and too pessimistic about several specifics.
+Status: **a working `openroad` binary exists and passes a real LEF/DEF smoke.**
+Nothing is packaged, nothing is committed. Build artifacts are in this session's
+scratchpad and will not survive; the recipe below is what matters.
+
+### What is settled
+
+* **26Q3** (2026-06-30) is the current stable tag. OpenROAD moved to quarterly
+  tags (`26Q1`/`26Q2`/`26Q3`); `v2.0` is a 2021 fossil. This satisfies the
+  stable-release policy -- no `--rev` exception needed, unlike helix.
+* Upstream **officially supports EL8** now (`etc/DependencyInstaller.sh` has a
+  RHEL-8 branch using gcc-toolset-13 + Python 3.12). That is new since the
+  scoping was written.
+* **C++20 is mandatory** (`CMAKE_CXX_STANDARD 20`), so EL8's gcc 8.5 cannot
+  build it and gcc-toolset is unavoidable. `-static-libstdc++ -static-libgcc`
+  makes that safe: the binary ends up with **GLIBC_2.27** and **no GLIBCXX
+  symbols at all**, so it does not floor above stock EL8's 3.4.25.
+* Verified functionally, not by `-version`: reads `gscl45nm.lef` +
+  `design.def`, reports `SMOKE_INSTANCES=12` / `SMOKE_NETS=24` through the Tcl
+  API. `openroad -version` prints `26Q3` from a binary that cannot load Tcl at
+  all, so it is worthless as a gate -- see the Tcl trap below.
+
+### Dependencies -- all source-built, none available at a usable version
+
+| dep | version | note |
+|---|---|---|
+| OR-Tools | 9.14 | `-DBUILD_DEPS=ON` pulls abseil/protobuf/re2/SCIP/HiGHS/Cbc |
+| Boost | **1.87** | NOT upstream's 1.89 -- matches what OR-Tools compiled against, so one Boost in the link |
+| swig | 4.3.0 | EL8 ships 3.0.12; needs bison >= 3.5 to build |
+| bison | 3.8.2 | EL8 ships 3.0.4; OpenROAD needs >= 3.2 |
+| spdlog | 1.15.0 | |
+| eigen | 3.4 | |
+| lemon | 1.3.1 | **needs a patch**: hardcodes `CMAKE_POLICY(SET CMP0048 OLD)`, which CMake 4 removed. Delete the line; lemon's `project()` passes no VERSION so the policy is irrelevant |
+| cudd | 3.0.0 | autotools |
+| yaml-cpp | **0.6.3** | NOT 0.8.0 -- 0.8 exports only `yaml-cpp::yaml-cpp`, but OpenROAD links the bare `yaml-cpp` target, so 0.8 fails with `cannot find -lyaml-cpp`. 0.6.3 is what EL8's EPEL ships and what upstream tests |
+| gtest | 1.17.0 | required even with `-DENABLE_TESTS=OFF` |
+
+**flex is NOT required** despite upstream pinning 2.6.4 -- `find_package(FLEX)`
+carries no `REQUIRED` and the version line is commented out. (flex 2.6.4 also
+fails to build under GCC 14, which is wasted effort to discover.)
+
+Every configure needs `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`; this box has CMake
+4.3.2, which hard-refuses projects declaring `cmake_minimum_required < 3.5`.
+
+### The two findings that decide the packaging
+
+**1. OR-Tools must be built with STATIC deps, or the closure is unusable.**
+`cmake/dependencies/CMakeLists.txt` **hardcodes** `set(BUILD_SHARED_LIBS ON)`
+for its FetchContent deps -- it is not an option, and `-DBUILD_SHARED_LIBS=OFF`
+at the top level reaches `libortools` but not them. Left alone, `openroad` needs
+**111 shared libraries**, ~100 of them abseil, none present on EL8. Patching
+that one line (plus `protobuf_BUILD_SHARED_LIBS`) drops the closure to **26
+NEEDED, 15 of which are EL8 base**. Note `-DBUILD_ZLIB=OFF` does NOT work --
+it is a `CMAKE_DEPENDENT_OPTION` forced back ON by `BUILD_DEPS`; it is harmless
+only because the static build emits `libz.a` instead of the `libz.so` whose
+absence broke an earlier link.
+
+Remaining to bundle: **10 libs** -- the 9 COIN-OR solvers (`Cbc`, `CbcSolver`,
+`Clp`, `ClpSolver`, `Osi`, `OsiCbc`, `OsiClp`, `Cgl`, `CoinUtils`) plus
+`libscip.so.9.2`. That is routine next to `gui_libs`' ~80.
+
+**2. The Tcl trap -- this is the `expect` hazard, and it decides the deps.**
+`libpython3.14.so.1.0` and `libtcl8.6.so` BOTH live in portable-python's
+`~/.local/lib`, and portable-python's Tcl script library at `~/.local/lib/tcl8.6`
+is **8.6.17** whose `init.tcl` does `package require -exact Tcl 8.6.17`. EL8's
+system Tcl is **8.6.8**. So the two CANNOT be mixed in either direction:
+
+* build-tree run, prefix `/tmp/openroad-install-26Q3`: dies with
+  `Can't find a usable init.tcl`, having searched portable-python's dead
+  compiled-in prefix `/opt/cpython3144-portablelib/lib/tcl8.6`;
+* forcing system `libtcl8.6` (8.6.8) would then be rejected by the 8.6.17
+  script tree once installed under `~/.local`.
+
+**The resolution is to lean INTO portable-python rather than away from it.**
+Installed at `~/.local`, Tcl's `<prefix>/lib/tcl8.6` fallback finds the 8.6.17
+tree, which matches the 8.6.17 `libtcl8.6.so` that RPATH resolves from the same
+place. Verified with a fake prefix supplying that library: the smoke passes with
+**no wrapper and no `TCL_LIBRARY` export**, so the repo's standing rule against
+exporting it (see `expect`) is respected.
+
+So the package is: `depends: [portable-python]`, standard RPATH
+`$ORIGIN/../lib64:$ORIGIN/../lib`, 10 bundled libs, **no wrapper**.
+
+### Still to do
+
+`build/build-openroad.sh` (carrying the lemon patch, the OR-Tools static patch,
+and the yaml-cpp 0.6.3 pin), registry entry + `@eda` membership, the mandatory
+`ADDING_BINARIES.md` note, a `tests/prebuilt-binaries` smoke driving a real
+LEF/DEF (never `-version`), and the GUI pass. **Qt5Charts is the only GUI
+blocker and it is cheap**: EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact
+match for the Qt5 already in `gui_libs`. `-DBUILD_GUI=OFF` was used throughout.
+
+Unsettled and deferred: OpenROAD proper vs OpenROAD-flow-scripts. ORFS is a
+scripts+PDK layer ON TOP of this binary, so it changes nothing above; it only
+decides whether the PDK data also ships.
+
 ## UNCOMMITTED: less 704 — current pager, replacing EL8's 2017 build
 
 Three binaries (`less`, `lessecho`, `lesskey`), `kind: bin`, in `@core-cli`.
