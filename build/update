@@ -12,6 +12,15 @@ Usage:
   ./build/update --commit               stage + commit automated output
   ./build/update --dry-run              print commands without executing
   ./build/update --tag vX.Y.Z          version hint for nodejs and yara-rules
+
+Update cadence (see the "update cadence" section below):
+  ./build/update --currency             table: package | interval | last | due
+  ./build/update --set-interval P 1y    throttle one package to once a year
+  ./build/update --set-interval P never never auto-update P (manual only)
+  ./build/update --ignore-cadence       run the whole sweep regardless of interval
+
+The no-argument sweep honours each package's interval (default 6mo). Naming a
+package explicitly ALWAYS updates it -- cadence never blocks a manual run.
 """
 
 import bz2
@@ -239,6 +248,200 @@ def _classify(name):
     if name in PYPI_WHEEL:
         return "pypi-wheel"
     return None
+
+
+# -- update cadence ------------------------------------------------------------
+#
+# Bare `./build/update` is the AUTOMATIC sweep, and "rebuild everything from
+# upstream whenever someone runs it" is the wrong default for a farm-facing
+# bundle. Every bump drags the full verification burden behind it -- Tier 3
+# container run, malware scan, provenance re-check, release notes -- so a tool
+# that churns every few weeks costs far more than the churn is worth. Cadence
+# lets a package say "no more than once a year" without opting out of updates.
+#
+# Two deliberate splits:
+#
+#   POLICY is declarative and reviewable: `auto_update_interval` on the package
+#   in payload/packages.json, so it sits next to `pin_reason` and shows up in
+#   review. For the handful of dev artifacts with no registry entry
+#   (yara-rules, tmux-plugins, taplo-schemas) the same key works on their
+#   AUTOMATED entry below.
+#
+#   STATE is bookkeeping and stays OUT of the shipped registry, in
+#   build/currency-state.json. packages.json is hashed into .content-manifest,
+#   so recording a timestamp there would dirty the payload manifest on every
+#   sweep for something that changes no shipped byte. build/ is export-ignore,
+#   so this file never reaches a user.
+#
+# Naming a package explicitly ALWAYS updates it, cadence or not -- that is the
+# manual override, and it needs no special case because main() already
+# distinguishes "named packages" from "no-argument sweep".
+
+DEFAULT_AUTO_UPDATE_INTERVAL = "6mo"
+_CURRENCY_STATE = os.path.join(BUILD, "currency-state.json")
+
+# Nominal months/years (30 / 365 days). This gates how often a BUILD runs, not
+# a billing cycle; calendar exactness would buy nothing here.
+_INTERVAL_UNITS = {"d": 1, "w": 7, "mo": 30, "y": 365}
+_INTERVAL_RE = re.compile(r"^(\d+)\s*(d|w|mo|y)$")
+
+
+def _parse_interval(spec):
+    """'6mo' -> timedelta(days=180); 'never' -> None. Raises ValueError on junk."""
+    s = str(spec).strip().lower()
+    if s in ("never", "manual", "off"):
+        return None
+    m = _INTERVAL_RE.match(s)
+    if not m:
+        raise ValueError(f"bad interval {spec!r}: use <N>d/<N>w/<N>mo/<N>y or 'never' (e.g. 6mo, 1y, 90d)")
+    return datetime.timedelta(days=int(m.group(1)) * _INTERVAL_UNITS[m.group(2)])
+
+
+def _interval_spec(name):
+    """Declared cadence for a package, else the global default."""
+    for table in (PACKAGES, AUTOMATED):
+        info = table.get(name)
+        if isinstance(info, dict) and info.get("auto_update_interval"):
+            return info["auto_update_interval"]
+    return DEFAULT_AUTO_UPDATE_INTERVAL
+
+
+def _load_currency_state():
+    try:
+        with open(_CURRENCY_STATE) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        # Unreadable state must not silently freeze every package forever;
+        # fail OPEN (everything due) and say so.
+        print(f"WARNING: {_CURRENCY_STATE} unreadable ({exc}); treating every package as due")
+        return {}
+    return data.get("packages") or {}
+
+
+def _save_currency_state(pkgs):
+    payload = {
+        "_comment": (
+            "Bookkeeping for ./build/update cadence: WHEN each package last ran. "
+            "Policy (how often) is auto_update_interval in payload/packages.json. "
+            "Dev-only -- build/ is export-ignore, so this never ships."
+        ),
+        "packages": dict(sorted(pkgs.items())),
+    }
+    tmp = _CURRENCY_STATE + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(payload, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp, _CURRENCY_STATE)
+
+
+def _last_auto_update(name, state):
+    raw = (state.get(name) or {}).get("last_auto_update")
+    if not raw:
+        return None
+    try:
+        return datetime.date.fromisoformat(raw)
+    except ValueError:
+        print(f"WARNING: {name}: unparseable last_auto_update {raw!r}; treating as never updated")
+        return None
+
+
+def _currency_status(name, state, today=None):
+    """(due, detail). Never raises: a bad interval means DUE, loudly."""
+    today = today or datetime.date.today()
+    spec = _interval_spec(name)
+    try:
+        interval = _parse_interval(spec)
+    except ValueError as exc:
+        print(f"WARNING: {name}: {exc}; treating as due")
+        return True, "bad interval -- fix auto_update_interval"
+    last = _last_auto_update(name, state)
+    if interval is None:
+        return False, f"interval '{spec}': manual only"
+    if last is None:
+        return True, f"never auto-updated (interval {spec})"
+    age = (today - last).days
+    remaining = interval.days - age
+    if remaining > 0:
+        return False, f"updated {age}d ago; next due in {remaining}d (interval {spec})"
+    return True, f"last updated {age}d ago (interval {spec})"
+
+
+def _record_auto_update(names, dry_run=False):
+    """Stamp today's date for packages that actually ran.
+
+    A MANUAL run stamps too. "No more than once a year" is about how often the
+    package gets rebuilt, not about which command did it -- and stamping stops
+    the next sweep from redoing work a human just did by hand.
+    """
+    if dry_run or not names:
+        return
+    state = _load_currency_state()
+    today = datetime.date.today().isoformat()
+    for n in names:
+        state.setdefault(n, {})["last_auto_update"] = today
+    _save_currency_state(state)
+
+
+def _set_pkg_interval(name, spec):
+    """Write auto_update_interval into one package block (minimal diff)."""
+    _parse_interval(spec)  # validate BEFORE touching the registry
+    path = os.path.join(REPO, "payload", "packages.json")
+    with open(path) as fh:
+        txt = fh.read()
+    i = txt.find(f'"{name}": {{')
+    if i < 0:
+        raise KeyError(name)
+    depth = 0
+    j = txt.index("{", i)
+    while j < len(txt):
+        if txt[j] == "{":
+            depth += 1
+        elif txt[j] == "}":
+            depth -= 1
+            if depth == 0:
+                j += 1
+                break
+        j += 1
+    block = txt[i:j]
+    if '"auto_update_interval"' in block:
+        new_block, n = re.subn(
+            r'("auto_update_interval"\s*:\s*")([^"]*)(")',
+            lambda m: m.group(1) + spec + m.group(3),
+            block,
+            count=1,
+        )
+    else:
+        # Insert after "kind", which every entry carries, so diffs stay tidy.
+        new_block, n = re.subn(
+            r'("kind"\s*:\s*"[^"]*",\n)(\s*)',
+            lambda m: f'{m.group(1)}{m.group(2)}"auto_update_interval": "{spec}",\n{m.group(2)}',
+            block,
+            count=1,
+        )
+    if n != 1:
+        raise KeyError(f"could not set auto_update_interval for {name}")
+    with open(path, "w") as fh:
+        fh.write(txt[:i] + new_block + txt[j:])
+
+
+def cmd_currency():
+    state = _load_currency_state()
+    today = datetime.date.today()
+    names = list(AUTOMATED) + sorted(ROLLING_GIT)
+    rows = []
+    for name in names:
+        due, detail = _currency_status(name, state, today)
+        last = _last_auto_update(name, state)
+        rows.append((name, _interval_spec(name), last.isoformat() if last else "-", "DUE" if due else "held", detail))
+    w = max([len(r[0]) for r in rows] + [7])
+    print(f"{'package'.ljust(w)}  {'interval':8}  {'last':10}  {'state':5}  detail")
+    print(f"{'-' * w}  {'-' * 8}  {'-' * 10}  {'-' * 5}  {'-' * 40}")
+    for r in rows:
+        print(f"{r[0].ljust(w)}  {r[1]:8}  {r[2]:10}  {r[3]:5}  {r[4]}")
+    print(f"\nDefault interval: {DEFAULT_AUTO_UPDATE_INTERVAL}.")
+    print("Naming a package explicitly always updates it; --ignore-cadence does it for the whole sweep.")
 
 
 # -- output helpers ------------------------------------------------------------
@@ -1140,7 +1343,38 @@ ALL_KNOWN = (
     metavar="VERSION",
     help="Version hint for nodejs and yara (e.g. v26.3.0 or 20260517).",
 )
-def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, allow_downgrade):
+@click.option(
+    "--currency",
+    "show_currency",
+    is_flag=True,
+    help="Table: package | interval | last auto-update | due. No updating.",
+)
+@click.option(
+    "--ignore-cadence",
+    is_flag=True,
+    help="Run the whole sweep regardless of auto_update_interval.",
+)
+@click.option(
+    "--set-interval",
+    "set_interval",
+    nargs=2,
+    default=None,
+    metavar="PACKAGE SPEC",
+    help="Set a package's cadence, e.g. --set-interval gnuplot 1y (or 'never').",
+)
+def main(
+    packages,
+    show_list,
+    list_outdated,
+    do_commit,
+    rebuild,
+    dry_run,
+    tag,
+    allow_downgrade,
+    show_currency,
+    ignore_cadence,
+    set_interval,
+):
     """update -- per-package updater for loadout.
 
     With no arguments, runs every automated package end-to-end without
@@ -1158,15 +1392,57 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, a
       ./build/update --commit                 # stage + commit automated output
       ./build/update --tag v26.3.0 nodejs     # version hint for nodejs/yara
     """
+    if set_interval:
+        pkg, spec = set_interval
+        try:
+            _parse_interval(spec)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from None
+        if pkg not in PACKAGES:
+            raise click.UsageError(
+                f"{pkg!r} has no payload/packages.json entry, so there is nowhere "
+                "declarative to record its cadence. If it is a dev artifact "
+                "(yara-rules, tmux-plugins, taplo-schemas), set "
+                f'"auto_update_interval": "{spec}" on its AUTOMATED entry in build/update.'
+            )
+        _set_pkg_interval(pkg, spec)
+        print(f"{pkg}: auto_update_interval -> {spec}")
+        print("Remember to re-run: python3.14 build/gen-content-manifest")
+        return
+
+    if show_currency:
+        cmd_currency()
+        return
+
     if show_list or list_outdated:
         cmd_list(outdated_only=list_outdated)
         return
 
+    # Naming packages is the MANUAL path and is never throttled. Only the
+    # no-argument sweep honours cadence.
+    explicit = bool(packages)
     packages = list(packages) if packages else list(AUTOMATED) + sorted(ROLLING_GIT)
 
     unknown = [p for p in packages if p not in ALL_KNOWN]
     if unknown:
         raise click.UsageError("unknown package(s): {}".format(", ".join(unknown)))
+
+    if not explicit and not ignore_cadence:
+        state = _load_currency_state()
+        due, held = [], []
+        for name in packages:
+            is_due, detail = _currency_status(name, state)
+            (due if is_due else held).append((name, detail))
+        if held:
+            _sep("held by cadence")
+            for name, detail in held:
+                print(f"  {name}: {detail}")
+            print("\n  Override: name the package explicitly, or pass --ignore-cadence.")
+        packages = [name for name, _ in due]
+        if not packages:
+            _sep()
+            print("Nothing due. Every automated package is inside its update interval.")
+            return
 
     auto_succeeded = []
     all_ok = True
@@ -1200,6 +1476,8 @@ def main(packages, show_list, list_outdated, do_commit, rebuild, dry_run, tag, a
             _show_pypi_wheel(name)
         else:
             print(f"WARNING: no handler for '{name}'")
+
+    _record_auto_update(auto_succeeded, dry_run=dry_run)
 
     if do_commit and auto_succeeded:
         git_commit(auto_succeeded, dry_run=dry_run)

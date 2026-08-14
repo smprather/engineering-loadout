@@ -1,0 +1,4 @@
+{
+  "_comment": "Bookkeeping for ./build/update cadence: WHEN each package last ran. Policy (how often) is auto_update_interval in payload/packages.json. Dev-only -- build/ is export-ignore, so this never ships.",
+  "packages": {}
+}

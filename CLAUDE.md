@@ -791,6 +791,53 @@ build/check-versions --offline       # skip network; just list current versions
 
 Reads `packages.json` for bundled `version` and `farm-versions`'s TOOLS table for homepage URLs. Queries `api.github.com/.../releases/latest` (falling back to `/tags`) for GitHub-hosted projects and `pypi.org/pypi/<name>/json` for `python-tool` packages with `uv_tool` field. Authenticates against GitHub via `$GITHUB_TOKEN`/`$GH_TOKEN` or `gh auth token` for 5000/hr authenticated quota vs 60/hr unauthenticated. Packages whose homepage isn't on GitHub/PyPI marked `n/a` (skipped from default view).
 
+`check-versions` only *reports*; it never throttles. A package deliberately off
+its upstream release track should carry a `pin_reason`, which surfaces in the
+table so the currency sweep cannot mistake it for neglect (`hx` is the worked
+example: a master build whose row reads `mismatch` forever and must NOT be
+"fixed" by moving to the newest tag).
+
+### Update cadence -- how often a package auto-updates
+
+```bash
+./build/update                          # sweep: only packages that are DUE
+./build/update --currency               # table: package | interval | last | due
+./build/update --set-interval gnuplot 1y      # at most once a year
+./build/update --set-interval gnuplot never   # manual only
+./build/update --ignore-cadence         # run the whole sweep anyway
+./build/update gnuplot                  # MANUAL: always runs, cadence ignored
+```
+
+**Default is `6mo`.** Bare `./build/update` is the automatic sweep, and
+rebuilding everything from upstream on every run is the wrong default for a
+farm-facing bundle: each bump drags the full verification burden behind it
+(Tier 3 container, malware scan, provenance re-check, release notes), so a tool
+that churns every few weeks costs far more than the churn is worth.
+
+Two deliberate splits:
+
+- **Policy is declarative**: `auto_update_interval` on the package in
+  `payload/packages.json`, next to `pin_reason`, so a cadence change shows up in
+  review. Accepts `<N>d` / `<N>w` / `<N>mo` / `<N>y` / `never`. The handful of
+  dev artifacts with no registry entry (`yara-rules`, `tmux-plugins`,
+  `taplo-schemas`) take the same key on their `AUTOMATED` entry in `build/update`.
+- **State stays out of the shipped registry**: `build/currency-state.json`
+  records only *when* each package last ran. `packages.json` is hashed into
+  `.content-manifest`, so stamping a timestamp there would dirty the payload
+  manifest on every sweep for something that changes no shipped byte. `build/`
+  is `export-ignore`, so the state file never reaches a user.
+
+**Naming a package explicitly always updates it** -- cadence throttles only the
+no-argument sweep. A manual run still stamps the date, so the next sweep does
+not redo work a human just did by hand.
+
+**Every failure mode fails OPEN (package is DUE)**: a typo'd interval, a corrupt
+timestamp, or an unreadable state file warns and updates anyway. Freezing a
+package at an old version silently is far worse than an unnecessary rebuild, and
+is exactly the silent-degrade class this repo designs against.
+`tests/update-cadence` (Tier 1) pins the boundaries, the per-package override,
+and all three fail-open paths.
+
 ### Create a GitHub release
 
 **Follow [`docs/RELEASE.md`](docs/RELEASE.md).** It is the authoritative, ordered

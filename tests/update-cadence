@@ -1,0 +1,145 @@
+#!/usr/bin/env python3.14
+"""update-cadence -- unit tests for ./build/update's auto-update throttle.
+
+The cadence layer decides whether the no-argument `./build/update` sweep
+rebuilds a package or leaves it alone. Two properties are worth pinning:
+
+  1. A per-package `auto_update_interval` really overrides the 6mo default --
+     not just in the display, but in the due/held decision.
+  2. Every failure mode fails OPEN (package is DUE), never closed. A typo'd
+     interval or a corrupt state file must not silently freeze a package at an
+     old version forever, which is the exact silent-degrade this repo keeps
+     designing against and is far worse than an unnecessary rebuild.
+"""
+
+import datetime
+import importlib.machinery
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+loader = importlib.machinery.SourceFileLoader("update_mod", os.path.join(REPO, "build", "update"))
+spec = importlib.util.spec_from_loader("update_mod", loader)
+upd = importlib.util.module_from_spec(spec)
+loader.exec_module(upd)
+
+FAILURES = []
+
+
+def check(label, cond, detail=""):
+    if cond:
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append(label)
+
+
+def main():
+    day = datetime.timedelta(days=1)
+
+    print("interval parsing")
+    check("default is 6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL == "6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL)
+    check("6mo -> 180d", upd._parse_interval("6mo") == 180 * day)
+    check("1y -> 365d", upd._parse_interval("1y") == 365 * day)
+    check("90d -> 90d", upd._parse_interval("90d") == 90 * day)
+    check("2w -> 14d", upd._parse_interval("2w") == 14 * day)
+    check("case/space tolerant", upd._parse_interval("  1Y ") == 365 * day)
+    check("never -> None", upd._parse_interval("never") is None)
+
+    for bad in ("6months", "", "y", "-1y", "6 mo mo", "soon"):
+        try:
+            upd._parse_interval(bad)
+        except ValueError:
+            pass
+        else:
+            check(f"rejects {bad!r}", False, "accepted junk")
+            break
+    else:
+        check("rejects malformed specs", True)
+
+    print("due / held decision")
+    today = datetime.date(2026, 8, 14)
+
+    def state_with(days_ago):
+        return {"pkg": {"last_auto_update": (today - days_ago * day).isoformat()}}
+
+    orig_spec = upd._interval_spec
+    try:
+        upd._interval_spec = lambda name: "6mo"
+        due, _ = upd._currency_status("pkg", state_with(179), today)
+        check("179d < 6mo -> held", not due)
+        due, _ = upd._currency_status("pkg", state_with(180), today)
+        check("180d == 6mo -> due", due)
+        due, _ = upd._currency_status("pkg", state_with(400), today)
+        check("400d -> due", due)
+        due, _ = upd._currency_status("pkg", {}, today)
+        check("never recorded -> due", due)
+
+        # The property the feature exists for: same date, different interval,
+        # DIFFERENT decision.
+        upd._interval_spec = lambda name: "1y"
+        due_1y, _ = upd._currency_status("pkg", state_with(200), today)
+        upd._interval_spec = lambda name: "6mo"
+        due_6mo, _ = upd._currency_status("pkg", state_with(200), today)
+        check("200d: held at 1y but due at 6mo", (not due_1y) and due_6mo, f"1y={due_1y} 6mo={due_6mo}")
+
+        upd._interval_spec = lambda name: "never"
+        due, detail = upd._currency_status("pkg", state_with(9999), today)
+        check("never -> never auto-due", not due, detail)
+
+        # Fail-open: a typo must not freeze the package.
+        upd._interval_spec = lambda name: "6 months please"
+        due, _ = upd._currency_status("pkg", state_with(1), today)
+        check("bad interval fails OPEN (due)", due)
+
+        # Corrupt timestamp must not freeze it either.
+        upd._interval_spec = lambda name: "6mo"
+        due, _ = upd._currency_status("pkg", {"pkg": {"last_auto_update": "not-a-date"}}, today)
+        check("corrupt timestamp fails OPEN (due)", due)
+    finally:
+        upd._interval_spec = orig_spec
+
+    print("state file")
+    with tempfile.TemporaryDirectory() as tmp:
+        orig = upd._CURRENCY_STATE
+        try:
+            upd._CURRENCY_STATE = os.path.join(tmp, "currency-state.json")
+            check("missing state file -> empty, not a crash", upd._load_currency_state() == {})
+            upd._save_currency_state({"a": {"last_auto_update": "2026-08-14"}})
+            check("round-trips", upd._load_currency_state()["a"]["last_auto_update"] == "2026-08-14")
+            with open(upd._CURRENCY_STATE) as fh:
+                check("stores under 'packages'", "packages" in json.load(fh))
+            with open(upd._CURRENCY_STATE, "w") as fh:
+                fh.write("{ not json")
+            check("corrupt state file -> empty, not a crash", upd._load_currency_state() == {})
+        finally:
+            upd._CURRENCY_STATE = orig
+
+    print("declared intervals in packages.json are valid")
+    bad = []
+    for name, info in upd.PACKAGES.items():
+        if not isinstance(info, dict):
+            continue
+        spec_val = info.get("auto_update_interval")
+        if spec_val is None:
+            continue
+        try:
+            upd._parse_interval(spec_val)
+        except ValueError as exc:
+            bad.append(f"{name}: {exc}")
+    check("every declared auto_update_interval parses", not bad, "; ".join(bad))
+
+    print()
+    if FAILURES:
+        print(f"update-cadence: {len(FAILURES)} FAILED")
+        return 1
+    print("update-cadence: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
