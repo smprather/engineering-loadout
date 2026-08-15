@@ -304,13 +304,69 @@ Installer uses Click/rich-click subcommands (dnf/apt verbs). Bare `loadout` and 
 - `./loadout clean [--logs|--pending|--all]` -- remove stale `/tmp/loadout*` state.
 - `./loadout completion bash` -- print a static bash completion script (subcommands, per-verb flags, and the package/group/tag names baked in) to stdout. Regenerate the committed `envs/bash/global/completions/loadout.bash` with `./loadout completion bash > envs/bash/global/completions/loadout.bash` whenever the CLI verbs/flags or the package registry change. The completions dir is sourced at shell startup (static, not eval'd live) -- the generated script is self-contained (computes `cur`/`prev` itself; borrows bash-completion's `_filedir` only when present) and shellcheck-clean (uses `mapfile -t COMPREPLY`).
 
+### Transaction summary and confirmation
+
+Install-like verbs print a dnf-style summary and ask before doing anything:
+
+```
+Package                   Kind          Version           Installed
+
+Installing:
+ openroad                  bin           26Q3                  136 M
+
+Installing dependencies:
+ portable-python           python-base   3.14.4                 96 M
+
+Transaction Summary
+=====================================================================
+Install  2 packages (1 requested, 1 dependency)
+
+Total installed size: 232 M
+Is this ok [Y/n]:
+```
+
+**`[Y/n]` -- the capitalised letter is what bare ENTER selects.** Requested
+packages and pulled-in dependencies are listed separately, each package
+appearing exactly once.
+
+**Sizes are INSTALLED (uncompressed) size**, which is the number a user budgets
+disk against; the whole payload is 3.1 G compressed and 8.4 G installed, so the
+distinction is not cosmetic. bzip2 stores no uncompressed length, so learning it
+means decompressing -- unacceptable per-install for ~3 GB. It is precomputed
+once by `build/gen-installed-sizes` into `payload/installed-sizes.json` and
+committed, exactly as DEB bakes `Installed-Size` and RPM bakes `RPMTAG_SIZE`.
+`build/gen-installed-sizes --check` is a Tier 1 gate so the map cannot drift
+from the payload. If the map is missing the summary falls back to compressed
+bytes and says so loudly rather than reporting a wrong number.
+
+The map is keyed **per file, not per package**, for a reason: python-tool wheels
+are shared (a dozen tools each list `anyio`, `click`, `platformdirs`), so
+per-package numbers cannot be summed. The installer unions each package's file
+set first and sizes the union once; when rows therefore overshoot the total it
+prints `(rows sum to X; shared files counted once above)` rather than hiding the
+discrepancy.
+
+Two artifact rules worth not re-deriving: chunked artifacts (`*.part-NNN`)
+collapse to their logical name before lookup, so a three-part archive counts
+once; and `bin/*.bz2` counts whenever the file exists rather than only for
+archive-less packages the way `doctor` checks it -- `gtkwave` has BOTH 16
+separate binaries and an archive holding only `share/`, and doctor's carve-out
+under-reported it by 10x.
+
+**Non-interactive callers are not blocked.** With stdin not a TTY the prompt
+prints `Is this ok [Y/n]: y   (not a terminal -- assuming yes; pass -y to be
+explicit)` and proceeds. dnf would read EOF and abort, which would break every
+test and CI caller for no safety gain -- nothing has been written at that point,
+and `--dry-run` exists for a look-first workflow.
+
 ### Selection flags
 
 - Positional `PKG...` -- install exactly these packages/`@groups` (deps still walked unless `--no-deps`). There is no bare `all`; use `@engineering-loadout` (curated bundled set) or `@all` (truly everything).
 - `--skip NAMES` -- remove packages/`@groups` from install set (`install`, `reinstall`, `upgrade`, `resolve`).
 - `--no-deps` -- install named set verbatim; no `depends`/`recommends` walk (`install`, `reinstall`, `upgrade`, `resolve`).
 - `--force` -- continue past resolver errors (e.g. hard dep in skip set), printing `WARNING:` row instead of erroring (`install`, `reinstall`, `upgrade`, `resolve`).
-- `--dry-run` -- resolve + print; no writes (`install`, `reinstall`, `upgrade`).
+- `--dry-run` -- resolve + print the transaction summary; no writes (`install`, `reinstall`, `upgrade`).
+- `-y` / `--assumeyes` / `--yes` -- answer the transaction prompt (dnf spells it `--assumeyes`, apt `--yes`; both accepted).
 - `--allow-online-plugin-sync` -- allow install-like verbs to run Neovim `Lazy! restore` against the committed lockfile over the network; default uses the bundled stash/offline path (`install`, `reinstall`, `upgrade`).
 - `--no-verify` -- skip sha256 verification of payload archives against `.content-manifest` (`install`, `reinstall`, `upgrade`).
 - `--install-follows-symlinks [yes|no|auto]` -- choose how archive extraction treats existing directory symlinks; `auto` follows only when the target is writable (`install`, `reinstall`, `upgrade`).
@@ -755,9 +811,16 @@ xterm, expect) as examples of the required level of detail.
 bzip2 -k mybinary
 cp mybinary.bz2 payload/el8.x86_64.glibc2p28/bin/
 ./build/strip-all-elf-binaries          # strips, updates .strip-manifest
-git add payload/ .strip-manifest
+python3.14 build/gen-installed-sizes    # BEFORE the manifest -- it hashes this file
+python3.14 build/gen-content-manifest
+git add payload/ .strip-manifest .content-manifest
 git commit                        # pre-commit hook re-strips and re-records
 ```
+
+**Order matters in that chain.** `payload/installed-sizes.json` lives under
+`payload/`, so `.content-manifest` hashes it; regenerating the sizes map after
+the manifest leaves the manifest stale. Both have `--check` modes wired into
+Tier 1, so getting it wrong fails a gate rather than shipping.
 
 For shared libraries, put `.bz2` in `lib64/` instead.
 

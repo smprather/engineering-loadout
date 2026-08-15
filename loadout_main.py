@@ -4816,6 +4816,195 @@ def glob_paths_glob(pattern):
     return sorted(glob.glob(pattern))
 
 
+# --- transaction summary + confirmation ------------------------------------
+#
+# Modelled on dnf: what you asked for and what got pulled in are listed
+# SEPARATELY, each package appearing exactly once, with a total at the end.
+
+_SIZE_UNITS = (("G", 1024**3), ("M", 1024**2), ("k", 1024))
+
+
+def _human_size(n):
+    """dnf-style short size: '39 M', '1.2 G', '512 k'."""
+    for suffix, scale in _SIZE_UNITS:
+        if n >= scale:
+            val = n / scale
+            return f"{val:.0f} {suffix}" if val >= 10 else f"{val:.1f} {suffix}"
+    return f"{n} B"
+
+
+def _artifact_paths(entry, repo_dir, platform_dir):
+    """Every payload file a package reads, as a SET of absolute paths.
+
+    A set, not a total, because python-tool wheels are SHARED -- a dozen tools
+    each list `anyio`, `click`, `platformdirs` -- so adding per-package sizes
+    would count the same file repeatedly. Callers union these and size the union
+    once. Mirrors the artifact locations doctor validates; keep the two in step.
+    """
+    out = set()
+
+    def _add(pattern):
+        for pat in (pattern, pattern + ".part-*"):
+            for p in glob_paths_glob(pat):
+                if os.path.isfile(p):
+                    out.add(p)
+
+    archive = entry.get("archive", "")
+    if archive:
+        resolved = archive
+        if "TS_PLATFORM" in resolved:
+            resolved = resolved.replace("TS_PLATFORM", treesitter_platform_id())
+        if "PLATFORM" in resolved and platform_dir:
+            resolved = resolved.replace("PLATFORM", os.path.basename(platform_dir))
+        _add(os.path.join(repo_dir, resolved))
+
+    if platform_dir:
+        # Count bin/*.bz2 whenever the file EXISTS, rather than only for
+        # archive-less packages the way doctor does. gtkwave has both: 16
+        # separate bin/*.bz2 AND an archive carrying only share/, so doctor's
+        # carve-out silently dropped all 16 and reported gtkwave as 444 k.
+        # Packages whose bins really do live inside the archive (nodejs) have no
+        # bin/*.bz2 to glob, so this cannot double-count them.
+        for b in entry.get("bins", []):
+            _add(os.path.join(platform_dir, "bin", b + ".bz2"))
+        for lib in entry.get("libs", []):
+            _add(os.path.join(platform_dir, "lib64", lib + ".bz2"))
+        for dist in entry.get("wheels", []):
+            # Wheel filenames normalise '-' and '.' to '_'; try both spellings.
+            _add(os.path.join(platform_dir, "wheels", dist + "-*.whl"))
+            _add(os.path.join(platform_dir, "wheels", re.sub(r"[-.]+", "_", dist) + "-*.whl"))
+
+    src = entry.get("source")
+    if src:
+        for root, _dirs, files in os.walk(os.path.join(repo_dir, src)):
+            for f in files:
+                out.add(os.path.join(root, f))
+    return out
+
+
+_INSTALLED_SIZES = None
+_INSTALLED_SIZES_OK = False
+_PART_SUFFIX_RE = re.compile(r"\.part-\d+$")
+
+
+def _load_installed_sizes(repo_dir):
+    """Load payload/installed-sizes.json (path -> uncompressed bytes).
+
+    Precomputed by build/gen-installed-sizes because bzip2 carries no
+    uncompressed length: learning it means decompressing, and doing that for
+    ~3 GB on every install is not acceptable. Same reason DEB bakes
+    Installed-Size and RPM bakes RPMTAG_SIZE at package time.
+    """
+    global _INSTALLED_SIZES, _INSTALLED_SIZES_OK
+    if _INSTALLED_SIZES is not None:
+        return _INSTALLED_SIZES
+    _INSTALLED_SIZES = {}
+    try:
+        with open(os.path.join(repo_dir, PAYLOAD_DIR, "installed-sizes.json")) as fh:
+            _INSTALLED_SIZES = json.load(fh).get("sizes", {}) or {}
+        _INSTALLED_SIZES_OK = bool(_INSTALLED_SIZES)
+    except OSError, ValueError:
+        _INSTALLED_SIZES_OK = False
+    return _INSTALLED_SIZES
+
+
+def _bytes_of(paths, repo_dir):
+    """Installed (uncompressed) bytes for a set of artifact paths.
+
+    Chunked artifacts collapse to their logical name first, so a three-part
+    archive is counted once rather than three times.
+    """
+    sizes = _load_installed_sizes(repo_dir)
+    logical = {_PART_SUFFIX_RE.sub("", os.path.relpath(p, repo_dir)) for p in paths}
+    if _INSTALLED_SIZES_OK:
+        return sum(sizes.get(rel, 0) for rel in logical)
+    # No precomputed map: fall back to on-disk (compressed) bytes rather than
+    # reporting nothing. render_transaction labels which one it showed.
+    total = 0
+    for rel in logical:
+        try:
+            total += os.path.getsize(os.path.join(repo_dir, rel))
+        except OSError:
+            pass
+    return total
+
+
+def render_transaction(requested, selected, registry, repo_dir):
+    """Print a dnf-style transaction table. Returns (n_packages, total_bytes)."""
+    platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
+
+    # What the user literally asked for (groups expanded) vs what the dependency
+    # walk added. Every package lands in exactly one bucket -- no double-listing.
+    try:
+        asked = expand_groups(requested, registry) & set(selected)
+    except ResolverError:
+        asked = set(selected)
+    deps = set(selected) - asked
+
+    paths = {n: _artifact_paths(registry.get(n, {}), repo_dir, platform_dir) for n in selected}
+    all_paths = set()
+    for s in paths.values():
+        all_paths |= s
+    total = _bytes_of(all_paths, repo_dir)
+    sum_rows = sum(_bytes_of(paths[n], repo_dir) for n in selected)
+
+    width = max([len(n) for n in selected] + [24]) if selected else 24
+
+    def _section(title, names):
+        if not names:
+            return
+        print(f"\n{title}:")
+        for n in sorted(names):
+            e = registry.get(n, {})
+            print(
+                " {}  {}  {}  {:>9}".format(
+                    n.ljust(width),
+                    (e.get("kind") or "").ljust(12),
+                    (str(e.get("version") or "")).ljust(16),
+                    _human_size(_bytes_of(paths[n], repo_dir)),
+                )
+            )
+
+    print("\n{}  {}  {}  {:>9}".format("Package".ljust(width), "Kind".ljust(12), "Version".ljust(16), "Installed"))
+    _section("Installing", asked)
+    _section("Installing dependencies", deps)
+
+    print("\nTransaction Summary")
+    print("=" * (width + 45))
+    print(
+        f"Install  {len(selected)} package{'s' if len(selected) != 1 else ''}"
+        f" ({len(asked)} requested, {len(deps)} dependenc{'ies' if len(deps) != 1 else 'y'})"
+    )
+    print(f"\nTotal installed size: {_human_size(total)}")
+    if sum_rows > total:
+        # Not an arithmetic error worth hiding: python-tool wheels are shared, so
+        # the rows legitimately overlap. The total is the honest number.
+        print(f"  (rows sum to {_human_size(sum_rows)}; shared files counted once above)")
+    if not _INSTALLED_SIZES_OK:
+        print("WARNING: payload/installed-sizes.json missing or unreadable --")
+        print("         sizes above are COMPRESSED payload bytes, not installed size.")
+        print("         Regenerate with: python3.14 build/gen-installed-sizes")
+    return len(selected), total
+
+
+def confirm_transaction(assume_yes):
+    """dnf-style [Y/n]. Capitalised letter is what bare ENTER selects."""
+    if assume_yes:
+        return True
+    if not sys.stdin.isatty():
+        # Every test and CI caller runs non-interactively; blocking there would
+        # break them all for no safety gain, since nothing has been written yet
+        # and --dry-run exists for a look-first workflow.
+        print("Is this ok [Y/n]: y   (not a terminal -- assuming yes; pass -y to be explicit)")
+        return True
+    try:
+        answer = input("Is this ok [Y/n]: ").strip().lower()
+    except EOFError, KeyboardInterrupt:
+        print()
+        return False
+    return answer in ("", "y", "yes")
+
+
 def cmd_install(args, registry, selected_tools, repo_dir, home):
     """The default install verb."""
     global _FOLLOW_SYMLINKS, _VERIFY_CONTENT, _ALLOW_ONLINE_PLUGIN_SYNC
@@ -4966,6 +5155,18 @@ def cmd_install_v2(args, registry, repo_dir, home):
         for n in unknown:
             eprint(f"Error: no match for argument: {n}")
         return 1
+
+    if selected_tools:
+        render_transaction(pkgs, selected_tools, registry, repo_dir)
+        # --dry-run falls THROUGH to cmd_install, which prints the by-kind
+        # "Resolved N packages" listing and stops. The table augments that
+        # output rather than replacing it -- tests/check-installer parses the
+        # listing, and it stays useful to a human besides.
+        if not getattr(args, "dry_run", False):
+            if not confirm_transaction(bool(getattr(args, "assume_yes", False))):
+                print("Operation aborted.")
+                return 1
+
     return cmd_install(args, registry, selected_tools, repo_dir, home)
 
 
@@ -5200,6 +5401,14 @@ def _selection_options(f):
 def _install_options(f):
     """Decorator stack: install-like verbs (install, reinstall, upgrade)."""
     f = click.option(
+        "-y",
+        "--assumeyes",
+        "--yes",
+        "assume_yes",
+        is_flag=True,
+        help="Answer yes to the transaction prompt (dnf spells it --assumeyes, apt --yes; both work).",
+    )(f)
+    f = click.option(
         "--post-install-hook",
         "post_install_hook",
         multiple=True,
@@ -5339,6 +5548,7 @@ def cli_install(
     allow_online_plugin_sync,
     install_follows_symlinks,
     post_install_hook,
+    assume_yes,
     dest_dir,
 ):
     """Install the named packages or @groups.
@@ -5375,6 +5585,7 @@ def cli_install(
         allow_online_plugin_sync=allow_online_plugin_sync,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=list(post_install_hook),
+        assume_yes=assume_yes,
         dest_dir=dest_dir,
     )
     ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(dest_dir)))
@@ -5397,6 +5608,7 @@ def cli_reinstall(
     allow_online_plugin_sync,
     install_follows_symlinks,
     post_install_hook,
+    assume_yes,
     dest_dir,
 ):
     """Re-install named packages. Today identical to `install`; will diverge once
@@ -5413,6 +5625,7 @@ def cli_reinstall(
         allow_online_plugin_sync=allow_online_plugin_sync,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=post_install_hook,
+        assume_yes=assume_yes,
         dest_dir=dest_dir,
     )
 
@@ -5434,6 +5647,7 @@ def cli_upgrade(
     allow_online_plugin_sync,
     install_follows_symlinks,
     post_install_hook,
+    assume_yes,
     dest_dir,
 ):
     """Re-extract the named packages from the current checkout.
@@ -5452,6 +5666,7 @@ def cli_upgrade(
         allow_online_plugin_sync=allow_online_plugin_sync,
         install_follows_symlinks=install_follows_symlinks,
         post_install_hook=post_install_hook,
+        assume_yes=assume_yes,
         dest_dir=dest_dir,
     )
 
@@ -5640,7 +5855,7 @@ _loadout_complete() {
     case "$cmd" in
         install|reinstall|upgrade|update)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--skip --no-deps --force --dry-run --no-backup --post-install-hook --install-follows-symlinks --dest-dir -h --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--skip --no-deps --force --dry-run --no-backup --no-verify --allow-online-plugin-sync --post-install-hook --install-follows-symlinks --dest-dir -y --assumeyes --yes -h --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -W "$pkgs $groups" -- "$cur")
             fi

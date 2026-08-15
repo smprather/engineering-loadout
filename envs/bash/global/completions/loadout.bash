@@ -58,7 +58,7 @@ _loadout_complete() {
     case "$cmd" in
         install|reinstall|upgrade|update)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--skip --no-deps --force --dry-run --no-backup --post-install-hook --install-follows-symlinks --dest-dir -h --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--skip --no-deps --force --dry-run --no-backup --no-verify --allow-online-plugin-sync --post-install-hook --install-follows-symlinks --dest-dir -y --assumeyes --yes -h --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -W "$pkgs $groups" -- "$cur")
             fi

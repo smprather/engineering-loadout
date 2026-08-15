@@ -100,6 +100,7 @@ run_test "registry-integrity" "$PY" tests/registry-integrity
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
+run_test "installed-sizes in sync" "$PY" build/gen-installed-sizes --check
 run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" "$PY" build/gen-readme-table --check

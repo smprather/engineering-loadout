@@ -1,0 +1,243 @@
+#!/usr/bin/env python3.14
+"""gen-installed-sizes -- record the UNCOMPRESSED size of every payload artifact.
+
+`loadout install` shows a dnf-style transaction summary, and the number a user
+acts on there is the INSTALLED size, not the compressed one -- nobody budgets
+disk against a .bz2. bzip2 stores no uncompressed length in its header, so the
+only way to learn it is to decompress; doing that for ~3 GB on every install is
+absurd, so it is computed once here and committed, exactly as DEB's
+Installed-Size and RPM's RPMTAG_SIZE are baked at package time.
+
+Output: payload/installed-sizes.json, a map of repo-relative path -> bytes.
+
+Keys are LOGICAL paths: a chunked artifact (`foo.tar.bz2.part-000`,
+`.part-001`, ...) is recorded once under `foo.tar.bz2`, because that is the one
+file the installer conceptually extracts. Consumers normalise `.part-NNN` away
+before lookup.
+
+Per-file rather than per-package, deliberately: python-tool wheels are SHARED
+(a dozen tools each depend on `anyio`, `click`, `platformdirs`), so a
+per-package number cannot be summed without double-counting. Keeping file
+granularity lets the installer union the file sets first and size the union
+once.
+
+Usage:
+    python3.14 build/gen-installed-sizes            # write the map
+    python3.14 build/gen-installed-sizes --check    # fail if stale (Tier 1)
+"""
+
+import bz2
+import concurrent.futures
+import json
+import os
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import zipfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(REPO, "payload", "installed-sizes.json")
+
+# Trees holding artifacts the installer reads. envs/ is here because env
+# packages install from a `source` directory rather than an archive.
+SCAN_DIRS = ("payload", "envs")
+
+# Never measured: this file itself, and anything git-ignored that a developer
+# may or may not have fetched (the nvim plugin stash is a release asset).
+SKIP_SUBSTRINGS = (
+    "installed-sizes.json",
+    "nvim-plugin-stash.tar.bz2",
+)
+
+_PART_RE = re.compile(r"\.part-\d+$")
+
+
+def logical_path(path):
+    """foo.tar.bz2.part-003 -> foo.tar.bz2 ; anything else unchanged."""
+    return _PART_RE.sub("", path)
+
+
+def _chunk_reader(logical_abs, seekable=False):
+    """File object over a logical artifact, rejoining .part-NNN if needed.
+
+    seekable=True materialises chunks into a temp file. zipfile REQUIRES a
+    seekable object (it reads the central directory from the end), and a purely
+    sequential concat object makes it raise -- which silently scored every
+    chunked font zip as 0 bytes until the warnings surfaced it.
+    """
+    if os.path.exists(logical_abs):
+        return open(logical_abs, "rb")
+    parts = sorted(p for p in (logical_abs + f".part-{i:03d}" for i in range(1000)) if os.path.exists(p))
+    if not parts:
+        return None
+    if seekable:
+        tmp = tempfile.TemporaryFile()
+        for p in parts:
+            with open(p, "rb") as fh:
+                shutil.copyfileobj(fh, tmp)
+        tmp.seek(0)
+        return tmp
+
+    class _Concat:
+        def __init__(self, paths):
+            self._paths = list(paths)
+            self._fh = None
+            self._i = 0
+
+        def read(self, n=-1):
+            out = b""
+            while True:
+                if self._fh is None:
+                    if self._i >= len(self._paths):
+                        return out
+                    self._fh = open(self._paths[self._i], "rb")
+                    self._i += 1
+                chunk = self._fh.read(n if n and n > 0 else -1)
+                if not chunk:
+                    self._fh.close()
+                    self._fh = None
+                    if n and n > 0 and not out:
+                        continue
+                    if n and n > 0:
+                        return out
+                    continue
+                out += chunk
+                if n and n > 0 and len(out) >= n:
+                    return out
+                if not (n and n > 0):
+                    continue
+
+        def close(self):
+            if self._fh:
+                self._fh.close()
+
+    return _Concat(parts)
+
+
+def measure(rel):
+    """Uncompressed bytes for one logical artifact. Returns (rel, bytes)."""
+    abs_path = os.path.join(REPO, rel)
+    try:
+        # zip and wheel directories record uncompressed sizes -- no inflate needed.
+        if rel.endswith((".zip", ".whl")):
+            fh = _chunk_reader(abs_path, seekable=True)
+            if fh is None:
+                return rel, 0
+            try:
+                with zipfile.ZipFile(fh) as zf:
+                    return rel, sum(i.file_size for i in zf.infolist())
+            finally:
+                fh.close()
+
+        if rel.endswith(".tar.bz2"):
+            fh = _chunk_reader(abs_path)
+            if fh is None:
+                return rel, 0
+            try:
+                total = 0
+                with tarfile.open(fileobj=fh, mode="r|bz2") as tf:
+                    for m in tf:
+                        if m.isreg():
+                            total += m.size
+                return rel, total
+            finally:
+                fh.close()
+
+        if rel.endswith(".bz2"):
+            fh = _chunk_reader(abs_path)
+            if fh is None:
+                return rel, 0
+            try:
+                dec = bz2.BZ2Decompressor()
+                total = 0
+                while True:
+                    block = fh.read(1 << 20)
+                    if not block:
+                        break
+                    total += len(dec.decompress(block))
+                return rel, total
+            finally:
+                fh.close()
+
+        # lstat, not getsize: three vendored tmux-resurrect entries are symlinks
+        # into a tmux-test submodule that is not vendored, so getsize raises
+        # ENOENT on them. A symlink installs as a symlink and costs its target
+        # path, which is what lstat reports -- and a dangling one is not an error
+        # worth a warning on every run.
+        return rel, os.lstat(abs_path).st_size
+    except Exception as exc:  # noqa: BLE001 - a bad artifact must not kill the sweep
+        print(f"WARNING: {rel}: {exc}", file=sys.stderr)
+        return rel, 0
+
+
+def collect():
+    """Every logical artifact path under the scanned trees, repo-relative."""
+    seen = set()
+    for top in SCAN_DIRS:
+        base = os.path.join(REPO, top)
+        if not os.path.isdir(base):
+            continue
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                rel = os.path.relpath(os.path.join(root, f), REPO)
+                if any(s in rel for s in SKIP_SUBSTRINGS):
+                    continue
+                seen.add(logical_path(rel))
+    return sorted(seen)
+
+
+def build():
+    paths = collect()
+    sizes = {}
+    workers = min(os.cpu_count() or 4, 20)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as ex:
+        for rel, n in ex.map(measure, paths, chunksize=8):
+            sizes[rel] = n
+    return sizes
+
+
+def main(argv):
+    check = "--check" in argv
+    sizes = build()
+    payload = {
+        "_comment": (
+            "Uncompressed (installed) size in bytes per logical payload artifact. "
+            "Generated by build/gen-installed-sizes; bzip2 has no size header, so "
+            "this is precomputed rather than measured at install time. Chunked "
+            "artifacts are keyed by their logical name, without .part-NNN."
+        ),
+        "sizes": sizes,
+    }
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+    if check:
+        try:
+            with open(OUT) as fh:
+                have = fh.read()
+        except FileNotFoundError:
+            print("installed-sizes.json is missing. Run: python3.14 build/gen-installed-sizes")
+            return 1
+        if have != text:
+            old = json.loads(have).get("sizes", {})
+            drift = [k for k in set(old) | set(sizes) if old.get(k) != sizes.get(k)]
+            print(f"installed-sizes.json is stale ({len(drift)} artifact(s) differ):")
+            for k in sorted(drift)[:10]:
+                print(f"  {k}: {old.get(k)} -> {sizes.get(k)}")
+            if len(drift) > 10:
+                print(f"  ... and {len(drift) - 10} more")
+            print("Run: python3.14 build/gen-installed-sizes")
+            return 1
+        print(f"installed-sizes.json OK ({len(sizes)} artifacts)")
+        return 0
+
+    with open(OUT, "w") as fh:
+        fh.write(text)
+    total = sum(sizes.values())
+    print(f"wrote {OUT} ({len(sizes)} artifacts, {total / 1024**3:.1f} GiB installed)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

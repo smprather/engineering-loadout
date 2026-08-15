@@ -284,6 +284,7 @@ Done. helix $DESCRIBE ($SHA)
 
 Next, as for every payload change:
   ./build/strip-all-elf-binaries
+  python3.14 build/gen-installed-sizes   # before the manifest: it hashes this file
   python3.14 build/gen-content-manifest
   python3.14 build/gen-readme-table
 EOF

@@ -1301,6 +1301,7 @@ sha256  4fdbda673dea226a77ae6eabdc6894e63db4f31fed1c2b278741c4a3fdef8652  payloa
 sha256  4fdbda673dea226a77ae6eabdc6894e63db4f31fed1c2b278741c4a3fdef8652  payload/treesitter/vendor/nvim-treesitter/runtime/queries/eex/injections.scm
 sha256  4fe32f4fffd37772f27be3b56ebfa70d495a1ac65b15b2d4c3e96c088d437174  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/wxml/injections.scm
 sha256  4fe32f4fffd37772f27be3b56ebfa70d495a1ac65b15b2d4c3e96c088d437174  payload/treesitter/vendor/nvim-treesitter/runtime/queries/wxml/injections.scm
+sha256  4fe72b4dfd68e90ee4107bb7198c0f5ae8c417e0291e8cac71037b8fae1741d3  payload/installed-sizes.json
 sha256  4ff0b2f16a79cf4693f63d45b72948b0874bc6a8d896ab552a2dda77985ae979  payload/el8.x86_64.glibc2p28/lib64/libXaw.so.7.bz2
 sha256  50057ac6b1bc300c3f583ee00dd7de0a68a5c3c4cfc3644a3a36c18a9b8f75f4  payload/el8.x86_64.glibc2p28/bin/uname.bz2
 sha256  50118e4afa68d9876312b443da4a4f282635c14ca0dfc52fef365b274fe59dd2  payload/treesitter/vendor/nvim-treesitter/tests/indent/python/parenthesized_conditions.py
