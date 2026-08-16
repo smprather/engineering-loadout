@@ -68,7 +68,7 @@ run_one() {
     echo "============================================================"
 
     # shellcheck disable=SC2086
-    ./loadout install @rust $dest_flag --no-backup
+    ./loadout install -y @rust $dest_flag --no-backup
 
     cfg="$cargo_home_base/.cargo/config.toml"
     echo "--- installer-written $cfg ---"

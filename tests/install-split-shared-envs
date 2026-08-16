@@ -85,7 +85,7 @@ run_loadout() {
 }
 
 echo "Installing @shared to non-home tree: $shared_root"
-run_loadout install @shared --dest-dir "$shared_root" --no-backup
+run_loadout install -y @shared --dest-dir "$shared_root" --no-backup
 
 echo "Installing @envs to temp HOME: $test_home"
 env -i \
@@ -96,7 +96,7 @@ env -i \
     XDG_CACHE_HOME="$test_cache" \
     XDG_STATE_HOME="$test_state" \
     LOADOUT_CFG_SHARED_PREFIX="$shared_prefix" \
-    "$repo_dir/loadout" install @envs --no-backup
+    "$repo_dir/loadout" install -y @envs --no-backup
 
 assert_exists "$shared_prefix/bin/bash"
 assert_exists "$shared_prefix/bin/nvim"

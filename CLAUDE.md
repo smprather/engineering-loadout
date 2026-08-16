@@ -353,11 +353,24 @@ archive-less packages the way `doctor` checks it -- `gtkwave` has BOTH 16
 separate binaries and an archive holding only `share/`, and doctor's carve-out
 under-reported it by 10x.
 
-**Non-interactive callers are not blocked.** With stdin not a TTY the prompt
-prints `Is this ok [Y/n]: y   (not a terminal -- assuming yes; pass -y to be
-explicit)` and proceeds. dnf would read EOF and abort, which would break every
-test and CI caller for no safety gain -- nothing has been written at that point,
-and `--dry-run` exists for a look-first workflow.
+**Non-interactive callers must pass `-y`.** With stdin not a TTY the
+transaction ABORTS with exit 1, matching dnf:
+
+```
+Is this ok [Y/n]:
+Error: stdin is not a terminal, so the transaction cannot be confirmed.
+       Pass -y (--assumeyes / --yes) to confirm non-interactively,
+       or --dry-run to see the transaction without installing.
+Operation aborted.
+```
+
+Assuming yes there would mean `loadout install @all | tee log` installs 8 GB
+without ever asking, and a pipe is not consent. Every programmatic caller in
+this repo therefore states its intent: the Tier 2 install tests, the Tier 3
+Docker entrypoints (`build/docker/almalinux8.10-{smoke,rust}-entrypoint`) and
+`tests/prebuilt-binaries` all pass `-y`. **Add `-y` to any new automation** --
+a caller that omits it aborts having written nothing, which is the intended
+failure rather than a silent install.
 
 ### Selection flags
 

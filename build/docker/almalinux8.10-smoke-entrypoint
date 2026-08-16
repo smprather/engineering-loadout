@@ -80,7 +80,7 @@ if [ "${LOADOUT_SMOKE_DYNAMIC:-0}" = "1" ]; then
     # offline path is what gets certified and any network attempt cannot
     # succeed. strace is installed in the smoke image.
     echo "== dynamic: install nvim into a dest tree"
-    ./loadout install nvim env-nvim treesitter-parsers --dest-dir /work/dyn --no-backup > /dev/null
+    ./loadout install -y nvim env-nvim treesitter-parsers --dest-dir /work/dyn --no-backup > /dev/null
     echo "== dynamic: behavioral analysis (canary + strace, network isolated)"
     exec "$py" tests/dynamic-analysis --package nvim --bindir /work/dyn/local/bin
 fi

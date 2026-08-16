@@ -101,7 +101,7 @@ mkdir -p "$local_prefix/bin" "$local_prefix/lib/modules/libexec"
 printf 'legacy modulecmd\n' > "$local_prefix/bin/modulecmd"
 printf 'legacy modulecmd\n' > "$local_prefix/lib/modulecmd.tcl"
 printf 'legacy engine\n' > "$local_prefix/lib/modules/libexec/modulecmd.tcl"
-run_loadout install modules --no-backup
+run_loadout install -y modules --no-backup
 
 for rel in "${module_runtime_files[@]}"; do
     [[ -e "$local_prefix/$rel" ]] || fail "missing installed path: $rel"

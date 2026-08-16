@@ -4992,11 +4992,15 @@ def confirm_transaction(assume_yes):
     if assume_yes:
         return True
     if not sys.stdin.isatty():
-        # Every test and CI caller runs non-interactively; blocking there would
-        # break them all for no safety gain, since nothing has been written yet
-        # and --dry-run exists for a look-first workflow.
-        print("Is this ok [Y/n]: y   (not a terminal -- assuming yes; pass -y to be explicit)")
-        return True
+        # dnf's behaviour, deliberately: a non-interactive caller gets EOF on the
+        # prompt and the transaction aborts. Assuming yes here would mean
+        # `loadout install @all | tee log` installs 8 GB without ever being
+        # asked, and a pipe is not consent. Automation states intent with -y.
+        print("Is this ok [Y/n]: ")
+        eprint("Error: stdin is not a terminal, so the transaction cannot be confirmed.")
+        eprint("       Pass -y (--assumeyes / --yes) to confirm non-interactively,")
+        eprint("       or --dry-run to see the transaction without installing.")
+        return False
     try:
         answer = input("Is this ok [Y/n]: ").strip().lower()
     except EOFError, KeyboardInterrupt:

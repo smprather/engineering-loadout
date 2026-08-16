@@ -48,7 +48,7 @@ mkdir -p "$H1"
 # git-nvim is included on purpose: the stash needs git to clone from, and the Tier 3
 # container (stock almalinux:8.10) has NO system git. That makes the container the exact
 # machine git-nvim exists for -- it is the only place the private-git path gets exercised.
-HOME="$H1" "$REPO/loadout" install nvim env-nvim nvim-plugin-stash treesitter-parsers git-nvim \
+HOME="$H1" "$REPO/loadout" install -y nvim env-nvim nvim-plugin-stash treesitter-parsers git-nvim \
     --no-backup >/dev/null 2>&1
 
 [ -e "$H1/.local/bin/git" ] \
@@ -77,7 +77,7 @@ mkdir -p "$SHARED" "$H2"
 
 # The shared tree carries the binary + runtime, the read-only plugin CATALOG, and the
 # 251 MB parser set. It must NOT carry lazy/ -- that is per-user, writable state.
-"$REPO/loadout" install nvim nvim-plugin-stash treesitter-parsers git-nvim \
+"$REPO/loadout" install -y nvim nvim-plugin-stash treesitter-parsers git-nvim \
     --dest-dir "$SHARED" --no-backup >/dev/null 2>&1
 
 [ -e "$SHARED/local/bin/git" ] \
@@ -94,7 +94,7 @@ mkdir -p "$SHARED" "$H2"
 
 # The per-user run copies the plugins it needs out of the shared catalog into $HOME.
 HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
-    "$REPO/loadout" install env-nvim --no-backup >/dev/null 2>&1
+    "$REPO/loadout" install -y env-nvim --no-backup >/dev/null 2>&1
 
 [ -d "$H2/.local/share/nvim/lazy/lazy.nvim" ] \
     || fail "split: lazy.nvim not seeded into \$HOME (this is the air-gapped bug)"

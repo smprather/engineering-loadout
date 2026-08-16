@@ -9,7 +9,7 @@ trap 'rm -rf "$TMPHOME"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-HOME="$TMPHOME" "$REPO/loadout" install env-st --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-st --no-backup >/dev/null
 
 ST="$TMPHOME/.config/st"
 [ -f "$ST/global/st.xresources" ] || fail "global layer not installed"
@@ -37,7 +37,7 @@ cp "$ST/user/st.xresources" "$TMPHOME/user.expected"
 mkdir -p "$ST/site"
 echo 'st.color4: #ff0000' > "$ST/site/st.xresources"
 
-HOME="$TMPHOME" "$REPO/loadout" install env-st --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-st --no-backup >/dev/null
 
 cmp -s "$ST/user/st.xresources" "$TMPHOME/user.expected" \
     || fail "reinstall overwrote the user layer"

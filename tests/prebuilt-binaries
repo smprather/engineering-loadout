@@ -1541,6 +1541,7 @@ def main(keep):
             [
                 installer,
                 "install",
+                "-y",
                 "@shared",
                 "--dest-dir",
                 tmpdir,

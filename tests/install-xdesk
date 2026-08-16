@@ -58,7 +58,7 @@ env -i \
     HOME="$test_home" \
     PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
     LANG="${LANG:-C.UTF-8}" \
-    "$repo_dir/loadout" install xephyr --dest-dir "$dest_dir" --no-backup \
+    "$repo_dir/loadout" install -y xephyr --dest-dir "$dest_dir" --no-backup \
     > "$test_home/install.log" 2>&1 || {
     tail -20 "$test_home/install.log" >&2
     fail "install exited non-zero"

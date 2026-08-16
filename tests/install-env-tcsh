@@ -69,7 +69,7 @@ $_text" ;;
     done
 }
 
-HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
 
 [ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked"
 [ -e "$TMPHOME/.cshrc" ] || fail ".cshrc not linked"
@@ -212,7 +212,7 @@ echo "$out" | grep -q 'HF=.*tcsh_history\.' || fail "per-PID histfile not set: [
 
 # --- Reinstall must not clobber a user-created layer (the env-st lesson).
 echo 'setenv LOADOUT_TEST_KEEPME 1' > "$TMPHOME/.config/tcsh/user/config.csh"
-HOME="$TMPHOME" "$REPO/loadout" install env-tcsh --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
 [ -f "$TMPHOME/.config/tcsh/user/config.csh" ] || fail "reinstall deleted the user layer"
 
 echo "install-env-tcsh: OK"

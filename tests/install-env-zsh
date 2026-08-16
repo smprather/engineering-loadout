@@ -81,7 +81,7 @@ $_text"
     fi
 }
 
-HOME="$TMPHOME" "$REPO/loadout" install env-zsh env-bash --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-zsh env-bash --no-backup >/dev/null
 
 [ -e "$TMPHOME/.zshrc" ] || fail ".zshrc not linked"
 [ -e "$TMPHOME/.zprofile" ] || fail ".zprofile not linked"
@@ -164,7 +164,7 @@ echo "$out" | grep -q 'probe/sub$' || fail "cd FILE did not land in its parent: 
 # --- while the shipped zshrc went on sourcing them. Same failure the env-st and
 # --- env-tcsh handlers exist to prevent.
 echo 'export LOADOUT_TEST_KEEPME=1' > "$TMPHOME/.config/zsh/user/zshrc"
-HOME="$TMPHOME" "$REPO/loadout" install env-zsh --no-backup >/dev/null
+HOME="$TMPHOME" "$REPO/loadout" install -y env-zsh --no-backup >/dev/null
 [ -f "$TMPHOME/.config/zsh/user/zshrc" ] || fail "reinstall deleted the user layer"
 out=$(zsh_i 'echo "KEEP=$LOADOUT_TEST_KEEPME"')
 echo "$out" | grep -q 'KEEP=1' || fail "user layer is not sourced: [$out]"

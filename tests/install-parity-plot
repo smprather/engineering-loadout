@@ -28,7 +28,7 @@ env -i \
     HOME="$test_home" \
     PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
     LANG="${LANG:-C.UTF-8}" \
-    "$repo_dir/loadout" install parity-plot --dest-dir "$dest_dir" --no-backup \
+    "$repo_dir/loadout" install -y parity-plot --dest-dir "$dest_dir" --no-backup \
     > "$test_home/install.log" 2>&1 || {
     tail -40 "$test_home/install.log" >&2
     fail "install exited non-zero"
