@@ -1,157 +1,66 @@
 # Current Handoff
 
-Last updated: 2026-08-13. **Three commits sit unreleased on `main`**: taplo
-0.10.0 (`aaadf10`), the shell history flush (`dc5f5c1`), and three open-item
-fixes (`2ed6627`) — plus the **uncommitted helix rebuild** described in the next
-section. Details below; what still needs the owner is at the end of them.
+Last updated: 2026-08-16. **Everything below is COMMITTED AND PUSHED**; the
+working tree is clean and `main` is in sync with `origin/main`. Ten commits sit
+unreleased (no tag cut yet): the three from 2026-08-13 (taplo `aaadf10`, shell
+history flush `dc5f5c1`, open-item fixes `2ed6627`) plus seven from 2026-08-14
+to 08-16:
 
-All three tiers green, re-run clean after the helix rebuild:
+| commit | what |
+|---|---|
+| `af1092c` | helix rebuilt from master + workspace-trust config; **less 704** |
+| `5ac4472` | `./build/update` cadence (`auto_update_interval`, default 6mo) |
+| `36f2642` | OpenROAD EL8 build recipe (docs) |
+| `4dd93fe` | `@all` group; why there is no online-only variant |
+| `2416382` | **OpenROAD 26Q3** packaged (`openroad` + `sta` + 10 solver libs) |
+| `cdf0f4e` | install transaction summary, installed sizes, `[Y/n]`, `-y` |
+| `ac7a655` | non-TTY install ABORTS (dnf behaviour); 18 call sites pass `-y` |
 
-* **Tier 1 + Tier 2** (`tests/run-all`): exit 0, every test PASS, no FAIL lines.
-  Includes the new `env-helix-config`.
+All tiers green as of the last commit:
+
+* **Tier 1 + Tier 2** (`tests/run-all`): exit 0, no FAIL lines. New since
+  2026-08-13: `env-helix-config`, `update-cadence`, `installed-sizes in sync`.
 * **Tier 3** (`tests/prebuilt-binaries-almalinux8 --full`, clean
-  `almalinux:8.10`): exit 0, **290 binaries OK**, 25 expected host-contract
-  skips. helix reports `OK: hx  helix 25.07.1 (079a789e)`,
-  `OK (grammars): helix runtime (301 parsers)` and `OK (health): helix config`
-  — the last of those being the check that the shipped binary accepts the
-  shipped config. taplo's catalog is still proven in BOTH deployment shapes
-  (`Relocated taplo runtime: 1 text files` for the temp-HOME install and again
-  for the split shared-tree install, plus `OK (path): taplo schema catalog` /
-  `OK (schema): taplo runtime`).
+  `almalinux:8.10`): exit 0, **292 binaries OK**, 25 expected host-contract
+  skips. 287 -> 290 was `less`/`lessecho`/`lesskey`; 290 -> 292 is
+  `openroad`/`sta`.
 
-> Binary count moved 287 → 290: `less`, `lessecho`, `lesskey`. That is the
-> **less 704** package, also uncommitted — see its section below.
+## Start here after a context clear
 
-**A methodology note on how these numbers were obtained.** An earlier full run
-also exited 0, but `packages.json` and `.content-manifest` were edited *while*
-Tier 2 was in flight — the "no concurrent payload jobs" hazard. That result was
-discarded rather than reported, and the numbers above come from a clean
-serialised re-run. A green from a run that raced its own inputs is not evidence.
+Three things changed shape recently and are easy to trip over:
 
-**Caveat on the meld fix: Tier 3 does NOT cover it.** The container skips meld
-(`SKIP (host cmd): meld  host /usr/bin/python3.6 for EL8 PyGObject missing`), so
-the probe never runs there. The change rests on dev-box evidence instead — 12
-timed runs under the exact probe env, plus a four-case negative test of the
-retry path. Re-check it on the next release run, which is where the original
-failure appeared.
+1. **`./loadout install` now asks.** A dnf-style transaction summary prints, then
+   `Is this ok [Y/n]:`. **Non-interactive callers must pass `-y`** or the
+   transaction aborts with exit 1 having written nothing. Any new automation
+   needs `-y`; that is deliberate, not a bug.
+2. **The post-payload chain gained a step, and ORDER MATTERS**:
+   `./build/strip-all-elf-binaries` -> `python3.14 build/gen-installed-sizes` ->
+   `python3.14 build/gen-content-manifest`. The sizes map lives under `payload/`
+   so the manifest hashes it; regenerating sizes last leaves the manifest stale.
+   Both have `--check` in Tier 1.
+3. **`@all` exists** and means literally everything (`@shared-all` +
+   `@envs-all`). There is deliberately no "@all minus the offline caches"
+   variant -- the caches ARE the product; see `expand_groups` in
+   `loadout_main.py` for the reasoning.
 
-Last released: 2026-08-11. Five packages landed since v2026.08.09 — freetype
-2.14.3 (source-built, replacing EL8's 2.9.1), pdftotext 22.12.0 -> 26.04.0,
-markdown-oxide 0.25.12, iverilog 13.0, yosys 0.68 — plus currency bumps for
-miller 6.21.0 and ty 0.0.70. `@eda` now spans the open RTL flow: synthesise
-(yosys) -> simulate (iverilog) -> lint/model (verilator) -> view (gtkwave) ->
-layout (klayout). linux-process-resource-monitor still pending upstream.
+**A methodology note that keeps paying off.** Several greens this week were not
+evidence: a run whose inputs were edited mid-flight, a build-time smoke that
+tested the build tree instead of the packaged artifact, and repeated "exit 0"
+notifications that reported a wrapper's status rather than the work's. Verify
+the artifact on disk, and serialise anything that writes `payload/`.
 
-## UNCOMMITTED: helix rebuilt from master, config moved to max functionality (2026-08-13)
+## STILL NEEDS THE OWNER
 
-Asked for: "update helix and default to *highly insecure, most functional*
-configuration goals."
-
-### The finding that reframed the task
-
-**The bundled helix was never the 25.07.1 release.** It was a **master build** at
-commit `87d5c05c` (2026-05-03) that *reports itself* as `helix 25.07.1
-(87d5c05c)` — a master build prints the last release tag plus the commit. It
-entered `payload/` through a bulk snapshot commit with no build script, no
-`ADDING_BINARIES.md` note and no recorded provenance, and `packages.json`
-recorded it as version `25.07.1` as though it were the release.
-
-Proof, not inference: upstream's `25.07.1` tag source has **no**
-`rainbow_brackets`, `word_completion` or `insecure` field, yet the bundled binary
-accepted all three (`hx --health` dumps its full accepted field list on an
-unknown key). The repo has been shipping — and documenting — a master build as a
-release for months. That also invalidated the previous handoff's conclusion that
-`level = "servers"` was "BLOCKED, not pending": nothing was blocking it, we were
-already on master.
-
-Upstream state as of today: newest **release** is still `25.07.1`
-(2025-07-18, 13 months old); master HEAD is `079a789e` (2026-07-23).
-
-### What changed
-
-* **helix rebuilt** from master `079a789e`, EL8, rust 1.96.0. glibc floor
-  **2.28** (exactly EL8), NEEDED = glibc + `libgcc_s` only. 301 grammars (payload
-  had 291). Runtime archive 20 MB.
-* **`build/build-helix.sh` written** — it did not exist. Takes `--rev`, and
-  explicitly **rejects `--tag`** with a pointer to the rationale. It is the one
-  documented exception to the stable-release policy; every other build script
-  still requires `--tag`. Full note appended to `build/ADDING_BINARIES.md`
-  (MANDATORY rule, previously unsatisfied for this package).
-* **`build/helix/hx`** — the wrapper source, extracted from the payload where it
-  only existed bzip2'd. Logic byte-identical; comments added.
-* **`envs/helix/config.toml` migrated and widened** (below).
-* **`packages.json`** version is now `git describe` — `25.07-984-g079a789e`
-  (master's nearest ancestor tag is `25.07`; `25.07.1` is a patch off a side
-  branch). Description and `farm-versions` regex both now carry the commit, so
-  the tag half can never again read as "a release is installed".
-
-### The coupling that makes this one change, not two
-
-Upstream **removed `[editor] insecure`** and replaced it with
-`[editor.workspace-trust] { level, prompt, trusted }`. helix parses `config.toml`
-with `deny_unknown_fields`: one unrecognised key and it discards the **entire
-file**, falls back to stock defaults, and **exits 0**. So:
-
-| | old config | new config |
-|---|---|---|
-| **old binary** | works | whole config discarded |
-| **new binary** | whole config discarded | works |
-
-Verified in both directions with a live negative control — the retired
-`insecure` key on the new binary produces ``unknown field `insecure` `` and
-`Configuration file malformed`. Bumping the binary alone would have silently
-reverted every helix setting this repo ships.
-
-**Two gates now pin it**, because nothing did before:
-
-* `tests/env-helix-config` (new, Tier 1) — decompresses the payload `hx.bin`,
-  runs `--health` against the shipped `config.toml` + `languages.toml`, and
-  fails on `malformed`/`unknown field`. Also asserts the trust level is still the
-  owner's `insecure`, and that `languages.toml` carries exactly one relocation
-  token.
-* `build/build-helix.sh` runs the same assertion **before packaging**, so a bad
-  pairing cannot reach the payload.
-
-`tests/prebuilt-binaries` gained the matching runtime check: `>= 200` installed
-grammars and `hx --health rust` reporting highlight support. The old smoke only
-checked that `runtime/tutor` existed, which a helix with zero grammars passes.
-
-**A trap worth remembering:** `--health` **exits 0 on a malformed config**, so
-every assertion here is on its *text*. And the negative control must inject the
-bogus key **inside** the existing `[editor]` table — appending a second
-`[editor]` is a TOML *duplicate-table* error, which helix also calls "malformed",
-so a control written that way passes while proving nothing about the rename. The
-first draft of the test had exactly that bug; a mutation run caught it.
-
-### Config posture: maximum functionality
-
-`[editor.workspace-trust] level = "insecure"`, `prompt = false`. Everything the
-previous handoff entry recorded about *why* still applies unchanged — the cost on
-a shared filesystem, the controlled-environment premise, the revisit condition —
-except that the narrower `level = "servers"` is **now available and deliberately
-not taken**, on the stated goal. Changing that one word is the whole rollback;
-nothing else in the file moves with it.
-
-Also flipped toward capability: inline diagnostics on all lines down to hint
-severity, `display-inlay-hints`, `auto-document-highlight`,
-`display-progress-messages`, `undercurl`, `completion-trigger-len = 1`,
-buffer-word completion at `trigger-length = 3`, and a file picker that ignores
-`.gitignore`/`.ignore` entirely (matching the repo's own `rg --hidden
---no-ignore` alias).
-
-**Three deliberate non-flips**, recorded in the file so they read as decisions:
-`auto-save` stays off (it writes files unprompted, and with `auto-format` that
-means reformatting on the way out); `kitty-keyboard-protocol` stays `auto`
-(forcing `enabled` *breaks* input on terminals lacking it — here the maximally
-functional setting is the autodetecting one); `mouse` stays `false` (helix
-grabbing the mouse takes it *from* the terminal, losing click-drag selection and
-tmux copy-mode — off leaves more working).
-
-### Verification
-
-Post-payload chain ran (`strip-all-elf-binaries`: 301 ELFs stripped, 1 archive
-rewritten → `gen-content-manifest` → `gen-readme-table`). Test results at the top
-of this file.
+* **A release.** Ten commits are gated but untagged. `docs/RELEASE.md` is the
+  ordered procedure; tag signing needs the ssh-agent socket.
+* **`sudo freshclam`**, still outstanding from v2026.08.09.
+* **OpenROAD GUI** -- `-DBUILD_GUI=OFF` today. Only blocker is Qt5Charts, and
+  EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
+  `gui_libs`, so enabling it is additive.
+* **Leftover build trees** (not cleaned automatically, several GB):
+  `/tmp/or-tools-install-9.14`, `/tmp/openroad-deps`,
+  `/tmp/openroad-install-26Q3`. `build/build-openroad.sh --reuse-build` needs
+  them; delete when done with OpenROAD packaging.
 
 ## UNCOMMITTED: OpenROAD 26Q3 -- packaged, gated, RTL-to-GDS place & route
 
