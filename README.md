@@ -237,7 +237,7 @@ OpenSSH for those.
 | btm | bin | 0.14.7 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
-| lefdef-tools | python-tool | b9ac43e | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
+| lefdef-tools | python-tool | cda0e5a | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | liberty-tools | python-tool | v2026.06.01.1-35-g73af358 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |

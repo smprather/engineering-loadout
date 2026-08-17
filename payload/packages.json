@@ -238,7 +238,7 @@
       ],
       "uv_tool": "lefdef-tools",
       "rolling_git": "https://github.com/smprather/lefdef-tools.git",
-      "version": "b9ac43e",
+      "version": "cda0e5a",
       "platforms": [
         "linux"
       ],

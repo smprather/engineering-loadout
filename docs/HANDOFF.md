@@ -1,10 +1,10 @@
 # Current Handoff
 
-Last updated: 2026-08-16. **Everything below is COMMITTED AND PUSHED**; the
-working tree is clean and `main` is in sync with `origin/main`. Ten commits sit
-unreleased (no tag cut yet): the three from 2026-08-13 (taplo `aaadf10`, shell
-history flush `dc5f5c1`, open-item fixes `2ed6627`) plus seven from 2026-08-14
-to 08-16:
+Last updated: 2026-08-16, mid-release. Ten commits plus this session's currency
+sweep sit unreleased (**no tag cut yet** -- the release is blocked on two owner
+actions, see *STILL NEEDS THE OWNER* below). The ten: three from 2026-08-13
+(taplo `aaadf10`, shell history flush `dc5f5c1`, open-item fixes `2ed6627`) plus
+seven from 2026-08-14 to 08-16:
 
 | commit | what |
 |---|---|
@@ -24,6 +24,55 @@ All tiers green as of the last commit:
   `almalinux:8.10`): exit 0, **292 binaries OK**, 25 expected host-contract
   skips. 287 -> 290 was `less`/`lessecho`/`lesskey`; 290 -> 292 is
   `openroad`/`sta`.
+
+## The currency sweep for this release, and the bug it exposed (2026-08-16)
+
+The class-C sweep ran `yara-rules`, `tldr-data`, `taplo-schemas`,
+`tmux-plugins`, `nodejs` and the four rolling-git wheels, serialised (never two
+payload jobs at once). Results: YARA-Forge moved to `20260816`, `lefdef-tools`
+`b9ac43e -> cda0e5a`, the other three rolling projects had not moved,
+`tmux-plugins` unchanged. **`env-nvim` was skipped deliberately** --
+`envs/nvim/lazy-lock.json` has not moved since `v2026.08.11`, and the pins are
+the source of truth, so the stash is equivalent. It therefore stays DUE in
+`build/currency-state.json`, which is correct rather than a bug.
+
+### `nodejs` downgraded the payload and the guard fired too late
+
+`./build/update nodejs` with no `--tag` runs `nvm install --lts`, which bundles
+whatever this box happens to have -- **26.2.0, older than the bundled 26.7.0**.
+`build/update`'s `_check_no_downgrade` did fire, but it runs *after*
+`import-nodejs` has rewritten `node.tar.bz2`, stamped `packages.json`, and
+re-run strip + sizes + manifest. The error arrived with the tree already
+poisoned and both maps re-pinned to the downgrade -- a loud error wrapped in a
+chain that had already succeeded.
+
+**The guard now lives in `build/import-nodejs`** (`assert_no_downgrade`), at the
+first point where the version is known and nothing has been written: right
+after `packages_json` is resolved, before bundle assembly. It exits 1 saying
+"Nothing was written", and takes `--allow-downgrade`. Version strings that are
+git SHAs return `None` from `_version_tuple` and are never compared, so
+rolling-git packages are unaffected. `build/update`'s post-hoc check is left in
+place as a backstop.
+
+Recovery, if it happens again: `git checkout -- <the archive>`, restore the
+version field in `packages.json`, then re-run
+`strip-all-elf-binaries -> gen-installed-sizes -> gen-content-manifest`. The
+restored archive comes back **byte-identical** because strip pins tar
+mtime/ownership.
+
+### `gen-installed-sizes` was never wired into `build/update`
+
+`cdf0f4e` added the sizes map to the post-payload chain but only taught the
+*manual* path about it; `build/update` still ran strip + content-manifest only,
+so any sweep left `payload/installed-sizes.json` stale and Tier 1 red. Fixed at
+the single choke point -- `_run_content_manifest` became
+`_run_payload_manifests` and runs sizes first, manifest second -- plus the four
+printed guidance blocks and `docs/RELEASE.md` §4, which still documented the old
+two-step chain.
+
+**The ordering is the whole point**: `installed-sizes.json` lives under
+`payload/`, so `.content-manifest` hashes it. Sizes last means the manifest pins
+the previous sizes file.
 
 ## Start here after a context clear
 
@@ -51,9 +100,15 @@ the artifact on disk, and serialise anything that writes `payload/`.
 
 ## STILL NEEDS THE OWNER
 
-* **A release.** Ten commits are gated but untagged. `docs/RELEASE.md` is the
-  ordered procedure; tag signing needs the ssh-agent socket.
-* **`sudo freshclam`**, still outstanding from v2026.08.09.
+* **A live ssh-agent holding the signing key -- the release is BLOCKED on it.**
+  On 2026-08-16 all ten `/tmp/ssh-*/agent.*` sockets refused connection: every
+  agent was dead, not merely un-probed. `./build/release`'s `_preflight()`
+  blocks without one, and `--allow-unsigned` must NOT be used -- an unsigned tag
+  breaks the top link of `signed tag -> sha256sums.txt -> payload bytes`. Start
+  one where this session can inherit it:
+  `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`.
+* **`sudo freshclam`**, still outstanding from v2026.08.09. The malware scan is
+  a release gate; against stale signatures a CLEAN verdict means nothing.
 * **OpenROAD GUI** -- `-DBUILD_GUI=OFF` today. Only blocker is Qt5Charts, and
   EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
   `gui_libs`, so enabling it is additive.
@@ -62,7 +117,7 @@ the artifact on disk, and serialise anything that writes `payload/`.
   `/tmp/openroad-install-26Q3`. `build/build-openroad.sh --reuse-build` needs
   them; delete when done with OpenROAD packaging.
 
-## UNCOMMITTED: OpenROAD 26Q3 -- packaged, gated, RTL-to-GDS place & route
+## UNRELEASED on main: OpenROAD 26Q3 -- packaged, gated, RTL-to-GDS place & route (committed `2416382`)
 
 The old scoping below ("3-5 day project, prebuilts DEAD on EL8, OR-Tools is the
 monster") was right about the shape and too pessimistic about several specifics.
@@ -192,7 +247,7 @@ Unsettled and deferred: OpenROAD proper vs OpenROAD-flow-scripts. ORFS is a
 scripts+PDK layer ON TOP of this binary, so it changes nothing above; it only
 decides whether the PDK data also ships.
 
-## UNCOMMITTED: less 704 — current pager, replacing EL8's 2017 build
+## UNRELEASED on main: less 704 — current pager, replacing EL8's 2017 build (committed `af1092c`)
 
 Three binaries (`less`, `lessecho`, `lesskey`), `kind: bin`, in `@core-cli`.
 EL8 ships less 530 from 2017; this bundles upstream's current **RECOMMENDED**
