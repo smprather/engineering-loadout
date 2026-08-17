@@ -116,7 +116,8 @@ run_one "non-default --dest-dir $alt" "--dest-dir $alt" "$alt" "$alt/local/bin"
 # the store carries dependency crates, the source comes with the checkout).
 echo
 echo "============================================================"
-echo "### TOOL REBUILD: ripgrep 15.1.0, cargo build --offline"
+: "${RIPGREP_VERSION:?RIPGREP_VERSION not set in the image -- rebuild it}"
+echo "### TOOL REBUILD: ripgrep $RIPGREP_VERSION, cargo build --offline"
 echo "============================================================"
 rgsrc=/work/ripgrep-src
 rm -rf "$rgsrc"; cp -a /opt/ripgrep-src "$rgsrc"
@@ -127,8 +128,8 @@ rgbin="$rgsrc/target/release/rg"
 ver="$("$rgbin" --version | head -1)"
 echo "  built: $ver"
 case "$ver" in
-    *"ripgrep 15.1.0"*) echo "  OK: loadout rust tool rebuilt offline from the store" ;;
-    *) echo "ERROR: unexpected ripgrep version" >&2; exit 1 ;;
+    *"ripgrep $RIPGREP_VERSION"*) echo "  OK: loadout rust tool rebuilt offline from the store" ;;
+    *) echo "ERROR: expected ripgrep $RIPGREP_VERSION, got: $ver" >&2; exit 1 ;;
 esac
 
 echo

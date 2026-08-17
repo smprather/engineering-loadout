@@ -49,9 +49,24 @@ if [ -z "${DOCKER_CONFIG:-}" ]; then
     fi
 fi
 
+# The rebuilt tool's version comes from the registry, never a literal here: the
+# store is built from build/rust-tool-locks.txt, whose refs track packages.json,
+# so a hardcoded version silently drifts out of the store's closure and the
+# offline build fails with an unresolvable transitive dep.
+rg_version=$(
+    python3.14 - "$repo_dir" <<'PY'
+import json, sys
+with open(sys.argv[1] + "/payload/packages.json") as fh:
+    print(json.load(fh)["packages"]["rg"]["version"])
+PY
+) || { echo "ERROR: could not read rg version from payload/packages.json" >&2; exit 1; }
+[ -n "$rg_version" ] || { echo "ERROR: empty rg version from payload/packages.json" >&2; exit 1; }
+
 if [ "$build" -eq 1 ]; then
+    echo "Building image with ripgrep $rg_version (from payload/packages.json)"
     docker build \
         -t "$image" \
+        --build-arg "RIPGREP_VERSION=$rg_version" \
         -f "$docker_dir/almalinux8.10-rust.Dockerfile" \
         "$docker_dir"
 fi

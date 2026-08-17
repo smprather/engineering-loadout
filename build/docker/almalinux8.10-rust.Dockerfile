@@ -22,7 +22,18 @@ RUN dnf install -y \
 # only place network is allowed). At RUN time (--network none) the entrypoint
 # rebuilds it with `cargo build --offline` against the bundled superset store,
 # proving the store can reconstruct loadout's own rust binaries offline.
-RUN git clone --depth 1 --branch 15.1.0 https://github.com/BurntSushi/ripgrep \
+#
+# The version is passed in from payload/packages.json rather than written here.
+# It was hardcoded to 15.1.0 while the registry and build/rust-tool-locks.txt
+# moved to 15.2.0 on 2026-08-04, so the store carried 15.2.0's closure while the
+# test tried to build 15.1.0 -- whose globset needs crate versions the store no
+# longer had. The test failed for 13 days without anyone noticing, because it is
+# not in tests/run-all's default tiers. Same family as failure-catalogue entry
+# 10 (stale version literals in tests).
+ARG RIPGREP_VERSION
+ENV RIPGREP_VERSION=${RIPGREP_VERSION}
+RUN test -n "$RIPGREP_VERSION" || { echo "RIPGREP_VERSION build-arg is required" >&2; exit 1; }
+RUN git clone --depth 1 --branch "$RIPGREP_VERSION" https://github.com/BurntSushi/ripgrep \
         /opt/ripgrep-src \
     && rm -rf /opt/ripgrep-src/.git
 

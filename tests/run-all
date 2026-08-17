@@ -141,6 +141,14 @@ if [ "$CONTAINER" -eq 1 ]; then
         tests/prebuilt-binaries-almalinux8 --full
     run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" \
         tests/prebuilt-binaries-almalinux8 --no-build --dynamic
+    # The crate store's whole reason to exist is `cargo build --offline` on a
+    # farm node, and NOTHING in this suite exercised it -- so when the tool
+    # locks moved ripgrep to 15.2.0 on 2026-08-04 and the container kept
+    # cloning 15.1.0, the offline rebuild broke and stayed broken for 13 days.
+    # verify-crate-store checks hashes and coverage; only this proves the
+    # closure actually resolves.
+    run_test "rust offline rebuild from the crate store (network isolated)" \
+        tests/rust-offline-almalinux8
 fi
 
 echo
