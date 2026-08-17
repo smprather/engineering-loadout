@@ -46,9 +46,40 @@ gates take ~10 minutes and an unattended prompt at the end does not fail — it
 gh auth status                       # must be logged in, 'repo' scope
 ```
 
-Tag signing needs a live ssh-agent holding the key. On WSL `ssh-add` is aliased
-to spawn a *fresh keyless* agent, so never trust a bare `ssh-add` or an inherited
-`$SSH_AUTH_SOCK`. Probe for the agent that actually holds the key:
+Tag signing needs a live ssh-agent holding the key, at a socket the releasing
+process can actually reach. **Use the fixed socket** — `~/.ssh/loadout-agent.sock`:
+
+```bash
+SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock" /usr/bin/ssh-add -l   # already loaded?
+
+# if not:
+rm -f ~/.ssh/loadout-agent.sock
+/usr/bin/ssh-agent -a "$HOME/.ssh/loadout-agent.sock" >/dev/null
+SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock" /usr/bin/ssh-add ~/.ssh/id_ed25519
+```
+
+**Absolute paths on both binaries are required, not stylistic.** The owner's
+`~/.config/bash/user/bashrc` shadows `ssh-add`, and the version that shipped
+until 2026-08-17 expanded to
+`eval "$(ssh-agent -s)" && command ssh-add ~/.ssh/id_ed25519` — so typing
+`ssh-add ~/.ssh/id_ed25519` spawned a *brand-new* agent and loaded the key into
+that, leaving any agent the release could see keyless. It now defines a function
+using the fixed socket above and reusing a live agent, but a bare `ssh-add` is
+still not to be trusted on an unknown box.
+
+**Why fixed rather than discovered.** `eval "$(ssh-agent -s)"` puts the socket
+at a random `/tmp/ssh-XXXX/agent.N` and exports `SSH_AUTH_SOCK` into that shell
+only. Anything not descended from that shell — an agent-driven release, CI —
+cannot know which socket to use. On 2026-08-17 the owner had a correctly loaded
+agent and the release still could not sign, because its socket was not
+discoverable from the releasing process: all ten sockets under `/tmp/ssh-*/`
+were stale and refused connection, while the real one was not visible there at
+all. A known path is addressable by everyone; a random one is addressable only
+by the shell that made it.
+
+Fallback, for a box where the fixed socket was never set up — probe for whoever
+holds the key, and treat "no match" as *no usable agent* rather than as a
+reason to skip signing:
 
 ```bash
 FP=$(ssh-keygen -lf ~/.ssh/id_ed25519.pub | awk '{print $2}')
@@ -57,7 +88,7 @@ for s in /tmp/ssh-*/agent.*; do
 done
 ```
 
-Then export that socket for the whole session and run `./build/release` with it.
+Then export the socket for the whole session and run `./build/release` with it.
 `./build/release`'s `_preflight()` re-proves signing by signing a throwaway tag with no
 tty, no askpass and no `DISPLAY`, and greps the object for a signature block — a
 zero exit from the signer is not proof. It blocks the release unless
