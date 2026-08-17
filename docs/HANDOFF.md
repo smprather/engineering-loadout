@@ -1,10 +1,21 @@
 # Current Handoff
 
-Last updated: 2026-08-16, mid-release. Ten commits plus this session's currency
-sweep sit unreleased (**no tag cut yet** -- the release is blocked on two owner
-actions, see *STILL NEEDS THE OWNER* below). The ten: three from 2026-08-13
-(taplo `aaadf10`, shell history flush `dc5f5c1`, open-item fixes `2ed6627`) plus
-seven from 2026-08-14 to 08-16:
+Last updated: 2026-08-17. **`v2026.08.17` is RELEASED** (class C, signed,
+verified per `docs/RELEASE.md` §9: `isDraft=false`, Good ED25519 signature, all
+three assets, stash sha256 matching local, and the released commit `f5fbe0c`
+equal to `origin/main`). It carried fourteen commits since `v2026.08.11`: the
+ten listed below plus four from 2026-08-17 (three build-tool fixes `ebf0bd8` /
+`c911f38` / `f5fbe0c`, and the currency sweep `94ddafe`).
+
+Release gates as run: Tier 1+2 33/33, Tier 3 292 binaries with 25 expected
+host-contract skips, release smoke 317 binaries (more than Tier 3 because the
+dev box supplies the host GLVND/perl/py3.6/Tk that the container lacks), malware
+scan **CLEAN, 0 detections across 77,634 files** on a genuine cache miss against
+signatures refreshed the same morning.
+
+The ten that were already gated: three from 2026-08-13 (taplo `aaadf10`, shell
+history flush `dc5f5c1`, open-item fixes `2ed6627`) plus seven from 2026-08-14
+to 08-16:
 
 | commit | what |
 |---|---|
@@ -100,15 +111,23 @@ the artifact on disk, and serialise anything that writes `payload/`.
 
 ## STILL NEEDS THE OWNER
 
-* **A live ssh-agent holding the signing key -- the release is BLOCKED on it.**
-  On 2026-08-16 all ten `/tmp/ssh-*/agent.*` sockets refused connection: every
-  agent was dead, not merely un-probed. `./build/release`'s `_preflight()`
-  blocks without one, and `--allow-unsigned` must NOT be used -- an unsigned tag
-  breaks the top link of `signed tag -> sha256sums.txt -> payload bytes`. Start
-  one where this session can inherit it:
-  `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`.
-* **`sudo freshclam`**, still outstanding from v2026.08.09. The malware scan is
-  a release gate; against stale signatures a CLEAN verdict means nothing.
+* **`sudo dnf install qt5-qtcharts-devel`** -- the only thing standing between
+  here and an OpenROAD GUI build. EPEL has `qt5-qtcharts-5.15.3-1.el8`, an exact
+  match for the Qt5 already in `gui_libs`.
+
+**Cleared on 2026-08-17, recorded because both cost a cycle:**
+
+* `sudo freshclam` was run; `daily.cld` v28095, 355,605 signatures. Check the DB
+  build date before trusting any CLEAN verdict.
+* **Tag signing now uses a FIXED agent socket, `~/.ssh/loadout-agent.sock`.**
+  Probing `/tmp/ssh-*/agent.*` -- what `docs/RELEASE.md` §1 used to tell you to
+  do -- found nothing while the owner had a perfectly good agent loaded: all ten
+  sockets there were stale, and the live one was not visible from the releasing
+  process at all. `eval "$(ssh-agent -s)"` exports `SSH_AUTH_SOCK` into one
+  shell only, so anything not descended from that shell cannot address it. The
+  owner's user-layer `bashrc` also **shadows `ssh-add`**; it is now a function
+  using the fixed socket that reuses a live agent, but always call
+  `/usr/bin/ssh-add` explicitly. Never resolve this with `--allow-unsigned`.
 * **OpenROAD GUI** -- `-DBUILD_GUI=OFF` today. Only blocker is Qt5Charts, and
   EPEL ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
   `gui_libs`, so enabling it is additive.
@@ -559,6 +578,27 @@ the first place.
 
 ## OPEN — needs a decision, not a fix
 
+### xdotool — requested 2026-08-17 by the owner, not started
+
+Package `xdotool` (X11 automation: synthetic keystrokes/mouse, window search,
+move/resize/activate). Nothing investigated yet beyond the request; the notes
+below are what to check first, not conclusions.
+
+* **Source vs shanghai.** EL8 ships `xdotool` in EPEL. It is a small C program
+  over `libX11`/`libXtst`/`libXinerama`/`libxkbcommon`, so either route is
+  cheap; `gui_libs` already carries the X11 client stack, and the question is
+  whether `libXtst` (XTEST extension — the part that injects input) is in it
+  or needs adding. **Check `gui_libs` for `libXtst.so.6` before anything else.**
+* **It needs a real X display to do anything**, so it inherits the same
+  host-contract caveat as the GL GUI apps in `tests/prebuilt-binaries`: a probe
+  must either be a genuine skip on a headless container or run under `xdesk`.
+  `xdesk` already exists for exactly this and `tests/install-xdesk` shows the
+  pattern -- prefer that over a `--version`-only smoke, which proves nothing
+  here (the failure mode is "cannot open display", not a bad binary).
+* **Decide the audience.** The owner's Windows-side automation is AutoHotKey;
+  `xdotool` is the Linux analogue and would pair with the `xdesk` nested
+  session. Worth settling whether it ships in `@gui-suite` or stays name-only.
+
 ### DigitalJS / OpenROAD — scoped, not started
 
 - **DigitalJS**: the cheap part. It is a browser JS library (BSD-2-Clause, no
@@ -584,6 +624,13 @@ EL8 source build; its prebuilt wants GLIBC_2.35), `jupyterlab` 4.6.3 (blocked on
 pip's `--platform` resolver backtracking into httpcore/anyio). `pdftotext` is
 correctly **pinned** — the blocker is now fontconfig 2.15 at poppler 26.06+, not
 freetype.
+
+**`ty` -- IN PROGRESS 2026-08-17 at 0.0.72** (upstream moved past the 0.0.70 in
+the account below). Doing it properly this time: the binary is bumped
+(sha256-verified against upstream's published sum, `GLIBC_2.17` floor, base libs
+only), `build/rust-tool-locks.txt` is re-pinned to 0.0.72, and the crate store is
+being rebuilt so the store can still rebuild the tool offline. A `crate-store`
+assurance re-pin follows. The history below is why the shortcut was refused:
 
 **`ty` 0.0.70 was bumped and then DELIBERATELY REVERTED to 0.0.69.** `ty` is a
 Rust tool, and `verify-crate-store --check-policy` correctly failed the release

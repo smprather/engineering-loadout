@@ -22,7 +22,7 @@ delta        https://github.com/dandavison/delta            0.19.2
 hyperfine    https://github.com/sharkdp/hyperfine           1.20.0
 tree-sitter  https://github.com/tree-sitter/tree-sitter    0.26.12
 stylua       https://github.com/JohnnyMorganz/StyLua        2.5.2
-ty           https://github.com/astral-sh/ty                0.0.69
+ty           https://github.com/astral-sh/ty                0.0.72
 uv           https://github.com/astral-sh/uv                0.12.3
 
 # --- source-built rust tools (already built from source in the loadout) ---

@@ -223,7 +223,7 @@ sha256  b6e03a4ad5884474396246fed62c8b9d24f75bce1a1d7be01a1b5fb47523c25f  payloa
 sha256  0071ab0a9f06e47046ff807b4cab3b0b6493ea35eada14f20bf157027ac179e1  payload/el8.x86_64.glibc2p28/bin/tsort.bz2
 sha256  da7d1cd8c8213f1f2fecd74bf77b389a9af00a69d258ebdf5b1661adf593162f  payload/el8.x86_64.glibc2p28/bin/tty.bz2
 sha256  18264a5d0f8157ad524a39be9e92f074d91a687de16c769e91a896c8b80ad0bf  payload/el8.x86_64.glibc2p28/bin/twinwave.bz2
-sha256  fe88b063dcb0bf682a13def20b1ecbd62bb88bb03eddd92b149ed168abfdd22e  payload/el8.x86_64.glibc2p28/bin/ty.bz2
+sha256  4b636a6625c7fedb57e8f5b57a87ddb58ded6395fd47cca08a3a7c88d3f1a4d7  payload/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  50057ac6b1bc300c3f583ee00dd7de0a68a5c3c4cfc3644a3a36c18a9b8f75f4  payload/el8.x86_64.glibc2p28/bin/uname.bz2
 sha256  e78e24b7ca307e5371d925aad486be6fe23467b08046c64f077ecacbc704bc1f  payload/el8.x86_64.glibc2p28/bin/unexpand.bz2
 sha256  38e2a8673c1b9bfb5fd63b659b3e1c4bbee58f7d3d961bc3f639592374666375  payload/el8.x86_64.glibc2p28/bin/uniq.bz2

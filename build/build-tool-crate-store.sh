@@ -78,6 +78,18 @@ STORES="$WORK/stores"; STORE="$WORK/store"; LOCKS_DIR="$WORK/locks"
 mkdir -p "$STORES" "$STORE" "$LOCKS_DIR"
 nsync=0
 
+# Per-tool coverage: "<name>\t<crates>", 0 for anything that was skipped.
+# Every skip path below is a WARN on stderr and the build still exits 0, so a
+# tool can silently contribute NOTHING to the shipped store. That is not
+# hypothetical -- `ty` was absent from every store ever built (astral-sh/ty is a
+# thin repo whose Rust source is a `ruff` git submodule, so it has no root
+# Cargo.lock), and `verify-crate-store --check-policy` reported OK throughout
+# because it compares REFS to packages.json, never store CONTENTS.
+# This file is what makes coverage checkable; the gate reads it.
+COVERAGE="$WORK/coverage.tsv"
+: > "$COVERAGE"
+COVERAGE_OUT="$REPO/assurance/crate-store-tools.tsv"
+
 # cargo-local-registry --sync downloads exactly the crates a project's manifest
 # + lock resolve to (an empty manifest syncs nothing), and it prunes anything
 # outside that one lock. So we sync each tool's OWN clone (manifest + committed
@@ -90,9 +102,11 @@ sync_root() {  # label  dir-with-Cargo.toml-and-lock
         cp "$root/Cargo.lock" "$LOCKS_DIR/$label.lock"
         rc="$(find "$out" -name '*.crate' | wc -l | tr -d ' ')"
         echo "  $label: $rc crates"
+        printf '%s\t%s\n' "$label" "$rc" >> "$COVERAGE"
         nsync=$((nsync + 1))
     else
         echo "  WARN: sync failed for $label -- skipping" >&2
+        printf '%s\t0\n' "$label" >> "$COVERAGE"
         rm -rf "$out"
     fi
 }
@@ -133,14 +147,46 @@ while read -r name repo ref _rest; do
     [ -n "${repo:-}" ] && [ -n "${ref:-}" ] || continue
     case "$repo" in *smprather*) [ "$with_firstparty" -eq 1 ] || { echo "  skip $name (--no-firstparty)"; continue; } ;; esac
     if ! clone_tool "$name" "$repo" "$ref"; then
-        echo "  WARN: clone failed for $name ($repo @ $ref) -- skipping" >&2; continue
+        echo "  WARN: clone failed for $name ($repo @ $ref) -- skipping" >&2
+        printf '%s\t0\n' "$name" >> "$COVERAGE"; continue
     fi
     dir="$WORK/src/$name"
+    lockroot="$dir"
+
+    # Initialise submodules ALWAYS, not only when a root Cargo.lock is missing.
+    # Two different tools need this for two different reasons, and each was
+    # silently skipped from every store ever built:
+    #
+    #   ty     -- a thin DISTRIBUTION repo (pyproject.toml, uv.lock, docs) whose
+    #             Rust source is a `ruff` submodule. No root Cargo.lock and no
+    #             workspace, so `cargo generate-lockfile` fails outright.
+    #   surfer -- HAS a root Cargo.lock, but `f128` and `instruction-decoder` are
+    #             submodules referenced as PATH dependencies, so
+    #             `cargo local-registry --sync` cannot resolve the lock without
+    #             them and fails.
+    #
+    # Gating this on "no root lock" therefore fixes ty and leaves surfer broken.
+    # --filter=blob:none keeps it cheap against a large monorepo and works on a
+    # --depth 1 parent clone; the unfiltered retry covers servers with no
+    # partial-clone support.
+    ( cd "$dir" && git submodule update --init --recursive --filter=blob:none >/dev/null 2>&1 ) \
+        || ( cd "$dir" && git submodule update --init --recursive >/dev/null 2>&1 ) || true
+
     if [ ! -f "$dir/Cargo.lock" ]; then
-        ( cd "$dir" && cargo generate-lockfile >/dev/null 2>&1 ) || {
-            echo "  WARN: no lock and generate-lockfile failed for $name -- skipping" >&2; continue; }
+        for sub in $( cd "$dir" && git submodule status 2>/dev/null | awk '{print $2}' ); do
+            if [ -f "$dir/$sub/Cargo.lock" ]; then
+                lockroot="$dir/$sub"
+                echo "  $name: no root lock; using submodule $sub/Cargo.lock"
+                break
+            fi
+        done
     fi
-    sync_root "$name" "$dir"
+    if [ ! -f "$lockroot/Cargo.lock" ]; then
+        ( cd "$lockroot" && cargo generate-lockfile >/dev/null 2>&1 ) || {
+            echo "  WARN: no lock and generate-lockfile failed for $name -- skipping" >&2
+            printf '%s\t0\n' "$name" >> "$COVERAGE"; continue; }
+    fi
+    sync_root "$name" "$lockroot"
 done < "$TOOL_LIST"
 
 [ "$nsync" -gt 0 ] || { echo "no stores synced" >&2; exit 1; }
@@ -241,6 +287,23 @@ if [ "$packed_bytes" -gt "$CHUNK_BYTES" ]; then
     [ "$nchunks" -ge 1 ] || { echo "ERROR: split produced no chunks" >&2; exit 1; }
     echo "  -> $nchunks chunks"
 fi
+# Record per-tool coverage so `verify-crate-store --check-coverage` can prove
+# every pinned tool actually contributed crates. Written LAST, only on an
+# otherwise successful build, so a failed run cannot leave a record claiming
+# coverage the store does not have.
+sort -o "$COVERAGE" "$COVERAGE"
+{
+    echo "# Per-tool crate counts in the shipped store, written by build-tool-crate-store.sh."
+    echo "# 0 means the tool contributed NOTHING -- it was skipped (no lock, clone or sync"
+    echo "# failure). The build still exits 0 in that case, so this file is the record that"
+    echo "# makes it visible. Gated by: build/verify-crate-store --check-coverage"
+    echo "# Format: <name>\t<crates>.  00-seeds is the curated user closure, not a tool."
+    cat "$COVERAGE"
+} > "$COVERAGE_OUT"
+echo ""
+echo "Wrote coverage record -> $COVERAGE_OUT"
+awk -F'\t' '$2 == 0 && $1 !~ /^#/ { print "  ZERO COVERAGE: " $1 }' "$COVERAGE"
+
 echo ""
 echo "Shipped store now covers user projects + offline rebuilds of loadout rust tools."
 echo "Install:  ./loadout install @rust"

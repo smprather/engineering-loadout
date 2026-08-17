@@ -1,0 +1,28 @@
+# Per-tool crate counts in the shipped store, written by build-tool-crate-store.sh.
+# 0 means the tool contributed NOTHING -- it was skipped (no lock, clone or sync
+# failure). The build still exits 0 in that case, so this file is the record that
+# makes it visible. Gated by: build/verify-crate-store --check-coverage
+# Format: <name>\t<crates>.  00-seeds is the curated user closure, not a tool.
+00-seeds	748
+bat	256
+delta	276
+eza	215
+fd	125
+fish	167
+hyperfine	172
+just	155
+lefdef-tools	30
+liberty-tools	20
+models	409
+numr	353
+ripgrep	49
+starship	430
+stylua	145
+surfer	708
+text-serdes	0
+time-plot	0
+tokei	204
+tree-sitter	295
+ty	505
+uv	658
+zoxide	127

@@ -33,6 +33,7 @@ import tempfile
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STORE_BASE = os.path.join(REPO, "payload", "crate-store", "crate-store.tar.bz2")
 LOCK = os.path.join(REPO, "assurance", "crate-store.lock")
+COVERAGE = os.path.join(REPO, "assurance", "crate-store-tools.tsv")
 
 
 def _sha256(path):
@@ -172,7 +173,67 @@ def check_policy():
         print("  Re-pin the refs, then rebuild: build/build-tool-crate-store.sh", file=sys.stderr)
         sys.exit(1)
 
+    check_coverage(refs)
     print(f"crate-store policy OK ({len(refs)} pinned tool refs match packages.json)")
+
+
+def check_coverage(refs=None):
+    """Assert every pinned tool actually CONTRIBUTED crates to the shipped store.
+
+    Ref-consistency is not coverage, and conflating the two hid a real hole for
+    the entire life of this store. build-tool-crate-store.sh skips a tool it
+    cannot harvest -- no Cargo.lock, clone failure, sync failure -- with a WARN
+    on stderr, and still exits 0. check_policy() then compared refs to
+    packages.json, found them equal, and printed OK.
+
+    `ty` was absent from EVERY store ever built on exactly that path:
+    astral-sh/ty is a thin distribution repo whose Rust source is a `ruff` git
+    submodule, so it has no root Cargo.lock and generate-lockfile fails. The
+    store therefore could not rebuild ty offline while the gate said it could,
+    and a ty bump was repeatedly deferred on the false premise that the store
+    was the blocker. `surfer` was silently missing the same way.
+
+    Reads assurance/crate-store-tools.tsv, which the builder writes last on an
+    otherwise successful run. HEAD-tracked first-party repos are already
+    excluded by _tool_refs(), so a rolling repo that needs clone auth cannot
+    fail this.
+    """
+    if refs is None:
+        refs = _tool_refs()
+
+    if not os.path.exists(COVERAGE):
+        print(f"{COVERAGE} missing -- cannot prove the store covers the pinned tools.", file=sys.stderr)
+        print("  Rebuild with: build/build-tool-crate-store.sh", file=sys.stderr)
+        sys.exit(1)
+
+    counts = {}
+    with open(COVERAGE, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2:
+                continue
+            try:
+                counts[parts[0]] = int(parts[1])
+            except ValueError:
+                continue
+
+    absent = [name for name, _ref in refs if counts.get(name, 0) <= 0]
+    if absent:
+        print(
+            "Pinned rust tools contribute NO crates to the shipped store, so it cannot rebuild them offline:",
+            file=sys.stderr,
+        )
+        for name in absent:
+            why = "not recorded by the builder" if name not in counts else "recorded with 0 crates"
+            print(f"  {name}: {why}", file=sys.stderr)
+        print(
+            "  The builder WARNs and exits 0 on a skip -- read its log for 'WARN:.*skipping'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def main():
@@ -184,7 +245,17 @@ def main():
         action="store_true",
         help="fail if the store violates the seed list or the ban list (reads the lock; no extraction)",
     )
+    ap.add_argument(
+        "--check-coverage",
+        action="store_true",
+        help="fail if any pinned rust tool contributed no crates to the store (implied by --check-policy)",
+    )
     args = ap.parse_args()
+
+    if args.check_coverage and not (args.check_policy or args.emit_lock or args.check_lock):
+        check_coverage()
+        print("crate-store coverage OK")
+        return
 
     if args.check_policy and not (args.emit_lock or args.check_lock):
         check_policy()

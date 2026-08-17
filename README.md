@@ -297,7 +297,7 @@ OpenSSH for those.
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
 | tmux | bin | 3.7b | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.26.12 | Incremental parser generator and query tool |
-| ty | bin | 0.0.69 | Fast Python type checker (Astral) |
+| ty | bin | 0.0.72 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.3 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.0901 | Vi IMproved text editor |
