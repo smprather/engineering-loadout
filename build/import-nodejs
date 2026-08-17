@@ -336,6 +336,43 @@ def detect_node_version(src_dir):
 # ---------------------------------------------------------------------------
 
 
+def _version_tuple(v):
+    """Numeric release tuple, or None when the string is not a version."""
+    if not v or not re.match(r"^v?\d", v):
+        return None
+    parts = re.findall(r"\d+", v.lstrip("vV").split("-")[0].split("+")[0])
+    return tuple(int(p) for p in parts) if parts else None
+
+
+def assert_no_downgrade(packages_json_path, version, allow_downgrade):
+    """Refuse to bundle a Node older than the one packages.json records.
+
+    Returns quietly when either version is unparseable -- an unknown version is
+    a reason to let a human look, not to hard-fail a build box.
+    """
+    try:
+        with open(packages_json_path) as fh:
+            current = json.load(fh)["packages"].get("nodejs", {}).get("version", "") or ""
+    except OSError, ValueError, KeyError:
+        return
+
+    before, after = _version_tuple(current), _version_tuple(version)
+    if before is None or after is None or after >= before:
+        return
+
+    msg = f"nodejs: version would go BACKWARDS {current} -> {version}"
+    if allow_downgrade:
+        print(f"warning: {msg}; --allow-downgrade given, continuing.")
+        return
+    eprint(f"ERROR: {msg}")
+    eprint("  A bare `./build/update nodejs` bundles whatever nvm has locally when")
+    eprint("  given no target. Name the version you want:")
+    eprint("    ./build/update --tag <ver> nodejs")
+    eprint("  Pass --allow-downgrade if the regression is genuinely intended.")
+    eprint("  Nothing was written.")
+    sys.exit(1)
+
+
 def update_packages_json(packages_json_path, version, dry_run):
     if dry_run:
         print(f"[dry-run] would update packages.json nodejs.version to {version}")
@@ -382,7 +419,13 @@ def update_packages_json(packages_json_path, version, dry_run):
     is_flag=True,
     help="Print what would be done without creating the archive.",
 )
-def main(node_dir, tag, platform_override, dry_run):
+@click.option(
+    "--allow-downgrade",
+    "allow_downgrade",
+    is_flag=True,
+    help="Bundle a version older than the one packages.json records (refused by default).",
+)
+def main(node_dir, tag, platform_override, dry_run, allow_downgrade):
     """Bundle a Node.js installation into the loadout payload tree.
 
     Examples:
@@ -420,6 +463,18 @@ def main(node_dir, tag, platform_override, dry_run):
     packages_json = os.path.join(repo_dir, "payload", "packages.json")
 
     print(f"archive      : {dest_archive}")
+
+    # Downgrade guard -- BEFORE anything is written.
+    #
+    # A bare `./build/update nodejs` runs `nvm install --lts`, which bundles
+    # whatever this box happens to have rather than the newest release. On
+    # 2026-08-16 that silently replaced the bundled 26.7.0 with a local 26.2.0.
+    # build/update also checks for this, but only AFTER the importer has
+    # rewritten node.tar.bz2 and stamped packages.json, so its error arrived
+    # with the tree already poisoned and the manifests re-pinned to the
+    # downgrade. The check belongs here, at the first point where the version
+    # is known and nothing has been written yet.
+    assert_no_downgrade(packages_json, node_version, allow_downgrade)
 
     # glibc audit
     audit_glibc(os.path.join(src_dir, "bin", "node"))

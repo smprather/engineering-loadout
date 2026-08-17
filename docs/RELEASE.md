@@ -150,11 +150,20 @@ step leaves Tier 1 red, and `./build/update --commit` will happily commit the dr
 ```bash
 ./build/strip-all-elf-binaries                    # 1. strip/normalize/chunk; updates .strip-manifest
 ./loadout completion bash > envs/bash/global/completions/loadout.bash   # 2. only if verbs/flags/package names changed
-python3.14 build/gen-content-manifest       # 3. re-pin every payload sha256
-python3.14 build/gen-content-manifest --check   # 4. prove it
+python3.14 build/gen-installed-sizes        # 3. re-pin every artifact's UNCOMPRESSED size
+python3.14 build/gen-content-manifest       # 4. re-pin every payload sha256
+python3.14 build/gen-installed-sizes --check    # 5. prove it
+python3.14 build/gen-content-manifest --check   # 6. prove it
 ```
 
-`./build/update` now runs steps 1 and 3 automatically for the paths it mutates. A
+**Step 3 comes before step 4 and the order is not cosmetic.**
+`payload/installed-sizes.json` lives *under* `payload/`, so `.content-manifest`
+hashes it; regenerate the sizes map last and the manifest pins the previous
+one, turning Tier 1 red on a tree that is otherwise correct. Both have
+`--check` modes wired into Tier 1, so getting it wrong fails a gate rather
+than shipping.
+
+`./build/update` runs steps 1, 3 and 4 automatically for the paths it mutates. A
 manual build script does **not** — you run them.
 
 `.content-manifest` is regenerated **wholesale**; it cannot accept one file and

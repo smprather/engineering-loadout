@@ -463,7 +463,17 @@ def _run(cmd, dry_run=False):
     return subprocess.call(cmd, cwd=REPO)
 
 
-def _run_content_manifest(dry_run=False):
+def _run_payload_manifests(dry_run=False):
+    """Re-pin the two committed payload maps, in the order that matters.
+
+    payload/installed-sizes.json lives UNDER payload/, so .content-manifest
+    hashes it. Regenerating the sizes map second therefore leaves the manifest
+    pinning the PREVIOUS sizes file, and Tier 1's gen-content-manifest --check
+    goes red on a tree that is otherwise correct. Sizes first, manifest second.
+    """
+    rc = _run([os.path.join(BUILD, "gen-installed-sizes")], dry_run)
+    if rc != 0:
+        return rc
     return _run([os.path.join(BUILD, "gen-content-manifest")], dry_run)
 
 
@@ -532,7 +542,7 @@ def _run_yara_rules(dry_run=False, tag=None):
     zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
     if dry_run:
         print(f"$ [download {zip_url} -> payload/yara/]")
-        _run_content_manifest(dry_run=True)
+        _run_payload_manifests(dry_run=True)
         return True
 
     with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
@@ -557,9 +567,9 @@ def _run_yara_rules(dry_run=False, tag=None):
 
     compressed_kb = os.path.getsize(_YARA_RULES_BZ2) // 1024
     print(f"  Compressed: {compressed_kb} KB")
-    rc = _run_content_manifest(dry_run=False)
+    rc = _run_payload_manifests(dry_run=False)
     if rc != 0:
-        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        print(f"WARNING: payload manifest chain exited rc={rc}")
         return False
     return True
 
@@ -600,7 +610,7 @@ def _run_tldr_data(dry_run=False):
         print("$ tldr --update")
         print("$ (prune offensive-security tool pages from cache)")
         print(f"$ tar cjf {output} -C {cache_dir} tldr-pages/")
-        _run_content_manifest(dry_run=True)
+        _run_payload_manifests(dry_run=True)
         return True
 
     rc = subprocess.call(["tldr", "--update"])
@@ -627,9 +637,9 @@ def _run_tldr_data(dry_run=False):
 
     size_mb = os.path.getsize(output) // 1024 // 1024
     print(f"Done: {size_mb}M written to {output}")
-    rc = _run_content_manifest(dry_run=False)
+    rc = _run_payload_manifests(dry_run=False)
     if rc != 0:
-        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        print(f"WARNING: payload manifest chain exited rc={rc}")
         return False
     return True
 
@@ -657,15 +667,16 @@ def _run_taplo_schemas(dry_run=False):
     The archive is a payload artifact, so it needs the same post-payload chain
     every other payload change does: strip-all-elf-binaries normalises the tar
     (pinned mtime/ownership, so identical content yields identical bytes and
-    the assurance ledger stays reproducible), then gen-content-manifest records
-    the new hash -- without which the installer refuses the file outright as
-    "payload file not in .content-manifest".
+    the assurance ledger stays reproducible), then gen-installed-sizes and
+    gen-content-manifest record the new size and hash -- without the latter the
+    installer refuses the file outright as "payload file not in
+    .content-manifest".
     """
     fetch = os.path.join(BUILD, "taplo", "fetch-schemas.py")
     if dry_run:
         print(f"$ {fetch}")
         print("$ ./build/strip-all-elf-binaries")
-        _run_content_manifest(dry_run=True)
+        _run_payload_manifests(dry_run=True)
         return True
 
     rc = _run([sys.executable, fetch], dry_run)
@@ -675,9 +686,9 @@ def _run_taplo_schemas(dry_run=False):
     rc = _run([os.path.join(REPO, "build/strip-all-elf-binaries")], dry_run)
     if rc != 0:
         print(f"WARNING: strip-all-elf-binaries exited rc={rc}")
-    rc = _run_content_manifest(dry_run=False)
+    rc = _run_payload_manifests(dry_run=False)
     if rc != 0:
-        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        print(f"WARNING: payload manifest chain exited rc={rc}")
         return False
     return True
 
@@ -738,9 +749,9 @@ def _run_tmux_plugins(dry_run=False):
     if not ok:
         return False
 
-    rc = _run_content_manifest(dry_run=dry_run)
+    rc = _run_payload_manifests(dry_run=dry_run)
     if rc != 0:
-        print(f"WARNING: gen-content-manifest exited rc={rc}")
+        print(f"WARNING: payload manifest chain exited rc={rc}")
         return False
 
     return True
@@ -834,9 +845,9 @@ def _run_automated(name, dry_run=False, tag=None):
         rc2 = _run([os.path.join(REPO, "build/strip-all-elf-binaries")], dry_run)
         if rc2 != 0:
             print(f"WARNING: strip-all-elf-binaries exited rc={rc2}")
-        rc3 = _run_content_manifest(dry_run)
+        rc3 = _run_payload_manifests(dry_run)
         if rc3 != 0:
-            print(f"WARNING: gen-content-manifest exited rc={rc3}")
+            print(f"WARNING: payload manifest chain exited rc={rc3}")
             return False
         return True
     elif name == "tldr-data":
@@ -1003,7 +1014,7 @@ def _run_rolling(name, dry_run=False, force=False):
         print("$ uv build --wheel --out-dir <tmp> <tmp>")
         print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
         print(f"$ (stamp packages.json version for {name})")
-        _run_content_manifest(dry_run=True)
+        _run_payload_manifests(dry_run=True)
         return True
 
     uv = _find_uv()
@@ -1065,9 +1076,9 @@ def _run_rolling(name, dry_run=False, force=False):
 
         _set_pkg_version(name, version)
         print(f"  packages.json version -> {version}")
-        rc = _run_content_manifest(dry_run=False)
+        rc = _run_payload_manifests(dry_run=False)
         if rc != 0:
-            print(f"WARNING: gen-content-manifest exited rc={rc}")
+            print(f"WARNING: payload manifest chain exited rc={rc}")
             return False
         return True
     finally:
@@ -1091,6 +1102,7 @@ def _show_build(name):
     print()
     print("  After building:")
     print("    ./build/strip-all-elf-binaries")
+    print("    build/gen-installed-sizes")
     print("    build/gen-content-manifest")
     print("    git add payload/ .strip-manifest packages.json")
 
@@ -1107,6 +1119,7 @@ def _show_import(name):
     print("  Note: {}".format(info["note"]))
     print()
     print("  After importing:")
+    print("    build/gen-installed-sizes")
     print("    build/gen-content-manifest")
     print("    git add payload/ packages.json")
 
@@ -1127,8 +1140,9 @@ def _show_download(name):
     print(f"     bzip2 -k {name}")
     print(f"  2. cp {name}.bz2 payload/el8.x86_64.glibc2p28/bin/")
     print("  3. ./build/strip-all-elf-binaries")
-    print("  4. build/gen-content-manifest")
-    print("  5. git add payload/ .strip-manifest packages.json")
+    print("  4. build/gen-installed-sizes")
+    print("  5. build/gen-content-manifest")
+    print("  6. git add payload/ .strip-manifest packages.json")
 
 
 def _show_pypi_wheel(name):
@@ -1168,6 +1182,7 @@ def _show_pypi_wheel(name):
     print("    silently changes what OTHER tools resolve on their next install.")
     print()
     print("  After refreshing:")
+    print("    build/gen-installed-sizes")
     print("    build/gen-content-manifest")
     print("    build/gen-readme-table")
     print(f"    ./loadout install {name} --dest-dir <d>   # prove it resolves OFFLINE")
@@ -1407,7 +1422,8 @@ def main(
             )
         _set_pkg_interval(pkg, spec)
         print(f"{pkg}: auto_update_interval -> {spec}")
-        print("Remember to re-run: python3.14 build/gen-content-manifest")
+        print("Remember to re-run: python3.14 build/gen-installed-sizes,")
+        print("then python3.14 build/gen-content-manifest (sizes first -- the manifest hashes them).")
         return
 
     if show_currency:
