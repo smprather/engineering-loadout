@@ -579,13 +579,23 @@ def main(dry_run, strip_bin, no_manifest, chunk_only):
         )
     )
 
-    # Regenerate the content manifest so install-time --verify always reflects
-    # the final on-disk bytes (post-strip, post-chunk). Skipped on --chunk-only
-    # (a partial pass) and dry runs.
+    # Regenerate the two committed payload maps so install-time --verify always
+    # reflects the final on-disk bytes (post-strip, post-chunk). Skipped on
+    # --chunk-only (a partial pass) and dry runs.
+    #
+    # ORDER IS LOAD-BEARING: installed-sizes.json lives under payload/, so
+    # .content-manifest hashes it. Sizes must be rewritten FIRST or the manifest
+    # pins the previous sizes file and Tier 1 goes red on a correct tree. This
+    # is the deepest of the three places that regenerate manifests (the others
+    # being build/update and the manual chain in docs/RELEASE.md §4), and the
+    # one every path goes through -- stripping an ELF payload inside a tar
+    # changes its UNCOMPRESSED size, which is exactly what the sizes map
+    # records.
     if not dry_run and not chunk_only:
-        gen = os.path.join(repo_dir, "build", "gen-content-manifest")
-        if os.path.isfile(gen):
-            subprocess.run([sys.executable, gen], check=False)
+        for script in ("gen-installed-sizes", "gen-content-manifest"):
+            gen = os.path.join(repo_dir, "build", script)
+            if os.path.isfile(gen):
+                subprocess.run([sys.executable, gen], check=False)
 
 
 if __name__ == "__main__":
