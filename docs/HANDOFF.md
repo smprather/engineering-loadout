@@ -1175,7 +1175,7 @@ keeping:
 (prints ``​`<pkg>` is already installed``, exits 0, changes nothing) **unless the
 requested options differ from the `[tool.options]` block in the tool's
 `uv-receipt.toml`** -- which records `find-links`. The payload has chunked wheels,
-so `_prepare_wheels_dir` rejoins into a fresh `/tmp/loadout-wheels.XXXXXX` every
+so `_prepare_wheels_dir` rejoins into a fresh `/tmp/.loadout-wheels.XXXXXX` every
 run; that path lands in the receipt, never matches next time, and uv reinstalls.
 **Upgrades land today by accident of the temp path, not by design.** Delete the
 last chunked wheel and `_prepare_wheels_dir` returns the stable payload `wheels/`

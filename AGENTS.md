@@ -31,6 +31,11 @@ XDG_CACHE_HOME=/tmp/codex-nvim-cache XDG_STATE_HOME=/tmp/codex-nvim-state nvim -
 
 ## Lessons Learned
 
+- Installer-internal temp files/dirs under `/tmp` MUST use a dot-hidden prefix (`.loadout-rejoin.`, `.loadout-wheels.`, `.loadout-python-install.`, `.loadout-restore_`, `.loadout-layer-*`), never a bare `loadout-*` prefix. `loadout clean --all` sweeps `/tmp/loadout-*`, and a bare prefix lets one user's `clean --all` delete another concurrent install's mid-extraction temp and corrupt the install. Only cross-run identity paths (`/tmp/loadout-pending-<user>/`, `/tmp/loadout.<user>.log`) keep visible names; the sweep excludes the pending dir by name.
+- `pending.json` entries written by `stage_pending_ops` carry `src_bz2` + `src_sha256`; on every merge the installer prunes entries whose staged file or source `.bz2` vanished, or whose source hash changed, so the pending daemon can never apply an outdated binary. Entries without `src_bz2` (pre-existing) are left untouched -- do not add heuristics beyond missing-file/hash-change.
+- Do not create `/tmp` tempdirs with hardcoded `dir="/tmp"` in installer code; let `tempfile` honor `TMPDIR` (locked-down hosts may have a restricted `/tmp`).
+- Summary-table rows are phase-level (`Area`) except single-package installs, where `install_prebuilt_binaries` re-labels the row with the package name (`Package` header, phase name in Detail). Keep multi-package output coarse; see CLAUDE.md "Summary-table package attribution".
+
 - Do not use `xset +fp ~/.local/share/fonts` from shell startup. Even with valid `fonts.dir`, X may reject user-home paths such as `/home/mylesp` when the home directory is `700`. Use fontconfig (`fc-cache`) for modern Linux apps and WSLg.
 - Vendored fonts belong in `~/.local/share/fonts`. Generate `fonts.scale`/`fonts.dir` when `mkfontscale`/`mkfontdir` exist, but rely on `fc-cache` for actual desktop app discovery.
 - Font archives live under `payload/fonts/`. Archives over normal GitHub size limits should be split as `payload/fonts/Name.zip.part-000`, `Name.zip.part-001`, etc. The installer rejoins split archives under `/tmp` before unzipping. Use 45 MiB chunks to stay below GitHub's 50 MB warning threshold.

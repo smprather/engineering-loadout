@@ -687,8 +687,11 @@ class _Bz2Store:
         parts = glob_paths_glob(path + ".part-*")
         # Hash each chunk as stored -- the manifest records per-chunk sha256.
         _verify_source_files(parts)
+        # Dot-hidden prefix: never matches the `clean --all` /tmp sweep
+        # ("loadout-*"), so a concurrent clean cannot delete a mid-extraction
+        # temp from another running install.
         fd, tmp = tempfile.mkstemp(
-            prefix="loadout-rejoin.",
+            prefix=".loadout-rejoin.",
             suffix="." + os.path.basename(path),
         )
         self._tmpfiles.append(tmp)
@@ -748,7 +751,7 @@ def _prepare_wheels_dir(wheels_dir):
     if not chunked:
         return wheels_dir, lambda: None
 
-    tmp_dir = tempfile.mkdtemp(prefix="loadout-wheels.")
+    tmp_dir = tempfile.mkdtemp(prefix=".loadout-wheels.")
 
     # Copy whole wheels directly.
     for whl in glob.glob(os.path.join(wheels_dir, "*.whl")):
@@ -775,6 +778,12 @@ FINAL_NOTICES = []
 INSTALL_RESULTS = []
 INSTALL_BLOCKERS = []
 _SILENT_AREAS = set()  # area names whose non-FAIL results are omitted from install results table
+# Maps an internal phase name to a package name for re-labelling summary-table
+# rows when the selection is a single package: "ruff" instead of
+# "pre-built binaries", with the phase name demoted to the Detail column.
+# Populated by install_prebuilt_binaries; empty for multi-package installs,
+# which keep the honest phase-level view.
+_RESULT_PKG_LABELS = {}
 
 
 class InstallRefused(Exception):
@@ -1629,7 +1638,11 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         return
 
     # Decompress staged files outside the lock (potentially slow I/O).
-    staged_map = {}  # name -> staged_path
+    # Record the compressed source .bz2 hash at staging time so a later run can
+    # tell that an old pending entry's payload went stale (source changed or
+    # vanished) and prune it, rather than letting the daemon apply an outdated
+    # binary.
+    staged_map = {}  # name -> (staged_path, bz2_path, src_bz2_sha256)
     for name in sorted(blocked_binaries):
         bz2_path = os.path.join(bin_dir, name + ".bz2")
         if not os.path.isfile(bz2_path):
@@ -1640,24 +1653,61 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         except OSError as exc:
             warn(f"could not stage {name}: {exc}")
             continue
-        staged_map[name] = staged
+        try:
+            src_sha = _sha256_file(bz2_path)
+        except OSError as exc:
+            warn(f"could not hash staged source for {name}: {exc}")
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+            continue
+        staged_map[name] = (staged, bz2_path, src_sha)
         print(f"  staged pending op: {staged} -> {os.path.join(dest_bin_dir, name)}")
 
     if not staged_map:
         return
 
     # Merge into pending.json under lock; new entry supersedes old by dest path.
-    # Always update last_activity so the daemon's 1-week timeout resets.
+    # Prune stale entries first: an install_binary entry whose staged file or
+    # recorded source .bz2 has disappeared, or whose source .bz2 no longer
+    # hashes to what was staged, would otherwise let the daemon eventually
+    # install an outdated build. Entries written by older installers (no
+    # src_bz2 field) are left untouched -- the daemon drops them itself when
+    # their staged file goes away.
     now = _now_utc_iso()
     with _pending_lock():
         existing, _ = _read_pending_state()
-        for name, staged in staged_map.items():
+        for dest, op in list(existing.items()):
+            if op.get("type") != "install_binary":
+                continue
+            src_bz2 = op.get("src_bz2")
+            if not src_bz2:
+                continue
+            staged = op.get("staged", "")
+            stale = not os.path.isfile(staged) or not os.path.isfile(src_bz2)
+            if not stale:
+                try:
+                    stale = _sha256_file(src_bz2) != op.get("src_sha256")
+                except OSError:
+                    stale = True
+            if stale:
+                del existing[dest]
+                if staged and os.path.exists(staged):
+                    try:
+                        os.unlink(staged)
+                    except OSError:
+                        pass
+                warn(f"pruned stale pending op for {os.path.basename(dest)} (payload changed)")
+        for name, (staged, bz2_path, src_sha) in staged_map.items():
             dest = os.path.join(dest_bin_dir, name)
             existing[dest] = {
                 "type": "install_binary",
                 "dest": dest,
                 "staged": staged,
                 "mode": 0o755,
+                "src_bz2": bz2_path,
+                "src_sha256": src_sha,
                 "block": {"type": "proc_exe_absent", "path": dest},
             }
         _write_pending_state(existing, now)
@@ -1675,40 +1725,50 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         warn(f"daemon script not found at {daemon_src} -- pending ops will not auto-apply")
         return
 
-    # Check if daemon already running via pidfile.
-    pid_file = os.path.join(_PENDING_DIR, "daemon.pid")
-    try:
-        with open(pid_file) as f:
-            pid = int(f.read().strip())
-        os.kill(pid, 0)
-        print(f"  pending-ops daemon already running (pid {pid})")
-        return
-    except OSError, ValueError:
-        pass
+    # Pidfile check + spawn both happen under the pending lock so two
+    # concurrent installs cannot race into spawning two daemons. The daemon
+    # only takes this lock once its poll loop starts, long after Popen
+    # returns, so holding it here cannot deadlock.
+    with _pending_lock():
+        pid_file = os.path.join(_PENDING_DIR, "daemon.pid")
+        try:
+            with open(pid_file) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            print(f"  pending-ops daemon already running (pid {pid})")
+            return
+        except OSError, ValueError:
+            pass
 
-    log_file = os.path.join(_PENDING_DIR, "daemon.log")
-    log_fh = None
-    try:
-        log_fh = open(log_file, "a")
-        proc = subprocess.Popen(
-            [sys.executable, daemon_dst],
-            stdout=log_fh,
-            stderr=log_fh,
-            close_fds=True,
-            start_new_session=True,
-        )
-        print(f"  pending-ops daemon spawned (pid {proc.pid}), log: {log_file}")
-    except OSError as exc:
-        warn(f"could not spawn pending-ops daemon: {exc}")
-    finally:
-        if log_fh is not None:
-            log_fh.close()
+        log_file = os.path.join(_PENDING_DIR, "daemon.log")
+        log_fh = None
+        try:
+            log_fh = open(log_file, "a")
+            proc = subprocess.Popen(
+                [sys.executable, daemon_dst],
+                stdout=log_fh,
+                stderr=log_fh,
+                close_fds=True,
+                start_new_session=True,
+            )
+            print(f"  pending-ops daemon spawned (pid {proc.pid}), log: {log_file}")
+        except OSError as exc:
+            warn(f"could not spawn pending-ops daemon: {exc}")
+        finally:
+            if log_fh is not None:
+                log_fh.close()
 
 
 def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     root_dir = os.path.join(repo_dir, PAYLOAD_DIR)
     dest_bin_dir = os.path.join(home, _local_name(home), "bin")
     dest_lib64_dir = os.path.join(home, _local_name(home), "lib64")
+
+    # Single-package selection (e.g. `loadout install ruff`): report this
+    # phase's summary row under the package name instead of "pre-built
+    # binaries" -- users think in packages, not installer phases.
+    if selected_tools is not None and len(selected_tools) == 1:
+        _RESULT_PKG_LABELS["pre-built binaries"] = next(iter(selected_tools))
 
     if not os.path.isdir(root_dir):
         skipped(
@@ -1976,7 +2036,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         return
 
     archive = os.path.join(src_dir, archives[-1])
-    tmp_dir = tempfile.mkdtemp(prefix="loadout-python-install.", dir="/tmp")
+    tmp_dir = tempfile.mkdtemp(prefix=".loadout-python-install.")
     try:
         print(f"  extracting {archive}...")
         pv_extract_tar(archive, tmp_dir)
@@ -2302,6 +2362,18 @@ def print_install_results():
         # SKIP (and anything else) is omitted -- a not-selected phase is not news.
     n_fail = sum(1 for r in rows if r[1] == "FAILED")
 
+    # Phase rows can be re-labelled as package names for small selections
+    # (see install_prebuilt_binaries): "ruff" instead of "pre-built binaries",
+    # with the internal phase name demoted to the Detail column.
+    def _display(row):
+        pkg = _RESULT_PKG_LABELS.get(row[0])
+        if pkg is None:
+            return row
+        return (pkg, row[1], row[2] or row[0])
+
+    rows = [_display(r) for r in rows]
+    first_header = "Package" if rows and all(r[0] in _RESULT_PKG_LABELS.values() for r in rows) else "Area"
+
     def _final(line, error):
         if _RICH:
             assert _console is not None
@@ -2315,7 +2387,7 @@ def print_install_results():
 
     if _RICH:
         t = _RichTable(title="Summary", show_lines=False, highlight=False)
-        t.add_column("Area", style="cyan", no_wrap=True)
+        t.add_column(first_header, style="cyan", no_wrap=True)
         t.add_column("Result", justify="center")
         t.add_column("Detail", style="dim")
         _status_style = {"done": "green", "FAILED": "bold red"}
@@ -2327,13 +2399,13 @@ def print_install_results():
         _console.print(t)
     else:
         widths = [
-            max(len("Area"), *(len(row[0]) for row in rows)),
+            max(len(first_header), *(len(row[0]) for row in rows)),
             max(len("Result"), *(len(row[1]) for row in rows)),
             max(len("Detail"), *(len(row[2]) for row in rows)),
         ]
         print("")
         print("Summary:")
-        print("  {:{}}  {:{}}  {:{}}".format("Area", widths[0], "Result", widths[1], "Detail", widths[2]))
+        print("  {:{}}  {:{}}  {:{}}".format(first_header, widths[0], "Result", widths[1], "Detail", widths[2]))
         print("  {}  {}  {}".format("-" * widths[0], "-" * widths[1], "-" * widths[2]))
         for thing, result, detail in rows:
             print("  {:{}}  {:{}}  {:{}}".format(thing, widths[0], result, widths[1], detail, widths[2]))
@@ -3515,7 +3587,7 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
 
 def restore_backup(backup_path, home):
     if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
-        tmp_dir = tempfile.mkdtemp(prefix="loadout_restore_", dir="/tmp")
+        tmp_dir = tempfile.mkdtemp(prefix=".loadout-restore_")
         try:
             with tarfile.open(backup_path, "r:bz2") as tf:
                 safe_extract_tar(tf, tmp_dir)
@@ -3602,7 +3674,7 @@ def preserve_bash_layers_from_symlink(home):
         for layer in BASH_LAYERS:
             src = os.path.join(bash_config, layer)
             if os.path.isdir(src):
-                tmp = tempfile.mkdtemp(prefix=f"loadout-layer-{layer}-", dir="/tmp")
+                tmp = tempfile.mkdtemp(prefix=f".loadout-layer-{layer}-")
                 shutil.rmtree(tmp)
                 shutil.copytree(src, tmp, symlinks=True)
                 saved[layer] = tmp

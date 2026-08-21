@@ -480,6 +480,7 @@ sha256  1cfc66ed18176f3c13fe54bf955085bd6a1764ece5ae59015acbef1f8ddd4bd1  payloa
 sha256  1d22e9d23d2b1c17800fddda3158d5bda254c9eb2f1fd7c484e98934d0f50e1a  payload/treesitter/vendor/nvim-treesitter/tests/indent/typst/show.typ
 sha256  1d4ac8e7b16637d51d112d68fc1e699e0058549c57b7cd6b169d4008ba0d9015  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/helm/folds.scm
 sha256  1d534eb14ff125114885202b86f46c9f2bd78c786e5c75a637028fbbf0f808d7  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/typescript/folds.scm
+sha256  1d8023d8fe89ca6dd7966da7fdf01af81e359d6890df68a792ea7e822fe6eb13  payload/installed-sizes.json
 sha256  1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a  payload/el8.x86_64.glibc2p28/wheels/python_dotenv-1.2.2-py3-none-any.whl
 sha256  1d8c004418eee073885a48b6f04c9d807c595ad3cdc8a2afc6c0e39c776bc7a2  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/re2c/injections.scm
 sha256  1d8c004418eee073885a48b6f04c9d807c595ad3cdc8a2afc6c0e39c776bc7a2  payload/treesitter/vendor/nvim-treesitter/runtime/queries/re2c/injections.scm
@@ -3635,7 +3636,6 @@ sha256  ddf4248f88e8f99a82d1812a9d983bce35768ca0ff259f27328b5d0e3e6ef7f1  payloa
 sha256  de1426f1d5e16bcbb2c9e47dd5e364e5952ddcacc67632cde824bc9cc5106f2b  payload/el8.x86_64.glibc2p28/bin/Xephyr.bz2
 sha256  de1e4d3904087cbdb8daf2b25f01f6c390a2ee1a1d1b200792b4355877f35c7f  payload/el8.x86_64.glibc2p28/bin/ssh10.bz2
 sha256  de48e376374e4d18b66e35dd732f1288c6133e92ebf77778190b288a6a636cba  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ocaml_interface.lua
-sha256  de61ca33ea688d666f90141700666e9c287723396ef5d01928fb15a934de988a  payload/installed-sizes.json
 sha256  de6e27b1c1f4b44975f6e73e38cb92c7958782765cd0a5c298ef82f4f838e517  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/rifleconf/injections.scm
 sha256  de6e27b1c1f4b44975f6e73e38cb92c7958782765cd0a5c298ef82f4f838e517  payload/treesitter/vendor/nvim-treesitter/runtime/queries/rifleconf/injections.scm
 sha256  debf30cda8ba699b8d36b9dc065077df5e021f1a1ed4ab64e62ba573b1036949  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/hyprlang.lua
