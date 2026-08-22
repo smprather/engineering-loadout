@@ -99,7 +99,8 @@ def test_expand_groups(m):
     shared_all = eg(["@shared-all"], REGISTRY)
     check("@shared-all folds optionals back in", shared_all == shared | {"surfer"})
     envs = eg(["@envs"], REGISTRY)
-    check("@envs contains bash config only", envs == {"env-bash"})
+    check("@envs covers the majority shells (bash + tcsh)", envs == {"env-bash", "env-tcsh"})
+    check("@envs skips optional env bundles not in its charter", "env-opt" not in envs)
     envs_all = eg(["@envs-all"], REGISTRY)
     check(
         "@envs-all includes every env bundle",

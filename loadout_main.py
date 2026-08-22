@@ -244,7 +244,7 @@ def _parse_namelist(raw):
 _SYNTHETIC_GROUPS = {
     "@shared": "Every non-env, non-optional package -- install set for a shared/read-only tree.",
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, rust, ...).",
-    "@envs": "Bash configuration only (env-bash); install other per-user config bundles explicitly.",
+    "@envs": "Bash + tcsh configuration (env-bash, env-tcsh); install other per-user config bundles explicitly.",
     "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh, env-cargo).",
     "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
@@ -255,9 +255,8 @@ def expand_groups(names, registry, _stack=None):
 
     @shared is special: every non-group package except per-user "env" config
     bundles -- i.e. everything you install into a shared/read-only tree. @envs
-    deliberately installs only env-bash. This keeps the normal per-user shell
-    setup Bash-only; install other env packages by name or use @envs-all for the
-    complete env set. @shared skips packages flagged "optional": true; those
+    installs the two majority shells' config (env-bash + env-tcsh). Other env
+    packages are installed by name or via @envs-all for the complete set. @shared skips packages flagged "optional": true; those
     install only when named explicitly or pulled in by a group that lists them
     (e.g. surfer, the @rust trio, env-tcsh). @shared-all and @envs-all fold
     optional packages back in.
@@ -306,8 +305,14 @@ def expand_groups(names, registry, _stack=None):
             out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") != "env"}
             continue
         if name == "@envs":
+            # env-bash plus env-tcsh: tcsh is the majority interactive shell on
+            # the target EE farm nodes, so the default per-user shell setup
+            # covers both majors. env-starship rides along through env-bash's
+            # recommends. Other env bundles stay explicit (use @envs-all).
             if "env-bash" in registry:
                 out.add("env-bash")
+            if "env-tcsh" in registry:
+                out.add("env-tcsh")
             continue
         if name == "@envs-all":
             # Full per-user env set, including optional env packages.
@@ -504,6 +509,36 @@ _STALE_OPENSSH_CLIENT_SHA256 = {
     "scp": "e21fa1d5a8b2752737b3feef6a775bb03dbb16fd7ef0f42d0446002ebefe58ff",
     "sftp": "dd47a4b719acb3c82aeb02186a89b3ea8b2c7715fac1cd41db17eca6ad8a818a",
 }
+
+
+def remove_stale_pyright_python_shims(dest_bin_dir):
+    """Remove uv-tool launchers from the retired PyPI pyright wrapper.
+
+    pyright used to ship as a uv_tool python-tool; its PyPI wheel resolves
+    node at RUNTIME and (air-gapped, no bundled node on PATH) downloads one
+    via nodeenv. pyright is now a pure Node runtime archive exec'ing the
+    bundled node by absolute path, so these shims are dead weight that would
+    silently resurrect the download-on-first-run behavior. Gated on content
+    (must reference this install's uv tools venv) so a user's unrelated
+    script of the same name is never touched.
+    """
+    for name in ("pyright-python", "pyright-python-langserver"):
+        path = os.path.join(dest_bin_dir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                head = fh.read(4096)
+        except OSError as exc:
+            warn(f"could not inspect stale pyright shim {path}: {exc}")
+            continue
+        if b"uv/tools/pyright" not in head and b"uv\\tools\\pyright" not in head:
+            continue
+        try:
+            os.remove(path)
+            print(f"  removed stale PyPI-pyright shim: {path}")
+        except OSError as exc:
+            warn(f"could not remove stale pyright shim {path}: {exc}")
 
 
 def remove_stale_openssh_clients(dest_bin_dir):
@@ -2967,6 +3002,9 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
                 remove_if_exists(os.path.join(install_to, rel))
 
         pv_extract_tar(archive, install_to)
+
+        if pkg_name == "pyright":
+            remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
 
         relocate_token = entry.get("relocate_token")
         if relocate_token is not None:

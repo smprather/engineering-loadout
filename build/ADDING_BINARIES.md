@@ -4600,3 +4600,114 @@ ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
 
 OpenROAD-flow-scripts (ORFS) is a scripts + PDK layer **on top of** this binary;
 it changes nothing here and only decides whether the PDK data also ships.
+
+## sqlite 3.53.4 -- SQLite CLI + libsqlite3 (EL8 SOURCE build, C)
+
+Date: 2026-08-22. Build: `./build/build-sqlite.sh --tag 3.53.4` (needs
+`readline-devel` + `ncurses-devel` on the host for configure's auto-detect).
+Payload:
+`payload/el8.x86_64.glibc2p28/bin/sqlite3.bz2` (~928K) and
+`payload/el8.x86_64.glibc2p28/lib64/libsqlite3.so.0.bz2` (~752K).
+
+### Why
+
+EL8 ships sqlite 3.26 from 2018. The CLI is the product; `libsqlite3.so.0`
+ships with it because the shell links it dynamically, and future packages can
+NEEDED against it for free.
+
+### Readline: no NEW dependency, by design
+
+`--enable-readline` is the upstream default and was kept ON. The NEEDED pair
+`libreadline.so.7` + `libtinfo.so.6` (+ `libncurses.so.6`) is ALREADY shipped
+in payload lib64/ as UNREGISTERED stems -- the installer's rule is "unclaimed
+lib64 stem = installed with EVERY selection" (`_lib_selected` in
+loadout_main.py), so the binary's RPATH `$ORIGIN/../lib64` resolves them on
+any loadout host even though nothing declares an owner. gnuplot / ngspice /
+octave / vvp already rely on exactly these libs. Do not read the missing
+registry entry as a missing library.
+
+### Extensions: `--all`
+
+Upstream's own bundle (fts4 fts5 rtree geopoly session dbpage dbstat carray).
+EL8's system build ships fts5+rtree; shipping a CLI that rejected
+`USING fts5` would be a silent regression versus any distro from the last
+decade.
+
+### Version encoding trap
+
+sqlite.org tarballs are named `sqlite-autoconf-<N>.tar.gz`, where N encodes
+3.X.Y as `3XXYY00` (branch releases 3.X.Y.Z -> `3XXYYZZ`). The build script
+derives N from --tag and cross-checks it against the download page's
+machine-readable CSV comment (`PRODUCT,<version>,<relative-url>,<size>,<sha3>`),
+which also supplies the year-scoped relative URL
+(`https://www.sqlite.org/<year>/...`) and the SHA3-256 used for verification.
+The CSV row is matched on `<name>.tar.gz,` -- never `,<name>.tar.gz`: the
+leading character is the `/` of the year dir.
+
+### Smoke tests that actually bite (house rule: --version proves nothing)
+
+1. insert/select roundtrip on a temp db;
+2. fts5 + rtree probes (catches `--all` silently not taking);
+3. session changeset capture -- three separate traps, all hit during the first
+   bring-up:
+   - `.session open` takes an OPEN DATABASE ALIAS (`main`), NOT a filename;
+     a filename silently opens a second connection whose writes are never
+     recorded, yielding an EMPTY changeset with zero diagnostics;
+   - tracked tables need a PRIMARY KEY -- rowid-only tables are silently
+     skipped;
+   - under `set -e`, an unguarded `printf | sqlite3` pipeline dies silently
+     on nonzero exit before reaching the error handlers.
+4. readline assertion: configure falls back SILENTLY to no-readline when the
+   devel headers are absent; the script hard-fails unless `libreadline.so*`
+   appears in NEEDED.
+
+### Packaging notes
+
+strip -> patchelf (`$ORIGIN/../lib64` for the binary, `$ORIGIN` for the lib)
+-> bzip2, per repo invariant. The SONAME file ships under its soname
+(`libsqlite3.so.0`), not the upstream real name (`libsqlite3.so.3.53.4`);
+the linker-name `libsqlite3.so` is deliberately NOT shipped -- add it only if
+an offline source build ever needs to compile against this copy.
+Registry currency scrapes `SQLite version X.Y.Z` from the download page.
+
+## pyright 1.1.411 -- Python LSP (upstream npm package, pure Node runtime archive)
+
+Date: 2026-08-22. Build: `./build/build-pyright.sh --tag 1.1.411`.
+Payload: `payload/el8.x86_64.glibc2p28/runtime/pyright.tar.bz2` (~3.0M).
+Registry shape mirrors the nodejs entry: kind bin + `archive` +
+`sentinel bin/pyright` + `install_to ~/.local`, hard `depends [nodejs]`.
+
+### Why the PyPI wheel was retired (the offline bug, load-bearing)
+
+The PyPI `pyright` wheel is a PYTHON WRAPPER around the same JS. It bundles
+the npm dist (no pyright download at runtime) but resolves NODE at runtime:
+(1) `nodejs-wheel-binaries` pkg (never shipped), (2) global `node` on PATH,
+(3) fallback `_ensure_node_env()` -> **nodeenv downloads a Node tarball from
+nodejs.org**. Air-gapped box + no `~/.local/bin/node` on PATH = dead, with a
+confusing network error. Worse, the failure is masked on any box where the
+bashrc put bundled node on PATH -- build-box masking in env-var form.
+
+The new archive removes both Python and the resolution logic: sh wrappers
+exec `$PREFIX/bin/node` by ABSOLUTE PATH derived from the wrapper location.
+No PATH setup needed (GUI-launched nvim included), no network, no python.
+
+### Packaging notes
+
+- The archive tree must be PURE JS/data; the build script asserts no ELF
+  bytes (`od -An -tx1` matching `7f 45 4c 46` -- grep does not interpret
+  `\x7f` escapes, and `find -exec` exit status does not reflect per-file
+  matches; both were bugs in the first draft of this guard).
+- Integrity: verified against the registry metadata's
+  `dist.integrity = sha512-<base64>` via `openssl dgst -sha512 -binary |
+  openssl base64 -A`.
+- Stage-verify needs a node at `$STAGE/bin/node` for the absolute-path
+  wrapper to exec; the script symlinks one in and REMOVES it before tar so
+  it never reaches the payload.
+- typeshed-fallback rides along inside dist/ (asserted); without it pyright
+  reports bogus stdlib errors.
+- Upgraded installs keep stale uv shims `pyright-python` /
+  `pyright-python-langserver`; `remove_stale_pyright_python_shims`
+  (loadout_main.py, called from install_runtime_archives) deletes them,
+  content-gated on referencing this install's `uv/tools/pyright` venv so an
+  unrelated user file of the same name is never touched.
+- Old wheels removed from the wheelhouse: pyright-1.1.40x, nodeenv-1.10.0.

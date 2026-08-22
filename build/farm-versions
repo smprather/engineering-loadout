@@ -439,6 +439,12 @@ TOOLS = [
         strategy_flag(["--version"], r"version:\s*([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "sqlite3",
+        "sqlite",
+        "https://www.sqlite.org",
+        strategy_flag(["--version"], r"^([0-9]+\.[0-9]+\.[0-9]+) "),
+    ),
+    (
         "starship",
         "starship",
         "https://github.com/starship/starship",

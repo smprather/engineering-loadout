@@ -291,6 +291,7 @@ OpenSSH for those.
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.13.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
+| sqlite | bin | 3.53.4 | SQLite database CLI and library — EL8 ships 3.26 from 2018; current upstream with readline line-editing and FTS4/5 + RTREE + session extensions |
 | starship | bin | 1.26.0 | Cross-shell customizable minimal prompt |
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
@@ -354,7 +355,7 @@ OpenSSH for those.
 | openroad | bin | 26Q3 | OpenROAD — RTL-to-GDS place & route: floorplanning, placement, clock-tree synthesis, global/detailed routing and parasitic extraction, driven from Tcl or Python. Ships `sta` (standalone OpenSTA timing) alongside. Completes the open flow already here: yosys synthesises → openroad places & routes → klayout views the layout |
 | lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |
-| pyright | python-tool | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions |
+| pyright | bin | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads) |
 | taplo | bin | 0.10.0 | TOML toolkit — linter, formatter and language server in one binary. Ships an offline JSON Schema catalog (49 SchemaStore schemas: Cargo.toml, pyproject.toml, ruff, uv, rustfmt, starship …) so `taplo lint` validates keys on an air-gapped node instead of silently degrading to grammar-only. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml |
 | tmux-path-store | python-tool | 1.1.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots

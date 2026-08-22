@@ -1244,6 +1244,27 @@
       ],
       "description": "Static analysis linter for shell scripts"
     },
+    "sqlite": {
+      "kind": "bin",
+      "bins": [
+        "sqlite3"
+      ],
+      "libs": [
+        "libsqlite3.so.0"
+      ],
+      "version": "3.53.4",
+      "version_url": "https://www.sqlite.org/download.html",
+      "version_pattern": "SQLite version ([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "data",
+        "database",
+        "core"
+      ],
+      "description": "SQLite database CLI and library -- EL8 ships sqlite 3.26 from 2018; this bundles current upstream (readline line-editing via the already-shipped libreadline.so.7, FTS4/5 + RTREE + session extensions enabled)"
+    },
     "starship": {
       "kind": "bin",
       "bins": [
@@ -3903,24 +3924,13 @@
       "missing_hint": "taplo will work but `taplo lint` degrades to grammar-only checking (no Cargo.toml/pyproject.toml key validation)"
     },
     "pyright": {
-      "kind": "python-tool",
-      "uv_tool": "pyright",
+      "kind": "bin",
       "bins": [
         "pyright",
-        "pyright-langserver",
-        "pyright-python",
-        "pyright-python-langserver"
+        "pyright-langserver"
       ],
       "depends": [
-        "portable-python",
-        "uv"
-      ],
-      "libs": [
-        "libatomic.so.1"
-      ],
-      "wheels": [
-        "pyright",
-        "nodeenv"
+        "nodejs"
       ],
       "version": "1.1.411",
       "platforms": [
@@ -3929,7 +3939,12 @@
       "tags": [
         "lsp"
       ],
-      "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions"
+      "archive": "payload/PLATFORM/runtime/pyright.tar.bz2",
+      "archive_name": "pyright.tar.bz2",
+      "sentinel": "bin/pyright",
+      "install_to": "~/.local",
+      "missing_hint": "Run: ./build/build-pyright.sh --tag <version>",
+      "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions; upstream npm package running directly on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads)"
     },
     "tmux-path-store": {
       "kind": "python-tool",

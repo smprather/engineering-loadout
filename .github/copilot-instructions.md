@@ -65,7 +65,7 @@ Use `sh -n loadout` for the POSIX-sh shim,
 after installer or shell edits. `./tests/install-linux-tmp-home` runs the Linux
 installer against a temp `HOME` with temp XDG cache/state dirs from `/tmp`, then
 smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
-`@envs-all` for broad config coverage; normal `@envs` is Bash-only.
+`@envs-all` for broad config coverage; normal `@envs` covers Bash + tcsh.
 
 ## Architecture
 
@@ -85,8 +85,9 @@ smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
 
 Groups (`@`-prefixed keys) have a `members` list and expand recursively with
 cycle detection. Synthetic runtime groups: `@shared` (every non-env,
-non-optional package), `@shared-all` (same plus optionals), `@envs` (Bash
-configuration only), and `@envs-all` (every env config bundle). The bare
+non-optional package), `@shared-all` (same plus optionals), `@envs` (env-bash +
+env-tcsh plus env-bash's recommends), and `@envs-all` (every env config
+bundle). The bare
 keyword `all` is rejected; users always name packages or groups explicitly
 (dnf/apt style).
 

@@ -246,13 +246,9 @@ EXPECT_NONZERO = {
     "espresso": (["--version"], 1, ("Espresso Version",), "1988 tool, no version flag; prints its release banner"),
     "false": (["--version"], 1, ("GNU coreutils",), "GNU false exits 1 unconditionally, by definition"),
     # --- servers that need a transport before they will talk ---------------
+    # pyright-langserver is a sh wrapper exec'ing bundled node; without
+    # --stdio/--node-ipc the vscode-languageserver layer refuses to start.
     "pyright-langserver": (
-        ["--version"],
-        1,
-        ("Connection input stream is not set",),
-        "LSP server; requires --stdio/--node-ipc to start",
-    ),
-    "pyright-python-langserver": (
         ["--version"],
         1,
         ("Connection input stream is not set",),

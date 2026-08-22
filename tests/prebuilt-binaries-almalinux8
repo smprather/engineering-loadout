@@ -98,12 +98,12 @@ if [ "$interactive" -eq 1 ]; then
         "$image"
 fi
 
-net_arg=""
-if [ "$dynamic" -eq 1 ]; then
-    # The dynamic detonation runs with no network so an exfiltration/update
-    # attempt cannot succeed and the offline path is what gets certified.
-    net_arg="--network=none"
-fi
+# Internet is disabled for EVERY container run, not just dynamic mode: the
+# product is offline-first, so a smoke that silently reaches the network can
+# mask a broken offline path (this exact masking is why pyright's nodeenv
+# download went unnoticed). Interactive debugging keeps network off too; use
+# docker run by hand if you truly need to fetch something in a shell.
+net_arg="--network=none"
 
 exec docker run --rm \
     $net_arg \

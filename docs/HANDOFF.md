@@ -1,5 +1,25 @@
 # Current Handoff
 
+Last updated: 2026-08-22. **Tier 3 has NOT run for the 2026-08-22 batch** —
+the changes below are Tier 1+2 green (full `tests/run-all`) plus a targeted
+offline container spot-check for pyright; run
+`tests/prebuilt-binaries-almalinux8 --full` and the release smoke before any
+release.
+
+## 2026-08-22 batch (unreleased, one commit)
+
+| area | what |
+|---|---|
+| sqlite | New package: EL8 source build 3.53.4 (`build/build-sqlite.sh`), bin/sqlite3 + libsqlite3.so.0; readline via already-shipped unregistered lib64 stems; upstream `--all` extensions. Session-probe traps documented in ADDING_BINARIES.md |
+| pyright | Retired PyPI wheel (runtime nodeenv download = air-gapped killer); now pure-Node runtime archive (`build/build-pyright.sh`) exec'ing bundled node by absolute path; depends [nodejs]; wheels + nodeenv removed from wheelhouse; stale uv shims cleaned content-gated |
+| docker tests | ALL automated docker runs now `--network=none` (prebuilt smoke previously had network unless `--dynamic` — that masking hid pyright's nodeenv download) |
+| @envs | Synthetic group now env-bash + env-tcsh (+recommends) — fixes tcsh onboarding reported by a work-side agent |
+
+Verified offline in almalinux:8.10 container with `--network none`: cold
+bootstrap → `install pyright nodejs --dest-dir` → pyright type-checks.
+
+---
+
 Last updated: 2026-08-17. **`v2026.08.17` is RELEASED** (class C, signed,
 verified per `docs/RELEASE.md` §9: `isDraft=false`, Good ED25519 signature, all
 three assets, stash sha256 matching local, and the released commit `f5fbe0c`
