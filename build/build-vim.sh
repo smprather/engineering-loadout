@@ -4,7 +4,7 @@
 #
 # Replaces the old build-gvim.sh, which took no --tag, expected you to `cd` into
 # a checkout you had prepared yourself, and only PRINTED the packaging commands.
-# CLAUDE.md claims every build/build-*.sh enforces --tag; this makes that true
+# AGENTS.md claims every build/build-*.sh enforces --tag; this makes that true
 # for vim, and produces all three artifacts in one run so terminal vim, gvim and
 # the runtime can never drift to different patch levels.
 #

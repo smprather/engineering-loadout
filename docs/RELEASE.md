@@ -1,7 +1,7 @@
 # Release Procedure
 
 The authoritative, ordered procedure for cutting a release. Release knowledge
-used to live scattered across `CLAUDE.md`, `docs/SECURITY.md`,
+used to live scattered across `AGENTS.md`, `docs/SECURITY.md`,
 `docs/MAINTENANCE.md`, `docs/HANDOFF.md` and the `./build/release` docstring; every
 release then reconstructed it from memory and missed something different. This
 file is the single source. If you change the release process, change it here.
@@ -218,7 +218,7 @@ deliberate — it is a claim you are making about provenance.
 
 ## 5. Documentation sync
 
-Docs drift is not cosmetic here: `CLAUDE.md` is the contract the next session
+Docs drift is not cosmetic here: `AGENTS.md` is the contract the next session
 reads, and a wrong statement in it causes wrong work later.
 
 - **README package table** — every row's version must equal
@@ -228,10 +228,10 @@ reads, and a wrong statement in it causes wrong work later.
   catalogue entry 8 — precisely because the instruction to "regenerate" had no
   tool behind it and no gate). Font and `env-*` packages are intentionally
   excluded; rows are only rewritten when the name matches a registry entry.
-- **`CLAUDE.md`** — package behavior sections, the repo-structure tree, group
+- **`AGENTS.md`** — package behavior sections, the repo-structure tree, group
   membership, CLI flags. If you deleted a patch or a package, grep for its name.
 - **`AGENTS.md`** — carries its own per-package pins that drift independently of
-  CLAUDE.md's.
+  AGENTS.md's.
 - **`docs/HANDOFF.md`** — what the next session reads first. Record *why*, not
   just what.
 - **`docs/SECURITY.md`** — only claim a control that exists. It claimed the tmux

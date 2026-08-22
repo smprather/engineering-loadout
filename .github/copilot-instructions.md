@@ -312,7 +312,7 @@ init` wipes its driver, so the Starship prompt vanishes on login but works after
 `exec bash`. Required order: reset framework state -> source loadout `wezterm.sh`
 (with WezTerm output hooks skipped off-WezTerm) -> `starship init` (untouched `PROMPT_COMMAND`) -> `loadout_add_precmd
 loadout_restore_echo`. Verify with a real PTY (tmux), not `bash -lic`. Full
-detail: `envs/bash/global/README.md` and `AGENTS.md` "Lessons Learned".
+detail: `envs/bash/global/README.md` and `AGENTS.md` "Shell Architecture".
 
 Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `envs/nvim/init.lua` disables the plugin layer cleanly

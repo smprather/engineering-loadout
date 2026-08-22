@@ -142,7 +142,7 @@ Refresh plugins later without a new loadout release with `./tools/refresh-stash`
 override the stash location with `LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR` if needed.
 Neovim itself needs `git` to clone from the stash; `git-nvim` (in `@shared-all`)
 provides a private one for boxes with no system git. See the full behavior in
-`CLAUDE.md` -> "nvim plugin stash delivery".
+`AGENTS.md` -> "nvim plugin stash delivery".
 
 **Deploying to a farm or an air-gapped site** -- where the network policy varies
 and a shared filesystem is read-only on the secure side -- is documented

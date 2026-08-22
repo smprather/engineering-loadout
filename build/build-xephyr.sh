@@ -36,7 +36,7 @@
 #     libselinux, libcrypto, libgcrypt and friends: all base RPMs, present on
 #     every supported node.
 #   - libGL.so.1 / libGLX.so.0 / libGLdispatch.so.0 stay HOST-provided. Never
-#     bundle the GLVND dispatcher -- see CLAUDE.md, "Never bundle these libs".
+#     bundle the GLVND dispatcher -- see AGENTS.md, "Never bundle these libs".
 #   - BUNDLED here: libXdmcp, libXfont2, libfontenc, libxcb-glx,
 #     libxcb-xf86dri, libxcb-xv.
 #

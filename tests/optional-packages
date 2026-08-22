@@ -58,7 +58,7 @@ surfer_out=$("${probe_env[@]}" surfer --version 2>&1) || fail "surfer --version:
 grep -qi 'surfer' <<< "$surfer_out" || fail "unexpected surfer version output: $surfer_out"
 echo "  OK: $surfer_out"
 
-# --- cicwave: offscreen Qt startup (no GL in offscreen per CLAUDE.md)
+# --- cicwave: offscreen Qt startup (no GL in offscreen per AGENTS.md)
 echo "Smoke: cicwave (offscreen Qt)"
 [[ -x $local_prefix/bin/cicwave ]] || fail "cicwave launcher not installed"
 cicwave_out=$("${probe_env[@]}" QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 \

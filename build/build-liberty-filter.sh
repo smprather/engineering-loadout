@@ -35,7 +35,7 @@
 # whenever upstream has tagged the state you want.
 #
 # The binary NEEDs only glibc + libgcc_s, both present on every EL8 target and
-# both on the never-bundle list in CLAUDE.md. No lib64 artifacts, no runtime data
+# both on the never-bundle list in AGENTS.md. No lib64 artifacts, no runtime data
 # files, so no runtime tarball either.
 #
 # Prerequisites on the build machine (EL8):

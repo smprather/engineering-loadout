@@ -17,7 +17,7 @@
 #      with a real copy resolved against the extracted tree) rather than rewrite
 #      them relative, because add_tree_to_tar's os.walk(followlinks=False) never
 #      re-emits symlinks-to-directories -- a re-tarred archive would silently
-#      drop the 5 directory links (the firefox lesson, CLAUDE.md).
+#      drop the 5 directory links (the firefox lesson, AGENTS.md).
 #
 #   2. SPLIT GEM EXTENSIONS. Fedora/RHEL put compiled gem .so files in
 #      /usr/lib64/gems/ruby/<g>-<v>/ while rubygems (once relocated) looks in

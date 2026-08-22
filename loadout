@@ -15,7 +15,7 @@
 # Decompression requirements: bzip2 and tar in PATH. Both are part of
 # every supported base system (RHEL/Alma/CentOS 7/8/9, Suse, WSL).
 #
-# Python 3.6 is no longer required. See CLAUDE.md "Python bootstrap".
+# Python 3.6 is no longer required. See AGENTS.md "Python bootstrap".
 
 set -eu
 

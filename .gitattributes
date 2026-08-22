@@ -5,7 +5,6 @@
 
 # AI / agent instructions
 /AGENTS.md                      export-ignore
-/CLAUDE.md                      export-ignore
 /.github                        export-ignore
 
 # Git hooks (developer-only; install manually with cp hooks/* .git/hooks/)

@@ -9,7 +9,7 @@
 # dependency for it.
 #
 # The binary NEEDs only glibc and libgcc_s, both of which are on every EL8
-# target and both of which the loadout must NEVER bundle (see CLAUDE.md ->
+# target and both of which the loadout must NEVER bundle (see AGENTS.md ->
 # "Never bundle these libs"). So there are no lib64 artifacts either: this is a
 # single self-contained binary with no runtime data files, hence no runtime
 # tarball.

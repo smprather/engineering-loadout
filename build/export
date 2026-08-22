@@ -5,7 +5,7 @@ export: publish a verified, git-less copy of this checkout to an install directo
 The result is byte-for-byte what a GitHub release tarball contains -- `git archive`
 applies the same `export-ignore` rules -- so the installation directory carries the
 payload, the installer, `.content-manifest` and the docs, but none of the dev
-tooling (`build/`, `tests/`, `update`, `release`, `scan-for-malware`, CLAUDE.md...)
+tooling (`build/`, `tests/`, `update`, `release`, `scan-for-malware`, AGENTS.md...)
 and no `.git`.
 
 WHY THIS EXISTS RATHER THAN "just run git archive": the security claims survive an

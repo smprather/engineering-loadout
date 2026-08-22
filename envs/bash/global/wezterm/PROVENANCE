@@ -1,5 +1,5 @@
 Vendored from: https://github.com/wezterm/wezterm  (assets/shell-integration/wezterm.sh)
-Matches:       bundled wezterm 20260618_095146_c10636f3 (see CLAUDE.md "WezTerm runtime behavior")
+Matches:       bundled wezterm 20260618_095146_c10636f3 (see AGENTS.md "WezTerm runtime behavior")
 License:       MIT (upstream WezTerm license)
 File:          assets/shell-integration/wezterm.sh -> wezterm.sh (unmodified)
 

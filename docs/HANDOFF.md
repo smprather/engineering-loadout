@@ -972,7 +972,7 @@ Consequences, so nobody re-derives them:
   on every directory change, so "every cd lists" needs no `cd` wrapper at all;
   `set implicitcd` replaces bash's ERR-trap directory-execution hack.
 - Project memory `tcsh-env-one-time-pass` was **deleted** and replaced by
-  `tcsh-env-tracks-bash`; `CLAUDE.md` and `envs/tcsh/README.md` are updated. The
+  `tcsh-env-tracks-bash`; `AGENTS.md` and `envs/tcsh/README.md` are updated. The
   July 2026 plan/spec under `docs/superpowers/` carry SUPERSEDED banners rather
   than being edited -- they are a record of what was decided then.
 
@@ -1488,7 +1488,7 @@ stay reachable by name, so nothing existing changed behaviour. Migrating them in
 a reasonable follow-up.
 
 Build notes for all five source builds are in `build/ADDING_BINARIES.md`;
-per-package runtime behaviour is in `CLAUDE.md`.
+per-package runtime behaviour is in `AGENTS.md`.
 
 **`klayout` closed a loop that had been open in a build note only.** The `ruby`
 entry called ruby "the interpreter KLayout embeds for DRC/LVS scripting" -- but
@@ -1625,7 +1625,7 @@ Two things already settled, do not re-litigate:
 Its other deps are already bundled: `plotly 6.9.0`, `rich_click 1.9.8`. Rust
 edition 2024 needs cargo >= 1.85; the box has 1.96.0.
 
-Also corrected in `CLAUDE.md` while diagnosing this: the claim that
+Also corrected in `AGENTS.md` while diagnosing this: the claim that
 `--platform manylinux_2_28_x86_64` finds manylinux1/2010/2014 wheels. It does
 not -- pip matches tags exactly, which is what made kaleido 0.2.1 look like it
 had vanished from PyPI.
@@ -1745,7 +1745,7 @@ class C it did not meet:
 
 - `vim`/`gvim` 9.2.0901 and `octave` 11.3.0. **`build-gvim.sh` and
   `build-octave.sh` take no `--tag`** and want a source checkout you supply --
-  CLAUDE.md's claim that all `build/build-*.sh` enforce `--tag` is wrong for
+  AGENTS.md's claim that all `build/build-*.sh` enforce `--tag` is wrong for
   these two.
 - `htop`, `rsync`, `xsel`, `yank`, `yara`: **no build script and no
   `ADDING_BINARIES.md` note at all.** Bumping them means authoring the
@@ -1857,7 +1857,7 @@ Smaller: `XDESK_SESSION=" "` died with a `set -u` "unbound variable" instead of
 an error message; `--size` accepted `0x0` and `1x2x3`; dead `status=$?` after a
 `set -e` exec; the build script's header still said "five" sonames and omitted
 `libfontenc` from the bundled list -- the very lib whose omission shipped broken;
-`CLAUDE.md` had no xephyr/xdesk coverage at all while every comparable package
+`AGENTS.md` had no xephyr/xdesk coverage at all while every comparable package
 has a behavior section; and the `Xephyr` wrapper's exported `LD_LIBRARY_PATH` is
 inherited by the host helpers Xephyr forks (`xkbcomp`), which is benign on EL8
 but is now recorded in a comment.
@@ -2024,7 +2024,7 @@ Two structural wastes in `./build/release` removed, both on the release critical
   and clobbers only the small assets. Gated on a signed tag + a byte-match (present
   asset, size, and matching SHA-256 in the previous release's `sha256sums.txt`), then
   a post-publish re-read asserts published-not-draft + stash present, self-healing
-  with a full upload on any doubt. See CLAUDE.md -> "Create a GitHub release".
+  with a full upload on any doubt. See AGENTS.md -> "Create a GitHub release".
 - **Binary-smoke content cache.** The ~4.5 min smoke gate (the slowest) is now cached
   under `release-smoke-v1/`, keyed on a parallel hash of **actual bytes** (all of
   `payload/**` + `loadout` + `loadout_main.py` + `tests/prebuilt-binaries`, a

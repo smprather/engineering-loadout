@@ -6,7 +6,7 @@
 # so this wrapper points the Mesa vendor side at the bundled mesa3d_libs tree
 # exactly as the surfer and wezterm wrappers do. The GLVND dispatcher
 # (libGL.so.1 / libGLX.so.0 / libGLdispatch.so.0) stays host-provided on
-# purpose -- see CLAUDE.md, "Never bundle these libs".
+# purpose -- see AGENTS.md, "Never bundle these libs".
 #
 # Prefix is derived from the installed launcher path, not from $HOME, so
 # --dest-dir installs and shared-tree deployments resolve their own libs.

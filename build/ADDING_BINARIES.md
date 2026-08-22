@@ -2786,7 +2786,7 @@ and git-lfs, which all resolve against the corp git's exec-path and config.
 build box itself -- this box IS the EL8 build machine, same shanghai
 technique as meld / mate-terminal / firefox. Deps are all EL8 BaseOS
 (`libpcre2-8`, `libz`, `libcrypto`/openssl 1.1, glibc) -- nothing is
-bundled, per CLAUDE.md's never-bundle list. No patchelf/RPATH needed.
+bundled, per AGENTS.md's never-bundle list. No patchelf/RPATH needed.
 
 **Package:** `git-nvim`, `kind: runtime`, `optional: true`. Reachable via
 `@shared-all` or by name; deliberately NOT in `@shared` or
@@ -3401,7 +3401,7 @@ untagged upstream state -- which is how the other first-party tools already ship
 here -- but prefer `--tag`.
 
 **Deps:** NEEDED is `libgcc_s.so.1`, `libpthread.so.0`, `libc.so.6` -- glibc and
-libgcc only, both on the never-bundle list in CLAUDE.md. Max glibc symbol
+libgcc only, both on the never-bundle list in AGENTS.md. Max glibc symbol
 `GLIBC_2.28`, exactly the EL8 floor. No lib64 artifacts, no runtime data, so no
 runtime tarball.
 
@@ -3457,7 +3457,7 @@ rather than silently reaching for the network on some future build box.
 
 **No libs bundled.** NEEDED is `libgcc_s.so.1`, `libpthread.so.0`, `libm.so.6`,
 `libc.so.6` -- all glibc/libgcc, all present on every EL8 target, and all on the
-never-bundle list in CLAUDE.md. Max glibc symbol is `GLIBC_2.28`, exactly the
+never-bundle list in AGENTS.md. Max glibc symbol is `GLIBC_2.28`, exactly the
 EL8 floor. No runtime data files, so no runtime tarball.
 
 **Name asymmetry (upstream's, and load-bearing here):**
@@ -3645,7 +3645,7 @@ every bundled lib**. (`libXfont2` also pulls `libfreetype.so.6`, which
   hazard -- and it has the side benefit of giving the nested server a genuine
   Mesa vendor side for GLX. It is non-optional already, so this adds no weight.
 - **GLVND stays host-provided.** `libGL.so.1` / `libGLX.so.0` /
-  `libGLdispatch.so.0` are NEEDED but must never be bundled (see CLAUDE.md).
+  `libGLdispatch.so.0` are NEEDED but must never be bundled (see AGENTS.md).
   `tests/prebuilt-binaries` skips the exec probe when the host lacks them.
 
 The build script re-derives this closure with `objdump -p` on every run and

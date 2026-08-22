@@ -6,7 +6,7 @@
 #   git-lfs, credential helpers and custom git-* subcommands resolve against THEIR
 #   git's exec-path and config; a different git in front breaks them silently. This is
 #   the same failure the openssh package documents (it ships `ssh10` and deliberately
-#   never a bare `ssh`, so /usr/bin/ssh keeps winning). See CLAUDE.md ->
+#   never a bare `ssh`, so /usr/bin/ssh keeps winning). See AGENTS.md ->
 #   "OpenSSH package behavior".
 #
 #   So this installs to  lib/loadout-git/{bin,libexec}  and NOTHING is linked into
@@ -23,7 +23,7 @@
 #
 # Shanghai: extracted from the EL8 system packages (git-core), like meld /
 # mate-terminal / firefox. Deps are all EL8 BaseOS (libpcre2-8, libz, libcrypto,
-# glibc) -- nothing is bundled, per CLAUDE.md's never-bundle list.
+# glibc) -- nothing is bundled, per AGENTS.md's never-bundle list.
 #
 # Usage:
 #   build/build-git.sh                 # bundle the system git

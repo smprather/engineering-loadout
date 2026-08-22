@@ -4,7 +4,7 @@
 #   https://github.com/helix-editor/helix   (MPL-2.0)
 #
 # ── WHY THIS IS A --rev BUILD AND NOT A --tag BUILD ───────────────────────────
-# This repo's policy is stable tagged releases only (see CLAUDE.md, "Stable-
+# This repo's policy is stable tagged releases only (see AGENTS.md, "Stable-
 # release policy for bundled binaries"). helix is a deliberate, documented
 # exception, and every other build script should keep requiring --tag.
 #
