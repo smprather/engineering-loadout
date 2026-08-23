@@ -1,0 +1,96 @@
+#!/bin/sh
+# Probe ONE host:port with a short-TTL disk cache. Mirrors loadout_net_probe()
+# in envs/bash/functions.sh -- keep them in sync; both shells share the same
+# ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net cache files, so a verdict from a bash
+# login shell spares the tcsh helper its own network round-trip.
+#
+# Used by helpers/cargo-wrap. TTL: LOADOUT_NET_PROBE_TTL seconds (default 300).
+probe_cached() {
+    hp=$1
+    t=$2
+    ttl=${LOADOUT_NET_PROBE_TTL:-300}
+    dir=${XDG_RUNTIME_DIR:-/tmp}/.loadout-net
+    name=$(printf '%s' "$hp" | tr -c 'A-Za-z0-9._-' '_')
+    file=$dir/$name
+    if [ -f "$file" ]; then
+        verdict=$(cat "$file" 2>/dev/null)
+        case $verdict in
+            0 | 1)
+                now=$(date +%s)
+                age=$((now - $(stat -c %Y "$file" 2>/dev/null || echo 0)))
+                if [ "$age" -lt "$ttl" ]; then
+                    return $((1 - verdict))
+                fi
+                ;;
+        esac
+    fi
+    verdict=0
+    timeout "$t" bash -c "exec 3<>/dev/tcp/${hp%%:*}/${hp##*:}" 2>/dev/null && verdict=1
+    mkdir -p "$dir" 2>/dev/null
+    printf '%s\n' "$verdict" >"$dir/.$name.$$" 2>/dev/null &&
+        mv -f "$dir/.$name.$$" "$file" 2>/dev/null
+    [ "$verdict" = "1" ]
+}
+
+# cargo: online-first with automatic offline fallback to the bundled crate
+# store (rust-crate-store). Mirrors the cargo() wrapper function in
+# envs/bash/functions.sh -- keep the two in sync;
+# tests/cargo-offline-fallback drives both through the same scenarios.
+#
+# Upstream cargo has NO source failover (rust-lang/cargo#3066): the choice
+# between crates.io and the local registry must be made before cargo runs.
+# Stock ~/.cargo/config.toml stays replacement-free, so while online this
+# wrapper changes nothing; when crates.io is unreachable AND the store exists,
+# it injects the replacement via CLI config args for that command only.
+#
+# Overrides:
+#   LOADOUT_CARGO_OFFLINE=1     force offline mode (inject) without probing
+#   LOADOUT_CARGO_OFFLINE=0     disable the wrapper entirely
+#   LOADOUT_CFG_CARGO_PROBE_HOSTS  host list (default crates.io edge hosts)
+
+# Version-ish subcommands never consult a registry; pass through untouched.
+case "$1" in
+    --version | -V | --help | -h | help | --list | man)
+        exec cargo "$@"
+        ;;
+esac
+
+mode=auto
+case "${LOADOUT_CARGO_OFFLINE:-}" in
+    1 | true | yes | on | enabled) mode=force ;;
+    0 | false | no | off | disabled) exec cargo "$@" ;;
+esac
+
+declared=0
+for a in "$@"; do
+    case "$a" in
+        --offline | --frozen | --locked) declared=1 ;;
+    esac
+done
+
+if [ "$declared" -eq 0 ] && [ "$mode" != force ]; then
+    hosts=${LOADOUT_CFG_CARGO_PROBE_HOSTS:-index.crates.io:443 static.crates.io:443}
+    online=0
+    for hp in $hosts; do
+        if probe_cached "$hp" 2; then
+            online=1
+            break
+        fi
+    done
+    [ "$online" -eq 1 ] && exec cargo "$@"
+fi
+
+if [ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]; then
+    store="${LOADOUT_CFG_SHARED_PREFIX%/}/share/cargo/registry-store"
+else
+    store="$HOME/.local/share/cargo/registry-store"
+fi
+# No store installed -> nothing to fall back to; let real cargo run and
+# produce its own (network) error rather than pointing at thin air.
+[ -d "$store" ] || exec cargo "$@"
+
+# --config is a GLOBAL option: it must land before the subcommand.
+exec cargo \
+    --config 'source.crates-io.replace-with="loadout-local"' \
+    --config "source.loadout-local.local-registry=\"$store\"" \
+    "$@"

@@ -2252,10 +2252,13 @@ Two builders write the same archive; the **superset** is what ships.
   `~/.local/share/cargo/registry-store`).
 
 ### Wiring + config
-- `env-cargo` (custom `_install_env_cargo`) writes `~/.cargo/config.toml` with a
-  `[source.crates-io] replace-with = "local-registry"` source replacement
-  pointing at the installed store. Honors `LOADOUT_CFG_SHARED_PREFIX` and
-  `--dest-dir` (store path tracks `_resolve_install_to`). No manual edits.
+- `env-cargo` (custom `_install_env_cargo`) writes a STOCK `~/.cargo/config.toml`
+  (no source replacement -- online-first). The offline fallback is shell-level:
+  the `cargo()` wrapper in envs/bash/functions.sh (tcsh: helpers/cargo-wrap)
+  injects a `replace-with` pointing at the installed store via `--config` CLI
+  args, only when crates.io is unreachable AND the store exists. Store path
+  honors `LOADOUT_CFG_SHARED_PREFIX` and the HOME/`--dest-dir` layouts. No
+  manual edits.
 - Group `@rust` = `rust` + `rust-crate-store` + `env-cargo`. Install offline:
   `./loadout install @rust`.
 - Test offline on clean AlmaLinux 8.10:

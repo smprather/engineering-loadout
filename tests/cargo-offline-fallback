@@ -1,0 +1,352 @@
+#!/usr/bin/env python3.14
+"""cargo-offline-fallback -- cargo is online-first with bundled offline fallback.
+
+Policy (2026-08-22, enhancement-request-cargo-offline-fallback.md): the
+bundled crate store (rust-crate-store) must be usable when the machine is
+offline, but must NEVER block normal online work -- cargo upstream has no
+source failover (rust-lang/cargo#3066, open since 2016), so the decision has
+to be made before cargo runs:
+
+  1. env-cargo writes a STOCK ~/.cargo/config.toml (no source replacement).
+  2. A shell `cargo` wrapper probes crates.io reachability per invocation
+     (cached, short TTL) and, only when unreachable AND the store exists,
+     injects the local-registry replacement via `cargo --config` CLI args.
+  3. Shell startup keeps using LOADOUT_ONLINE but through a once-per-day
+     disk cache so a new shell never pays for network probes.
+  4. tcsh tracks bash (policy 2026-08-08): helpers/cargo-wrap + cached
+     helpers/detect-online.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import os
+import re
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FUNCTIONS = os.path.join(REPO, "envs", "bash", "functions.sh")
+BASHRC = os.path.join(REPO, "envs", "bash", "global", "bashrc")
+TCSH_ALIASES = os.path.join(REPO, "envs", "tcsh", "global", "aliases.csh")
+TCSH_HELPERS = os.path.join(REPO, "envs", "tcsh", "global", "helpers")
+
+FAILURES = []
+
+
+def check(name, ok, detail=""):
+    status = "ok" if ok else "FAIL"
+    print(f"  [{status}] {name}" + (f" -- {detail}" if detail and not ok else ""))
+    if not ok:
+        FAILURES.append(name)
+
+
+def sh(shell: str, code: str, env: dict) -> subprocess.CompletedProcess:
+    """Run code in a bare interactive-capable shell with functions.sh sourced.
+
+    zsh -f / bash --noprofile --norc keep dev-shell state out; functions.sh is
+    shared code sourced as-is by both (envs/zsh/zshrc:53), so every function
+    under test must behave identically in either.
+    """
+    if shell == "bash":
+        cmd = ["bash", "--noprofile", "--norc", "-c", f'source "{FUNCTIONS}"; {code}']
+    else:
+        cmd = [shell, "-f", "-c", f'source "{FUNCTIONS}"; {code}']
+    return subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+
+class Listener:
+    """A TCP listener standing in for 'crates.io reachable'."""
+
+    def __init__(self):
+        self._srv = socket.socket()
+        self._srv.bind(("127.0.0.1", 0))
+        self._srv.listen(8)
+        self.port = self._srv.getsockname()[1]
+        self._stop = threading.Event()
+        self._t = threading.Thread(target=self._serve, daemon=True)
+        self._t.start()
+
+    def _serve(self):
+        while not self._stop.is_set():
+            try:
+                self._srv.settimeout(0.5)
+                conn, _ = self._srv.accept()
+                conn.close()
+            except OSError:
+                pass
+
+    def close(self):
+        self._stop.set()
+        self._t.join(timeout=2)
+        self._srv.close()
+
+
+class Env:
+    """Isolated environment: fake cargo on PATH, private XDG_RUNTIME_DIR."""
+
+    def __init__(self):
+        self.tmp = tempfile.mkdtemp(prefix="cargo-fallback-test-")
+        self.bin = os.path.join(self.tmp, "bin")
+        self.runtime = os.path.join(self.tmp, "runtime")
+        self.home = os.path.join(self.tmp, "home")
+        self.log = os.path.join(self.tmp, "cargo-args.log")
+        # Wrapper resolves the store under $HOME exactly like real usage.
+        self.store = os.path.join(self.home, ".local", "share", "cargo", "registry-store")
+        for d in (self.bin, self.runtime, self.home, self.store):
+            os.makedirs(d, exist_ok=True)
+        os.makedirs(os.path.dirname(self.store), exist_ok=True)
+        with open(os.path.join(self.bin, "cargo"), "w") as f:
+            f.write('#!/bin/sh\nprintf \'%s\\n\' "$@" >> "$CARGO_ARGS_LOG"\nexit ${FAKE_CARGO_EXIT:-0}\n')
+        os.chmod(os.path.join(self.bin, "cargo"), 0o755)
+        # A store that looks installed: wrapper only needs -d.
+        os.makedirs(os.path.join(self.store, "index"))
+        with open(os.path.join(self.store, "config.json"), "w") as f:
+            f.write("{}\n")
+
+    def base_env(self, **extra):
+        # Keep the shells themselves reachable: the loadout-installed zsh lives
+        # outside /usr/bin on dev boxes, and the restricted PATH must not hide
+        # it from `sh("zsh", ...)`.
+        shell_dirs = []
+        for s in ("zsh", "bash"):
+            w = shutil.which(s)
+            if w:
+                shell_dirs.append(os.path.dirname(w))
+        path = ":".join([self.bin] + shell_dirs + ["/usr/bin", "/bin"])
+        env = {
+            "PATH": path,
+            "HOME": self.home,
+            "XDG_RUNTIME_DIR": self.runtime,
+            "CARGO_ARGS_LOG": self.log,
+            "LOADOUT_CFG_CARGO_PROBE_HOSTS": "",
+        }
+        env.update(extra)
+        return env
+
+    def read_log(self):
+        with open(self.log) as f:
+            return [line for line in f.read().splitlines() if line]
+
+    def cleanup(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- net probe --
+def test_probe(env: Env, port: int):
+    print("== loadout_net_probe")
+    hp = f"127.0.0.1:{port}"
+    r = sh("bash", f"loadout_net_probe {hp} 1", env.base_env())
+    check("probe succeeds against live host", r.returncode == 0, r.stderr)
+    cachedir = os.path.join(env.runtime, ".loadout-net")
+    cachefile = os.path.join(cachedir, f"127.0.0.1_{port}")
+
+    def cached_verdict():
+        if not os.path.isfile(cachefile):
+            return None
+        with open(cachefile) as f:
+            return f.read().strip()
+
+    check("cache file written under .loadout-net", cached_verdict() is not None)
+    check("cache records success", cached_verdict() == "1")
+
+    # Cache hit: verdict survives the host dying, within TTL.
+    dying = Listener()
+    hp2 = f"127.0.0.1:{dying.port}"
+    r = sh("bash", f"loadout_net_probe {hp2} 1", env.base_env())
+    check("probe succeeds against second host", r.returncode == 0)
+    dying.close()
+    r = sh("bash", f"loadout_net_probe {hp2} 1", env.base_env())
+    check("fresh cache short-circuits probe", r.returncode == 0)
+
+    # TTL expiry forces a re-probe (ttl=0 -> always stale). hp2's listener is
+    # already closed, so the re-probe must observe it dead.
+    r = sh("bash", f"loadout_net_probe {hp2} 1 0", env.base_env())
+    check("ttl=0 forces re-probe of dead host", r.returncode != 0)
+    cachefile = os.path.join(cachedir, f"127.0.0.1_{dying.port}")
+    with open(cachefile) as f:
+        check("cache records failure", f.read().strip() == "0")
+
+    # Dead host from scratch.
+    r = sh("bash", "loadout_net_probe 127.0.0.1:1 1", env.base_env())
+    check("dead host fails fast", r.returncode != 0)
+
+    # zsh parity: same function file, same behavior.
+    r = sh("zsh", f"loadout_net_probe {hp} 1", env.base_env())
+    check("zsh sources functions.sh and probe works", r.returncode == 0, r.stderr)
+
+
+# ------------------------------------------------------------- cargo wrapper --
+def test_cargo_wrapper(env: Env, port: int):
+    print("== cargo() wrapper")
+
+    def run(code, shell="bash", **extra):
+        e = env.base_env(**extra)
+        return sh(shell, code, e)
+
+    # Online: passthrough, no injected args.
+    open(env.log, "w").close()
+    r = run("cargo build --release")
+    check("online: exit 0", r.returncode == 0, r.stderr)
+    check("online: no injected config args", env.read_log() == ["build", "--release"], str(env.read_log()))
+
+    # Offline: injects replacement + store path BEFORE user args.
+    open(env.log, "w").close()
+    r = run("cargo fetch", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    check("offline: exit 0", r.returncode == 0, r.stderr)
+    argv = env.read_log()
+    ok = (
+        len(argv) == 5
+        and argv[0] == "--config"
+        and 'replace-with="loadout-local"' in argv[1]
+        and argv[2] == "--config"
+        and "local-registry=" in argv[3]
+        and env.store in argv[3]
+        and argv[4:] == ["fetch"]
+    )
+    check("offline: two --config args then user args", ok, str(argv))
+
+    # Shared prefix moves the store path.
+    open(env.log, "w").close()
+    shared = os.path.join(env.tmp, "shared-prefix")
+    os.makedirs(os.path.join(shared, "share", "cargo", "registry-store"))
+    r = run("cargo fetch", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1", LOADOUT_CFG_SHARED_PREFIX=shared)
+    argv = env.read_log()
+    check("shared prefix honored", any(shared in a for a in argv[:4]), str(argv))
+
+    # Version-ish commands never probe (fast even when offline).
+    open(env.log, "w").close()
+    r = run("cargo --version", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    check("--version passes through untouched", env.read_log() == ["--version"])
+
+    # Explicit --offline/--frozen/--locked: declared intent, no probing needed.
+    for flag in ("--offline", "--frozen", "--locked"):
+        open(env.log, "w").close()
+        r = run(f"cargo build {flag}", LOADOUT_CFG_CARGO_PROBE_HOSTS=f"127.0.0.1:{port}")
+        argv = env.read_log()
+        check(
+            f"{flag} skips probe and injects",
+            len(argv) == 6 and argv[0] == "--config" and argv[4:] == ["build", flag],
+            str(argv),
+        )
+
+    # Missing store: never inject, whatever the probe says.
+    shutil.rmtree(env.store)
+    open(env.log, "w").close()
+    r = run("cargo fetch", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    check("missing store: passthrough", env.read_log() == ["fetch"])
+    os.makedirs(os.path.join(env.store, "index"))  # restore
+
+    # Manual override tri-state beats probing.
+    open(env.log, "w").close()
+    r = run("cargo fetch", LOADOUT_CARGO_OFFLINE="1")
+    check("LOADOUT_CARGO_OFFLINE=1 forces injection", len(env.read_log()) == 5)
+    open(env.log, "w").close()
+    r = run("cargo fetch", LOADOUT_CARGO_OFFLINE="0", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    check("LOADOUT_CARGO_OFFLINE=0 disables wrapper", env.read_log() == ["fetch"])
+
+    # zsh parity for the injection path.
+    open(env.log, "w").close()
+    r = run("cargo fetch", shell="zsh", LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    check("zsh wrapper injects identically", len(env.read_log()) == 5, r.stderr)
+
+
+# --------------------------------------------------------- startup daily cache --
+def test_startup_cache(env: Env):
+    print("== loadout_detect_online_cached + bashrc wiring")
+    dying = Listener()
+    try:
+        hp = f"127.0.0.1:{dying.port}"
+        r = sh("bash", "loadout_detect_online_cached", env.base_env(LOADOUT_CFG_ONLINE_DETECT_HOSTS=hp))
+        check("cached detector returns online", r.returncode == 0, r.stderr)
+        # Host dies; the once-per-day cache must still answer from disk.
+        dying.close()
+        r = sh("bash", "loadout_detect_online_cached", env.base_env(LOADOUT_CFG_ONLINE_DETECT_HOSTS=hp))
+        check("daily cache serves second login", r.returncode == 0)
+    finally:
+        dying.close()
+
+    src = open(BASHRC).read()
+    check(
+        "bashrc uses cached detector",
+        "loadout_detect_online_cached" in src and re.search(r"\*\)\s+loadout_detect_online_cached", src) is not None,
+    )
+
+
+# ---------------------------------------------------------------- tcsh parity --
+def test_tcsh_parity(env: Env, port: int):
+    print("== tcsh tracking (helpers)")
+    helper = os.path.join(TCSH_HELPERS, "cargo-wrap")
+    aliases = open(TCSH_ALIASES).read()
+    check(
+        "helpers/cargo-wrap exists and is executable", os.path.isfile(helper) and os.stat(helper).st_mode & stat.S_IXUSR
+    )
+    check("aliases.csh wires cargo to cargo-wrap", "cargo-wrap" in aliases and re.search(r"alias\s+cargo\b", aliases))
+    check("helper is POSIX sh", os.path.isfile(helper) and open(helper).read(2) == "#!")
+
+    def helper_run(**extra):
+        e = env.base_env(**extra)
+        if not os.path.isfile(helper):
+            return subprocess.CompletedProcess([], 127, "", "missing helper")
+        return subprocess.run([helper, "fetch"], env=e, capture_output=True, text=True)
+
+    open(env.log, "w").close()
+    r = helper_run(LOADOUT_CFG_CARGO_PROBE_HOSTS=f"127.0.0.1:{port}")
+    check("tcsh helper online passthrough", env.read_log() == ["fetch"], r.stderr)
+    open(env.log, "w").close()
+    r = helper_run(LOADOUT_CFG_CARGO_PROBE_HOSTS="127.0.0.1:1")
+    argv = env.read_log()
+    check(
+        "tcsh helper offline injects",
+        len(argv) == 5 and argv[0] == "--config" and argv[-1] == "fetch",
+        r.stdout + r.stderr,
+    )
+    do = os.path.join(TCSH_HELPERS, "detect-online")
+    src = open(do).read() if os.path.isfile(do) else ""
+    check("detect-online consults the daily cache", ".loadout-net" in src)
+
+
+# ---------------------------------------------------------------- installer --
+def test_installer_stock_config():
+    print("== env-cargo writes stock config")
+    import importlib.machinery
+    import importlib.util
+
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", os.path.join(REPO, "loadout_main.py"))
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+
+    with tempfile.TemporaryDirectory(prefix="cargo-fallback-inst-") as home:
+        m._install_env_cargo(REPO, home)
+        cfg = open(os.path.join(home, ".cargo", "config.toml")).read()
+    check("stock config: no replace-with", "replace-with" not in cfg, cfg)
+    check("stock config: managed-by marker present", "Managed by loadout" in cfg)
+
+
+def main():
+    env = Env()
+    listener = Listener()
+    try:
+        test_probe(env, listener.port)
+        test_cargo_wrapper(env, listener.port)
+        test_startup_cache(env)
+        test_tcsh_parity(env, listener.port)
+        test_installer_stock_config()
+    finally:
+        listener.close()
+        env.cleanup()
+    print()
+    if FAILURES:
+        print(f"{len(FAILURES)} case(s) FAILED:", *FAILURES, sep="\n  ")
+        return 1
+    print("all cargo-offline-fallback cases passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

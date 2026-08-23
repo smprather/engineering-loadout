@@ -39,6 +39,15 @@ export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"
 export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"
 # LOADOUT_CFG_ONLINE_DETECT_HOSTS -> space-separated host:port
 export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"
+# Startup online verdict is cached on disk for this many seconds (default one
+# day) so only the first login pays for probes. 0 disables the cache.
+# export LOADOUT_ONLINE_CACHE_TTL="86400"
+# cargo wrapper (online-first, offline fallback to rust-crate-store):
+# hosts probed per invocation, TTL of their cached verdicts, and manual
+# tri-state override (1 = always offline mode, 0 = never wrap).
+export LOADOUT_CFG_CARGO_PROBE_HOSTS="index.crates.io:443 static.crates.io:443"
+export LOADOUT_NET_PROBE_TTL="300"
+# export LOADOUT_CARGO_OFFLINE=""
 # LOADOUT_CFG_USE_LOADOUT_MODULES -> 0 | 1  (source modules-init.bash; opt-in)
 export LOADOUT_CFG_USE_LOADOUT_MODULES="0"
 # LOADOUT_CFG_PRESERVE_FUNCTIONS -> space-separated function names.

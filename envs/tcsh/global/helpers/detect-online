@@ -2,7 +2,11 @@
 # Probe network reachability in parallel. Exit 0 = online, 1 = offline/blocked.
 #
 # Backs LOADOUT_ONLINE in global/tcshrc; mirrors loadout_detect_online() in
-# envs/bash/functions.sh, including its default host list and timeout.
+# envs/bash/functions.sh, including its default host list and timeout, plus
+# the once-per-day disk cache of loadout_detect_online_cached(): only the
+# first login of the day pays for network probes; every later shell reads the
+# verdict from ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/detect-<md5> -- the same
+# cache file a bash login shell writes, keyed on an md5 of the host list.
 #
 # The bash version uses /dev/tcp, which is a bash feature -- neither /bin/sh nor
 # csh has it. This shells out to bash for that one primitive when bash exists,
@@ -12,6 +16,30 @@
 
 timeout_s=${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}
 hosts=${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}
+
+cache_dir=${XDG_RUNTIME_DIR:-/tmp}/.loadout-net
+cache_ttl=${LOADOUT_ONLINE_CACHE_TTL:-86400}
+if command -v md5sum >/dev/null 2>&1; then
+    key=$(printf '%s' "$hosts" | md5sum | awk '{print $1}')
+else
+    # No md5sum (should not happen on EL7+): fall back to a sanitized key.
+    key=$(printf '%s' "$hosts" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-64)
+fi
+cache_file=$cache_dir/detect-$key
+
+if [ "$cache_ttl" -gt 0 ] 2>/dev/null && [ -f "$cache_file" ]; then
+    verdict=$(cat "$cache_file" 2>/dev/null)
+    case $verdict in
+        0 | 1)
+            now=$(date +%s)
+            age=$((now - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0)))
+            if [ "$age" -lt "$cache_ttl" ]; then
+                [ "$verdict" = "1" ]
+                exit $?
+            fi
+            ;;
+    esac
+fi
 
 command -v timeout >/dev/null 2>&1 || exit 1
 
@@ -36,4 +64,12 @@ for hp in $hosts; do
 done
 wait
 
-[ "$(cat "$tmp" 2>/dev/null)" = "1" ]
+if [ "$(cat "$tmp" 2>/dev/null)" = "1" ]; then
+    verdict=1
+else
+    verdict=0
+fi
+mkdir -p "$cache_dir" 2>/dev/null
+printf '%s\n' "$verdict" >"$cache_dir/.detect-$key.$$" 2>/dev/null &&
+    mv -f "$cache_dir/.detect-$key.$$" "$cache_file" 2>/dev/null
+[ "$verdict" = "1" ]

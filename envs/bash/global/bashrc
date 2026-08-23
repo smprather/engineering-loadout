@@ -121,11 +121,14 @@ export EGL_LOG_LEVEL=fatal
 # Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells / tmux panes.
 # LOADOUT_CFG_ENABLE_ONLINE_UPDATES: auto (parallel TCP probe) | 1 (force online) | 0 (force offline)
 # Override hosts in user/config.sh: LOADOUT_CFG_ONLINE_DETECT_HOSTS="nexus.corp:443 ..."
+# The auto probe is cached once per day on disk (loadout_detect_online_cached),
+# so only the first login of the day pays for network probes -- every later
+# shell starts instantly regardless of network state.
 if [[ -z "${LOADOUT_ONLINE+x}" ]]; then
     case "${LOADOUT_CFG_ENABLE_ONLINE_UPDATES:-auto}" in
     0 | false | no | off | disabled) LOADOUT_ONLINE=0 ;;
     1 | true | yes | on | enabled) LOADOUT_ONLINE=1 ;;
-    *) loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
+    *) loadout_detect_online_cached && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
     esac
     export LOADOUT_ONLINE
 fi

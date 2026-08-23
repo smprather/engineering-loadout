@@ -310,4 +310,13 @@ alias is_truthy    "$_lo_helpers/is-truthy"
 alias vercmp       "$_lo_helpers/vercmp"
 alias fpcmp        "$_lo_helpers/vercmp"
 
+# ---- cargo: online-first with bundled offline fallback -----------------------
+# Mirrors the cargo() wrapper function in envs/bash/functions.sh: stock
+# crates.io while online, automatic local-registry injection when crates.io
+# is unreachable and the rust-crate-store exists. All logic lives in the
+# helper (shape 2: does-the-work), so this is a plain argument-forwarding alias.
+if ( -X cargo && -x "$_lo_helpers/cargo-wrap" ) then
+    alias cargo '"$_lo_helpers"/cargo-wrap \!*'
+endif
+
 unset _lo_helpers

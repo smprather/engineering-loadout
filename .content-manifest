@@ -525,6 +525,7 @@ sha256  1f63db5f3a9faef66d410926b2a9ea525a0f01cc61080ec59950b331a0f6a98d  payloa
 sha256  1f63db5f3a9faef66d410926b2a9ea525a0f01cc61080ec59950b331a0f6a98d  payload/treesitter/vendor/nvim-treesitter/runtime/queries/starlark/indents.scm
 sha256  1f876ad914ee14191794602702e2a5b147095608c81e0be60329fc1e62629b27  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/terraform/indents.scm
 sha256  1f9676e1fbe363ae662346cf4435de0252702b4483c56dcedeb894555d1cfc63  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/arduino/highlights.scm
+sha256  1fab81e7199fdcf86423755e39a3e73124fdf925f6ebd3c0ea4b5ca500adc63f  payload/installed-sizes.json
 sha256  1fb1d1cdfe67e01d2c0e8f69268bbf5574cdfb4ced7e0bff2de649579f7c3814  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/koto/highlights.scm
 sha256  1fb1d1cdfe67e01d2c0e8f69268bbf5574cdfb4ced7e0bff2de649579f7c3814  payload/treesitter/vendor/nvim-treesitter/runtime/queries/koto/highlights.scm
 sha256  1fb3b4d21ae0f887f455600105dd8e2096223fc611851cd02844df737dab6548  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/erlang.so.bz2
@@ -2821,7 +2822,6 @@ sha256  a91e74e2173197a5b40b7697b55874c5f067976d8130a3a45a14c083bb1d21c1  payloa
 sha256  a94060b4303752b45718ac84c48b64aea9fc5ebc52340de07e0c72e81165c2e9  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/properties.so.bz2
 sha256  a9462224a505ade19a605f71f8fa63c2048833ce50abc86768a0d81d876dc81c  payload/el8.x86_64.glibc2p28/wheels/ipython_pygments_lexers-1.1.1-py3-none-any.whl
 sha256  a946edb24d5bc8802f1d7d29d6a75f8645eba35ee24d6681831e8bd27b694bc4  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/puppet.so.bz2
-sha256  a97400d8dfcf9fa2bb6973bc9b58abf51604c3010084168f31e94482085e69c1  payload/installed-sizes.json
 sha256  a97b18e52b7bc8b70075ed1a78dad12e72e5e5ae769bb212d8276186a972dd91  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ecma/folds.scm
 sha256  a97b18e52b7bc8b70075ed1a78dad12e72e5e5ae769bb212d8276186a972dd91  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ecma/folds.scm
 sha256  aa295f5d57986bcb6fc1154d84c35670b5f76ec49ab6360139d4abb7c399e286  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/gdscript.so.bz2

@@ -11,15 +11,16 @@
 #      .crate into a local registry (index/ + *.crate files), no build.
 #   5. Packs the store to rust/crate-store.tar.bz2 and reports the weight.
 #
-# The resulting registry is consumed offline via ~/.cargo/config.toml:
+# The resulting registry is consumed offline by loadout's shell cargo wrapper
+# (envs/bash/functions.sh cargo() / tcsh helpers/cargo-wrap): while crates.io
+# is unreachable it injects, for that command only,
 #
-#     [source.crates-io]
-#     replace-with = "loadout-store"
-#     [source.loadout-store]
-#     local-registry = "<localroot>/share/cargo/registry-store"
+#     --config 'source.crates-io.replace-with="loadout-local"'
+#     --config source.loadout-local.local-registry="<localroot>/share/cargo/registry-store"
 #
-# With that source replacement any project whose deps are in the store resolves
-# and builds with `cargo build --offline` -- no crates.io, no index fetch.
+# so any project whose deps are in the store resolves and builds with
+# `cargo build --offline` -- no crates.io, no index fetch. ~/.cargo/config.toml
+# itself stays stock (online-first).
 #
 # Prerequisites on the build machine (EL8):
 #   - rustc + cargo on PATH (rustup, dnf, or the bundled rust runtime once it exists)
@@ -97,20 +98,19 @@ if ! cargo local-registry --help >/dev/null 2>&1; then
     cargo install cargo-local-registry
 fi
 
-# Isolate the resolve/sync from the loadout's OWN offline cargo config.
+# Isolate the resolve/sync from any loadout-influenced cargo resolution.
 #
-# env-cargo writes ~/.cargo/config.toml with `[source.crates-io] replace-with =
-# "loadout-store"`, pointing cargo at the very registry this script builds. On a
-# build box that has run `loadout install env-cargo`, cargo therefore resolves
-# against the PREVIOUS store, so a resolve can only ever succeed for crates
-# already in it -- a new seed dies with "no matching package named `<seed>`
-# found ... index (which is replacing registry `crates-io`)". That is a
-# bootstrap trap: the store could not grow, which is why it went stale enough to
-# break the fish 4.8.1 build in the first place.
-#
-# A private CARGO_HOME with no config.toml makes the resolve and the sync talk
-# to real crates.io -- which is what this script's header has always claimed it
-# does ("all ONLINE").
+# Historically env-cargo wrote ~/.cargo/config.toml with an unconditional
+# `replace-with` pointing at the installed store, so a plain `cargo build` on a
+# build box that had run `loadout install env-cargo` resolved against the
+# PREVIOUS store and new seeds died with "no matching package named `<seed>`
+# found". That bootstrap trap is why the store went stale enough to break the
+# fish 4.8.1 build. Since 2026-08-22 the config is stock and the offline
+# fallback lives in the shell wrapper instead -- but the wrapper injects the
+# same replacement whenever crates.io is unreachable, so on an air-gapped box
+# the trap returns through a different door. A private CARGO_HOME with no
+# config.toml keeps this script talking to real crates.io either way -- which
+# is what its header has always claimed ("all ONLINE").
 CARGO_HOME_ISOLATED="$(mktemp -d "${TMPDIR:-/tmp}/crate-store-cargo-home.XXXXXX")"
 CARGO_HOME="$CARGO_HOME_ISOLATED"
 export CARGO_HOME

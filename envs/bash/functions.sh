@@ -34,6 +34,172 @@ loadout_detect_online() {
     [[ "$_result" == "1" ]]
 }
 
+# Probe ONE host:port with a short-TTL disk cache, so tools that need a
+# per-invocation connectivity verdict (the cargo() wrapper below) do not
+# re-pay the timeout on every call during a build loop.
+#
+# Usage: loadout_net_probe <host:port> [timeout_secs] [ttl_secs]
+# Cache: ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/<sanitized host_port>, content
+# "1"/"0"; the file's mtime is the probe timestamp. Dot-hidden because
+# `loadout clean --all` sweeps /tmp/loadout-* and must never touch these.
+# TTL: 3rd arg or LOADOUT_NET_PROBE_TTL seconds (default 300); ttl=0 forces
+# a re-probe.
+# Returns 0 = reachable, 1 = unreachable. Works under zsh: the probe shells
+# out to bash for /dev/tcp exactly like loadout_detect_online.
+loadout_net_probe() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
+    local _hp="${1:?host:port required}"
+    local _t="${2:-2}"
+    local _ttl="${3:-${LOADOUT_NET_PROBE_TTL:-300}}"
+
+    local _dir="${XDG_RUNTIME_DIR:-/tmp}/.loadout-net"
+    local _name _file _verdict _now _age
+    _name=$(printf '%s' "$_hp" | tr -c 'A-Za-z0-9._-' '_')
+    _file="$_dir/$_name"
+
+    if [[ -f "$_file" ]]; then
+        _verdict=$(cat "$_file" 2>/dev/null)
+        case "$_verdict" in
+        0 | 1)
+            _now=$(date +%s)
+            _age=$((_now - $(stat -c %Y "$_file" 2>/dev/null || echo 0)))
+            if ((_age < _ttl)); then
+                return $((1 - _verdict))
+            fi
+            ;;
+        esac
+    fi
+
+    _verdict=0
+    timeout "$_t" bash -c "exec 3<>/dev/tcp/${_hp%%:*}/${_hp##*:}" 2>/dev/null &&
+        _verdict=1
+
+    mkdir -p "$_dir" 2>/dev/null
+    # Atomic write: concurrent shells must not interleave half a verdict.
+    {
+        printf '%s\n' "$_verdict" >"$_dir/.$_name.$$" &&
+            mv -f "$_dir/.$_name.$$" "$_file"
+    } 2>/dev/null
+
+    [[ "$_verdict" == "1" ]]
+}
+
+# loadout_detect_online behind a once-per-day disk cache.
+#
+# Shell startup must stay fast even on flaky networks: the first login of a
+# day pays the parallel TCP probe once, every later shell reads the verdict
+# from disk without touching the network. Keyed on an md5 of the host list so
+# a user override of LOADOUT_CFG_ONLINE_DETECT_HOSTS gets its own entry.
+# Usage: loadout_detect_online_cached [timeout_secs]   (TTL:
+# LOADOUT_ONLINE_CACHE_TTL, default 86400; 0 disables caching)
+loadout_detect_online_cached() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
+    local _ttl="${LOADOUT_ONLINE_CACHE_TTL:-86400}"
+    local _hosts="${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}"
+    local _dir="${XDG_RUNTIME_DIR:-/tmp}/.loadout-net"
+    local _key _file _verdict _now _age _result
+
+    _key=$(printf '%s' "$_hosts" | md5sum | awk '{print $1}')
+    _file="$_dir/detect-$_key"
+
+    if ((_ttl > 0)) && [[ -f "$_file" ]]; then
+        _verdict=$(cat "$_file" 2>/dev/null)
+        case "$_verdict" in
+        0 | 1)
+            _now=$(date +%s)
+            _age=$((_now - $(stat -c %Y "$_file" 2>/dev/null || echo 0)))
+            if ((_age < _ttl)); then
+                [[ "$_verdict" == "1" ]]
+                return
+            fi
+            ;;
+        esac
+    fi
+
+    loadout_detect_online "$@"
+    _result=$?
+    mkdir -p "$_dir" 2>/dev/null
+    {
+        printf '%s\n' "$((_result == 0 ? 1 : 0))" >"$_dir/.detect-$_key.$$" &&
+            mv -f "$_dir/.detect-$_key.$$" "$_file"
+    } 2>/dev/null
+    return $_result
+}
+
+# cargo: online-first with automatic offline fallback to the bundled crate
+# store (rust-crate-store). Upstream cargo has NO source failover
+# (rust-lang/cargo#3066, open since 2016): `replace-with` is unconditional,
+# so the choice between crates.io and the local registry must be made BEFORE
+# cargo runs. This wrapper probes crates.io reachability per invocation --
+# cheap when online (TCP connect), cached for a few minutes when offline --
+# and only when crates.io is unreachable AND the store exists injects the
+# local-registry replacement via CLI config args. The stock ~/.cargo/config.toml
+# written by env-cargo stays replacement-free, so online behavior is exactly
+# upstream cargo.
+#
+# Overrides:
+#   LOADOUT_CARGO_OFFLINE=1     force offline mode (inject) without probing
+#   LOADOUT_CARGO_OFFLINE=0     disable the wrapper entirely
+#   LOADOUT_CFG_CARGO_PROBE_HOSTS  host list (default crates.io edge hosts)
+cargo() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
+    case "$1" in
+    --version | -V | --help | -h | help | --list | man)
+        command cargo "$@"
+        return
+        ;;
+    esac
+
+    local _mode=auto _a _declared=0 _hosts _hp _online=0 _store
+    case "${LOADOUT_CARGO_OFFLINE:-}" in
+    1 | true | yes | on | enabled) _mode=force ;;
+    0 | false | no | off | disabled)
+        command cargo "$@"
+        return
+        ;;
+    esac
+
+    for _a in "$@"; do
+        case "$_a" in
+        --offline | --frozen | --locked) _declared=1 ;;
+        esac
+    done
+
+    if ((_declared == 0)) && [[ "$_mode" != force ]]; then
+        _hosts="${LOADOUT_CFG_CARGO_PROBE_HOSTS:-index.crates.io:443 static.crates.io:443}"
+        for _hp in $_hosts; do
+            # Short per-host timeout; the cache keeps repeat calls free.
+            if loadout_net_probe "$_hp" 2; then
+                _online=1
+                break
+            fi
+        done
+        if ((_online == 1)); then
+            command cargo "$@"
+            return
+        fi
+    fi
+
+    if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
+        _store="${LOADOUT_CFG_SHARED_PREFIX%/}/share/cargo/registry-store"
+    else
+        _store="$HOME/.local/share/cargo/registry-store"
+    fi
+    # No store installed -> nothing to fall back to; let real cargo run and
+    # produce its own (network) error rather than pointing at thin air.
+    [[ -d "$_store" ]] || {
+        command cargo "$@"
+        return
+    }
+
+    # --config is a GLOBAL option: it must land before the subcommand, which
+    # is why the injection prepends here instead of appending.
+    command cargo \
+        --config 'source.crates-io.replace-with="loadout-local"' \
+        --config "source.loadout-local.local-registry=\"$_store\"" \
+        "$@"
+}
+
 auto_attach_to_tmux() {
     if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX}"; then
         # Make sure terminal is in a known-good state

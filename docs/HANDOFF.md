@@ -18,6 +18,36 @@ release.
 Verified offline in almalinux:8.10 container with `--network none`: cold
 bootstrap → `install pyright nodejs --dest-dir` → pyright type-checks.
 
+## cargo online-first with offline fallback (2026-08-22, second change set)
+
+Closes `enhancement-request-cargo-offline-fallback.md`. Upstream cargo has no
+source failover (rust-lang/cargo#3066), so the choice is made before cargo
+runs:
+
+- `_install_env_cargo` now writes a STOCK `~/.cargo/config.toml` (no
+  `replace-with`). Existing installs migrate by reinstalling env-cargo.
+- `cargo()` wrapper in functions.sh (zsh gets it via the shared file; tcsh via
+  new `helpers/cargo-wrap`, alias wired in aliases.csh) probes
+  `index.crates.io:443 static.crates.io:443` per invocation with a short-TTL
+  disk cache (`${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/`), and only when
+  unreachable AND the registry-store exists injects the replacement via two
+  `--config` CLI args placed before the subcommand. Verified end-to-end with
+  real cargo 1.96 against the real store (offline fetch resolves from the
+  store; online search passes through untouched).
+- Startup detection is now cached once per day:
+  bashrc's LOADOUT_ONLINE block calls `loadout_detect_online_cached`; tcsh's
+  `helpers/detect-online` shares the same cache files. New shell startup pays
+  zero network cost except the first login of the day.
+- Overrides: `LOADOUT_CARGO_OFFLINE=1` (force offline mode) / `=0` (never
+  wrap); hosts via `LOADOUT_CFG_CARGO_PROBE_HOSTS`; probe TTL via
+  `LOADOUT_NET_PROBE_TTL`.
+- Gate: `tests/cargo-offline-fallback` (T1, fake cargo + live/dead listener
+  sockets drives bash/zsh/tcsh-helper through identical scenarios).
+
+Note for build scripts: the build-tree-sitter trap below still applies — an
+offline build box now gets store injection via the wrapper instead of a
+static config, so isolated `CARGO_HOME` remains mandatory there.
+
 ---
 
 Last updated: 2026-08-17. **`v2026.08.17` is RELEASED** (class C, signed,

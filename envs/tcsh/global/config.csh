@@ -74,3 +74,11 @@ if ( ! $?LOADOUT_CFG_ONLINE_DETECT_TIMEOUT ) setenv LOADOUT_CFG_ONLINE_DETECT_TI
 # Space-separated host:port pairs probed in parallel. Override in user/config.csh
 # to use corporate mirror hosts.
 if ( ! $?LOADOUT_CFG_ONLINE_DETECT_HOSTS ) setenv LOADOUT_CFG_ONLINE_DETECT_HOSTS "github.com:443 raw.githubusercontent.com:443 pypi.org:443"
+# Startup online verdict is cached on disk for this many seconds (default one
+# day) so only the first login pays for probes. 0 disables the cache.
+if ( ! $?LOADOUT_ONLINE_CACHE_TTL ) setenv LOADOUT_ONLINE_CACHE_TTL 86400
+# cargo wrapper (online-first, offline fallback to rust-crate-store): hosts
+# probed per invocation, TTL of their cached verdicts, manual tri-state
+# override (1 = always offline mode, 0 = never wrap).
+if ( ! $?LOADOUT_CFG_CARGO_PROBE_HOSTS ) setenv LOADOUT_CFG_CARGO_PROBE_HOSTS "index.crates.io:443 static.crates.io:443"
+if ( ! $?LOADOUT_NET_PROBE_TTL ) setenv LOADOUT_NET_PROBE_TTL 300

@@ -4158,33 +4158,26 @@ def _install_env_zsh(repo_dir, home):
 
 
 def _install_env_cargo(repo_dir, home):
-    """Write ~/.cargo/config.toml pointing Cargo at the bundled offline
-    local-registry (installed by the rust-crate-store data package).
+    """Write a STOCK ~/.cargo/config.toml (no source replacement).
 
-    Source replacement makes any project whose deps are in the store resolve
-    and build with `cargo build --offline` -- no crates.io, no index fetch.
-    The local-registry path tracks the store's install_to and honors a shared
-    tree via LOADOUT_CFG_SHARED_PREFIX, exactly like install_tealdeer_config.
+    Online-first policy: cargo talks to crates.io normally. The offline
+    fallback is handled at shell level -- the loadout `cargo` function in
+    envs/bash/functions.sh (and tcsh helpers/cargo-wrap) probes crates.io
+    reachability per invocation and, only when unreachable AND the bundled
+    local-registry (rust-crate-store) exists, injects the replacement via
+    `cargo --config` CLI args. Upstream cargo has no source failover
+    (rust-lang/cargo#3066), so an unconditional replace-with here would make
+    the mirror total instead of a fallback and block any crate absent from
+    the store while online.
     """
     cargo_dir = os.path.join(home, ".cargo")
     ensure_dir(cargo_dir, "cargo config")
-    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
-    if prefix:
-        store = os.path.join(prefix, "share", "cargo", "registry-store")
-    else:
-        # Match install_crate_store's target in both HOME (.local) and
-        # --dest-dir (un-dotted local) layouts.
-        store = _resolve_install_to("~/.local/share/cargo/registry-store", home)
-    store = os.path.abspath(os.path.expanduser(store))
     text = (
-        "# Managed by loadout (env-cargo). Offline crate resolution against the\n"
-        "# bundled local-registry. Delete this file to restore crates.io fetches.\n"
-        "[source.crates-io]\n"
-        'registry = "sparse+https://index.crates.io/"\n'
-        'replace-with = "local-registry"\n'
-        "\n"
-        "[source.local-registry]\n"
-        f"local-registry = {json.dumps(store)}\n"
+        "# Managed by loadout (env-cargo). Stock crates.io access -- online-first.\n"
+        "# When crates.io is unreachable, loadout's shell `cargo` wrapper\n"
+        "# automatically injects the bundled offline local-registry\n"
+        "# (rust-crate-store) as a source replacement for that command.\n"
+        "# Delete this file to manage cargo configuration yourself.\n"
     )
     dest = os.path.join(cargo_dir, "config.toml")
     require_writable_parent(dest, "cargo config")
@@ -4192,7 +4185,7 @@ def _install_env_cargo(repo_dir, home):
         require_writable_dir(dest, "cargo config")
     with open(dest, "w") as f:
         f.write(text)
-    print(f"  cargo offline config -> {dest} (local-registry: {store})")
+    print(f"  cargo stock config -> {dest} (offline fallback via shell cargo wrapper)")
 
 
 ENV_HANDLERS = {
