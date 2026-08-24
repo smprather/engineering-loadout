@@ -245,7 +245,7 @@ git add payload/el8.x86_64.glibc2p28/bin/mytool.bz2 \
 git commit
 ```
 
-## Neovim build notes (currently shipping v0.12.2 stable; procedure below first recorded for a 2026-05-12 nightly)
+## Neovim build notes (currently shipping v0.12.5 stable; procedure below first recorded for a 2026-05-12 nightly)
 
 Built from source at `~/neovim` (stable tag; the stable-release policy forbids
 shipping nightlies -- rebuild from the latest stable tag). CMake flags:
@@ -2388,31 +2388,30 @@ only, and a real-X/WSLg `surfer --version` + a headed launch on a sample
 
 ---
 
-## parity-plot 0.5.0 -- offline Plotly parity plots + NiceGUI designer
+## parity-plot 0.7.0 -- offline Plotly parity plots + NiceGUI designer
 
 `parity-plot` is the first-party Python CLI at
 `https://github.com/smprather/parity-plot`. The bundled snapshot is upstream
-stable tag `v0.5.0` (`ed16b6a446837db78d7502d9062a98d276a66dd4`). It is a pure
+stable tag `v0.7.0`. It is a pure
 wheel requiring Python 3.14. NiceGUI is a core upstream dependency now, so
 `parity-plot design` is usable after an offline install without a separate extra.
 
 ### Licensing note
 
-The v0.5.0 upstream tree currently contains no `LICENSE`/`COPYING` file or
+The v0.7.0 upstream tree currently contains no `LICENSE`/`COPYING` file or
 project license metadata. Its owner authorized this first-party bundle; do not
 claim a license or redistribute it on another party's behalf until upstream
 adds explicit terms.
 
-### Offline patch
+### Offline HTML behavior
 
-Upstream currently writes HTML with `include_plotlyjs="cdn"`. That output is
-tiny, but a browser on an air-gapped machine cannot render it. The loadout-only
-patch `build/parity-plot/0001-inline-plotly-js-for-offline-html.patch` changes
-this to `include_plotlyjs=True`, embedding Plotly from the already-installed
-wheel. Keep this patch and its positive HTML smoke: it costs about 4.9 MiB per
-generated report, but no extra bundled wheel bytes because Plotly contains its
-own `plotly.min.js`. It also corrects upstream module metadata that still
-reported version 0.1.0.
+There is no loadout patch anymore. Through v0.6.0 we carried a patch that
+changed Plotly's CDN reference into an inlined copy, so generated HTML rendered
+air-gapped. v0.7.0 adopted that behavior upstream and added
+`[output].plotlyjs` control; standalone documents default to inline Plotly.
+Keep the behavioral smoke instead of reintroducing a patch:
+`tests/install-parity-plot` asserts generated HTML embeds the Plotly runtime and
+carries no CDN reference.
 
 PNG/SVG/PDF are a different boundary: Kaleido needs a compatible local
 Chrome/Chromium. Do **not** run `plotly_get_chrome` from the installer or add a
@@ -2422,7 +2421,7 @@ a browser; it guarantees only HTML rendering entirely offline.
 ### Build + bundle
 
 ```bash
-build/build-parity-plot.sh --tag v0.5.0            # repeat the pinned stable release
+build/build-parity-plot.sh --tag v0.7.0            # repeat the pinned stable release
 build/build-parity-plot.sh --tag vNEXT             # deliberate stable-tag update
 ./loadout completion bash > envs/bash/global/completions/loadout.bash
 ./build/gen-content-manifest
@@ -3906,8 +3905,8 @@ carries both `spicefmt` (the CLI formatter+linter) and `spice-netlist-ls` (the
 LSP server). This is the first multi-binary prebuilt the import script handles:
 the static-packaging branch was refactored to package each binary under its own
 name (`_pkg_static_bin` helper) so a multi-binary tool does not clobber itself.
-Both are static-pie musl -- no NEEDED, no GLIBC symbols, no patchelf, no RPATH.
-`strip` -> `bzip2` only, same as `mlr`.
+Both are static-pie musl — no NEEDED, no GLIBC symbols, no patchelf, no RPATH.
+`strip` → `bzip2` only, same as `mlr`.
 
 **`.tar.xz` not `.tar.gz`.** The extraction line now falls back to `tar xJf`
 when `tar xzf` fails, so xz-compressed release archives work without a separate
@@ -3926,35 +3925,35 @@ still covers formatter/linter behaviour.
 **Functional smoke (in the import script and in `tests/prebuilt-binaries`).**
 Four checks, each catching a distinct silent-failure class:
 1. **Format:** a netlist with `R1 1 0   1k` (extra spaces) must come out as
-   `R1 1 0 1k` -- a formatter that passes input through unchanged sails a
+   `R1 1 0 1k` — a formatter that passes input through unchanged sails a
    `--version` probe.
 2. **Lint:** a deck with `X1 a b sub` (no matching `.subckt sub`) must report
-   `undefined-subckt` -- a linter that no-ops is the same hazard.
-3. **Idempotency:** `spicefmt | spicefmt` is a fixed point -- the formatter
+   `undefined-subckt` — a linter that no-ops is the same hazard.
+3. **Idempotency:** `spicefmt | spicefmt` is a fixed point — the formatter
    invariant. A non-idempotent formatter would destabilise every save.
 4. **LSP startup:** `spice-netlist-ls` must answer a minimal stdio LSP session
-   (`initialize` -> `initialized` -> `shutdown` -> `exit`) with
+   (`initialize` → `initialized` → `shutdown` → `exit`) with
    `definitionProvider` and `documentFormattingProvider` capabilities. This
    catches a corrupt/wrong-arch LSP binary that the sibling CLI cannot cover.
 
 **Editor wiring.** `envs/nvim/lsp/spice_netlist_ls.lua` (added to
-`vim.lsp.enable` in `init.lua`) -- `cmd = {"spice-netlist-ls"}`, filetypes
+`vim.lsp.enable` in `init.lua`) — `cmd = {"spice-netlist-ls"}`, filetypes
 `{spice, cir, scs, subckt}`. nvim's builtin `filetype.lua` maps `.sp`/`.scs`/
-`.cir` -> `spice` already; `.subckt` is not in its table, so the lsp config
+`.cir` → `spice` already; `.subckt` is not in its table, so the lsp config
 calls `vim.filetype.add({ extension = { subckt = "spice" } })` (runs at config
 time, before buffers load). Format-on-save is central: conform.nvim's
 `BufWritePre` autocmd in `init.lua` falls back to the LSP server's
 `textDocument/formatting` when no conform formatter is registered for the
-filetype -- no per-ft autocmd needed. Helix: `envs/helix/languages.toml`
+filetype — no per-ft autocmd needed. Helix: `envs/helix/languages.toml`
 registers a `[language-server.spice-netlist-ls]` + a `[[language]] name = "spice"`
 block (helix has no built-in spice language, so this adds one rather than
 replacing a default).
 
 **`--dialect` / `spicefmt.toml` / `.scs` segmentation.** Dialect is
-auto-detected per file (`.control`/`.csparam` -> ngspice; `.alter`/`.protect`
--> hspice; `//` comments/paren nodes -> spectre; etc), overridable with
+auto-detected per file (`.control`/`.csparam` → ngspice; `.alter`/`.protect`
+→ hspice; `//` comments/paren nodes → spectre; etc), overridable with
 `--dialect` or a `spicefmt.toml`. A `.scs` file with `simulator lang=spice` /
-`simulator lang=spectre` directives gets per-section dialect routing -- each
+`simulator lang=spectre` directives gets per-section dialect routing — each
 section is parsed under the dialect its directive selects. This is internal to
 the tool; the loadout package does nothing special for it.
 
@@ -4835,8 +4834,291 @@ no kernel-ABI coupling like `perf` has, and bundling is unambiguous.
 ### perf is deliberately NOT bundled
 
 The request that surfaced Valgrind also mentioned `perf`. `perf` is a
-kernel-ABI-tied tool (matches the exact running kernel, and its NEEDED
+kernel-ABI-tied tool (matches the exact kernel, and its NEEDED
 list includes libpython3.6m). This loadout cannot bundle a perf binary
 that is correct on both EL8 farm nodes (kernel 4.18) and this dev box
 (WSL2 kernel 6.18). Policy: use the system perf matching your kernel.
 Documented in README.
+
+---
+
+## tclint 0.9.0 -- Tcl linter, formatter, and language server (pure-Python wheel)
+
+**Tool:** tclint -- modern dev tools for Tcl
+**Version:** 0.9.0 (latest stable; zero-ver project, https://0ver.org/)
+**Source:** https://github.com/nmoroze/tclint (MIT)
+**PyPI:** https://pypi.org/project/tclint/
+
+tclint is a pure-Python package (`py3-none-any` wheel) installed via the
+loadout's `uv tool` mechanism (the same path as visidata, ipython, etc.).
+No source build, no ELF, no patchelf, no bundled libs. Three launchers are
+produced in isolated venvs: `tclint` (linter), `tclfmt` (formatter), and
+`tclsp` (language server for editor integration).
+
+### Why a python-tool, not a bin
+
+The wheel is pure Python and `requires-python >= 3.10`, so the loadout's
+bundled Python 3.14 drives it. The `uv tool install` path gives isolated
+venvs (one per tool), so tclint's deps cannot collide with another
+python-tool's pins. The launcher shims resolve the interpreter by absolute
+path, so `tclsp` starts under headless nvim and from GUI-launched editors
+without PATH.
+
+### Dependencies (the wheel closure)
+
+Direct deps from `pyproject.toml` (pinned `==` / `~=`, so deterministic):
+
+| package | version | note |
+|---|---|---|
+| ply | 3.11 | PEG parser engine |
+| pathspec | 0.11.2 | gitignore-style file matching |
+| importlib-metadata | 6.8.0 | entry-point discovery (backport) |
+| pygls | 1.3.1 | the LSP framework tclsp is built on |
+| voluptuous | 0.15.2 | config schema validation |
+
+Transitive (pulled by pygls/lsprotocol/importlib-metadata):
+
+| package | version |
+|---|---|
+| lsprotocol | 2023.0.1 |
+| cattrs | 26.1.0 |
+| zipp | 4.1.0 |
+
+`attrs` and `typing-extensions` are already in the wheelhouse (shared by
+many tools). `tomli` is conditional on `python_version < '3.11'` and is
+therefore NOT needed for 3.14 (the stdlib `tomllib` covers it).
+
+### Download (the manylinux tag matters)
+
+```bash
+PIP_REQUIRE_VIRTUALENV=0 ~/.local/bin/python3.14 -m pip download tclint==0.9.0 \
+  --platform manylinux_2_28_x86_64 \
+  --platform manylinux2010_x86_64 \
+  --platform manylinux2014_x86_64 \
+  --platform manylinux1_x86_64 \
+  --platform any \
+  --python-version 3.14 \
+  --only-binary :all: \
+  -d payload/el8.x86_64.glibc2p28/wheels/
+```
+
+All wheels are `py3-none-any` (pure Python), so the platform tags are
+belt-and-suspenders; the `any` tag is what actually matches. Per the
+ADDING_BINARIES wheel-download rule, pass EVERY acceptable platform tag --
+pip matches tags EXACTLY with no downward implication, and a single-tag
+mistake can misdiagnose a wheel as absent.
+
+### Registry entry
+
+`kind: python-tool`, `uv_tool: tclint`, `depends: [portable-python, uv]`.
+The `wheels` list is the FULL closure (tclint + 8 deps); the installer
+matches each by normalized name (hyphens -> underscores) so
+`importlib-metadata` resolves `importlib_metadata-*.whl`. Member of
+`@dev-tools` (next to ruff, ty, taplo, shellcheck, stylua). Version
+discovery is automatic via `check-versions` (PyPI JSON keyed on
+`uv_tool`); no `version_url`/`version_pattern` needed.
+
+### Editor integration (tclsp)
+
+`tclsp` is a stdio LSP server (no args beyond `-l <log-level>`). It covers
+`.tcl` and the EDA constraint dialects `.sdc`/`.xdc`/`.upf`. Wired into both
+bundled editors:
+
+- **nvim:** `envs/nvim/lsp/tclsp.lua` (new) -- `cmd = { "tclsp" }`,
+  `filetypes = { "tcl", "sdc" }` (nvim maps `.sdc` to its own filetype),
+  `single_file_support = true`. Added to the `vim.lsp.enable({...})` list
+  in `envs/nvim/lua/global/init.lua`.
+- **helix:** `envs/helix/languages.toml` -- a `[language-server.tclsp]`
+  block and a `[[language]] name = "tcl" language-servers = ["tclsp"]`
+  entry. Helix has a built-in `tcl` language (tree-sitter grammar + queries)
+  but no language server, so this ADDS one rather than replacing a default.
+
+`tclsp` has no `--version` flag (it is an LSP server, not a CLI), so the
+release smoke probes `tclint` itself (the linter) rather than `tclsp`.
+`tests/prebuilt-binaries` drives `tclint` against a file with a known
+violation and requires the violation to be reported -- a checker that
+silently passes everything would sail through a version probe.
+
+### Farm-versions
+
+```python
+("tclint", "tclint", "https://github.com/nmoroze/tclint",
+ strategy_flag(["--version"], r"tclint ([0-9]+\.[0-9]+\.[0-9]+)")),
+```
+
+`tclint --version` prints `tclint 0.9.0`. `tclfmt --version` prints the
+same; `tclsp` rejects `--version` (it is a server).
+
+### Smoke (functional, not --version)
+
+```bash
+# Lint a file with a known violation -- a checker that silently passes
+# everything would sail through a --version probe.
+printf 'if { [expr {$x > 10}] } { puts $x is greater than 10! }\n' > /tmp/t.tcl
+tclint /tmp/t.tcl                        # exits nonzero, prints violations
+tclint /tmp/t.tcl; echo "rc=$?"          # rc=1 (violations found)
+# Clean file exits 0:
+printf 'puts "hello"\n' > /tmp/clean.tcl
+tclint /tmp/clean.tcl; echo "rc=$?"      # rc=0
+# Formatter round-trip:
+tclfmt /tmp/t.tcl > /tmp/fmt.tcl
+```
+
+### Install
+
+```bash
+./loadout install tclint
+```
+
+Installs `tclint`, `tclfmt`, `tclsp` launchers to `~/.local/bin/` (via the
+isolated venv at `~/.local/share/uv/tools/tclint/`). Also pulled by
+`@dev-tools` and the full `@engineering-loadout` bundle.
+
+### Updating
+
+```bash
+# Bump version in packages.json, re-download the wheel closure, run the
+# post-payload chain (strip is a no-op for wheels -- pure Python -- but
+# sizes + manifest must regenerate because the wheelhouse changed):
+PIP_REQUIRE_VIRTUALENV=0 ~/.local/bin/python3.14 -m pip download tclint==<NEW> \
+  --platform manylinux_2_28_x86_64 --platform manylinux2010_x86_64 \
+  --platform manylinux2014_x86_64 --platform manylinux1_x86_64 --platform any \
+  --python-version 3.14 --only-binary :all: \
+  -d payload/el8.x86_64.glibc2p28/wheels/
+# prune old tclint-*.whl + any stale dep wheels no longer in the closure
+# stamp packages.json version -> run gen-installed-sizes -> gen-content-manifest
+```
+
+---
+
+## OpenVAF 23.5.0 -- Verilog-A compiler (Rust + LLVM, EL8 SOURCE build)
+
+**Tool:** OpenVAF -- Verilog-A compiler for circuit simulators
+**Version:** 23.5.0 (latest stable; tag `OpenVAF-v23.5.0`)
+**Source:** https://github.com/pascalkuthe/OpenVAF (GPL-3.0)
+**Build script:** `build/build-openvaf.sh --tag OpenVAF-v23.5.0`
+
+OpenVAF compiles Verilog-A compact model files to OSDI shared objects usable
+by circuit simulators (ngspice with the OSDI prototype, Melange). It is a Rust
+project that links LLVM statically at build time, producing a single
+self-contained binary with only glibc + libstdc++ + libgcc_s NEEDED at runtime
+-- no bundled libs, no runtime LLVM dep.
+
+### The LLVM version constraint (why a prebuilt LLVM 15 is required)
+
+OpenVAF 23.5.0 targets **LLVM 13-15**. LLVM 16 removed
+`llvm/Transforms/IPO/PassManagerBuilder.h` and the corresponding legacy pass
+manager C API (`LLVMPassManagerBuilder*`), which OpenVAF's `openvaf/llvm/`
+FFI wrapper uses. The build box's `/usr/local` LLVM is version 23 (far too
+new), and EL8's `llvm-compat-devel` only goes back to 17 (also too new).
+
+The resolution is upstream's own **prebuilt LLVM 15.0.7** tarball
+(`https://openva.fra1.cdn.digitaloceanspaces.com/llvm-15.0.7-x86_64-unknown-linux-gnu-FULL.tar.zst`),
+which is built on CentOS 7 and runs on any Linux. The build script fetches it
+once to `/tmp/llvm-15.0.7-openvaf/` and points `LLVM_CONFIG` + `LIBCLANG_PATH`
++ `PATH` at it. Static linking means the resulting binary has **zero LLVM
+NEEDED** -- the prebuilt LLVM is a build-time-only tool, never shipped.
+
+### Two patches required (both applied by the build script)
+
+**Patch 1: `openvaf/llvm/build.rs` -- robust version parsing.**
+The build script's version parser does `version.split('.')` and `parse()` on
+each component. Our prebuilt LLVM reports `15.0.7` cleanly, but the build
+box `/usr/local` LLVM reports `23.0.0git` and the `git` suffix fails
+`u32::parse()`. The patch strips non-numeric characters from the patch
+component before parsing:
+```rust
+// Before:
+let patch: Result<u32, _> = patch.parse();
+// After:
+let patch: Result<u32, _> = patch.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse();
+```
+
+**Patch 2: `openvaf/osdi/stdlib.c` -- NO_STD function declarations.**
+This file compiles with `-DNO_STD` (no standard headers) but calls `strlen`,
+`malloc`, `memcpy`, `strcmp`, `realloc`, `log`. Older clang tolerated
+implicit declarations; clang 15 (from the prebuilt LLVM) in C99 mode rejects
+them as errors. The patch adds `extern` declarations for the six functions
+inside the `#ifdef NO_STD` block.
+
+Both patches are applied idempotently (grep before apply) so `--reuse-build`
+works. If upstream fixes either, the patch is silently skipped.
+
+### Prerequisites
+
+```bash
+source /opt/rh/gcc-toolset-14/enable
+# cargo 1.64+ (the loadout's 1.96 works), zstd to decompress the LLVM tarball
+# The build script fetches the prebuilt LLVM 15 automatically on first run.
+```
+
+### Build
+
+```bash
+./build/build-openvaf.sh --tag OpenVAF-v23.5.0
+./build/build-openvaf.sh --tag OpenVAF-v23.5.0 --reuse-build   # skip cargo build if tree exists
+```
+
+The build takes ~30s with warm deps, ~10 min cold. The release profile has
+`debug = true` (for good backtraces), so the unstripped binary is ~230 MB;
+after stripping it is ~58 MB.
+
+### Runtime library requirements
+
+| Library | Source | Notes |
+|---------|--------|-------|
+| `libstdc++.so.6` | EL8 system | Never bundle (per policy); GLIBCXX_3.4 floor |
+| `libgcc_s.so.1` | EL8 system | Never bundle (per policy) |
+| `libdl.so.2` | EL8 glibc | Always available |
+| `libpthread.so.0` | EL8 glibc | Always available |
+| `libm.so.6` | EL8 glibc | Always available |
+| `libc.so.6` | EL8 glibc | Always available |
+
+No bundled libs. Max glibc symbol: **GLIBC_2.28** (at the EL8 floor exactly).
+Max C++ ABI: **GLIBCXX_3.4** (GCC 3.4 era -- no newer-than-EL8 concern).
+
+### Packaging
+
+`strip` -> `patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib'` ->
+`bzip2` -> `payload/el8.x86_64.glibc2p28/bin/openvaf.bz2`.
+
+RPATH is harmless (no bundled libs to find), set for consistency with the
+repo convention. The `loadout_package_bin` helper in `build/lib.sh` handles
+the strip -> patchelf -> bzip2 chain.
+
+### Smoke test (functional, not --version)
+
+`--version` prints `openvaf 23.5.0` but proves nothing about compilation. The
+build script compiles `integration_tests/CURRENT_SOURCE/current_source.va`
+(a simple ideal current source) and asserts a valid OSDI shared object is
+produced:
+```bash
+openvaf integration_tests/CURRENT_SOURCE/current_source.va
+# must produce integration_tests/CURRENT_SOURCE/current_source.osdi (ELF shared object)
+```
+
+### Install
+
+```bash
+./loadout install openvaf
+```
+
+Installs `openvaf` to `~/.local/bin/`. Member of `@eda` (alongside openroad,
+iverilog, gtkwave, klayout, verilator, yosys). Also swept into the full
+`@engineering-loadout` bundle via the `all` synthetic group.
+
+### Updating
+
+```bash
+./build/build-openvaf.sh --tag OpenVAF-v<NEW>
+# The script re-fetches the prebuilt LLVM 15 if /tmp/llvm-15.0.7-openvaf is gone.
+# Run the post-payload chain after:
+./build/strip-all-elf-binaries
+python3.14 build/gen-installed-sizes
+python3.14 build/gen-content-manifest
+```
+
+If a future OpenVAF release drops the legacy pass manager (migrating to the
+new LLVM pass manager), the LLVM version constraint loosens and the prebuilt
+LLVM 15 fetch can be dropped. Check `openvaf/llvm/wrapper/OpenVafWrapper.cpp`
+for `PassManagerBuilder.h` -- if the include is gone, LLVM 16+ is fine.

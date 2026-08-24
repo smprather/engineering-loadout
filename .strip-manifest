@@ -138,10 +138,11 @@ sha256  b07a55cf07829ef22189172b0e58ca92cbca62ec48ca5c7a9703c2ec0b31d16e  payloa
 sha256  20970dc40eddcfc2a99385a163ebdf8b4c346915c608c8dd234fa0a50ce78cb6  payload/el8.x86_64.glibc2p28/bin/numfmt.bz2
 sha256  8cea5405de5c17b7129f28bcec5a23b0c19fb2631dd8b38cc9dfac24cde3ea82  payload/el8.x86_64.glibc2p28/bin/numr.bz2
 sha256  316ace40589469af2e51c59f9d71dd96caee5f6aafc9f717207e2e64c751e45d  payload/el8.x86_64.glibc2p28/bin/nvim-qt.bz2
-sha256  5af93582ed4b8886a24eec3d2ca8b7711be6ca85606d23e8946a7e35b29e8df1  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
+sha256  2509635e1f01c0d0097d1da011aab5aecdeeac33190d5f95fe7efda65bc4e819  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  6b1a470da0f0258a2c25fd12c8dcc2bb1ae852765b734fdb3e21cc71c6256685  payload/el8.x86_64.glibc2p28/bin/octave.bz2
 sha256  41af2495fa5ede6a9d67c56f79e5fab4fba1b8e029c63e35f5171056ebaab317  payload/el8.x86_64.glibc2p28/bin/od.bz2
 sha256  f5cb8ec7c2beadbead7b65ae1febb3182e18e9f1e53f83b93d93ce9a70263566  payload/el8.x86_64.glibc2p28/bin/openroad.bz2
+sha256  fe3ce56bb24a7c416b3304116f67e925e7e86b22c275b4080d0b0934a1f643ed  payload/el8.x86_64.glibc2p28/bin/openvaf.bz2
 sha256  a8f71c8f873a41eb1fcfdfcfea75f29c5c96955e8c4b80a5db9cdd0ff5a9540f  payload/el8.x86_64.glibc2p28/bin/paste.bz2
 sha256  32fefa25d1f8378cfd840f49ca2b9a16a8b7c44a4f7ecbd0a13d6fc1496308a5  payload/el8.x86_64.glibc2p28/bin/patchelf.bz2
 sha256  221b55274edcb5a4c20c9351dc5c563d3dd40e1043ec6b53e32ea5a67fa5b666  payload/el8.x86_64.glibc2p28/bin/pdftotext.bin.bz2
@@ -458,9 +459,9 @@ tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal
 tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
-tar-meta  39018530  1786927967  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
+tar-meta  39018530  1787591913  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  5831  1784306296  payload/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2
-tar-meta  4854855  1784306298  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
+tar-meta  4858261  1787539454  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
 tar-meta  3082228  1787409797  payload/el8.x86_64.glibc2p28/runtime/pyright.tar.bz2

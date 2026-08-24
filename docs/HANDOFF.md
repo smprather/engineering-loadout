@@ -1,10 +1,31 @@
 # Current Handoff
 
-Last updated: 2026-08-24. **Tier 3 has NOT run for the valgrind batch either** —
-the 2026-08-22 batch below was Tier 1+2 green plus a pyright container
-spot-check; the 2026-08-23 valgrind batch is Tier 1+2 green only; the
-2026-08-24 spice-netlist-ls addition is Tier 1+2 + Tier 3 green. Run the release
-smoke before any release.
+Last updated: 2026-08-24. Current branch is a release candidate for
+`v2026.08.24`; publish/verification happens after this commit via
+`./build/release`. All unreleased 2026-08-22 through 2026-08-24 payload changes
+are gated: post-payload chain green, nvim assurance repin + dynamic detonation
+green, `tests/run-all` green, and Tier 3
+`tests/prebuilt-binaries-almalinux8 --full` green (**298 binaries OK, 25
+expected host-contract skips, runtimes OK**).
+
+Release-prep notes: refreshed the nvim plugin stash for the nvim 0.12.5 bump
+(78 bare mirrors, 24 active plugins clone offline; stash sha256
+`28a5ad38ccd430d09e15e47ff2de09945f6f1b68111f93f706e8b9e4e4bc0e30`). The local
+ignored `.content-manifest.fetched` was temporarily aligned to that local stash
+only so pre-release dev/test installs can verify the asset. Do not treat that
+ignored file as release provenance; after publish, regenerate it through
+`tools/fetch-stash` against the signed release checksums.
+Content-heuristic hits during stash rebuild were reviewed and were in upstream
+plugin bootstrap/test/doc paths (`blink.cmp`, `lazy.nvim`, `snacks.nvim`,
+`tokyonight.nvim`, `which-key.nvim`). Currency cadence is held after explicitly
+refreshing `env-nvim`, same-version `nodejs` 26.7.0, and YARA-Forge rules
+`20260823`. `sudo freshclam` updated daily DB to 28102; ClamAV engine warned
+local 1.4.5 is behind recommended 1.4.6.
+
+One small cleanup landed with the release candidate: Node 26.7.0 ships
+`node`/`npm`/`npx` but no `corepack`, and the old registry/doc/importer claim
+was stale. `nodejs` metadata now names npm/npx only, and `build/import-nodejs`
+fails instead of warning if a declared bundle path is missing.
 
 ## 2026-08-24 batch: spice-netlist-ls 0.3.0 (unreleased)
 
@@ -17,6 +38,27 @@ Gates: post-payload chain green (`strip-all-elf-binaries` ->
 (`tests/run-all`), Tier 3 green (`tests/prebuilt-binaries-almalinux8 --full`:
 298 binaries OK, 25 expected host-contract skips, runtimes OK).
 
+## 2026-08-23 batch: OpenVAF 23.5.0 (unreleased)
+
+| area | what |
+|---|---|
+| openvaf | New package: OpenVAF 23.5.0 (`kind: bin`) — Verilog-A compiler, compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + statically-linked LLVM. Member of `@eda`. Build: `build/build-openvaf.sh --tag OpenVAF-v23.5.0`. Two patches: (1) `openvaf/llvm/build.rs` version parser strips non-numeric suffix (handles `23.0.0git`); (2) `openvaf/osdi/stdlib.c` adds `extern` declarations under `NO_STD` for `strlen/malloc/memcpy/strcmp/realloc/log` (clang 15 C99 rejects implicit declarations). Build requires upstream's prebuilt LLVM 15.0.7 (LLVM 16+ removed `PassManagerBuilder.h`); the build script fetches it automatically. Binary: 58MB stripped, GLIBC_2.28, no bundled libs (glibc + libstdc++ + libgcc_s only). Smoke: compiles `current_source.va` → `current_source.osdi` (valid ELF shared object). farm-versions entry. Full note in ADDING_BINARIES.md. |
+
+Gates: included in aggregate release candidate gates above; Tier 3 smoke reports
+`openvaf 23.5.0` OK.
+
+## 2026-08-23 batch: tclint 0.9.0 + nvim 0.12.5 (unreleased)
+
+| area | what |
+|---|---|
+| tclint | New package: tclint 0.9.0 (`python-tool`, `uv_tool: tclint`) — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, `tclsp` language server. Pure-Python wheel (`py3-none-any`); zero-ver project (0ver.org). 9 wheels in the closure (tclint + ply/pathspec/importlib-metadata/pygls/voluptuous + lsprotocol/cattrs/zipp; attrs/typing-extensions already shared). Member of `@dev-tools`. Drives new `envs/nvim/lsp/tclsp.lua` (added to `vim.lsp.enable` list) and `envs/helix/languages.toml` (`tcl` language gains `tclsp`). farm-versions entry. Full note in ADDING_BINARIES.md. |
+| nvim | Bumped 0.12.4 → 0.12.5 (EL8 source build via `build/build-nvim.sh --tag v0.12.5 --clean`). GLIBC_2.28 (at EL8 floor, same as 0.12.4). Binary + runtime archive rebuilt. |
+
+Gates: included in aggregate release candidate gates above. Extra nvim-specific
+gates green: `tests/prebuilt-binaries-almalinux8 --no-build --dynamic`
+(10/10 dynamic canary/network checks) and `tests/install-nvim-deployments`
+(single-HOME, split shared/envs, offline update path, opt-in catalog plugin).
+
 ## 2026-08-23 batch: valgrind 3.27.1 (unreleased)
 
 | area | what |
@@ -24,8 +66,9 @@ Gates: post-payload chain green (`strip-all-elf-binaries` ->
 | valgrind | New package: EL8 source build 3.27.1 (`build/build-valgrind.sh`), upstream moved tools from `lib/valgrind/` to `libexec/valgrind/` in 3.27.x and switched `bin/valgrind` from shell to an ELF dispatcher. Wrapper at `bin/valgrind` exports `VALGRIND_LIB=<prefix>/libexec/valgrind` then execs that dispatcher. NEEDED = glibc only. Stage-verify compiles a `malloc(16)` leak and requires exit 42 + "definitely lost: 16 bytes". Member of `@dev-tools`. Test: `tests/valgrind-smoke` (T2). |
 | perf | Deliberately NOT bundled — kernel-ABI-tied (EL8 4.18 vs WSL2 6.18 mismatch class). Documented in `build/ADDING_BINARIES.md`. |
 
-Gates: Tier 1 16/16 + Tier 2 all (valgrind-smoke included). ~70 MB compressed
-payload cost; 108 MB installed.
+Gates: included in aggregate release candidate gates above; `tests/run-all`
+includes `valgrind-smoke`, and Tier 3 smoke reports `valgrind-3.27.1` OK. ~70
+MB compressed payload cost; 108 MB installed.
 
 ## 2026-08-22 batch (unreleased, one commit)
 
@@ -2149,13 +2192,14 @@ spawns a fresh **keyless** agent. Use `/usr/bin/ssh-add -l` against each
   remains a GitHub release asset (`nvim-plugin-stash.tar.bz2`) with its checksum and
   content-manifest trust chain; it is not a Git payload.
 - `parity-plot` is bundled as a non-optional Linux Python tool from stable upstream
-  tag `v0.5.0` (`ed16b6a446837db78d7502d9062a98d276a66dd4`). NiceGUI is now a
-  core upstream dependency, not a `uv_extras` entry, so the local designer still
-  installs offline. Its loadout patch corrects the stale Python module version and
-  embeds Plotly in generated HTML, so reports render offline. Static image/PDF export
-  still needs an already-installed Chrome/Chromium for Kaleido. Rebuild with
-  `build/build-parity-plot.sh --tag v0.5.0`; it copies a supplied source checkout
-  into a disposable build tree and first reuses the vendored lock closure offline.
+  tag `v0.7.0`. NiceGUI is a core upstream dependency, not a `uv_extras` entry,
+  so the local designer still installs offline. Upstream now defaults standalone
+  HTML reports to inline Plotly, so reports render offline without a loadout
+  patch. Static image/PDF export still needs an already-installed
+  Chrome/Chromium for Kaleido. Rebuild with
+  `build/build-parity-plot.sh --tag v0.7.0`; it copies a supplied source
+  checkout into a disposable build tree and first reuses the vendored lock
+  closure offline.
   Upstream still ships no explicit license file/metadata; the owner authorized this
   first-party bundle, but add explicit terms upstream before third-party redistribution.
 - `@envs` now intentionally expands only `env-bash` (then its `env-starship`

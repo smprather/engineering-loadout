@@ -35,6 +35,8 @@ return {
             json       = { "biome" },
             jsonc      = { "biome" },
             toml       = { "taplo" },
+            tcl        = { "tclfmt" },
+            sdc        = { "tclfmt" },
         },
         formatters = {
             stylua   = { prepend_args = { "--indent-type", "Spaces", "--collapse-simple-statement", "Always" } },

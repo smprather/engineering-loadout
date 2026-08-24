@@ -17,9 +17,8 @@ Platform auto-detection:
   Produces a platform string like "el8.x86_64.glibc2p28".
 
 Bundle contents (headers/docs/src stripped):
-  ./bin/node, ./bin/npm, ./bin/npx, ./bin/corepack
+  ./bin/node, ./bin/npm, ./bin/npx
   ./lib/node_modules/npm/
-  ./lib/node_modules/corepack/
 
 Extracts to ~/.local/ so bins land in ~/.local/bin/.
 """
@@ -249,9 +248,7 @@ _KEEP_PATHS = [
     "bin/node",
     "bin/npm",
     "bin/npx",
-    "bin/corepack",
     os.path.join("lib", "node_modules", "npm"),
-    os.path.join("lib", "node_modules", "corepack"),
 ]
 
 
@@ -261,8 +258,7 @@ def assemble_bundle(src_dir, bundle_dir):
         src = os.path.join(src_dir, rel)
         dst = os.path.join(bundle_dir, rel)
         if not os.path.exists(src) and not os.path.islink(src):
-            eprint(f"warning: expected path not found in node dir: {rel}")
-            continue
+            die(f"expected path not found in node dir: {rel}")
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         if os.path.islink(src):
             link_target = os.readlink(src)
@@ -275,7 +271,7 @@ def assemble_bundle(src_dir, bundle_dir):
             shutil.copy2(src, dst)
 
     # Ensure bin/npm and bin/npx are executable (they may be scripts)
-    for name in ("npm", "npx", "corepack"):
+    for name in ("npm", "npx"):
         p = os.path.join(bundle_dir, "bin", name)
         if os.path.isfile(p) and not os.path.islink(p):
             os.chmod(p, 0o755)

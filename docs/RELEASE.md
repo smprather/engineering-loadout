@@ -230,8 +230,8 @@ reads, and a wrong statement in it causes wrong work later.
   excluded; rows are only rewritten when the name matches a registry entry.
 - **`AGENTS.md`** — package behavior sections, the repo-structure tree, group
   membership, CLI flags. If you deleted a patch or a package, grep for its name.
-- **`AGENTS.md`** — carries its own per-package pins that drift independently of
-  AGENTS.md's.
+- **`.github/copilot-instructions.md`** — carries its own per-package pins that
+  drift independently of AGENTS.md's.
 - **`docs/HANDOFF.md`** — what the next session reads first. Record *why*, not
   just what.
 - **`docs/SECURITY.md`** — only claim a control that exists. It claimed the tmux

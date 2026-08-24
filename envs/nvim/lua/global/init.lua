@@ -171,6 +171,11 @@ if vim.g.cfg_enable_lsp then
     -- server, and two of them attach to every .toml buffer -- the same
     -- double-attach that markdown_oxide/marksman is avoiding above.
     --
+    -- tclsp is the Tcl language server shipped by tclint (bundled as a
+    -- python-tool wheel; see build/ADDING_BINARIES.md). It covers .tcl and
+    -- the EDA constraint dialects (.sdc/.xdc/.upf); nvim maps .sdc to its
+    -- own filetype so both are listed in tclsp.lua.
+    --
     -- spice_netlist_ls is the SPICE formatter/linter/LSP server shipped as
     -- static binaries by the spice-netlist-ls package. It covers .sp/.cir/.scs
     -- and .subckt netlists; see envs/nvim/lsp/spice_netlist_ls.lua.
@@ -182,7 +187,7 @@ if vim.g.cfg_enable_lsp then
     -- to the upstream bare command name. Re-enabling it means BUNDLING the
     -- server and its node_modules closure offline first -- nodejs is already in
     -- the payload, so it is feasible, but it is a package, not a config edit.
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "markdown_oxide", "biome", "taplo", "spice_netlist_ls" })
+    vim.lsp.enable({ "lua_ls", "ruff", "ty", "markdown_oxide", "biome", "taplo", "tclsp", "spice_netlist_ls" })
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {

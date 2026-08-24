@@ -62,6 +62,20 @@ catalogs = ["file:///__LOADOUT_RELOC_ROOT__/share/taplo/schemas/catalog.json"]
 name = "toml"
 language-servers = ["taplo"]
 
+# tcl: tclsp, the Tcl language server shipped by tclint (bundled as a
+# python-tool wheel; see build/ADDING_BINARIES.md). Helix has a built-in tcl
+# language with tree-sitter grammar and queries but no language server, so
+# this ADDS one rather than replacing a built-in default. tclsp covers .tcl
+# and the EDA constraint dialects .sdc/.xdc/.upf; helix's built-in tcl
+# filetype already matches .tcl and .sdc (the dialects share the tcl grammar).
+
+[language-server.tclsp]
+command = "tclsp"
+
+[[language]]
+name = "tcl"
+language-servers = ["tclsp"]
+
 # spice: spice-netlist-ls, the SPICE netlist formatter+linter+LSP bundled as
 # two static-pie musl binaries (see build/build-prebuilt-bin.sh --tool
 # spice-netlist-ls). Helix has NO built-in `spice` language, so we register

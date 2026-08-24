@@ -839,6 +839,23 @@
       "description": "OpenROAD \u2014 RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.14 and the matching Tcl 8.6.17 script library \u2014 mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
       "missing_hint": "openroad will not run: it needs the bundled COIN-OR/SCIP solver libs in lib64"
     },
+    "openvaf": {
+      "kind": "bin",
+      "bins": [
+        "openvaf"
+      ],
+      "version": "23.5.0",
+      "version_url": "https://github.com/pascalkuthe/OpenVAF/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "compiler",
+        "verilog-a"
+      ],
+      "description": "OpenVAF \u2014 Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + LLVM. Single self-contained binary (glibc + libstdc++ + libgcc_s only, no runtime LLVM dep). Build with build/build-openvaf.sh --tag OpenVAF-v23.5.0"
+    },
     "openssh": {
       "kind": "bin",
       "bins": [
@@ -1026,7 +1043,7 @@
       "bins": [
         "nvim"
       ],
-      "version": "0.12.4",
+      "version": "0.12.5",
       "platforms": [
         "linux"
       ],
@@ -2390,6 +2407,38 @@
       ],
       "description": "Tcl scripting language \u2014 tclsh interpreter and runtime library"
     },
+    "tclint": {
+      "kind": "python-tool",
+      "bins": [],
+      "wheels": [
+        "tclint",
+        "ply",
+        "pathspec",
+        "importlib-metadata",
+        "pygls",
+        "lsprotocol",
+        "voluptuous",
+        "cattrs",
+        "zipp"
+      ],
+      "uv_tool": "tclint",
+      "version": "0.9.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "lsp",
+        "lint",
+        "format",
+        "tcl",
+        "python"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "tclint \u2014 modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (editor integration for nvim/helix). Pure-Python (py3-none-any); zero-ver project (https://0ver.org/) pinned to the latest stable release. Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml"
+    },
     "tk": {
       "kind": "bin",
       "bins": [
@@ -2418,8 +2467,7 @@
       "bins": [
         "node",
         "npm",
-        "npx",
-        "corepack"
+        "npx"
       ],
       "libs": [
         "libatomic.so.1"
@@ -2433,7 +2481,7 @@
         "javascript"
       ],
       "archive": "payload/PLATFORM/runtime/node.tar.bz2",
-      "description": "Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling)",
+      "description": "Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling)",
       "sentinel": "bin/node",
       "install_to": "~/.local",
       "archive_name": "node.tar.bz2",
@@ -3481,6 +3529,7 @@
         "ruff",
         "ty",
         "taplo",
+        "tclint",
         "uv",
         "tree-sitter",
         "patchelf"
@@ -3567,6 +3616,7 @@
       "kind": "group",
       "members": [
         "openroad",
+        "openvaf",
         "iverilog",
         "gtkwave",
         "klayout",

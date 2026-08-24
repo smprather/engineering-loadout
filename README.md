@@ -278,7 +278,7 @@ OpenSSH for those.
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.3.8 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
-| nvim | bin | 0.12.4 | Hyperextensible Vim-based text editor |
+| nvim | bin | 0.12.5 | Hyperextensible Vim-based text editor |
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
 | procs | bin | 0.14.12 | ps replacement with colors and process tree |
@@ -331,8 +331,9 @@ OpenSSH for those.
 | zsh | bin | 5.9 | Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive |
 | fish | bin | 4.8.1 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |
+| tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
-| nodejs | bin | 26.7.0 | Node.js LTS JavaScript runtime with npm/npx/corepack (for LSP servers, JS tooling) |
+| nodejs | bin | 26.7.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | 7e9859e | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
@@ -355,6 +356,7 @@ OpenSSH for those.
 | yosys | bin | 0.68 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
 | iverilog | bin | 13.0 | Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design |
 | openroad | bin | 26Q3 | OpenROAD — RTL-to-GDS place & route: floorplanning, placement, clock-tree synthesis, global/detailed routing and parasitic extraction, driven from Tcl or Python. Ships `sta` (standalone OpenSTA timing) alongside. Completes the open flow already here: yosys synthesises → openroad places & routes → klayout views the layout |
+| openvaf | bin | 23.5.0 | OpenVAF — Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + statically-linked LLVM (no runtime LLVM dep). Member of @eda |
 | lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |
 | pyright | bin | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads) |
