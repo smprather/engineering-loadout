@@ -111,6 +111,8 @@ NO_EXEC = {
     # during ld.so init on the current EL8/WSL2 kernel even though
     # the binary is byte-identical to a previously-shipping release.
     # Pinned NO_EXEC until reproducible on a non-WSL2 EL8 box.
+    "spice-netlist-ls",  # LSP server, no --version/--help; smoked below.
+    # The sibling `spicefmt` CLI covers formatter/linter behaviour.
 }
 
 # Per-binary probe flags tried in order. First flag set that exits 0 wins.
@@ -1455,6 +1457,135 @@ def smoke_runtime_layout(tmpdir, env):
                 detail = output_excerpt(proc.stdout)
                 print(f"  FAIL (lsp):          markdown-oxide  {detail}")
                 failures.append(("markdown-oxide", detail))
+
+    if has_bin("spicefmt"):
+        # `spicefmt --version` is a genuine exit-0 banner, so the generic probe
+        # cannot catch a formatter that silently passes input through unchanged
+        # or a linter that no-ops. Drive the real job: (1) format a netlist and
+        # assert spacing was normalised, (2) lint a deck with an undefined
+        # subckt and require the error, (3) idempotency -- format(format(x)) ==
+        # format(x). The LSP sibling (spice-netlist-ls) has no --version and no
+        # CLI surface; the CLI smoke here is what covers both, since they share
+        # one parser/formatter/lint core.
+        work = os.path.join(tmpdir, "spicefmt-smoke")
+        os.makedirs(work, exist_ok=True)
+        deck = os.path.join(work, "deck.sp")
+        try:
+            with open(deck, "w") as f:
+                f.write("* title\nR1 1 0   1k\nC1 1 0  1p\n.tran 1n 10n\n")
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "spicefmt"), deck],
+                cwd=work,
+                env=env,
+                timeout=60,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as exc:
+            print(f"  FAIL (fmt):          spicefmt  {exc}")
+            failures.append(("spicefmt", str(exc)))
+            proc = None
+        if proc is not None:
+            out = proc.stdout.decode("utf-8", "replace")
+            if proc.returncode == 0 and "R1 1 0 1k" in out:
+                print("  OK   (fmt):          spicefmt  netlist formatted")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (fmt):          spicefmt  rc={proc.returncode} {detail}")
+                failures.append(("spicefmt", detail))
+            # Idempotency: format the output again, must be byte-identical.
+            if proc.returncode == 0:
+                o1 = os.path.join(work, "o1.sp")
+                o2 = os.path.join(work, "o2.sp")
+                try:
+                    with open(o1, "wb") as f:
+                        f.write(proc.stdout)
+                    subprocess.run(
+                        [os.path.join(bin_dir, "spicefmt"), o1],
+                        cwd=work,
+                        env=env,
+                        timeout=60,
+                        check=True,
+                        stdout=open(o2, "wb"),
+                        stderr=subprocess.STDOUT,
+                    )
+                    if open(o1, "rb").read() == open(o2, "rb").read():
+                        print("  OK   (idem):         spicefmt  format|format = fixed point")
+                    else:
+                        print("  FAIL (idem):         spicefmt  formatter is not idempotent")
+                        failures.append(("spicefmt", "not idempotent"))
+                except Exception as exc:
+                    print(f"  FAIL (idem):         spicefmt  {exc}")
+                    failures.append(("spicefmt", str(exc)))
+            # Lint: an undefined subckt reference must be reported.
+            try:
+                lint_proc = subprocess.run(
+                    [os.path.join(bin_dir, "spicefmt"), "--lint"],
+                    cwd=work,
+                    env=env,
+                    timeout=60,
+                    input=b"X1 a b sub\ntitle line\n",
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+            except Exception as exc:
+                print(f"  FAIL (lint):         spicefmt  {exc}")
+                failures.append(("spicefmt", str(exc)))
+                lint_proc = None
+            if lint_proc is not None:
+                lout = lint_proc.stdout.decode("utf-8", "replace")
+                if "undefined-subckt" in lout:
+                    print("  OK   (lint):         spicefmt  undefined-subckt reported")
+                else:
+                    detail = output_excerpt(lint_proc.stdout)
+                    print(f"  FAIL (lint):         spicefmt  missed undefined-subckt: {detail}")
+                    failures.append(("spicefmt", detail))
+
+    if has_bin("spice-netlist-ls"):
+        # The LSP binary has no CLI banner. Exercise the real stdio protocol:
+        # initialize -> initialized -> shutdown -> exit. This catches a
+        # corrupt/wrong-arch server binary that the sibling CLI smoke cannot.
+        def lsp_frame(body):
+            return b"Content-Length: " + str(len(body)).encode("ascii") + b"\r\n\r\n" + body
+
+        payload = b"".join(
+            lsp_frame(body)
+            for body in [
+                b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}',
+                b'{"jsonrpc":"2.0","method":"initialized","params":{}}',
+                b'{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}',
+                b'{"jsonrpc":"2.0","method":"exit","params":null}',
+            ]
+        )
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "spice-netlist-ls")],
+                cwd=tmpdir,
+                env=env,
+                timeout=60,
+                input=payload,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except Exception as exc:
+            print(f"  FAIL (lsp):          spice-netlist-ls  {exc}")
+            failures.append(("spice-netlist-ls", str(exc)))
+            proc = None
+        if proc is not None:
+            out = proc.stdout.decode("utf-8", "replace")
+            if (
+                proc.returncode == 0
+                and '"id":1' in out
+                and "definitionProvider" in out
+                and "documentFormattingProvider" in out
+                and '"id":2' in out
+                and '"result":null' in out
+            ):
+                print("  OK   (lsp):          spice-netlist-ls  initialize/shutdown")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (lsp):          spice-netlist-ls  rc={proc.returncode} {detail}")
+                failures.append(("spice-netlist-ls", detail))
 
     if has_bin("python3.14"):
         # Display-free Tcl interp smoke: the bundle's sitecustomize must point

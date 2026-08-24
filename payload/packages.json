@@ -2161,6 +2161,27 @@
       "missing_hint": "the Verilator C++ include tree (verilated.h / verilated.mk) will NOT be installed; `verilator` starts but every generated model fails to compile",
       "description": "Verilator \u2014 Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models). Needs host perl for its driver and host g++ to compile the generated model. `verilator --debug` is unavailable: the 104 MB verilator_bin_dbg is deliberately not shipped"
     },
+    "spice-netlist-ls": {
+      "kind": "bin",
+      "bins": [
+        "spicefmt",
+        "spice-netlist-ls"
+      ],
+      "version": "0.3.0",
+      "version_url": "https://github.com/smprather/spice-netlist-ls/releases",
+      "version_pattern": "spice-netlist-ls/releases/tag/v([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "spice",
+        "format",
+        "lsp",
+        "lint"
+      ],
+      "description": "spice-netlist-ls \u2014 `gofmt` for SPICE netlists: an opinionated formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format with pluggable dialects (HSPICE, NGSPICE, Spectre-SPICE, LTspice). Ships two static-pie musl binaries: `spicefmt` (CLI formatter+linter) and `spice-netlist-ls` (LSP server for diagnostics, formatting, go-to-definition on X instantiations \u2192 .subckt). Complements the bundled simulators (ngspice/iverilog/verilator) by formatting+linting the decks they consume; .scs files with `simulator lang=spice`/`lang=spectre` directives get per-section dialect routing. First-party (smprather), MIT"
+    },
     "spice-subckt-rc-reduce": {
       "kind": "bin",
       "bins": [
@@ -3550,7 +3571,8 @@
         "gtkwave",
         "klayout",
         "verilator",
-        "yosys"
+        "yosys",
+        "spice-netlist-ls"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },

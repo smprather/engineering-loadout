@@ -1,10 +1,21 @@
 # Current Handoff
 
-Last updated: 2026-08-23. **Tier 3 has NOT run for the valgrind batch either** —
+Last updated: 2026-08-24. **Tier 3 has NOT run for the valgrind batch either** —
 the 2026-08-22 batch below was Tier 1+2 green plus a pyright container
-spot-check; the 2026-08-23 valgrind batch is Tier 1+2 green only. Run
-`tests/prebuilt-binaries-almalinux8 --full` and the release smoke before any
-release.
+spot-check; the 2026-08-23 valgrind batch is Tier 1+2 green only; the
+2026-08-24 spice-netlist-ls addition is Tier 1+2 + Tier 3 green. Run the release
+smoke before any release.
+
+## 2026-08-24 batch: spice-netlist-ls 0.3.0 (unreleased)
+
+| area | what |
+|---|---|
+| spice-netlist-ls | Added at 0.3.0 using `build/build-prebuilt-bin.sh --tool spice-netlist-ls --tag v0.3.0`. Upstream x86_64 Linux musl asset checksum verified (`sha256:4bc790f3060438ac56d4a65fb7b5ab2886913a0477d24cebd308426db186df18`). Ships the two static-pie musl binaries from the same archive: `spicefmt` (CLI formatter+linter) and `spice-netlist-ls` (LSP server). Build-import smoke passed: both binaries had no NEEDED deps/GLIBC symbols; `spicefmt --version` reported 0.3.0, formatted a sample deck, reported `undefined-subckt`, and proved format idempotency; `spice-netlist-ls` answered a minimal stdio LSP initialize/shutdown session. |
+
+Gates: post-payload chain green (`strip-all-elf-binaries` ->
+`gen-installed-sizes` -> `gen-content-manifest`), Tier 1+2 green
+(`tests/run-all`), Tier 3 green (`tests/prebuilt-binaries-almalinux8 --full`:
+298 binaries OK, 25 expected host-contract skips, runtimes OK).
 
 ## 2026-08-23 batch: valgrind 3.27.1 (unreleased)
 

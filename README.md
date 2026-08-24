@@ -323,6 +323,7 @@ OpenSSH for those.
 | octave | bin | 11.3.0 | GNU scientific computing language (MATLAB-compatible) |
 | ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
 | spice-subckt-rc-reduce | bin | 0.1.1 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
+| spice-netlist-ls | bin | 0.3.0 | spice-netlist-ls — `gofmt` for SPICE netlists: formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format (HSPICE, NGSPICE, Spectre-SPICE, LTspice dialects). Ships `spicefmt` (CLI) + `spice-netlist-ls` (LSP); .scs files get per-section dialect routing. Member of @eda |
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |

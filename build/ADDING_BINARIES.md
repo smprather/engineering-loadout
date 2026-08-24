@@ -3891,6 +3891,74 @@ release asset and the script verifies against it; miller publishes none, so the
 script prints the hash it computed instead.
 
 
+## spice-netlist-ls 0.3.0 -- SPICE netlist formatter + linter + LSP (upstream prebuilt, first-party)
+
+**Build:** `build/build-prebuilt-bin.sh --tool spice-netlist-ls --tag v0.3.0`
+
+First-party (smprather), MIT. `gofmt` for SPICE netlists: an opinionated
+formatter, linter, and LSP server for the classic SPICE circuit-simulation
+netlist format with pluggable dialects (HSPICE, NGSPICE, Spectre-SPICE, LTspice).
+Member of `@eda`. Complements the bundled simulators (ngspice/iverilog/verilator)
+by formatting+linting the decks they consume.
+
+**Two binaries in one archive.** Upstream's `spice-netlist-ls-x86_64-unknown-linux-musl.tar.xz`
+carries both `spicefmt` (the CLI formatter+linter) and `spice-netlist-ls` (the
+LSP server). This is the first multi-binary prebuilt the import script handles:
+the static-packaging branch was refactored to package each binary under its own
+name (`_pkg_static_bin` helper) so a multi-binary tool does not clobber itself.
+Both are static-pie musl -- no NEEDED, no GLIBC symbols, no patchelf, no RPATH.
+`strip` -> `bzip2` only, same as `mlr`.
+
+**`.tar.xz` not `.tar.gz`.** The extraction line now falls back to `tar xJf`
+when `tar xzf` fails, so xz-compressed release archives work without a separate
+code path per tool.
+
+**Version probe is on the CLI binary, not the LSP.** `spicefmt --version`
+prints `spicefmt 0.3.0`; `spice-netlist-ls` is an LSP server with no `--version`
+or `--help` (bare invocation prints `Error: disconnected channel` and exits
+nonzero). The script's version-assertion case branches on `spice-netlist-ls`
+and probes `spicefmt`; the `tests/prebuilt-binaries` exec probe lists
+`spice-netlist-ls` in `NO_EXEC`, so the generic `--version` loop does not flag
+it as a failure. The dedicated LSP smoke drives initialize/initialized/shutdown/
+exit over stdio and requires the server capabilities response. The CLI smoke
+still covers formatter/linter behaviour.
+
+**Functional smoke (in the import script and in `tests/prebuilt-binaries`).**
+Four checks, each catching a distinct silent-failure class:
+1. **Format:** a netlist with `R1 1 0   1k` (extra spaces) must come out as
+   `R1 1 0 1k` -- a formatter that passes input through unchanged sails a
+   `--version` probe.
+2. **Lint:** a deck with `X1 a b sub` (no matching `.subckt sub`) must report
+   `undefined-subckt` -- a linter that no-ops is the same hazard.
+3. **Idempotency:** `spicefmt | spicefmt` is a fixed point -- the formatter
+   invariant. A non-idempotent formatter would destabilise every save.
+4. **LSP startup:** `spice-netlist-ls` must answer a minimal stdio LSP session
+   (`initialize` -> `initialized` -> `shutdown` -> `exit`) with
+   `definitionProvider` and `documentFormattingProvider` capabilities. This
+   catches a corrupt/wrong-arch LSP binary that the sibling CLI cannot cover.
+
+**Editor wiring.** `envs/nvim/lsp/spice_netlist_ls.lua` (added to
+`vim.lsp.enable` in `init.lua`) -- `cmd = {"spice-netlist-ls"}`, filetypes
+`{spice, cir, scs, subckt}`. nvim's builtin `filetype.lua` maps `.sp`/`.scs`/
+`.cir` -> `spice` already; `.subckt` is not in its table, so the lsp config
+calls `vim.filetype.add({ extension = { subckt = "spice" } })` (runs at config
+time, before buffers load). Format-on-save is central: conform.nvim's
+`BufWritePre` autocmd in `init.lua` falls back to the LSP server's
+`textDocument/formatting` when no conform formatter is registered for the
+filetype -- no per-ft autocmd needed. Helix: `envs/helix/languages.toml`
+registers a `[language-server.spice-netlist-ls]` + a `[[language]] name = "spice"`
+block (helix has no built-in spice language, so this adds one rather than
+replacing a default).
+
+**`--dialect` / `spicefmt.toml` / `.scs` segmentation.** Dialect is
+auto-detected per file (`.control`/`.csparam` -> ngspice; `.alter`/`.protect`
+-> hspice; `//` comments/paren nodes -> spectre; etc), overridable with
+`--dialect` or a `spicefmt.toml`. A `.scs` file with `simulator lang=spice` /
+`simulator lang=spectre` directives gets per-section dialect routing -- each
+section is parsed under the dialect its directive selects. This is internal to
+the tool; the loadout package does nothing special for it.
+
+
 ## yosys 0.68 -- RTL synthesis (EL8 SOURCE build)
 
 **Build:** `build/build-yosys.sh --tag v0.68`

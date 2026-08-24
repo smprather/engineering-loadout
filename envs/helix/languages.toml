@@ -61,3 +61,22 @@ catalogs = ["file:///__LOADOUT_RELOC_ROOT__/share/taplo/schemas/catalog.json"]
 [[language]]
 name = "toml"
 language-servers = ["taplo"]
+
+# spice: spice-netlist-ls, the SPICE netlist formatter+linter+LSP bundled as
+# two static-pie musl binaries (see build/build-prebuilt-bin.sh --tool
+# spice-netlist-ls). Helix has NO built-in `spice` language, so we register
+# the language + point it at the server. The server provides diagnostics,
+# formatting, and go-to-definition (X instantiation -> .subckt, following
+# .include/.inc/.lib transitively). filetypes cover the extensions nvim's
+# builtin filetype.lua also recognises (.sp/.scs/.cir/.subckt); the `.scs`
+# case is Spectre netlist with possible `simulator lang=spice` per-section
+# dialect switching, which the server routes internally.
+
+[language-server.spice-netlist-ls]
+command = "spice-netlist-ls"
+
+[[language]]
+name = "spice"
+scope = "source.spice"
+file-types = ["sp", "cir", "scs", "subckt"]
+language-servers = ["spice-netlist-ls"]

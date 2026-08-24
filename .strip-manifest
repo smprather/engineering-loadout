@@ -182,7 +182,9 @@ sha256  dbbf84790650147c89ed1160b76649ee9e15f287a819a84b68ffcf373235ae7f  payloa
 sha256  48e98433780fd89d0c37675a2e008daebde3596c5da61ebeff935a65a3473a2f  payload/el8.x86_64.glibc2p28/bin/shuf.bz2
 sha256  a775723d28aa332a86aba19db28e370b4197b9a80c0b12fc250ee29ee8d7d49f  payload/el8.x86_64.glibc2p28/bin/sleep.bz2
 sha256  188dbead80871f3577b1328c67aa86baed6d05de51bf77b47de4cb0db9cab5d7  payload/el8.x86_64.glibc2p28/bin/sort.bz2
+sha256  23b51f16b28656709890d0f1d9d4945f862be61db94bbdce9a643c29d3f4d718  payload/el8.x86_64.glibc2p28/bin/spice-netlist-ls.bz2
 sha256  c1c22189eb18db9dbe2b63eb804824576e4daf68c37f3d4abb9837749d05f7fc  payload/el8.x86_64.glibc2p28/bin/spice-subckt-rc-reduce.bz2
+sha256  7c95e1633430447ba82e83b781c2da992cb32034ff75c47eda28904d1752f2b1  payload/el8.x86_64.glibc2p28/bin/spicefmt.bz2
 sha256  faa98f4a4df0244b0857d23163b5f03a5579bfe9af00191c0a67e43f9a605e79  payload/el8.x86_64.glibc2p28/bin/split.bz2
 sha256  a215548709e00364871ebdaaca95e71103535123a8a8c6cd625c078610cd1936  payload/el8.x86_64.glibc2p28/bin/sqlite3.bz2
 sha256  747c5428adb41049f895a5088830f3ea40df68014f90da6f139c7d5f7be1fe94  payload/el8.x86_64.glibc2p28/bin/ssh-add.bz2

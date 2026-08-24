@@ -382,6 +382,12 @@ TOOLS = [
         strategy_flag(["--version"], r"mlr ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "spicefmt",
+        "spice-netlist-ls",
+        "https://github.com/smprather/spice-netlist-ls",
+        strategy_flag(["--version"], r"spicefmt ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "nvim",
         "neovim",
         "https://github.com/neovim/neovim",
