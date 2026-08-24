@@ -4714,3 +4714,61 @@ No PATH setup needed (GUI-launched nvim included), no network, no python.
   content-gated on referencing this install's `uv/tools/pyright` venv so an
   unrelated user file of the same name is never touched.
 - Old wheels removed from the wheelhouse: pyright-1.1.40x, nodeenv-1.10.0.
+
+## valgrind 3.27.1 -- memcheck/cachegrind/callgrind bundle (EL8 SOURCE build, C)
+
+Date: 2026-08-23. Build: `./build/build-valgrind.sh --tag 3.27.1`.
+Payload: `payload/el8.x86_64.glibc2p28/runtime/valgrind.tar.bz2` (~70MB,
+extracts to ~108MB).
+
+Upstream ships signed tarballs at sourceware.org/pub/valgrind/. No per-file
+sidecar hash; build script prints the sha256 it computed.
+
+### Why from source (not a shanghai of EL8's 3.22.0)
+
+EL8 ships 3.22.0 (2022). 3.27.1 is current stable and carries AVX-512
+handling improvements that matter on modern Xeon/EPYC, plus six releases of
+bug fixes. Valgrind is **pure userspace** (NEEDED = glibc only), so there is
+no kernel-ABI coupling like `perf` has, and bundling is unambiguous.
+
+### Layout after install (prefix ~/.local)
+
+- `bin/valgrind` -- thin wrapper exporting `VALGRIND_LIB=<prefix>/libexec/valgrind`
+  then exec'ing the real dispatcher.
+- `libexec/valgrind/valgrind` -- upstream's real ELF dispatcher (3.27.x
+  moved it from being a shell script to a compiled binary; it resolves
+  tools via `VALGRIND_LIB`).
+- `libexec/valgrind/{memcheck,cachegrind,callgrind,helgrind,...}-amd64-linux`
+  -- tool binaries, stripped.
+- `libexec/valgrind/*.xml` -- register descriptions (load-bearing; some code
+  paths die at trace time without them, not startup).
+- `libexec/valgrind/default.supp` -- default suppressions.
+- `lib/valgrind/*.a` -- static libs, shipped for completeness.
+- `share/valgrind/` -- docs.
+
+### Traps (all hit during development)
+
+1. **Layout changed in 3.27.x**: tools moved from `lib/valgrind/` to
+   `libexec/valgrind/`. Configure's `pkglibdir` output is unreliable; the
+   installed tree is the truth. Build script uses `libexec/` and asserts
+   `memcheck-amd64-linux`, `default.supp`, and XMLs are all present.
+2. **`--version` proves nothing** here either: valgrind can report its
+   version and still fail to find memcheck. The stage-verify compiles a
+   10-line C program with a deliberate `malloc(16)` leak, runs memcheck
+   with `--error-exitcode=42`, and requires BOTH exit 42 AND the string
+   "definitely lost: 16 bytes" in the log.
+3. **NEEDED must be glibc only**. Valgrind's tool binaries are effectively
+   self-contained; any NEEDED on libdw/libelf/libcap/etc. indicates the
+   build box's devel headers leaked in, and the artifact is dead on a
+   clean farm node. The check pattern-matches against el8's base set.
+4. **glibc floor is 2.14** -- valgrind is extremely conservative; EL8's
+   2.28 has ample headroom.
+
+### perf is deliberately NOT bundled
+
+The request that surfaced Valgrind also mentioned `perf`. `perf` is a
+kernel-ABI-tied tool (matches the exact running kernel, and its NEEDED
+list includes libpython3.6m). This loadout cannot bundle a perf binary
+that is correct on both EL8 farm nodes (kernel 4.18) and this dev box
+(WSL2 kernel 6.18). Policy: use the system perf matching your kernel.
+Documented in README.

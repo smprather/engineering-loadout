@@ -1,10 +1,20 @@
 # Current Handoff
 
-Last updated: 2026-08-22. **Tier 3 has NOT run for the 2026-08-22 batch** —
-the changes below are Tier 1+2 green (full `tests/run-all`) plus a targeted
-offline container spot-check for pyright; run
+Last updated: 2026-08-23. **Tier 3 has NOT run for the valgrind batch either** —
+the 2026-08-22 batch below was Tier 1+2 green plus a pyright container
+spot-check; the 2026-08-23 valgrind batch is Tier 1+2 green only. Run
 `tests/prebuilt-binaries-almalinux8 --full` and the release smoke before any
 release.
+
+## 2026-08-23 batch: valgrind 3.27.1 (unreleased)
+
+| area | what |
+|---|---|
+| valgrind | New package: EL8 source build 3.27.1 (`build/build-valgrind.sh`), upstream moved tools from `lib/valgrind/` to `libexec/valgrind/` in 3.27.x and switched `bin/valgrind` from shell to an ELF dispatcher. Wrapper at `bin/valgrind` exports `VALGRIND_LIB=<prefix>/libexec/valgrind` then execs that dispatcher. NEEDED = glibc only. Stage-verify compiles a `malloc(16)` leak and requires exit 42 + "definitely lost: 16 bytes". Member of `@dev-tools`. Test: `tests/valgrind-smoke` (T2). |
+| perf | Deliberately NOT bundled — kernel-ABI-tied (EL8 4.18 vs WSL2 6.18 mismatch class). Documented in `build/ADDING_BINARIES.md`. |
+
+Gates: Tier 1 16/16 + Tier 2 all (valgrind-smoke included). ~70 MB compressed
+payload cost; 108 MB installed.
 
 ## 2026-08-22 batch (unreleased, one commit)
 

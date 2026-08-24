@@ -483,6 +483,14 @@ TOOLS = [
     ),
     ("ty", "ty", "https://github.com/astral-sh/ty", strategy_flag(["--version"], r"ty ([0-9]+\.[0-9]+\.[0-9]+)")),
     (
+        # Loadout wrapper execs libexec/valgrind/valgrind; the wrapper itself
+        # is what lives on PATH as 'valgrind'.
+        "valgrind",
+        "valgrind",
+        "https://valgrind.org",
+        strategy_flag(["--version"], r"valgrind-([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "vim.bin",
         "vim",
         "https://github.com/vim/vim",

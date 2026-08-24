@@ -3923,6 +3923,35 @@
       "relocate_root": "share/taplo/schemas",
       "missing_hint": "taplo will work but `taplo lint` degrades to grammar-only checking (no Cargo.toml/pyproject.toml key validation)"
     },
+    "valgrind": {
+      "kind": "bin",
+      "bins": [
+        "valgrind"
+      ],
+      "version": "3.27.1",
+      "version_url": "https://valgrind.org/downloads/current.html",
+      "version_pattern": "valgrind-(\\d+\\.\\d+\\.\\d+)\\.tar\\.bz2",
+      "platforms": [
+        "linux"
+      ],
+      "archive": "payload/PLATFORM/runtime/valgrind.tar.bz2",
+      "install_to": "~/.local",
+      "sentinel": "libexec/valgrind/memcheck-amd64-linux",
+      "remove_before_extract": [
+        "bin/valgrind",
+        "libexec/valgrind",
+        "lib/valgrind",
+        "share/valgrind"
+      ],
+      "missing_hint": "valgrind memcheck/cachegrind/callgrind will NOT be available",
+      "tags": [
+        "debug",
+        "memcheck",
+        "profiling",
+        "core"
+      ],
+      "description": "Valgrind 3.27.1 \u2014 instrumenting binary analysis framework (memcheck, cachegrind, callgrind, helgrind, massif, drd). Wrapper at bin/valgrind exports VALGRIND_LIB to the relocated libexec/valgrind/ tree."
+    },
     "pyright": {
       "kind": "bin",
       "bins": [

@@ -122,6 +122,7 @@ fi
 # --- Tier 2: integration installs into temp roots --------------------------
 run_test "install-fonts-rejoin" "$PY" tests/install-fonts-rejoin
 run_test "install-modules" tests/install-modules
+run_test "valgrind-smoke" tests/valgrind-smoke
 run_test "install-env-st" tests/install-env-st
 run_test "install-env-tcsh" tests/install-env-tcsh
 run_test "install-env-zsh" tests/install-env-zsh

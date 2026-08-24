@@ -296,6 +296,7 @@ OpenSSH for those.
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
+| valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7b | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.26.12 | Incremental parser generator and query tool |
 | ty | bin | 0.0.72 | Fast Python type checker (Astral) |

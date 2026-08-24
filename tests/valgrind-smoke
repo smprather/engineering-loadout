@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Tier-2 smoke for the valgrind package. Exercises the *installed* artifact
+# end-to-end: wrapper on PATH -> dispatcher finds lib/valgrind -> memcheck
+# against a real compiled binary with a known leak -> assert the leak report
+# AND valgrind's exit code. A bare --version does not satisfy this test --
+# the binary must actually detect the leak.
+#
+# Traps encoded here:
+#   * valgrind's dispatcher resolves memcheck via VALGRIND_LIB, which the
+#     wrapper must export pointing at <prefix>/lib/valgrind. If the wrapper
+#     forgets, the dispatcher fails with "valgrind: failed to start tool
+#     'memcheck' for platform 'amd64-linux': No such file or directory".
+#   * The XML register description files (*.xml) must be shipped; without
+#     them valgrind starts but dies tracing (caught by hand during scoping).
+#   * memcheck exits 0 on clean programs; on a leaky program we REQUIRE the
+#     leak summary line AND --error-exitcode semantics. Asserting only one
+#     would pass a valgrind that wasn't actually analysing.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+test_home=$(mktemp -d /tmp/loadout-valgrind-home.XXXXXX)
+test_cache=$(mktemp -d /tmp/loadout-valgrind-cache.XXXXXX)
+test_state=$(mktemp -d /tmp/loadout-valgrind-state.XXXXXX)
+local_prefix="$test_home/.local"
+
+cleanup() {
+    rm -rf "$test_home" "$test_cache" "$test_state"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "valgrind smoke failed: $*" >&2
+    exit 1
+}
+
+run_loadout() {
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+        LANG="${LANG:-C.UTF-8}" \
+        XDG_CACHE_HOME="$test_cache" \
+        XDG_STATE_HOME="$test_state" \
+        "$repo_dir/loadout" "$@"
+}
+
+echo "Installing valgrind into fresh HOME: $test_home"
+run_loadout install -y valgrind --no-backup
+
+# Wrapper on PATH as ~/.local/bin/valgrind; real tree under
+# ~/.local/libexec/valgrind/ (upstream 3.27.x layout).
+[[ -x "$local_prefix/bin/valgrind" ]] || fail "missing wrapper: $local_prefix/bin/valgrind"
+[[ -x "$local_prefix/libexec/valgrind/memcheck-amd64-linux" ]] \
+    || fail "missing sentinel: libexec/valgrind/memcheck-amd64-linux"
+[[ -x "$local_prefix/libexec/valgrind/valgrind" ]] \
+    || fail "missing dispatcher: libexec/valgrind/valgrind"
+[[ -r "$local_prefix/libexec/valgrind/default.supp" ]] \
+    || fail "missing default.supp (suppressions)"
+ls "$local_prefix/libexec/valgrind/"*-amd64-linux >/dev/null 2>&1 \
+    || fail "no *-amd64-linux tool binaries under libexec/valgrind/"
+
+# XML register descriptions ship with the tree; without them some paths die
+# at trace time rather than startup.
+compgen -G "$local_prefix/libexec/valgrind/*.xml" >/dev/null \
+    || fail "no XML register description files shipped"
+
+# Wrapper must NOT be an ELF (it is shell); real tools MUST be ELFs.
+if file "$local_prefix/bin/valgrind" | grep -q ELF; then
+    fail "bin/valgrind is an ELF; wrapper must be shell"
+fi
+for tool in valgrind memcheck cachegrind callgrind; do
+    file "$local_prefix/libexec/valgrind/${tool}"*-amd64-linux 2>/dev/null | grep -q 'ELF 64-bit' \
+        || file "$local_prefix/libexec/valgrind/$tool" | grep -q 'ELF 64-bit' \
+        || fail "libexec/valgrind/$tool (or $tool-amd64-linux) is not an ELF"
+done
+
+# Wrapper must export VALGRIND_LIB so the dispatcher can find its tools
+# against our relocated prefix.
+grep -q 'VALGRIND_LIB' "$local_prefix/bin/valgrind" \
+    || fail "bin/valgrind does not export VALGRIND_LIB"
+
+# --version must report the bundled tag (catches a silent re-bundle of an
+# older release).
+ver_out=$(env -i \
+    HOME="$test_home" \
+    PATH="$local_prefix/bin:/usr/bin:/bin" \
+    valgrind --version 2>&1) || fail "valgrind --version exited nonzero"
+echo "  $ver_out"
+case "$ver_out" in
+    valgrind-3.27.1) ;;
+    *) fail "--version did not report 3.27.1: $ver_out" ;;
+esac
+
+# Functional smoke: memcheck must find a real leak in a real compiled binary.
+# Written to a file and compiled with the host's cc -- we are testing the
+# *installed* valgrind, not the compiler.
+smoke_c="$test_home/leak.c"
+smoke_bin="$test_home/leak"
+cat > "$smoke_c" <<'EOF'
+#include <stdlib.h>
+int main(void) {
+    /* Exactly 16 bytes leaked. memcheck reports these as definitely lost. */
+    (void)malloc(16);
+    return 0;
+}
+EOF
+cc -O0 -g "$smoke_c" -o "$smoke_bin"
+
+memcheck_log="$test_home/memcheck.log"
+rc=0
+env -i \
+    HOME="$test_home" \
+    PATH="$local_prefix/bin:/usr/bin:/bin" \
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=42 \
+        "$smoke_bin" >"$memcheck_log" 2>&1 || rc=$?
+
+# valgrind MUST exit 42 on a leak when --error-exitcode=42 is given; and the
+# log MUST say it found the 16 bytes. Both assertions are required -- the
+# exit code alone passes on a valgrind that crashed before analysis (e.g. a
+# missing tool XML), and the log text alone passes on a valgrind that exited
+# 0 because the wrapper swallowed --error-exitcode.
+[[ "$rc" == 42 ]] || {
+    echo "--- memcheck log ---" >&2
+    cat "$memcheck_log" >&2
+    fail "expected exit 42 from --error-exitcode, got $rc"
+}
+grep -q 'definitely lost: 16 bytes' "$memcheck_log" || {
+    echo "--- memcheck log ---" >&2
+    cat "$memcheck_log" >&2
+    fail "memcheck did not report 'definitely lost: 16 bytes'"
+}
+
+# Clean program must exit 0 and report no leaks. Valgrind's actual no-leak
+# banner is "All heap blocks were freed -- no leaks are possible"; it does
+# NOT print 'definitely lost: 0 bytes'.
+clean_c="$test_home/clean.c"
+clean_bin="$test_home/clean"
+printf 'int main(void) { return 0; }\n' > "$clean_c"
+cc -O0 "$clean_c" -o "$clean_bin"
+env -i \
+    HOME="$test_home" \
+    PATH="$local_prefix/bin:/usr/bin:/bin" \
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=42 "$clean_bin" \
+        >"$test_home/clean.log" 2>&1 \
+    || fail "clean program made valgrind exit nonzero"
+grep -q 'All heap blocks were freed -- no leaks are possible' "$test_home/clean.log" \
+    || fail "clean program did not produce the no-leaks banner"
+
+echo "valgrind smoke OK"
