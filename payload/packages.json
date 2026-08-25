@@ -3143,7 +3143,7 @@
         "env",
         "terminal"
       ],
-      "description": "tmux config + bundled tpm/resurrect/continuum plugins"
+      "description": "tmux config + pop-in/pop-out helpers + bundled tpm/resurrect/continuum plugins"
     },
     "env-helix": {
       "kind": "env",

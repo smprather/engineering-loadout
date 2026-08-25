@@ -333,7 +333,8 @@ accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
 
 Tmux and Vim plugins are vendored in-tree (no internet required):
 
-- `envs/tmux/vendor/plugins/` -- tpm, resurrect, continuum, better-mouse-mode
+- `envs/tmux/` -- tmux.conf, word-boundary helper, pop-in/pop-out shell helpers,
+  and vendored plugins: tpm, resurrect, continuum, better-mouse-mode
 - `envs/vim/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
 - `envs/vim/vim/pack/vendor/opt/` -- optional plugins
 

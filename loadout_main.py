@@ -3964,6 +3964,12 @@ def _install_env_tmux(repo_dir, home):
         os.path.join(tmux_config, "tmux-word-separators"),
         False,
     )
+    for helper in ("shell-state-export.sh", "tmux-popin.sh", "tmux-popout.sh"):
+        install_path(
+            os.path.join(repo_dir, "envs", "tmux", helper),
+            os.path.join(tmux_config, helper),
+            False,
+        )
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
     lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
 

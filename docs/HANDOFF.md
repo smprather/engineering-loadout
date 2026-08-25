@@ -1,12 +1,24 @@
 # Current Handoff
 
-Last updated: 2026-08-24. Current branch is a release candidate for
-`v2026.08.24`; publish/verification happens after this commit via
-`./build/release`. All unreleased 2026-08-22 through 2026-08-24 payload changes
-are gated: post-payload chain green, nvim assurance repin + dynamic detonation
-green, `tests/run-all` green, and Tier 3
-`tests/prebuilt-binaries-almalinux8 --full` green (**298 binaries OK, 25
-expected host-contract skips, runtimes OK**).
+Last updated: 2026-08-25. `v2026.08.24` was published from `fc36596` and
+verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
+matched `sha256sums.txt`. Current post-release change updates `env-tmux` from
+the live `~/.config/tmux` config: escape-time goes back to 100, and
+`shell-state-export.sh`, `tmux-popin.sh`, and `tmux-popout.sh` are now shipped
+and installed with env-tmux.
+
+## 2026-08-25 batch: env-tmux live config sync (unreleased)
+
+| area | what |
+|---|---|
+| env-tmux | Synced top-level config from `~/.config/tmux`: `tmux.conf`, `shell-state-export.sh`, `tmux-popin.sh`, and `tmux-popout.sh`. Installer now deploys the three helper scripts alongside `tmux.conf`, `tmux-3col-layout.sh`, and `tmux-word-separators`; `tests/install-linux-tmp-home` asserts the helpers are present. The copied pop-out helpers were hardened before commit: private `mktemp` snapshot dir, quoted injected paths, argv arrays for `bash --rcfile`, and comments now match the unbound helper behavior. Vendored plugin trees were not copied from the live config because active config drift was only top-level; plugin update still goes through `./build/update tmux-plugins`. |
+
+## 2026-08-24 release: v2026.08.24 (published)
+
+All unreleased 2026-08-22 through 2026-08-24 payload changes were gated:
+post-payload chain green, nvim assurance repin + dynamic detonation green,
+`tests/run-all` green, and Tier 3 `tests/prebuilt-binaries-almalinux8 --full`
+green (**298 binaries OK, 25 expected host-contract skips, runtimes OK**).
 
 Release-prep notes: refreshed the nvim plugin stash for the nvim 0.12.5 bump
 (78 bare mirrors, 24 active plugins clone offline; stash sha256
