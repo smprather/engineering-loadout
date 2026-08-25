@@ -101,6 +101,30 @@ vim.opt.formatoptions:remove("t")
 local my_augroup1 = vim.api.nvim_create_augroup("my_augroup1", { clear = true })
 
 local utils = require("global.utils")
+
+vim.filetype.add({
+    extension = {
+        sp = "spice",
+        cir = "spice",
+        spice = "spice",
+        spi = "spice",
+        spf = "spice",
+        cdl = "spice",
+        ckt = "spice",
+        scs = "spice",
+        subckt = "spice",
+        sub = "spice",
+        net = "spice",
+        pex = "spice",
+        pm = "spice",
+        lib = "spice",
+        inc = "spice",
+    },
+    pattern = {
+        [".*%.spice"] = "spice",
+        [".*%.sp"] = "spice",
+    },
+})
 vim.api.nvim_create_autocmd("BufWinEnter", {
     group    = my_augroup1,
     callback = function() vim.opt.incsearch = utils.buf_smaller_than(50) end,
@@ -187,7 +211,29 @@ if vim.g.cfg_enable_lsp then
     -- to the upstream bare command name. Re-enabling it means BUNDLING the
     -- server and its node_modules closure offline first -- nodejs is already in
     -- the payload, so it is feasible, but it is a package, not a config edit.
-    vim.lsp.enable({ "lua_ls", "ruff", "ty", "markdown_oxide", "biome", "taplo", "tclsp", "spice_netlist_ls" })
+    local lsp_servers = {
+        { name = "lua_ls",          cmd = "lua-language-server" },
+        { name = "ruff",            cmd = "ruff" },
+        { name = "ty",              cmd = "ty" },
+        { name = "markdown_oxide",  cmd = "markdown-oxide" },
+        { name = "biome",           cmd = "biome" },
+        { name = "taplo",           cmd = "taplo" },
+        { name = "tclsp",           cmd = "tclsp" },
+        { name = "spice_netlist_ls", cmd = vim.env.SPICEFMT_LS_CMD or "spice-netlist-ls" },
+    }
+    local enabled_lsp_servers = {}
+    local missing_lsp_servers = {}
+    for _, server in ipairs(lsp_servers) do
+        if utils.executable(server.cmd) then
+            table.insert(enabled_lsp_servers, server.name)
+        else
+            table.insert(missing_lsp_servers, server.name .. " (" .. server.cmd .. ")")
+        end
+    end
+    vim.g.loadout_missing_lsp_servers = missing_lsp_servers
+    if #enabled_lsp_servers > 0 then
+        vim.lsp.enable(enabled_lsp_servers)
+    end
     vim.lsp.config("*", {
         root_markers = { ".git" },
         capabilities = {

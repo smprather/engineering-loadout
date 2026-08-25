@@ -2,10 +2,16 @@
 
 Last updated: 2026-08-25. `v2026.08.24` was published from `fc36596` and
 verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
-matched `sha256sums.txt`. Current post-release change updates `env-tmux` from
-the live `~/.config/tmux` config: escape-time goes back to 100, and
-`shell-state-export.sh`, `tmux-popin.sh`, and `tmux-popout.sh` are now shipped
-and installed with env-tmux.
+matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
+sync is committed as `aa3af08`; current work updates `env-nvim` from the live
+`~/.config/nvim` config and guards optional language tools so env-only installs
+do not try to spawn missing LSP/formatter binaries.
+
+## 2026-08-25 batch: env-nvim live config sync (unreleased)
+
+| area | what |
+|---|---|
+| env-nvim | Synced the live GUI mouse-selection behavior, SPICE filetype coverage, `spice_netlist_ls` command override, `spicefmt` alias config, and SPICE semantic-token/format-on-save ftplugin into the shipped env. The shipped defaults now enable only language servers whose command exists on `PATH` (`lua-language-server`, `ruff`, `ty`, `markdown-oxide`, `biome`, `taplo`, `tclsp`, `spice-netlist-ls`/`$SPICEFMT_LS_CMD`), recording skipped entries in `vim.g.loadout_missing_lsp_servers` instead of producing startup/open-buffer noise. `spicefmt` conform integration is registered only when `spicefmt`/`$SPICEFMT_CMD` exists. `tests/install-nvim-deployments` now opens a `.sp` file in an env-only split install and asserts missing `spice-netlist-ls` leaves both `spice_netlist_ls` and `spicefmt` disabled. |
 
 ## 2026-08-25 batch: env-tmux live config sync (unreleased)
 

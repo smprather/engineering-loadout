@@ -62,6 +62,10 @@ per plugin. Versions are locked in `lazy-lock.json`. Notable inclusions:
 Coverage is broad — most languages Neovim knows about have an entry here.
 Enable in your user layer with `vim.lsp.enable("<server>")`.
 
+The global defaults only enable servers whose command exists on `PATH`. This
+keeps env-only installs quiet when optional packages such as `spice-netlist-ls`
+or `tclint` have not been installed.
+
 ## Tree-sitter — Offline
 
 326 prebuilt parsers ship in `treesitter/prebuilt/<platform>/`. The

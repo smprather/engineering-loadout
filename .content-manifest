@@ -442,7 +442,6 @@ sha256  1acda72912e7cc688f133e19797e56c7c88b0564d0c1397367706fbb21b8b09d  payloa
 sha256  1acda72912e7cc688f133e19797e56c7c88b0564d0c1397367706fbb21b8b09d  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/objc/indents.scm
 sha256  1ae5e4e9e3b5792371a1d61695ac0242563efb0fd0b4923dc6b530ae433a9241  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/haskell_persistent/highlights.scm
 sha256  1ae5e4e9e3b5792371a1d61695ac0242563efb0fd0b4923dc6b530ae433a9241  payload/treesitter/vendor/nvim-treesitter/runtime/queries/haskell_persistent/highlights.scm
-sha256  1af2eeb0d96bc22b7c01302199aa5b3abae4ffb8a2cda6d59303ff11a25f7db0  payload/installed-sizes.json
 sha256  1b0c74e29e5200a26f3e063b2059e9d3ece94270ddf3d8072ac72b1a3e3970f9  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/udev.so.bz2
 sha256  1b10119484bb1976d251f7a0abefd1b72d90c358beb1afbc2b82f7e4902a7449  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/puppet.lua
 sha256  1b24691cd1c326fd766575772b0a0bac195b5afd410340c6f8e4e97e56e29cdb  payload/fonts/IosevkaTerm.zip.part-000
@@ -3279,6 +3278,7 @@ sha256  c67d1eec36c141345a35cf4fffacde3e134291a88a9c134ce7fe7651dc5f03c9  payloa
 sha256  c696dd2c48f23516e9e51edae16ffbd1aabf8a395976b8b19c21ecb37d2cdcb7  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/surface.so.bz2
 sha256  c698d2864bd3dc694c1def67bfc837aacf926bffa12e909d566dbebec6423f54  payload/treesitter/vendor/nvim-treesitter/lua/nvim-treesitter/cache.lua
 sha256  c6a8d2e175d223310118f11181287a2e4c1a68c8ea65f3a802ed0262845928ab  payload/el8.x86_64.glibc2p28/lib64/libXdmcp.so.6.bz2
+sha256  c6bf4cc9bf8d7dddaaa191f8228c8990799416fcc52aa27d9ac5b17bbeb63c0a  payload/installed-sizes.json
 sha256  c6ce3509631d72d1d70bad90af0d873cc31d8eac7e2cb94410f8cd173c1c4ed5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/htmldjango/folds.scm
 sha256  c6ce3509631d72d1d70bad90af0d873cc31d8eac7e2cb94410f8cd173c1c4ed5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/htmldjango/folds.scm
 sha256  c6e9518b456770d2e7e1ab1234f255a4d3181ce9f1d236c66210b284278eadd8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/objdump.so.bz2

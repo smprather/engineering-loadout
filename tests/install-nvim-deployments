@@ -112,6 +112,30 @@ echo "$out" | grep -q "PARSERS=yes" \
 $out"
 echo "  split shared/envs: plugins load offline from HOME, parsers resolve from the shared tree"
 
+# Optional LSP tools must be guards, not assumptions. env-nvim can be installed
+# without @dev-tools / @eda; opening a matching filetype must not enable a server
+# whose binary is absent from the selected package set.
+spice_deck="$H2/spice-guard.sp"
+printf '* smoke\n.end\n' > "$spice_deck"
+out=$(
+    HOME="$H2" \
+    LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+    PATH="$SHARED/local/bin" \
+    https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 \
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true \
+    /usr/bin/timeout 120 nvim --headless -n "$spice_deck" -c 'lua vim.defer_fn(function()
+        print("SPICE_FT=" .. vim.bo.filetype)
+        local enabled = vim.lsp.is_enabled("spice_netlist_ls") or vim.lsp.is_enabled("spicefmt")
+        print("SPICE_LS=" .. (enabled and "enabled" or "missing-ok"))
+        vim.cmd("qa!")
+    end, 800)' 2>&1 || true
+)
+echo "$out" | grep -q "SPICE_FT=spice" || fail "split: .sp did not map to spice filetype:
+$out"
+echo "$out" | grep -q "SPICE_LS=missing-ok" || fail "split: missing spice-netlist-ls still enabled an LSP:
+$out"
+echo "  optional LSP guards: missing spice-netlist-ls leaves spice buffers quiet"
+
 # --- the offline UPDATE path: plugins must be real clones OF THE STASH ---------
 snacks="$H2/.local/share/nvim/lazy/snacks.nvim"
 [ -d "$snacks/.git" ] || fail "split: lazy/snacks.nvim is not a git repo -- :Lazy update cannot work"

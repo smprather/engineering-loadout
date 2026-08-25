@@ -37,9 +37,9 @@ vim.filetype.add({
 
 ---@type vim.lsp.Config
 return {
-  cmd = { "spice-netlist-ls" },
-  filetypes = { "spice", "cir", "scs", "subckt" },
-  root_markers = { "spicefmt.toml", ".git" },
+  cmd = { vim.env.SPICEFMT_LS_CMD or "spice-netlist-ls" },
+  filetypes = { "spice" },
+  root_markers = { ".git", "spicefmt.toml" },
   -- Netlists are frequently standalone cards opened outside any project;
   -- without this the server never attaches to a single .sp picked from a
   -- shared tree.

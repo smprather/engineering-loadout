@@ -1,5 +1,15 @@
 local M = {}
 
+function M.executable(cmd)
+    if type(cmd) == "table" then
+        cmd = cmd[1]
+    end
+    if type(cmd) ~= "string" or cmd == "" then
+        return false
+    end
+    return vim.fn.executable(cmd) == 1
+end
+
 function M.buf_smaller_than(threshold_mb)
     local filename = vim.api.nvim_buf_get_name(0)
     if filename == "" then return true end

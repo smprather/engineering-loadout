@@ -407,7 +407,9 @@ installs to `~/.local`. Use `python3.14` and `pip3.14` to pin this build.
 
 The full `nvim-treesitter` parser registry is bundled and installs offline
 to `~/.local/share/nvim/tree-sitter-parsers/`. All 326 languages work out
-of the box, no internet required.
+of the box, no internet required. Default LSP integrations are command-guarded,
+so installing only `env-nvim` does not produce errors for optional tools you did
+not install.
 
 ---
 

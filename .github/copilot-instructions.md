@@ -318,6 +318,10 @@ detail: `envs/bash/global/README.md` and `AGENTS.md` "Shell Architecture".
 Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `envs/nvim/init.lua` disables the plugin layer cleanly
 instead of erroring.
+Default-enabled Neovim LSPs must also start without optional tool packages:
+guard each server with `vim.fn.executable`, and keep missing tools in
+`vim.g.loadout_missing_lsp_servers` instead of enabling a server that will fail
+when its filetype opens.
 
 Use `./build/strip-all-elf-binaries` (Python 3.14) after adding vendored
 binaries, libraries, parser grammars, or tar archives. It walks the repo
