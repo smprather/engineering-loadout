@@ -63,7 +63,8 @@ Use `sh -n loadout` for the POSIX-sh shim,
 `python3 -m py_compile loadout_main.py` for the Python installer, and
 `bash -n envs/bash/global/bashrc`
 after installer or shell edits. `./tests/install-linux-tmp-home` runs the Linux
-installer against a temp `HOME` with temp XDG cache/state dirs from `/tmp`, then
+installer against a temp `HOME` with temp XDG cache/state dirs under
+`${TMPDIR:-/tmp}`, then
 smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
 `@envs-all` for broad config coverage; normal `@envs` covers Bash + tcsh.
 

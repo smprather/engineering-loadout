@@ -29,6 +29,7 @@ Usage:
 import bz2
 import concurrent.futures
 import json
+import multiprocessing
 import os
 import re
 import shutil
@@ -192,7 +193,14 @@ def build():
     paths = collect()
     sizes = {}
     workers = min(os.cpu_count() or 4, 20)
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as ex:
+    kwargs = {"max_workers": workers}
+    if hasattr(os, "fork"):
+        # Python 3.14 defaults to forkserver on POSIX. That creates a temp Unix
+        # socket, which some sandboxed build shells reject with EPERM. This
+        # script is a short-lived Linux payload scanner and does not rely on
+        # forkserver semantics, so use plain fork when the platform supports it.
+        kwargs["mp_context"] = multiprocessing.get_context("fork")
+    with concurrent.futures.ProcessPoolExecutor(**kwargs) as ex:
         for rel, n in ex.map(measure, paths, chunksize=8):
             sizes[rel] = n
     return sizes

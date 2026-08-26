@@ -81,7 +81,7 @@ need strip
 need tar
 need awk
 
-WORK_DIR=$(mktemp -d /tmp/build-valgrind-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-valgrind-XXXXXX")
 INST_DIR="/tmp/loadout-valgrind-instdir-${TAG}"
 trap 'rm -rf "$WORK_DIR" "$INST_DIR"' EXIT INT TERM
 

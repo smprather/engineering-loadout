@@ -1,11 +1,19 @@
 # Current Handoff
 
-Last updated: 2026-08-25. `v2026.08.24` was published from `fc36596` and
+Last updated: 2026-08-26. `v2026.08.24` was published from `fc36596` and
 verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
 matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
-sync is committed as `aa3af08`; current work updates `env-nvim` from the live
-`~/.config/nvim` config and guards optional language tools so env-only installs
-do not try to spawn missing LSP/formatter binaries.
+sync is committed as `aa3af08`; `env-nvim` live config sync and optional-tool
+guards are committed as `0b2c66f`; current work makes loadout-owned scratch
+state respect `$TMPDIR` where applicable.
+
+## 2026-08-26 batch: TMPDIR-respecting scratch state (unreleased)
+
+| area | what |
+|---|---|
+| installer temp state | `loadout_main.py` now derives run logs, pending-daemon state, wheel rejoin dirs, portable-Python extract dirs, snapshot-restore scratch, preserved bash-layer scratch, and `clean --all` sweep roots from Python's tempdir resolver (`TMPDIR`, then normal fallback). Dot-hidden `.loadout-*` scratch remains excluded from `clean --all`; `clean --all` removes `loadout-*` only under the current temp root. |
+| user env temp files | nvim/vim/tmux/bash/tcsh temp files now honor `$TMPDIR` for cross-host yank files, Lua LSP logs, tmux buffer export, shell `p`/`cdp`, alias dump, and strace output. `/dev/shm` remains the nvim fallback when `TMPDIR` is unset; X11 socket paths remain fixed under `/tmp/.X11-unix`. |
+| tests/build scratch | Shell tests that create temp HOMEs/dest dirs and build scripts with hardcoded `mktemp /tmp/...` scratch roots now use `${TMPDIR:-/tmp}`. Version-scoped build prefixes and protocol paths that intentionally document `/tmp` were left alone. Regression coverage: `tests/unit-resolver` imports `loadout_main.py` in a fresh subprocess with custom `TMPDIR` and asserts run-log/pending roots follow it. |
 
 ## 2026-08-25 batch: env-nvim live config sync (unreleased)
 

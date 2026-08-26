@@ -22,7 +22,8 @@
 set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TMP="$(mktemp -d /tmp/loadout-nvim-deploy.XXXXXX)"
+tmp_root=${TMPDIR:-/tmp}
+TMP="$(mktemp -d "$tmp_root/loadout-nvim-deploy.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

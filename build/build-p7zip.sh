@@ -77,7 +77,7 @@ need gcc
 need g++
 need make
 
-WORK_DIR=$(mktemp -d /tmp/build-p7zip-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-p7zip-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "==> Downloading p7zip_${VERSION}_src_all.tar.bz2 ..."

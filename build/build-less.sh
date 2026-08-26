@@ -94,7 +94,7 @@ PATCHELF="$HOME/.local/bin/patchelf"
 [ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
 [ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 
-WORK_DIR=$(mktemp -d /tmp/build-less-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-less-XXXXXX")
 INST_DIR="/tmp/loadout-less-instdir-${TAG}"
 trap 'rm -rf "$WORK_DIR" "$INST_DIR"' EXIT INT TERM
 

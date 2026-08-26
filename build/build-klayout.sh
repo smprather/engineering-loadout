@@ -183,7 +183,7 @@ SYS_XMLPATTERNS=/usr/lib64/libQt5XmlPatterns.so.5
     exit 1
 }
 
-WORK_DIR=$(mktemp -d /tmp/build-klayout-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-klayout-XXXXXX")
 INST_DIR="/tmp/klayout-install-${VERSION}"
 rm -rf "$INST_DIR"
 mkdir -p "$INST_DIR"

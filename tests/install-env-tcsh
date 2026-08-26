@@ -29,7 +29,8 @@ if ! command -v script >/dev/null 2>&1; then
     exit 0
 fi
 
-TMPHOME="$(mktemp -d /tmp/loadout-env-tcsh.XXXXXX)"
+tmp_root=${TMPDIR:-/tmp}
+TMPHOME="$(mktemp -d "$tmp_root/loadout-env-tcsh.XXXXXX")"
 trap 'rm -rf "$TMPHOME"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

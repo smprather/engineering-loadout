@@ -77,7 +77,7 @@ esac
 # MAJOR.MINOR drives the libexec path and the registry sentinel.
 series=$(echo "$tag" | cut -d. -f1,2)
 
-workdir=$(mktemp -d /tmp/loadout-gnuplot.XXXXXX)
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-gnuplot.XXXXXX")
 prefix="$workdir/install"
 trap 'rm -rf "$workdir"' EXIT INT TERM
 

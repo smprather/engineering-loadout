@@ -7,8 +7,9 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-optional-home.XXXXXX)
-dest_dir=$(mktemp -d /tmp/loadout-optional-dest.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-optional-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-optional-dest.XXXXXX")
 local_prefix="$dest_dir/local"
 
 cleanup() {

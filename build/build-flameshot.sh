@@ -57,7 +57,7 @@ fi
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
 need gcc; need g++; need cmake; need git; need patchelf
 
-WORK_DIR=$(mktemp -d /tmp/build-flameshot-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-flameshot-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "==> Downloading flameshot ${TAG} source ..."

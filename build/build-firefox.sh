@@ -124,7 +124,7 @@ case "$INSTALLED_NVR" in
         ;;
 esac
 
-STAGE=$(mktemp -d /tmp/firefox-stage-XXXXXX)
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/firefox-stage-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 
 echo "==> Staging Firefox tree from $SRC_DIR ..."

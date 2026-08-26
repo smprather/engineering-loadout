@@ -27,6 +27,17 @@ vim.api.nvim_create_autocmd("TextYankPost", {
     callback = function() vim.hl.on_yank() end,
 })
 
+local function loadout_tmp_root()
+    local tmp = vim.env.TMPDIR
+    if tmp == nil or tmp == "" then
+        tmp = "/tmp"
+    else
+        tmp = tmp:gsub("/+$", "")
+        if tmp == "" then tmp = "/" end
+    end
+    return tmp
+end
+
 -- ── Options table ────────────────────────────────────────────────────────
 local options = {
     cmdheight     = 1,
@@ -62,7 +73,7 @@ local options = {
     swapfile      = true,
     backup        = false,
     writebackup   = true,
-    directory     = vim.g.cfg_swap_dir or "/tmp",
+    directory     = vim.g.cfg_swap_dir or loadout_tmp_root(),
     wildmenu      = true,
     wildmode      = "longest:full,full",
     timeoutlen    = 300,
@@ -412,9 +423,10 @@ vim.cmd([[map <leader>a  :wa<cr>]])
 vim.cmd([[map <leader>=  <c-w>=]])
 
 -- Cross-platform yank/paste via temp file (avoids NFS clipboard issues)
-local _vitmp = vim.g.cfg_vitmp_file or "/tmp/vitmp"
-local _read_cmd = vim.g.cfg_is_windows and ("type " .. _vitmp) or ("cat " .. _vitmp)
-vim.keymap.set("v", "<leader>y", ":w! " .. _vitmp .. "<CR>",    { noremap = true })
+local _vitmp = vim.g.cfg_vitmp_file or (loadout_tmp_root() .. "/vitmp")
+local _write_target = vim.fn.fnameescape(_vitmp)
+local _read_cmd = vim.g.cfg_is_windows and ("type " .. vim.fn.shellescape(_vitmp)) or ("cat " .. vim.fn.shellescape(_vitmp))
+vim.keymap.set("v", "<leader>y", ":w! " .. _write_target .. "<CR>",    { noremap = true })
 vim.keymap.set("n", "<leader>p", ":r! " .. _read_cmd .. "<CR>", { noremap = true })
 
 vim.cmd([[map <leader># :windo set invnumber<CR>]])

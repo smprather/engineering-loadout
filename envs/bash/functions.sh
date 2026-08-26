@@ -41,7 +41,8 @@ loadout_detect_online() {
 # Usage: loadout_net_probe <host:port> [timeout_secs] [ttl_secs]
 # Cache: ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/<sanitized host_port>, content
 # "1"/"0"; the file's mtime is the probe timestamp. Dot-hidden because
-# `loadout clean --all` sweeps /tmp/loadout-* and must never touch these.
+# `loadout clean --all` sweeps loadout-* under the current temp root and must
+# never touch these.
 # TTL: 3rd arg or LOADOUT_NET_PROBE_TTL seconds (default 300); ttl=0 forces
 # a re-probe.
 # Returns 0 = reachable, 1 = unreachable. Works under zsh: the probe shells

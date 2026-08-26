@@ -11,7 +11,7 @@
 #   uv-receipt.toml. That receipt records find-links.
 #
 #   Today the payload has chunked wheels, so _prepare_wheels_dir rejoins into a
-#   FRESH /tmp/loadout-wheels.XXXXXX every run. The recorded find-links therefore
+#   FRESH ${TMPDIR:-/tmp}/.loadout-wheels.XXXXXX every run. The recorded find-links therefore
 #   never matches and uv reinstalls every time -- upgrades land, by accident of
 #   the temp path rather than by design. Remove the last chunked wheel and
 #   _prepare_wheels_dir returns the stable payload wheels/ dir, the options match,
@@ -27,8 +27,9 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-uvtool-home.XXXXXX)
-dest_dir=$(mktemp -d /tmp/loadout-uvtool-dest.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-uvtool-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-uvtool-dest.XXXXXX")
 local_prefix="$dest_dir/local"
 
 cleanup() { rm -rf "$test_home" "$dest_dir"; }

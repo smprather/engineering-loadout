@@ -94,8 +94,8 @@ if [ "$TAG" != "$detected_tag" ]; then
     exit 1
 fi
 
-STAGE=$(mktemp -d /tmp/wezterm-stage-XXXXXX)
-MESA_STAGE=$(mktemp -d /tmp/mesa3d-stage-XXXXXX)
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/wezterm-stage-XXXXXX")
+MESA_STAGE=$(mktemp -d "${TMPDIR:-/tmp}/mesa3d-stage-XXXXXX")
 trap 'rm -rf "$STAGE" "$MESA_STAGE"' EXIT
 
 mkdir -p "$RUNTIME_DIR"

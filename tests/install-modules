@@ -4,9 +4,10 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-modules-home.XXXXXX)
-test_cache=$(mktemp -d /tmp/loadout-modules-cache.XXXXXX)
-test_state=$(mktemp -d /tmp/loadout-modules-state.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-modules-home.XXXXXX")
+test_cache=$(mktemp -d "$tmp_root/loadout-modules-cache.XXXXXX")
+test_state=$(mktemp -d "$tmp_root/loadout-modules-state.XXXXXX")
 local_prefix="$test_home/.local"
 module_prefix="$local_prefix/lib/modules"
 relocate_token='/__LOADOUT_RELOC_ROOT__'

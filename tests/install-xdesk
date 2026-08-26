@@ -26,8 +26,9 @@ if [[ -z ${DISPLAY:-} ]]; then
     exit 0
 fi
 
-test_home=$(mktemp -d /tmp/loadout-xdesk-home.XXXXXX)
-dest_dir=$(mktemp -d /tmp/loadout-xdesk-dest.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-xdesk-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-xdesk-dest.XXXXXX")
 local_prefix="$dest_dir/local"
 
 # State for the --keep regression test: populated when we bring up a server
@@ -212,7 +213,7 @@ echo "  OK: server $keep_display (pid $keep_pid) alive, state dir and cookie ret
 # 1. A connection with NO cookie must FAIL. Point HOME at an empty dir so
 #    ~/.Xauthority cannot supply one either, and unset XAUTHORITY. If this
 #    succeeds, the security bug is back -- the kept server is wide open.
-empty_home=$(mktemp -d /tmp/loadout-xdesk-empty.XXXXXX)
+empty_home=$(mktemp -d "$tmp_root/loadout-xdesk-empty.XXXXXX")
 if env -u XAUTHORITY HOME="$empty_home" DISPLAY="$keep_display" xdpyinfo > /dev/null 2>&1; then
     rm -rf "$empty_home"
     fail "SECURITY REGRESSION: kept server $keep_display accepted a cookie-less connection"

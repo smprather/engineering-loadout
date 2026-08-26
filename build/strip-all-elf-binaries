@@ -537,7 +537,7 @@ def main(dry_run, strip_bin, no_manifest, chunk_only):
 
     manifest = Manifest(repo_dir, not no_manifest)
     manifest.load()
-    tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir=os.environ.get("TMPDIR", "/tmp"))
+    tmp_dir = tempfile.mkdtemp(prefix="loadout-strip.", dir=tempfile.gettempdir())
     stats = {
         "processed": 0,
         "stripped": 0,

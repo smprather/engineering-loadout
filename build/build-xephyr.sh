@@ -181,7 +181,7 @@ PATCHELF="$HOME/.local/bin/patchelf"
 STRIP=/usr/bin/strip
 [ -x "$STRIP" ] || { echo "ERROR: $STRIP not found" >&2; exit 1; }
 
-STAGE=$(mktemp -d /tmp/xephyr-stage-XXXXXX)
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/xephyr-stage-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/bin" "$STAGE/lib64" "$STAGE/rpm" "$STAGE/rpm-libs"
 

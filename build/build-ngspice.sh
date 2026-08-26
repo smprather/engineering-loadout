@@ -82,8 +82,8 @@ need bison
 need flex
 need "$PATCHELF"
 
-WORK_DIR=$(mktemp -d /tmp/build-ngspice-XXXXXX)
-INST_DIR=$(mktemp -d /tmp/inst-ngspice-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-ngspice-XXXXXX")
+INST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/inst-ngspice-XXXXXX")
 trap 'rm -rf "$WORK_DIR" "$INST_DIR"' EXIT
 
 echo "==> Downloading ngspice-${VERSION}.tar.gz ..."

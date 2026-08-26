@@ -4,8 +4,9 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-parity-home.XXXXXX)
-dest_dir=$(mktemp -d /tmp/loadout-parity-dest.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-parity-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-parity-dest.XXXXXX")
 local_prefix="$dest_dir/local"
 designer_pid=""
 

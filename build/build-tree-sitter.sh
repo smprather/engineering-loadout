@@ -70,7 +70,7 @@ case "$tag" in
         ;;
 esac
 
-workdir=$(mktemp -d /tmp/loadout-tree-sitter.XXXXXX)
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-tree-sitter.XXXXXX")
 trap 'rm -rf "$workdir"' EXIT INT TERM
 
 src="$workdir/src"

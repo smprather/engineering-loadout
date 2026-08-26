@@ -120,7 +120,7 @@ need help2man
 need perl
 need python3
 
-WORK_DIR=$(mktemp -d /tmp/build-verilator-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-verilator-XXXXXX")
 INST_DIR="/tmp/verilator-install-${VERSION}"
 rm -rf "$INST_DIR"
 mkdir -p "$INST_DIR"

@@ -67,7 +67,7 @@ case "$tag" in
         ;;
 esac
 
-workdir=$(mktemp -d /tmp/loadout-lls.XXXXXX)
+workdir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-lls.XXXXXX")
 trap 'rm -rf "$workdir"' EXIT INT TERM
 
 url="$RELEASES_URL/download/$tag/lua-language-server-$tag-linux-x64.tar.gz"

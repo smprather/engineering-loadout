@@ -120,7 +120,7 @@ PATCHELF="$HOME/.local/bin/patchelf"
 [ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
 [ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 
-WORK_DIR=$(mktemp -d /tmp/build-freetype-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-freetype-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 
 echo "==> Downloading freetype-${TAG}.tar.xz ..."

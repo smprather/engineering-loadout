@@ -167,6 +167,20 @@ PAYLOAD_DIR = "payload"
 SUPPORTED_SCHEMA_VERSION = 3
 
 
+def _tmp_root():
+    """Return the root for loadout temp state.
+
+    tempfile.gettempdir() honors TMPDIR (then TEMP/TMP) and falls back only when
+    the requested directory is unusable. Keep all loadout-owned scratch under
+    this root instead of hardcoding /tmp.
+    """
+    return tempfile.gettempdir()
+
+
+def _tmp_path(name):
+    return os.path.join(_tmp_root(), name)
+
+
 def _load_tool_registry(repo_dir):
     """Load payload/packages.json. Returns {} if missing or unreadable.
 
@@ -722,12 +736,13 @@ class _Bz2Store:
         parts = glob_paths_glob(path + ".part-*")
         # Hash each chunk as stored -- the manifest records per-chunk sha256.
         _verify_source_files(parts)
-        # Dot-hidden prefix: never matches the `clean --all` /tmp sweep
+        # Dot-hidden prefix: never matches the `clean --all` temp-root sweep
         # ("loadout-*"), so a concurrent clean cannot delete a mid-extraction
         # temp from another running install.
         fd, tmp = tempfile.mkstemp(
             prefix=".loadout-rejoin.",
             suffix="." + os.path.basename(path),
+            dir=_tmp_root(),
         )
         self._tmpfiles.append(tmp)
         with os.fdopen(fd, "wb") as out:
@@ -786,7 +801,7 @@ def _prepare_wheels_dir(wheels_dir):
     if not chunked:
         return wheels_dir, lambda: None
 
-    tmp_dir = tempfile.mkdtemp(prefix=".loadout-wheels.")
+    tmp_dir = tempfile.mkdtemp(prefix=".loadout-wheels.", dir=_tmp_root())
 
     # Copy whole wheels directly.
     for whl in glob.glob(os.path.join(wheels_dir, "*.whl")):
@@ -1068,11 +1083,11 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
-# Per-user suffix on shared-/tmp state so concurrent users on one farm node
+# Per-user suffix on shared temp-root state so concurrent users on one farm node
 # don't collide on (or fail to open) each other's log/pending files.
 _TMP_USER = getpass.getuser()
 
-_RUN_LOG_FIXED_PATH = f"/tmp/loadout.{_TMP_USER}.log"
+_RUN_LOG_FIXED_PATH = _tmp_path(f"loadout.{_TMP_USER}.log")
 
 
 def _setup_run_log(repo_dir, argv):
@@ -1598,7 +1613,7 @@ def select_prebuilt_platform_dir(root_dir):
     return best_dir
 
 
-_PENDING_DIR = f"/tmp/loadout-pending-{_TMP_USER}"
+_PENDING_DIR = _tmp_path(f"loadout-pending-{_TMP_USER}")
 _PENDING_TIMEOUT_SECS = 7 * 24 * 3600  # 1 week
 
 
@@ -1658,7 +1673,7 @@ def _write_pending_state(ops_by_dest, last_activity_iso):
 
 
 def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
-    """Stage blocked binaries to /tmp and spawn the pending-ops daemon."""
+    """Stage blocked binaries to the temp root and spawn the pending-ops daemon."""
     if not blocked_binaries:
         return
 
@@ -2071,7 +2086,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         return
 
     archive = os.path.join(src_dir, archives[-1])
-    tmp_dir = tempfile.mkdtemp(prefix=".loadout-python-install.")
+    tmp_dir = tempfile.mkdtemp(prefix=".loadout-python-install.", dir=_tmp_root())
     try:
         print(f"  extracting {archive}...")
         pv_extract_tar(archive, tmp_dir)
@@ -3625,7 +3640,7 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
 
 def restore_backup(backup_path, home):
     if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
-        tmp_dir = tempfile.mkdtemp(prefix=".loadout-restore_")
+        tmp_dir = tempfile.mkdtemp(prefix=".loadout-restore_", dir=_tmp_root())
         try:
             with tarfile.open(backup_path, "r:bz2") as tf:
                 safe_extract_tar(tf, tmp_dir)
@@ -3712,7 +3727,7 @@ def preserve_bash_layers_from_symlink(home):
         for layer in BASH_LAYERS:
             src = os.path.join(bash_config, layer)
             if os.path.isdir(src):
-                tmp = tempfile.mkdtemp(prefix=f".loadout-layer-{layer}-")
+                tmp = tempfile.mkdtemp(prefix=f".loadout-layer-{layer}-", dir=_tmp_root())
                 shutil.rmtree(tmp)
                 shutil.copytree(src, tmp, symlinks=True)
                 saved[layer] = tmp
@@ -5413,11 +5428,11 @@ def cmd_snapshot(args, repo_dir, home):
 
 
 def cmd_clean(args):
-    """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/.
+    """Remove stale loadout temp-root state. Refuses to touch ~/loadout_backups/.
 
-    --logs    -> delete /tmp/loadout.<user>.log
-    --pending -> delete /tmp/loadout-pending-<user>/ (only if daemon PID is dead)
-    --all     -> both, plus any stale /tmp/loadout-* tempdirs owned by this user
+    --logs    -> delete <temp-root>/loadout.<user>.log
+    --pending -> delete <temp-root>/loadout-pending-<user>/ (only if daemon PID is dead)
+    --all     -> both, plus any stale <temp-root>/loadout-* tempdirs owned by this user
     """
     do_logs = args.logs or args.clean_all
     do_pending = args.pending or args.clean_all
@@ -5445,9 +5460,10 @@ def cmd_clean(args):
             except OSError as exc:
                 eprint(f"Could not remove {_PENDING_DIR}: {exc}")
     if do_extra:
-        for name in os.listdir("/tmp"):
+        tmp_root = _tmp_root()
+        for name in os.listdir(tmp_root):
             if name.startswith("loadout-") and name != os.path.basename(_PENDING_DIR):
-                full = os.path.join("/tmp", name)
+                full = os.path.join(tmp_root, name)
                 try:
                     if os.lstat(full).st_uid != os.getuid():
                         continue  # another user's state -- not ours to clean
@@ -5884,18 +5900,18 @@ def cli_snapshot_list(ctx, dest_dir):
     ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
 
-@cli.command(name="clean", short_help="Remove stale /tmp/loadout* state.")
-@click.option("--logs", is_flag=True, help="Delete /tmp/loadout.<user>.log.")
+@cli.command(name="clean", short_help="Remove stale loadout temp-root state.")
+@click.option("--logs", is_flag=True, help="Delete <temp-root>/loadout.<user>.log.")
 @click.option(
     "--pending",
     is_flag=True,
-    help="Delete /tmp/loadout-pending-<user>/ (only when the pending-ops daemon is dead).",
+    help="Delete <temp-root>/loadout-pending-<user>/ (only when the pending-ops daemon is dead).",
 )
 @click.option("--all", "clean_all", is_flag=True, help="Delete logs + pending + stale loadout-* tempdirs.")
 @click.pass_context
 def cli_clean(ctx, logs, pending, clean_all):
-    """Remove stale /tmp/loadout* state. Refuses to touch ~/loadout_backups/ and
-    refuses to clean /tmp/loadout-pending-<user>/ while the pending-ops daemon is alive."""
+    """Remove stale loadout temp-root state. Refuses to touch ~/loadout_backups/ and
+    refuses to clean <temp-root>/loadout-pending-<user>/ while the pending-ops daemon is alive."""
     args = _ctx_args(ctx, logs=logs, pending=pending, clean_all=clean_all)
     ctx.exit(cmd_clean(args))
 

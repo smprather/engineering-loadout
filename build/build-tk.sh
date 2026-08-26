@@ -77,7 +77,7 @@ need "$PATCHELF"
     exit 1
 }
 
-WORK_DIR=$(mktemp -d /tmp/build-tk-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-tk-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "==> Downloading ${TARBALL} ..."

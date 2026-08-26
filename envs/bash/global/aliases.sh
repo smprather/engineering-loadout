@@ -38,8 +38,14 @@ cddd() { loadout_cd_recent_dir 2; }
 cdddd() { loadout_cd_recent_dir 3; }
 cddddd() { loadout_cd_recent_dir 4; }
 cdddddd() { loadout_cd_recent_dir 5; }
-alias p='pwd | tee "/tmp/p_dir.$USER"'
-alias cdp='cd "$(cat "/tmp/p_dir.$USER")"'
+loadout_tmp_root() {
+    local tmp=${TMPDIR:-/tmp}
+    tmp=${tmp%/}
+    [[ -n $tmp ]] || tmp=/
+    printf '%s\n' "$tmp"
+}
+alias p='pwd | tee "$(loadout_tmp_root)/p_dir.${USER:-user}"'
+alias cdp='cd "$(cat "$(loadout_tmp_root)/p_dir.${USER:-user}")"'
 
 ### Listing ###
 alias sl='ls'
@@ -281,7 +287,8 @@ rlrt() {
 alias gpw='chmod -R g+w'
 alias gmw='chmod -R g-w'
 a() {
-    local alias_file="/tmp/alias.$$"
+    local alias_file
+    alias_file="$(loadout_tmp_root)/alias.$$"
     alias | sort >"$alias_file"
     # `typeset -f`, not `declare -f`: identical in bash, and the only spelling
     # zsh understands (this file is sourced by envs/zsh too).
@@ -291,7 +298,7 @@ a() {
 }
 alias clean_bash='echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME USER=$(/bin/whoami) /bin/bash --rcfile ~/.clean.bashrc"'
 alias vman="MANPAGER='nvim +Man\!' man"
-st() { strace -o "/tmp/strace.$USER" -f -v -s 1000000 "$@"; }
+st() { strace -o "$(loadout_tmp_root)/strace.${USER:-user}" -f -v -s 1000000 "$@"; }
 alias sp1="set_prompt"
 alias sp2="set_prompt include_host"
 alias fsbm='fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test; rm ./fio_test'

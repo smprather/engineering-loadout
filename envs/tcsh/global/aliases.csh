@@ -19,6 +19,7 @@
 # and is aliased here. See helpers/README.md for the three helper shapes.
 
 set _lo_helpers = "$HOME/.config/tcsh/global/helpers"
+alias loadout_tmp_root "$_lo_helpers/tmp-root"
 
 # ---- navigation --------------------------------------------------------------
 # `cd` gets the same conveniences as the bash env's cd(): a FILE argument goes to
@@ -56,8 +57,8 @@ alias cdddd     'set _lo_d = "`'"$_lo_helpers"'/recent-dir 3`" ; if ( "$_lo_d" !
 alias cddddd    'set _lo_d = "`'"$_lo_helpers"'/recent-dir 4`" ; if ( "$_lo_d" != "" ) cd "$_lo_d" ; unset _lo_d'
 alias cdddddd   'set _lo_d = "`'"$_lo_helpers"'/recent-dir 5`" ; if ( "$_lo_d" != "" ) cd "$_lo_d" ; unset _lo_d'
 
-alias p         'pwd | tee "/tmp/p_dir.$USER"'
-alias cdp       'cd "`cat /tmp/p_dir.$USER`"'
+alias p         'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; pwd | tee "$_lo_tmp/p_dir.$USER" ; unset _lo_tmp'
+alias cdp       'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; set _lo_d = "`cat "$_lo_tmp/p_dir.$USER"`" ; if ( "$_lo_d" != "" ) cd "$_lo_d" ; unset _lo_d _lo_tmp'
 alias latest    'eval "`'"$_lo_helpers"'/latest-link \!*`"'
 
 # ---- listing -----------------------------------------------------------------
@@ -194,10 +195,10 @@ alias clean_bash 'echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME U
 alias agrep     'alias | g'
 # `a`: dump the alias table to a temp file and edit it. The bash version also
 # dumps `declare -f`; csh has no functions, so the alias table is the whole set.
-alias a         'alias | sort > "/tmp/alias.$$" ; $LOADOUT_CFG_PREFERRED_VI "/tmp/alias.$$" ; rm -f "/tmp/alias.$$"'
+alias a         'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; set _lo_alias = "$_lo_tmp/alias.$$" ; alias | sort > "$_lo_alias" ; $LOADOUT_CFG_PREFERRED_VI "$_lo_alias" ; rm -f "$_lo_alias" ; unset _lo_alias _lo_tmp'
 # NOTE: shadows the bundled `st` terminal, exactly as the bash env's st() does.
 # Kept for parity -- run the terminal as `\st` or by full path.
-alias st        'strace -o "/tmp/strace.$USER" -f -v -s 1000000'
+alias st        'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; strace -o "$_lo_tmp/strace.$USER" -f -v -s 1000000 \!* ; unset _lo_tmp'
 # sp1 / sp2: prompt without / with the hostname. The bash env re-runs its
 # set_prompt function; csh has no functions, so these reassign the prompt lead
 # that global/tcshrc left in place for exactly this purpose (and that precmd

@@ -37,11 +37,22 @@ end)()
 -- Platform detection
 local _is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 local _username   = os.getenv("USER") or os.getenv("USERNAME") or "nvimuser"
+local function _tmp_root()
+    local tmp = os.getenv("TMPDIR")
+    if tmp == nil or tmp == "" then return nil end
+    tmp = tmp:gsub("/+$", "")
+    if tmp == "" then return "/" end
+    return tmp
+end
+local _env_tmp_root = _tmp_root()
 
 local _swap_dir, _vitmp_file
 if _is_windows then
     _swap_dir   = vim.fn.expand("$TEMP") .. "\\nvim\\swap"
     _vitmp_file = vim.fn.expand("$TEMP") .. "\\nvim_vitmp"
+elseif _env_tmp_root ~= nil then
+    _swap_dir   = _env_tmp_root .. "/" .. _username .. "/vim"
+    _vitmp_file = _env_tmp_root .. "/vitmp_" .. _username
 elseif vim.fn.isdirectory("/dev/shm") == 1 then
     _swap_dir   = "/dev/shm/" .. _username .. "/vim"
     _vitmp_file = "/dev/shm/" .. _username .. "/vitmp"

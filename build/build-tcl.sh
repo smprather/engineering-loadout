@@ -83,7 +83,7 @@ need gcc
 need make
 need "$PATCHELF"
 
-WORK_DIR=$(mktemp -d /tmp/build-tcl-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-tcl-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "==> Downloading ${TARBALL} ..."

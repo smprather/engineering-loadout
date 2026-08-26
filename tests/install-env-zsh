@@ -32,7 +32,8 @@ if ! command -v script >/dev/null 2>&1; then
 fi
 
 ZSH_BIN="$(command -v zsh)"
-TMPHOME="$(mktemp -d /tmp/loadout-env-zsh.XXXXXX)"
+tmp_root=${TMPDIR:-/tmp}
+TMPHOME="$(mktemp -d "$tmp_root/loadout-env-zsh.XXXXXX")"
 trap 'rm -rf "$TMPHOME"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

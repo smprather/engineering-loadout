@@ -43,7 +43,7 @@ command -v docker >/dev/null 2>&1 || { echo "ERROR: docker command not found" >&
 if [ -z "${DOCKER_CONFIG:-}" ]; then
     docker_home=${HOME:-}/.docker
     if [ ! -d "$docker_home" ] || [ ! -w "$docker_home" ]; then
-        DOCKER_CONFIG=/tmp/loadout-docker-config-${USER:-$(id -u)}
+        DOCKER_CONFIG=${TMPDIR:-/tmp}/loadout-docker-config-${USER:-$(id -u)}
         export DOCKER_CONFIG
         mkdir -p "$DOCKER_CONFIG"
     fi

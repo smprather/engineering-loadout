@@ -133,7 +133,7 @@ pkg-config --exists gtk+-3.0 || {
     exit 1
 }
 
-WORK_DIR=$(mktemp -d /tmp/build-gtkwave-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-gtkwave-XXXXXX")
 # Version-scoped install prefix so successive builds cannot contaminate each
 # other (same reasoning as build-octave.sh).
 INST_DIR="/tmp/gtkwave-install-${VERSION}"

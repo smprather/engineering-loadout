@@ -17,6 +17,7 @@ set -euo pipefail
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 INSTALLER="$REPO_DIR/loadout"
 INSTALLER_MAIN="$REPO_DIR/loadout_main.py"
+tmp_root=${TMPDIR:-/tmp}
 FAILURES=0
 
 fail() {
@@ -60,7 +61,7 @@ fi
 # 2. doctor -- registry integrity
 # ---------------------------------------------------------------------------
 echo "--- 2. doctor ---"
-DOCTOR_OUT=$(cd /tmp && "$INSTALLER" doctor 2>&1)
+DOCTOR_OUT=$(cd "$tmp_root" && "$INSTALLER" doctor 2>&1)
 if echo "$DOCTOR_OUT" | grep -qiE "^ERROR|^FAIL|missing|unresolved"; then
     fail "doctor reported issues"
     echo "$DOCTOR_OUT" | grep -iE "ERROR|FAIL|missing|unresolved" >&2
@@ -72,7 +73,7 @@ fi
 # 3. dry-run @core-cli -- resolver returns expected core packages
 # ---------------------------------------------------------------------------
 echo "--- 3. dry-run @core-cli ---"
-DRY_CORE=$(cd /tmp && "$INSTALLER" install "@core-cli" --dry-run 2>&1)
+DRY_CORE=$(cd "$tmp_root" && "$INSTALLER" install "@core-cli" --dry-run 2>&1)
 REQUIRED_CORE=(bat rg eza fd jq)
 for pkg in "${REQUIRED_CORE[@]}"; do
     if echo "$DRY_CORE" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
@@ -86,7 +87,7 @@ done
 # 4. dry-run @engineering-loadout -- full bundled-set completeness
 # ---------------------------------------------------------------------------
 echo "--- 4. dry-run @engineering-loadout ---"
-DRY_FULL=$(cd /tmp && "$INSTALLER" install "@engineering-loadout" --dry-run 2>&1)
+DRY_FULL=$(cd "$tmp_root" && "$INSTALLER" install "@engineering-loadout" --dry-run 2>&1)
 
 # Packages that were previously orphaned / missing from the group
 REQUIRED_FULL=(nodejs modules lua-language-server octave fish ngspice nvim vim bash tmux uv)
@@ -109,7 +110,7 @@ fi
 # 5. bare 'install' must error (strict CLI; no default install)
 # ---------------------------------------------------------------------------
 echo "--- 5. bare 'install' must error ---"
-if (cd /tmp && "$INSTALLER" install >/dev/null 2>&1); then
+if (cd "$tmp_root" && "$INSTALLER" install >/dev/null 2>&1); then
     fail "bare 'install' succeeded (should error with exit 1)"
 else
     pass "bare 'install' errors as expected"

@@ -92,8 +92,8 @@ BUILD_TCLSH="$(find "$TCL_EXEC_PREFIX/bin" -maxdepth 1 -type f -name 'tclsh[0-9]
 }
 echo "==> Using bundled Tcl: $BUILD_TCLSH ($WITH_TCL/tclConfig.sh)"
 
-WORK_DIR=$(mktemp -d /tmp/build-modules-XXXXXX)
-STAGE_PARENT=$(mktemp -d /tmp/modules-stage-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-modules-XXXXXX")
+STAGE_PARENT=$(mktemp -d "${TMPDIR:-/tmp}/modules-stage-XXXXXX")
 trap 'rm -rf "$WORK_DIR" "$STAGE_PARENT"' EXIT
 
 echo "==> Downloading modules-${VERSION}.tar.bz2 ..."

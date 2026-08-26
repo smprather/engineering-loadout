@@ -221,8 +221,14 @@ map <leader>pp :set invpaste paste?<cr>
 map <leader>nw :set nowrap<cr>
 map <leader>w  :set wrap<cr>
 map <leader>=  <c-w>=
-vmap <leader>y :w! /tmp/vitmp_$USER<CR>
-nmap <leader>p :r! cat /tmp/vitmp_$USER<CR>
+let s:vitmp_dir = empty($TMPDIR) ? '/tmp' : substitute($TMPDIR, '/\+$', '', '')
+if empty(s:vitmp_dir)
+    let s:vitmp_dir = '/'
+endif
+let s:vitmp_user = empty($USER) ? 'vimuser' : $USER
+let s:vitmp_file = s:vitmp_dir . '/vitmp_' . s:vitmp_user
+execute 'vmap <leader>y :w! ' . fnameescape(s:vitmp_file) . '<CR>'
+execute 'nmap <leader>p :r! cat ' . shellescape(s:vitmp_file) . '<CR>'
 map <leader># :windo set invnumber<CR>
 map <leader>f zR
 " Delete all trailing whitespace
@@ -253,4 +259,3 @@ nnoremap ;; ;
 if filereadable(expand("~/.vimrc_hook.bottom"))
     source ~/.vimrc_hook.bottom
 endif
-

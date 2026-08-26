@@ -12,9 +12,19 @@ local root_files = {
 
 local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 local username = os.getenv("USER") or os.getenv("USERNAME") or "nvimuser"
+local function tmp_root()
+    local tmp = os.getenv("TMPDIR")
+    if tmp == nil or tmp == "" then return nil end
+    tmp = tmp:gsub("/+$", "")
+    if tmp == "" then return "/" end
+    return tmp
+end
+local env_tmp_root = tmp_root()
 local lsp_log_dir
 if is_windows then
     lsp_log_dir = vim.fn.expand("$TEMP") .. "\\lua_language_server"
+elseif env_tmp_root ~= nil then
+    lsp_log_dir = env_tmp_root .. "/" .. username .. "/lua_language_server"
 elseif vim.fn.isdirectory("/dev/shm") == 1 then
     lsp_log_dir = "/dev/shm/" .. username .. "/lua_language_server"
 else

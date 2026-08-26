@@ -80,7 +80,7 @@ Rebuild the full set with `./build/treesitter/build_parsers` from the repo root.
 ## Sanity Check
 
 ```bash
-XDG_CACHE_HOME=/tmp/nvim-cache XDG_STATE_HOME=/tmp/nvim-state \
+XDG_CACHE_HOME="${TMPDIR:-/tmp}/nvim-cache" XDG_STATE_HOME="${TMPDIR:-/tmp}/nvim-state" \
   nvim --headless +qa
 ```
 

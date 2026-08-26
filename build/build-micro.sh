@@ -51,22 +51,22 @@ fi
 ver="${tag#v}"
 
 URL="https://github.com/zyedidia/micro/releases/download/${tag}/micro-${ver}-linux64.tar.gz"
-TMPDIR="$(mktemp -d /tmp/build-micro.XXXXXX)"
-trap 'rm -rf "$TMPDIR"' EXIT
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/build-micro.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "Downloading $URL ..."
-curl -fL "$URL" -o "$TMPDIR/micro.tar.gz"
+curl -fL "$URL" -o "$WORK_DIR/micro.tar.gz"
 
 echo "Extracting ..."
-tar -xzf "$TMPDIR/micro.tar.gz" -C "$TMPDIR"
+tar -xzf "$WORK_DIR/micro.tar.gz" -C "$WORK_DIR"
 # Archive layout changed: v2.0.14 used micro-VER-linux64/micro; v2.0.15+ uses micro-VER/micro
-BIN="$TMPDIR/micro-${ver}-linux64/micro"
+BIN="$WORK_DIR/micro-${ver}-linux64/micro"
 if [ ! -f "$BIN" ]; then
-    BIN="$TMPDIR/micro-${ver}/micro"
+    BIN="$WORK_DIR/micro-${ver}/micro"
 fi
 if [ ! -f "$BIN" ]; then
     echo "ERROR: could not find micro binary in archive" >&2
-    ls "$TMPDIR/" >&2
+    ls "$WORK_DIR/" >&2
     exit 1
 fi
 

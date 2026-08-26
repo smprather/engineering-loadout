@@ -1,0 +1,7 @@
+#!/bin/sh
+# Print the temp root used by shell helpers. Honors TMPDIR when set.
+
+tmp=${TMPDIR:-/tmp}
+tmp=${tmp%/}
+[ -n "$tmp" ] || tmp=/
+printf '%s\n' "$tmp"

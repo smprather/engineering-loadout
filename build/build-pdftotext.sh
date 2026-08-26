@@ -145,7 +145,7 @@ need cmake
 need pkg-config
 need patchelf
 
-WORK_DIR=$(mktemp -d /tmp/build-pdftotext-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-pdftotext-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "==> Downloading poppler-${VERSION}.tar.xz ..."

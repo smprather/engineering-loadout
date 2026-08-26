@@ -41,11 +41,12 @@ done
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd "$script_dir/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-install-home.XXXXXX)
-test_cache=$(mktemp -d /tmp/loadout-install-cache.XXXXXX)
-test_state=$(mktemp -d /tmp/loadout-install-state.XXXXXX)
-test_hooks=$(mktemp -d /tmp/loadout-install-hooks.XXXXXX)
-install_log=$(mktemp /tmp/loadout-install-log.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-install-home.XXXXXX")
+test_cache=$(mktemp -d "$tmp_root/loadout-install-cache.XXXXXX")
+test_state=$(mktemp -d "$tmp_root/loadout-install-state.XXXXXX")
+test_hooks=$(mktemp -d "$tmp_root/loadout-install-hooks.XXXXXX")
+install_log=$(mktemp "$tmp_root/loadout-install-log.XXXXXX")
 
 cleanup() {
     if [[ "$keep_home" == "1" ]]; then
@@ -126,7 +127,7 @@ fi
 
 echo "Temp HOME: $test_home"
 (
-    cd /tmp
+    cd "$tmp_root"
     XDG_CACHE_HOME="$test_cache" \
     XDG_STATE_HOME="$test_state" \
         "$repo_dir/loadout" "${install_args[@]}"

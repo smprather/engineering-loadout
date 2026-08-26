@@ -73,7 +73,7 @@ BZIP2="$(command -v bzip2 || true)"
 [ -x "$HOME/.local/bin/bzip2" ] && BZIP2="$HOME/.local/bin/bzip2"
 [ -n "$BZIP2" ] || { echo "ERROR: bzip2 not found" >&2; exit 1; }
 
-WORK_DIR=$(mktemp -d /tmp/build-pyright-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-pyright-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 
 echo "==> Fetching npm registry metadata for pyright@$TAG ..."
@@ -184,7 +184,7 @@ VER_OUT=$("$STAGE/bin/pyright" --version)
 }
 echo "  pyright --version: $VER_OUT"
 
-TMPD=$(mktemp -d /tmp/pyright-smoke-XXXXXX)
+TMPD=$(mktemp -d "${TMPDIR:-/tmp}/pyright-smoke-XXXXXX")
 printf 'def f(x: int) -> str:\n    return x\n' >"$TMPD/bad.py"
 ERR_OUT=$("$STAGE/bin/pyright" "$TMPD/bad.py" 2>&1) || true
 case "$ERR_OUT" in

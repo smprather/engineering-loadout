@@ -45,7 +45,7 @@ PATCHELF="$HOME/.local/bin/patchelf"
 # shellcheck disable=SC1091
 [ -f /opt/rh/gcc-toolset-14/enable ] && . /opt/rh/gcc-toolset-14/enable
 
-STAGE=$(mktemp -d "/tmp/build-$TOOL-XXXXXX")
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/build-$TOOL-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 tar xzf "$SRC_TARBALL" -C "$STAGE"
 SRC=$(find "$STAGE" -maxdepth 1 -mindepth 1 -type d | head -1)

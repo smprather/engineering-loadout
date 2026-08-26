@@ -4,7 +4,8 @@
 set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TMPHOME="$(mktemp -d /tmp/loadout-env-st.XXXXXX)"
+tmp_root=${TMPDIR:-/tmp}
+TMPHOME="$(mktemp -d "$tmp_root/loadout-env-st.XXXXXX")"
 trap 'rm -rf "$TMPHOME"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }

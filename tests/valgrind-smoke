@@ -19,9 +19,10 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_home=$(mktemp -d /tmp/loadout-valgrind-home.XXXXXX)
-test_cache=$(mktemp -d /tmp/loadout-valgrind-cache.XXXXXX)
-test_state=$(mktemp -d /tmp/loadout-valgrind-state.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-valgrind-home.XXXXXX")
+test_cache=$(mktemp -d "$tmp_root/loadout-valgrind-cache.XXXXXX")
+test_state=$(mktemp -d "$tmp_root/loadout-valgrind-state.XXXXXX")
 local_prefix="$test_home/.local"
 
 cleanup() {

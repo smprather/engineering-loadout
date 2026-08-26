@@ -23,6 +23,7 @@ import types
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+PENDING_DAEMON_PATH = os.path.join(REPO, "payload", "pending-daemon", "loadout-pending-daemon")
 
 
 def load_loadout():
@@ -325,6 +326,40 @@ def test_local_name_and_install_to(m):
     check("absolute install_to passes through", m._resolve_install_to("/opt/x", "/srv/root") == "/opt/x")
 
 
+def test_tmpdir_respected_for_global_temp_state(m):
+    import subprocess
+    import tempfile
+    import textwrap
+
+    with tempfile.TemporaryDirectory() as d:
+        code = textwrap.dedent(
+            f"""
+            import importlib.machinery
+            import importlib.util
+            import os
+
+            loader = importlib.machinery.SourceFileLoader("loadout_tmpdir_mod", {LOADOUT_PATH!r})
+            spec = importlib.util.spec_from_loader("loadout_tmpdir_mod", loader)
+            mod = importlib.util.module_from_spec(spec)
+            loader.exec_module(mod)
+
+            assert mod._tmp_root() == {d!r}, mod._tmp_root()
+            assert mod._RUN_LOG_FIXED_PATH.startswith({(d + os.sep)!r}), mod._RUN_LOG_FIXED_PATH
+            assert mod._PENDING_DIR.startswith({(d + os.sep)!r}), mod._PENDING_DIR
+
+            daemon_loader = importlib.machinery.SourceFileLoader("pending_daemon_tmpdir_mod", {PENDING_DAEMON_PATH!r})
+            daemon_spec = importlib.util.spec_from_loader("pending_daemon_tmpdir_mod", daemon_loader)
+            daemon = importlib.util.module_from_spec(daemon_spec)
+            daemon_loader.exec_module(daemon)
+            assert daemon.RUN_LOG_PATH == mod._RUN_LOG_FIXED_PATH, (daemon.RUN_LOG_PATH, mod._RUN_LOG_FIXED_PATH)
+            assert daemon.PENDING_DIR == mod._PENDING_DIR, (daemon.PENDING_DIR, mod._PENDING_DIR)
+            """
+        )
+        env = dict(os.environ, TMPDIR=d)
+        subprocess.run([sys.executable, "-c", code], check=True, env=env)
+        check("TMPDIR controls loadout global temp state", True)
+
+
 def main():
     mod = load_loadout()
     for fn in (
@@ -339,6 +374,7 @@ def main():
         test_list_name_filters,
         test_get_version_release_stamp,
         test_local_name_and_install_to,
+        test_tmpdir_respected_for_global_temp_state,
     ):
         print(f"-- {fn.__name__}")
         fn(mod)

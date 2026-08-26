@@ -112,7 +112,7 @@ BZIP2="$(command -v bzip2 || true)"
 [ -x "$HOME/.local/bin/bzip2" ] && BZIP2="$HOME/.local/bin/bzip2"
 [ -n "$BZIP2" ] || { echo "ERROR: bzip2 not found" >&2; exit 1; }
 
-WORK_DIR=$(mktemp -d /tmp/build-sqlite-XXXXXX)
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-sqlite-XXXXXX")
 INST_DIR="/tmp/loadout-sqlite-instdir-${TAG}"
 trap 'rm -rf "$WORK_DIR" "$INST_DIR"' EXIT INT TERM
 

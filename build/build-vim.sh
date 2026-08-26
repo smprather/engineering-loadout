@@ -60,7 +60,7 @@ PATCHELF="$HOME/.local/bin/patchelf"
 # shellcheck disable=SC1091
 [ -f /opt/rh/gcc-toolset-14/enable ] && . /opt/rh/gcc-toolset-14/enable
 
-STAGE=$(mktemp -d /tmp/vim-build-XXXXXX)
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/vim-build-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 
 echo "==> Obtaining vim $TAG ..."

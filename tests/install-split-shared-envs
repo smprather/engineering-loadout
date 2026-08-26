@@ -36,11 +36,12 @@ done
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd "$script_dir/.." && pwd)
-shared_root=$(mktemp -d /tmp/loadout-shared-root.XXXXXX)
-test_home=$(mktemp -d /tmp/loadout-env-home.XXXXXX)
-test_cache=$(mktemp -d /tmp/loadout-env-cache.XXXXXX)
-test_state=$(mktemp -d /tmp/loadout-env-state.XXXXXX)
-test_run=$(mktemp -d /tmp/loadout-split-run.XXXXXX)
+tmp_root=${TMPDIR:-/tmp}
+shared_root=$(mktemp -d "$tmp_root/loadout-shared-root.XXXXXX")
+test_home=$(mktemp -d "$tmp_root/loadout-env-home.XXXXXX")
+test_cache=$(mktemp -d "$tmp_root/loadout-env-cache.XXXXXX")
+test_state=$(mktemp -d "$tmp_root/loadout-env-state.XXXXXX")
+test_run=$(mktemp -d "$tmp_root/loadout-split-run.XXXXXX")
 shared_prefix="$shared_root/local"
 basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
 
