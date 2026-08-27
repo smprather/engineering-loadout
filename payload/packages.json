@@ -3095,7 +3095,7 @@
         "editor",
         "nvim"
       ],
-      "description": "Offline git stash for nvim plugins -- 24 bare mirrors + lazy.nvim, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update fetches from it, so plugin updates work with no network. Needs git (system, or the optional git-nvim package)."
+      "description": "Offline git stash for nvim plugins -- 78 bare mirrors covering the active set plus catalog, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update/sync fetches from it, so plugin updates work with no network. The installer runs headless Lazy sync from this stash whenever loadout nvim and env-nvim are both available. Needs git (system, or the optional git-nvim package)."
     },
     "env-vim": {
       "kind": "env",

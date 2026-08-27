@@ -11,7 +11,7 @@
 # The two shapes, both exercised here:
 #
 #   1. single HOME   -- `install nvim env-nvim nvim-plugin-stash
-#                       treesitter-parsers git-nvim` (the normal/online case)
+#                       treesitter-parsers git-nvim` (the normal full-HOME case)
 #   2. split         -- `install nvim nvim-plugin-stash treesitter-parsers
 #                       git-nvim --dest-dir <tree>` + `install env-nvim`
 #                       with LOADOUT_CFG_SHARED_PREFIX=<tree>/local (the farm case)
@@ -26,6 +26,23 @@ tmp_root=${TMPDIR:-/tmp}
 TMP="$(mktemp -d "$tmp_root/loadout-nvim-deploy.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
+
+assert_lazy_sync_ran() {
+    # $1 = install log, $2 = label
+    grep -F "Running nvim --headless '+Lazy! sync' (offline plugin stash)" "$1" >/dev/null 2>&1 \
+        || fail "$2: installer did not run headless Lazy sync:
+$(sed -n '1,220p' "$1")"
+}
+
+assert_no_first_run_noise() {
+    # $1 = captured nvim output, $2 = label
+    case "$1" in
+        *"lazy.nvim unavailable"*|*"Error detected"*|*"E[0-9][0-9][0-9]"*|*"WARNING"*|*"Warning"*|*"WARN"*)
+            fail "$2: first headless nvim launch was noisy:
+$1"
+            ;;
+    esac
+}
 
 # Run nvim headless with the network blackholed; print what it loaded.
 nvim_offline() {
@@ -49,8 +66,10 @@ mkdir -p "$H1"
 # git-nvim is included on purpose: the stash needs git to clone from, and the Tier 3
 # container (stock almalinux:8.10) has NO system git. That makes the container the exact
 # machine git-nvim exists for -- it is the only place the private-git path gets exercised.
+single_log="$TMP/single-install.log"
 HOME="$H1" "$REPO/loadout" install -y nvim env-nvim nvim-plugin-stash treesitter-parsers git-nvim \
-    --no-backup >/dev/null 2>&1
+    --no-backup >"$single_log" 2>&1
+assert_lazy_sync_ran "$single_log" "single-HOME"
 
 [ -e "$H1/.local/bin/git" ] \
     && fail "single-HOME: git-nvim put a git on the user's PATH -- it would shadow the corp git"
@@ -65,6 +84,7 @@ out=$(nvim_offline "$H1" "$H1/.local/bin" "")
 echo "$out" | grep -q "lazy.nvim unavailable" \
     && fail "single-HOME: nvim fell back to the git-clone bootstrap:
 $out"
+assert_no_first_run_noise "$out" "single-HOME"
 echo "$out" | grep -q "PLUGINS=[1-9]" || fail "single-HOME: no plugins loaded:
 $out"
 echo "$out" | grep -q "PARSERS=yes" || fail "single-HOME: parser dir not on runtimepath:
@@ -94,8 +114,10 @@ mkdir -p "$SHARED" "$H2"
     && fail "split: lazy/ was seeded into the SHARED tree -- it is per-user state, and nvim never looks there"
 
 # The per-user run copies the plugins it needs out of the shared catalog into $HOME.
+split_env_log="$TMP/split-env-install.log"
 HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
-    "$REPO/loadout" install -y env-nvim --no-backup >/dev/null 2>&1
+    "$REPO/loadout" install -y env-nvim --no-backup >"$split_env_log" 2>&1
+assert_lazy_sync_ran "$split_env_log" "split"
 
 [ -d "$H2/.local/share/nvim/lazy/lazy.nvim" ] \
     || fail "split: lazy.nvim not seeded into \$HOME (this is the air-gapped bug)"
@@ -106,6 +128,7 @@ out=$(nvim_offline "$H2" "$SHARED/local/bin" "$SHARED/local")
 echo "$out" | grep -q "lazy.nvim unavailable" \
     && fail "split: nvim fell back to the git-clone bootstrap (the reported air-gapped failure):
 $out"
+assert_no_first_run_noise "$out" "split"
 echo "$out" | grep -q "PLUGINS=[1-9]" || fail "split: no plugins loaded:
 $out"
 echo "$out" | grep -q "PARSERS=yes" \

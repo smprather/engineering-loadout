@@ -361,6 +361,10 @@ Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-
 hook strips `.git` dirs on the next commit).
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
+When a loadout nvim binary and env-nvim config are both present, the installer
+runs headless `Lazy! sync` from the local/shared plugin stash before the user's
+first interactive launch. Keep default plugin sync offline; network restore stays
+behind `--allow-online-plugin-sync`.
 
 Tree-sitter offline support targets Neovim v0.12+ only. Vendored
 `nvim-treesitter` and `treesitter-parser-registry` live under

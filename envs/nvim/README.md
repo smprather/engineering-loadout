@@ -56,6 +56,12 @@ per plugin. Versions are locked in `lazy-lock.json`. Notable inclusions:
   `indent-blankline.nvim`, `illuminate.nvim`, plus the markdown and
   lazydev plugins
 
+During install, once both a loadout nvim binary and this env-nvim config are
+available, `loadout` runs `nvim --headless -n '+Lazy! sync' '+qa'` against the
+local/shared plugin stash. That makes the first interactive launch use already
+bootstrapped Lazy.nvim and active plugins. Default install stays offline; GitHub
+restore requires `--allow-online-plugin-sync`.
+
 ## LSP
 
 `envs/nvim/lsp/<server>.lua` files hold one `vim.lsp.config` entry per server.

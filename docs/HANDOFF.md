@@ -1,12 +1,22 @@
 # Current Handoff
 
-Last updated: 2026-08-26. `v2026.08.24` was published from `fc36596` and
+Last updated: 2026-08-27. `v2026.08.24` was published from `fc36596` and
 verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
 matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
 sync is committed as `aa3af08`; `env-nvim` live config sync and optional-tool
 guards are committed as `0b2c66f`; TMPDIR-respecting scratch state is committed
-as `546fe00`; current work makes tcsh a stronger first-class mirror of the bash
-environment.
+as `546fe00`; tcsh first-class refurb is committed as `fda7e71`; current work
+runs headless Neovim Lazy sync during installs when loadout nvim plus env-nvim
+are available.
+
+## 2026-08-27 batch: headless Neovim Lazy sync on install (unreleased)
+
+| area | what |
+|---|---|
+| installer | `install_nvim_lazy_update` now runs `nvim --headless -n '+Lazy! sync' '+qa'` by default whenever a relevant nvim package is in the resolved selection, `~/.config/nvim/init.lua` exists, a loadout nvim binary exists locally or under `LOADOUT_CFG_SHARED_PREFIX`, and the offline plugin stash is installed. The sync now runs after Tree-sitter parsers are installed, so the smoke sees the final runtime/parser state. |
+| split deploys | A per-user `env-nvim` install with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local` now resolves the shared nvim binary, seeds per-user `lazy/` from the shared stash, then runs headless Lazy sync before first interactive launch. `@shared --dest-dir` still installs binary/stash/parsers only and does not seed shared `lazy/`. |
+| trust model | Default plugin sync remains offline-only. If the stash is missing, the installer skips Lazy sync with a message that the quiet first-run guarantee requires `nvim-plugin-stash`; network restore still requires explicit `--allow-online-plugin-sync` and uses `Lazy! restore` against `lazy-lock.json`, not a default GitHub sync. |
+| tests/docs | `tests/install-nvim-deployments` now captures install logs and asserts headless Lazy sync ran for both single-HOME and split env installs, then blackholes network and asserts the first headless nvim launch has plugins/parsers and no Lazy/missing-tool noise. README, AGENTS, Copilot notes, and `envs/nvim/README.md` document the new guarantee and offline default. |
 
 ## 2026-08-26 batch: tcsh first-class refurb (unreleased)
 

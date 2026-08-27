@@ -56,8 +56,11 @@ stash that fails its hash is deleted rather than left on disk. Do **not** copy
 the asset into place manually -- `.content-manifest` is a strict allowlist, so
 a hand-placed stash is refused, not silently trusted.
 
-Skipping it is safe: Neovim still installs and starts, and the plugin step is
-skipped with a warning naming `fetch-stash`.
+Skipping it is safe only for a core/editor-only Neovim: Neovim still installs,
+but the installer cannot run the offline headless Lazy sync that makes the first
+interactive launch warning-free. For a normal `env-nvim` install, fetch and
+install the stash so Lazy.nvim and the active plugins are cloned from local
+mirrors before the user ever starts Neovim.
 
 Re-run the same command against a newer release tarball to update.
 Unchanged files are skipped, so re-runs are quick.
@@ -345,7 +348,7 @@ OpenSSH for those.
 | tldr-data | data |  | Bundled tldr-pages cache for offline tealdeer use |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
 | git-nvim | runtime | 2.43.7 | PRIVATE git for nvim/lazy only -- installed to lib/loadout-git/, never on the user's PATH (a loadout git would shadow the corp git and break its subcommands/credential helpers, cf. openssh/ssh10). Optional: @shared-all or by name. nvim uses it only when the system has no git. |
-| nvim-plugin-stash | data |  | Offline git stash for nvim plugins -- 24 bare mirrors + lazy.nvim, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update fetches from it, so plugin updates work with no network. Needs git (system, or the optional git-nvim package). |
+| nvim-plugin-stash | data |  | Offline git stash for nvim plugins -- 78 bare mirrors covering the active set plus catalog, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update/sync fetches from it, so plugin updates work with no network. The installer runs headless `Lazy! sync` from this stash whenever a loadout nvim binary and env-nvim config are both present. Needs git (system, or the optional git-nvim package). |
 | models | bin | 0.14.0 | TUI/CLI to browse AI models + benchmarks from models.dev (needs network for live data) |
 | modules | runtime | 5.6.1 | Environment Modules — module load/unload for shell environment management (HPC-style) |
 | rust | runtime | 1.96.0 | Rust toolchain — rustc + cargo + std libraries (offline source build target) |

@@ -3338,6 +3338,67 @@ def _resolve_nvim_stash(home):
     return ""
 
 
+def _resolve_loadout_nvim_bin(home):
+    """Locate the loadout nvim binary in this install root, then a shared prefix.
+
+    Do not fall back to an arbitrary system `nvim`: the headless Lazy pass must validate
+    the exact loadout runtime/config pairing the user just installed.
+    """
+    roots = [os.path.join(home, _local_name(home))]
+    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if prefix:
+        roots.append(os.path.expanduser(prefix))
+    for root in roots:
+        candidate = os.path.join(root, "bin", "nvim")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return ""
+
+
+def _nvim_config_present(home):
+    return os.path.isfile(os.path.join(home, ".config", "nvim", "init.lua"))
+
+
+def _nvim_phase_relevant(selected_tools):
+    if selected_tools is None:
+        return True
+    return bool({"nvim", "env-nvim", "nvim-plugin-stash", "git-nvim"} & set(selected_tools))
+
+
+def _nvim_headless_env(home):
+    env = os.environ.copy()
+    local_prefix = os.path.join(home, _local_name(home))
+    env["HOME"] = home
+    env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
+    env["XDG_DATA_HOME"] = os.path.join(local_prefix, "share")
+    env["XDG_STATE_HOME"] = os.path.join(local_prefix, "state")
+    env["XDG_CACHE_HOME"] = os.path.join(home, ".cache")
+    if not env.get("LOADOUT_CFG_SHARED_PREFIX", "").strip():
+        # In --dest-dir installs the loadout prefix is <dest>/local, but nvim's
+        # helper discovers the private git-nvim binary through LOADOUT_CFG_SHARED_PREFIX.
+        # Supplying the staged prefix here keeps headless sync working on stock hosts
+        # with no system git, without changing the user's shell environment.
+        env["LOADOUT_CFG_SHARED_PREFIX"] = local_prefix
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env.setdefault("GIT_ASKPASS", "/bin/true")
+    return env
+
+
+def _process_output_tail(proc, lines=20):
+    chunks = []
+    for stream in (proc.stdout, proc.stderr):
+        if not stream:
+            continue
+        if isinstance(stream, bytes):
+            chunks.append(stream.decode("utf-8", "replace"))
+        else:
+            chunks.append(str(stream))
+    text = "\n".join(chunk.strip() for chunk in chunks if chunk.strip())
+    if not text:
+        return ""
+    return "\n".join(text.splitlines()[-lines:])
+
+
 def _resolve_git(home):
     """Find a git to clone the stash with -- WITHOUT ever putting one on the user's PATH.
 
@@ -3414,11 +3475,11 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
     """Clone the bundled nvim plugins from the offline stash into the USER's lazy/.
 
     lazy/ is per-user state: nvim resolves it from stdpath("data") -- always $HOME --
-    and `:Lazy update` writes to it. So this phase is gated on **env-nvim** (the
-    per-user config package), NOT on nvim-plugin-stash (a `kind: data` package that
-    lands in the shared tree). Gating it on the data package meant a split deployment
-    seeded lazy/ into the *shared tree*, where nvim never looks, and the user's $HOME
-    got nothing -- the air-gapped "lazy.nvim unavailable" failure.
+    and `:Lazy update` writes to it. So this phase is gated on actual prerequisites:
+    relevant nvim package selection, env-nvim config in this HOME, and an installed
+    stash in either this tree or LOADOUT_CFG_SHARED_PREFIX. A split @shared install
+    can therefore unpack the shared stash without seeding shared lazy/ state, while
+    the later per-user env-nvim install seeds the writable HOME lazy/ tree.
 
     Each plugin is a real `git clone` from the stash's bare mirror, checked out at its
     lazy-lock.json pin. That is what makes `:Lazy update` / `:Lazy restore` work with no
@@ -3434,9 +3495,13 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
     Plugins already present in lazy/ are left alone, so re-running the installer never
     clobbers one the user updated via `:Lazy update`.
     """
-    if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("nvim plugin bundle (env-nvim not selected)", "")
-        record_result("nvim plugin bundle", "SKIP", "env-nvim not in selected packages (lazy/ is per-user)")
+    if not _nvim_phase_relevant(selected_tools):
+        skipped("nvim plugin bundle (nvim/env-nvim not selected)", "")
+        record_result("nvim plugin bundle", "SKIP", "nvim/env-nvim not in selected packages")
+        return
+    if not _nvim_config_present(home):
+        skipped("nvim plugin bundle (env-nvim config not installed)", "")
+        record_result("nvim plugin bundle", "SKIP", "no ~/.config/nvim/init.lua")
         return
 
     stash = _resolve_nvim_stash(home)
@@ -3574,41 +3639,58 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
 
 
 def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
-    """When online, run headless nvim to bootstrap lazy.nvim and sync all plugins.
+    """Run headless nvim so Lazy is settled before the user's first interactive launch.
 
-    Gated on env-nvim, like the seeding phase: :Lazy lives in the per-user config and
-    operates on the per-user lazy/ dir. Gating this on nvim-plugin-stash (which
-    lands in the shared tree) meant it never ran on the @envs side, where the config
-    it needs actually is.
+    Normal path is offline: env-nvim points lazy.nvim at the installed plugin stash,
+    and the user's lazy/ clones have stash origins. A split deployment therefore works:
+    nvim can live in LOADOUT_CFG_SHARED_PREFIX while env-nvim and lazy/ live in $HOME.
+
+    Network restore remains opt-in. Default install must not fetch unreviewed plugin
+    code from GitHub just because the machine is online.
     """
-    # Lazy sync requires the staged tree to contain a usable nvim config
-    # (init.lua + plugin specs). That config ships in the env-nvim package
-    # (`kind: env`). When env-nvim isn't in the selection -- e.g. a `@shared`
-    # install into a shared release tree, where per-user configs land
-    # separately under `@envs` -- there is no init.lua to define `:Lazy`, and
-    # the headless invocation fails. Skip cleanly in that case; per-user
-    # `:Lazy sync` runs later when each user installs their `@envs` set.
-    if selected_tools is not None and "env-nvim" not in selected_tools:
-        skipped("Neovim Lazy sync (env-nvim not selected)", "")
-        record_result("Neovim Lazy sync", "SKIP", "env-nvim not in selected packages")
+    if not _nvim_phase_relevant(selected_tools):
+        skipped("Neovim Lazy sync (nvim/env-nvim not selected)", "")
+        record_result("Neovim Lazy sync", "SKIP", "nvim/env-nvim not in selected packages")
         return
-    nvim_bin = os.path.join(home, _local_name(home), "bin", "nvim")
-    if not os.path.isfile(nvim_bin) or not os.access(nvim_bin, os.X_OK):
+    if not _nvim_config_present(home):
+        skipped("Neovim Lazy sync (env-nvim config not installed)", "")
+        record_result("Neovim Lazy sync", "SKIP", "no ~/.config/nvim/init.lua")
+        return
+    nvim_bin = _resolve_loadout_nvim_bin(home)
+    if not nvim_bin:
         skipped("Neovim Lazy sync (nvim binary not found)", "install nvim first")
         record_result("Neovim Lazy sync", "SKIP", "nvim binary not found")
         return
-    # Security default: do NOT pull plugin code from GitHub at install time.
-    # The vetted, commit-pinned plugin bundle shipped in the payload is
-    # authoritative; an online sync would fetch un-reviewed upstream HEADs,
-    # bypassing every repo-side scan and the content manifest. Opt in with
-    # --allow-online-plugin-sync, which restores the committed lazy-lock.json
-    # pins (never a bare `sync` to HEAD).
+    _env = _nvim_headless_env(home)
+    stash = _resolve_nvim_stash(home)
+    if stash:
+        print("  Running nvim --headless '+Lazy! sync' (offline plugin stash) ...")
+        res = run(
+            [nvim_bin, "--headless", "-n", "+Lazy! sync", "+qa"],
+            env=_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if res.returncode == 0:
+            record_result("Neovim Lazy sync", "OK", "headless Lazy sync completed from offline stash")
+        else:
+            tail = _process_output_tail(res)
+            detail = f"Neovim Lazy sync exited rc={res.returncode}; first nvim launch may still show plugin errors"
+            warn(detail + (f"\n{tail}" if tail else ""))
+            record_result("Neovim Lazy sync", "FAIL", f"Lazy sync rc={res.returncode}")
+        return
+
+    # Security default: do NOT pull plugin code from GitHub at install time. The
+    # vetted plugin stash is authoritative for offline/squeaky installs; fetching over
+    # the network bypasses repo-side review and release-asset verification. Opt in
+    # with --allow-online-plugin-sync, which restores the committed lazy-lock.json pins.
     if not _ALLOW_ONLINE_PLUGIN_SYNC:
         skipped(
-            "Neovim Lazy sync (online sync disabled by default)",
-            "the bundled pinned plugin set is used; pass --allow-online-plugin-sync to restore from lazy-lock.json",
+            "Neovim Lazy sync (no offline plugin stash installed)",
+            "install nvim-plugin-stash for a quiet offline first run; network restore needs --allow-online-plugin-sync",
         )
-        record_result("Neovim Lazy sync", "SKIP", "online sync disabled (using bundled pinned plugins)")
+        record_result("Neovim Lazy sync", "SKIP", "no plugin stash; online restore disabled")
         return
     if not _is_online():
         skipped("Neovim Lazy restore (offline)", "run :Lazy restore manually when online")
@@ -3619,23 +3701,21 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         skipped("Neovim Lazy restore (no lazy-lock.json)", "commit envs/nvim/lazy-lock.json to enable pinned restore")
         record_result("Neovim Lazy restore", "SKIP", "no committed lazy-lock.json")
         return
-    print("  Running nvim --headless '+Lazy! restore' (pinned to lazy-lock.json) ...")
-    # Point HOME + all XDG base dirs at the install target so the headless nvim
-    # reads/writes the STAGED config/data (~/.config/nvim, lazy/, lazy-lock.json),
-    # not the real user's ~/.config/nvim. For a normal install home == $HOME, so
-    # this is a no-op; for --dest-dir it keeps the staged install self-contained.
-    _env = os.environ.copy()
-    _env["HOME"] = home
-    _env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
-    _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
-    _env["XDG_STATE_HOME"] = os.path.join(home, _local_name(home), "state")
-    _env["XDG_CACHE_HOME"] = os.path.join(home, ".cache")
-    try:
-        run([nvim_bin, "--headless", "+Lazy! restore", "+qa"], env=_env)
+    print("  Running nvim --headless '+Lazy! restore' (network opt-in, pinned to lazy-lock.json) ...")
+    res = run(
+        [nvim_bin, "--headless", "-n", "+Lazy! restore", "+qa"],
+        env=_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if res.returncode == 0:
         record_result("Neovim Lazy restore", "OK", "plugins restored to lazy-lock.json pins")
-    except subprocess.CalledProcessError as exc:
-        warn(f"Neovim Lazy restore exited rc={exc.returncode}; run :Lazy restore manually")
-        record_result("Neovim Lazy restore", "FAIL", f"Lazy restore rc={exc.returncode}")
+    else:
+        tail = _process_output_tail(res)
+        detail = f"Neovim Lazy restore exited rc={res.returncode}; run :Lazy restore manually"
+        warn(detail + (f"\n{tail}" if tail else ""))
+        record_result("Neovim Lazy restore", "FAIL", f"Lazy restore rc={res.returncode}")
 
 
 def restore_backup(backup_path, home):
@@ -5244,8 +5324,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     # out of it.
     run_install_step("nvim plugin stash", install_nvim_plugin_stash, repo_dir, home, selected_tools, silent=True)
     run_install_step("nvim plugin bundle", install_nvim_plugin_bundle, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, home, selected_tools)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
+    run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, home, selected_tools)
 
     # Shared-library (ldd) check runs LAST, after every runtime archive has extracted.
     # Doing it in the binary phase warned falsely about libs a later runtime provides
