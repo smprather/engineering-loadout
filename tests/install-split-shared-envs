@@ -112,6 +112,8 @@ assert_exists "$shared_prefix/share/nvim/runtime/filetype.lua"
 assert_exists "$shared_prefix/share/terminfo/s/st-256color"
 assert_exists "$test_home/.bashrc"
 assert_exists "$test_home/.config/bash/global/config.sh"
+assert_exists "$test_home/.tcshrc"
+assert_exists "$test_home/.config/tcsh/global/config.csh"
 assert_not_exists "$test_home/.zshrc"
 assert_not_exists "$test_home/.config/zsh"
 assert_not_exists "$test_home/.local/bin/nvim"
@@ -119,6 +121,11 @@ assert_not_exists "$test_home/.local/bin/nvim"
 if ! grep -Eq "^export LOADOUT_CFG_SHARED_PREFIX='?$shared_prefix'?$" "$test_home/.config/bash/global/config.sh"; then
     echo "Expected @envs install to bake LOADOUT_CFG_SHARED_PREFIX into bash/global/config.sh" >&2
     grep "^export LOADOUT_CFG_SHARED_PREFIX=" "$test_home/.config/bash/global/config.sh" >&2 || true
+    exit 1
+fi
+if ! grep -F "setenv LOADOUT_CFG_SHARED_PREFIX \"$shared_prefix\"" "$test_home/.config/tcsh/global/config.csh" >/dev/null; then
+    echo "Expected @envs install to bake LOADOUT_CFG_SHARED_PREFIX into tcsh/global/config.csh" >&2
+    grep "LOADOUT_CFG_SHARED_PREFIX" "$test_home/.config/tcsh/global/config.csh" >&2 || true
     exit 1
 fi
 
@@ -177,6 +184,39 @@ env -i \
         module unload loadout-modules-smoke
         [[ -z "${LOADOUT_SPLIT_MODULES_TEST+x}" ]] || fail "module unload failed"
     '
+
+if command -v tcsh >/dev/null 2>&1 && command -v script >/dev/null 2>&1; then
+    echo "Smoke-testing tcsh env against shared prefix"
+    tcsh_err="$test_run/tcsh.err"
+    tcsh_out=$(
+        printf 'echo "SP=$LOADOUT_CFG_SHARED_PREFIX"\necho "NV=`which nvim`"\necho "TI=$TERMINFO_DIRS"\nexit\n' \
+            | env -i \
+                HOME="$test_home" \
+                PATH="$basic_path" \
+                LANG="${LANG:-C.UTF-8}" \
+                TERM="xterm-256color" \
+                EXPECTED_SHARED_PREFIX="$shared_prefix" \
+                script -qec "tcsh -i" /dev/null 2>"$tcsh_err" \
+            | tr -d '\r'
+    )
+    if [[ -s "$tcsh_err" ]]; then
+        echo "tcsh split env smoke wrote to stderr:" >&2
+        cat "$tcsh_err" >&2
+        exit 1
+    fi
+    case "$tcsh_out" in
+        *"Undefined variable"*|*"Event not found"*|*"Badly placed ()"*|*"Missing }"*|*"Missing ]"*|*"Too many arguments"*|*"Expression Syntax"*|*"Variable syntax"*|*"Unmatched"*|*"No match"*|*"if: Expression Syntax"*|*"alias: Too dangerous"*|*"Command not found"*)
+            echo "tcsh split env smoke printed csh noise:" >&2
+            printf '%s\n' "$tcsh_out" >&2
+            exit 1
+            ;;
+    esac
+    [[ "$tcsh_out" == *"SP=$shared_prefix"* ]] || { echo "tcsh did not load baked shared prefix: $tcsh_out" >&2; exit 1; }
+    [[ "$tcsh_out" == *"NV=$shared_prefix/bin/nvim"* ]] || { echo "tcsh did not find shared nvim: $tcsh_out" >&2; exit 1; }
+    [[ "$tcsh_out" == *"$shared_prefix/share/terminfo"* ]] || { echo "tcsh TERMINFO_DIRS missing shared terminfo: $tcsh_out" >&2; exit 1; }
+else
+    echo "SKIP: tcsh split env smoke (no native tcsh/script)"
+fi
 
 if [[ -x "$shared_prefix/bin/zsh" ]]; then
     echo "Smoke-testing native Modules zsh init against shared prefix"

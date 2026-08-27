@@ -141,6 +141,20 @@ The `envs/bash/global/` directory is the canonical upstream; the other layer dir
 (`corp/`, `site/`, `team/`, `project/`, `user/`) are user-created and not committed
 to this repo.
 
+### tcsh Layer System
+
+`envs/tcsh/tcshrc` is the single entry point (symlinked to `~/.tcshrc` and
+`~/.cshrc`). tcsh is first-class for this project: bash leads, and tcsh mirrors
+bash changes unless upstream offers no tcsh integration target. Use aliases for
+one-line wrappers and POSIX-sh helpers under `envs/tcsh/global/helpers/` for
+loops, locals, or shell-code emission.
+
+`TCSH_CONFIG_ROOT_DIR` defaults to `~/.config/tcsh` and mirrors
+`BASH_CONFIG_ROOT_DIR`/`ZSH_CONFIG_ROOT_DIR`. When it points at a shared config
+root, the entrypoint sources that root first, then still applies the user's
+home-local `corp/site/team/project/user` override layers. Split `@envs` installs
+bake `LOADOUT_CFG_SHARED_PREFIX` into both bash and tcsh global config defaults.
+
 ### Hook Injection Points
 
 Each layer can inject code into `global/bashrc` via numbered files in

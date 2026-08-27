@@ -14,7 +14,11 @@
 # Everything is guarded: on a machine with no loadout install, this file sets nothing
 # and prints nothing. Startup silence is a hard requirement.
 
-set _loadout_global = "$HOME/.config/tcsh/global"
+if ( $?TCSH_CONFIG_ROOT_DIR ) then
+    set _loadout_global = "${TCSH_CONFIG_ROOT_DIR}/global"
+else
+    set _loadout_global = "$HOME/.config/tcsh/global"
+endif
 set _loadout_helpers = "${_loadout_global}/helpers"
 
 # ---- re-exec into a preferred tcsh, if one is configured and different --------

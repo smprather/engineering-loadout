@@ -1856,6 +1856,7 @@ sha256  6f1f6cbe4d70bc0689ae1160c4d17adfc7e5d92320b3c2f9687f01dd201dc0a9  payloa
 sha256  6f66f7410f736051f9e797d3f75a95cb1074701b04f9f2934259c1335601e531  payload/el8.x86_64.glibc2p28/lib64/libCbcSolver.so.2.bz2
 sha256  6f70a8ff55e94c7b5c47e3f681e28a51f0288ac2635d12cca79569c417cc684a  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/problog/folds.scm
 sha256  6f715618b7d83ceb4f5731dac2d7d31959a865c881ac6581d3e5e54cd46c15db  payload/treesitter/vendor/nvim-treesitter/tests/query/injections/starlark/test.bzl
+sha256  6fae5fc8a4684cb929fa924325beb30e4578ee0237400b159318e379dbc41d38  payload/installed-sizes.json
 sha256  6fbcaa953b6b364df1666f202e8281e099ed2cb544dba9fa6175332a2e6336e7  payload/el8.x86_64.glibc2p28/wheels/pyarrow-24.0.0-cp314-cp314-manylinux_2_28_x86_64.whl.part-001
 sha256  6fc5d927e378ef748827f685d942124da050122b6bee35142c9dbab24179f714  payload/treesitter/vendor/nvim-treesitter/tests/indent/sql_spec.lua
 sha256  6fd32248a19f650ec2eaee63cc1df60d8ca7a1957cfc07d910ebc2ad15d23da0  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/elixir.lua
@@ -2345,7 +2346,6 @@ sha256  8b230a4a0fe3710b3db0c4b0bf714716c6e29710a2651acd6cd01cacaaf0677f  payloa
 sha256  8b2be3472569a21d73ffa7134cd80f04b9f4601640042c6fc8d8a0f057695ec5  envs/tmux/vendor/plugins/tmux-yank/video/script.md
 sha256  8b3e9d12b0549a8f401847f0345e3f90f52b2eee85dbf1abeb764439d57ae1b4  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/vrl.lua
 sha256  8b48e0b0a273e72dd83a638f4f65ef11583705552965e5a00ddd5f5919eeaec6  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/gdshader.lua
-sha256  8b55024433613c952ea80fefe68843443e39deb008ee989fda8d7aecd4192885  payload/installed-sizes.json
 sha256  8b6e4fcedc80aacd37435758ce1f226c9c992b4bcfb63fe3013aeb8d91c1c99c  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/udev/locals.scm
 sha256  8b6e4fcedc80aacd37435758ce1f226c9c992b4bcfb63fe3013aeb8d91c1c99c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/udev/locals.scm
 sha256  8b9638b119c00a3d3195fb8236ef099f37fc8fafc920a74b6a9e5e528f79ef61  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/xresources/injections.scm

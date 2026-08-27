@@ -11,9 +11,28 @@
 #
 # Layers are sourced lowest-first: global -> corp -> site -> team -> project -> user.
 # Every source is guarded: a missing layer is normal, not an error, and must stay
-# silent.
+# silent. TCSH_CONFIG_ROOT_DIR mirrors BASH_CONFIG_ROOT_DIR/ZSH_CONFIG_ROOT_DIR:
+# it may point at a shared config tree, while home-local override layers under
+# ~/.config/tcsh/{corp,site,team,project,user} still apply afterwards.
 
-set _loadout_tcsh_dir = "$HOME/.config/tcsh"
+if ( ! $?USER ) then
+    setenv USER "`/bin/whoami`"
+else if ( "$USER" == "" ) then
+    setenv USER "`/bin/whoami`"
+endif
+
+# Match bash's clean-slate startup: aliases are rebuilt from the layered files
+# below, so stale aliases removed from global/ cannot survive an `exec tcsh` or
+# manual re-source.
+unalias *
+
+set _loadout_tcsh_home_dir = "$HOME/.config/tcsh"
+if ( ! $?TCSH_CONFIG_ROOT_DIR ) then
+    setenv TCSH_CONFIG_ROOT_DIR "$_loadout_tcsh_home_dir"
+else if ( "$TCSH_CONFIG_ROOT_DIR" == "" ) then
+    setenv TCSH_CONFIG_ROOT_DIR "$_loadout_tcsh_home_dir"
+endif
+set _loadout_tcsh_dir = "$TCSH_CONFIG_ROOT_DIR"
 
 # Pass 1: LOADOUT_CFG_* preferences for every layer.
 foreach _loadout_layer (global corp site team project user)
@@ -21,6 +40,13 @@ foreach _loadout_layer (global corp site team project user)
         source "${_loadout_tcsh_dir}/${_loadout_layer}/config.csh"
     endif
 end
+if ( "$_loadout_tcsh_dir" != "$_loadout_tcsh_home_dir" ) then
+    foreach _loadout_layer (corp site team project user)
+        if ( -r "${_loadout_tcsh_home_dir}/${_loadout_layer}/config.csh" ) then
+            source "${_loadout_tcsh_home_dir}/${_loadout_layer}/config.csh"
+        endif
+    end
+endif
 
 # Pass 2: the shell config itself (PATH, aliases, prompt).
 foreach _loadout_layer (global corp site team project user)
@@ -28,6 +54,14 @@ foreach _loadout_layer (global corp site team project user)
         source "${_loadout_tcsh_dir}/${_loadout_layer}/tcshrc"
     endif
 end
+if ( "$_loadout_tcsh_dir" != "$_loadout_tcsh_home_dir" ) then
+    foreach _loadout_layer (corp site team project user)
+        if ( -r "${_loadout_tcsh_home_dir}/${_loadout_layer}/tcshrc" ) then
+            source "${_loadout_tcsh_home_dir}/${_loadout_layer}/tcshrc"
+        endif
+    end
+endif
 
 unset _loadout_layer
 unset _loadout_tcsh_dir
+unset _loadout_tcsh_home_dir

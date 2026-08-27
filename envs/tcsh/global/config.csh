@@ -17,6 +17,8 @@
 # processes and can only see the environment.
 #
 # Override any of these in ~/.config/tcsh/user/config.csh.
+# Split @envs installs may rewrite the installed copy of LOADOUT_CFG_SHARED_PREFIX
+# below; the repo source intentionally keeps it empty.
 
 # ---- shell selection ---------------------------------------------------------
 # Full path to a preferred tcsh binary; the rc re-execs into it at startup when
@@ -26,7 +28,9 @@ if ( ! $?LOADOUT_CFG_PREFERRED_TCSH )      setenv LOADOUT_CFG_PREFERRED_TCSH ""
 
 # ---- deployment layout -------------------------------------------------------
 # Local-root of a separately-installed shared/read-only tree (the dir holding
-# bin/, share/, lib64/). Empty = use the user's own ~/.local.
+# bin/, share/, lib64/). Empty = use the user's own ~/.local. Mirrors the bash
+# variable exactly; loadout bakes it into this installed file when @envs is run
+# with LOADOUT_CFG_SHARED_PREFIX in the installer environment.
 if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX ""
 
 # ---- preferred tools ---------------------------------------------------------

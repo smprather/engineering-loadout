@@ -1,15 +1,18 @@
 # tcsh environment
 
-A loadout environment for tcsh: PATH, `LOADOUT_CFG_*` variables, terminfo, ~30
-aliases, a git-aware prompt, and the same six-layer override chain as bash.
+A loadout environment for tcsh: PATH, `LOADOUT_CFG_*` variables, terminfo, the
+bash alias surface reimplemented as tcsh aliases/helpers, a git-aware prompt,
+and the same six-layer override chain as bash.
 
 ## Installing it
 
-`env-tcsh` is **opt-in** (`optional: true`): it is not in `@envs`, and not in the
-`@engineering-loadout` full-bundle sweep. Nobody gets a tcsh config they did not ask for.
+`env-tcsh` is still marked `optional: true` so it is skipped by tool-only groups
+like `@shared`, but it is a first-class member of `@envs` because tcsh is the
+majority interactive shell for the target EE users.
 
 ```
 ./loadout install env-tcsh     # by name
+./loadout install @envs        # bash + tcsh majority-shell config
 ./loadout install @envs-all    # every env bundle, optionals included
 ```
 
@@ -44,8 +47,8 @@ is now the floor rather than the goal.
 
 ## The layer chain
 
-Same shape as bash. `~/.tcshrc` and `~/.cshrc` both link to `~/.config/tcsh/tcshrc`,
-which sources, lowest first:
+Same shape as bash. `~/.tcshrc` and `~/.cshrc` both link to
+`~/.config/tcsh/tcshrc`, which sources, lowest first:
 
 ```
 global -> corp -> site -> team -> project -> user
@@ -55,9 +58,20 @@ global -> corp -> site -> team -> project -> user
 (PATH, aliases, prompt). Every source is guarded — a layer you have not created is
 normal, not an error.
 
+`TCSH_CONFIG_ROOT_DIR` mirrors bash's `BASH_CONFIG_ROOT_DIR` and zsh's
+`ZSH_CONFIG_ROOT_DIR`. It defaults to `~/.config/tcsh`, but can point at a shared
+loadout-owned tcsh config root. When it differs from the user's home config root,
+the entrypoint still sources the home-local `corp/site/team/project/user` layers
+after the shared root, so personal overrides survive shared config deployments.
+
 Only `global/` is loadout-owned. Put your own settings in
 `~/.config/tcsh/user/config.csh` and `~/.config/tcsh/user/tcshrc`; a reinstall never
 touches them.
+
+For split installs, `loadout install @envs` bakes
+`LOADOUT_CFG_SHARED_PREFIX=<shared>/local` into both bash and tcsh global config
+defaults. A direct tcsh login then finds shared `bin/`, `TERMINFO_DIRS`, typelibs,
+and GUI helper paths without relying on the parent process to export the prefix.
 
 ## What you get
 

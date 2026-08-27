@@ -441,10 +441,12 @@ extraction uses the same progress bar style as other bulk install phases.
 
 ---
 
-## Bash Configuration
+## Bash and tcsh Configuration
 
-Six-layer override chain (`global -> corp -> site -> team -> project -> user`),
-`LOADOUT_CFG_*` knobs, and a curated alias set:
+`@envs` installs both majority-shell configs: bash leads, and tcsh mirrors the
+bash architecture/capability set where tcsh can support it. Both use the same
+six-layer override chain (`global -> corp -> site -> team -> project -> user`),
+`LOADOUT_CFG_*` knobs, shared-prefix install model, and curated alias surface:
 
 - `b` / `bb` / `bbb` ... -- `cd ..` up 1, 2, 3 levels
 - `cdd` / `cddd` ... -- `cd` to the N-th most recently modified directory
@@ -454,6 +456,10 @@ Six-layer override chain (`global -> corp -> site -> team -> project -> user`),
 - `vi` / `vim` -- your preferred editor (`nvim` by default)
 - `cat` -- `bat` with no paging
 - `ll` / `la` / `lh` -- `ls` variants (sizes, all files, human-readable)
+
+tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,
+and keeps home-local override layers active even when `TCSH_CONFIG_ROOT_DIR`
+points at a shared tcsh config root.
 
 ---
 

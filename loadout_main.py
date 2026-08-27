@@ -3841,19 +3841,55 @@ def _nvim_migration_notice(nvim_config):
     shutil.rmtree(custom, ignore_errors=True)
 
 
-def _mirror_shared_prefix(home):
-    """Bake $LOADOUT_CFG_SHARED_PREFIX into the installed global/config.sh.
+def _csh_quote(value):
+    """Return a tcsh-safe double-quoted scalar."""
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+        .replace("!", "\\!")
+        .replace("\n", "")
+    )
+    return f'"{escaped}"'
+
+
+def _rewrite_shared_prefix_line(cfg, pattern, replacement, label, val):
+    """Rewrite one installed config file with the shared prefix if present."""
+    # Edit only a real installed file -- never follow a symlink back into the repo.
+    if not os.path.isfile(cfg) or os.path.islink(cfg):
+        return False
+    with open(cfg) as f:
+        text = f.read()
+    new_text, n = re.subn(
+        pattern,
+        lambda _m: replacement,
+        text,
+        count=1,
+        flags=re.M,
+    )
+    if not n:
+        eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX line not found in {cfg}; not baked")
+        return False
+    with open(cfg, "w") as f:
+        f.write(new_text)
+    print(f"  LOADOUT_CFG_SHARED_PREFIX baked into {label}: {val}")
+    return True
+
+
+def _mirror_shared_prefix(home, shells=("bash", "tcsh")):
+    """Bake $LOADOUT_CFG_SHARED_PREFIX into installed shell config defaults.
 
     The shared/read-only tree is installed separately (`loadout install @shared
     --dest-dir /foo/bar`), by a different run -- often a different user -- than the
     per-user `loadout install @envs`. Nothing else carries that path across, so the
-    @envs run reads LOADOUT_CFG_SHARED_PREFIX from its own environment and stamps
-    it into the per-user config.sh, where the shell (PATH/TERMINFO_DIRS/tealdeer)
+    @envs run reads LOADOUT_CFG_SHARED_PREFIX from its own environment and stamps it
+    into the per-user bash/tcsh config defaults, where shells (PATH/TERMINFO_DIRS)
     can derive from it.
 
-    Only the installed copy is stamped; the repo source keeps an empty default.
-    Setting it is install-time state: re-running @envs without the env var resets
-    it to empty. No-op when unset.
+    Only installed copies are stamped; repo sources keep empty defaults. Setting it
+    is install-time state: re-running @envs without the env var resets it to empty.
+    No-op when unset.
     """
     val = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
     if not val:
@@ -3861,25 +3897,23 @@ def _mirror_shared_prefix(home):
     val = os.path.abspath(os.path.expanduser(val))
     if not os.path.isdir(val):
         eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX={val} is not a directory (baking anyway)")
-    cfg = os.path.join(home, ".config", "bash", "global", "config.sh")
-    # Edit only a real installed file -- never follow a symlink back into the repo.
-    if not os.path.isfile(cfg) or os.path.islink(cfg):
-        return
-    with open(cfg) as f:
-        text = f.read()
-    new_text, n = re.subn(
-        r"^export LOADOUT_CFG_SHARED_PREFIX=.*$",
-        "export LOADOUT_CFG_SHARED_PREFIX=" + shlex.quote(val),
-        text,
-        count=1,
-        flags=re.M,
-    )
-    if not n:
-        eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX line not found in {cfg}; not baked")
-        return
-    with open(cfg, "w") as f:
-        f.write(new_text)
-    print(f"  LOADOUT_CFG_SHARED_PREFIX baked into config.sh: {val}")
+
+    if "bash" in shells:
+        _rewrite_shared_prefix_line(
+            os.path.join(home, ".config", "bash", "global", "config.sh"),
+            r"^export LOADOUT_CFG_SHARED_PREFIX=.*$",
+            "export LOADOUT_CFG_SHARED_PREFIX=" + shlex.quote(val),
+            "bash/global/config.sh",
+            val,
+        )
+    if "tcsh" in shells:
+        _rewrite_shared_prefix_line(
+            os.path.join(home, ".config", "tcsh", "global", "config.csh"),
+            r"^if \( ! \$\?LOADOUT_CFG_SHARED_PREFIX \)[ \t]+.*$",
+            "if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX " + _csh_quote(val),
+            "tcsh/global/config.csh",
+            val,
+        )
 
 
 def install_tealdeer_config(repo_dir, home):
@@ -3912,7 +3946,7 @@ def _install_env_bash(repo_dir, home):
     for entrypoint in BASH_ENTRYPOINTS:
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
-    _mirror_shared_prefix(home)
+    _mirror_shared_prefix(home, ("bash",))
     install_tealdeer_config(repo_dir, home)
 
 
@@ -4133,6 +4167,7 @@ def _install_env_tcsh(repo_dir, home):
     ensure_dir(tcsh_dir, "tcsh config")
     install_path(os.path.join(src, "global"), os.path.join(tcsh_dir, "global"), False)
     install_path(os.path.join(src, "tcshrc"), os.path.join(tcsh_dir, "tcshrc"), False)
+    _mirror_shared_prefix(home, ("tcsh",))
     for layer in ("corp", "site", "team", "project", "user"):
         ensure_dir(os.path.join(tcsh_dir, layer), "tcsh config layer")
     for entrypoint in (".tcshrc", ".cshrc"):

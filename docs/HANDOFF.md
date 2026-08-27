@@ -4,8 +4,17 @@ Last updated: 2026-08-26. `v2026.08.24` was published from `fc36596` and
 verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
 matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
 sync is committed as `aa3af08`; `env-nvim` live config sync and optional-tool
-guards are committed as `0b2c66f`; current work makes loadout-owned scratch
-state respect `$TMPDIR` where applicable.
+guards are committed as `0b2c66f`; TMPDIR-respecting scratch state is committed
+as `546fe00`; current work makes tcsh a stronger first-class mirror of the bash
+environment.
+
+## 2026-08-26 batch: tcsh first-class refurb (unreleased)
+
+| area | what |
+|---|---|
+| tcsh architecture | tcsh now has `TCSH_CONFIG_ROOT_DIR`, matching the bash/zsh config-root model. The shared root supplies the loadout-owned `global/` layer while home-local `corp/site/team/project/user` overlays still source afterwards, so shared config deployments do not block personal/site layers. |
+| split installs | `LOADOUT_CFG_SHARED_PREFIX` is now baked into `tcsh/global/config.csh` as well as `bash/global/config.sh`; direct tcsh logins can find shared `bin/`, terminfo, typelibs, and GUI helper paths without relying on inherited parent environment. |
+| docs/tests | `envs/tcsh/README.md`, `README.md`, `AGENTS.md`, and Copilot notes now describe tcsh as first-class but bash-led. `tests/install-env-tcsh` covers shared config-root overlay and tcsh shared-prefix bake; `tests/install-split-shared-envs` asserts the bake and smokes tcsh against the shared prefix when native tcsh/script are available. |
 
 ## 2026-08-26 batch: TMPDIR-respecting scratch state (unreleased)
 

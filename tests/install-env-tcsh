@@ -37,10 +37,33 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # Run an interactive tcsh under a real PTY, feeding it CMDS on stdin.
 # Echoes stdout; stderr lands in $ERRFILE.
 ERRFILE="$TMPHOME/stderr.txt"
-tcsh_i() {
+tcsh_i_home() {
+    _home=$1
+    _cmd=$2
     : > "$ERRFILE"
-    printf '%s\nexit\n' "$1" \
-        | HOME="$TMPHOME" script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+    printf '%s\nexit\n' "$_cmd" \
+        | HOME="$_home" script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+tcsh_i() {
+    tcsh_i_home "$TMPHOME" "$1"
+}
+tcsh_i_root() {
+    _root=$1
+    _cmd=$2
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmd" \
+        | env -i HOME="$TMPHOME" TCSH_CONFIG_ROOT_DIR="$_root" PATH="${PATH:-/usr/bin:/bin}" LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
+            script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+tcsh_i_clean_home() {
+    _home=$1
+    _cmd=$2
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmd" \
+        | env -i HOME="$_home" PATH="${PATH:-/usr/bin:/bin}" LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
+            script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
         | tr -d '\r'
 }
 
@@ -145,7 +168,7 @@ HELPERS="$TMPHOME/.config/tcsh/global/helpers"
 for h in is-truthy vercmp recent-dir recent-file recent-files path-list \
          grep-all-history git-stash-pull safe-symlink latest-link seed-history \
          prompt-color find-count zhead total-cpu lsf-queues vnc-start \
-         vnc-kill-newest detect-online; do
+         vnc-kill-newest detect-online tmp-root; do
     [ -x "$HELPERS/$h" ] || fail "helper not installed executable: $h"
 done
 
@@ -162,6 +185,39 @@ done
 "$HELPERS/vercmp" 2.9 -lt 2.10 || fail "vercmp: 2.9 should be < 2.10"
 "$HELPERS/vercmp" 1.2 -eq 1.2.0 || fail "vercmp: 1.2 should equal 1.2.0"
 "$HELPERS/vercmp" --between 1.0 1.5 2.0 || fail "vercmp: 1.5 should be within [1.0,2.0]"
+
+# --- Split/shared config architecture: TCSH_CONFIG_ROOT_DIR can point at a
+# --- loadout-owned shared config root, while HOME-local override layers still
+# --- apply afterwards. This mirrors bash's BASH_CONFIG_ROOT_DIR + home overlay.
+ALTROOT="$TMPHOME/shared-tcsh-root"
+mkdir -p "$ALTROOT"
+cp -a "$TMPHOME/.config/tcsh/global" "$ALTROOT/global"
+for layer in corp site team project user; do
+    mkdir -p "$ALTROOT/$layer"
+done
+mkdir -p "$TMPHOME/.config/tcsh/user"
+echo 'setenv LOADOUT_TEST_HOME_OVERLAY yes' > "$TMPHOME/.config/tcsh/user/config.csh"
+echo 'setenv LOADOUT_TEST_HOME_TCSHRC loaded' > "$TMPHOME/.config/tcsh/user/tcshrc"
+out=$(tcsh_i_root "$ALTROOT" 'echo "ROOT=$TCSH_CONFIG_ROOT_DIR" ; echo "OV=$LOADOUT_TEST_HOME_OVERLAY" ; echo "RC=$LOADOUT_TEST_HOME_TCSHRC" ; alias loadout_tmp_root')
+assert_no_csh_noise "TCSH_CONFIG_ROOT_DIR overlay" "$out"
+echo "$out" | grep -q "ROOT=$ALTROOT" || fail "TCSH_CONFIG_ROOT_DIR not exported/respected: [$out]"
+echo "$out" | grep -q "OV=yes" || fail "home config overlay not sourced after shared root: [$out]"
+echo "$out" | grep -q "RC=loaded" || fail "home tcshrc overlay not sourced after shared root: [$out]"
+echo "$out" | grep -q "$ALTROOT/global/helpers/tmp-root" || fail "global aliases did not resolve helpers from TCSH_CONFIG_ROOT_DIR: [$out]"
+
+# --- The @envs shared-prefix bake must cover tcsh, not only bash. A direct
+# --- tcsh login must find the shared tree even when LOADOUT_CFG_SHARED_PREFIX is
+# --- NOT inherited from the parent process.
+BAKE_HOME="$TMPHOME/bake-home"
+SHARED_PREFIX="$TMPHOME/shared-prefix!bang"
+mkdir -p "$BAKE_HOME" "$SHARED_PREFIX/bin"
+HOME="$BAKE_HOME" LOADOUT_CFG_SHARED_PREFIX="$SHARED_PREFIX" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+grep -F "setenv LOADOUT_CFG_SHARED_PREFIX \"$TMPHOME/shared-prefix\!bang\"" "$BAKE_HOME/.config/tcsh/global/config.csh" >/dev/null \
+    || fail "env-tcsh install did not bake LOADOUT_CFG_SHARED_PREFIX into config.csh"
+out=$(tcsh_i_clean_home "$BAKE_HOME" 'echo "USER=$USER" ; echo "SP=$LOADOUT_CFG_SHARED_PREFIX"')
+assert_no_csh_noise "tcsh shared-prefix bake clean env" "$out"
+echo "$out" | grep -q "USER=" || fail "tcsh did not bootstrap USER from a clean env: [$out]"
+echo "$out" | grep -q "SP=$SHARED_PREFIX" || fail "baked tcsh LOADOUT_CFG_SHARED_PREFIX not loaded from clean env: [$out]"
 
 # --- A helper-backed alias must work END TO END inside tcsh. Testing the helper
 # --- alone proves nothing about the alias quoting, which is where csh bites.

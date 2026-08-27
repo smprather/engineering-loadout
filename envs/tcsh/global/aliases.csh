@@ -18,7 +18,11 @@
 # Anything needing loops, locals, `case` or arithmetic lives in global/helpers/
 # and is aliased here. See helpers/README.md for the three helper shapes.
 
-set _lo_helpers = "$HOME/.config/tcsh/global/helpers"
+if ( $?TCSH_CONFIG_ROOT_DIR ) then
+    set _lo_helpers = "${TCSH_CONFIG_ROOT_DIR}/global/helpers"
+else
+    set _lo_helpers = "$HOME/.config/tcsh/global/helpers"
+endif
 alias loadout_tmp_root "$_lo_helpers/tmp-root"
 
 # ---- navigation --------------------------------------------------------------
