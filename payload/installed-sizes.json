@@ -1622,7 +1622,7 @@
     "envs/tmux/tmux-popin.sh": 1453,
     "envs/tmux/tmux-popout.sh": 4480,
     "envs/tmux/tmux-word-separators": 1544,
-    "envs/tmux/tmux.conf": 8058,
+    "envs/tmux/tmux.conf": 8275,
     "envs/tmux/vendor/plugins.lock": 349,
     "envs/tmux/vendor/plugins/tmux-better-mouse-mode/.travis.yml": 332,
     "envs/tmux/vendor/plugins/tmux-better-mouse-mode/LICENSE.md": 1078,

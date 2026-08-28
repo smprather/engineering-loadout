@@ -470,6 +470,7 @@ points at a shared tcsh config root.
 ## Tmux
 
 Prefix `Ctrl-\`. Shift-arrows for pane navigation, Ctrl-arrows for windows,
-`Prefix+1`-`5` for layout presets, `Prefix+v` to capture the pane buffer
-into nvim. tmux-resurrect and tmux-continuum bundled -- your sessions come
-back after a reboot.
+`Prefix+1`-`5` for layout presets, `Prefix+6` to reapply the custom 3-column
+layout, `Prefix+o` to open a new seven-pane 3-column work window, and
+`Prefix+v` to capture the pane buffer into nvim. tmux-resurrect and
+tmux-continuum bundled -- your sessions come back after a reboot.

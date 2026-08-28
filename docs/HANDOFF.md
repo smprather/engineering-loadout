@@ -5,7 +5,17 @@ signed tag good, `origin/main == v2026.08.28^{commit}`, all three release
 assets present, and the nvim stash asset hash matches `sha256sums.txt`.
 Current post-release changes: none.
 
-The 2026-08-24 through 2026-08-27 batches below are included in `v2026.08.28`.
+The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
+
+## 2026-08-28 batch: env-tmux pane factory (released in v2026.08.28)
+
+| area | what |
+|---|---|
+| env-tmux | `Prefix+o` now opens a new seven-pane work window: split, re-tile after each split so tmux does not preserve an early skewed split tree, then run `tmux-3col-layout.sh` to center the active pane full-height with balanced side columns. README documents `Prefix+6` as the manual 3-column re-layout key and `Prefix+o` as the seven-pane factory. |
+
+Gates: isolated tmux smoke installed `env-tmux` into a temp `--dest-dir`,
+sourced the deployed config, executed the `Prefix+o` command sequence, and
+verified the new window had seven panes with the custom 3-column layout.
 
 ## 2026-08-27 batch: TypeScript LSP + Python tool progress (released in v2026.08.28)
 
