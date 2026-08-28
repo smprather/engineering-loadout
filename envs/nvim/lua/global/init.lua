@@ -215,6 +215,11 @@ if vim.g.cfg_enable_lsp then
     -- static binaries by the spice-netlist-ls package. It covers .sp/.cir/.scs
     -- and .subckt netlists; see envs/nvim/lsp/spice_netlist_ls.lua.
     --
+    -- ts_ls is the TypeScript/JavaScript language server shipped as a
+    -- loadout Node runtime archive. It bundles the server package and
+    -- TypeScript itself, so no npm install or first-run network access is
+    -- needed; see envs/nvim/lsp/ts_ls.lua.
+    --
     -- yamlls was dropped from this list (2026-08-13) for the marksman reason:
     -- yaml-language-server is an npm package and is NOT bundled, so every user
     -- got an enabled server that could never start. Its lsp/yamlls.lua also
@@ -230,6 +235,7 @@ if vim.g.cfg_enable_lsp then
         { name = "biome",           cmd = "biome" },
         { name = "taplo",           cmd = "taplo" },
         { name = "tclsp",           cmd = "tclsp" },
+        { name = "ts_ls",           cmd = "typescript-language-server" },
         { name = "spice_netlist_ls", cmd = vim.env.SPICEFMT_LS_CMD or "spice-netlist-ls" },
     }
     local enabled_lsp_servers = {}

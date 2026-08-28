@@ -330,7 +330,14 @@ def test_installer_stock_config():
 
 def main():
     env = Env()
-    listener = Listener()
+    try:
+        listener = Listener()
+    except PermissionError as exc:
+        env.cleanup()
+        print(
+            f"SKIP: host policy forbids local socket binds ({exc}) -- cargo offline fallback probe tests need loopback sockets"
+        )
+        return 0
     try:
         test_probe(env, listener.port)
         test_cargo_wrapper(env, listener.port)

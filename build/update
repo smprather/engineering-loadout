@@ -106,6 +106,10 @@ BUILD_SCRIPTS = {
     "octave": {"script": "build-octave.sh", "runtime": "octave.tar.bz2"},
     "st": {"script": "build-st.sh"},
     "tmux": {"script": "build-tmux.sh"},
+    "typescript-language-server": {
+        "script": "build-typescript-language-server.sh",
+        "runtime": "typescript-language-server.tar.bz2",
+    },
     "urxvt": {"script": "build-urxvt.sh"},
     "vcd-toggle-profiler": {"script": "build-vcd-toggle-profiler.sh", "runtime": "vcd-toggle-profiler.tar.bz2"},
     "vim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},

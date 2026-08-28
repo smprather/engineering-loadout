@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Smoke the TypeScript LSP package through the installer, not just its build
+# script. This catches broken registry/archive wiring in normal loadout runs.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-tsls-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-tsls-dest.XXXXXX")
+local_prefix="$dest_dir/local"
+
+cleanup() { rm -rf "$test_home" "$dest_dir"; }
+trap cleanup EXIT
+
+fail() {
+    echo "typescript-language-server smoke failed: $*" >&2
+    exit 1
+}
+
+py=""
+for cand in "$HOME/.local/bin/python3.14" "$repo_dir/.loadout-bootstrap/bin/python3.14" python3.14; do
+    if command -v "$cand" >/dev/null 2>&1; then
+        py=$cand
+        break
+    fi
+done
+[[ -n $py ]] || fail "python3.14 not found"
+
+echo "Installing typescript-language-server into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install -y typescript-language-server --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -80 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+launcher="$local_prefix/bin/typescript-language-server"
+node="$local_prefix/bin/node"
+tsc_js="$local_prefix/lib/node_modules/typescript/lib/tsc.js"
+tsserver_js="$local_prefix/lib/node_modules/typescript/lib/tsserver.js"
+typescript_package_json="$local_prefix/lib/node_modules/typescript/package.json"
+[[ -x $launcher ]] || fail "typescript-language-server launcher missing"
+[[ -x $node ]] || fail "node dependency missing"
+[[ -f $tsc_js ]] || fail "bundled TypeScript tsc.js missing"
+[[ -f $tsserver_js ]] || fail "bundled TypeScript tsserver.js missing"
+[[ -f $typescript_package_json ]] || fail "bundled TypeScript package.json missing"
+
+expected=$("$repo_dir/loadout" info typescript-language-server 2>/dev/null |
+    sed -n 's/.*[Vv]ersion[^0-9]*\([0-9][0-9.]*\).*/\1/p' | head -1)
+[[ -n $expected ]] || fail "could not read expected version from registry"
+version=$("$launcher" --version)
+[[ $version == "$expected" ]] || fail "server reports '$version', registry says '$expected'"
+
+typescript_expected=$("$py" - "$typescript_package_json" <<'PY'
+import json
+import sys
+
+print(json.load(open(sys.argv[1]))["version"])
+PY
+)
+[[ -n $typescript_expected ]] || fail "could not read bundled TypeScript version"
+typescript_version=$("$node" "$tsc_js" --version)
+[[ $typescript_version == "Version $typescript_expected" ]] \
+    || fail "TypeScript reports '$typescript_version', build script says $typescript_expected"
+
+"$py" - "$launcher" "$test_home" <<'PY'
+import json
+import os
+import select
+import subprocess
+import sys
+import time
+
+cmd = sys.argv[1]
+home = sys.argv[2]
+env = {
+    "HOME": home,
+    "PATH": os.path.dirname(cmd) + ":/usr/bin:/bin",
+    "LANG": os.environ.get("LANG", "C.UTF-8"),
+    "https_proxy": "http://127.0.0.1:9",
+    "http_proxy": "http://127.0.0.1:9",
+}
+captured = bytearray()
+
+def frame(payload):
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return b"Content-Length: %d\r\n\r\n" % len(body) + body
+
+proc = subprocess.Popen(
+    [cmd, "--stdio"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    env=env,
+)
+
+def write(payload):
+    assert proc.stdin is not None
+    proc.stdin.write(frame(payload))
+    proc.stdin.flush()
+
+def saw_id(req_id):
+    return (b'"id":%d' % req_id) in captured or (b'"id": %d' % req_id) in captured
+
+def drain_until(req_id, timeout):
+    assert proc.stdout is not None
+    fd = proc.stdout.fileno()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if saw_id(req_id):
+            return True
+        if proc.poll() is not None:
+            break
+        ready, _, _ = select.select([fd], [], [], 0.1)
+        if ready:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            captured.extend(chunk)
+    return saw_id(req_id)
+
+write(
+    {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "processId": None,
+            "rootUri": None,
+            "capabilities": {},
+            "clientInfo": {"name": "loadout-install-smoke"},
+        },
+    }
+)
+ok1 = drain_until(1, 15)
+write({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+write({"jsonrpc": "2.0", "id": 2, "method": "shutdown", "params": None})
+ok2 = drain_until(2, 15)
+write({"jsonrpc": "2.0", "method": "exit", "params": None})
+if proc.stdin is not None:
+    proc.stdin.close()
+try:
+    rc = proc.wait(timeout=5)
+except subprocess.TimeoutExpired:
+    proc.kill()
+    rc = proc.wait(timeout=5)
+stderr = proc.stderr.read() if proc.stderr is not None else b""
+if not ok1 or not ok2 or rc != 0:
+    sys.stderr.buffer.write(bytes(captured) + b"\n--- stderr ---\n" + stderr + b"\n")
+    raise SystemExit(1)
+PY
+
+echo "  typescript-language-server $version + TypeScript $typescript_expected; LSP stdio OK"
+echo "install-typescript-language-server: PASS"

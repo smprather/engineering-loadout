@@ -2262,69 +2262,78 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     installed = []
     failed = []
     skipped_tools = []
+    progress, progress_task = _progress("Python tools", len(tools_to_install))
     try:
         for tool_name, pkg_name, install_spec in tools_to_install:
-            # Check if a wheel for this package exists (whole or chunked) before install.
-            norm = pkg_name.lower().replace("-", "_").replace(".", "_")
-            matches = (
-                glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl"))
-                + glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
-                + glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl.part-000"))
-                + glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
-            )
-            if not matches:
-                warn(f"skipping {install_spec} -- no wheel found in {wheels_dir}")
-                skipped_tools.append(tool_name)
-                continue
-            cmd = [
-                uv_bin,
-                "tool",
-                "install",
-                install_spec,
-                # WITHOUT --force, `uv tool install` NO-OPS on an already-installed
-                # tool -- it prints "`<pkg>` is already installed" and exits 0,
-                # whatever version the bundled wheel carries. That exit 0 was then
-                # reported below as "Installed Python tool: <name>", so `./loadout
-                # upgrade <python-tool>` could not upgrade ANY of the uv_tool
-                # packages and said it had. Found 2026-08-09 on a box pinned at
-                # tmux-path-store 1.0.0 across two releases that shipped 1.0.1 and
-                # 1.1.0. The rolling-git tools are the worst affected -- they move
-                # most often. Reinstalling from the local wheelhouse is cheap
-                # (measured: 5 packages in 46 ms), so this is unconditional rather
-                # than gated on a version comparison, which would be unreliable
-                # anyway: rolling-git packages carry `git describe` strings in the
-                # registry `version` while their wheels carry PEP440.
-                "--force",
-                "--python",
-                python_bin,
-                "--no-index",
-                "--find-links",
-                effective_wheels_dir,
-                "--no-cache",
-            ]
-            # Force uv to install into the destination root (matters for --dest-dir runs;
-            # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
-            _env = os.environ.copy()
-            _env["HOME"] = home
-            _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
-            _env["XDG_BIN_HOME"] = os.path.join(home, _local_name(home), "bin")
-            print("  running: {}".format(" ".join(cmd)))
-            proc = run(cmd, check=False, env=_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            out = proc.stdout.decode("utf-8", "replace")
-            err = proc.stderr.decode("utf-8", "replace")
-            for line in out.splitlines():
-                print(f"  {line}")
-            if proc.returncode != 0:
-                for line in err.splitlines():
-                    eprint(f"  {line}")
-                warn(f"uv tool install {install_spec} exited {proc.returncode}")
-                failed.append(tool_name)
-            else:
-                installed.append(tool_name)
-                print(f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']}")
-                for launcher in _prune_dead_uv_launchers(pkg_name, _env["XDG_BIN_HOME"]):
-                    print(f"  Removed unsupported launcher: {launcher}")
+            if progress:
+                progress.update(progress_task, description=f"Python tools: {tool_name}")
+            try:
+                # Check if a wheel for this package exists (whole or chunked) before install.
+                norm = pkg_name.lower().replace("-", "_").replace(".", "_")
+                matches = (
+                    glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl"))
+                    + glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
+                    + glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl.part-000"))
+                    + glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
+                )
+                if not matches:
+                    warn(f"skipping {install_spec} -- no wheel found in {wheels_dir}")
+                    skipped_tools.append(tool_name)
+                    continue
+                cmd = [
+                    uv_bin,
+                    "tool",
+                    "install",
+                    install_spec,
+                    # WITHOUT --force, `uv tool install` NO-OPS on an already-installed
+                    # tool -- it prints "`<pkg>` is already installed" and exits 0,
+                    # whatever version the bundled wheel carries. That exit 0 was then
+                    # reported below as "Installed Python tool: <name>", so `./loadout
+                    # upgrade <python-tool>` could not upgrade ANY of the uv_tool
+                    # packages and said it had. Found 2026-08-09 on a box pinned at
+                    # tmux-path-store 1.0.0 across two releases that shipped 1.0.1 and
+                    # 1.1.0. The rolling-git tools are the worst affected -- they move
+                    # most often. Reinstalling from the local wheelhouse is cheap
+                    # (measured: 5 packages in 46 ms), so this is unconditional rather
+                    # than gated on a version comparison, which would be unreliable
+                    # anyway: rolling-git packages carry `git describe` strings in the
+                    # registry `version` while their wheels carry PEP440.
+                    "--force",
+                    "--python",
+                    python_bin,
+                    "--no-index",
+                    "--find-links",
+                    effective_wheels_dir,
+                    "--no-cache",
+                ]
+                # Force uv to install into the destination root (matters for --dest-dir runs;
+                # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
+                _env = os.environ.copy()
+                _env["HOME"] = home
+                _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
+                _env["XDG_BIN_HOME"] = os.path.join(home, _local_name(home), "bin")
+                _vprint("  running: {}".format(" ".join(cmd)))
+                proc = run(cmd, check=False, env=_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                out = proc.stdout.decode("utf-8", "replace")
+                err = proc.stderr.decode("utf-8", "replace")
+                for line in out.splitlines():
+                    _vprint(f"  {line}")
+                if proc.returncode != 0:
+                    for line in err.splitlines():
+                        eprint(f"  {line}")
+                    warn(f"uv tool install {install_spec} exited {proc.returncode}")
+                    failed.append(tool_name)
+                else:
+                    installed.append(tool_name)
+                    _vprint(f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']}")
+                    for launcher in _prune_dead_uv_launchers(pkg_name, _env["XDG_BIN_HOME"]):
+                        _vprint(f"  Removed unsupported launcher: {launcher}")
+            finally:
+                if progress:
+                    progress.advance(progress_task)
     finally:
+        if progress:
+            progress.stop()
         _wheels_cleanup()
 
     if failed:

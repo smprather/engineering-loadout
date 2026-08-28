@@ -90,7 +90,7 @@ echo "--- 4. dry-run @engineering-loadout ---"
 DRY_FULL=$(cd "$tmp_root" && "$INSTALLER" install "@engineering-loadout" --dry-run 2>&1)
 
 # Packages that were previously orphaned / missing from the group
-REQUIRED_FULL=(nodejs modules lua-language-server octave fish ngspice nvim vim bash tmux uv)
+REQUIRED_FULL=(nodejs modules lua-language-server typescript-language-server octave fish ngspice nvim vim bash tmux uv)
 for pkg in "${REQUIRED_FULL[@]}"; do
     if echo "$DRY_FULL" | grep -qE "(^|[[:space:],])${pkg}([[:space:],]|$)"; then
         pass "full set resolves: $pkg"

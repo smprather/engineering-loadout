@@ -1,13 +1,32 @@
 # Current Handoff
 
-Last updated: 2026-08-27. `v2026.08.24` was published from `fc36596` and
+Last updated: 2026-08-28. `v2026.08.24` was published from `fc36596` and
 verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
 matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
 sync is committed as `aa3af08`; `env-nvim` live config sync and optional-tool
 guards are committed as `0b2c66f`; TMPDIR-respecting scratch state is committed
 as `546fe00`; tcsh first-class refurb is committed as `fda7e71`; current work
 runs headless Neovim Lazy sync during installs when loadout nvim plus env-nvim
-are available.
+are available, adds `typescript-language-server`, and uses a Rich progress bar
+for the Python uv_tool install loop.
+
+## 2026-08-27 batch: TypeScript LSP + Python tool progress (unreleased)
+
+| area | what |
+|---|---|
+| typescript-language-server | Add `typescript-language-server` 6.0.0 as a pure Node runtime archive built by `build/build-typescript-language-server.sh`. The archive bundles the upstream npm server package plus `typescript` 6.0.3, exposes only `bin/typescript-language-server`, hard-depends on loadout `nodejs`, and smokes version + bundled TypeScript + stdio LSP initialize/shutdown before writing the payload. |
+| env-nvim | Add guarded `ts_ls` to the default LSP set. Missing `typescript-language-server` stays quiet through the existing `vim.g.loadout_missing_lsp_servers` path; installed package enables JS/TS buffers without first-run npm/network work. |
+| installer UX | `install_python_tools` now renders one Rich progress bar over selected uv_tool packages instead of printing a running command list. Top-level `--verbose` still prints exact `uv tool install ... --force ...` commands/stdout for diagnostics and the force-reinstall regression test. |
+| xdesk hardening | Final `tests/run-all` exposed inherited `XDG_RUNTIME_DIR=/run/user/$uid` can exist but be read-only in constrained sessions. `xdesk` now falls back to writable `$TMPDIR`/`/tmp`, exports the private state dir as `XDG_RUNTIME_DIR`, and `tests/install-xdesk` skips when `$DISPLAY` is set but not reachable. |
+| constrained test hosts | `tests/cargo-offline-fallback` now skips when host policy forbids local loopback socket creation; that test's live/dead network probe cases cannot run under such a sandbox. |
+
+Gates: post-payload chain green (`strip-all-elf-binaries` ->
+`gen-installed-sizes` -> `gen-content-manifest`), focused TS LSP install smoke
+green, `tests/run-all` green, and Tier 3 green
+(`tests/prebuilt-binaries-almalinux8 --full`: 299 binaries OK, 25 expected
+host-contract skips, runtimes OK). A spec review flagged the bash `cd`
+completion as possible scope drift; owner clarified it is intentional and it
+remains in the commit.
 
 ## 2026-08-27 batch: headless Neovim Lazy sync on install (unreleased)
 

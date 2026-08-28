@@ -25,6 +25,14 @@ if [[ -z ${DISPLAY:-} ]]; then
     echo "SKIP: no \$DISPLAY -- xdesk needs a parent X display to nest inside"
     exit 0
 fi
+if ! command -v xdpyinfo > /dev/null 2>&1; then
+    echo "SKIP: host xdpyinfo missing -- cannot verify the nested display"
+    exit 0
+fi
+if ! xdpyinfo > /dev/null 2>&1; then
+    echo "SKIP: parent X display '$DISPLAY' is not reachable -- xdesk needs a usable parent X display"
+    exit 0
+fi
 
 tmp_root=${TMPDIR:-/tmp}
 test_home=$(mktemp -d "$tmp_root/loadout-xdesk-home.XXXXXX")
@@ -74,11 +82,6 @@ env -i \
 if LD_LIBRARY_PATH="$local_prefix/lib64" ldd "$local_prefix/bin/Xephyr.bin" | grep -q 'not found'; then
     LD_LIBRARY_PATH="$local_prefix/lib64" ldd "$local_prefix/bin/Xephyr.bin" | grep 'not found' >&2
     fail "unresolved shared libraries"
-fi
-
-if ! command -v xdpyinfo > /dev/null 2>&1; then
-    echo "SKIP: host xdpyinfo missing -- cannot verify the nested display"
-    exit 0
 fi
 
 # The session command runs INSIDE the nested display, which is the only place

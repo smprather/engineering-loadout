@@ -350,6 +350,12 @@ TOOLS = [
         strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "typescript-language-server",
+        "typescript-language-server",
+        "https://github.com/typescript-language-server/typescript-language-server",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "iverilog",
         "iverilog",
         "https://github.com/steveicarus/iverilog",

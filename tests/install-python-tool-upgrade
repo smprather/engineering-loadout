@@ -49,7 +49,7 @@ do_install() {
         HOME="$test_home" \
         PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
         LANG="${LANG:-C.UTF-8}" \
-        "$repo_dir/loadout" install -y "$pkg" --dest-dir "$dest_dir" --no-backup \
+        "$repo_dir/loadout" --verbose install -y "$pkg" --dest-dir "$dest_dir" --no-backup \
         > "$1" 2>&1 || {
         tail -40 "$1" >&2
         fail "install exited non-zero ($1)"

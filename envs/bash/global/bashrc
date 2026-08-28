@@ -491,6 +491,7 @@ cd() {
     builtin cd "$target" && human_readable=0 ls
     # z "$target" && human_readable=0 ls
 }
+complete -o filenames -d cd
 
 extract_rpm() {
     rpm2cpio "$1" | cpio -idmv

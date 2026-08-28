@@ -3673,8 +3673,9 @@ Three things in it are load-bearing:
 1. **MIT-MAGIC-COOKIE auth by default.** A unix-socket X server is *not*
    access-controlled: on a shared farm node any other user could connect to the
    nested display and read its keystrokes. `xdesk` mints a cookie into a private
-   `$XDG_RUNTIME_DIR` state dir and exports `XAUTHORITY`. It warns loudly if
-   `xauth`/`mcookie` are missing rather than silently running open.
+   state dir under writable `$XDG_RUNTIME_DIR`, writable `$TMPDIR`, or `/tmp`,
+   then exports that private dir as `XDG_RUNTIME_DIR` plus `XAUTHORITY`. It
+   warns loudly if `xauth`/`mcookie` are missing rather than silently running open.
    `--no-auth` exists for debugging only.
 2. **Readiness waits on the right fact.** The first version waited for
    `/tmp/.X11-unix/X$N` to appear and timed out against a perfectly healthy
@@ -3687,9 +3688,9 @@ Three things in it are load-bearing:
    except for `start*` launchers (`startxfce4` runs `dbus-launch` itself; a
    second bus would strand half the session's services on the wrong one).
 
-It also warns when `XDG_RUNTIME_DIR` is not `drwx------`, because dconf and
-D-Bus refuse a world-writable one and the resulting CRITICAL spew looks like a
-packaging bug.
+It also warns when the inherited `XDG_RUNTIME_DIR` is not `drwx------`, and
+falls back when it is not writable/searchable; read-only `/run/user/$uid`
+mounts can appear in constrained test/container sessions.
 
 Two more `xdesk` rules worth recording:
 
@@ -4781,6 +4782,46 @@ No PATH setup needed (GUI-launched nvim included), no network, no python.
   content-gated on referencing this install's `uv/tools/pyright` venv so an
   unrelated user file of the same name is never touched.
 - Old wheels removed from the wheelhouse: pyright-1.1.40x, nodeenv-1.10.0.
+
+## typescript-language-server 6.0.0 -- TypeScript/JavaScript LSP (upstream npm package, pure Node runtime archive)
+
+Date: 2026-08-27. Build:
+`./build/build-typescript-language-server.sh --tag 6.0.0 --typescript-tag 6.0.3`.
+Payload:
+`payload/el8.x86_64.glibc2p28/runtime/typescript-language-server.tar.bz2`.
+
+Registry shape: `kind: bin`, `bins: [typescript-language-server]`,
+`archive runtime/typescript-language-server.tar.bz2`, `sentinel
+bin/typescript-language-server`, `install_to ~/.local`, hard `depends
+[nodejs]`. It is also a member of `@dev-tools`; `@engineering-loadout` reaches
+it through the normal `@shared` sweep.
+
+Why a runtime archive: `typescript-language-server` is only the LSP shim. It
+wraps `tsserver`, which comes from the separate `typescript` npm package.
+Upstream's current install guidance is `npm install -g
+typescript-language-server typescript@6`, so the loadout archive carries both
+npm tarballs. The server wrapper execs `$PREFIX/bin/node` by absolute path and
+therefore works from GUI-launched nvim and env-only shells without relying on
+PATH or npm.
+
+Build-script invariants:
+
+- Fetch `typescript-language-server@$TAG` and `typescript@$TYPESCRIPT_TAG`
+  from `registry.npmjs.org`.
+- Verify npm `dist.integrity` SHA-512 before extracting either tarball.
+- Reject any ELF file in the npm packages; pure JS/data only.
+- Stage packages under `lib/node_modules/{typescript-language-server,typescript}`.
+- Stage only the `typescript-language-server` user-visible wrapper. Do not
+  expose `tsc`/`tsserver` unless a separate package decision is made; the
+  bundled TypeScript exists to satisfy the language server offline.
+- Smoke `typescript-language-server --version`, `typescript/lib/tsc.js
+  --version`, and a minimal stdio LSP initialize/shutdown session before
+  writing the archive.
+
+Nvim integration: `envs/nvim/lua/global/init.lua` now enables `ts_ls` by
+default, guarded by `vim.fn.executable("typescript-language-server")` through
+the shared optional-LSP guard. This keeps env-only installs silent until the
+package is installed, then enables JS/TS buffers without user config.
 
 ## valgrind 3.27.1 -- memcheck/cachegrind/callgrind bundle (EL8 SOURCE build, C)
 

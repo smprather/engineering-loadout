@@ -160,6 +160,26 @@ echo "$out" | grep -q "SPICE_LS=missing-ok" || fail "split: missing spice-netlis
 $out"
 echo "  optional LSP guards: missing spice-netlist-ls leaves spice buffers quiet"
 
+ts_file="$H2/ts-guard.ts"
+printf 'const x: number = 1;\n' > "$ts_file"
+out=$(
+    HOME="$H2" \
+    LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+    PATH="$SHARED/local/bin" \
+    https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 \
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true \
+    /usr/bin/timeout 120 nvim --headless -n "$ts_file" -c 'lua vim.defer_fn(function()
+        print("TS_FT=" .. vim.bo.filetype)
+        print("TS_LS=" .. (vim.lsp.is_enabled("ts_ls") and "enabled" or "missing-ok"))
+        vim.cmd("qa!")
+    end, 800)' 2>&1 || true
+)
+echo "$out" | grep -q "TS_FT=typescript" || fail "split: .ts did not map to typescript filetype:
+$out"
+echo "$out" | grep -q "TS_LS=missing-ok" || fail "split: missing typescript-language-server still enabled ts_ls:
+$out"
+echo "  optional LSP guards: missing typescript-language-server leaves TS buffers quiet"
+
 # --- the offline UPDATE path: plugins must be real clones OF THE STASH ---------
 snacks="$H2/.local/share/nvim/lazy/snacks.nvim"
 [ -d "$snacks/.git" ] || fail "split: lazy/snacks.nvim is not a git repo -- :Lazy update cannot work"

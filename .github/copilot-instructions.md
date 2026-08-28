@@ -204,6 +204,8 @@ Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
 short-circuit with a `SKIP` install-results row when their package(s) are not in
 the selected set. `--skip @fonts-all` short-circuits `install_fonts`;
 `--skip tldr-data` short-circuits `install_tldr_cache`; etc.
+Python-tool installs render a Rich progress bar for the uv_tool loop; use
+top-level `--verbose` when a test needs the exact `uv tool install` command.
 
 The Linux installer resolves the repo from the script path, not the current
 working directory. It checks the Python version before running.

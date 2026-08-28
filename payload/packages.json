@@ -3530,6 +3530,7 @@
         "ty",
         "taplo",
         "tclint",
+        "typescript-language-server",
         "uv",
         "tree-sitter",
         "patchelf"
@@ -4046,6 +4047,30 @@
       "install_to": "~/.local",
       "missing_hint": "Run: ./build/build-pyright.sh --tag <version>",
       "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions; upstream npm package running directly on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads)"
+    },
+    "typescript-language-server": {
+      "kind": "bin",
+      "bins": [
+        "typescript-language-server"
+      ],
+      "depends": [
+        "nodejs"
+      ],
+      "version": "6.0.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "lsp",
+        "javascript",
+        "typescript"
+      ],
+      "archive": "payload/PLATFORM/runtime/typescript-language-server.tar.bz2",
+      "archive_name": "typescript-language-server.tar.bz2",
+      "sentinel": "bin/typescript-language-server",
+      "install_to": "~/.local",
+      "missing_hint": "Run: ./build/build-typescript-language-server.sh --tag <version>",
+      "description": "TypeScript/JavaScript language server (LSP) \u2014 upstream npm package plus bundled TypeScript 6.x running directly on loadout's bundled Node.js (no npm install, no runtime downloads)"
     },
     "tmux-path-store": {
       "kind": "python-tool",

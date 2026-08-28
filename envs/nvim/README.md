@@ -70,7 +70,9 @@ Enable in your user layer with `vim.lsp.enable("<server>")`.
 
 The global defaults only enable servers whose command exists on `PATH`. This
 keeps env-only installs quiet when optional packages such as `spice-netlist-ls`
-or `tclint` have not been installed.
+or `tclint` have not been installed. The guarded default set includes
+loadout-bundled JS/TS support through `ts_ls` when
+`typescript-language-server` is installed.
 
 ## Tree-sitter — Offline
 

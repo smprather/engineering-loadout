@@ -159,13 +159,29 @@ fi
 
 # GTK/GNOME-family sessions write settings through dconf, which needs a private
 # XDG_RUNTIME_DIR. A world-writable one makes dconf and D-Bus refuse to start.
+runtime_parent=""
 if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
     perms=$(ls -ld "$XDG_RUNTIME_DIR" | cut -c1-10)
     case "$perms" in
         drwx------) ;;
         *) warn "XDG_RUNTIME_DIR ($XDG_RUNTIME_DIR) is $perms, not drwx------; expect dconf/D-Bus warnings" ;;
     esac
+    if [ -w "$XDG_RUNTIME_DIR" ] && [ -x "$XDG_RUNTIME_DIR" ]; then
+        runtime_parent=$XDG_RUNTIME_DIR
+    else
+        warn "XDG_RUNTIME_DIR ($XDG_RUNTIME_DIR) is not writable/searchable; using temp fallback"
+    fi
 fi
+if [ -z "$runtime_parent" ]; then
+    for candidate in "${TMPDIR:-}" /tmp; do
+        [ -n "$candidate" ] || continue
+        if [ -d "$candidate" ] && [ -w "$candidate" ] && [ -x "$candidate" ]; then
+            runtime_parent=$candidate
+            break
+        fi
+    done
+fi
+[ -n "$runtime_parent" ] || die "no writable temp dir for state"
 
 # ---- pick a free display ---------------------------------------------------
 if [ -z "$display" ]; then
@@ -184,7 +200,10 @@ fi
 # ---- auth cookie -----------------------------------------------------------
 # Without this any other user on the host can connect to the nested server and
 # read its keystrokes: the unix socket alone is not an access control.
-statedir=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/xdesk.XXXXXX") || die "cannot create state dir"
+statedir=$(mktemp -d "$runtime_parent/xdesk.XXXXXX") || die "cannot create state dir"
+chmod 700 "$statedir"
+XDG_RUNTIME_DIR=$statedir
+export XDG_RUNTIME_DIR
 authfile="$statedir/Xauthority"
 auth_args=""
 
