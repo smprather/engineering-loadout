@@ -1,16 +1,13 @@
 # Current Handoff
 
-Last updated: 2026-08-28. `v2026.08.24` was published from `fc36596` and
-verified: signed tag good, `origin/main == v2026.08.24`, nvim stash asset hash
-matched `sha256sums.txt`. Current post-release changes: `env-tmux` live config
-sync is committed as `aa3af08`; `env-nvim` live config sync and optional-tool
-guards are committed as `0b2c66f`; TMPDIR-respecting scratch state is committed
-as `546fe00`; tcsh first-class refurb is committed as `fda7e71`; current work
-runs headless Neovim Lazy sync during installs when loadout nvim plus env-nvim
-are available, adds `typescript-language-server`, and uses a Rich progress bar
-for the Python uv_tool install loop.
+Last updated: 2026-08-28. `v2026.08.28` is published and verified:
+signed tag good, `origin/main == v2026.08.28^{commit}`, all three release
+assets present, and the nvim stash asset hash matches `sha256sums.txt`.
+Current post-release changes: none.
 
-## 2026-08-27 batch: TypeScript LSP + Python tool progress (unreleased)
+The 2026-08-24 through 2026-08-27 batches below are included in `v2026.08.28`.
+
+## 2026-08-27 batch: TypeScript LSP + Python tool progress (released in v2026.08.28)
 
 | area | what |
 |---|---|
@@ -28,7 +25,7 @@ host-contract skips, runtimes OK). A spec review flagged the bash `cd`
 completion as possible scope drift; owner clarified it is intentional and it
 remains in the commit.
 
-## 2026-08-27 batch: headless Neovim Lazy sync on install (unreleased)
+## 2026-08-27 batch: headless Neovim Lazy sync on install (released in v2026.08.28)
 
 | area | what |
 |---|---|
@@ -37,7 +34,7 @@ remains in the commit.
 | trust model | Default plugin sync remains offline-only. If the stash is missing, the installer skips Lazy sync with a message that the quiet first-run guarantee requires `nvim-plugin-stash`; network restore still requires explicit `--allow-online-plugin-sync` and uses `Lazy! restore` against `lazy-lock.json`, not a default GitHub sync. |
 | tests/docs | `tests/install-nvim-deployments` now captures install logs and asserts headless Lazy sync ran for both single-HOME and split env installs, then blackholes network and asserts the first headless nvim launch has plugins/parsers and no Lazy/missing-tool noise. README, AGENTS, Copilot notes, and `envs/nvim/README.md` document the new guarantee and offline default. |
 
-## 2026-08-26 batch: tcsh first-class refurb (unreleased)
+## 2026-08-26 batch: tcsh first-class refurb (released in v2026.08.28)
 
 | area | what |
 |---|---|
@@ -45,7 +42,7 @@ remains in the commit.
 | split installs | `LOADOUT_CFG_SHARED_PREFIX` is now baked into `tcsh/global/config.csh` as well as `bash/global/config.sh`; direct tcsh logins can find shared `bin/`, terminfo, typelibs, and GUI helper paths without relying on inherited parent environment. |
 | docs/tests | `envs/tcsh/README.md`, `README.md`, `AGENTS.md`, and Copilot notes now describe tcsh as first-class but bash-led. `tests/install-env-tcsh` covers shared config-root overlay and tcsh shared-prefix bake; `tests/install-split-shared-envs` asserts the bake and smokes tcsh against the shared prefix when native tcsh/script are available. |
 
-## 2026-08-26 batch: TMPDIR-respecting scratch state (unreleased)
+## 2026-08-26 batch: TMPDIR-respecting scratch state (released in v2026.08.28)
 
 | area | what |
 |---|---|
@@ -53,13 +50,13 @@ remains in the commit.
 | user env temp files | nvim/vim/tmux/bash/tcsh temp files now honor `$TMPDIR` for cross-host yank files, Lua LSP logs, tmux buffer export, shell `p`/`cdp`, alias dump, and strace output. `/dev/shm` remains the nvim fallback when `TMPDIR` is unset; X11 socket paths remain fixed under `/tmp/.X11-unix`. |
 | tests/build scratch | Shell tests that create temp HOMEs/dest dirs and build scripts with hardcoded `mktemp /tmp/...` scratch roots now use `${TMPDIR:-/tmp}`. Version-scoped build prefixes and protocol paths that intentionally document `/tmp` were left alone. Regression coverage: `tests/unit-resolver` imports `loadout_main.py` in a fresh subprocess with custom `TMPDIR` and asserts run-log/pending roots follow it. |
 
-## 2026-08-25 batch: env-nvim live config sync (unreleased)
+## 2026-08-25 batch: env-nvim live config sync (released in v2026.08.28)
 
 | area | what |
 |---|---|
 | env-nvim | Synced the live GUI mouse-selection behavior, SPICE filetype coverage, `spice_netlist_ls` command override, `spicefmt` alias config, and SPICE semantic-token/format-on-save ftplugin into the shipped env. The shipped defaults now enable only language servers whose command exists on `PATH` (`lua-language-server`, `ruff`, `ty`, `markdown-oxide`, `biome`, `taplo`, `tclsp`, `spice-netlist-ls`/`$SPICEFMT_LS_CMD`), recording skipped entries in `vim.g.loadout_missing_lsp_servers` instead of producing startup/open-buffer noise. `spicefmt` conform integration is registered only when `spicefmt`/`$SPICEFMT_CMD` exists. `tests/install-nvim-deployments` now opens a `.sp` file in an env-only split install and asserts missing `spice-netlist-ls` leaves both `spice_netlist_ls` and `spicefmt` disabled. |
 
-## 2026-08-25 batch: env-tmux live config sync (unreleased)
+## 2026-08-25 batch: env-tmux live config sync (released in v2026.08.28)
 
 | area | what |
 |---|---|
@@ -91,7 +88,7 @@ One small cleanup landed with the release candidate: Node 26.7.0 ships
 was stale. `nodejs` metadata now names npm/npx only, and `build/import-nodejs`
 fails instead of warning if a declared bundle path is missing.
 
-## 2026-08-24 batch: spice-netlist-ls 0.3.0 (unreleased)
+## 2026-08-24 batch: spice-netlist-ls 0.3.0 (released in v2026.08.28)
 
 | area | what |
 |---|---|
