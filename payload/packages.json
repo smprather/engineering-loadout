@@ -433,7 +433,8 @@
         "llvm-ranlib"
       ],
       "libs": [
-        "libedit.so.0"
+        "libedit.so.0",
+        "libxml2.so.2"
       ],
       "version": "23.0git",
       "platforms": [
@@ -546,24 +547,6 @@
         "monitor"
       ],
       "description": "du replacement with visual bar chart"
-    },
-    "flameshot": {
-      "kind": "bin",
-      "bins": [
-        "flameshot"
-      ],
-      "depends": [
-        "gui_libs"
-      ],
-      "version": "14.0.0",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "screenshot",
-        "gui"
-      ],
-      "description": "Flameshot \u2014 powerful GUI screenshot tool. flameshot 13.3.0 back-ported to Qt5 for EL8 (upstream is Qt6-only); needs gui_libs (Qt5/X11) + DISPLAY"
     },
     "expect": {
       "kind": "bin",
@@ -1683,6 +1666,7 @@
         "libdbus-1.so.3",
         "libepoxy.so.0",
         "libexpat.so.1",
+        "libffi.so.6",
         "libfontconfig.so.1",
         "libfreetype.so.6",
         "libfribidi.so.0",
@@ -1710,6 +1694,7 @@
         "libpng16.so.16",
         "libqwayland-generic.so",
         "libqxcb.so",
+        "libselinux.so.1",
         "libthai.so.0",
         "libtiff.so.5",
         "libuuid.so.1",
@@ -3641,8 +3626,7 @@
         "mate-terminal",
         "wezterm",
         "xephyr",
-        "firefox",
-        "flameshot"
+        "firefox"
       ],
       "description": "Full GUI stack for headless compute farm GUI forwarding"
     },

@@ -1,0 +1,43 @@
+#!/bin/sh
+# Drop into (or run a command in) the AlmaLinux 8.10 build-machine container
+# defined by build/Dockerfile, with this repo bind-mounted at /repo.
+#
+# See build/Dockerfile's header for why payload-mutating work (build-*.sh,
+# strip-all-elf-binaries, gen-content-manifest, gen-installed-sizes,
+# gen-readme-table) must run in here rather than on the native host.
+#
+# Usage:
+#   build/build-shell                       # interactive shell in /repo
+#   build/build-shell ./build/build-tmux.sh --tag 3.7b
+#   build/build-shell ./build/strip-all-elf-binaries
+#
+# Builds the image on first use (or after Dockerfile changes); cached after
+# that, so this stays fast. Runs as the invoking user's uid:gid so files the
+# container writes into the bind-mounted repo are not root-owned on the host.
+
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+IMAGE="loadout-build"
+
+docker build -q -t "$IMAGE" -f "$REPO/build/Dockerfile" "$REPO/build" >/dev/null
+
+if [ "$#" -eq 0 ]; then
+    set -- bash
+fi
+
+tty_flags=""
+if [ -t 0 ] && [ -t 1 ]; then
+    tty_flags="-it"
+fi
+
+# shellcheck disable=SC2086  # tty_flags is intentionally word-split (0 or 1 flags)
+exec docker run --rm $tty_flags \
+    -v "$REPO:/repo" \
+    -w /repo \
+    -u "$(id -u):$(id -g)" \
+    -v /etc/passwd:/etc/passwd:ro \
+    -v /etc/group:/etc/group:ro \
+    -e HOME=/tmp \
+    -e LOADOUT_PATCHELF=/usr/bin/patchelf \
+    "$IMAGE" "$@"

@@ -255,7 +255,6 @@ OpenSSH for those.
 | delta | bin | 0.19.2 | Git diff pager with syntax highlighting |
 | duf | bin | 0.9.1 | df replacement with colored usage table |
 | dust | bin | 1.2.4 | du replacement with visual bar chart |
-| flameshot | bin | 14.0.0 | Flameshot — powerful GUI screenshot tool. flameshot 13.3.0 back-ported to Qt5 for EL8 (upstream is Qt6-only); needs gui_libs (Qt5/X11) + DISPLAY |
 | expect | bin | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 | eza | bin | 0.23.5 | ls replacement with icons, colors, git status |
 | fd | bin | 10.4.2 | Fast and user-friendly find alternative |

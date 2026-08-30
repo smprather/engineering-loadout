@@ -1580,6 +1580,46 @@ Install both: `./loadout install scc,tokei` (both swept into the full `@engineer
 
 ## flameshot 13.3.0 -- GUI screenshot tool (Qt6->Qt5 EL8 back-port)
 
+**PULLED FROM THE PAYLOAD as of 2026-08-30 -- do not re-add without fixing the
+root cause first.** flameshot depends on `gui_libs`' `libQt5Network.so.5`,
+which EL8's qt5-qtbase RPM builds `-openssl-linked` against system
+`libssl.so.1.1`/`libcrypto.so.1.1`. EL8 always has those (openssl-libs-1.1.1);
+Arch/CachyOS never does (OpenSSL 3 only, no 1.1 compat by default) -- and
+because ELF loading requires *every* NEEDED entry to resolve before a process
+can even start, this is not a degraded feature, it is flameshot refusing to
+launch at all: `error while loading shared libraries: libssl.so.1.1`.
+
+Attempted fix: rebuild just `libQt5Network.so.5` from the same qt5-qtbase
+source+patches, linked against OpenSSL 3 (`openssl3-devel`/`openssl3-libs`
+from EPEL, `OPENSSL_LIBS`/`CPATH` env vars -- Qt's own OpenSSL config test is
+a hardcoded compile check, not pkg-config, so a PKG_CONFIG_PATH shim is
+silently ignored for this one library specifically). That configures and
+compiles, but fails at the QtNetwork *link* step:
+`undefined reference to 'SSL_get_peer_certificate'`,
+`undefined reference to 'EVP_PKEY_base_id'`. Qt 5.15.3 (2021-03) predates
+OpenSSL 3.0 (2021-09); its `qsslsocket_openssl_symbols.cpp` resolves every
+OpenSSL function by name and doesn't know OpenSSL 3 renamed these. Real fix
+exists upstream (later Qt 5.15.x point releases patched the OpenSSL glue for
+3.0 compat) but requires sourcing and applying those actual commits, with an
+unknown number of further symbol mismatches beyond the first two the linker
+reports -- open-ended enough that it was deliberately deferred rather than
+attempted blind. See `build/build-qt5network-openssl3.sh` for the full
+attempt and exact failure.
+
+The cheaper alternative not yet tried: reconfigure with `-openssl-runtime`
+instead of `-openssl-linked` -- QtNetwork would `dlopen()` whatever OpenSSL is
+present at actual runtime (1.1 on EL8, 3.x on Arch) with no hard link-time
+dependency and no patches needed, gracefully degrading if none is found. This
+would fix every `gui_libs` consumer's OpenSSL story at once, not just
+flameshot's, and is probably the right first thing to try before attempting
+the OpenSSL-3-symbol-compat patches above.
+
+To re-add flameshot: fix `gui_libs`' `libQt5Network.so.5` by one of the above,
+then restore the `"flameshot"` entry in `payload/packages.json` (removed
+2026-08-30, see git history) and its membership in `@gui-suite`.
+
+---
+
 flameshot >=13.0 is **Qt6-only upstream**, and NO prebuilt channel ships a
 glibc<=2.28 binary (fc41/42 = 2.38/2.40, deb = 2.35/2.36/2.39, **AppImage = 2.34**).
 EL8 has only Qt5 5.15 (what gui_libs bundles) and no Qt6. So we back-port the
