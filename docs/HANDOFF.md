@@ -1,13 +1,54 @@
 # Current Handoff
 
-Last updated: 2026-08-30 (late batch: firefox universal-host work). `v2026.08.28`
-is published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
+Last updated: 2026-08-31 (wezterm universal-host batch). `v2026.08.28` is
+published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
 all three release assets present, and the nvim stash asset hash matches
-`sha256sums.txt`. Current post-release changes: see the 2026-08-30 batch below.
+`sha256sums.txt`. Current post-release changes: the 2026-08-30 firefox batch
+(committed `80470b3`) and the 2026-08-31 wezterm batch below.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 
-## 2026-08-30 batch: firefox universal-host fixes + bash PS0 preservation (unreleased)
+## 2026-08-31 batch: wezterm universal-host fixes (unreleased)
+
+Surfaced the same way firefox's did: loadout wezterm on the CachyOS host.
+
+### wezterm: openssl 1.1 sonames + child-env poisoning
+
+Two independent bugs, both universal-host regressions masked on EL8:
+
+1. `wezterm{,-gui,-mux-server}` NEED `libssl.so.1.1` + `libcrypto.so.1.1`
+   (EL8 openssl; hosts on openssl 3 ship `.so.3` only) -> wezterm died at
+   startup with "error while loading shared libraries: libssl.so.1.1".
+   Fix: two UNCLAIMED lib64 stems (payload lib64/lib{ssl,crypto}.so.1.1.bz2,
+   from the EL8 openssl-libs rpm 1.1.1k-17, stripped + RPATH $ORIGIN) --
+   unclaimed stems install with every lib64 selection (sqlite/readline
+   precedent), so wezterm, Qt5Network, AND ruby's openssl.so all resolve.
+   RPATH (not env) does the loading.
+2. The wrappers exported `LD_LIBRARY_PATH=<prefix>/lib64` unconditionally
+   (Mesa/GLVND fallback for GL-less farm nodes). On hosts WITH their own GL,
+   that shadowed host glib/pcre2 with gui_libs' EL8-era copies for wezterm
+   AND EVERY CHILD it spawned: `flatpak: symbol lookup error:
+   /usr/lib/libaccountsservice.so.1: undefined symbol g_once_init_leave_pointer`
+   (EL8 glib 2.56 vs host 2.8x), host `grep` broke against the old bundled
+   libpcre2. Fix: all three wrappers (wezterm, -gui, -mux-server) now
+   platform-condition the Mesa/GLVND exports on an ldconfig probe for host
+   `libEGL.so.1` -- host GL present -> no exports at all (children stay
+   clean; binaries' RPATH already resolves every NEEDED lib); host GL absent
+   -> exports as before (farm-node fallback preserved).
+
+Built/verified on CachyOS: payload wezterm.tar.bz2 repacked with the gated
+wrappers (re-chunked 2x40MiB), `./loadout upgrade wezterm -y` deployed;
+`wezterm --version`, `cli list`, and a real GUI window all work; flatpak +
+host grep healthy again. Tier 1 sync gates green (sizes/content-manifest).
+Tier 2/3 still deferred per owner.
+
+### Ride-alongs
+
+- `docs/SHARED_LIBS.md`: libssl/libcrypto.so.1.1 rows added to the
+  always-installed table.
+- AGENTS.md wezterm entry rewritten for both fixes.
+
+## 2026-08-30 batch: firefox universal-host fixes + bash PS0 preservation (committed 80470b3)
 
 Work happened on the CachyOS (Arch-family) dev box, NOT the EL8 build box.
 Everything verified there; Tier 2/3 NOT run yet (owner said stop at T1).

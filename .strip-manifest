@@ -329,6 +329,7 @@ sha256  56c09de65082a96409a09a6d6d74dadc8dc7c990ffd3de394b2378ec9c4c54b4  payloa
 sha256  05944adfbdd08b4f0ba38fa20132524684c5a6a5e788693b564071144d9bd11f  payload/el8.x86_64.glibc2p28/lib64/libcholmod.so.3.bz2
 sha256  cb690e4dcf1e45d5b7b85cc5ed1b008121b96ec174c79bb844fb535423bbff1a  payload/el8.x86_64.glibc2p28/lib64/libcolamd.so.2.bz2
 sha256  0af618509c67075f58886fa8ffc5cf74138e56666e7781b6c56816d98e9acb75  payload/el8.x86_64.glibc2p28/lib64/libcrypt.so.1.bz2
+sha256  1053174af6f9af287b5d7ad703cf410f4cb094d2a56b6c40bffe05f8a3df0f34  payload/el8.x86_64.glibc2p28/lib64/libcrypto.so.1.1.bz2
 sha256  3ec5619f69c8b218abc8a20210aa8f22f42f7844ea64c77610002954a189ed0a  payload/el8.x86_64.glibc2p28/lib64/libcxsparse.so.3.bz2
 sha256  e2f4f33451dbd91190ba31762415c616dd72cb2afaf5524744b0bf28495f1927  payload/el8.x86_64.glibc2p28/lib64/libdatrie.so.1.bz2
 sha256  751c6a32f5fde75b071cd71c769f88bcaee4a53fac74f56a5393cd8b042fed0b  payload/el8.x86_64.glibc2p28/lib64/libdbus-1.so.3.bz2
@@ -406,6 +407,7 @@ sha256  f3170fa2d0da0d01ec3febc4790e78e03dc8f8095e3f1a354e280aafbe1994e6  payloa
 sha256  d47819830416f5f81007ecabcb29ca652bc542ad32a9efb3f278a156b2c6fa8b  payload/el8.x86_64.glibc2p28/lib64/libsndfile.so.1.bz2
 sha256  c5d15f3afbad4ea61f29a2a4d83e5e7b006e527558777a556bac133276fd3538  payload/el8.x86_64.glibc2p28/lib64/libspqr.so.2.bz2
 sha256  0ddf996a3d1c711dbb92da8f96ffc8ab36676e514e693764a4d5c6ee2de0550a  payload/el8.x86_64.glibc2p28/lib64/libsqlite3.so.0.bz2
+sha256  e2d8c76bb49610565adda51b0cf5f57673ead9188d0ff4f060dc14a2e811e2fc  payload/el8.x86_64.glibc2p28/lib64/libssl.so.1.1.bz2
 sha256  ebaa74c68f7b9baaf4c7546477cfd52c2c889a9b2e3f6bf100a9af478483c1d3  payload/el8.x86_64.glibc2p28/lib64/libsuitesparseconfig.so.4.bz2
 sha256  9ed021dd73fd1639e1d777898a9c92700b606956f7055a9317b537ad1a4492d0  payload/el8.x86_64.glibc2p28/lib64/libsz.so.2.bz2
 sha256  5843e40f9553208fc7c3602b4ade7c361acaf3c255e9f8b0d5722ba52b48c82a  payload/el8.x86_64.glibc2p28/lib64/libtbb.so.2.bz2
@@ -474,6 +476,7 @@ tar-meta  28387403  1787471355  payload/el8.x86_64.glibc2p28/runtime/valgrind.ta
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  271233  1785979682  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
+tar-meta  41943040  1788190592  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  648856  1786424664  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  937153  1786927648  payload/tldr/tldr-pages.tar.bz2

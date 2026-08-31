@@ -33,6 +33,8 @@ Runtime dependencies vendored alongside binaries -- no system library assumption
 | `libXt.so.6` | X Toolkit Intrinsics |
 | `libxxhash.so.0` | Fast non-cryptographic hash |
 | `libz.so.1` | zlib compression |
+| `libssl.so.1.1` | OpenSSL 1.1 TLS (wezterm's mux/ssh stack, Qt5Network, ruby's openssl.so). Hosts with openssl 3 have no `.so.1.1` at all. EL8 `openssl-libs` rpm, unclaimed stem so it lands with every lib64 selection |
+| `libcrypto.so.1.1` | OpenSSL 1.1 crypto (same consumers; libssl NEEDs it). Same source/shape as libssl.so.1.1 |
 
 ## `gui_libs` optional package (~80 libs)
 

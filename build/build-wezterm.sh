@@ -146,15 +146,31 @@ bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
 prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
 real_wezterm="$prefix/lib/wezterm/wezterm"
 
+# Mesa/GLVND fallback -- PLATFORM-CONDITIONED, not unconditional. The binaries
+# carry RPATH $ORIGIN/../../lib64:$ORIGIN, which already resolves every NEEDED
+# lib (incl. the bundled libssl/libcrypto.so.1.1 stems). The env exports below
+# exist ONLY for the GL dlopens (libEGL_mesa/DRI drivers) on farm nodes with no
+# host GL. Exporting them on a host that HAS its own GL stack is poison: the
+# loadout lib64 area also carries gui_libs' EL8-era glib/pcre2/etc, which would
+# shadow the host copies for wezterm AND EVERY CHILD it spawns (flatpak died
+# with "libaccountsservice: undefined symbol g_once_init_leave_pointer"; host
+# grep broke against the old bundled libpcre2). Same universal-host rule as
+# firefox: host copy wins wherever the host can supply the soname; loadout
+# libs step in only when the host cannot.
 mesa_libdir="$prefix/lib64"
-if [ -d "$mesa_libdir" ]; then
+host_gl_missing=0
+if command -v ldconfig >/dev/null 2>&1 \
+   && ! ldconfig -p 2>/dev/null | grep -q 'libEGL\.so\.1'; then
+  host_gl_missing=1
+fi
+if [ "$host_gl_missing" -eq 1 ] && [ -d "$mesa_libdir" ]; then
   export LD_LIBRARY_PATH="$mesa_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   if [ -d "$mesa_libdir/dri" ]; then
     export LIBGL_DRIVERS_PATH="$mesa_libdir/dri${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
   fi
-fi
-if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
-  export __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+  if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
+    export __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+  fi
 fi
 
 portal_setting_ok() {
@@ -177,7 +193,7 @@ restart_portal() {
   timeout 10s systemctl --user restart xdg-desktop-portal.service >/dev/null 2>&1 || return 1
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    portal_setting_ok && return 0
+    portal_setting_ok || return 0
     sleep 0.25
   done
 
@@ -198,15 +214,23 @@ for wezterm_cmd in wezterm-gui wezterm-mux-server; do
 bin_dir=\$(CDPATH= cd "\$(dirname "\$0")" && pwd -P) || exit 1
 prefix=\$(CDPATH= cd "\$bin_dir/.." && pwd -P) || exit 1
 
+# See the bin/wezterm wrapper for why the Mesa/GLVND exports are
+# platform-conditioned: unconditional exports shadow the host's glib/pcre2
+# (EL8-era gui_libs copies) in every child process on hosts with their own GL.
 mesa_libdir="\$prefix/lib64"
-if [ -d "\$mesa_libdir" ]; then
+host_gl_missing=0
+if command -v ldconfig >/dev/null 2>&1 \\
+   && ! ldconfig -p 2>/dev/null | grep -q 'libEGL\.so\.1'; then
+  host_gl_missing=1
+fi
+if [ "\$host_gl_missing" -eq 1 ] && [ -d "\$mesa_libdir" ]; then
   export LD_LIBRARY_PATH="\$mesa_libdir\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
   if [ -d "\$mesa_libdir/dri" ]; then
     export LIBGL_DRIVERS_PATH="\$mesa_libdir/dri\${LIBGL_DRIVERS_PATH:+:\$LIBGL_DRIVERS_PATH}"
   fi
-fi
-if [ -d "\$prefix/share/glvnd/egl_vendor.d" ]; then
-  export __EGL_VENDOR_LIBRARY_DIRS="\$prefix/share/glvnd/egl_vendor.d\${__EGL_VENDOR_LIBRARY_DIRS:+:\$__EGL_VENDOR_LIBRARY_DIRS}"
+  if [ -d "\$prefix/share/glvnd/egl_vendor.d" ]; then
+    export __EGL_VENDOR_LIBRARY_DIRS="\$prefix/share/glvnd/egl_vendor.d\${__EGL_VENDOR_LIBRARY_DIRS:+:\$__EGL_VENDOR_LIBRARY_DIRS}"
+  fi
 fi
 
 exec "\$prefix/lib/wezterm/$wezterm_cmd" "\$@"
