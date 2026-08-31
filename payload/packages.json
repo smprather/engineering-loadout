@@ -1160,7 +1160,8 @@
         "rdbg"
       ],
       "libs": [
-        "libruby.so.3.3"
+        "libruby.so.3.3",
+        "libcrypt.so.1"
       ],
       "version": "3.3.10",
       "version_url": "https://www.ruby-lang.org/en/downloads/releases/",
@@ -1537,24 +1538,6 @@
       ],
       "description": "GTK3 GUI Vim with clipboard and font rendering"
     },
-    "nedit-ng": {
-      "kind": "bin",
-      "bins": [
-        "nedit-ng"
-      ],
-      "version": "2025.1",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "editor",
-        "gui"
-      ],
-      "depends": [
-        "gui_libs"
-      ],
-      "description": "Qt5 GUI text editor, NEdit rewrite"
-    },
     "surfer": {
       "kind": "bin",
       "bins": [
@@ -1577,26 +1560,6 @@
         "mesa3d_libs"
       ],
       "description": "Surfer \u2014 waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer"
-    },
-    "nvim-qt": {
-      "kind": "bin",
-      "bins": [
-        "nvim-qt"
-      ],
-      "version": "0.2.19",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "editor",
-        "gui"
-      ],
-      "archive": "payload/PLATFORM/runtime/nvim-qt-runtime.tar.bz2",
-      "depends": [
-        "gui_libs",
-        "nvim"
-      ],
-      "description": "Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required)"
     },
     "mesa3d_libs": {
       "kind": "runtime",
@@ -2302,7 +2265,7 @@
     "firefox": {
       "kind": "bin",
       "bins": [],
-      "version": "140.11.0",
+      "version": "140.14.0",
       "platforms": [
         "linux"
       ],
@@ -3536,8 +3499,6 @@
       "kind": "group",
       "members": [
         "gvim",
-        "nedit-ng",
-        "nvim-qt",
         "meld"
       ],
       "description": "GUI editors (depend on gui_libs)"

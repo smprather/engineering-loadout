@@ -1,11 +1,106 @@
 # Current Handoff
 
-Last updated: 2026-08-28. `v2026.08.28` is published and verified:
-signed tag good, `origin/main == v2026.08.28^{commit}`, all three release
-assets present, and the nvim stash asset hash matches `sha256sums.txt`.
-Current post-release changes: none.
+Last updated: 2026-08-30 (late batch: firefox universal-host work). `v2026.08.28`
+is published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
+all three release assets present, and the nvim stash asset hash matches
+`sha256sums.txt`. Current post-release changes: see the 2026-08-30 batch below.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
+
+## 2026-08-30 batch: firefox universal-host fixes + bash PS0 preservation (unreleased)
+
+Work happened on the CachyOS (Arch-family) dev box, NOT the EL8 build box.
+Everything verified there; Tier 2/3 NOT run yet (owner said stop at T1).
+
+### firefox 140.11.0 -> 140.14.0esr + offline rpm-staging build path
+
+- Current upstream ESR in the 140 line: 140.14.0esr (product-details
+  `firefox_versions.json`: FIREFOX_ESR=140.14.0esr, ESR_NEXT=153.1.0esr).
+- `build/build-firefox.sh --from-rpms <dir>`: OFFLINE staging path --
+  stages from downloaded Alma 8 AppStream rpms (firefox + nspr + nss-3 +
+  nss-util + nss-softokn-3 + nss-softokn-freebl) with bsdtar, no
+  dnf/EL8-host needed. libffi.so.6/libjpeg.so.62 fall back to the loadout
+  payload copies when the host lacks the EL8 sonames. `.desktop` comes
+  from the rpm or the currently-deployed payload tar. Glob trap fixed
+  along the way: `nss-*.rpm` also matches nss-util/nss-softokn; the core
+  NSS rpm must be globbed as `nss-3*`.
+- 140.14.0 was built through this path on CachyOS (rpms:
+  firefox-140.14.0-1.el8_10.alma.1, nss 3.112.0-8, nspr 4.36.0-2 from
+  repo.almalinux.org AppStream). `packages.json` + README table updated
+  to 140.14.0; payload re-chunked; sizes/content manifests regenerated
+  (`--check` green).
+- Box deployed via `./loadout upgrade firefox -y`; `--version` =
+  140.14.0esr. Verification: fresh-profile headless
+  `--screenshot https://example.com` renders BYTE-IDENTICAL to the
+  user-verified-good 140.11 v4 bundle (same md5) -- no trust regression
+  in the bump.
+- NOTE: firefox CANNOT self-update in this layout (no `updater` binary
+  ships; even upstream's would need root + the Mozilla install layout).
+  Updates flow through build-firefox.sh bumps only. Upstream ESR 140
+  point-releases land in Alma 8 AppStream within days.
+
+### firefox: universal-host TLS fix -- trust module stays system-provided
+
+First failure layer (fixed earlier this batch): `libxul.so` NEEDEDs the
+EL8 sonames `libffi.so.6` + `libjpeg.so.62`; newer hosts ship `.so.8`
+only -> `XPCOMGlueLoad`. Both now bundle co-located (`RPATH=$ORIGIN`)
+via the NSS staging loop, and the wrapper keeps its loader path
+strictly inside the bundle (`$libdir` only; a `$prefix/lib64` prepend
+was tried and REVERTED -- it shadowed the host GTK3/dbus stack on newer
+hosts; rule: bundle only sonames the host can't supply, host copy wins
+for everything else). See AGENTS.md firefox entry +
+build/ADDING_BINARIES.md firefox section for the full rationale.
+
+Then gmail still showed `SEC_ERROR_UNKNOWN_ISSUER` on every HTTPS site,
+in fresh profiles, on the CachyOS host (HTTP loaded fine; TLS never
+trusted anything).
+
+Root cause: the bundle shipped EL8's `libnssckbi.so` +
+`libnsssysinit.so`, whose ckbi is an **alternatives symlink to
+p11-kit's trust proxy** -- it reads the system trust store from
+hardcoded EL8 paths (`/etc/pki/ca-trust/...`), nonexistent on Arch- 
+family hosts -> zero roots. Works on EL8, dead TLS everywhere else;
+evaded the smoke because `--version`/`data:` screenshots never verify a
+cert. (The EL8 build-script copy follows the symlink via `readlink -f`,
+so the bundle silently received the proxy, not classic roots.)
+
+Fix:
+
+- `build/build-firefox.sh`: `libnssckbi.so` + `libnsssysinit.so`
+  REMOVED from the NSS staging list + a build-time guard that fails the
+  build if either reappears in the stage. Without a bundled ckbi, NSS
+  dlopens the HOST trust module -- classic roots or the host's own
+  working proxy. This matches upstream: Mozilla's official Linux
+  tarballs ship no ckbi either.
+- Payload repacked (v4): trust modules deleted from the tar, ffi/jpeg
+  co-location kept; re-chunked; sizes/content manifests regenerated.
+- Verified on the CachyOS host: example.com + gmail.com load with the
+  lock icon in a fresh profile.
+
+Diagnosis journey worth remembering (three separate build-box-masking
+layers had to fall): (1) libffi.so.6 soname gap -> XPCOMGlueLoad;
+(2) `$prefix/lib64` wrapper prepend -> host stack shadowing (firefox
+"reached outside its install space"); (3) EL8 p11-kit trust proxy ->
+SEC_ERROR_UNKNOWN_ISSUER. Universal-host rule that fell out: keep the
+loader path inside the bundle, bundle ONLY sonames the host cannot
+supply, and never ship a distro-specific trust proxy.
+
+### bashrc: keep functions referenced by inherited PS0 across the clean-slate
+
+`/etc/profile.d/80-systemd-osc-context.sh` (systemd OSC-3008, shipped via
+tmpfiles on Arch-family) sets `PS0='$(__systemd_osc_context_ps0)'` and
+defines that function. The clean-slate `unset -f $(declare -F)` in
+`envs/bash/bashrc` deleted the function but left PS0, so bash expanded a
+dangling `$(...)` before EVERY command:
+`-bash: __systemd_osc_context_ps0: command not found`.
+
+Fix: the clean-slate keep-list now also harvests identifiers from
+inherited PS0 and preserves any that name a currently-defined function
+(alongside `LOADOUT_CFG_PRESERVE_FUNCTIONS`). No hardcoded systemd name
+list; any profile.d hook using the same pattern survives. Verified via
+real-PTY login shell + `exec bash` on a live host. Box-side, the same
+fix was applied to the installed copy at `~/.config/bash/bashrc`
+(installed copies are real files, not symlinks into the repo).
 
 ## 2026-08-28 batch: env-tmux pane factory (released in v2026.08.28)
 
@@ -296,6 +391,27 @@ the artifact on disk, and serialise anything that writes `payload/`.
 
 ## STILL NEEDS THE OWNER
 
+* **Run Tier 2 + Tier 3 after this batch** (`./tests/run-all` full, then
+  `--container`). Tier 1 is green except 4 PRE-EXISTING WIP failures (below);
+  nothing in the 2026-08-30 batch added failures. Tier 2/3 were explicitly
+  deferred by the owner mid-batch.
+* **Pre-existing WIP T1 failures (all owner's in-flight work, not this batch):**
+  `registry-integrity` (farm-versions still lists nedit-ng/nvim-qt/flameshot;
+  `envs/nvim/vendor/plugins` dir missing), `env-shell-parity`
+  (LOADOUT_CFG_ENABLE_SSH_AGENT unmapped in tcsh -- the ssh-agent bashrc WIP),
+  `shell-typeahead` (zsh, envs/zsh/global/zshrc WIP), `check-installer`
+  (doctor: nvim-plugin-stash release asset absent on this box -- expected
+  off-build-box, fetch with tools/fetch-stash).
+* **Smoke-gap worth closing next:** tests/prebuilt-binaries probes firefox
+  `--version` only -- that is why THREE universal-host regressions
+  (libffi soname, libjpeg soname, trust proxy) all shipped green. Add an
+  HTTPS fetch/smoke to the firefox probe on the dest-dir shape.
+* **firefox bytes not build-box-canonical:** the 140.14.0 tar was
+  strip/bzip2'd on CachyOS. Content is identical (RPATH'd ELFs skip strip)
+  but a future EL8 rebuild will churn hashes; expected, harmless.
+* **`bin/rsync.bz2`** was left at its churned-but-stripped state after a
+  strip-all mishap this session (biome.bz2 was restored to HEAD). Re-verify
+  both against the in-flight rsync/biome WIP before committing.
 * **`sudo dnf install qt5-qtcharts-devel`** -- the only thing standing between
   here and an OpenROAD GUI build. EPEL has `qt5-qtcharts-5.15.3-1.el8`, an exact
   match for the Qt5 already in `gui_libs`.

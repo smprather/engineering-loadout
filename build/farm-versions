@@ -256,12 +256,6 @@ TOOLS = [
         strategy_flag(["--version"], r"fio-([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
     ),
     (
-        "flameshot",
-        "flameshot",
-        "https://github.com/flameshot-org/flameshot",
-        strategy_flag(["--version"], r"Flameshot v([0-9]+\.[0-9]+\.[0-9]+)"),
-    ),
-    (
         "fzf",
         "fzf",
         "https://github.com/junegunn/fzf",
@@ -542,12 +536,6 @@ TOOLS = [
         )(_run([binary, "--version"])),
     ),
     (
-        "nedit-ng",
-        "nedit-ng",
-        "https://github.com/eteran/nedit-ng",
-        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
-    ),
-    (
         "surfer",
         "surfer",
         "https://gitlab.com/surfer-project/surfer",
@@ -719,12 +707,6 @@ TOOLS = [
         strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("node", "nodejs", "https://github.com/nodejs/node", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
-    (
-        "nvim-qt",
-        "nvim-qt",
-        "https://github.com/equalsraf/neovim-qt",
-        strategy_flag(["--version"], r"NVIM-QT v([0-9]+\.[0-9]+\.[0-9]+)"),
-    ),
     ("yara", "yara", "https://github.com/VirusTotal/yara", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
     (
         "zellij",

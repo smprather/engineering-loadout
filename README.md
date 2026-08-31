@@ -306,9 +306,7 @@ OpenSSH for those.
 | uv | bin | 0.12.3 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.0901 | Vi IMproved text editor |
 | gvim | bin | 9.2.0901 | GTK3 GUI Vim with clipboard and font rendering |
-| nedit-ng | bin | 2025.1 | Qt5 GUI text editor, NEdit rewrite |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
-| nvim-qt | bin | 0.2.19 | Official Qt5 GUI frontend for Neovim (menus, tabs, mouse, floating windows; no GPU required) |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
@@ -329,7 +327,7 @@ OpenSSH for those.
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
-| firefox | bin | 140.11.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin) |
+| firefox | bin | 140.14.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin) |
 | zsh | bin | 5.9 | Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive |
 | fish | bin | 4.8.1 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |

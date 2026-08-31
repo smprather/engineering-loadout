@@ -29,20 +29,35 @@ if [[ -z "${PATH:-}" ]]; then
     export PATH="/usr/local/bin:/bin:/usr/bin:/usr/sbin"
 fi
 unalias -a
-# Clear every function so a re-source / `exec bash` starts fresh -- except any the
-# user listed in LOADOUT_CFG_PRESERVE_FUNCTIONS. That config var is an exported
-# scalar, so on `exec bash` / child shells it is already in the environment here,
-# before config.sh re-sources -- exactly when inherited functions (e.g. Environment
-# Modules' `module`/`_module_raw`/`ml`, carried in via `export -f`) would be wiped.
-if [[ -n ${LOADOUT_CFG_PRESERVE_FUNCTIONS:-} ]]; then
-    _lo_keep_fns=" ${LOADOUT_CFG_PRESERVE_FUNCTIONS} "
-    for _lo_fn in $(declare -F | awk '{print $3}'); do
-        [[ $_lo_keep_fns == *" ${_lo_fn} "* ]] || unset -f "${_lo_fn}"
+# Clear every function so a re-source / `exec bash` starts fresh -- except (1)
+# any the user listed in LOADOUT_CFG_PRESERVE_FUNCTIONS and (2) functions still
+# referenced by inherited PS0. The exported config var makes case (1) work on
+# `exec bash` / child shells (e.g. Environment Modules' `module`/`_module_raw`/
+# `ml`, carried in via `export -f`). Case (2): /etc/profile.d snippets (systemd
+# OSC-3008 hook sets PS0='$(__systemd_osc_context_ps0)') define their helper
+# functions before this wipe; deleting the function but keeping PS0 makes bash
+# expand a dangling `$(...)` before EVERY command -> "command not found" noise
+# on the prompt. PS1/PS2/PROMPT_COMMAND/precmd_functions are rebuilt later (or
+# reset in the prompt block), so PS0's function-references are the only ones we
+# must carry across the wipe.
+_lo_keep_fns=" ${LOADOUT_CFG_PRESERVE_FUNCTIONS:-} "
+if [[ -n ${PS0:-} ]]; then
+    for _lo_tok in ${PS0}; do
+        # Command substitutions and bare words alike; keep valid identifiers
+        # that name a currently-defined function.
+        _lo_tok=${_lo_tok//'$('/' '}
+        _lo_tok=${_lo_tok//')'/' '}
+        for _lo_fn in $_lo_tok; do
+            [[ $_lo_fn =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+            declare -F "$_lo_fn" > /dev/null 2>&1 && _lo_keep_fns="$_lo_keep_fns $_lo_fn "
+        done
     done
-    unset _lo_fn _lo_keep_fns
-else
-    unset -f $(declare -F | awk '{print $3}')
+    unset _lo_tok
 fi
+for _lo_fn in $(declare -F | awk '{print $3}'); do
+    [[ $_lo_keep_fns == *" ${_lo_fn} "* ]] || unset -f "${_lo_fn}"
+done
+unset _lo_fn _lo_keep_fns
 
 # ===========================================================================
 # Startup debugging -- BOTH default OFF, placed AFTER the double-source guard

@@ -31,8 +31,21 @@
 #   /lib64/libnss3.so: version `NSS_3.107' not found ... Couldn't load XPCOM
 # The build box only has nss-3.112 because the firefox RPM pulled it in,
 # which masked the gap until a dest node surfaced it (same build-box
-# masking trap as the octave support libs).  We therefore carry the full
-# NSS runtime closure (13 .so) inside the bundle; see the staging step.
+# masking trap as the octave support libs).  We therefore carry the NSS
+# runtime closure inside the bundle -- EXCEPT the trust module
+# (libnssckbi/libnsssysinit): those must stay system-provided, or the
+# bundle breaks TLS on every non-EL8 distro (see the NSS_LIBS comment).
+#
+# libffi.so.6 + libjpeg.so.62 are BUNDLED too (co-located, RPATH=$ORIGIN).
+# libxul.so NEEDEDs both EL8 sonames; hosts with newer userlands (Arch etc.)
+# have no .so.6 (libffi 3.4 bumped to .so.8) and no .so.62 (libjpeg-turbo 3
+# bumped to .so.8).  Bundle them next to libxul so the wrapper can keep its
+# loader path INSIDE the bundle ($libdir only): prepending $prefix/lib64
+# (gui_libs) instead would shadow the host's GTK3/dbus/etc with the EL8-era
+# gui_libs copies on newer hosts and break theme engines / spawned helpers --
+# firefox must run against the HOST desktop stack wherever it provides the
+# sonames, carrying only what the host cannot supply.  Both are copied from
+# /usr/lib64 on the EL8 build box, same as the NSS set.
 #
 # System libs still assumed present on the target (NOT bundled):
 #   - glibc (libc/libm/libpthread/libdl/librt) -- policy
@@ -47,15 +60,29 @@
 # cairo / pango / X11 / Wayland stack libxul.so dlopens at runtime.
 #
 # Usage (run from any directory):
-#   sudo dnf upgrade -y firefox
-#   rpm -q firefox                      # capture e.g. firefox-140.11.0-1.el8_10.alma.1.x86_64
-#   ./build/build-firefox.sh --tag 140.11.0
+#   On the EL8 build box (default path -- system dnf install):
+#     sudo dnf upgrade -y firefox
+#     rpm -q firefox                    # capture e.g. firefox-140.11.0-1.el8_10.alma.1.x86_64
+#     ./build/build-firefox.sh --tag 140.11.0
+#
+#   Offline / non-EL8 host (rpm staging path -- used for the 140.14.0 bump,
+#   which was built from Alma repo rpms on a CachyOS box because the EL8
+#   build box was unavailable):
+#     ./build/build-firefox.sh --tag 140.14.0 \
+#         --from-rpms <dir with firefox-*.rpm + nss/nspr/nss-util/nss-softokn/
+#                      nss-softokn-freebl rpms from the same Alma 8 repo>
+#
+#   --from-rpms stages from the extracted rpm trees instead of /usr/lib64:
+#   firefox tree from the firefox rpm; NSS/NSPR closure from the nss rpms;
+#   libffi.so.6 + libjpeg.so.62 from the loadout payload copies (EL8 bytes,
+#   repo-proven).  The rpm NVR must match --tag, same as the dnf path.
 
 set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 TAG=""
+FROM_RPMS=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -63,6 +90,11 @@ while [ "$#" -gt 0 ]; do
             shift
             [ "$#" -gt 0 ] || { echo "missing value for --tag" >&2; exit 2; }
             TAG="$1"
+            ;;
+        --from-rpms)
+            shift
+            [ "$#" -gt 0 ] || { echo "missing value for --from-rpms" >&2; exit 2; }
+            FROM_RPMS="$1"
             ;;
         -h|--help)
             sed -n '2,/^$/p' "$0"
@@ -90,16 +122,57 @@ need() {
     }
 }
 
-need rpm
 need tar
 need bzip2
+PATCHELF="$HOME/.local/bin/patchelf"
+command -v "$PATCHELF" >/dev/null 2>&1 || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 
-SRC_DIR=/usr/lib64/firefox
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/firefox-stage-XXXXXX")
+trap 'rm -rf "$STAGE" ${_RPMS_EXTRACT:-}' EXIT
+
+if [ -n "$FROM_RPMS" ]; then
+    # ---- Offline rpm-staging path (--from-rpms) --------------------------
+    # Stage from Alma 8 repo rpms instead of the build box's installed tree.
+    # The firefox NVR embedded in the rpm filenames must match --tag.
+    need bsdtar
+    [ -d "$FROM_RPMS" ] || { echo "ERROR: --from-rpms dir not found: $FROM_RPMS" >&2; exit 1; }
+    FF_RPM=$(ls "$FROM_RPMS"/firefox-"${TAG}"-*.x86_64.rpm 2>/dev/null | head -1)
+    [ -n "$FF_RPM" ] || {
+        echo "ERROR: no firefox-${TAG}-*.x86_64.rpm in $FROM_RPMS" >&2
+        echo "  Download from https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/" >&2
+        exit 1
+    }
+    NSS_RPMS=""
+    for n in "nspr-" "nss-3" "nss-util-" "nss-softokn-3" "nss-softokn-freebl-"; do
+        r=$(ls "$FROM_RPMS"/"$n"*.x86_64.rpm 2>/dev/null | sort -V | tail -1)
+        [ -n "$r" ] || { echo "ERROR: no ${n}* rpm in $FROM_RPMS" >&2; exit 1; }
+        NSS_RPMS="$NSS_RPMS $r"
+    done
+    R=$(mktemp -d "${TMPDIR:-/tmp}/firefox-rpms-XXXXXX")
+    # keep the extraction dir alive past this block's scope alongside $STAGE
+    _RPMS_EXTRACT="$R"
+    for r in "$FF_RPM" $NSS_RPMS; do
+        bsdtar -xf "$r" -C "$R" 2>/dev/null
+    done
+    SRC_DIR="$R/usr/lib64/firefox"
+    SRC_NSS_DIR="$R/usr/lib64"
+else
+    # ---- Default path: build box's dnf-managed system tree ----------------
+    need rpm
+    SRC_DIR=/usr/lib64/firefox
+    SRC_NSS_DIR=/usr/lib64
+fi
+
 SRC_BIN="$SRC_DIR/firefox-bin"
 
 if [ ! -d "$SRC_DIR" ]; then
-    echo "ERROR: $SRC_DIR not found -- install/upgrade firefox first:" >&2
-    echo "  sudo dnf upgrade -y firefox" >&2
+    if [ -n "$FROM_RPMS" ]; then
+        echo "ERROR: firefox rpm did not unpack a /usr/lib64/firefox tree" >&2
+    else
+        echo "ERROR: $SRC_DIR not found -- install/upgrade firefox first:" >&2
+        echo "  sudo dnf upgrade -y firefox" >&2
+    fi
     exit 1
 fi
 
@@ -112,20 +185,19 @@ if [ ! -x "$SRC_BIN" ]; then
     exit 1
 fi
 
-INSTALLED_NVR=$(rpm -q firefox 2>/dev/null || true)
-case "$INSTALLED_NVR" in
-    firefox-${TAG}-*)
-        echo "==> Confirmed installed firefox: $INSTALLED_NVR"
-        ;;
-    *)
-        echo "ERROR: --tag $TAG does not match installed package $INSTALLED_NVR" >&2
-        echo "  Update --tag to match, or run:  sudo dnf upgrade -y firefox" >&2
-        exit 1
-        ;;
-esac
-
-STAGE=$(mktemp -d "${TMPDIR:-/tmp}/firefox-stage-XXXXXX")
-trap 'rm -rf "$STAGE"' EXIT
+if [ -z "$FROM_RPMS" ]; then
+    INSTALLED_NVR=$(rpm -q firefox 2>/dev/null || true)
+    case "$INSTALLED_NVR" in
+        firefox-${TAG}-*)
+            echo "==> Confirmed installed firefox: $INSTALLED_NVR"
+            ;;
+        *)
+            echo "ERROR: --tag $TAG does not match installed package $INSTALLED_NVR" >&2
+            echo "  Update --tag to match, or run:  sudo dnf upgrade -y firefox" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 echo "==> Staging Firefox tree from $SRC_DIR ..."
 mkdir -p "$STAGE/bin" "$STAGE/lib"
@@ -170,34 +242,64 @@ if [ -n "$absolute_links" ]; then
     exit 1
 fi
 
-# --- Bundle the NSS / NSPR runtime closure into lib/firefox/ -------------
-# Firefox 140 needs NSS_3.107 (see header).  Co-locate the EL8 nss .so set
-# next to libxul.so; firefox-bin already runs with RPATH=$ORIGIN, and NSS
-# dlopen's its softoken/freebl/ckbi plugins from libnss3's own directory,
-# so stamping each with RPATH=$ORIGIN makes the closure self-resolving
-# regardless of the host's (possibly older) system NSS.  Strip-before-
-# patchelf per the repo ELF rule (nss RPM libs are already stripped, so
+# --- Bundle the NSS / NSPR + libffi runtime closure into lib/firefox/ -----
+# Firefox 140 needs NSS_3.107 (see header); libxul NEEDEDs libffi.so.6 (see
+# header).  Co-locate the EL8 .so set next to libxul.so; firefox-bin already
+# runs with RPATH=$ORIGIN, and NSS dlopen's its softoken/freebl/ckbi plugins
+# from libnss3's own directory, so stamping each with RPATH=$ORIGIN makes the
+# closure self-resolving regardless of the host's system NSS/libffi.  Strip-
+# before-patchelf per the repo ELF rule (nss RPM libs are already stripped, so
 # strip is a near no-op, but keep the order).
 PATCHELF="$HOME/.local/bin/patchelf"
 command -v "$PATCHELF" >/dev/null 2>&1 || PATCHELF="$(command -v patchelf || true)"
 [ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found (need it to stamp NSS RPATH)" >&2; exit 1; }
 
+# NSS_LIBS deliberately EXCLUDES libnssckbi.so -- the trust module must stay
+# system-provided (this is also what Mozilla's official Linux tarballs do: they
+# ship no ckbi either).  On EL8/Fedora /usr/lib64/libnssckbi.so is an
+# alternatives symlink to p11-kit-trust.so, a PROXY that reads the trust store
+# from hardcoded distro paths (/etc/pki/ca-trust/...).  Bundling that proxy
+# made firefox show SEC_ERROR_UNKNOWN_ISSUER for every HTTPS site on any other
+# distro (Arch-family trust lives in /etc/ssl/certs) -- classic build-box
+# masking, same shape as the NSS_3.107 gap.  Without a bundled ckbi, NSS
+# dlopens the HOST's trust module: works on every mainstream distro.  The
+# staging loop below hard-fails if /usr/lib64 lacks the remaining libs.
+# Also excluded: libnsssysinit.so (EL8's system-init shim; same distro-coupling
+# argument -- without it NSS uses the upstream default init path).
 NSS_LIBS="libnss3.so libnssutil3.so libsmime3.so libssl3.so libnspr4.so \
 libplc4.so libplds4.so libsoftokn3.so libfreebl3.so libfreeblpriv3.so \
-libnssdbm3.so libnssckbi.so libnsssysinit.so"
-echo "==> Bundling NSS/NSPR closure into lib/firefox/ ..."
+libnssdbm3.so libffi.so.6 libjpeg.so.62"
+echo "==> Bundling NSS/NSPR + host-gap sonames (libffi, libjpeg) into lib/firefox/ ..."
 for nsslib in $NSS_LIBS; do
-    src=$(readlink -f "/usr/lib64/$nsslib" 2>/dev/null || true)
-    [ -n "$src" ] && [ -f "$src" ] || {
-        echo "ERROR: /usr/lib64/$nsslib missing -- install nss/nspr first" >&2
-        exit 1
-    }
+    src=$(readlink -f "$SRC_NSS_DIR/$nsslib" 2>/dev/null || true)
+    # Offline/non-EL8 path: libffi.so.6 + libjpeg.so.62 do not exist on the
+    # host -- fall back to the loadout payload copies (EL8 bytes, repo-proven).
+    if { [ -z "$src" ] || [ ! -f "$src" ]; } \
+       && [ -f "$REPO/payload/el8.x86_64.glibc2p28/lib64/$nsslib.bz2" ]; then
+        src=""
+        echo "  $nsslib: staging from payload copy (host lacks the EL8 soname)"
+        bunzip2 -c "$REPO/payload/el8.x86_64.glibc2p28/lib64/$nsslib.bz2" \
+            > "$STAGE/lib/firefox/$nsslib"
+    else
+        [ -n "$src" ] && [ -f "$src" ] || {
+            echo "ERROR: $SRC_NSS_DIR/$nsslib missing -- install nss/nspr first" >&2
+            exit 1
+        }
+        cp "$src" "$STAGE/lib/firefox/$nsslib"
+    fi
     dst="$STAGE/lib/firefox/$nsslib"
-    cp "$src" "$dst"
-    /usr/bin/strip "$dst" 2>/dev/null || true
+    strip "$dst" 2>/dev/null || true
     "$PATCHELF" --set-rpath '$ORIGIN' "$dst"
     chmod 755 "$dst"
 done
+
+# Guard: the trust module must NEVER ship in the bundle (see the NSS_LIBS
+# comment).  If a future edit re-adds it, fail the build here.
+if [ -e "$STAGE/lib/firefox/libnssckbi.so" ] || [ -e "$STAGE/lib/firefox/libnsssysinit.so" ]; then
+    echo "ERROR: trust-module libs (libnssckbi/libnsssysinit) must not ship in the bundle" >&2
+    echo "       (they are distro-specific trust proxies; see NSS_LIBS comment)" >&2
+    exit 1
+fi
 
 # Firefox auto-mounts plugins from MOZ_PLUGIN_PATH; not needed for the
 # default browser experience.  The optional system langpacks under
@@ -221,8 +323,34 @@ libdir="$prefix/lib/firefox"
 #   "/lib64/libnss3.so: version `NSS_3.107' not found ... Couldn't load XPCOM".
 # Prepend $libdir so the bundled NSS (and every other bundled .so) wins; this
 # mirrors what the stock /usr/bin/firefox launcher does with LD_LIBRARY_PATH.
+# Keep the path INSIDE the bundle: do NOT add $prefix/lib64 (gui_libs) here --
+# on hosts newer than EL8 that would shadow the host GTK3/dbus stack with the
+# EL8-era gui_libs copies and break theme engines / spawned helpers.  The
+# host-gap sonames (libffi.so.6, libjpeg.so.62) are bundled in $libdir
+# instead, so $libdir alone closes the NEEDED set on any host.
 LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_LIBRARY_PATH
+
+# Platform condition (the ONE spot firefox needs one): the bundle ships no
+# libnssckbi.so -- the trust module must come from the host (bundling EL8's
+# p11-kit proxy broke TLS on every non-EL8 distro; see the NSS_LIBS comment
+# in the staging section).  NSS dlopens it by soname from the loader path, so
+# probe WITHOUT the bundle dir on the path: if the host provides no
+# libnssckbi.so at all (minimal containers, stripped farm nodes), fall back
+# to the loadout-owned copy under <prefix>/lib64 (gui_libs), if present.
+# gui_libs' ckbi has the same distro-proxy problem, so only use it as a
+# better-than-nothing fallback -- a working EL8 node always resolves its own
+# /usr/lib64 ckbi first, and hosts with no NSS at all likely lack the trust
+# paths the proxy wants, so this stays a pragmatic best-effort, not a fix.
+if ! command -v ldconfig >/dev/null 2>&1 \
+   || ! ldconfig -p 2>/dev/null | grep -q 'libnssckbi.so'; then
+    if [ -e "$prefix/lib64/libnssckbi.so" ]; then
+        LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$prefix/lib64"
+        export LD_LIBRARY_PATH
+        printf 'firefox wrapper: host has no libnssckbi.so; using loadout copy\n' >&2
+    fi
+fi
+
 exec "$libdir/firefox-bin" "$@"
 EOF
 chmod 755 "$STAGE/bin/firefox"
@@ -231,7 +359,14 @@ chmod 755 "$STAGE/bin/firefox"
 # session pick it up via XDG_DATA_DIRS=$HOME/.local/share:...; the .desktop
 # file's Exec= line points at /usr/bin/firefox, which still works on EL8
 # workstations as a fallback but the bundled wrapper is the intended path.
-if [ -r /usr/share/applications/firefox.desktop ]; then
+# Offline path: the rpm carries the .desktop in /usr/share/applications, so
+# prefer the unpacked copy when --from-rpms; keep the currently-deployed one
+# from the payload tar as the last-resort (a .desktop never goes stale in a
+# way that matters).
+if [ -n "${_RPMS_EXTRACT:-}" ] && [ -r "$_RPMS_EXTRACT/usr/share/applications/firefox.desktop" ]; then
+    mkdir -p "$STAGE/share/applications"
+    cp "$_RPMS_EXTRACT/usr/share/applications/firefox.desktop" "$STAGE/share/applications/"
+elif [ -r /usr/share/applications/firefox.desktop ]; then
     mkdir -p "$STAGE/share/applications"
     cp /usr/share/applications/firefox.desktop "$STAGE/share/applications/"
 fi

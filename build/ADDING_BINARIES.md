@@ -498,6 +498,15 @@ See `build/build-gvim.sh` for the full recipe.
 
 ## nedit-ng build notes (v2.0.1, commit 72661f5, added 2026-05-16)
 
+**PULLED FROM THE PAYLOAD as of 2026-08-30**, same reason and same fix path as
+flameshot (see that section, above `## flameshot`): nedit-ng directly needs
+`libQt5Network.so.5`, which is linked against `libssl.so.1.1`/`libcrypto.so.1.1`
+-- absent on Arch/CachyOS, so the binary fails to load at all, not just a
+degraded feature. Re-add once `gui_libs`' `libQt5Network.so.5` is fixed (see
+flameshot's note for the two paths considered) by restoring the `"nedit-ng"`
+entry in `payload/packages.json` (removed 2026-08-30, see git history) and its
+membership in `@editor-gui`.
+
 Qt5 CMake rewrite of NEdit. Single self-contained binary -- Qt .qrc embeds all resources, no runtime files needed. Requires gcc-toolset-14 and Qt5 devel packages.
 
 **Prerequisites:**
@@ -558,6 +567,15 @@ seen=(); queue=(/path/to/binary); while [[ ${#queue[@]} -gt 0 ]]; do ...
 See session history for the full `/tmp/dep_closure.sh` script.
 
 ## nvim-qt build notes (v0.2.19, added 2026-05-2x)
+
+**PULLED FROM THE PAYLOAD as of 2026-08-30**, same reason and same fix path as
+flameshot (see `## flameshot`, above): nvim-qt directly needs
+`libQt5Network.so.5`, which is linked against `libssl.so.1.1`/`libcrypto.so.1.1`
+-- absent on Arch/CachyOS, so the binary fails to load at all. Re-add once
+`gui_libs`' `libQt5Network.so.5` is fixed by restoring the `"nvim-qt"` entry
+in `payload/packages.json` (removed 2026-08-30, along with
+`payload/el8.x86_64.glibc2p28/runtime/nvim-qt-runtime.tar.bz2` -- see git
+history) and its membership in `@editor-gui`.
 
 Qt5 GUI frontend for Neovim. CMake build -- no Rust, no GPU renderer. No Docker needed.
 At runtime the binary resolves Qt5 from `~/.local/lib64` (gui_libs) via pre-baked RPATH,
@@ -1618,6 +1636,11 @@ To re-add flameshot: fix `gui_libs`' `libQt5Network.so.5` by one of the above,
 then restore the `"flameshot"` entry in `payload/packages.json` (removed
 2026-08-30, see git history) and its membership in `@gui-suite`.
 
+**Not the only casualty.** `nedit-ng` and `nvim-qt` hit the identical
+`libQt5Network.so.5` dependency and were pulled the same day for the same
+reason -- see their own sections (`## nedit-ng build notes`, `## nvim-qt build
+notes`). Fixing `libQt5Network.so.5` once restores all three.
+
 ---
 
 flameshot >=13.0 is **Qt6-only upstream**, and NO prebuilt channel ships a
@@ -1663,24 +1686,38 @@ non-optional, in `@gui-suite`. Needs `DISPLAY`. Max glibc GLIBC_2.27. ~2.2M bin.
 
 Install: `./loadout install gui_libs,flameshot`
 
-## firefox 140.11.0 -- Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS RPM)
+## firefox 140.14.0 -- Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS RPM)
 
 Mozilla Firefox does not get a source build -- its Rust + autoconf +
 gn build chain is enormous and not in scope for this repo. Instead we
-shanghai the EL8 BaseOS RPM: refresh the system install to the freshest
-ESR, copy the runtime tree, and add a thin POSIX-sh launcher.
+shanghai the EL8 BaseOS/AppStream RPM: refresh the system install to
+the freshest ESR, copy the runtime tree, and add a thin POSIX-sh
+launcher. **No self-update:** the bundle ships no `updater` binary and
+upstream's would need root + the Mozilla install layout -- updates come
+from build-firefox.sh bumps only (ESR point releases hit Alma 8
+AppStream within days of upstream).
 
 ### Build
 
 ```bash
 sudo dnf upgrade -y firefox
-rpm -q firefox                # capture exact version, e.g. firefox-140.11.0-1.el8_10.alma.1.x86_64
-./build/build-firefox.sh --tag 140.11.0
+rpm -q firefox                # capture exact version, e.g. firefox-140.14.0-1.el8_10.alma.1.x86_64
+./build/build-firefox.sh --tag 140.14.0
+```
+
+Offline / non-EL8 host (used for the 140.14.0 bump):
+
+```bash
+# download from https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/:
+#   firefox-<ver>-*.rpm  nspr-*.rpm  nss-3*.rpm  nss-util-*.rpm
+#   nss-softokn-*.rpm  nss-softokn-freebl-*.rpm
+./build/build-firefox.sh --tag 140.14.0 --from-rpms <dir-with-the-rpms>
 ```
 
 Script:
 - Verifies `rpm -q firefox` matches `--tag` so the bundled version
-  and the binaries can't drift.
+  and the binaries can't drift (the --from-rpms path checks the rpm
+  filename NVR instead).
 - Stages `/usr/lib64/firefox/` -> `$STAGE/lib/firefox/` via `cp -a`.
 - Drops a thin POSIX-sh wrapper at `$STAGE/bin/firefox` that derives
   prefix from `$0` and exec's `$prefix/lib/firefox/firefox-bin`.
@@ -1734,28 +1771,103 @@ Couldn't load XPCOM.
 `firefox --version` then silently falls through to the 115-ESR
 `/usr/bin/firefox`, which *looks* like "the bundle didn't update."
 
-Fix = carry the full NSS runtime closure (13 `.so`) inside the bundle
-and force the loader to prefer it:
+Fix = carry the NSS runtime closure inside the bundle and force the
+loader to prefer it:
 
 - 7 NEEDED: `libnss3 libnssutil3 libsmime3 libssl3 libnspr4 libplc4 libplds4`
-- 6 dlopen plugins: `libsoftokn3 libfreebl3 libfreeblpriv3 libnssdbm3 libnssckbi libnsssysinit`
+- 5 dlopen plugins: `libsoftokn3 libfreebl3 libfreeblpriv3 libnssdbm3`
 
 The build script copies these from `/usr/lib64/` into `lib/firefox/`,
 `strip`s then `patchelf --set-rpath '$ORIGIN'` each (strip-before-
 patchelf per the ELF rule; the strip-script's `elf_has_rpath` guard
 then skips them).
 
+### The trust module must stay SYSTEM-provided (SEC_ERROR_UNKNOWN_ISSUER trap)
+
+`libnssckbi.so` and `libnsssysinit.so` are **NOT bundled** -- on purpose,
+with a build-time guard that fails the build if they reappear. This is
+also what Mozilla's official Linux tarballs do (they ship no ckbi).
+
+On EL8/Fedora, `/usr/lib64/libnssckbi.so` is an alternatives symlink to
+p11-kit's **trust proxy**, which reads the system trust store from
+hardcoded distro paths (`/etc/pki/ca-trust/...`). Bundling that proxy
+made every HTTPS site fail with `SEC_ERROR_UNKNOWN_ISSUER` on any
+non-EL8 distro (Arch-family keeps trust in `/etc/ssl/certs`; the proxy
+found no roots at all). Classic build-box masking: works on EL8, zero
+TLS trust anywhere else -- and it evaded the dest-dir smoke because a
+`--version`/screenshot run against `data:` URLs never verifies a cert.
+
+Without a bundled ckbi, NSS dlopens the **host's** trust module
+(`libnssckbi.so` on the default loader path -- classic compiled roots,
+or the host's working p11-kit proxy). Every mainstream distro provides
+one; the bundle no longer cares where that host keeps its roots.
+
+Smoke (dest-dir shape, `env -i`, on a NON-EL8 host -- this is the only
+way the masking gets caught):
+
+```bash
+<dest>/local/bin/firefox --headless --profile /tmp/p \
+  --screenshot /tmp/x.png https://example.com
+# must render; and no "Not Secure" interstitial for a well-known CA site
+```
+
 **RPATH alone is not enough.** The EL8 RPM's `firefox-bin` and
 `libxul.so` have **no RPATH/RUNPATH** -- firefox-bin dlopens libxul by
 absolute path, but libxul's NEEDED libs (nss, libmoz*) get resolved by
 the loader with no app-dir on the search path. So the wrapper must
 `export LD_LIBRARY_PATH="$libdir:$LD_LIBRARY_PATH"` (mirrors the stock
-`/usr/bin/firefox` launcher). Verify after a build with:
+`/usr/bin/firefox` launcher) -- and NOTHING else. Do NOT add
+`$prefix/lib64` (gui_libs): on hosts newer than EL8 that shadows the
+host GTK3/dbus stack with EL8-era copies and breaks theme engines /
+spawned helpers (symptom: firefox "reaches outside its install space"
+and misbehaves). Keep the loader path inside the bundle; bundle any
+soname the host can't supply (next section). Verify after a build
+with:
 
 ```bash
 env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
   | grep 'libnss3.so' | grep 'calling init'
 # must print the BUNDLE path, not /lib64
+```
+
+### libffi.so.6 + libjpeg.so.62 are BUNDLED (the soname-gap-on-newer-hosts trap)
+
+`libxul.so` NEEDEDs `libffi.so.6` and `libjpeg.so.62` (EL8 sonames the
+build links against). EL8 hosts provide both in `/lib64`, and
+`gui_libs` also ships copies to `~/.local/lib64` -- so the EL8 smoke
+never failed. But hosts with newer userlands have **no such sonames at
+all** (Arch-family: libffi 3.4 = `.so.8` only, libjpeg-turbo 3 =
+`.so.8` only), and with the loader path inside the bundle there is
+nothing to resolve them:
+
+```
+XPCOMGlueLoad error for file .../lib/firefox/libxul.so:
+libffi.so.6: cannot open shared object file: No such file or directory
+Couldn't load XPCOM.
+```
+
+Fix = bundle the host-gap sonames **co-located** in `lib/firefox/`
+with `RPATH=$ORIGIN`, same staging loop as the NSS set (14th/15th
+entries: `libffi.so.6`, `libjpeg.so.62`, copied from `/usr/lib64` on
+the build box). The wrapper's existing `$libdir` prepend resolves
+them. Rule of thumb for adding more: bundle only sonames the TARGET
+host cannot provide; everything the host has, the host copy must win
+(GTK/dbus/mesa...), which is why `$prefix/lib64` must stay OFF the
+wrapper's loader path.
+
+Verify with the dest-dir shape on a host that lacks the sonames --
+`env -i` so the dev shell's `LD_LIBRARY_PATH` can't mask a gap:
+
+```bash
+<dest>/local/bin/firefox --version    # must print, not XPCOMGlueLoad
+```
+
+and assert the host stack stayed authoritative:
+
+```bash
+<dest>/local/bin/firefox --headless --screenshot /tmp/x.png data:text/html,ok
+ldd-with-LD_LIBRARY_PATH=<bundle>/lib/firefox <bundle>/lib/firefox/libxul.so \
+  | grep libgtk-3   # must resolve to /usr/lib, not ~/.local/lib64
 ```
 
 ### Runtime libs still assumed present on EL8 (NOT bundled)
@@ -1770,6 +1882,13 @@ env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
 `libfreetype` used to be on this list. It is now **bundled and source-built**
 (2.14.3, see the freetype section) and still reached through `gui_libs`, so
 `libxul.so` resolves the loadout copy rather than EL8's 2.9.1.
+
+`libffi.so.6` and `libjpeg.so.62` used to be on this list implicitly
+(EL8 base + `gui_libs` lib64 twins). Both are now **bundled
+co-located** -- see the soname-gap section above; `libasound2` is the
+remaining same-shape entry (every EL8 host has it; on soname-gap hosts
+it resolves from the host or needs the same treatment if ever
+reported).
 
 `depends: ["gui_libs"]` pulls in the GTK3 / cairo / pango / X11 /
 Wayland stack libxul.so dlopens at runtime.
@@ -1799,10 +1918,15 @@ gui_libs is auto-pulled via depends).
 sudo dnf upgrade -y firefox
 rpm -q firefox
 ./build/build-firefox.sh --tag <new-version>
+# or, offline / off the EL8 box:
+./build/build-firefox.sh --tag <new-version> --from-rpms <rpm-dir>
 git add payload/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2.part-* \
-        .strip-manifest payload/packages.json
+        .strip-manifest payload/packages.json README.md
 git commit -m 'feat(payload): firefox <version> shanghai bundle'
 ```
+
+(README.md too -- the package table is Tier-1 sync-gated on the version
+via `build/gen-readme-table`.)
 
 The shanghai approach means the bundle is only as fresh as the EL8
 RPM. AlmaLinux tracks Firefox ESR closely -- typically only a few
