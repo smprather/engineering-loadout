@@ -106,7 +106,11 @@ strip "$stage/surfer.bin"
 # Mesa vendor libs live one level up from bin/ at <prefix>/lib64.
 patchelf --set-rpath '$ORIGIN/../lib64' "$stage/surfer.bin"
 
-# Wrapper (single source of truth; mirrors wezterm's Mesa/GLVND env block).
+# Wrapper (single source of truth; inlines the shared GUI env-adaptation block
+# from build/gui-wrapper-env.sh -- host-GL probe + platform-conditioned Mesa/
+# GLVND fallback + host-fontconfig preference; see that file for the knobs).
+GUI_ENV_BLOCK="$(cd "$(dirname "$0")" && pwd)/gui-wrapper-env.sh"
+[ -r "$GUI_ENV_BLOCK" ] || { echo "ERROR: missing $GUI_ENV_BLOCK" >&2; exit 1; }
 cat > "$stage/surfer" <<'WRAP'
 #!/bin/sh
 #
@@ -118,16 +122,9 @@ cat > "$stage/surfer" <<'WRAP'
 bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
 prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
 
-mesa_libdir="$prefix/lib64"
-if [ -d "$mesa_libdir" ]; then
-  export LD_LIBRARY_PATH="$mesa_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-  if [ -d "$mesa_libdir/dri" ]; then
-    export LIBGL_DRIVERS_PATH="$mesa_libdir/dri${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
-  fi
-fi
-if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
-  export __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
-fi
+WRAP
+cat "$GUI_ENV_BLOCK" >> "$stage/surfer"
+cat >> "$stage/surfer" <<'WRAP'
 
 exec "$bin_dir/surfer.bin" "$@"
 WRAP

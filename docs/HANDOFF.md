@@ -12,6 +12,34 @@ The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 
 Surfaced the same way firefox's did: loadout wezterm on the CachyOS host.
 
+### fontconfig warning spam -> shared GUI wrapper env block
+
+After the openssl/GL fixes, wezterm still spewed ~91 fontconfig
+parse errors/warnings per launch: the bundled EL8 libfontconfig 2.13
+(RPATH-resolved) cannot parse Arch 2.18's /etc/fonts conf.d. Fix took
+the genericity the owner asked for:
+
+- NEW `build/gui-wrapper-env.sh` -- one shared env-adaptation block
+  (POSIX sh) inlined at BUILD time into wrapper heredocs; installed
+  wrappers stay self-contained. Contains: (1) host-GL probe (ldconfig
+  libEGL.so.1) gating the Mesa/GLVND exports -- host GL present means
+  ZERO exports, children inherit clean env; farm nodes keep the
+  fallback; (2) host-fontconfig LD_PRELOAD when the host provides
+  libfontconfig.so.1 -- host lib+config pair stays version-consistent;
+  LD_PRELOAD pins exactly that SONAME. Env knobs for no-rebuild
+  adaptation: LOADOUT_GUI_HOST_GL=auto|1|0,
+  LOADOUT_GUI_HOST_FONTCONFIG=auto|0|<abs-path>,
+  LOADOUT_GUI_LIB64=<dir>. RUNPATH precedence documented: env
+  outranks baked RUNPATH; never --force-rpath these payloads.
+- Consumers: wezterm x3 wrappers + surfer (which had the identical
+  unconditional-poison bug). Both build scripts restructured to
+  assemble wrappers as header + `cat gui-wrapper-env.sh` + exec tail.
+- Payload: wezterm.tar.bz2 repacked (2x40MiB chunks), surfer.bz2
+  wrapper restuffed; deployed via `./loadout upgrade wezterm surfer -y`.
+  Verified: `wezterm ls-fonts` 0 fontconfig warnings, GUI clean, cli
+  list OK, flatpak + host grep healthy, surfer --help runs; knob
+  overrides parse. Tier-1 sync gates green; Tier 2/3 still deferred.
+
 ### wezterm: openssl 1.1 sonames + child-env poisoning
 
 Two independent bugs, both universal-host regressions masked on EL8:

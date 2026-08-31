@@ -5327,3 +5327,32 @@ If a future OpenVAF release drops the legacy pass manager (migrating to the
 new LLVM pass manager), the LLVM version constraint loosens and the prebuilt
 LLVM 15 fetch can be dropped. Check `openvaf/llvm/wrapper/OpenVafWrapper.cpp`
 for `PassManagerBuilder.h` -- if the include is gone, LLVM 16+ is fine.
+
+## GUI wrapper env block (shared, for any bundled GUI launcher)
+
+`build/gui-wrapper-env.sh` is the single source of truth for the
+env-adaptation every GUI wrapper needs (host-GL probe + platform-gated
+Mesa/GLVND fallback + host-fontconfig LD_PRELOAD + the
+LOADOUT_GUI_HOST_GL / LOADOUT_GUI_HOST_FONTCONFIG / LOADOUT_GUI_LIB64
+knobs). Consume it by INLINING at build time -- the installed wrapper
+must stay a self-contained script with no repo dependency:
+
+```sh
+GUI_ENV_BLOCK="$(cd "$(dirname "$0")" && pwd)/gui-wrapper-env.sh"
+cat > "$stage/yourtool" <<'HDR'
+#!/bin/sh
+# ... header comment ...
+bin_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
+prefix=$(CDPATH= cd "$bin_dir/.." && pwd -P) || exit 1
+HDR
+cat "$GUI_ENV_BLOCK" >> "$stage/yourtool"
+cat >> "$stage/yourtool" <<'FTR'
+
+exec "$real_binary" "$@"
+FTR
+```
+
+The block requires $prefix set beforehand and never tramples
+caller-set values. Rationale + failure catalogue: see the block's own
+header comment and the AGENTS.md GUI WRAPPER SHARED BLOCK paragraph.
+Users of it today: build-wezterm.sh (3 wrappers), build-surfer.sh.

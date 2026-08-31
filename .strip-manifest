@@ -202,7 +202,7 @@ sha256  fddaf7592554e14867cef501599350affa19d95b408a7c1f4a75b043625f3253  payloa
 sha256  cab9afd1cd33eb9e0a507aee45579b0581b36f095a96ecfcc687d9f278716e81  payload/el8.x86_64.glibc2p28/bin/stylua.bz2
 sha256  6d62d65b8dcba1d9330f7e9375af1eddec1933d381917d43853a420df469f55c  payload/el8.x86_64.glibc2p28/bin/sum.bz2
 sha256  ef1ab201d70c0142e06817393ab229c0923003623aad7d6293afee1816aff32e  payload/el8.x86_64.glibc2p28/bin/surfer.bin.bz2
-sha256  66570d88c48d7b347f39c21dda2d137908b1b1d2573ae7bd6451c1d2cbe9a241  payload/el8.x86_64.glibc2p28/bin/surfer.bz2
+sha256  bdc25ff99b110d87b75979487b3ae4040c51f1f60845568b1db96d7c4ff4e5b4  payload/el8.x86_64.glibc2p28/bin/surfer.bz2
 sha256  0685493a201147e1bf8e62d9102d39c8a624d9b4837e2593daec4c73e1760f0a  payload/el8.x86_64.glibc2p28/bin/sync.bz2
 sha256  5eacac3388fae845870fa103a742a0bbf83397476ea844085d825f78ba3d21dc  payload/el8.x86_64.glibc2p28/bin/tac.bz2
 sha256  6c68418ef5fa20f1a20693b29f9a631c6be0f4d3f9bcdb74a978be1d98bb2ae4  payload/el8.x86_64.glibc2p28/bin/tail.bz2
@@ -476,7 +476,7 @@ tar-meta  28387403  1787471355  payload/el8.x86_64.glibc2p28/runtime/valgrind.ta
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  271233  1785979682  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
-tar-meta  41943040  1788190592  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
+tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  648856  1786424664  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  937153  1786927648  payload/tldr/tldr-pages.tar.bz2
