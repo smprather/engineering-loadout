@@ -27,7 +27,8 @@ config bundle, font, data cache, Python tool.
 | `group` | Virtual group -- no artifacts; just a `members` list |
 
 Every package also declares:
-- `platforms: [linux|macos|windows]` -- resolver filters by current platform
+- `platforms: [linux]` -- resolver filters by current platform; `'linux'` is the sole
+  value (windows/macos vocabulary retired 2026-08-31)
 - `tags: [...]` -- free-form labels for `list --tag T`
 - Per-kind artifact fields: `bins`, `libs`, `archive`, `wheels`, `uv_tool`, etc.
 - `version`, `description`, `homepage`

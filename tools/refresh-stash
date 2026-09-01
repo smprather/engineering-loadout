@@ -167,8 +167,8 @@ def main(argv):
         print(f"  FAILED  : {len(failed)}  ({', '.join(failed[:6])})")
         eprint()
         eprint("Some mirrors could not be reached. If github is blocked on this box, fetch the")
-        eprint("stash asset elsewhere (tools/download-release.ps1 on the Windows laptop), copy it")
-        eprint("over, and use ./tools/fetch-stash --from-file instead.")
+        eprint("stash asset elsewhere (any machine with github access), copy it over, and")
+        eprint("use ./tools/fetch-stash --from-file instead.")
         return 1
 
     print()

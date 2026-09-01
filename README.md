@@ -43,8 +43,8 @@ it is ~328 MB of bz2'd git packfiles, so committing it would grow every clone
 permanently. `./tools/fetch-stash` downloads and verifies it against the release.
 
 If this machine cannot reach GitHub, download `nvim-plugin-stash.tar.bz2` and
-`sha256sums.txt` from the release elsewhere (on Windows,
-`tools/download-release.ps1`), copy both over, and pair them by hand:
+`sha256sums.txt` from the release on any machine that has GitHub access, copy
+both over, and pair them by hand:
 
 ```bash
 ./tools/fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \
@@ -89,16 +89,6 @@ Name packages or groups the same way `dnf` or `apt` works:
 ./loadout install octave --dry-run                        # preview only
 ```
 
-### Windows
-
-```powershell
-.\loadout.cmd                  # bootstraps/uses bundled user-local PowerShell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1  # explicit 5.1 bootstrap
-```
-
-No elevation required.
-
 ---
 
 ## What's Inside
@@ -110,10 +100,8 @@ No elevation required.
 | **[Vim](https://www.vim.org)** | Vim 9.2 with NERDTree, SimpylFold, and vim-liberty bundled |
 | **[Tmux](https://github.com/tmux/tmux)** | Sessions that survive reboot (resurrect + continuum), `Ctrl-\` prefix |
 | **[Helix](https://helix-editor.com)** | Ready to run offline |
-| **[Starship](https://starship.rs)** | Cross-shell prompt, Linux and Windows configs |
-| **[PowerShell](https://github.com/PowerShell/PowerShell)** | Aliases, Unix coreutils wrappers, Starship + zoxide integration |
+| **[Starship](https://starship.rs)** | Cross-shell prompt, Linux config |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
-| **[AutoHotKey](https://www.autohotkey.com)** | AHK v2 flat script; reads feature config from `loadout_keys.toml` at startup |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
 | **Command-line tools** | 100+ modern CLI utilities, ready offline -- see table below |
 | **Nerd Fonts** | 12 font families |
@@ -133,8 +121,9 @@ Shared-tree installs stay relocatable: bundled runtime/data assets live under
 `~/.local/share` (or the staged prefix) and shell init exports the paths
 needed for discovery, including `TERMINFO_DIRS` for bundled `st` terminfo.
 
-**Multi-platform.** RedHat 7 / 8 / 9, Suse, x86_64 / ARM / PowerPC, and
-Windows.
+**Multi-platform Linux.** RedHat 7 / 8 / 9, Suse, x86_64 / ARM / PowerPC.
+Windows and macOS are not supported (the platform vocabulary was retired
+2026-08-31); Linux-only is the whole surface.
 
 **Layered configuration.** Settings flow from lowest to highest precedence:
 

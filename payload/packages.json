@@ -3,7 +3,7 @@
   "schema_version": 3,
   "_schema": {
     "kind": "Package type: 'bin', 'lib-bundle', 'runtime', 'typelib', 'python-base', 'python-tool', 'env', 'font', 'data', 'group'.",
-    "platforms": "List of platforms where this package is valid: 'linux', 'macos', 'windows'. Default ['linux'] when omitted.",
+    "platforms": "'linux' (the project is 100% Linux-only; the windows/macos platform vocabulary was retired 2026-08-31 -- offloaded to the windows-dotfiles repo). Default ['linux'] when omitted.",
     "tags": "Free-form labels for filtering/grouping (e.g. ['search', 'editor', 'gui']).",
     "depends": "Hard dependencies: package names (or @group refs) that MUST be installed alongside this one. Resolver auto-pulls them; skipping a hard dep of a selected pkg is an error unless --no-deps or --force.",
     "recommends": "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
@@ -2885,9 +2885,7 @@
       "install_to": "~/.local/share/tealdeer/cache/tldr-pages",
       "version": "",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "docs",
@@ -2938,8 +2936,7 @@
         "user"
       ],
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -2977,8 +2974,7 @@
         "user"
       ],
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3003,9 +2999,7 @@
         "user"
       ],
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3060,8 +3054,7 @@
         }
       ],
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3084,8 +3077,7 @@
         }
       ],
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3098,9 +3090,7 @@
       "source": "envs/helix/",
       "install_to": "~/.config/helix",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3132,8 +3122,7 @@
         }
       ],
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3160,8 +3149,7 @@
       "source": "envs/wezterm/wezterm.lua",
       "install_to": "~/.config/wezterm/wezterm.lua",
       "platforms": [
-        "windows",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3174,9 +3162,7 @@
       "source": "envs/editorconfig/editorconfig",
       "install_to": "~/.editorconfig",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3189,8 +3175,7 @@
       "source": "envs/pip/pip.conf",
       "install_to": "~/.config/pip/pip.conf",
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3198,47 +3183,13 @@
       ],
       "description": "pip config with require-virtualenv=true (protects base Python env)"
     },
-    "env-powershell": {
-      "kind": "env",
-      "source": "envs/powershell/Microsoft.PowerShell_profile.ps1",
-      "install_to": "%USERPROFILE%/Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
-      "extra_links": [
-        {
-          "from": "powershell/Microsoft.PowerShell_profile.ps1",
-          "to": "%USERPROFILE%/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1"
-        }
-      ],
-      "platforms": [
-        "windows"
-      ],
-      "tags": [
-        "env",
-        "shell"
-      ],
-      "description": "PowerShell profile (aliases, coreutils wrappers, PSReadLine, Starship, zoxide, PSFzf)"
-    },
-    "env-autohotkey": {
-      "kind": "env",
-      "source": "envs/autohotkey/hotkeys.ahk",
-      "install_to": "%USERPROFILE%/autohotkey/hotkeys.ahk",
-      "platforms": [
-        "windows"
-      ],
-      "tags": [
-        "env",
-        "hotkeys"
-      ],
-      "description": "AutoHotkey v2 flat script (corp logins, mouse wiggle, VPN, tmux helpers, ThinLinc)"
-    },
     "font-envycoder": {
       "kind": "font",
       "archive": "payload/fonts/EnvyCodeR.zip",
       "install_to": "~/.local/share/fonts/EnvyCodeR",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3251,9 +3202,7 @@
       "install_to": "~/.local/share/fonts/FiraCode",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3266,9 +3215,7 @@
       "install_to": "~/.local/share/fonts/Hack",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3281,9 +3228,7 @@
       "install_to": "~/.local/share/fonts/Inconsolata",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3296,9 +3241,7 @@
       "install_to": "~/.local/share/fonts/IosevkaTerm",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3311,9 +3254,7 @@
       "install_to": "~/.local/share/fonts/JetBrainsMono",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3326,9 +3267,7 @@
       "install_to": "~/.local/share/fonts/SourceCodePro",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3413,8 +3352,7 @@
       "kind": "env",
       "install_to": "~/.cargo/config.toml",
       "platforms": [
-        "linux",
-        "macos"
+        "linux"
       ],
       "tags": [
         "env",
@@ -3643,7 +3581,7 @@
         "env-vim",
         "env-helix"
       ],
-      "description": "Every Linux/macOS config bundle"
+      "description": "Every Linux config bundle"
     },
     "font-cascadiacode": {
       "kind": "font",
@@ -3651,9 +3589,7 @@
       "install_to": "~/.local/share/fonts/CascadiaCode",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3666,9 +3602,7 @@
       "install_to": "~/.local/share/fonts/Meslo",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3681,9 +3615,7 @@
       "install_to": "~/.local/share/fonts/UbuntuMono",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3696,9 +3628,7 @@
       "install_to": "~/.local/share/fonts/RobotoMono",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"
@@ -3711,9 +3641,7 @@
       "install_to": "~/.local/share/fonts/DejaVuSansMono",
       "version": "3.4.0",
       "platforms": [
-        "linux",
-        "macos",
-        "windows"
+        "linux"
       ],
       "tags": [
         "font"

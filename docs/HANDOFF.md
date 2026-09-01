@@ -1,12 +1,65 @@
 # Current Handoff
 
-Last updated: 2026-08-31 (wezterm universal-host batch). `v2026.08.28` is
+Last updated: 2026-08-31 (Windows/macOS retirement batch + wezterm universal-host batch). `v2026.08.28` is
 published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
 all three release assets present, and the nvim stash asset hash matches
 `sha256sums.txt`. Current post-release changes: the 2026-08-30 firefox batch
-(committed `80470b3`) and the 2026-08-31 wezterm batch below.
+(committed `80470b3`), the 2026-08-31 wezterm batch below, and the
+Windows/macOS retirement batch below that.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
+
+## 2026-08-31 batch: Windows/macOS retirement (this batch)
+
+The repo is now 100% Linux-only. Windows and macOS support was retired
+2026-08-31; all artifacts live in the owner's personal `windows-dotfiles`
+repo (commit `c4ca05b` "Offload all Windows/macOS artifacts from
+engineering-loadout" holds installer/loadout.ps1+cmd+pwsh-bootstrap,
+envs/powershell, envs/autohotkey, starship.windows.toml,
+payload/windows.x86_64 PowerShell zip chunks, download-release.ps1, nvim
+lsp/{powershell_es,autohotkey_lsp}.lua, and full package-registry doc
+snapshots). macOS may be revisited someday; windows will not.
+
+- Deleted from this repo: `loadout.ps1`, `loadout.cmd`,
+  `loadout-pwsh-bootstrap.ps1`, `envs/powershell/`, `envs/autohotkey/`,
+  `envs/starship/starship.windows.toml`,
+  `envs/nvim/lsp/{autohotkey_lsp,powershell_es}.lua`,
+  `payload/windows.x86_64/powershell/` (3 zip chunks + README),
+  `tools/download-release.ps1`.
+- `payload/packages.json`: `_schema.platforms` comment updated; every
+  package's `platforms` is `["linux"]` (or omitted, same default).
+- `loadout_main.py`: `_current_platform()` returns `"linux"` unconditionally
+  (darwin/win32 branches removed); docstring records the retirement; the
+  fonts-phase "Windows Terminal needs fonts installed on the Windows side"
+  WSL note dropped (fonts for Windows Terminal are a windows-dotfiles
+  concern).
+- Tests: `registry-integrity` KNOWN_PLATFORMS = {linux};
+  `unit-resolver`'s `winonly` fixture now uses a fictional platform value to
+  keep guarding the resolver's platform-filter mechanics without naming a
+  retired platform, plus a new `--force still platform-filters` check.
+- Docs swept: README (Windows install section, PowerShell/AHK table rows,
+  multi-platform line), AGENTS.md (scope, repo map, registry, fonts, tldr
+  acquisition paths, PowerShell/AHK/Windows-install sections → one
+  retirement note), copilot-instructions (install block, platforms field,
+  Windows section → retirement note), docs/INSTALLATION.md (Windows chapter
+  → "not supported"), docs/ARCHITECTURE.md (platforms field),
+  docs/SECURITY.md (scan coverage), build/ADDING_BINARIES.md (PowerShell
+  ZIP section → retirement note), docs/DEPLOYMENT-RUNBOOK.md (Windows
+  laptop fetch path → generic "any github-capable box" scp path; TLS
+  guidance de-PowerShelled).
+- Stash fetch story: TWO paths now -- `fetch-stash` (online) and
+  `fetch-stash --from-file --sums` (hand-carried from any github-capable
+  machine, still verified). The Windows-laptop PS5.1 path is gone from
+  this repo; how someone downloads assets on the far end is their own
+  business. `fetch-stash`/`refresh-stash` error messages updated to match.
+- `installed-sizes.json` + `.content-manifest` regenerated (order:
+  sizes then manifest) to drop the deleted files; `--check` green.
+
+Gates: unit-resolver 64/64, registry-integrity 10/11 (sole FAIL is the
+PRE-EXISTING `envs/nvim/vendor/plugins` dir miss, owner's separate WIP),
+Tier 1 syntax gates green. `loadout_main.py` diff also carries the
+unrelated `_ItemProgress` refactor and the nvim-qt gate-comment (owner's
+in-flight work, committed together).
 
 ## 2026-08-31 batch: wezterm universal-host fixes (unreleased)
 

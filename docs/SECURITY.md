@@ -42,10 +42,11 @@ pre-release gates. The final tag/release step waits and aborts on detection.
 
 Coverage is the whole shipped tree -- **~69,000 files**: `bin`/`lib64`, runtime
 archives, wheels, typelibs, treesitter parsers, fonts, the tldr cache, the
-Windows payload, the crate store, portable-python, and the Neovim + tmux plugin
+crate store, portable-python, and the Neovim + tmux plugin
 bundles. (Historically only `bin`/`lib64`/runtime were effectively scanned; the
 crate store scanned a dead path and portable-python was skipped entirely --
-both fixed.)
+both fixed. The Windows payload left coverage when the platform was retired
+2026-08-31.)
 
 ```bash
 ./build/scan-for-malware              # full scan (YARA + ClamAV)

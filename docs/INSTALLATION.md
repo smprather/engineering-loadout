@@ -195,67 +195,9 @@ the uncompressed dir is removed. `snapshot restore` accepts either the
 uncompressed dir or the `.tar.bz2` archive. Font files are excluded from
 snapshots (large and reproducible).
 
-## Windows
+## Windows / macOS
 
-**Recommended:**
-
-```powershell
-.\loadout.cmd
-# or: pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
-```
-
-`.\loadout.cmd` prefers `%USERPROFILE%\.local\opt\powershell\7\pwsh.exe`.
-If it is missing and no `pwsh.exe` is already on `PATH`, it uses Windows
-PowerShell 5.1 to extract the bundled PowerShell ZIP and then re-runs the
-installer under that user-local `pwsh.exe`.
-
-**Explicit Windows PowerShell 5.1 bootstrap:**
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\loadout-pwsh-bootstrap.ps1
-.\loadout.cmd
-```
-
-No elevation required. Files are copied, not symlinked -- re-run
-`.\loadout.cmd` or `.\loadout.ps1` after repo updates.
-
-### Windows destinations
-
-| Destination | Source |
-|-------------|--------|
-| `%LOCALAPPDATA%\nvim\` | `envs/nvim/` |
-| `%USERPROFILE%\.config\wezterm\wezterm.lua` | `envs/wezterm/wezterm.lua` |
-| `%USERPROFILE%\.config\starship\starship.toml` | `envs/starship/starship.windows.toml` |
-| `%USERPROFILE%\.editorconfig` | `envs/editorconfig/editorconfig` |
-| `%USERPROFILE%\autohotkey\hotkeys.ahk` | `envs/autohotkey/hotkeys.ahk` (feature-patched) |
-| `%USERPROFILE%\loadout_keys.toml` | Created if missing -- choose AHK features |
-| `%USERPROFILE%\.local\opt\powershell\7\` | Bundled PowerShell ZIP from `payload/windows.x86_64/powershell/` |
-| `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json` | Windows Terminal profile for bundled PowerShell |
-| PowerShell profile (5.1 + 7+) | `envs/powershell/Microsoft.PowerShell_profile.ps1` |
-
-### AutoHotKey feature flags
-
-Edit `%USERPROFILE%\loadout_keys.toml`:
-
-| Feature | Description |
-|---------|-------------|
-| `corp-logins` | Corp credential entry hotkeys |
-| `mouse-wiggle` | Idle mouse nudge to prevent lock screens |
-| `cisco-secure-client-vpn` | Cisco Secure Client auto-reconnect |
-| `password-manager` | Password manager quick-type hotkey |
-| `tmux-hotkeys` | `RAlt`/`RWin` zoom toggle, `Ctrl+;` last-pane toggle |
-| `f1f2f3-as-mouse-buttons` | F1/F2/F3 mouse remaps for mspaint/etxc/wezterm-gui |
-| `thinlinc-reconnect` | Auto-dismiss ThinLinc errors and reconnect |
-
-### AutoHotKey feature settings
-
-The Cisco Secure Client automation can skip VPN login attempts on named Wi-Fi
-networks. Add exact SSID names under `%USERPROFILE%\loadout_keys.toml`:
-
-```toml
-[autohotkey.features.cisco-secure-client-vpn]
-skip_wifi_ssids = [
-  "Home WiFi",
-  "Phone Hotspot",
-]
-```
+Not supported. Windows and macOS support was retired 2026-08-31 and
+offloaded to a separate personal repository (`windows-dotfiles`); this
+installer is Linux-only. There is no Windows or macOS install path here,
+and the package registry's `platforms` field accepts `'linux'` only.

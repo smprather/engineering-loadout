@@ -74,21 +74,66 @@ def _vprint(msg):
         print(msg)
 
 
-def _progress(description, total):
-    """Return a started rich Progress context for `total` items, or None when rich unavailable."""
-    if not _RICH:
-        return None, None
-    p = _RichProgress(
-        TextColumn("[cyan]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        console=_console,
-        transient=True,
-    )
-    p.start()
-    task = p.add_task(description, total=total)
-    return p, task
+class _ItemProgress:
+    """Per-item rich progress bar: one line per name, with the description
+    column padded to the widest name given up front so the bar/counter/timer
+    stay pinned at a fixed column instead of jittering left and right as
+    short and long names alternate.
+
+    Every method is a safe no-op when rich is unavailable, so callers never
+    need `if progress:` guards around step()/advance()/stop() -- that
+    per-call-site guard, and the per-call-site max-width computation it used
+    to require, is exactly how two of the six progress bars in this file
+    (GObject typelibs, Python tools) ended up missing the padding fix the
+    other four got by hand. Check `.active` only if you need to know whether
+    rich is actually driving a visible bar (e.g. to fall back to per-item
+    print()s the way extract_font_zip does).
+
+        p = _ItemProgress("Installing libraries", [names...])
+        for name in names:
+            p.step(name)     # set the description for the item about to run
+            ...
+            p.advance()      # bump the N/M counter once it's done
+        p.stop()
+    """
+
+    def __init__(self, description, item_names, total=None):
+        """`item_names` drives the description column's fixed width (and, when
+        `total` is not given, the bar's total too -- the common case, where
+        the names ARE the items being iterated). Pass `total` explicitly when
+        the bar advances once per some OTHER unit than the named items whose
+        width you want (e.g. pv_extract_tar advances once per tar member but
+        never calls .step(), so it passes item_names=() and total=len(members))."""
+        item_names = list(item_names)
+        self._width = max((len(n) for n in item_names), default=0)
+        self._progress = None
+        self._task = None
+        self.active = bool(_RICH)
+        if self.active:
+            self._progress = _RichProgress(
+                TextColumn("[cyan]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                console=_console,
+                transient=True,
+            )
+            self._progress.start()
+            self._task = self._progress.add_task(
+                description, total=len(item_names) if total is None else total
+            )
+
+    def step(self, name, prefix="  "):
+        if self._progress is not None:
+            self._progress.update(self._task, description=f"{prefix}{name.ljust(self._width)}")
+
+    def advance(self):
+        if self._progress is not None:
+            self._progress.advance(self._task)
+
+    def stop(self):
+        if self._progress is not None:
+            self._progress.stop()
 
 
 def _show_cursor():
@@ -191,8 +236,9 @@ def _load_tool_registry(repo_dir):
       kind         -- package type: 'bin', 'lib-bundle', 'runtime', 'typelib',
                      'python-base', 'python-tool', 'env', 'font', 'data', 'group'.
                      Defaults to 'bin' when absent.
-      platforms    -- list of platforms where the entry is valid: 'linux',
-                     'macos', 'windows'. Reserved for the resolver.
+      platforms    -- list of platforms where the entry is valid: 'linux'
+                     (sole platform; the project is 100% Linux-only).
+                     Reserved for the resolver.
       depends      -- list of hard-dependency package names. Reserved for the
                      resolver.
       recommends   -- list of soft-dependency package names. Reserved for the
@@ -235,13 +281,12 @@ class ResolverError(Exception):
 
 
 def _current_platform():
-    """Return the current OS platform key used by the resolver."""
-    if sys.platform.startswith("linux"):
-        return "linux"
-    if sys.platform == "darwin":
-        return "macos"
-    if sys.platform == "win32":
-        return "windows"
+    """Return the current OS platform key used by the resolver.
+
+    The project is 100% Linux-only (multi-platform Linux); 'linux' is the
+    sole platform value. Windows/macOS support was retired 2026-08-31 and
+    offloaded to the windows-dotfiles repo.
+    """
     return "linux"
 
 
@@ -1880,7 +1925,6 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         _DEFERRED_BINARIES = {"tmux"}
 
         _bin_bz2_files = sorted(f for f in _bz2.find(bin_dir) if _bin_selected(os.path.basename(f)[:-4]))
-        _max_bin_name = max((len(os.path.basename(f[:-4])) for f in _bin_bz2_files), default=0)
 
         # Don't silently "succeed" when a selected package has no built artifact.
         # Only flag genuine bin packages: skip those whose bins come from a runtime
@@ -1898,22 +1942,9 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                             _pname, "/".join(_claimed[:3]) + ("..." if len(_claimed) > 3 else "")
                         )
                     )
-        _progress_ctx = (
-            _RichProgress(
-                TextColumn("[cyan]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeElapsedColumn(),
-                console=_console,
-                transient=True,
-            )
-            if _RICH
-            else None
+        _bp = _ItemProgress(
+            "Installing binaries", (os.path.basename(f[:-4]) for f in _bin_bz2_files)
         )
-        _progress_task = None
-        if _progress_ctx is not None:
-            _progress_ctx.start()
-            _progress_task = _progress_ctx.add_task("Installing binaries", total=len(_bin_bz2_files))
 
         for bz2_file in _bin_bz2_files:
             dest_file = os.path.join(dest_bin_dir, os.path.basename(bz2_file[:-4]))
@@ -1923,8 +1954,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 warn(f"skipping {name} -- bz2 or split parts missing at {bz2_file}")
                 continue
 
-            if _progress_ctx is not None:
-                _progress_ctx.update(_progress_task, description=f"  {name.ljust(_max_bin_name)}")
+            _bp.step(name)
 
             if name in _DEFERRED_BINARIES:
                 pids = _exes_by_path(dest_file)
@@ -1934,8 +1964,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     # spawn a daemon + ask the user to restart their tmux server.
                     if _bz2_matches_dest(bz2_src, dest_file):
                         print(f"  {name} already current, skipping")
-                        if _progress_ctx is not None:
-                            _progress_ctx.advance(_progress_task)
+                        _bp.advance()
                         continue
                     blocked_deferred.add(name)
                     warn(
@@ -1943,8 +1972,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                             name, dest_file, ", ".join(str(p) for p in pids)
                         )
                     )
-                    if _progress_ctx is not None:
-                        _progress_ctx.advance(_progress_task)
+                    _bp.advance()
                     continue
                 # Not running from this path; attempt install normally and fall through.
 
@@ -1954,8 +1982,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             if _bz2_matches_dest(bz2_src, dest_file):
                 _bins_unchanged += 1
                 _vprint(f"  unchanged: {name}")
-                if _progress_ctx is not None:
-                    _progress_ctx.advance(_progress_task)
+                _bp.advance()
                 continue
 
             try:
@@ -1963,15 +1990,13 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 write_bz2_atomic(bz2_src, dest_file, 0o755)
             except OSError as exc:
                 if exc.errno != errno.ETXTBSY:
-                    if _progress_ctx is not None:
-                        _progress_ctx.stop()
+                    _bp.stop()
                     raise
                 if name in _DEFERRED_BINARIES:
                     # Proactive check passed but rename raced with a new exec; defer anyway.
                     blocked_deferred.add(name)
                     warn(f"could not replace {dest_file} (ETXTBSY race) -- deferring")
-                    if _progress_ctx is not None:
-                        _progress_ctx.advance(_progress_task)
+                    _bp.advance()
                     continue
                 # Non-deferred binary: retry once/second for up to 10 seconds.
                 replaced = False
@@ -1983,8 +2008,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                         break
                     except OSError as retry_exc:
                         if retry_exc.errno != errno.ETXTBSY:
-                            if _progress_ctx is not None:
-                                _progress_ctx.stop()
+                            _bp.stop()
                             raise
                 if not replaced:
                     pids = _exes_by_path(dest_file)
@@ -1992,16 +2016,13 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     blocked_failed[name] = pid_str
                     record_in_use_blocker("pre-built binaries", name, dest_file)
                     warn(f"could not replace {dest_file} after 10s: in use (PIDs: {pid_str})")
-                    if _progress_ctx is not None:
-                        _progress_ctx.advance(_progress_task)
+                    _bp.advance()
                     continue
-            if _progress_ctx is None:
+            if not _bp.active:
                 print(f"  bzip2: {bz2_file} -> {dest_file}")
-            if _progress_ctx is not None:
-                _progress_ctx.advance(_progress_task)
+            _bp.advance()
 
-        if _progress_ctx is not None:
-            _progress_ctx.stop()
+        _bp.stop()
 
     lib64_dir = os.path.join(src_dir, "lib64")
     if os.path.isdir(lib64_dir):
@@ -2016,29 +2037,27 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 os.remove(_glib_path)
                 print(f"  removed stale glibc lib: {_glib_path}")
         _lib64_bz2_files = sorted(f for f in _bz2.find(lib64_dir) if _lib_selected(os.path.basename(f)[:-4]))
-        _lp, _lpt = _progress("Installing libraries", len(_lib64_bz2_files))
+        _lp = _ItemProgress(
+            "Installing libraries", (os.path.basename(f[:-4]) for f in _lib64_bz2_files)
+        )
         for bz2_file in _lib64_bz2_files:
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
             bz2_src = _bz2.resolve(bz2_file)
             if bz2_src is None:
                 warn(f"skipping {os.path.basename(dest_file)} -- bz2 or split parts missing at {bz2_file}")
                 continue
-            if _lp:
-                _lp.update(_lpt, description=f"  {os.path.basename(dest_file)}")
+            _lp.step(os.path.basename(dest_file))
             # Skip no-op installs: dest already byte-identical to bundled bz2.
             if _bz2_matches_dest(bz2_src, dest_file):
                 _libs_unchanged += 1
                 _vprint(f"  unchanged: {os.path.basename(dest_file)}")
-                if _lp:
-                    _lp.advance(_lpt)
+                _lp.advance()
                 continue
             require_writable_parent(dest_file, "pre-built libraries")
             write_bz2_atomic(bz2_src, dest_file, 0o644)
             _vprint(f"  bzip2: {bz2_file} -> {dest_file}")
-            if _lp:
-                _lp.advance(_lpt)
-        if _lp:
-            _lp.stop()
+            _lp.advance()
+        _lp.stop()
 
     # NOTE: the shared-library (ldd) check is deliberately NOT run here. Some binaries
     # link libs that a LATER runtime-archive phase provides -- e.g. zsh needs
@@ -2153,19 +2172,16 @@ def install_typelibs(repo_dir, home, selected_tools=None):
     dest_dir = os.path.join(home, _local_name(home), "lib", "girepository-1.0")
     ensure_dir(dest_dir, "GObject typelibs")
 
-    _p, _pt = _progress("GObject typelibs", len(typelib_files))
+    _p = _ItemProgress("GObject typelibs", typelib_files)
     for name in typelib_files:
         src = os.path.join(src_dir, name)
         dest = os.path.join(dest_dir, name)
-        if _p:
-            _p.update(_pt, description=f"  {name}")
+        _p.step(name)
         require_writable_parent(dest, "GObject typelibs")
         shutil.copy2(src, dest)
         _vprint(f"  cp: {src} -> {dest}")
-        if _p:
-            _p.advance(_pt)
-    if _p:
-        _p.stop()
+        _p.advance()
+    _p.stop()
 
     record_result("GObject typelibs", "OK", f"{len(typelib_files)} files")
     print(f"  Installed {len(typelib_files)} typelibs -> {dest_dir}/")
@@ -2262,11 +2278,10 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     installed = []
     failed = []
     skipped_tools = []
-    progress, progress_task = _progress("Python tools", len(tools_to_install))
+    progress = _ItemProgress("Python tools", (t[0] for t in tools_to_install))
     try:
         for tool_name, pkg_name, install_spec in tools_to_install:
-            if progress:
-                progress.update(progress_task, description=f"Python tools: {tool_name}")
+            progress.step(tool_name, prefix="Python tools: ")
             try:
                 # Check if a wheel for this package exists (whole or chunked) before install.
                 norm = pkg_name.lower().replace("-", "_").replace(".", "_")
@@ -2329,11 +2344,9 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                     for launcher in _prune_dead_uv_launchers(pkg_name, _env["XDG_BIN_HOME"]):
                         _vprint(f"  Removed unsupported launcher: {launcher}")
             finally:
-                if progress:
-                    progress.advance(progress_task)
+                progress.advance()
     finally:
-        if progress:
-            progress.stop()
+        progress.stop()
         _wheels_cleanup()
 
     if failed:
@@ -2526,7 +2539,7 @@ def font_zip_members(zip_path):
         return [member for member in zf.namelist() if font_member(member) and os.path.basename(member)]
 
 
-def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None, task=None, max_name=0):
+def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None):
     if progress is None:
         print(f"  Extracting: {zip_path} -> {user_fonts_dir}/")
     members = members if members is not None else font_zip_members(zip_path)
@@ -2534,13 +2547,12 @@ def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None, task
         for member in members:
             dest = os.path.join(user_fonts_dir, os.path.basename(member))
             if progress is not None:
-                name = os.path.basename(member)
-                progress.update(task, description=f"  {name.ljust(max_name)}")
+                progress.step(os.path.basename(member))
             require_writable_parent(dest, "fonts")
             with zf.open(member) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
             if progress is not None:
-                progress.advance(task)
+                progress.advance()
 
 
 def _logical_zip_name(archive):
@@ -2625,12 +2637,11 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
         if members:
             zip_jobs.append((zip_path, members))
 
-    total_font_files = sum(len(members) for _, members in zip_jobs)
-    max_font_name = max((len(os.path.basename(member)) for _, members in zip_jobs for member in members), default=0)
-    _p, _pt = _progress("Installing fonts", total_font_files) if total_font_files else (None, None)
+    _font_names = [os.path.basename(member) for _, members in zip_jobs for member in members]
+    _p = _ItemProgress("Installing fonts", _font_names) if _font_names else None
     try:
         for zip_path, members in zip_jobs:
-            extract_font_zip(zip_path, user_fonts_dir, members, _p, _pt, max_font_name)
+            extract_font_zip(zip_path, user_fonts_dir, members, _p)
     finally:
         if _p is not None:
             _p.stop()
@@ -2654,7 +2665,6 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
 
     if is_wsl():
         print("  WSL note: Linux GUI apps use these fonts through fontconfig.")
-        print("  WSL note: Windows Terminal needs fonts installed on the Windows side.")
 
 
 def install_tldr_cache(repo_dir, home, selected_tools=None):
@@ -2815,15 +2825,14 @@ def pv_extract_tar(archive_path, dest_dir):
             safe_extract_tar(tf, dest_dir)
             return
 
-        p, task = _progress("  " + os.path.basename(archive_path), len(members))
-        assert p is not None
+        p = _ItemProgress("  " + os.path.basename(archive_path), (), total=len(members))
         # try/finally: a raised tf.extract must still stop the Progress, else its
         # cursor-hide (ESC[?25l) is never restored and the terminal cursor vanishes.
         try:
             for member in members:
                 tf.extract(member, dest_dir, filter="data")
-                p.advance(task)
-            p.advance(task)
+                p.advance()
+            p.advance()
         finally:
             p.stop()
 
@@ -3272,13 +3281,13 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         for n in sorted(os.listdir(parser_src))
         if os.path.isfile(os.path.join(parser_src, n)) and (n.endswith(".so.bz2") or n.endswith(".so"))
     ]
-    _max_parser_name = max((len(n.replace(".so.bz2", "").replace(".so", "")) for n in parser_files), default=0)
-    _p, _pt = _progress("Tree-sitter parsers", len(parser_files))
+    _p = _ItemProgress(
+        "Tree-sitter parsers",
+        (n.replace(".so.bz2", "").replace(".so", "") for n in parser_files),
+    )
     for name in parser_files:
         src = os.path.join(parser_src, name)
-        if _p:
-            _stripped = name.replace(".so.bz2", "").replace(".so", "")
-            _p.update(_pt, description=f"  {_stripped.ljust(_max_parser_name)}")
+        _p.step(name.replace(".so.bz2", "").replace(".so", ""))
         if name.endswith(".so.bz2"):
             dest = os.path.join(parser_dest, name[:-4])
             require_writable_parent(dest, "Tree-sitter parsers")
@@ -3292,10 +3301,8 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
             shutil.copy2(src, dest)
             os.chmod(dest, 0o644)
             _vprint(f"  cp: {src} -> {dest}")
-        if _p:
-            _p.advance(_pt)
-    if _p:
-        _p.stop()
+        _p.advance()
+    _p.stop()
     print(f"  Installed {len(parser_files)} parsers -> {parser_dest}/")
 
 
@@ -4378,7 +4385,13 @@ _HARDCODED_GATE_PKGS = frozenset(
         "vim",
         "gvim",
         "mate-terminal",
-        "nvim-qt",
+        # "nvim-qt" deliberately excluded here (not a rename): pulled from the
+        # registry 2026-08-30 -- see build/ADDING_BINARIES.md's "nvim-qt build
+        # notes" -- because its libQt5Network.so.5 dependency needs OpenSSL 1.1,
+        # absent on Arch/CachyOS. install_nvim_qt_runtime()'s own
+        # `"nvim-qt" not in selected_tools` check already no-ops cleanly when
+        # the package can never be selected, so this omission is deliberate,
+        # not a gap -- re-add "nvim-qt" here when the package comes back.
         "treesitter-parsers",
         "nvim-plugin-stash",
         "env-nvim",

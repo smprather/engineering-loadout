@@ -47,7 +47,7 @@ KNOWN_KINDS = {
     "data",
     "group",
 }
-KNOWN_PLATFORMS = {"linux", "macos", "windows"}
+KNOWN_PLATFORMS = {"linux"}
 SYNTHETIC_NAMES = {"@shared", "@shared-all", "@envs", "@envs-all"}
 OPTIONAL_SCHEMA_FIELDS = {"uv_extras"}
 

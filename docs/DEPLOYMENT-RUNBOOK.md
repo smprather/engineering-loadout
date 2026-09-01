@@ -8,7 +8,7 @@ table, find your state, run the commands.
 
 | env | github access | shared FS | notes |
 |---|---|---|---|
-| **Windows laptop** | most reliable | n/a | **PowerShell 5.1 only.** No WSL, no VMs (policy). |
+| **offsite box** (any OS with github + scp) | most reliable | n/a | Personal-utility role: fetch release assets by any means, hand-carry them. |
 | **nDPC** (Linux) | **varies by day**: full / clone-pull only / blocked | **R/W** | clone/pull is enough for everything here. |
 | **DPC** (Linux, air-gapped) | none | **R/O** | where the users actually are. |
 
@@ -26,7 +26,9 @@ git ls-remote https://github.com/smprather/engineering-loadout.git HEAD \
 ```
 
 - `REACHABLE` (full or clone/pull) → use the nDPC path.
-- `BLOCKED` → use the laptop path (the Windows laptop can still reach github).
+- `BLOCKED` → fetch release assets on any github-capable machine and scp them
+  over (section 2b). How you download them there is out of scope for this repo
+  (a browser is fine; verify with the release's `sha256sums.txt`).
 - Everything blocked → nothing to do; the last-good state keeps working.
 
 ---
@@ -125,27 +127,21 @@ Then stage it into the shared tree:
 #  if only the stash is new)
 ```
 
-### 2b. github blocked on nDPC, but the laptop can reach it -- the scp path
+### 2b. github blocked on nDPC, but some other box can reach it -- the scp path
 
-The Windows laptop has the most reliable github access but PowerShell only.
-`tools/download-release.ps1` downloads the release + stash, verifies sha256
-on the Windows side, and prints the scp command.
+Download the release + stash on any machine with github access, verify every
+asset against `sha256sums.txt` (the trust root, covered by the signed tag),
+and copy the files to nDPC:
 
-```powershell
-# on the Windows laptop, from a clone of the repo (or a release source tarball)
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File .\tools\download-release.ps1 -Tag v2026.07.14
-# default output dir: .\loadout-release
-```
-
-The script verifies every asset against `sha256sums.txt` (the trust root,
-covered by the signed tag). If a hash mismatches, the file is deleted and
-the script exits non-zero. It prints the scp command at the end.
-
-Copy the files to nDPC (the script prints the exact command):
-
-```powershell
-scp "C:/path/to/loadout-release/*" <user>@<ndpc-host>:~/loadout-release/
+```text
+# on the github-capable box: fetch, from the release page or with any client:
+#   engineering-loadout-v<TAG>.tar.gz
+#   nvim-plugin-stash.tar.bz2
+#   sha256sums.txt
+# verify before copying:
+sha256sum -c sha256sums.txt --ignore-missing
+# then copy them over:
+scp <files> <user>@<ndpc-host>:~/loadout-release/
 ```
 
 Then on nDPC, install from the copied files -- still verified:
@@ -240,14 +236,10 @@ mv -Tf /mnt/shared/loadout/.current.new /mnt/shared/loadout/current
 Users pointing at `current` pick up the new tree on their next shell. Keep
 the previous release for rollback.
 
-### 4b. github blocked on nDPC, laptop can reach it
+### 4b. github blocked on nDPC, some other box can reach it
 
-```powershell
-# on the Windows laptop
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File .\tools\download-release.ps1 -Tag v2026.07.15
-scp "C:/path/to/loadout-release/*" <user>@<ndpc-host>:~/loadout-release/
-```
+Fetch the release assets on the github-capable box (source tarball, stash,
+`sha256sums.txt`; verify with `sha256sum -c`), scp them to nDPC, then:
 
 ```bash
 # on nDPC
@@ -297,12 +289,6 @@ bytes the release signed. Do not use them. Re-download (section 2a or 2b);
 if it mismatches again, the release or your transport is compromised --
 stop and investigate.
 
-### `ERROR: SHA-256 MISMATCH for nvim-plugin-stash.tar.bz2` (PowerShell side)
-
-`tools/download-release.ps1` deleted the file. Same meaning as above, on the
-Windows side. Re-run the download; if it persists, the release is bad or TLS
-interception is corrupting the transfer (the script prints TLS guidance).
-
 ### `ERROR: <stash> is not writable.`
 
 You ran `refresh-stash` on the air-gapped side (DPC), where the shared FS is
@@ -331,17 +317,16 @@ Releases before the stash moved out of git do not carry the stash asset.
 
 ### `ERROR: cannot reach github.com: ...` (fetch-stash)
 
-github is blocked from this box. If this is nDPC and the laptop can reach
-it, use the scp path (section 2b). If the laptop is also blocked, section 2c
+github is blocked from this box. If this is nDPC and another box can reach
+github, use the scp path (section 2b). If everything is blocked, section 2c
 applies -- the existing stash keeps working.
 
-### TLS/SSL error on the Windows laptop
+### TLS/SSL error while downloading on another box
 
-Corporate TLS interception. `download-release.ps1` forces TLS 1.2/1.3. If
-the proxy uses an untrusted CA, the .NET stack rejects it. Fix: ensure the
-corp root CA is in the Windows certificate store, or download the files in
-a browser (which trusts the corp CA) and pass them to `fetch-stash
---from-file` on nDPC. The script prints this guidance inline.
+Corporate TLS interception. If the proxy uses an untrusted CA, command-line
+clients reject it. Fix: ensure the corp root CA is trusted on that box, or
+download the files in a browser (which trusts the corp CA) and pass them to
+`fetch-stash --from-file` on nDPC.
 
 ### `ERROR: release <tag> has no sha256sums.txt -- cannot verify. Refusing.`
 
@@ -366,7 +351,7 @@ still pin to `lazy-lock.json` until a release moves them.
 | per-user Bash config | DPC (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local ./loadout install @envs --no-backup` |
 | fetch stash (online) | nDPC | `./tools/fetch-stash` |
 | fetch stash (scp'd) | nDPC | `./tools/fetch-stash --from-file <f> --sums <sha256sums.txt>` |
-| download stash (Windows) | laptop | `tools/download-release.ps1 -Tag <tag>` |
+| fetch stash (blocked nDPC) | offsite box | download release assets, `sha256sum -c`, scp to nDPC |
 | refresh plugins (no release) | nDPC | `./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash` |
 | update loadout | nDPC | pull + `./tools/fetch-stash` + `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
 

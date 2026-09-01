@@ -53,12 +53,6 @@ cp hooks/* .git/hooks/ && chmod +x .git/hooks/*
 ./tests/install-linux-tmp-home
 ```
 
-```powershell
-# Windows install (copies files, no elevation required)
-.\loadout.cmd
-# or: pwsh -NoProfile -ExecutionPolicy Bypass -File .\loadout.ps1
-```
-
 Use `sh -n loadout` for the POSIX-sh shim,
 `python3 -m py_compile loadout_main.py` for the Python installer, and
 `bash -n envs/bash/global/bashrc`
@@ -76,7 +70,8 @@ smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
 
 - `kind` -- `bin`, `lib-bundle`, `runtime`, `typelib`, `python-base`, `python-tool`,
   `env`, `font`, `data`, or `group`.
-- `platforms` -- list from `linux`, `macos`, `windows`. Resolver filters.
+- `platforms` -- `'linux'` (sole value; the project is 100% Linux-only; the
+  windows/macos vocabulary was retired 2026-08-31). Resolver filters.
 - `tags` -- free-form labels for filtering.
 - `depends` -- hard-dependency package names (or `@group` refs). Resolver auto-pulls.
 - `recommends` -- soft-dependency package names. Auto-pulled when available, silently
@@ -443,32 +438,11 @@ The bash config gracefully degrades when modern tools are absent:
 Handles distro naming differences: `batcat` (Debian) vs `bat` (RedHat),
 `fdfind` vs `fd`.
 
-### Windows
+### Windows / macOS -- RETIRED
 
-Files are **copied**, not symlinked. Re-run `.\loadout.cmd` after
-repo changes. `.\loadout.cmd` uses bundled user-local PowerShell at
-`%USERPROFILE%\.local\opt\powershell\7\pwsh.exe` when present, falls back to
-system `pwsh.exe`, and otherwise uses Windows PowerShell 5.1 to extract
-`payload/windows.x86_64/powershell/PowerShell-*-win-x64.zip[.part-NNN]`
-without winget/admin. `loadout.ps1` writes a Windows Terminal profile fragment
-at `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\engineering-loadout\powershell.json`.
-AutoHotKey (`AutoHotkey64.exe`) is extracted to
-`%USERPROFILE%\AutoHotkey_*\` rather than installed system-wide (avoids
-SentinelOne flagging); if no such directory exists, the installer
-auto-downloads the latest stable release from GitHub and removes
-`AutoHotkey32.exe`. The PowerShell profile includes `Invoke-PatchDOSStub` -- a
-byte-patcher that changes an exe's DOS stub string to alter its hash, useful
-as a SentinelOne bypass for flagged binaries like AHK.
-
-The AHK feature config lives at `%USERPROFILE%\loadout_keys.toml` (created if
-missing). `hotkeys.ahk` reads the enabled-feature list from this file at startup
--- the installer no longer patches booleans into the script; it just copies it.
-Undefined settings fall back to defaults (`[autohotkey].enabled` default true;
-optional features default off). Override the config path with the
-`LOADOUT_KEYS_TOML` env var; run `hotkeys.ahk --print-config` to dump the
-resolved config and exit. The Cisco VPN feature also reads
-`[autohotkey.features.cisco-secure-client-vpn].skip_wifi_ssids` directly at
-runtime to skip automation on named Wi-Fi networks. Set
-`[autohotkey].logging = true` (default false) to append timestamped diagnostics
-(SSID source, VPN skip decision, auto-login actions) to
-`%USERPROFILE%\autohotkey\hotkeys.log` for troubleshooting.
+Windows and macOS support was retired 2026-08-31 and is 100% out of scope for
+this repository. The former Windows artifacts (installer, PowerShell profile,
+AutoHotKey config, Windows Terminal integration, `payload/windows.x86_64`)
+live in the owner's `windows-dotfiles` repo; this repository is Linux-only
+and the package registry's `platforms` vocabulary accepts `'linux'` only. Do
+not reintroduce windows/macos platform values, install paths, or docs here.

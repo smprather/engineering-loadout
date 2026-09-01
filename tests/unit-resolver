@@ -70,7 +70,10 @@ REGISTRY = {
     "env-zsh": {"kind": "env", "platforms": ["linux"]},
     "env-tcsh": {"kind": "env", "platforms": ["linux"], "optional": True},
     "env-opt": {"kind": "env", "platforms": ["linux"], "optional": True},
-    "winonly": {"kind": "bin", "bins": ["winonly"], "platforms": ["windows"]},
+    # Non-linux platform value: must be filtered out on linux. The project is
+    # linux-only today (registry KNOWN_PLATFORMS={linux}), but this fixture
+    # guards the resolver mechanics should a new platform be added later.
+    "winonly": {"kind": "bin", "bins": ["winonly"], "platforms": ["winonly"]},
     "@cli": {"kind": "group", "members": ["rg", "bat"]},
     "@editors": {"kind": "group", "members": ["gvim", "@cli"]},
     "@loop-a": {"kind": "group", "members": ["@loop-b"]},
@@ -155,8 +158,7 @@ def test_filter_by_platform(m):
     fp = m.filter_by_platform
     names = {"rg", "winonly"}
     check("platform filter keeps matches", fp(names, REGISTRY, "linux") == {"rg"})
-    check("platform filter windows side", fp(names, REGISTRY, "windows") == {"winonly"})
-    check("missing platforms defaults linux", fp({"x"}, {"x": {}}, "linux") == {"x"})
+    check("platform filter missing platforms defaults linux", fp({"x"}, {"x": {}}, "linux") == {"x"})
 
 
 def _args(**kw):
@@ -195,7 +197,10 @@ def test_resolve_tool_selection(m):
     check("--force downgrade to warning", sel == {"gvim", "bat"})
 
     sel = rts(_args(only="rg,winonly"), REGISTRY)
-    check("platform filter applied to selection", sel == {"rg"})
+    check("platform filter drops non-linux pkg from selection", sel == {"rg"})
+
+    sel = rts(_args(only="rg,winonly", force=True), REGISTRY)
+    check("--force still platform-filters", sel == {"rg"})
 
 
 def test_tool_bin_lib_sets(m):

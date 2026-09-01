@@ -21,8 +21,8 @@ Two paths, because the network policy keeps moving:
            fetch-stash --tag v2026.07.14  # from a specific one
   offline  fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \\
                        --sums /path/to/sha256sums.txt
-           # the file was downloaded elsewhere (e.g. a Windows laptop via
-           # tools/download-release.ps1) and scp'd over. It is still verified.
+           # the file was downloaded elsewhere (any machine with github
+           # access) and scp'd over. It is still verified.
 
 Runs under any python3 (stdlib only). No gh, no curl required.
 """
@@ -96,8 +96,8 @@ def release_assets(tag, token):
         raise SystemExit(1) from exc
     except urllib.error.URLError as exc:
         eprint(f"ERROR: cannot reach github.com: {exc.reason}")
-        eprint("  If this network blocks github, download the asset elsewhere (e.g. the")
-        eprint("  Windows path: tools/download-release.ps1), copy it over, and re-run with:")
+        eprint("  If this network blocks github, download the asset on any machine")
+        eprint("  with github access, copy it over, and re-run with:")
         eprint(f"    ./tools/fetch-stash --from-file <{STASH_NAME}> --sums <{SUMS_NAME}>")
         raise SystemExit(1) from exc
     return data["tag_name"], {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}

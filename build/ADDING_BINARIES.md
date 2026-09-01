@@ -205,7 +205,8 @@ Key rules:
   always installed regardless of tool selection.
 - `optional: true` -- keep a large or niche tool out of `all` / `@shared` / the
   full loadout sweep. Users then opt in with `./loadout install mytool`.
-- `platforms` -- list from `linux`, `macos`, `windows`. Resolver filters by current platform.
+- `platforms` -- `'linux'` (sole value; windows/macos retired 2026-08-31). Resolver filters
+  by current platform.
 - `tags` -- free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
 - `depends` -- list of hard-dep package names (or `@group` refs). Resolver auto-pulls them;
   skipping a hard dep raises `ResolverError` unless `--no-deps` or `--force`. Use for
@@ -392,29 +393,13 @@ Home directory quotas on shared compute systems are typically small (~4-10 GB). 
 Future: consider splitting payload into lightweight (-> `~/.local`) and heavyweight
 (-> shared filesystem, symlinked from `~/.local`). See memory file `project_prebuilt_bifurcation.md`.
 
-## PowerShell 7.6.3 -- Windows x64 portable ZIP
+## Windows payload -- RETIRED
 
-Windows installs use a user-local PowerShell runtime so `.\loadout.cmd` can run
-without admin rights, winget, Store/App Installer, or a system `pwsh.exe`.
-Bundle the official Microsoft ZIP under:
-
-```powershell
-payload\windows.x86_64\powershell\PowerShell-<version>-win-x64.zip
-```
-
-Refresh from GitHub releases, then split into 45 MiB parts:
-
-```powershell
-New-Item -ItemType Directory -Force payload\windows.x86_64\powershell | Out-Null
-gh release download v7.6.3 -R PowerShell/PowerShell `
-  -p PowerShell-7.6.3-win-x64.zip `
-  -D payload\windows.x86_64\powershell --clobber
-Get-FileHash payload\windows.x86_64\powershell\PowerShell-7.6.3-win-x64.zip -Algorithm SHA256
-python .\split-bz2 --chunk-mb 45 payload\windows.x86_64\powershell\PowerShell-7.6.3-win-x64.zip
-```
-
-Update `payload/windows.x86_64/powershell/README.md` with the source URL and
-SHA256. The Windows bootstrap rejoins `.zip.part-NNN` files before extraction.
+The Windows platform was retired 2026-08-31 and offloaded to the windows-dotfiles
+repo. The former PowerShell 7.6.3 portable-ZIP packaging notes (bundle under
+`payload/windows.x86_64/powershell/`, 45 MiB `.zip.part-NNN` splits, per-version
+README with source URL + SHA256) moved with it; do not reintroduce Windows
+payload content here.
 
 ## vim + gvim build notes (vim 9.2.0782; originally added 2026-05-16 at 9.2.458)
 
