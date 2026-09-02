@@ -1,5 +1,9 @@
 .codex/
 .vix/
+# Agent-tooling state (Caveman Cloud skill sync + local plugin marketplace),
+# same class as .codex/: machine-local, not part of the loadout product.
+.agents/
+skills-lock.json
 loadout_backups/
 .loadout-bootstrap/
 __pycache__/

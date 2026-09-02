@@ -35,6 +35,7 @@ Runtime dependencies vendored alongside binaries -- no system library assumption
 | `libz.so.1` | zlib compression |
 | `libssl.so.1.1` | OpenSSL 1.1 TLS (wezterm's mux/ssh stack, Qt5Network, ruby's openssl.so). Hosts with openssl 3 have no `.so.1.1` at all. EL8 `openssl-libs` rpm, unclaimed stem so it lands with every lib64 selection |
 | `libcrypto.so.1.1` | OpenSSL 1.1 crypto (same consumers; libssl NEEDs it). Same source/shape as libssl.so.1.1 |
+| `libcrypt.so.1` | libxcrypt (EL8 `libxcrypt` rpm; XCRYPT_2.0 symbols, NEEDED = glibc only). ruby NEEDs it; hosts on libxcrypt 4.4.36+ ship `libcrypt.so.2` only and have no `.so.1`. Unclaimed stem so it lands with every lib64 selection, same as libssl/libcrypto.so.1.1 |
 
 ## `gui_libs` optional package (~80 libs)
 
