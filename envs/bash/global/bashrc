@@ -203,6 +203,25 @@ if is_truthy "${LOADOUT_CFG_ENABLE_GRC}"; then
     source $BASH_CONFIG_ROOT_DIR/global/grc/etc/profile.d/grc.sh
 fi
 
+# Fixed-socket ssh-agent: export SSH_AUTH_SOCK at a stable path and start an
+# agent there if none is reachable yet. exit 2 from `ssh-add -l` means no
+# agent is listening at this socket (dead or never started); exit 0/1 (has
+# identities / reachable but empty) both mean a live agent is already there,
+# so leave it alone -- restarting it would drop any already-loaded identity.
+# ~/.ssh is created first: ssh-agent -a cannot bind a socket in a missing
+# directory, and on a fresh HOME that failure is silent (stderr suppressed).
+# Does NOT run ssh-add: a passphrase-protected key would prompt on every new
+# shell. Load it once per agent lifetime yourself.
+if is_truthy "${LOADOUT_CFG_ENABLE_SSH_AGENT}"; then
+    export SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock"
+    ssh-add -l >/dev/null 2>&1
+    if [[ $? -eq 2 ]]; then
+        mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+        rm -f "$SSH_AUTH_SOCK"
+        ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+    fi
+fi
+
 # fzf: shell integration (CTRL-T file picker, CTRL-R history, ALT-C cd)
 if command -v fzf >&/dev/null && is_truthy "${LOADOUT_CFG_ENABLE_FZF}"; then
     if [[ -n $_bat_exec ]]; then

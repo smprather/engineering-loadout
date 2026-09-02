@@ -20,6 +20,13 @@ export LOADOUT_CFG_ENABLE_FASTNVIM="0"
 export LOADOUT_CFG_ENABLE_FZF="0"
 export LOADOUT_CFG_ENABLE_ZOXIDE="0"
 export LOADOUT_CFG_ENABLE_GRC="1"
+# Fixed-socket ssh-agent (~/.ssh/loadout-agent.sock) started on demand if not
+# already running, instead of `eval "$(ssh-agent -s)"`'s random per-shell
+# socket that nothing outside that one shell can find. Does NOT auto-run
+# ssh-add -- a passphrase-protected key would prompt on every new shell; load
+# it once per agent lifetime yourself. See docs/RELEASE.md for why the fixed
+# socket matters for release signing specifically.
+export LOADOUT_CFG_ENABLE_SSH_AGENT="0"
 # IceCream-Bash ic/icp/ict/ictp debug-print helpers
 export LOADOUT_CFG_ENABLE_ICECREAM="1"
 export LOADOUT_CFG_ENABLE_STARSHIP="1"

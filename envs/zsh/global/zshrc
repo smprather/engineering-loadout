@@ -255,6 +255,19 @@ if is_truthy "${LOADOUT_CFG_ENABLE_GRC}"; then
     source_if_exists "$BASH_CONFIG_ROOT_DIR/global/grc/etc/profile.d/grc.sh"
 fi
 
+# Fixed-socket ssh-agent -- see envs/bash/global/bashrc's copy of this block
+# for the full rationale (LOADOUT_CFG_ENABLE_SSH_AGENT is shared, defined once
+# in envs/bash/global/config.sh).
+if is_truthy "${LOADOUT_CFG_ENABLE_SSH_AGENT}"; then
+    export SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock"
+    ssh-add -l >/dev/null 2>&1
+    if [[ $? -eq 2 ]]; then
+        mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+        rm -f "$SSH_AUTH_SOCK"
+        ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+    fi
+fi
+
 # tmux-path-store: per-tmux-window directory/file bookmarks.
 #
 # The EXECUTABLE is kebab-case; the CONFIG VARIABLE stays

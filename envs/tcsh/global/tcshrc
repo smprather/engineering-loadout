@@ -394,6 +394,34 @@ if ( $?prompt ) then
     unset _loadout_color
     unset _loadout_gitbranch
 
+    # ---- fixed-socket ssh-agent -----------------------------------------------
+    # Mirrors the block in envs/bash/global/bashrc (LOADOUT_CFG_ENABLE_SSH_AGENT
+    # is shared, defined once in envs/bash/global/config.sh; see the bash copy
+    # for the full rationale). csh specifics:
+    #   * `ssh-add -l` runs with stderr suppressed csh-style (`>& /dev/null` --
+    #     csh has no 2>/dev/null); its status lands in $status, and exit 2 means
+    #     no agent is listening at the socket (dead or never started), which is
+    #     the only case that starts one. Exit 0/1 (identities / reachable but
+    #     empty) both mean a live agent is already there -- restarting it would
+    #     drop any already-loaded identity.
+    #   * ~/.ssh is created first (mode 700): ssh-agent -a cannot bind a socket
+    #     in a missing directory, and on a fresh HOME that failure is silent.
+    #   * Does NOT run ssh-add: a passphrase-protected key would prompt on every
+    #     new shell. Load it once per agent lifetime yourself.
+    #   * Runs BEFORE tmux auto-attach so tmux panes inherit SSH_AUTH_SOCK.
+    if ( $?LOADOUT_CFG_ENABLE_SSH_AGENT ) then
+        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_SSH_AGENT" } ) then
+            setenv SSH_AUTH_SOCK "$HOME/.ssh/loadout-agent.sock"
+            ssh-add -l >& /dev/null
+            if ( $status == 2 ) then
+                mkdir -p "$HOME/.ssh" >& /dev/null
+                chmod 700 "$HOME/.ssh"
+                rm -f "$SSH_AUTH_SOCK" >& /dev/null
+                ssh-agent -a "$SSH_AUTH_SOCK" >& /dev/null
+            endif
+        endif
+    endif
+
     # ---- tmux auto-attach (last, so a failure cannot skip prompt setup) -------
     if ( $?LOADOUT_CFG_ATTACH_TO_TMUX && ! $?TMUX ) then
         if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ATTACH_TO_TMUX" } && -X tmux ) then
