@@ -2,6 +2,17 @@
 # scripts (strip-all-elf-binaries, gen-content-manifest, gen-installed-sizes,
 # gen-readme-table).
 #
+# GRAND PLATFORM IMAGE DOCTRINE. This image is the EL8 build PLATFORM, not a
+# thin dnf layer. End state: `docker run loadout-build <any build-*.sh>`
+# works with ZERO dynamic installs -- every tool a supported target's build
+# needs is baked here. Incremental rule: EACH TIME a target is rebuilt, any
+# boilerplate the build script had to `dnf install` on the fly gets absorbed
+# into this Dockerfile in the same change, so the NEXT rebuild of that target
+# (and anyone else's) finds it preinstalled. Never leave a build-*.sh whose
+# real-world flow still shells out to dnf mid-build. (Runtime deps of the
+# thing being built stay out; only the BUILD-TIME toolchain/devel closure
+# belongs here.)
+#
 # WHY THIS EXISTS. Every bundled binary's glibc floor, its libevent_core's
 # stray libcrypto.so.1.1 dependency (see build/build-libevent-core.sh), and
 # every SONAME choice in payload/ was decided against EL8's toolchain, and the
@@ -122,9 +133,25 @@ RUN dnf install -y -q epel-release \
         xcb-util-keysyms-devel xcb-util-renderutil-devel libxshmfence-devel \
         dbus-devel libepoxy-devel systemd-devel \
         # Qt5 (gui_libs) build closure: see build-qt5network-openssl3.sh.
+        # Plus the Qt5 -devel set every Qt build (klayout, nvim-qt, flameshot,
+        # nedit-ng) declares as a prerequisite -- qttools (lupdate/lrelease)
+        # and qtxmlpatterns ("Unknown module(s) in QT: xmlpatterns") are the
+        # two everyone misses.
         libxcb-devel libSM-devel libICE-devel cups-devel \
         libxkbcommon-devel libxkbcommon-x11-devel sqlite-devel \
         gtk3-devel krb5-devel cyrus-sasl-devel \
+        qt5-qtbase-devel qt5-qtsvg-devel qt5-qttools-devel \
+        qt5-qtxmlpatterns-devel \
+        # Per-target prerequisites absorbed from build-*.sh headers (the
+        # grand-image rule: prereqs named in a script get baked here the
+        # next time that target is rebuilt -- this is the first sweep):
+        # fio, sqlite, ngspice, verilator, yosys, zsh, openssh, tmux:
+        libaio-devel readline-devel fftw-devel help2man autoconf-archive \
+        # klayout's ruby-plugin build needs ruby headers (probe with
+        # --disable-gems; see AGENTS.md klayout entry):
+        ruby-devel \
+        # tcl (expect) and a python3 for host-driven build tooling:
+        tcl-devel python3 \
     && dnf clean all
 
 # Current CMake from Kitware's official binary tarball, shadowing the removed
