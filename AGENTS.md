@@ -25,7 +25,15 @@ Gates: `sh -n loadout`; `python3 -m py_compile loadout_main.py`; `bash -n envs/b
 
 ## Build Machine Mandate
 
-ALL builds happen on this machine: AlmaLinux 8.10 WSL2 = THE EL8 build machine (glibc 2.28, gcc-toolset-14 at `/opt/rh/gcc-toolset-14/enable`). No remote EL8 system exists. Never frame build steps as requiring another machine. Stock EL8 is the verification baseline for install behavior; dev box is NOT stock — install-behavior/payload/repo-layout changes need Tier 3 container gate before trusted.
+Dev platform moved 2026-09-01: AlmaLinux 8.10 WSL2 → CachyOS (Arch-family, glibc 2.44, kernel 6.x). The EL8 build machine is now the **`loadout-build` docker container** (`build/Dockerfile`, base `almalinux:8.10`, glibc 2.28, base gcc 8.5.0 + gcc-toolset-14 at `/opt/rh/gcc-toolset-14/enable`). Enter via `build/build-shell [cmd]` (bind-mounts repo at `/repo`, runs as invoking uid).
+
+Rules:
+- ALL compiling/packaging/payload-mutating work happens in the container, never on the native host. Two reasons: (1) glibc floor 2.28 is a link-time property — only EL8 userland guarantees it; cross-compiling FROM CachyOS is forbidden (configure/run probes execute target binaries and would probe the host: kernel 6.x, glibc 2.44 — the build-box-masking bug class); (2) byte reproducibility — CachyOS bzip2 1.0.8 does not round-trip EL8's 1.0.6 bytes (confirmed: a native strip-all-elf-binaries run churned 29 unrelated payload archives).
+- Image bakes what EL8 gets wrong out of the box: **cmake = Kitware 4.4.3 binary tarball** (dnf's 3.26 has the nvim-blocking bug class; building cmake from source wastes ~30 min per image rebuild), **ninja-build**, gettext-devel, perl-IPC-Cmd/Time-Piece (CPython configure needs them), plus the full X11/GUI devel closure + *-source repos for `dnf download --source`. Bump cmake via the `CMAKE_VERSION` ARG in `build/Dockerfile`.
+- `--network=none` is a TEST-time rule (Tier 3 + automated docker runs), NOT build-time. Image builds and dnf inside the container may use the network.
+- LLVM 23 toolchain (clang-23, llvm-{ar,ranlib,profdata,bolt}, lld, merge-fdata; required by portable-python's PGO/LTO/BOLT build) lives at `~/.local/bin` on the host. It was built against an old loader floor (interpreter `Linux 3.2.0`) and RUNS INSIDE the container: bind-mount `~/.local` (ro) or copy the tools in. Verified working. Alternative: `docs/BUILD_LLVM_EL8.md` documents building LLVM in an EL8 userland.
+- Everyday dev (shell configs, installer testing, day-to-day loadout use, T1/T2 tests) runs natively on CachyOS — the native/foreign-platform gap is the point of running loadout on a non-EL8 box. Install-behavior/payload/repo-layout changes still need the Tier 3 container gate (`tests/prebuilt-binaries-almalinux8 --full`, `--network=none`) before trusted.
+- Historical note: pre-2026-09-01 payloads were built on AlmaLinux 8.10 WSL2. BUILD.md files embedded in old artifacts (portable-python, etc.) still reference that box; treat those paths as recipe documentation, not the current machine.
 
 ## Key Commands
 

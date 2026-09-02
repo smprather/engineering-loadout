@@ -4,25 +4,27 @@ Reference for the build machine and the full workflow for adding a new binary.
 
 ## Build Machine
 
-**AlmaLinux 8.10**, x86_64, glibc 2.28, running as WSL2 on Windows.
+The EL8 build machine is the **`loadout-build` docker container** (`build/Dockerfile`, base `almalinux:8.10`, entered via `build/build-shell [cmd]`). The dev platform moved 2026-09-01 from AlmaLinux 8.10 WSL2 to CachyOS (Arch-family, glibc 2.44, kernel 6.x) — compiling/packaging/payload-mutating work NEVER happens on the native host (cross-compiling from Arch is forbidden: configure/run probes would probe the 6.x kernel / glibc 2.44 host, the build-box-masking bug class; and CachyOS bzip2 1.0.8 doesn't byte-round-trip EL8's 1.0.6). LLVM 23 (portable-python's PGO/LTO/BOLT toolchain) lives at `~/.local/bin` on the host and runs inside the container — bind-mount it read-only. `--network=none` is a TEST-time rule only; image builds + dnf inside the container may use the network.
+
 Platform directory: `el8.x86_64.glibc2p28`
 
+Inside the container:
 ```
-uname -r  -> 6.6.87.2-microsoft-standard-WSL2
 ldd --version -> ldd (GNU libc) 2.28
-gcc --version -> gcc 14.2.1 (gcc-toolset-14, enabled in ~/.config/bash/user/bashrc)
-/usr/bin/gcc --version -> gcc 8.5.0 (base system compiler, too old for most modern software)
+gcc --version -> gcc 8.5.0 (base system compiler, too old for most modern software)
+cmake --version -> 4.4.3 (Kitware binary tarball, NOT dnf's 3.26 -- EL8's cmake has
+                    the nvim-blocking bug class and source-building cmake wastes
+                    ~30 min per image rebuild)
+ninja --version -> 1.8.2 (dnf; nvim builds use -G Ninja)
 ```
 
-GCC 14 is sourced via `gcc-toolset-14` from the `appstream` repo:
+GCC 14 via gcc-toolset-14 (in the image, enabled per-script via build/lib.sh's `loadout_enable_gcc_toolset`):
 ```bash
 sudo dnf install -y gcc-toolset-14 gcc-toolset-14-gcc-c++
-# Or it may already be active if it is in your user bashrc:
 . /opt/rh/gcc-toolset-14/enable
 ```
 
-User has `sudo` (wheel group). Enabled repos: appstream, baseos, epel, extras, powertools,
-docker-ce-stable, gh-cli, rpmfusion-free-updates, rpmfusion-nonfree-updates.
+Enabled repos: appstream, baseos, epel, extras, powertools + *-source repos (for `dnf download --source`).
 
 ### Notable devel packages already installed
 

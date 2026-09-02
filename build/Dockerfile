@@ -2,22 +2,35 @@
 # scripts (strip-all-elf-binaries, gen-content-manifest, gen-installed-sizes,
 # gen-readme-table).
 #
-# WHY THIS EXISTS. build/ADDING_BINARIES.md documents AlmaLinux 8.10 (WSL2)
-# as the one true build machine: every bundled binary's glibc floor, its
-# libevent_core's stray libcrypto.so.1.1 dependency (see
-# build/build-libevent-core.sh), and every SONAME choice in payload/ was
-# decided against that platform's toolchain. Running the maintenance scripts
-# on anything else is not a style choice -- it silently reintroduces exactly
+# WHY THIS EXISTS. Every bundled binary's glibc floor, its libevent_core's
+# stray libcrypto.so.1.1 dependency (see build/build-libevent-core.sh), and
+# every SONAME choice in payload/ was decided against EL8's toolchain, and the
+# glibc 2.28 floor is a LINK-TIME property only an EL8 userland guarantees.
+# The dev platform moved 2026-09-01 from AlmaLinux 8.10 WSL2 to CachyOS
+# (Arch-family, glibc 2.44, kernel 6.x), which makes this container THE build
+# machine. Cross-compiling from the Arch host is forbidden: configure/run
+# probes execute target binaries and would probe the host (kernel 6.x, glibc
+# 2.44) -- the build-box-masking bug class. Running the maintenance scripts
+# natively is not a style choice either -- it silently reintroduces exactly
 # the bug this file exists to prevent. Confirmed the hard way: running
-# strip-all-elf-binaries on a native Arch/CachyOS host (different tar/bzip2
-# build) repacked 29 unrelated payload archives with different bytes and
-# timestamps despite identical extracted content, because bzip2 1.0.8
+# strip-all-elf-binaries on the native Arch/CachyOS host (different
+# tar/bzip2 build) repacked 29 unrelated payload archives with different bytes
+# and timestamps despite identical extracted content, because bzip2 1.0.8
 # (CachyOS) and bzip2 1.0.6 (this image) don't round-trip identically for
 # every input -- a diff with nothing to do with whatever binary you meant to
-# touch. Do all payload-mutating work in this container; do everyday
-# development (shell configs, testing the installer, day-to-day loadout use)
-# natively -- that native/foreign-platform gap is the whole point of running
-# loadout on a non-EL8 box in the first place.
+# touch. Do all compiling/packaging/payload-mutating work in this container
+# via build/build-shell; do everyday development (shell configs, testing the
+# installer, day-to-day loadout use) natively -- that native/foreign-platform
+# gap is the whole point of running loadout on a non-EL8 box in the first
+# place.
+#
+# LLVM 23 (portable-python's PGO/LTO/BOLT toolchain) is NOT baked in: it
+# lives at ~/.local/bin on the host and runs fine inside this container
+# (built against an old loader floor) -- bind-mount ~/.local read-only when
+# a build needs it. docs/BUILD_LLVM_EL8.md documents the in-EL8 alternative.
+#
+# NOTE: --network=none is a TEST-time rule (Tier 3 gates, automated docker
+# runs). Image builds and dnf INSIDE this container may use the network.
 #
 # What's NOT baked in, deliberately:
 #   - python3.14: loadout self-hosts it. `./loadout` (bind-mounted at /repo)
@@ -58,14 +71,25 @@ RUN dnf install -y -q epel-release \
         gcc gcc-c++ make \
         gcc-toolset-14 gcc-toolset-14-gcc-c++ \
         # Autotools + friends most build-*.sh scripts configure/autogen with.
+        # cmake deliberately NOT here: EL8's 3.26 has the nvim-blocking bug
+        # class (and builds take ~30 min) -- a current Kitware cmake is
+        # installed from the official binary tarball in the layer below.
         autoconf automake libtool pkgconf-pkg-config \
-        bison flex gperf cmake \
+        bison flex gperf \
+        # ninja: nvim (-G Ninja) and friends; small, no reason to hand-install.
+        ninja-build \
+        # nvim + gettext consumers.
+        gettext gettext-devel \
         # Packaging: strip/readelf (binutils), patchelf (RPATH surgery),
         # bzip2/gzip/zstd/tar/cpio (archive formats used across payload/),
         # rpm2cpio (extracting vendor RPMs without installing them),
         # rpmbuild/dnf-plugins-core (dnf download --source + rpmbuild -bp,
         # for rebuilding a shanghai'd RPM from its own source + RH patches).
         binutils patchelf bzip2 gzip zstd tar cpio rpm-build dnf-plugins-core \
+        # portable-python BUILD.md prerequisites: perl-IPC-Cmd / perl-Time-Piece
+        # are required by CPython's configure; openssl-devel is needed to build
+        # OpenSSL 3.5.x from source alongside the system one.
+        perl-IPC-Cmd perl-Time-Piece openssl-devel \
         # Misc scripts (loadout_require_cmds) call directly. coreutils is
         # already present as coreutils-single in the base image -- naming it
         # explicitly conflicts with that package.
@@ -102,5 +126,22 @@ RUN dnf install -y -q epel-release \
         libxkbcommon-devel libxkbcommon-x11-devel sqlite-devel \
         gtk3-devel krb5-devel cyrus-sasl-devel \
     && dnf clean all
+
+# Current CMake from Kitware's official binary tarball, shadowing the removed
+# dnf cmake. Why: EL8 powertools ships cmake 3.26, which has the nvim-blocking
+# bug class (nvim's cmake.deps + -G Ninja configurations fail), and building
+# cmake from source takes ~30 minutes every image rebuild. The Kitware tarball
+# is an official static-ish release built against a conservative glibc floor,
+# needs no compile, and is verified by `cmake --version` right after install.
+# Bumping: change CMAKE_VERSION, rebuild the image (build/build-shell does it).
+ARG CMAKE_VERSION=4.4.3
+RUN curl -fsSL -o /tmp/cmake.tar.gz \
+        "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+    && tar -xzf /tmp/cmake.tar.gz -C /opt \
+    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/cmake /usr/local/bin/cmake \
+    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/ctest /usr/local/bin/ctest \
+    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/cpack /usr/local/bin/cpack \
+    && rm /tmp/cmake.tar.gz \
+    && cmake --version
 
 WORKDIR /repo
