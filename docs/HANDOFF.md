@@ -1,13 +1,11 @@
 # Current Handoff
 
-Last updated: 2026-09-03 (v2026.09.03 release prep: time-plot + lefdef-tools +
-updater fixes + security refresh). `v2026.08.28` is
-published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
-all three release assets present, and the nvim stash asset hash matches
-`sha256sums.txt`. Current post-release changes: the 2026-09-01 build-image
-refound batch, the libcrypt + ssh-agent batches, the Windows/macOS retirement,
-the 2026-08-31 wezterm batch, the 2026-08-30 firefox batch, the 2026-09-02
-portable-python 3.14.7 batch, and below (release-prep 2026-09-03, uncommitted).
+Last updated: 2026-09-03 (v2026.09.03 RELEASED). `v2026.09.03` is
+published and verified: signed tag good (ED25519), `origin/main ==
+v2026.09.03^{commit}` (`65986ef`), `isDraft=false`, all three release
+assets present (sha256sums.txt, default.content-manifest,
+nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
+published sha256sums.txt. `v2026.08.28` notes retained below for history.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 
