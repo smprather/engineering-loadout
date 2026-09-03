@@ -43,6 +43,10 @@ RUN chown -R loadout:loadout /opt/ripgrep-src
 COPY almalinux8.10-rust-entrypoint /usr/local/bin/loadout-rust-test
 RUN chmod 0755 /usr/local/bin/loadout-rust-test
 
+# Explicit: the legacy builder creates WORKDIR root-owned (BuildKit chowns to
+# USER), which breaks the entrypoint's rm -rf/mkdir of /work/dotfiles.
+RUN mkdir -p /work && chown loadout:loadout /work
+
 USER loadout
 WORKDIR /work
 

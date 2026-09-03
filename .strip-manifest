@@ -418,6 +418,7 @@ sha256  59480c07c06f6a1cb9841488d309cc7c49f39e21ffed748d2ce45da5ab85b8c8  payloa
 sha256  84df7354337f97d6bb1ff5e71cdd21f81fb82026b51ce1c8136922d8b85867af  payload/el8.x86_64.glibc2p28/lib64/libtiff.so.5.bz2
 sha256  d3d7ebde02d46d8e2116794ef44315c72669987643e2acf2fdd395cf231d837e  payload/el8.x86_64.glibc2p28/lib64/libtinfo.so.6.bz2
 sha256  f1884e26e973580b436ceec394d3fd9cc33d67bb8169af751fed06a96029d4a7  payload/el8.x86_64.glibc2p28/lib64/libumfpack.so.5.bz2
+sha256  c799e6092a8d54a63aaf2617d8667190e45a5a7e90e7e1d082a67523ab6bb3a7  payload/el8.x86_64.glibc2p28/lib64/libunwind.so.8.bz2
 sha256  e655735187fce65dc13edce9bc8709d43b414f8a735fefc473d0b12a8cbcaa04  payload/el8.x86_64.glibc2p28/lib64/libuuid.so.1.bz2
 sha256  57df22061918e723496902b642de8e7bb3c2db17156832ec234f8ea5345563b2  payload/el8.x86_64.glibc2p28/lib64/libvorbis.so.0.bz2
 sha256  a0dd02eb3101b94c9a4caadb3622945e7f4f4feef5c7a74c4f2953842c4c3cb2  payload/el8.x86_64.glibc2p28/lib64/libvorbisenc.so.2.bz2
@@ -479,7 +480,7 @@ tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz
 tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  648856  1786424664  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
-tar-meta  937153  1786927648  payload/tldr/tldr-pages.tar.bz2
+tar-meta  972948  1788464837  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2
 sha256  dd4de208187c47636fe5ac53fdbb31347902ba5372e2d19b3959acb6c91b2526  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/angular.so.bz2
@@ -806,4 +807,4 @@ sha256  c52891aae13f34d05c509c114a3e92e97c26938fac67e14ce32b578c4c6ff5b2  payloa
 sha256  e342cf73d0933f8bfe60b7a6587786cd4bf53ce8d5608ddf5f89efc1215f4702  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy.so.bz2
 sha256  ba384ab03a65cbd5e4e9c7f8159aef7c8c2975fc38d3732b3b60b79ee14ebc80  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ziggy_schema.so.bz2
 sha256  3a8f97cc4768000e6e3e349ea0ad1cfa8531a2cb1765619696da7f9c4cc592d3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/zsh.so.bz2
-sha256  72338b0c5f143b8025466935f12cf6a9567f730b7524cf6642c15aea5c974c38  payload/yara/yara-rules-full.yar.bz2
+sha256  b36d8f3413fa18f2c3ca8e292d1bc1e7697669f0e6938ee263e1c90e2d0e9984  payload/yara/yara-rules-full.yar.bz2

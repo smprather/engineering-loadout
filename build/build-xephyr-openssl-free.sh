@@ -65,9 +65,12 @@
 #   libgcrypt.so.20  -- the new SHA1 backend. EL8-base AND Arch-base (GnuPG
 #                       dependency everywhere). Not bundled -- assumed
 #                       present, same tier as libselinux/libaudit/libsystemd.
-#   libunwind.so.8   -- present on EL8 (libunwind-devel is already a
-#                       BuildRequires) and on Arch/CachyOS by default. Not
-#                       bundled -- assumed present.
+#   libunwind.so.8   -- BUNDLED in the xephyr package libs (libunwind
+#                       1.3.1, NEEDED = libc/libgcc_s only, no RPATH).
+#                       The recipe first assumed it present (EL8 build box
+#                       and Arch both have it), but stock almalinux:8.10
+#                       does NOT -- Tier 3 failed ldd + probe until bundled.
+#                       Same assumption class as libffi/libselinux.
 # libcrypto.so.1.1 is gone from the NEEDED list entirely.
 #
 # Build-time deps (system, headers) -- the full xorg-x11-server.spec

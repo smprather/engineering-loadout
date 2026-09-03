@@ -1,13 +1,114 @@
 # Current Handoff
 
-Last updated: 2026-09-02 (portable-python 3.14.7 batch). `v2026.08.28` is
+Last updated: 2026-09-03 (v2026.09.03 release prep: time-plot + lefdef-tools +
+updater fixes + security refresh). `v2026.08.28` is
 published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
 all three release assets present, and the nvim stash asset hash matches
 `sha256sums.txt`. Current post-release changes: the 2026-09-01 build-image
 refound batch, the libcrypt + ssh-agent batches, the Windows/macOS retirement,
-the 2026-08-31 wezterm batch, and the 2026-08-30 firefox batch.
+the 2026-08-31 wezterm batch, the 2026-08-30 firefox batch, the 2026-09-02
+portable-python 3.14.7 batch, and below (release-prep 2026-09-03, uncommitted).
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
+
+## 2026-09-03 batch: release prep (time-plot + lefdef-tools + updater fixes)
+
+Rolling-git updates, all verified forward (old SHAs confirmed ancestors of HEAD):
+
+- `time-plot` `7e9859e` -> `v0.2.0` (pure-Python, native `uv build` fine).
+  Smoke: offline wheelhouse install, `--help` exit 0, txt -> self-contained
+  HTML renders. First run hit the downgrade-guard false positive below
+  (payload already correct); re-run skipped rebuild and stamped currency.
+- `lefdef-tools` `cda0e5a` -> `v2026.9.0` (upstream moved 1244b22 -> 90a2e23
+  mid-batch and switched to CalVer). NATIVE BUILD FAILS on CachyOS: maturin
+  `manylinux_2_28` audit rejects GLIBC_2.30/2.33/2.34 symbols from the host
+  toolchain. Built in `loadout-build` instead (rustup 1.96.0 + astral uv
+  inside the container, source bind-mounted at /src, wheel to /src/dist):
+  `lefdef_tools-2026.9.0-cp314-cp314-manylinux_2_28` with max GLIBC_2.28 and
+  glibc-only NEEDED (libgcc_s/libpthread/libdl/libc/ld-linux). Recipe is
+  manual -- `_run_rolling` has no container path; the updater then ran the
+  skip path (describe == stamped version) and stamped currency 2026-09-03.
+  Smoke: offline install, `import lefdef_tools` 2026.9.0, CLI + `--version`.
+  LESSON: rolling-git Rust wheels can no longer be rebuilt natively since
+  the WSL2->CachyOS move. Next time one is due, either teach `_run_rolling`
+  a container build or repeat the manual recipe. Baking a Rust toolchain
+  into the image is deferred (size vs frequency).
+- `build/update` downgrade-guard false positive (fixed): `_version_tuple`
+  parsed short SHA `7e9859e` as version `(7,9859)` -> "BACKWARDS 7e9859e ->
+  v0.2.0" on a genuine forward update. Docstring already claimed SHAs
+  return None; now true for hex SHAs starting with a digit: 7-40 lowercase
+  hex chars containing an `a-f` letter return None. All-digit strings
+  (`20260823` date versions) still compare; all-digit SHAs (~4%) still slip
+  (indistinguishable from date versions -- accepted). 9-case check green.
+- `build/update tldr-data` wrong-cache-dir failure (fixed): user's live
+  `~/.config/tealdeer/config.toml` sets absolute
+  `cache_dir=~/.local/share/tealdeer/cache`, updater assumed
+  `~/.cache/tealdeer` and errored after a successful `tldr --update`.
+  `_tldr_cache_dir()` now parses `tldr --show-paths` (`Cache dir:` line),
+  falls back to the XDG default.
+
+Security refresh: `yara-rules` updated (19 MB, manifests regen'd);
+`tldr-data` refreshed after the fix above; ClamAV daily.cld v28112 built
+TODAY 2026-09-03 (system `freshclam -d` daemon holds the log lock -- the
+`sudo freshclam` lock error is benign, DB is current). No assurance re-pin:
+nvim/rust/rust-crate-store/treesitter/git-nvim/crate-store versions
+unchanged since v2026.08.28.
+
+Currency triage: `check-versions --outdated-only` FIRST RETURNED ZERO ROWS
+because portable-python's compiled-in CA path (`/etc/pki/tls/...`, EL8)
+does not exist on CachyOS -- every urllib fetch failed verify. Same
+universal-host class as the firefox ckbi bug. Workaround for the sweep:
+`SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. Real list: ~38
+outdated (agent-deck, biome, fish 4.9.0, nodejs 26.8.1, tmux 3.7c, uv
+0.12.9, vim 9.2.1036, ...; pdftotext still pinned). All are build/download
+jobs, none DUE by cadence -- deferred to normal bumps, NOT this release.
+Two follow-ups worth tracking: (1) portable-python needs a CA-trust story
+on non-EL8 hosts (env default? wrapper?); (2) `time-plot` always shows in
+`--list-outdated` (describe `v0.2.0` vs HEAD-short `eb37f4e` never equal --
+list noise only, `_run_rolling` compares correctly).
+
+Doc drift fixed in-tree: README `gvim nedit-ng` example -> `gvim` alone +
+table regen'd (lefdef/time-plot rows); AGENTS dropped three dead
+nedit-ng/nvim-qt refs (phase list, klayout contract, shared-prefix list).
+`farm-versions` already clean (80470b3). ADDING_BINARIES removal notes kept
+deliberately (restore recipes).
+
+## 2026-09-03 batch: Tier 1/2/3 gates for the release (all Tier 3 green)
+
+- `fetch-stash` from v2026.08.28 (sha256 `28a5adb...`, matches the 08-24
+  recorded hash) UNBLOCKED FIVE GATES: `check-installer`, `install-nvim-
+  deployments`, and container `--full` (whose entrypoint runs `doctor`,
+  exit 2 on the missing stash). System python3 was the loadout 3.14 via
+  PATH (compiled-in CA `/opt/cpython3147p/...` = dead build prefix), so
+  `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` was still required.
+- Container `--full`: first blocked on harness infra (`/work/dotfiles`
+  mkdir denied -- legacy docker creates WORKDIR root-owned, BuildKit chowns
+  to USER; fixed with explicit `mkdir+chown` in BOTH smoke and rust
+  Dockerfiles), then caught a REAL floor regression: rebuilt Xephyr.bin
+  NEEDs `libunwind.so.8`, absent on stock almalinux:8.10 (the recipe assumed
+  it present -- same assumption class as libffi/libselinux). Bundled
+  libunwind 1.3.1 (NEEDED = libc/libgcc_s only, stripped, no RPATH) into
+  the xephyr package libs; recipe comment corrected. Re-run: **300 binaries
+  OK, 22 skips, runtimes OK**.
+- `--dynamic`: 10/10 PASS. `rust-offline`: was STRUCTURALLY BROKEN since
+  the 08-22 cargo-fallback change (entrypoint drove bare `sh cargo` against
+  a stock config that can never resolve offline, and its config-content
+  assertion matched a COMMENT). Rewrote it to drive the real product path:
+  install `@rust env-bash`, assert the config is stock (no `replace-with=`),
+  build under bash with the installed bashrc sourced so the `cargo` wrapper
+  injects the store. Mode-2 subtlety: the staged config.sh bakes
+  `LOADOUT_CFG_SHARED_PREFIX=""`, so the prefix travels as
+  LOADOUT_TEST_PREFIX and is exported AFTER sourcing. Result: **both modes
+  + ripgrep 15.2.0 rebuild ALL PASSED**, no network.
+- Still red (pre-existing, NOT release payload; owner WIP or host-env):
+  `shell-typeahead` (zsh), `install-env-zsh` (test picks loadout zsh from
+  PATH but installs env-only HOME: binary's built-in module_path is the
+  dead `/tmp/zsh-install-5.9` prefix; works only after the env repoints it
+  at an installed runtime -- design gap in the owner's WIP area),
+  `valgrind-smoke` (CachyOS host lacks glibc debuginfo; valgrind refuses to
+  start -- needs a debuginfo package installed on the host, not payload).
+  (`registry-integrity` went 10/11 -> 11/11 once the stash existed;
+  final host suite: only these 3 fail.)
 
 ## 2026-09-02 batch: portable-python 3.14.7 (this batch)
 

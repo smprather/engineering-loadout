@@ -2264,6 +2264,7 @@
     "payload/el8.x86_64.glibc2p28/lib64/libtiff.so.5.bz2": 512304,
     "payload/el8.x86_64.glibc2p28/lib64/libtinfo.so.6.bz2": 194536,
     "payload/el8.x86_64.glibc2p28/lib64/libumfpack.so.5.bz2": 825608,
+    "payload/el8.x86_64.glibc2p28/lib64/libunwind.so.8.bz2": 57352,
     "payload/el8.x86_64.glibc2p28/lib64/libuuid.so.1.bz2": 38584,
     "payload/el8.x86_64.glibc2p28/lib64/libvorbis.so.0.bz2": 192720,
     "payload/el8.x86_64.glibc2p28/lib64/libvorbisenc.so.2.bz2": 693720,
@@ -2427,7 +2428,7 @@
     "payload/el8.x86_64.glibc2p28/wheels/kanaries_track-0.0.5-py3-none-any.whl": 20851,
     "payload/el8.x86_64.glibc2p28/wheels/kiwisolver-1.5.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl": 5755279,
     "payload/el8.x86_64.glibc2p28/wheels/lark-1.3.1-py3-none-any.whl": 357982,
-    "payload/el8.x86_64.glibc2p28/wheels/lefdef_tools-0.1.0-cp314-cp314-manylinux_2_28_x86_64.whl": 1075643,
+    "payload/el8.x86_64.glibc2p28/wheels/lefdef_tools-2026.9.0-cp314-cp314-manylinux_2_28_x86_64.whl": 1075249,
     "payload/el8.x86_64.glibc2p28/wheels/liberty_tools-1.0.1.dev0-cp314-cp314-manylinux_2_28_x86_64.whl": 6055834,
     "payload/el8.x86_64.glibc2p28/wheels/logistro-2.0.1-py3-none-any.whl": 17772,
     "payload/el8.x86_64.glibc2p28/wheels/lsprotocol-2023.0.1-py3-none-any.whl": 502496,
@@ -2524,7 +2525,7 @@
     "payload/el8.x86_64.glibc2p28/wheels/tclint-0.9.0-py3-none-any.whl": 211344,
     "payload/el8.x86_64.glibc2p28/wheels/terminado-0.18.1-py3-none-any.whl": 33325,
     "payload/el8.x86_64.glibc2p28/wheels/text_serdes-0.1.1-py3-none-any.whl": 22127,
-    "payload/el8.x86_64.glibc2p28/wheels/time_plot-0.1.0-py3-none-any.whl": 231614,
+    "payload/el8.x86_64.glibc2p28/wheels/time_plot-0.2.0-py3-none-any.whl": 243319,
     "payload/el8.x86_64.glibc2p28/wheels/tinycss2-1.5.1-py3-none-any.whl": 109131,
     "payload/el8.x86_64.glibc2p28/wheels/tmux_path_store-1.1.0-py3-none-any.whl": 19388,
     "payload/el8.x86_64.glibc2p28/wheels/tomlkit-0.15.1-py3-none-any.whl": 207760,
@@ -2566,9 +2567,9 @@
     "payload/fonts/RobotoMono.zip": 88847602,
     "payload/fonts/SourceCodePro.zip": 99242463,
     "payload/fonts/UbuntuMono.zip": 28536830,
-    "payload/packages.json": 104671,
+    "payload/packages.json": 104698,
     "payload/pending-daemon/loadout-pending-daemon": 11012,
-    "payload/tldr/tldr-pages.tar.bz2": 4110664,
+    "payload/tldr/tldr-pages.tar.bz2": 4290268,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/build-info/platform.env": 344,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ada.lua": 178,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/agda.lua": 178,
@@ -6062,6 +6063,6 @@
     "payload/treesitter/vendor/treesitter-parser-registry/registry.json": 114050,
     "payload/treesitter/vendor/treesitter-parser-registry/schemas/schema.json": 8132,
     "payload/yara/release-tag.txt": 9,
-    "payload/yara/yara-rules-full.yar.bz2": 20849618
+    "payload/yara/yara-rules-full.yar.bz2": 20853837
   }
 }

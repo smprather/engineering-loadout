@@ -604,9 +604,26 @@ def _prune_tldr_offensive_pages(pages_dir):
             print(f"  - {r}")
 
 
-def _run_tldr_data(dry_run=False):
+def _tldr_cache_dir():
+    """tealdeer's real cache dir -- honours the user's config file.
+
+    `tldr --show-paths` prints `Cache dir: <path> (source)`; the config file
+    can redirect it to an absolute cache_dir (e.g. ~/.local/share/tealdeer),
+    in which case the XDG default ~/.cache/tealdeer holds nothing.
+    """
+    try:
+        out = subprocess.check_output(["tldr", "--show-paths"], stderr=subprocess.DEVNULL).decode()
+        for line in out.splitlines():
+            if line.startswith("Cache dir:"):
+                return line.split(":", 1)[1].split("(")[0].strip()
+    except Exception:
+        pass
     cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-    cache_dir = os.path.join(cache_home, "tealdeer")
+    return os.path.join(cache_home, "tealdeer")
+
+
+def _run_tldr_data(dry_run=False):
+    cache_dir = _tldr_cache_dir()
     pages_dir = os.path.join(cache_dir, "tldr-pages")
     output = os.path.join(REPO, "payload", "tldr", "tldr-pages.tar.bz2")
 
@@ -887,6 +904,8 @@ def _version_tuple(v):
     """
     if not v or not re.match(r"^v?\d", v):
         return None
+    if re.fullmatch(r"[0-9a-f]{7,40}", v) and re.search(r"[a-f]", v):
+        return None  # git SHA, not a version (time-plot 7e9859e parsed as (7,9859))
     parts = re.findall(r"\d+", v.split("-")[0].split("+")[0])
     return tuple(int(p) for p in parts) if parts else None
 

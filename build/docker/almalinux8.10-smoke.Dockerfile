@@ -19,6 +19,10 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash loadout
 COPY almalinux8.10-smoke-entrypoint /usr/local/bin/loadout-smoke
 RUN chmod 0755 /usr/local/bin/loadout-smoke
 
+# Explicit: the legacy builder creates WORKDIR root-owned (BuildKit chowns to
+# USER), which breaks the entrypoint's rm -rf/mkdir of /work/dotfiles.
+RUN mkdir -p /work && chown loadout:loadout /work
+
 USER loadout
 WORKDIR /work
 

@@ -238,7 +238,7 @@
       ],
       "uv_tool": "lefdef-tools",
       "rolling_git": "https://github.com/smprather/lefdef-tools.git",
-      "version": "cda0e5a",
+      "version": "v2026.9.0",
       "platforms": [
         "linux"
       ],
@@ -1775,6 +1775,7 @@
         "libXdmcp.so.6",
         "libXfont2.so.2",
         "libfontenc.so.1",
+        "libunwind.so.8",
         "libxcb-glx.so.0",
         "libxcb-xf86dri.so.0",
         "libxcb-xv.so.0"
@@ -2605,7 +2606,7 @@
       ],
       "uv_tool": "time-plot",
       "rolling_git": "https://github.com/smprather/time-plot.git",
-      "version": "7e9859e",
+      "version": "v0.2.0",
       "platforms": [
         "linux"
       ],

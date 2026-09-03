@@ -229,7 +229,7 @@ OpenSSH for those.
 | btm | bin | 0.14.7 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
-| lefdef-tools | python-tool | cda0e5a | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
+| lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | liberty-tools | python-tool | v2026.06.01.1-35-g73af358 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
@@ -324,7 +324,7 @@ OpenSSH for those.
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
 | nodejs | bin | 26.7.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
-| time-plot | python-tool | 7e9859e | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
+| time-plot | python-tool | v0.2.0 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | cicwave | python-tool | 0.5.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
@@ -366,7 +366,7 @@ installed (common on remote compute nodes), install `gui_libs` alongside
 any GUI application:
 
 ```bash
-./loadout install gvim nedit-ng gui_libs
+./loadout install gvim gui_libs
 # Or use the group, which pulls gui_libs for you:
 ./loadout install @gui-suite
 ```
