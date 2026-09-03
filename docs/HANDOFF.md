@@ -1,15 +1,53 @@
 # Current Handoff
 
-Last updated: 2026-08-31 (Windows/macOS retirement batch + wezterm universal-host batch). `v2026.08.28` is
+Last updated: 2026-09-02 (portable-python 3.14.7 batch). `v2026.08.28` is
 published and verified: signed tag good, `origin/main == v2026.08.28^{commit}`,
 all three release assets present, and the nvim stash asset hash matches
-`sha256sums.txt`. Current post-release changes: the 2026-08-30 firefox batch
-(committed `80470b3`), the 2026-08-31 wezterm batch below, and the
-Windows/macOS retirement batch below that.
+`sha256sums.txt`. Current post-release changes: the 2026-09-01 build-image
+refound batch, the libcrypt + ssh-agent batches, the Windows/macOS retirement,
+the 2026-08-31 wezterm batch, and the 2026-08-30 firefox batch.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 
-## 2026-08-31 batch: Windows/macOS retirement (this batch)
+## 2026-09-02 batch: portable-python 3.14.7 (this batch)
+
+Bumps portable-python `3.14.4 → 3.14.7` (CachyOS now at 3.14.7; fixes the bad look).
+EL8 container build (PGO + LTO + BOLT) via `build/build-shell`, same 9-dep recipe
+as 3.14.4 (OpenSSL 3.5.6, SQLite 3.53.1, readline 8.3, gdbm 1.26, zstd 1.5.7,
+mpdecimal 4.0.1, libffi 3.4.5, Tcl/Tk 8.6.17, Expat 2.8.0). Toolchain gaps from the
+WSL2→CachyOS move healed first: `~/.local/lib/clang/23/include` (241 headers) +
+`libclang_rt.profile.a` + `libbolt_rt_instr.a` (BOLT runtime, manual build — old
+bolt/runtime CMakeLists generates a broken `cmake -E copy` with kitware 4.4.3).
+Pipeline traps hit: perl `-i` length bug corrupted `libcrypto.so.3`/`libzstd.so.1.5.7`
+headers (17 vs 25 byte placeholder, shift → `readelf: out of range`; fix: exact-length
+`/work/deps/prefix`→`/opt/cpython3147p` (17) and `/work/deps/build`→`/opt/cpython314b`
+(16) via binary-safe python `bytes.replace`), plus missing `libgdbm_compat` (dropped
+in gdbm 1.26) and missing `bin/pip` wrapper (ensurepip only left `pip3`; added `pip`).
+Stage at `~/build-work/ppy147/stage` (off tmpfs — 16 GB tmpfs filled at PGO profile
+write), audits clean (no `/work` leaks in ELFs, rpaths `$ORIGIN`/ `$ORIGIN/../lib`),
+smoke `python 3.14.7 / openssl 3.5.6 / sqlite 3.53.1 / tk 8.6` green. Payload repacked
+via `import-portable-python --platform el8.x86_64.glibc2p28`; old 3.14.4 archive
+removed. Post-payload chain `strip-all` (NOSTRIP) → `gen-installed-sizes` →
+`gen-content-manifest` → `gen-readme-table` green.
+
+Queued next: shanghai `astral-sh/python-build-standalone` `20260901` (verified:
+`install_only` has `libpython3.14.so.1.0` + `include/` + `tk 9.0`; glibc floor 2.17
+— lower than ours; PGO+LTO yes, BOLT no; ca trust needs our `sitecustomize` shim;
+`_gdbm` missing). Blocker is Tcl 9.0 — OpenROAD needs `8.6.17` pair
+(`package require -exact` + `libtcl8.6.so` NEEDED); fix is a decoupled `tcl86`
+runtime so base python's Tcl can float. Keep custom 3.14.7 now, switch at 3.14.8.
+
+## 2026-09-01 batch: build-image refound + libcrypt + ssh-agent
+
+- Refound `loadout-build` on docker `almalinux:8.10` (CachyOS is now the dev host,
+  glibc 2.44). Mandate rewritten: container = only build surface, cross-compile
+  forbidden, `--network=none` is test-only, toolchain binds in.
+- `libcrypt.so.1` unclaimed stem for ruby (libxcrypt 4.4.36+ hosts ship `2` only).
+- `LOADOUT_CFG_ENABLE_SSH_AGENT` fixed-socket across bash/zsh/tcsh (tcsh parity).
+- Grand image doctrine codified; first prereq sweep baked (Qt5 -devel set, etc.).
+- Forward-compat doctrine (EL8 = floor).
+
+## 2026-08-31 batch: Windows/macOS retirement
 
 The repo is now 100% Linux-only. Windows and macOS support was retired
 2026-08-31; all artifacts live in the owner's personal `windows-dotfiles`

@@ -329,7 +329,7 @@ OpenSSH for those.
 | cicwave | python-tool | 0.5.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
-| portable-python | python-base | 3.14.4 | BOLT-optimized portable CPython build with bundled install.sh |
+| portable-python | python-base | 3.14.7 | BOLT-optimized portable CPython build with bundled install.sh |
 | gobject-typelibs | typelib |  | GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo) |
 | tldr-data | data |  | Bundled tldr-pages cache for offline tealdeer use |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
