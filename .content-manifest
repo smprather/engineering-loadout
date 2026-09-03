@@ -82,7 +82,6 @@ sha256  054dda1d1aeae55744c3e34f6e824bf741b35051db6007b878fe32fb2eb0402a  envs/t
 sha256  0554c8b3658e57c9ad8ff732a9f18a57042704a02d765877cda644ae9dbf924e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hack/injections.scm
 sha256  0554c8b3658e57c9ad8ff732a9f18a57042704a02d765877cda644ae9dbf924e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/hack/injections.scm
 sha256  056974a5bb990df34453985ca040e7ee2612e845e5b3d9387adfa43d9ac2c8a2  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/proto.so.bz2
-sha256  058882eb5e827680bc60b52eb7d5399ae3c09b3ab85e437f4de40b2576f56487  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 sha256  05927441f386725b52d46941686b2cd76adbd99ca039adb611cc371a46559f63  payload/treesitter/vendor/nvim-treesitter/scripts/templates/self-contained-validate.yml
 sha256  05944adfbdd08b4f0ba38fa20132524684c5a6a5e788693b564071144d9bd11f  payload/el8.x86_64.glibc2p28/lib64/libcholmod.so.3.bz2
 sha256  059618709a4c7e6b287643a68282257e197c5a05cfb9d82b6ac517d32230cb12  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/toml/highlights.scm
@@ -960,6 +959,7 @@ sha256  397ca75e7256f79ed7c84b0f2e48f7e92e93b643f57cb253171ec91ccdcc13e0  payloa
 sha256  398424bbaf1ccf3265234479c41389c6f945089d004436e2386092f393e6a104  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/rust/for.rs
 sha256  39879f36b9db43e4f7217c7c11132bc9d0ffc17651f51b0483d4c34edc61889e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/tact/highlights.scm
 sha256  39879f36b9db43e4f7217c7c11132bc9d0ffc17651f51b0483d4c34edc61889e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/tact/highlights.scm
+sha256  39b80073d61763e32253380316ac9f0cd79b0179365d0844089a8892bceab351  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 sha256  39d3804f39160bd0a1c43467fb081cca02e3068dfdba496a435c3fd73ce1e198  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/wgsl/highlights.scm
 sha256  39d3804f39160bd0a1c43467fb081cca02e3068dfdba496a435c3fd73ce1e198  payload/treesitter/vendor/nvim-treesitter/runtime/queries/wgsl/highlights.scm
 sha256  39d7f20808f5187c810d431acb0f50d386aa4aa744e6cb395bf886ba847431aa  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sxhkdrc/injections.scm
@@ -2938,7 +2938,6 @@ sha256  b04601272f831150a2516f651e7aad511384afe555bfb7c65392ee06d01618cd  payloa
 sha256  b04601272f831150a2516f651e7aad511384afe555bfb7c65392ee06d01618cd  payload/treesitter/vendor/nvim-treesitter/runtime/queries/slim/injections.scm
 sha256  b04860e1b8f2e3b76905050adbbb9fbb0a8b8616977ffa757993664e6d5bb81f  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/just.lua
 sha256  b07a55cf07829ef22189172b0e58ca92cbca62ec48ca5c7a9703c2ec0b31d16e  payload/el8.x86_64.glibc2p28/bin/nproc.bz2
-sha256  b08dcd2c7f716d8b877bd38e49ed3fb429ea051e37baebe4c292729503268fa0  payload/installed-sizes.json
 sha256  b0a3eccc8d6eb641085cab2cae6afcf8e1083f94aad1fc2d064d59131f7a19a2  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/promql/highlights.scm
 sha256  b0a3eccc8d6eb641085cab2cae6afcf8e1083f94aad1fc2d064d59131f7a19a2  payload/treesitter/vendor/nvim-treesitter/runtime/queries/promql/highlights.scm
 sha256  b0b8cb059b48fa5b25117ee45413063b68db21258b6e5f5c75a7aee27bbaa20c  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/yuck/indents.scm
@@ -3411,6 +3410,7 @@ sha256  cf3a2b84b9108abe0623a1afc3641add87f75d08def4de9da8ec425c3b0fcb21  payloa
 sha256  cf4f3d32ebd8f0481fa66b3246b3692792d49186c1e1de83c127eb7e1b86ae5f  payload/fonts/IosevkaTerm.zip.part-002
 sha256  cf542e32ebe4d229bff3d0ab1dce2ea5edf0904ea99d40619c8c80b7b6d73797  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/slang/folds.scm
 sha256  cf8867e865d26d7f4d7ef5af238e73711260995ac4c9420aed2195a53bab953c  payload/el8.x86_64.glibc2p28/bin/fstminer.bz2
+sha256  cfa70d0c27c3d6eec6fba7cff2a7b0ff08ff37883bdf70361c0c1f3a212f39f7  payload/installed-sizes.json
 sha256  cfb5b390e42bd24483ba02ea0e7bb314091c2b84113848d7a14c9584dfa06c1a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ocaml.lua
 sha256  cfb713bef2df8f67e1c8c31fd7f672c90bb7e1dbfd01817c5d5f261dd3da6b2f  payload/el8.x86_64.glibc2p28/lib64/libpixman-1.so.0.bz2
 sha256  cfe705cc3c1f5c9cdc2b852671b41ffb0ef7463ab3793189101d7e82d352a9fd  envs/tmux/vendor/plugins/tmux-resurrect/tests/fixtures/restore_file.txt

@@ -110,6 +110,35 @@ deliberately (restore recipes).
   (`registry-integrity` went 10/11 -> 11/11 once the stash existed;
   final host suite: only these 3 fail.)
 
+## 2026-09-03 batch: ruby extension RPATH (release-smoke catch, fixed)
+
+The release dry-run's host smoke failed 6 checks; 5 were MY tmpfs (16 GB,
+squatting an 8 GB @shared tree from manual probing -- parallel/sequential
+@shared installs then ENOSPC mid-extraction with FLAKY missing files, a
+different set each run). Lesson: keep /tmp clear of install trees before
+any @shared-shaped run; the smoke cleans its own tmpdir, manual trees do
+not. The 1 real catch: `ruby -ropenssl` dies with `libssl.so.1.1: cannot
+open shared object file` on non-EL8 hosts. Root cause chain: the stems ARE
+installed (unclaimed, every lib64 selection) but nothing points at them --
+dlopen'd extensions do not inherit ruby.bin's RUNPATH, and the build smoke
+ran everything under LD_LIBRARY_PATH (masking again). EL8 carries openssl
+1.1 system-wide, so Tier 3 stayed green while newer hosts broke -- the
+wezterm batch's "RPATH does the loading" claim for ruby was never true.
+
+Fix in `build/build-ruby.sh` (new Fixup 5/5, renumbered 1-4): scan every
+`.so` under lib64/ruby + share/gems/extensions for NEEDEDs on bundled libs
+(libssl/libcrypto/libffi) and patchelf a per-file `$ORIGIN`-relative RPATH
+to lib64 (computed depth -- the two layouts differ). openssl.so + fiddle.so
+patched; psych (libyaml) and zlib (libz) stay host-assumed. The recipe's
+four LD_LIBRARY_PATH uses are GONE from the post-fixup stages -- the staged
+tree now proves itself bare. Current tar repacked surgically (patchelf 2
+files, re-tar, container `strip-all-elf-binaries` for EL8 bzip2 bytes --
+host strip-all first poisoned it with 1.0.8 bytes, caught and redone) and
+the chain re-pinned. Proof: `ruby -ropenssl -rfiddle -rpsych` green with
+gui_libs; openssl alone green WITHOUT it (stems always present); fiddle
+without gui_libs still fails BY DESIGN (ruby does not depend on gui_libs;
+klayout pulls it -- noted in the recipe).
+
 ## 2026-09-02 batch: portable-python 3.14.7 (this batch)
 
 Bumps portable-python `3.14.4 → 3.14.7` (CachyOS now at 3.14.7; fixes the bad look).

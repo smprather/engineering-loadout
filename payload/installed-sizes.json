@@ -2317,7 +2317,7 @@
     "payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2": 17133117,
     "payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2": 12929271,
     "payload/el8.x86_64.glibc2p28/runtime/pyright.tar.bz2": 19285460,
-    "payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2": 15300678,
+    "payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2": 15333718,
     "payload/el8.x86_64.glibc2p28/runtime/runtime_config.toml": 0,
     "payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2": 580347300,
     "payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2": 17664,

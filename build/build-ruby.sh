@@ -120,7 +120,7 @@ echo "Extracting ..."
 ( cd "$tree" && for r in "$workdir"/*.rpm; do rpm2cpio "$r" | cpio -idm 2> /dev/null; done )
 [ -x "$tree/usr/bin/ruby" ] || { echo "ERROR: no usr/bin/ruby after extract" >&2; exit 1; }
 
-echo "Fixup 1/4: materializing absolute /usr symlinks ..."
+echo "Fixup 1/5: materializing absolute /usr symlinks ..."
 python3.14 - "$tree/usr" << 'PYEOF'
 import os
 import shutil
@@ -164,7 +164,7 @@ if left:
 print(f"  materialized {files} file + {dirs} directory symlinks; 0 absolute links remain")
 PYEOF
 
-echo "Fixup 2/4: moving gem extensions to the canonical rubygems layout ..."
+echo "Fixup 2/5: moving gem extensions to the canonical rubygems layout ..."
 ext_root="$tree/usr/share/gems/extensions/$GEM_ARCH/$RUBY_ABI"
 mkdir -p "$ext_root"
 moved=0
@@ -178,7 +178,7 @@ fi
 rm -rf "${tree:?}/usr/lib64/gems" "${tree:?}/usr/lib/gems"
 echo "  moved $moved extension dir(s) to share/gems/extensions/$GEM_ARCH/$RUBY_ABI"
 
-echo "Fixup 3/4: wrappers (ruby is not --enable-load-relative) ..."
+echo "Fixup 3/5: wrappers (ruby is not --enable-load-relative) ..."
 mkdir -p "$tree/usr/libexec/ruby"
 for s in gem irb rdbg; do
     [ -f "$tree/usr/bin/$s" ] || continue
@@ -226,7 +226,7 @@ echo "  wrapped ruby + gem/irb/rdbg"
 "$LOADOUT_PATCHELF" --set-rpath '$ORIGIN/../lib64' "$tree/usr/bin/ruby.bin"
 strip "$tree/usr/bin/ruby.bin" 2> /dev/null || true
 
-echo "Fixup 4/4: generating the default-gem specs EL8 omits ..."
+echo "Fixup 4/5: generating the default-gem specs EL8 omits ..."
 # EL8 ships share/gems/specifications/default/ EMPTY, so gems like psych and irb
 # declare runtime deps (stringio, reline, ...) that rubygems cannot resolve --
 # `irb` then dies in activate_bin_path even though every one of those libraries
@@ -238,7 +238,6 @@ echo "Fixup 4/4: generating the default-gem specs EL8 omits ..."
 # through GEM_PATH and therefore follows the install.
 (
     cd "$tree/usr"
-    LD_LIBRARY_PATH="$PWD/lib64" \
     RUBYLIB="$PWD/lib64/ruby:$PWD/share/ruby:$PWD/share/rubygems" \
     GEM_HOME="$PWD/share/gems" GEM_PATH="$PWD/share/gems" \
     ./bin/ruby.bin -e '
@@ -273,7 +272,6 @@ echo "Fixup 4/4: generating the default-gem specs EL8 omits ..."
 # actually breaks `irb`, and it fails silently at runtime rather than at build.
 (
     cd "$tree/usr"
-    LD_LIBRARY_PATH="$PWD/lib64" \
     RUBYLIB="$PWD/lib64/ruby:$PWD/share/ruby:$PWD/share/rubygems" \
     GEM_HOME="$PWD/share/gems" GEM_PATH="$PWD/share/gems" \
     ./bin/ruby.bin -e '
@@ -291,10 +289,34 @@ echo "Fixup 4/4: generating the default-gem specs EL8 omits ..."
     '
 ) || { echo "ERROR: shipped gems have unsatisfied dependencies" >&2; exit 1; }
 
+echo "Fixup 5/5: RPATH for extensions whose NEEDEDs are bundled libs ..."
+# dlopen'd extensions do NOT inherit ruby.bin's RUNPATH (RUNPATH, unlike the
+# legacy RPATH, does not propagate to children), so openssl.so (libssl +
+# libcrypto unclaimed stems) and fiddle.so (libffi from gui_libs) die with
+# "cannot open shared object file" on any host without those sonames
+# system-wide. EL8 carries openssl 1.1 itself, which is why this stayed green
+# through Tier 3 while broken on newer hosts. Point each affected extension at
+# the installed lib64 with a path computed from its own depth, so both the
+# lib64/ruby/ and share/gems/extensions/ layouts resolve.
+# psych (libyaml) and zlib (libz) stay host-assumed: EL8-base and newer-host
+# base both carry them, same tier as libgcrypt for xephyr. fiddle additionally
+# needs gui_libs installed (ruby does not depend on it; klayout pulls it).
+find "$tree/usr/lib64/ruby" "$tree/usr/share/gems/extensions" -name '*.so' 2> /dev/null \
+| while IFS= read -r _ext; do
+    if readelf -d "$_ext" | grep -qE '\[(libssl|libcrypto|libffi)[^]]*\]'; then
+        _rel=$(realpath --relative-to="$(dirname "$_ext")" "$tree/usr/lib64")
+        # shellcheck disable=SC2016  # $ORIGIN is an ld.so token, not a shell var
+        "$LOADOUT_PATCHELF" --set-rpath "\$ORIGIN/$_rel" "$_ext"
+        echo "  rpath \$ORIGIN/$_rel: ${_ext#"$tree/usr/"}"
+    fi
+done
+
 echo "Verifying the staged tree before packaging ..."
+# No LD_LIBRARY_PATH anywhere below: the staged tree must prove itself with
+# only the RPATHs baked above (a jazzed-up environment is what hid the
+# missing extension RPATHs until the release smoke on a newer host).
 (
     cd "$tree/usr"
-    LD_LIBRARY_PATH="$PWD/lib64" \
     RUBYLIB="$PWD/lib64/ruby:$PWD/share/ruby:$PWD/share/rubygems" \
     GEM_HOME="$PWD/share/gems" GEM_PATH="$PWD/share/gems" \
     ./bin/ruby.bin -e '
@@ -308,7 +330,6 @@ echo "Verifying the staged tree before packaging ..."
 # not built" warning is exactly the known-false signal this repo refuses to ship.
 noise=$(
     cd "$tree/usr"
-    LD_LIBRARY_PATH="$PWD/lib64" \
     RUBYLIB="$PWD/lib64/ruby:$PWD/share/ruby:$PWD/share/rubygems" \
     GEM_HOME="$PWD/share/gems" GEM_PATH="$PWD/share/gems" \
     ./bin/ruby.bin -e 'require "json"; require "yaml"' 2>&1 1> /dev/null || true
