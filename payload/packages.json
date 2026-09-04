@@ -1160,8 +1160,7 @@
         "rdbg"
       ],
       "libs": [
-        "libruby.so.3.3",
-        "libcrypt.so.1"
+        "libruby.so.3.3"
       ],
       "version": "3.3.10",
       "version_url": "https://www.ruby-lang.org/en/downloads/releases/",
@@ -2403,12 +2402,6 @@
         "tcl",
         "gui_libs"
       ],
-      "archive": "payload/PLATFORM/runtime/tk.tar.bz2",
-      "install_to": "~/.local",
-      "sentinel": "lib/tk9.0/tk.tcl",
-      "remove_before_extract": [
-        "lib/tk9.0"
-      ],
       "version": "9.0.3",
       "version_url": "https://github.com/tcltk/tk",
       "platforms": [
@@ -2418,7 +2411,7 @@
         "lang",
         "gui"
       ],
-      "description": "Tk GUI toolkit \u2014 wish interpreter plus the Tk script library (lib/tk9.0 file tree; the zipfs copy embedded in libtcl9tk9.0.so does not survive post-link patchelf, so the tree ships explicitly)"
+      "description": "Tk GUI toolkit \u2014 wish interpreter and embedded Tk runtime"
     },
     "nodejs": {
       "kind": "bin",

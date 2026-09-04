@@ -9,13 +9,16 @@
 # Tcl must already be built by build-tcl.sh so tclConfig.sh, tcl.h, and
 # libtcl9.0.so exist under /tmp/loadout-tcl-instdir-<version>.
 #
-# NOTE: Tk 9.x embeds its script library in libtcl9tk9.0.so via zipfs, but
-# the embedded copy does NOT survive post-link patchelf (the zip
-# central-directory offset goes stale, zipfs fails to mount, and wish dies
-# with "Can't find a usable tk.tcl" -- broken on every host, EL8 included).
-# So the .so ships un-patchelf'd AND the script tree ships explicitly as
-# lib/tk9.0 (untarred from the intact embedded zip if needed, normally just
-# `make install`'s lib/tk9.0). Do not strip the shared library either.
+# NOTE: Tk 9.x embeds its script library in libtcl9tk9.0.so via zipfs. That
+# copy is FRAGILE: any post-link rewrite of the .so (even an RPATH-only
+# patchelf) shifts bytes, the zip central-directory offset goes stale, zipfs
+# silently fails to mount, and wish dies with "Can't find a usable tk.tcl"
+# on every host (this shipped broken once). So the .so ships with NO RPATH
+# (configure --disable-rpath; wish's own $ORIGIN/../lib64 RUNPATH resolves
+# whatever it needs) and the recipe PROVES the embedded copy every build by
+# requiring Tk with the file tree hidden. Do not strip the shared library
+# either. tcl (libtcl9.0.so) is unaffected... (its zipfs survived its own
+# patchelf; do not generalize from it).
 #
 # Usage (run from any directory):
 #   ./build/build-tk.sh --tag core-9-0-3
@@ -25,7 +28,6 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
-RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
 TAG=""
 
@@ -83,6 +85,16 @@ need "$PATCHELF"
     echo "ERROR: missing ${TCL_INCLUDE_DIR}/tcl.h; run build-tcl.sh first" >&2
     exit 1
 }
+# tk also consumes tcl's PRIVATE headers via TCL_SRC_DIR in tclConfig.sh. A
+# tclConfig whose src tree is gone (stale /tmp path, or a build-tcl.sh from
+# before sources were persisted) silently compiles tk against system tcl 8.6
+# headers and dies in pages of unknown-type Tcl_Size errors -- fail here
+# instead, in one line.
+TCL_SRC_DIR="$(sed -n "s/^TCL_SRC_DIR='\(.*\)'/\1/p" "${TCL_CONFIG_DIR}/tclConfig.sh")"
+[ -f "${TCL_SRC_DIR}/generic/tcl.h" ] || {
+    echo "ERROR: tcl sources missing at ${TCL_SRC_DIR:-<empty>}; run build-tcl.sh first (same boot -- tk consumes its build tree)" >&2
+    exit 1
+}
 
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/build-tk-XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -96,10 +108,15 @@ cd "$WORK_DIR/tk${VERSION}/unix"
 
 echo "==> Configuring (prefix: ${TK_INST_DIR}) ..."
 rm -rf "$TK_INST_DIR"
+# --disable-rpath: a link-time RPATH (the /tmp instdir) would ship as an
+# embedded dead build path; the wish binary gets its $ORIGIN RUNPATH from
+# patchelf at packaging instead (bins are not zipfs -- that rewrite is safe).
 ./configure \
     --prefix="$TK_INST_DIR" \
     --libdir="$TK_INST_DIR/lib" \
     --with-tcl="$TCL_CONFIG_DIR" \
+    --disable-rpath \
+    --disable-libcups \
     --enable-shared \
     --enable-64bit
 
@@ -122,8 +139,24 @@ if [ -z "$TKLIB" ]; then
 fi
 TKLIB_NAME=$(basename "$TKLIB")
 
+echo "==> Checking loader closure (no cups, no build paths) ..."
+# libcups auto-links when cups-devel is present and is absent on minimal EL8
+# (caught by Tier 3, not here); a /tmp RPATH would be a dead build path.
+for _f in "$WISH_BIN" "$TKLIB"; do
+    _needed=$(readelf -d "$_f" | grep NEEDED || true)
+    case "$_needed" in
+        *libcups*) echo "ERROR: $(basename "$_f") NEEDs libcups (use --disable-libcups)" >&2; exit 1 ;;
+    esac
+    case "$(readelf -d "$_f" | grep -E 'RPATH|RUNPATH' || true)" in
+        */tmp/*) echo "ERROR: $(basename "$_f") embeds a /tmp loader path" >&2; exit 1 ;;
+    esac
+done
+echo "  OK: no libcups, no /tmp loader paths"
+
 echo "==> Verifying wish ..."
-if "$WISH_BIN" <<'EOF'
+# Staging-only loader path: --disable-rpath keeps dead build paths out of the
+# shipped lib, so the just-linked wish needs help finding its own tree here.
+if LD_LIBRARY_PATH="$TK_INST_DIR/lib:$TCL_INST_DIR/lib" "$WISH_BIN" <<'EOF'
 puts "Tk version: [package require Tk]"
 puts "Tk library: $tk_library"
 exit
@@ -132,6 +165,23 @@ then
     echo "  OK: wish works and can find Tk"
 else
     echo "  ERROR: wish verification failed" >&2
+    exit 1
+fi
+# Decisive zipfs proof: hide the file tree -- the shipped lib must find
+# tk.tcl via its embedded zipfs alone. (A post-link patchelf silently breaks
+# the zip offset while the tree masks it; that shipped broken everywhere.)
+mv "$TK_INST_DIR/lib/tk9.0" "$TK_INST_DIR/lib/tk9.0.hidden-for-zipfs-test"
+if LD_LIBRARY_PATH="$TK_INST_DIR/lib:$TCL_INST_DIR/lib" "$WISH_BIN" <<'EOF'
+package require Tk
+puts "Tk library (no file tree): $tk_library"
+exit
+EOF
+then
+    echo "  OK: embedded zipfs serves tk.tcl with no file tree"
+    mv "$TK_INST_DIR/lib/tk9.0.hidden-for-zipfs-test" "$TK_INST_DIR/lib/tk9.0"
+else
+    mv "$TK_INST_DIR/lib/tk9.0.hidden-for-zipfs-test" "$TK_INST_DIR/lib/tk9.0"
+    echo "  ERROR: zipfs does not serve tk.tcl without the file tree" >&2
     exit 1
 fi
 
@@ -188,15 +238,6 @@ with open(path, 'w') as f:
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION" "$TKLIB_NAME"
 
-echo "==> Packaging Tk script tree (lib/tk9.0 file tree, not zipfs) ..."
-# make install already materialized $TK_INST_DIR/lib/tk9.0 -- tar it as the
-# package runtime so wish finds tk.tcl without depending on the embedded
-# zipfs copy (see NOTE at the top of this script).
-[ -f "$TK_INST_DIR/lib/tk9.0/tk.tcl" ] || {
-    echo "ERROR: $TK_INST_DIR/lib/tk9.0/tk.tcl missing" >&2; exit 1; }
-tar cjf "$RUNTIME_DIR/tk.tar.bz2" -C "$TK_INST_DIR" ./lib/tk9.0
-echo "  runtime/tk.tar.bz2 ($(du -h "$RUNTIME_DIR/tk.tar.bz2" | cut -f1))"
-
 echo "==> Running strip-all-elf-binaries ..."
 "$REPO/build/strip-all-elf-binaries"
 
@@ -206,4 +247,4 @@ echo ""
 echo "Produced:"
 echo "  $BIN_DIR/wish.bz2"
 echo "  $LIB_DIR/${TKLIB_NAME}.bz2"
-echo "  $RUNTIME_DIR/tk.tar.bz2"
+echo "  (No runtime archive -- Tk 9.x script library is embedded in ${TKLIB_NAME} via zipfs, verified working above)"

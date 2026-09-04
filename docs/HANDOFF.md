@@ -39,6 +39,32 @@ fresh tcl build-tree headers (configure used the build-tree tclConfig, not
 the installed one); shipped libtcl9tk9.0.so untouched. Meld (py3.6) and the
 fontconfig-theme cosmetics remain host-contract/future.
 
+## 2026-09-04 batch: tk rebuild unblocked (tcl sources persist) -- UNRELEASED
+
+wish/tkdiff dead everywhere (above) needed a source rebuild, which was
+blocked: tk died in pages of unknown-type Tcl_Size. Root cause was NOT
+headers -- the installed tcl.h is fine. The tcl recipe's EXIT trap deleted
+its mktemp build tree on return, but the installed tclConfig.sh points
+TCL_SRC_DIR at that (now-dead) tree for PRIVATE headers; tk's compile then
+silently skipped the missing -I dirs and fell through to system tcl 8.6
+(/usr/include/tcl.h, tcl-devel is in the image). Fix: build-tcl.sh persists
+sources to stable `/tmp/loadout-tcl-src-<ver>` (cleaned first, repoints
+TCL_SRC_DIR, fails loud if either step misses) instead of trap-deleting;
+build-tk.sh preflights TCL_SRC_DIR/generic/tcl.h with a one-line error.
+Same boot required for both (both die on reboot -- honest, documented).
+
+Rebuild surfaced two more, both fixed in-recipe: (1) fresh wish linked
+libcups (auto-detected, absent on minimal EL8 -- Tier 3 caught it), fixed
+with --disable-libcups + a closure guard (no libcups, no /tmp loader
+paths); fresh wish also NEEDs libcrypt.so.1, which the registry had
+ruby-owned while AGENTS/SHARED_LIBS documented it unclaimed -- removed
+from ruby libs so it lands with every lib64 selection as documented.
+(2) strip-all would now STRIP the RPATH-less zipfs lib (tail truncation),
+so it gained an `elf_has_zipfs_tail` skip (EOCD signature) in all three
+paths. Final proof: full container tcl+tk rebuild green incl. the no-tree
+zipfs test; host smoke 324 OK; container --full 303 OK. tk.tar.bz2 file-tree
+idea REVERTED (zipfs proven clean -- simpler payload, no registry churn).
+
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 
 ## 2026-09-03 batch: release prep (time-plot + lefdef-tools + updater fixes)

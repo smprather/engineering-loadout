@@ -254,7 +254,7 @@ sha256  161570b306b30c4a5b87bc089b31bfeeeeb4e6458cf70c327193843630b64208  payloa
 sha256  f131dba1ad7a57e36858dccc0efd9bae8c761bf4ab4e5bac67c3c0c71d56758b  payload/el8.x86_64.glibc2p28/bin/vztminer.bz2
 sha256  1292a3ba537fba94bb4cf089e4c6052f1919c6be25051b4ffbe6f1a20cc3c2cc  payload/el8.x86_64.glibc2p28/bin/wc.bz2
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payload/el8.x86_64.glibc2p28/bin/whoami.bz2
-sha256  4d398253083585ee9d673b71d2bb5f4baed44ac233f9ca5a44011bb9c0330665  payload/el8.x86_64.glibc2p28/bin/wish.bz2
+sha256  16fb1705b4d8bd15e5bb5a920e658d63156b3e0c792553f7d9834a6aa1ef1640  payload/el8.x86_64.glibc2p28/bin/wish.bz2
 sha256  a5bb63d81525e7820adbd1712303440878abc81f54940b19e57b7bf5cc107470  payload/el8.x86_64.glibc2p28/bin/xdesk.bz2
 sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
@@ -415,8 +415,8 @@ sha256  ebaa74c68f7b9baaf4c7546477cfd52c2c889a9b2e3f6bf100a9af478483c1d3  payloa
 sha256  9ed021dd73fd1639e1d777898a9c92700b606956f7055a9317b537ad1a4492d0  payload/el8.x86_64.glibc2p28/lib64/libsz.so.2.bz2
 sha256  5843e40f9553208fc7c3602b4ade7c361acaf3c255e9f8b0d5722ba52b48c82a  payload/el8.x86_64.glibc2p28/lib64/libtbb.so.2.bz2
 sha256  a88d0e847c3e88edcbcb6b0362129a1a5e51f4fd785f07bd7662caa0147057a4  payload/el8.x86_64.glibc2p28/lib64/libtcl8.6.so.bz2
-sha256  01975380757004609d185f285ecfbf9ba38ae3f0cac94054a1f2beefcb462a44  payload/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2
-sha256  34cd9b16fea31573d0f95a8be78fc1beb9e93e489ce529882a214beaa165f725  payload/el8.x86_64.glibc2p28/lib64/libtcl9tk9.0.so.bz2
+sha256  3d45347b891fb1ecc502c13392e7d9213d13ac74079edb388cecfa6ee4f28b28  payload/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2
+sha256  be89ba82ab7e2e163c00b0ad0179b672fc32f401402a102a2973c783d9642909  payload/el8.x86_64.glibc2p28/lib64/libtcl9tk9.0.so.bz2
 sha256  59480c07c06f6a1cb9841488d309cc7c49f39e21ffed748d2ce45da5ab85b8c8  payload/el8.x86_64.glibc2p28/lib64/libthai.so.0.bz2
 sha256  84df7354337f97d6bb1ff5e71cdd21f81fb82026b51ce1c8136922d8b85867af  payload/el8.x86_64.glibc2p28/lib64/libtiff.so.5.bz2
 sha256  d3d7ebde02d46d8e2116794ef44315c72669987643e2acf2fdd395cf231d837e  payload/el8.x86_64.glibc2p28/lib64/libtinfo.so.6.bz2
@@ -475,7 +475,6 @@ tar-meta  3082228  1787409797  payload/el8.x86_64.glibc2p28/runtime/pyright.tar.
 tar-meta  3992335  1788465896  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  396800  1786927647  payload/el8.x86_64.glibc2p28/runtime/taplo-schemas.tar.bz2
-tar-meta  220613  1788497849  payload/el8.x86_64.glibc2p28/runtime/tk.tar.bz2
 tar-meta  3667901  1787846593  payload/el8.x86_64.glibc2p28/runtime/typescript-language-server.tar.bz2
 tar-meta  28387403  1787471355  payload/el8.x86_64.glibc2p28/runtime/valgrind.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2

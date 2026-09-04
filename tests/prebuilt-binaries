@@ -752,18 +752,6 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (xspice):       ngspice runtime")
 
-    if has_bin("wish"):
-        # wish starts (and `wish --version` exits 0) even with no script
-        # library -- it dies only when something is required. The payload
-        # carries lib/tk9.0 explicitly because the zipfs copy embedded in
-        # libtcl9tk9.0.so does not survive post-link patchelf; assert the
-        # tree the interpreter actually falls back to.
-        require_path(
-            os.path.join(tmpdir, "local", "lib", "tk9.0", "tk.tcl"),
-            "tk script library",
-            failures,
-        )
-
     if has_bin("taplo"):
         # `taplo --version` is a real exit-0 banner, so the generic probe cannot
         # see the thing most likely to break: the OFFLINE JSON Schema catalog.

@@ -220,6 +220,23 @@ def elf_has_rpath(path):
         return False
 
 
+def elf_has_zipfs_tail(path):
+    """Return True if an ELF carries an appended zipfs archive (Tcl/Tk 9.x
+    embed their script libraries this way). The zip central-directory offset
+    goes stale under ANY post-link rewrite and strip truncates the tail
+    outright, so these files must never be stripped or patchelf'd -- skip
+    loudly. (RPATH presence does NOT imply safety: tcl survived its patchelf
+    by luck of same-size replacement, tk did not.)"""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 65558))
+            return b"PK\x05\x06" in f.read()
+    except OSError:
+        return False
+
+
 def bzip2_write(src_path, dest_path):
     with open(src_path, "rb") as src:
         with bz2.open(dest_path, "wb", compresslevel=9) as dest:
@@ -255,6 +272,15 @@ def process_bzip2(repo_dir, manifest, strip_bin, bz2_path, tmp_dir, dry_run, sta
         manifest.record_sha(rel, bz2_path)
         return
 
+    if elf_has_zipfs_tail(payload):
+        # Appended zipfs archive (Tcl/Tk script library): strip truncates the
+        # tail, any rewrite stales the zip offset. Never touch these.
+        print(f"skip zipfs-tailed payload (embedded script library): {bz2_path}")
+        stats["skipped_nonelf"] += 1
+        os.unlink(payload)
+        manifest.record_sha(rel, bz2_path)
+        return
+
     if dry_run:
         print(f"would strip bzip2 payload: {bz2_path}")
         os.unlink(payload)
@@ -285,6 +311,12 @@ def process_raw_elf(repo_dir, manifest, strip_bin, path, dry_run, stats):
     # RPATH/RUNPATH was already patchelf'd+stripped; re-stripping corrupts it.
     if elf_has_rpath(path):
         print(f"skip patchelf'd raw ELF (RPATH set): {path}")
+        stats["skipped_nonelf"] += 1
+        manifest.record_sha(rel, path)
+        return
+
+    if elf_has_zipfs_tail(path):
+        print(f"skip zipfs-tailed raw ELF (embedded script library): {path}")
         stats["skipped_nonelf"] += 1
         manifest.record_sha(rel, path)
         return
@@ -466,7 +498,11 @@ def process_tar(repo_dir, manifest, strip_bin, tar_path, tmp_dir, dry_run, stats
         # information available" / "undefined symbol: , version" at runtime. This is
         # the same guard process_bzip2 applies; runtime tars (node, octave .oct libs,
         # lua-language-server, nvim-qt, ...) are full of patchelf'd binaries.
+        # Same for an appended zipfs archive (Tcl/Tk script libraries): strip
+        # truncates the tail outright.
         if elf_has_rpath(member):
+            continue
+        if elf_has_zipfs_tail(member):
             continue
         strip_file(strip_bin, member)
         tar_stripped += 1

@@ -215,6 +215,28 @@ echo "Install dir left at: $INST_DIR"
 echo "  tclConfig.sh: $INST_DIR/lib/tclConfig.sh"
 echo "  Use with: build-modules.sh --tag vX.Y.Z --with-tcl $INST_DIR/lib"
 echo ""
+echo "Persisting sources for downstream builds ..."
+# tk's build consumes TCL_SRC_DIR (PRIVATE headers) from the installed
+# tclConfig.sh. The old EXIT trap deleted the mktemp build tree on return, so
+# a later build-tk.sh invocation compiled against system tcl 8.6 headers and
+# died in pages of unknown-type Tcl_Size errors. Stable version-scoped path
+# (cleaned first, like INST_DIR); both die together on reboot, which is
+# honest -- tk must be rebuilt in the same boot as tcl anyway.
+SRC_KEEP="/tmp/loadout-tcl-src-${VERSION}"
+rm -rf "$SRC_KEEP"
+mkdir -p "$SRC_KEEP"
+[ -d "$WORK_DIR/tcl${VERSION}" ] \
+    || { echo "ERROR: expected sources at $WORK_DIR/tcl${VERSION}" >&2; exit 1; }
+mv "$WORK_DIR/tcl${VERSION}" "$SRC_KEEP/"
+sed -i "s|^TCL_SRC_DIR=.*|TCL_SRC_DIR='$SRC_KEEP/tcl${VERSION}'|" "$INST_DIR/lib/tclConfig.sh"
+grep -q "^TCL_SRC_DIR='$SRC_KEEP/tcl${VERSION}'$" "$INST_DIR/lib/tclConfig.sh" \
+    || { echo "ERROR: could not repoint TCL_SRC_DIR in tclConfig.sh" >&2; exit 1; }
+[ -f "$SRC_KEEP/tcl${VERSION}/generic/tcl.h" ] \
+    || { echo "ERROR: persisted sources lack generic/tcl.h" >&2; exit 1; }
+echo "  sources: $SRC_KEEP/tcl${VERSION} (tclConfig.sh TCL_SRC_DIR repointed)"
+trap - EXIT
+rm -rf "$WORK_DIR"
+echo ""
 echo "Commit with:"
 echo "  git add payload/el8.x86_64.glibc2p28/bin/tclsh.bz2 \\"
 echo "          payload/el8.x86_64.glibc2p28/lib64/${TCLLIB_NAME}.bz2 \\"
