@@ -1,6 +1,12 @@
 # Current Handoff
 
-Last updated: 2026-09-04 (read-only-source fix -- UNRELEASED). `v2026.09.03` is
+Last updated: 2026-09-04 (v2026.09.04 RELEASED). `v2026.09.04` is
+published and verified: signed tag good (ED25519), `origin/main ==
+v2026.09.04^{commit}` (`c0a6efb`), `isDraft=false`, all three release
+assets present. Fast path: targeted gates only (new regression test 9/9,
+T1 green except zsh typeahead WIP, assurance 35/35, rust-offline green on
+the new store) + the release script's own gates (scan/smoke/versions/
+checksums); full run-all tiers deferred. `v2026.09.03` is
 published and verified: signed tag good (ED25519), `origin/main ==
 v2026.09.03^{commit}` (`65986ef`), `isDraft=false`, all three release
 assets present (sha256sums.txt, default.content-manifest,
