@@ -119,9 +119,7 @@ class _ItemProgress:
                 transient=True,
             )
             self._progress.start()
-            self._task = self._progress.add_task(
-                description, total=len(item_names) if total is None else total
-            )
+            self._task = self._progress.add_task(description, total=len(item_names) if total is None else total)
 
     def step(self, name, prefix="  "):
         if self._progress is not None:
@@ -1315,6 +1313,15 @@ def _copy_tree_item(src, dest, excludes=(), rel_path=""):
         shutil.copy2(src, dest, follow_symlinks=False)
     except FileNotFoundError:
         return
+    # The installer rewrites some installed files in place afterwards (shared
+    # prefix bake, relocation tokens). A read-only install source would make
+    # those targets read-only too (copy2 preserves mode), so grant owner-write
+    # here: our own files must stay editable regardless of source modes.
+    # Executable and group/other bits are preserved -- only u+w is added.
+    try:
+        os.chmod(dest, os.stat(dest).st_mode | stat.S_IWUSR)
+    except OSError:
+        pass
 
 
 def sync_dir(src, dest, delete=False, excludes=None):
@@ -1942,9 +1949,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                             _pname, "/".join(_claimed[:3]) + ("..." if len(_claimed) > 3 else "")
                         )
                     )
-        _bp = _ItemProgress(
-            "Installing binaries", (os.path.basename(f[:-4]) for f in _bin_bz2_files)
-        )
+        _bp = _ItemProgress("Installing binaries", (os.path.basename(f[:-4]) for f in _bin_bz2_files))
 
         for bz2_file in _bin_bz2_files:
             dest_file = os.path.join(dest_bin_dir, os.path.basename(bz2_file[:-4]))
@@ -2037,9 +2042,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 os.remove(_glib_path)
                 print(f"  removed stale glibc lib: {_glib_path}")
         _lib64_bz2_files = sorted(f for f in _bz2.find(lib64_dir) if _lib_selected(os.path.basename(f)[:-4]))
-        _lp = _ItemProgress(
-            "Installing libraries", (os.path.basename(f[:-4]) for f in _lib64_bz2_files)
-        )
+        _lp = _ItemProgress("Installing libraries", (os.path.basename(f[:-4]) for f in _lib64_bz2_files))
         for bz2_file in _lib64_bz2_files:
             dest_file = os.path.join(dest_lib64_dir, os.path.basename(bz2_file[:-4]))
             bz2_src = _bz2.resolve(bz2_file)
@@ -3967,8 +3970,21 @@ def _rewrite_shared_prefix_line(cfg, pattern, replacement, label, val):
     if not n:
         eprint(f"  WARNING: LOADOUT_CFG_SHARED_PREFIX line not found in {cfg}; not baked")
         return False
-    with open(cfg, "w") as f:
-        f.write(new_text)
+    # Atomic rewrite with the source mode preserved (+owner-write): the
+    # installed copy may be read-only when the install source tree is
+    # (copy2 preserves mode), and an in-place open("w") would die with
+    # PermissionError. Same pattern as relocate_runtime_token.
+    mode = stat.S_IMODE(os.stat(cfg).st_mode) | stat.S_IWUSR
+    fd, tmp = tempfile.mkstemp(prefix=".loadout-cfg.", dir=os.path.dirname(cfg))
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(new_text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, cfg)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
     print(f"  LOADOUT_CFG_SHARED_PREFIX baked into {label}: {val}")
     return True
 
@@ -4205,8 +4221,17 @@ def _relocate_helix_languages(home):
             text = fh.read()
         if RELOCATION_TOKEN not in text:
             return
-        with open(path, "w") as fh:
-            fh.write(text.replace(RELOCATION_TOKEN, root))
+        mode = stat.S_IMODE(os.stat(path).st_mode) | stat.S_IWUSR
+        fd, tmp = tempfile.mkstemp(prefix=".loadout-helix.", dir=os.path.dirname(path))
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(text.replace(RELOCATION_TOKEN, root))
+            os.chmod(tmp, mode)
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+            raise
     except OSError as exc:
         warn(f"helix languages.toml: could not resolve the schema catalog path: {exc}")
         return

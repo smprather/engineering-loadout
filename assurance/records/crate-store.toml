@@ -3,13 +3,13 @@
 schema = 1
 package = "rust-crate-store"
 version = "closure-pinned"  # rolling crate set; the exact closure is pinned by assurance/crate-store.lock
-verified_utc = "2026-08-17T15:42:14Z"
+verified_utc = "2026-09-04T17:00:00Z"
 status = "verified"  # every .crate re-hashed against the crates.io sha256 in the store index
 
 [source]
 upstream = "crates.io"
 ref = "cargo local-registry --sync (transitive closure of build/rust-crate-list.txt + rust-tool-locks.txt)"
-dep_pinning = "each .crate carries the upstream crates.io sha256 in the registry index/; build/verify-crate-store re-hashes all 2740 crates against it, and the closure is committed to assurance/crate-store.lock"
+dep_pinning = "each .crate carries the upstream crates.io sha256 in the registry index/; build/verify-crate-store re-hashes all 2776 crates against it, and the closure is committed to assurance/crate-store.lock"
 
 [build]
 script = "build/build-tool-crate-store.sh"
@@ -17,25 +17,25 @@ policy = "superset store: user seed closure UNION every loadout rust tool's Carg
 
 [scan]
 engine = "scan-for-malware (YARA-Forge + optional ClamAV)"
-yara_forge_tag = "20260816"
+yara_forge_tag = "20260830"
 result = "clean"
 
 [crate_store]
 lock = "assurance/crate-store.lock"
 verifier = "build/verify-crate-store"
-count = 2740
+count = 2776
 
 [artifacts]
-"payload/crate-store/crate-store.tar.bz2.part-000" = "sha256:4177a8da31c5541f255856dde2433eda8d0e5663781eeecf0cd2080c8de323cc"
-"payload/crate-store/crate-store.tar.bz2.part-001" = "sha256:8fed58720dd20660bfcee4745bd092da3d66b3e2994eafb0e81cc9bdcfadbbc0"
-"payload/crate-store/crate-store.tar.bz2.part-002" = "sha256:57b0bb9c04c0523d4bbd04c83d032a7a656ea440ecdcdcea4755e3321d40bd3b"
-"payload/crate-store/crate-store.tar.bz2.part-003" = "sha256:767df8b98aef9c729308c9fdef681c18e76220e1eb62b918b2a9d1841ed20bd0"
-"payload/crate-store/crate-store.tar.bz2.part-004" = "sha256:b02df2b250deda413b7da377ae42b1d1ec383ab0b5148073ede8c2dbaf40d82b"
-"payload/crate-store/crate-store.tar.bz2.part-005" = "sha256:e5a8a62ed1b131995459853f311b910afe78359081c1e2edb8e3a05cab3ee5b9"
-"payload/crate-store/crate-store.tar.bz2.part-006" = "sha256:368dd5081d6b5f09fc7944fdb1ddf3e76c3dc56416ed8460c3c39857102363ee"
-"payload/crate-store/crate-store.tar.bz2.part-007" = "sha256:2f71254d50bed28ac8cbdd49717857ce145f4f5591145f4d88cc2ee597c78267"
-"payload/crate-store/crate-store.tar.bz2.part-008" = "sha256:f1b7b0c90b31d2905206618be97e6da5b3f99d87e02d8e480a4c11edaf148c58"
-"payload/crate-store/crate-store.tar.bz2.part-009" = "sha256:db2531e3eabdcb017d8fef402c030d0ab9ab23ba643002d43fe0c8e65b2f8f97"
+"payload/crate-store/crate-store.tar.bz2.part-000" = "sha256:4eb6eb0a6a5d9987691331016a56b9ef2f3922b09a73390c3c93c5ee2c2d7526"
+"payload/crate-store/crate-store.tar.bz2.part-001" = "sha256:44be191be03cdb6e483845b6ed4158e1d6bc4ae75eae4a928f137c4a672ca37e"
+"payload/crate-store/crate-store.tar.bz2.part-002" = "sha256:018fe6da8a810174809b0af89cf5a79bc716d17bfff0c06fc0ef0f0cf5e52fcc"
+"payload/crate-store/crate-store.tar.bz2.part-003" = "sha256:f15a01cdb1ac1ac28f3d4ebf0714b5080ffd85ec12ceb0d590519c8dcf0de6d8"
+"payload/crate-store/crate-store.tar.bz2.part-004" = "sha256:e1146541a1fe0e6bfe72ed7e7d7dba902299c0d528ac941d9c4df8bec9e4db8d"
+"payload/crate-store/crate-store.tar.bz2.part-005" = "sha256:e6a2817e47e3487160c38c2844184e776f7077c6298e39c48cd5e293cbeaf380"
+"payload/crate-store/crate-store.tar.bz2.part-006" = "sha256:cf1fffd70691955ddfc9526f112e705faae8eb85d885875a885b500c1f48a551"
+"payload/crate-store/crate-store.tar.bz2.part-007" = "sha256:fc4411f19b1e91c9029350d1b993062591e48048fb50c3418ccb24039ed0058f"
+"payload/crate-store/crate-store.tar.bz2.part-008" = "sha256:400b06bf1b0390dac4c374b36bd653cb7f5d60a6316eda18c7e0e9105032a5ef"
+"payload/crate-store/crate-store.tar.bz2.part-009" = "sha256:be56c543de57bb410997dc9cbc5878b14fa4eff2f97cd4d8cb51dbede947b09e"
 
 [dynamic]
 result = "n/a"  # inert crate sources (data archive); consumed by cargo build --offline (tests/rust-offline-almalinux8).

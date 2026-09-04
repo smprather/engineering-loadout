@@ -1,11 +1,58 @@
 # Current Handoff
 
-Last updated: 2026-09-04 (GTK3 launcher batch + tk land -- UNRELEASED). `v2026.09.03` is
+Last updated: 2026-09-04 (read-only-source fix -- UNRELEASED). `v2026.09.03` is
 published and verified: signed tag good (ED25519), `origin/main ==
 v2026.09.03^{commit}` (`65986ef`), `isDraft=false`, all three release
 assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
 published sha256sums.txt. `v2026.08.28` notes retained below for history.
+
+## 2026-09-04 batch: read-only install source fix (UNRELEASED, in tree)
+
+Implements enhancement-request-permissions-management.md (rewritten since
+the cargo items: now a single bug -- @envs fails when the install source
+tree is read-only). Diagnosis verified exact: copy2 preserves the 0o444
+mode, then the prefix bake's open(w) dies uncaught. Fix, three layers:
+(1) `_copy_tree_item` grants u+w on the destination copy (central -- covers
+the whole class, exec bits preserved); (2) `_rewrite_shared_prefix_line`
+rewrites atomically (mkstemp + replace) with source mode preserved +u+w,
+same pattern as relocate_runtime_token (NOT hardcoded 644);
+(3) helix languages.toml relocation hardened identically (it warned and
+continued; tealdeer fresh-write and relocate-token were already safe).
+New tests/install-readonly-source (9/9, Tier 2): copy u+w, bash+tcsh bake
+through 0o444 dests, mode preservation, no temp litter, helix relocation.
+Proven to catch the bug (fails on pre-fix code with 0o444). T1 green
+except zsh typeahead WIP; assurance 35/35, crate lock/policy OK.
+
+## 2026-09-04 batch: enhancement-request-permissions-management.md fielded
+
+#1 (REQUIRED, stale registry path): NOT a live bug -- already fixed by
+d3adc7c (cargo online-first, v2026.08.28). The pre-08-22 writer baked an
+absolute `replace-with` path at install time; a work-side reorg
+(external/engineering-loadout -> tools/loadout-shared) stranded it. Current
+code writes a comments-only stock config (proven: fresh env-cargo install)
+and both wrappers (bash functions.sh, tcsh helpers/cargo-wrap) derive
+`$LOADOUT_CFG_SHARED_PREFIX/share/cargo/registry-store` (or
+`$HOME/.local/...`) per-invocation -- proven with a fake-cargo arg capture
+for both layouts. Remedy for the stale box: reinstall env-cargo. No code
+changed. (Also confirmed ADDING_BINARIES already documents the stock-config
+design, and no work-side literal exists in-tree.)
+
+#2 (RECOMMENDED, crate coverage): wide/lexical-core/axum were absent from
+the 2740-crate store (axum sat in the seed list's REMOVED block, whose own
+comment anticipates pull-backs). Added as unpinned seeds, rebuilt the store
+via build-tool-crate-store.sh: 2776 crates incl. axum 0.8.9,
+lexical-core 1.0.6, wide 1.7.0. Build note: `cargo install
+cargo-local-registry` cannot compile on EL8 (vendored curl-sys needs
+OpenSSL 3+) -- installed the plugin on the CachyOS host and ran the
+(all-download, arch-independent) store build there; tar/bzip2 bytes
+canonicalized by container strip-all as usual. Re-pinned honestly:
+verify-crate-store lock re-emitted, crate-store.toml artifacts/count/yara
+re-pinned, malware scan CLEAN over the new parts (YARA 20260830 + ClamAV),
+rust-offline-almalinux8 green on the new store, plus a targeted offline
+resolve+build of all three new crates (61 packages locked, axum compiled).
+TEXT-SERDES/TIME-PLOT zero-coverage warnings are pre-existing (submodule
+path-deps, catalogue #14).
 
 ## 2026-09-04 batch: GTK3 launcher batch + tk land (UNRELEASED, in tree)
 

@@ -126,6 +126,7 @@ run_test "valgrind-smoke" tests/valgrind-smoke
 run_test "install-env-st" tests/install-env-st
 run_test "install-env-tcsh" tests/install-env-tcsh
 run_test "install-env-zsh" tests/install-env-zsh
+run_test "install-readonly-source" "$PY" tests/install-readonly-source
 run_test "optional-packages" tests/optional-packages
 run_test "install-parity-plot" tests/install-parity-plot
 run_test "install-python-tool-upgrade" tests/install-python-tool-upgrade

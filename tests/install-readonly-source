@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""
+install-readonly-source -- read-only install sources must not break @envs.
+
+A shared/near-native deployment can mark its published trees immutable
+(chmod -R a-w). @envs copies config with shutil.copy2 (mode-preserving),
+so installed files inherit read-only modes -- and every later in-place edit
+(shared-prefix bake, relocation tokens) died with PermissionError, failing
+the phase. The installer must never assume its own freshly-installed target
+files are writable.
+
+Covers, against small synthetic trees (no payload, no network):
+- _copy_tree_item grants owner-write on the destination copy.
+- _rewrite_shared_prefix_line bakes through a read-only destination,
+  atomically, preserving the source mode bits (+u+w), for bash and tcsh.
+- the helix languages.toml relocation survives a read-only destination.
+
+Must run under the bundled Python 3.14 (loadout_main.py uses PEP 758
+syntax that older interpreters cannot parse). Exits 0/1.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import stat
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+BASH_CFG = "export LOADOUT_CFG_SHARED_PREFIX=\nexport FOO=1\n"
+TCSH_CFG = "if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX \nset foo = 1\n"
+
+
+def main():
+    mod = load_loadout()
+    tmp = tempfile.mkdtemp(prefix="loadout-readonly-src.")
+    try:
+        # --- _copy_tree_item: destination gains owner-write -----------------
+        srcdir = os.path.join(tmp, "src")
+        os.makedirs(srcdir)
+        src = os.path.join(srcdir, "config.sh")
+        with open(src, "w") as f:
+            f.write(BASH_CFG)
+        os.chmod(src, 0o444)
+        dest = os.path.join(tmp, "dst", "config.sh")
+        mod._copy_tree_item(src, dest)
+        check("copy2 from read-only source lands", os.path.isfile(dest))
+        check(
+            "destination copy is owner-writable",
+            bool(os.stat(dest).st_mode & stat.S_IWUSR),
+            oct(os.stat(dest).st_mode),
+        )
+        check(
+            "destination copy preserves group/other bits",
+            stat.S_IMODE(os.stat(dest).st_mode) == 0o644,
+            oct(stat.S_IMODE(os.stat(dest).st_mode)),
+        )
+        with open(dest, "w") as f:
+            f.write("rewrite works\n")
+
+        # --- prefix bake through read-only destinations, both shells --------
+        home = os.path.join(tmp, "home")
+        bash_cfg = os.path.join(home, ".config", "bash", "global", "config.sh")
+        tcsh_cfg = os.path.join(home, ".config", "tcsh", "global", "config.csh")
+        os.makedirs(os.path.dirname(bash_cfg))
+        os.makedirs(os.path.dirname(tcsh_cfg))
+        with open(bash_cfg, "w") as f:
+            f.write(BASH_CFG)
+        with open(tcsh_cfg, "w") as f:
+            f.write(TCSH_CFG)
+        os.chmod(bash_cfg, 0o444)
+        os.chmod(tcsh_cfg, 0o444)
+        os.environ["LOADOUT_CFG_SHARED_PREFIX"] = "/opt/shared/local"
+        try:
+            mod._mirror_shared_prefix(home, ("bash", "tcsh"))
+        finally:
+            del os.environ["LOADOUT_CFG_SHARED_PREFIX"]
+        with open(bash_cfg) as f:
+            baked_bash = f.read()
+        with open(tcsh_cfg) as f:
+            baked_tcsh = f.read()
+        check(
+            "bash prefix baked through read-only dest",
+            "export LOADOUT_CFG_SHARED_PREFIX=/opt/shared/local" in baked_bash,
+            baked_bash[:120],
+        )
+        check(
+            "tcsh prefix baked through read-only dest",
+            'setenv LOADOUT_CFG_SHARED_PREFIX "/opt/shared/local"' in baked_tcsh,
+            baked_tcsh[:160],
+        )
+        check(
+            "bake preserves source mode +u+w (bash)",
+            stat.S_IMODE(os.stat(bash_cfg).st_mode) == 0o644,
+            oct(stat.S_IMODE(os.stat(bash_cfg).st_mode)),
+        )
+        check(
+            "bake preserves source mode +u+w (tcsh)",
+            stat.S_IMODE(os.stat(tcsh_cfg).st_mode) == 0o644,
+            oct(stat.S_IMODE(os.stat(tcsh_cfg).st_mode)),
+        )
+        check(
+            "no temp files left behind (bash)",
+            not [p for p in os.listdir(os.path.dirname(bash_cfg)) if p.startswith(".loadout-cfg.")],
+        )
+
+        # --- helix relocation through a read-only destination ---------------
+        helix = os.path.join(home, ".config", "helix", "languages.toml")
+        os.makedirs(os.path.dirname(helix))
+        with open(helix, "w") as f:
+            f.write('program = "/__LOADOUT_RELOC_ROOT__/bin/tool"\n')
+        os.chmod(helix, 0o444)
+        os.environ["LOADOUT_CFG_SHARED_PREFIX"] = "/opt/shared/local"
+        try:
+            mod._relocate_helix_languages(home)
+        finally:
+            del os.environ["LOADOUT_CFG_SHARED_PREFIX"]
+        with open(helix) as f:
+            helix_text = f.read()
+        check(
+            "helix relocation survives read-only dest",
+            "/opt/shared/local/bin/tool" in helix_text,
+            helix_text[:120],
+        )
+    finally:
+        import shutil
+
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -8,10 +8,16 @@
 # No versions here on purpose: the resolver picks the latest compatible set.
 # To pin a crate, append `=X.Y` (e.g. `base64=0.21`) -- parsed by the build script.
 # Offline additions (TUI/tables/serde formats/time): tabled, comfy-table, ron, postcard, time, bytesize, tui-textarea
+# Enhancement field request: wide (SIMD), lexical-core (number formatting),
+# axum (web framework; re-added from REMOVED below -- its hyper/tokio/tower
+# deps already ride in via tool closures, and the block anticipates pull-backs)
 
 serde
 serde_json
 thiserror
+wide
+lexical-core
+axum
 rand
 clap
 tokio

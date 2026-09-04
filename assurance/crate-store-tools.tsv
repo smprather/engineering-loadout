@@ -3,7 +3,7 @@
 # failure). The build still exits 0 in that case, so this file is the record that
 # makes it visible. Gated by: build/verify-crate-store --check-coverage
 # Format: <name>\t<crates>.  00-seeds is the curated user closure, not a tool.
-00-seeds	748
+00-seeds	763
 bat	256
 delta	276
 eza	215
