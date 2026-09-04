@@ -4,12 +4,18 @@
 # Produces:
 #   payload/el8.x86_64.glibc2p28/bin/wish.bz2
 #   payload/el8.x86_64.glibc2p28/lib64/libtcl9tk9.0.so.bz2
+#   payload/el8.x86_64.glibc2p28/runtime/tk.tar.bz2 (lib/tk9.0 script tree)
 #
 # Tcl must already be built by build-tcl.sh so tclConfig.sh, tcl.h, and
 # libtcl9.0.so exist under /tmp/loadout-tcl-instdir-<version>.
 #
-# NOTE: Tk 9.x embeds its script library in libtcl9tk9.0.so via zipfs.
-# Do not strip the shared library after build/patchelf.
+# NOTE: Tk 9.x embeds its script library in libtcl9tk9.0.so via zipfs, but
+# the embedded copy does NOT survive post-link patchelf (the zip
+# central-directory offset goes stale, zipfs fails to mount, and wish dies
+# with "Can't find a usable tk.tcl" -- broken on every host, EL8 included).
+# So the .so ships un-patchelf'd AND the script tree ships explicitly as
+# lib/tk9.0 (untarred from the intact embedded zip if needed, normally just
+# `make install`'s lib/tk9.0). Do not strip the shared library either.
 #
 # Usage (run from any directory):
 #   ./build/build-tk.sh --tag core-9-0-3
@@ -19,6 +25,7 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
+RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
 TAG=""
 
@@ -137,9 +144,19 @@ bzip2 -kf "$WORK_BIN"
 cp "${WORK_BIN}.bz2" "$BIN_DIR/wish.bz2"
 
 echo "==> Packaging shared library ..."
+# NEVER patchelf/strip this library: Tk 9.x appends its script library as a
+# zipfs zip whose central-directory offset is absolute from file start -- ANY
+# post-link rewrite (even an RPATH-only patchelf) shifts bytes and the offset
+# goes stale, so zipfs silently fails to mount and wish dies with "Can't find
+# a usable tk.tcl" on hosts without a system tk9. No RPATH is needed: wish
+# links this lib directly, so wish's own $ORIGIN/../lib64 RUNPATH resolves
+# whatever it needs. Guard below fails the build if an RPATH ever reappears.
 WORK_LIB="$WORK_DIR/${TKLIB_NAME}"
 cp "$TKLIB" "$WORK_LIB"
-"$PATCHELF" --set-rpath '$ORIGIN' "$WORK_LIB"
+if readelf -d "$WORK_LIB" | grep -qE 'RPATH|RUNPATH'; then
+    echo "ERROR: ${TKLIB_NAME} carries RPATH/RUNPATH -- zipfs offset would break" >&2
+    exit 1
+fi
 bzip2 -kf "$WORK_LIB"
 cp "${WORK_LIB}.bz2" "$LIB_DIR/${TKLIB_NAME}.bz2"
 
@@ -171,6 +188,15 @@ with open(path, 'w') as f:
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION" "$TKLIB_NAME"
 
+echo "==> Packaging Tk script tree (lib/tk9.0 file tree, not zipfs) ..."
+# make install already materialized $TK_INST_DIR/lib/tk9.0 -- tar it as the
+# package runtime so wish finds tk.tcl without depending on the embedded
+# zipfs copy (see NOTE at the top of this script).
+[ -f "$TK_INST_DIR/lib/tk9.0/tk.tcl" ] || {
+    echo "ERROR: $TK_INST_DIR/lib/tk9.0/tk.tcl missing" >&2; exit 1; }
+tar cjf "$RUNTIME_DIR/tk.tar.bz2" -C "$TK_INST_DIR" ./lib/tk9.0
+echo "  runtime/tk.tar.bz2 ($(du -h "$RUNTIME_DIR/tk.tar.bz2" | cut -f1))"
+
 echo "==> Running strip-all-elf-binaries ..."
 "$REPO/build/strip-all-elf-binaries"
 
@@ -180,4 +206,4 @@ echo ""
 echo "Produced:"
 echo "  $BIN_DIR/wish.bz2"
 echo "  $LIB_DIR/${TKLIB_NAME}.bz2"
-echo "  (No runtime archive -- Tk 9.x script library is embedded in ${TKLIB_NAME} via zipfs)"
+echo "  $RUNTIME_DIR/tk.tar.bz2"

@@ -170,6 +170,7 @@ PROBE_FLAGS = {
     # and exits 0. These are the binaries that used to score green off
     # `*** Could not open '--version'` (exit 255).
     "rtlbrowse": [[]],
+    "rtlbrowse.bin": [[]],
     "shmidcat": [[]],
     # yosys-abc is ABC with its own CLI -- it takes `-c <cmd>`/`-q <cmd>` and
     # rejects `--version`/`--help` with "unknown option". Running the `quit`
@@ -207,6 +208,7 @@ DISPLAY_REFUSALS = (
 EXPECT_NONZERO = {
     # --- GUI clients: loaded fine, refusing for want of a display ----------
     "twinwave": ([], 255, DISPLAY_REFUSALS, "GTK viewer launcher; needs a display"),
+    "twinwave.bin": ([], 255, DISPLAY_REFUSALS, "GTK viewer ELF; needs a display"),
     "meld": (["--version"], 1, DISPLAY_REFUSALS, "GTK diff viewer; needs a display"),
     "tkdiff": (["--version"], 1, DISPLAY_REFUSALS, "Tk diff viewer; needs a display"),
     "open-wezterm-here": (["--version"], 1, DISPLAY_REFUSALS, "wezterm-gui helper; needs a display"),
@@ -749,6 +751,18 @@ def smoke_runtime_layout(tmpdir, env):
                 failures.append(("ngspice runtime", detail))
             else:
                 print("  OK   (xspice):       ngspice runtime")
+
+    if has_bin("wish"):
+        # wish starts (and `wish --version` exits 0) even with no script
+        # library -- it dies only when something is required. The payload
+        # carries lib/tk9.0 explicitly because the zipfs copy embedded in
+        # libtcl9tk9.0.so does not survive post-link patchelf; assert the
+        # tree the interpreter actually falls back to.
+        require_path(
+            os.path.join(tmpdir, "local", "lib", "tk9.0", "tk.tcl"),
+            "tk script library",
+            failures,
+        )
 
     if has_bin("taplo"):
         # `taplo --version` is a real exit-0 banner, so the generic probe cannot

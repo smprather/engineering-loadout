@@ -13,14 +13,16 @@
 # GTK4 rewrite (gtkwave 4.x): it has NO stable tag (nightly only), and GTK4 is
 # not in gui_libs, so it is out of scope under the stable-release policy.
 #
-# NO WRAPPER, BY VERIFICATION: unlike ngspice/gvim/st, no GTKWave binary embeds
-# its configure prefix -- `share/gtkwave-gtk3/` holds only the manual and
-# examples, the .desktop file uses a bare `Exec=gtkwave`, and `twinwave` finds
-# gtkwave with execvp() from PATH. So the ELFs are shipped directly with RPATH
-# $ORIGIN/../lib64 and no launcher is needed. That is an INVARIANT this script
-# enforces (see "Verifying no binary embeds the build prefix" below): if a
-# future release starts baking in the prefix, the build fails loudly rather
-# than silently shipping binaries that look for /tmp/gtkwave-install-*.
+# GUI LAUNCHERS (env adaptation only): the three interactive frontends
+# (gtkwave, twinwave, rtlbrowse) ship as sh launchers over sibling .bin
+# ELFs. The launchers embed NO paths (everything derives from $0) -- the
+# no-prefix invariant below still holds and is still enforced; what changed
+# is that newer hosts need env adaptation the ELFs cannot do themselves.
+# Each launcher inlines two shared blocks (installed wrappers stay
+# self-contained): build/gui-wrapper-env.sh (host-GL probe + host-fontconfig
+# preload) and build/gtk3-launcher-env.sh (Wayland-session GDK_BACKEND=x11 +
+# GIO module suppression -- EL8-era gdk aborts on newer GNOME otherwise).
+# EL8/X11 sessions take neither branch. The 13 converters stay bare ELFs.
 #
 # KNOWN LIMITATION -- Tcl scripting is disabled (--disable-tcl). GTKWave's Tcl
 # layer (`gtkwave -S script.tcl`, the `gtkwave::` command set) would link
@@ -225,8 +227,9 @@ done
 echo "  OK: $NUM_BINS binaries, no drift"
 
 echo "==> Verifying no binary embeds the build prefix ..."
-# This is what makes the no-wrapper packaging valid. Do not weaken it: if it
-# fires, GTKWave needs a prefix-deriving launcher (see build/ngspice/ngspice).
+# The launchers below embed no paths (everything derives from $0), so this
+# invariant still holds and is still enforced: if it fires, a binary (not a
+# launcher) needs a prefix-deriving wrapper (see build/ngspice/ngspice).
 PREFIX_HITS=0
 for f in "$INST_DIR"/bin/*; do
     if strings -a "$f" | grep -qF "$INST_DIR"; then
@@ -241,8 +244,8 @@ if grep -rlF "$INST_DIR" "$INST_DIR/share" >/dev/null 2>&1; then
 fi
 if [ "$PREFIX_HITS" -ne 0 ]; then
     echo "ERROR: $PREFIX_HITS artifact(s) embed the build prefix." >&2
-    echo "GTKWave is packaged WITHOUT a wrapper because nothing embeds it." >&2
-    echo "That is no longer true -- add a prefix-deriving wrapper before shipping." >&2
+    echo "Only the sh launchers may ship without embedded paths -- a binary" >&2
+    echo "hitting this needs a prefix-deriving wrapper before shipping." >&2
     exit 1
 fi
 echo "  OK: nothing embeds $INST_DIR -- binaries are relocatable as-is"
@@ -339,17 +342,50 @@ echo "$GW_VER" | grep -qF "v$VERSION" || {
 echo "==> Packaging binaries ..."
 # Stage in a dedicated dir: $WORK_DIR itself holds the clone, whose top-level
 # directory is also named "gtkwave" and would shadow the binary of that name.
+# The three GUI frontends ship wrapper-split (launcher + .bin ELF); the
+# converters stay bare ELFs.
+GUI_WRAPPED="gtkwave twinwave rtlbrowse"
 PKG_DIR="$WORK_DIR/pkg"
 mkdir -p "$PKG_DIR"
-for b in $EXPECTED_BINS; do
-    cp "$INST_DIR/bin/$b" "$PKG_DIR/$b"
-    strip "$PKG_DIR/$b"
-    # shellcheck disable=SC2016  # $ORIGIN is a literal ld.so token
-    "$PATCHELF" --set-rpath '$ORIGIN/../lib64' "$PKG_DIR/$b"
-    bzip2 -kf "$PKG_DIR/$b"
-    cp "$PKG_DIR/$b.bz2" "$BIN_DIR/$b.bz2"
+# Launcher composition (single source of truth per block; installed wrappers
+# stay self-contained sh): header derives the install prefix from $0, then
+# the shared GUI env block, then the shared GTK3 block, then exec.
+GUI_ENV_BLOCK="$REPO/build/gui-wrapper-env.sh"
+GTK_ENV_BLOCK="$REPO/build/gtk3-launcher-env.sh"
+[ -r "$GUI_ENV_BLOCK" ] || { echo "ERROR: missing $GUI_ENV_BLOCK" >&2; exit 1; }
+[ -r "$GTK_ENV_BLOCK" ] || { echo "ERROR: missing $GTK_ENV_BLOCK" >&2; exit 1; }
+for b in $GUI_WRAPPED; do
+    {
+        printf '#!/bin/sh\n# loadout %s launcher -- env adaptation ONLY (no prefix embedded;\n' "$b"
+        printf '# the real binary is the sibling .bin and carries no build prefix).\n'
+        printf '# Composed of: prefix header + build/gui-wrapper-env.sh +\n'
+        printf '# build/gtk3-launcher-env.sh -- see those files for what each fixes.\n'
+        printf 'here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)\n'
+        printf 'prefix=$(CDPATH= cd -- "$here/.." && pwd -P)\n'
+        cat "$GUI_ENV_BLOCK" "$GTK_ENV_BLOCK"
+        printf 'exec "$here/%s.bin" "$@"\n' "$b"
+    } > "$PKG_DIR/$b.launcher"
 done
-echo "  Wrote $NUM_BINS *.bz2 to $BIN_DIR"
+for b in $EXPECTED_BINS; do
+    cp "$INST_DIR/bin/$b" "$PKG_DIR/$b.bin"
+    strip "$PKG_DIR/$b.bin"
+    # shellcheck disable=SC2016  # $ORIGIN is a literal ld.so token
+    "$PATCHELF" --set-rpath '$ORIGIN/../lib64' "$PKG_DIR/$b.bin"
+    case " $GUI_WRAPPED " in
+        *" $b "*)
+            cp "$PKG_DIR/$b.launcher" "$PKG_DIR/$b"
+            chmod 755 "$PKG_DIR/$b"
+            bzip2 -kf "$PKG_DIR/$b" "$PKG_DIR/$b.bin"
+            cp "$PKG_DIR/$b.bz2" "$BIN_DIR/$b.bz2"
+            cp "$PKG_DIR/$b.bin.bz2" "$BIN_DIR/$b.bin.bz2"
+            ;;
+        *)
+            bzip2 -kf "$PKG_DIR/$b.bin"
+            cp "$PKG_DIR/$b.bin.bz2" "$BIN_DIR/$b.bz2"
+            ;;
+    esac
+done
+echo "  Wrote $NUM_BINS tools to $BIN_DIR (3 GUI frontends wrapper-split)"
 
 echo "==> Packaging gtkwave runtime (examples, man pages, desktop/mime/icons) ..."
 # gtkwave.odt is the 1.7 MB ODT user manual -- excluded, like octave's doc
@@ -392,6 +428,7 @@ echo "Done."
 echo ""
 echo "Produced:"
 for b in $EXPECTED_BINS; do echo "  $BIN_DIR/$b.bz2"; done
+for b in $GUI_WRAPPED; do echo "  $BIN_DIR/$b.bin.bz2"; done
 echo "  $RUNTIME_DIR/gtkwave.tar.bz2"
 echo ""
 echo "Reminders:"

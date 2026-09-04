@@ -1,11 +1,43 @@
 # Current Handoff
 
-Last updated: 2026-09-03 (v2026.09.03 RELEASED). `v2026.09.03` is
+Last updated: 2026-09-04 (GTK3 launcher batch + tk land -- UNRELEASED). `v2026.09.03` is
 published and verified: signed tag good (ED25519), `origin/main ==
 v2026.09.03^{commit}` (`65986ef`), `isDraft=false`, all three release
 assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
 published sha256sums.txt. `v2026.08.28` notes retained below for history.
+
+## 2026-09-04 batch: GTK3 launcher batch + tk land (UNRELEASED, in tree)
+
+Native-@all survey (335 exes, CachyOS): ZERO loader gaps, ZERO signals.
+Four clusters, two landed here:
+
+(a) GTK3 abort on Wayland sessions (gtkwave/twinwave/gvim/mate-terminal):
+bundled gdk-3 reads xsettings over GSettings on the Wayland path, newer
+GNOME dropped the `antialiasing' key -> GLib-GIO-ERROR abort (133), even
+`--version`. New shared `build/gtk3-launcher-env.sh` (GDK_BACKEND=x11 +
+GIO suppression, Wayland+XWayland gated, explicit env always wins, EL8/X11
+takes neither branch), composed with gui-wrapper-env (GL probe + fontconfig
+preload) into: gtkwave/twinwave/rtlbrowse (recipe-generated wrapper-split,
+.bin ELFs byte-identical), gvim (new `build/gvim-launcher.sh` source),
+mate-terminal (new `build/mate-terminal/mate-terminal-launcher.sh` source,
+re-tarred runtime). Proof: 3 live windows on :0, 0 aborts, FST roundtrip
+191k lines. Registry: gtkwave bins += 3 .bin; smoke gains twinwave.bin /
+rtlbrowse.bin entries + tk lib/tk9.0/tk.tcl sentinel. Gates: T1 clean
+(except zsh typeahead WIP), host smoke 324 OK, container --full 303 OK.
+
+(b) wish/tkdiff dead EVERYWHERE (zipfs): build-tk patchelfs the zipfs lib
+-> central offset stale -> "Can't find a usable tk.tcl". Fix: file tree
+`lib/tk9.0` (untarred from the intact embedded zip) ships as new
+`runtime/tk.tar.bz2` (registry archive+sentinel+remove_before_extract);
+recipe drops the lib patchelf (guard fails on RPATH) + emits the tree tar.
+Proof: Tk 9.0.3 require clean in a bare dest tree, TkDiff windows render.
+Side effect: container tcl rebuild refreshed libtcl9.0.so.bz2
+(container-canonical, tclsh zipfs verified). OPEN: full tk rebuild is
+blocked -- tk 9.0.3 compile fails with unknown-type Tcl_Size against the
+fresh tcl build-tree headers (configure used the build-tree tclConfig, not
+the installed one); shipped libtcl9tk9.0.so untouched. Meld (py3.6) and the
+fontconfig-theme cosmetics remain host-contract/future.
 
 The 2026-08-24 through 2026-08-28 batches below are included in `v2026.08.28`.
 

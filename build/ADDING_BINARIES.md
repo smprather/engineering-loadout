@@ -3077,15 +3077,16 @@ dnf install gtk3-devel glib2-devel bzip2-devel xz-devel zlib-devel gperf flex bi
 - Install prefix is **version-scoped** (`/tmp/gtkwave-install-<VERSION>`) so
   successive builds cannot contaminate each other, as with octave.
 
-**NO WRAPPER -- and that is verified, not assumed.** Unlike ngspice/gvim/st/fish,
-**nothing** in the GTKWave install embeds the configure prefix: `share/gtkwave-gtk3/`
-holds only the ODT manual and examples, the `.desktop` file uses a bare
-`Exec=gtkwave`, and `twinwave` locates gtkwave with `execvp()` from `PATH`. So the
-ELFs ship directly (strip -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> bzip2) with
-no launcher. The build script **enforces this as an invariant**: it greps every
-installed binary and every file under `share/` for the prefix and hard-fails if any
-hit appears. If that guard ever fires, GTKWave needs a prefix-deriving wrapper
-(model: `build/ngspice/ngspice`) -- do not weaken the guard instead.
+**GUI launchers (env-only, no prefix).** The 3 interactive frontends
+(gtkwave/twinwave/rtlbrowse) ship as sh launchers over sibling .bin ELFs;
+nothing embeds the configure prefix (the prefix-grep guard still enforces
+this). The launchers exist for newer-host env adaptation, not relocation:
+EL8-era gdk-3 aborts on Wayland sessions of newer GNOME (xsettings
+`antialiasing' key gone), so a Wayland+XWayland session forces
+`GDK_BACKEND=x11` plus GIO module suppression, composed from the shared
+`build/gui-wrapper-env.sh` + `build/gtk3-launcher-env.sh` blocks (same
+composition now also covers gvim and mate-terminal). EL8/X11 takes neither
+branch. The 13 converters stay bare ELFs.
 
 **Binary set is pinned, not globbed.** `EXPECTED_BINS` lists all 16; the script fails
 if upstream drops one *or* installs one not on the list, so a tool-set change is a

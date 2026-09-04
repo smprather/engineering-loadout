@@ -69,9 +69,10 @@ sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  payloa
 sha256  b8f93f9c06449bc7d595bd56f280769747c3457ae6ac0b921d1098c8b7a48454  payload/el8.x86_64.glibc2p28/bin/gopls.bz2
 sha256  4420caa461b042bb4c35bfc8d7580256479098c273a3f35b19edc33e6ac36ed6  payload/el8.x86_64.glibc2p28/bin/gping.bz2
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  payload/el8.x86_64.glibc2p28/bin/groups.bz2
-sha256  a546e160cd55c973206eeba619137b8441a914d6e50b0fa25caed3c87975c445  payload/el8.x86_64.glibc2p28/bin/gtkwave.bz2
+sha256  a546e160cd55c973206eeba619137b8441a914d6e50b0fa25caed3c87975c445  payload/el8.x86_64.glibc2p28/bin/gtkwave.bin.bz2
+sha256  d8000855e6eb9976689e96054bf26d9b6b31cfc24a6c9c0bdef0ea4da4a641b1  payload/el8.x86_64.glibc2p28/bin/gtkwave.bz2
 sha256  ca6d20e0dd178aa6275d5e246b88141b3b66f46e7617f20ed78964542fa612ec  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
-sha256  34b84a2d85fcbf841318c7b84857d968f0b02eefd0339a2abcf9662836558fee  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
+sha256  8874dd4e7d059973fffca7ce9288371ff437b58d4a029b24a3ea409622292fd5  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  payload/el8.x86_64.glibc2p28/bin/head.bz2
 sha256  b6d3e27839f4f7d17d30978e89b855331b632ab2bec6ca2607690ba492770d7f  payload/el8.x86_64.glibc2p28/bin/htop.bz2
 sha256  05c876e9c6a8f3cab63c0bbd4210d0c72e9376ce00f29086f35176aff36064c0  payload/el8.x86_64.glibc2p28/bin/hx.bin.bz2
@@ -160,7 +161,8 @@ sha256  81c5720b805adc7b2b5088c0c181e42d7f673bd8338e3eccba6e3bf930f4035e  payloa
 sha256  1891555602914f1583e3157c84cb0356aa3fd211134fc90cdf5db13d0ffb2f56  payload/el8.x86_64.glibc2p28/bin/rm.bz2
 sha256  34826810504c35ae76248e0e79495df8ff4b2f2191b8130fcd8aba8749b86726  payload/el8.x86_64.glibc2p28/bin/rmdir.bz2
 sha256  b16a9dbeb767b1b6e285205a498faa97400f0028f522f5e21bd7ff66b4e6598d  payload/el8.x86_64.glibc2p28/bin/rsync.bz2
-sha256  59386f8e44dc700a2b9dd57f0542bcb8e4679c2862af6fbd698eb2bb48907cb7  payload/el8.x86_64.glibc2p28/bin/rtlbrowse.bz2
+sha256  59386f8e44dc700a2b9dd57f0542bcb8e4679c2862af6fbd698eb2bb48907cb7  payload/el8.x86_64.glibc2p28/bin/rtlbrowse.bin.bz2
+sha256  4f343715ec724474d6d21ed7bd4be5b8b0ef3ace280d5ec53b720e8fcdf891f3  payload/el8.x86_64.glibc2p28/bin/rtlbrowse.bz2
 sha256  3aca0955fdf5800508d69888e67314159799927d355b5fa25166ea4717c4fd5f  payload/el8.x86_64.glibc2p28/bin/ruby.bin.bz2
 sha256  ecd1ac6aba18ff8dc55ed15b3d332bb0f36698bfa7c556e9ab21092c7fcee5d3  payload/el8.x86_64.glibc2p28/bin/ruby.bz2
 sha256  95b79a1b36bf7239a0bb463384457fe1ab8dbd3778e2265922e2b699ca0b6adf  payload/el8.x86_64.glibc2p28/bin/ruff.bz2
@@ -223,7 +225,8 @@ sha256  518ea53d89593a42e135d08ad5f8e2e21f19b4f0121af62466acb139f43050b5  payloa
 sha256  b6e03a4ad5884474396246fed62c8b9d24f75bce1a1d7be01a1b5fb47523c25f  payload/el8.x86_64.glibc2p28/bin/truncate.bz2
 sha256  0071ab0a9f06e47046ff807b4cab3b0b6493ea35eada14f20bf157027ac179e1  payload/el8.x86_64.glibc2p28/bin/tsort.bz2
 sha256  da7d1cd8c8213f1f2fecd74bf77b389a9af00a69d258ebdf5b1661adf593162f  payload/el8.x86_64.glibc2p28/bin/tty.bz2
-sha256  18264a5d0f8157ad524a39be9e92f074d91a687de16c769e91a896c8b80ad0bf  payload/el8.x86_64.glibc2p28/bin/twinwave.bz2
+sha256  18264a5d0f8157ad524a39be9e92f074d91a687de16c769e91a896c8b80ad0bf  payload/el8.x86_64.glibc2p28/bin/twinwave.bin.bz2
+sha256  0e9687a5f2d497cd673bd61330c2baa44f6847ec502005c942131ed886a7f284  payload/el8.x86_64.glibc2p28/bin/twinwave.bz2
 sha256  4b636a6625c7fedb57e8f5b57a87ddb58ded6395fd47cca08a3a7c88d3f1a4d7  payload/el8.x86_64.glibc2p28/bin/ty.bz2
 sha256  50057ac6b1bc300c3f583ee00dd7de0a68a5c3c4cfc3644a3a36c18a9b8f75f4  payload/el8.x86_64.glibc2p28/bin/uname.bz2
 sha256  e78e24b7ca307e5371d925aad486be6fe23467b08046c64f077ecacbc704bc1f  payload/el8.x86_64.glibc2p28/bin/unexpand.bz2
@@ -412,7 +415,7 @@ sha256  ebaa74c68f7b9baaf4c7546477cfd52c2c889a9b2e3f6bf100a9af478483c1d3  payloa
 sha256  9ed021dd73fd1639e1d777898a9c92700b606956f7055a9317b537ad1a4492d0  payload/el8.x86_64.glibc2p28/lib64/libsz.so.2.bz2
 sha256  5843e40f9553208fc7c3602b4ade7c361acaf3c255e9f8b0d5722ba52b48c82a  payload/el8.x86_64.glibc2p28/lib64/libtbb.so.2.bz2
 sha256  a88d0e847c3e88edcbcb6b0362129a1a5e51f4fd785f07bd7662caa0147057a4  payload/el8.x86_64.glibc2p28/lib64/libtcl8.6.so.bz2
-sha256  a8e08754de4911f1a453d697d3469525bc43b14c19620206a97f8ea4b5558245  payload/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2
+sha256  01975380757004609d185f285ecfbf9ba38ae3f0cac94054a1f2beefcb462a44  payload/el8.x86_64.glibc2p28/lib64/libtcl9.0.so.bz2
 sha256  34cd9b16fea31573d0f95a8be78fc1beb9e93e489ce529882a214beaa165f725  payload/el8.x86_64.glibc2p28/lib64/libtcl9tk9.0.so.bz2
 sha256  59480c07c06f6a1cb9841488d309cc7c49f39e21ffed748d2ce45da5ab85b8c8  payload/el8.x86_64.glibc2p28/lib64/libthai.so.0.bz2
 sha256  84df7354337f97d6bb1ff5e71cdd21f81fb82026b51ce1c8136922d8b85867af  payload/el8.x86_64.glibc2p28/lib64/libtiff.so.5.bz2
@@ -460,7 +463,7 @@ tar-meta  20725924  1786646654  payload/el8.x86_64.glibc2p28/runtime/helix.tar.b
 tar-meta  1891503  1786420088  payload/el8.x86_64.glibc2p28/runtime/iverilog.tar.bz2
 tar-meta  41943040  1785957836  payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2.part-000
 tar-meta  3021429  1786294907  payload/el8.x86_64.glibc2p28/runtime/lua-language-server.tar.bz2
-tar-meta  169618  1784306281  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
+tar-meta  172673  1788504118  payload/el8.x86_64.glibc2p28/runtime/mate-terminal.tar.bz2
 tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
@@ -472,6 +475,7 @@ tar-meta  3082228  1787409797  payload/el8.x86_64.glibc2p28/runtime/pyright.tar.
 tar-meta  3992335  1788465896  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  3346  1784306302  payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2
 tar-meta  396800  1786927647  payload/el8.x86_64.glibc2p28/runtime/taplo-schemas.tar.bz2
+tar-meta  220613  1788497849  payload/el8.x86_64.glibc2p28/runtime/tk.tar.bz2
 tar-meta  3667901  1787846593  payload/el8.x86_64.glibc2p28/runtime/typescript-language-server.tar.bz2
 tar-meta  28387403  1787471355  payload/el8.x86_64.glibc2p28/runtime/valgrind.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
