@@ -11,9 +11,9 @@ For the install workflow and the prebuilt parser bundle see the top-level
 
 ## Layer Dispatcher
 
-`envs/nvim/init.lua` is a thin dispatcher. The six layers
-(`global → corp → site → team → project → user`) match the bash layer
-system — each layer overrides the previous without touching upstream files.
+`envs/nvim/init.lua` is a thin two-layer dispatcher (`global → user`). The
+global layer is managed by loadout; the user layer overrides it without
+touching upstream files.
 
 Phases (in order, see `init.lua`):
 
@@ -31,12 +31,12 @@ Phases (in order, see `init.lua`):
 ```
 ~/.config/nvim/lua/
   global/      ← repo-managed: config.lua, init.lua, plugins/, utils.lua
-  corp/        ← corporation overrides (user-created, not committed here)
-  site/        ← site overrides
-  team/        ← team overrides
-  project/     ← project overrides
   user/        ← personal overrides
 ```
+
+The retired `corp/`, `site/`, `team/`, and `project/` directories are preserved
+but not loaded. An install warns when one contains files so its desired content
+can be moved into `lua/user/`.
 
 ## Bundled Plugins
 

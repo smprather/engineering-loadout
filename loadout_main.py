@@ -199,7 +199,7 @@ FONT_EXCLUDES = (
 
 BASH_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
-NVIM_LAYERS = ("corp", "site", "team", "project", "user")
+NVIM_LAYERS = ("user",)
 
 # Repo-relative payload home: platform dirs, packages.json, fonts, tldr, yara,
 # crate-store, treesitter prebuilt/vendor, pending-daemon. Renamed from the
@@ -3775,7 +3775,7 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         for name in ("functions.sh", "README.md", "bashrc"):
             remove_if_exists(os.path.join(bash_config, name))
 
-    for rel in list(BASH_ENTRYPOINTS) + [
+    restore_targets = list(BASH_ENTRYPOINTS) + [
         ".vimrc",
         ".tmux.conf",
         ".editorconfig",
@@ -3786,7 +3786,14 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         ".config/editorconfig",
         ".config/starship",
         ".config/vim",
-    ]:
+    ]
+    # Snapshots created before the tmux global/user migration did not capture
+    # ~/.tmux.local.conf. Do not erase a current legacy file unless this
+    # snapshot can actually restore it. lexists() includes backed-up symlinks.
+    if os.path.lexists(os.path.join(backup_dir, ".tmux.local.conf")):
+        restore_targets.append(".tmux.local.conf")
+
+    for rel in restore_targets:
         path = os.path.join(home, rel)
         if os.path.exists(path) or os.path.islink(path):
             print(f"  Removing: {path}")
@@ -3867,6 +3874,7 @@ def backup_existing(home, repo_dir):
             ".vim",
             ".tmux",
             ".tmux.conf",
+            ".tmux.local.conf",
             ".editorconfig",
             ".config/vim",
             ".config/nvim",
@@ -3919,7 +3927,25 @@ def compress_backup(backup_dir):
 
 
 def _nvim_migration_notice(nvim_config):
-    """Warn if old lua/custom/plugins/init.lua has non-trivial content; otherwise remove it."""
+    """Report preserved config that the current global/user dispatcher will not load."""
+    lua_root = os.path.join(nvim_config, "lua")
+    retired_populated = []
+    for layer in ("corp", "site", "team", "project"):
+        layer_dir = os.path.join(lua_root, layer)
+        for root, dirs, files in os.walk(layer_dir):
+            if files or any(os.path.islink(os.path.join(root, name)) for name in dirs):
+                retired_populated.append(layer)
+                break
+    if retired_populated:
+        warn(
+            "Neovim no longer loads the retired layer(s) "
+            + ", ".join(retired_populated)
+            + "; files were preserved. Move desired overrides into "
+            "~/.config/nvim/lua/user/."
+        )
+
+    # The older custom/plugins path predates the layer dispatcher. Preserve
+    # non-trivial content and remove only the inert stock placeholder.
     custom = os.path.join(nvim_config, "lua", "custom")
     if not os.path.isdir(custom):
         return
@@ -4102,6 +4128,58 @@ def _install_env_vim(repo_dir, home):
     lns(".config/vim/vimrc", os.path.join(home, ".vimrc"), verbose=True)
 
 
+def _install_tmux_user_layer(repo_dir, home, tmux_config):
+    """Seed the user layer or safely offer migration from the legacy name."""
+    tmux_user = os.path.join(tmux_config, "tmux.user.conf")
+    tmux_legacy = os.path.join(home, ".tmux.local.conf")
+    user_exists = os.path.lexists(tmux_user)
+    legacy_exists = os.path.lexists(tmux_legacy)
+
+    if user_exists:
+        if not os.path.isfile(tmux_user):
+            detail = "~/.config/tmux/tmux.user.conf exists but is not a regular file tmux can load; it was preserved."
+            if legacy_exists:
+                detail += " The legacy ~/.tmux.local.conf fallback remains active if it is loadable."
+            warn(detail)
+            return
+        if legacy_exists:
+            warn(
+                "Both ~/.tmux.local.conf and ~/.config/tmux/tmux.user.conf exist; "
+                "neither was changed. Reconcile them manually; tmux.user.conf is active."
+            )
+        return
+
+    if not legacy_exists:
+        install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.user.conf"), tmux_user, False)
+        return
+
+    fallback = (
+        "Legacy ~/.tmux.local.conf was preserved; tmux will keep loading it until ~/.config/tmux/tmux.user.conf exists."
+    )
+    if os.path.islink(tmux_legacy):
+        warn("Legacy ~/.tmux.local.conf is a symlink, so it was not moved automatically. " + fallback)
+        return
+    if not os.path.isfile(tmux_legacy):
+        warn("Legacy ~/.tmux.local.conf is not a regular file, so it was not moved automatically. " + fallback)
+        return
+    if not sys.stdin.isatty():
+        warn(fallback)
+        return
+
+    print("Legacy tmux user config found at ~/.tmux.local.conf.\nThe new user layer is ~/.config/tmux/tmux.user.conf.")
+    try:
+        answer = input("Move it now [Y/n]: ").strip().lower()
+    except EOFError:
+        answer = "n"
+    if answer in ("", "y", "yes"):
+        require_writable_parent(tmux_legacy, "legacy tmux user config")
+        require_writable_parent(tmux_user, "tmux user layer")
+        shutil.move(tmux_legacy, tmux_user)
+        print("  Moved ~/.tmux.local.conf -> ~/.config/tmux/tmux.user.conf")
+    else:
+        warn(fallback)
+
+
 def _install_env_tmux(repo_dir, home):
     remove_if_exists(os.path.join(home, ".tmux.conf"))
     remove_if_exists(os.path.join(home, ".tmux"))
@@ -4115,6 +4193,12 @@ def _install_env_tmux(repo_dir, home):
         delete=True,
     )
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
+    install_path(
+        os.path.join(repo_dir, "envs", "tmux", "tmux.global.conf"),
+        os.path.join(tmux_config, "tmux.global.conf"),
+        False,
+    )
+    _install_tmux_user_layer(repo_dir, home, tmux_config)
     install_path(
         os.path.join(repo_dir, "envs", "tmux", "tmux-3col-layout.sh"),
         os.path.join(tmux_config, "tmux-3col-layout.sh"),

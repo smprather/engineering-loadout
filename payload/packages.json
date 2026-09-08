@@ -19,7 +19,7 @@
     "optional": "If true, the package is excluded from the 'all' / '@shared' / '@engineering-loadout' sweeps and installs only when named explicitly, via '@shared-all', or pulled by a group that lists it in members. This is the only gating field.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
     "extra_links": "List of {from, to} entries describing additional symlinks to create after the env is installed.",
-    "supports_layers": "For kind='env': layer names (corp/site/project/user) the env supports for user overrides.",
+    "supports_layers": "For kind='env': ordered layer names the environment supports (for example global/user or global/corp/site/team/project/user).",
     "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
     "bins": "List of bin/*.bz2 stems (without .bz2) owned by this package.",
     "libs": "List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools \u2014 those are always installed.",
@@ -2996,9 +2996,7 @@
       "source": "envs/nvim/",
       "install_to": "~/.config/nvim",
       "supports_layers": [
-        "corp",
-        "site",
-        "project",
+        "global",
         "user"
       ],
       "platforms": [
@@ -3008,7 +3006,7 @@
         "env",
         "editor"
       ],
-      "description": "Neovim layer dispatcher (lazy.nvim plugin specs + LSP configs across all layers)"
+      "description": "Neovim global/user layer dispatcher with lazy.nvim plugin specs and LSP configs"
     },
     "git-nvim": {
       "kind": "runtime",
@@ -3079,6 +3077,10 @@
           "to": "~/.tmux"
         }
       ],
+      "supports_layers": [
+        "global",
+        "user"
+      ],
       "platforms": [
         "linux"
       ],
@@ -3086,7 +3088,7 @@
         "env",
         "terminal"
       ],
-      "description": "tmux config + pop-in/pop-out helpers + bundled tpm/resurrect/continuum plugins"
+      "description": "tmux global/user config layers + pop-in/pop-out helpers + bundled tpm/resurrect/continuum plugins"
     },
     "env-helix": {
       "kind": "env",
