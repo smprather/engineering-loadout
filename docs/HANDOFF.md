@@ -13,6 +13,27 @@ assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
 published sha256sums.txt. `v2026.08.28` notes retained below for history.
 
+## 2026-09-05 batch: strace 7.2 + strace-ui (UNRELEASED, in tree)
+
+Option A from the strace_ui scoping (build-time opam/OxCaml, ship one
+native binary). `strace` 7.2 source-built (`build/build-strace.sh --tag
+7.2`, non-optional, in @shared): `--without-libunwind --without-libselinux`
+(EPEL-only / absent on newer distros -- the CachyOS ceiling gate caught
+libselinux loader-failing; both serve flags strace-ui never passes).
+`strace-ui` optional, depends [strace] (`build/build-strace-ui.sh --tag
+<b48e51a>`: no upstream tags so the commit IS the pin + OX_REPO_COMMIT pins
+the OxCaml repo; ~35 min, 264 opam pkgs build-time only; ships native
+main.exe 12.7MB bz2, NEEDED glibc+libstdc+++libgcc_s with GLIBCXX 3.4.21 in
+EL8's 3.4.25). Dockerfile absorbs opam 2.5.2 + autoconf 2.72 (/usr/local,
+distro 2.69 too old for oxcaml configure.ac) + rsync (compiler install dies
+127). `-version` = NO_VERSION_UTIL exit 0 (probe + farm-versions marker);
+render proven under winsize-set pty (0x0 paints nothing -- harness
+artifact). Gates: unit-resolver 64/64, registry-integrity 11/11, README
+table OK, optional-packages (new strace-ui section) green, Tier-3
+--full 304 OK, host @shared install + Arch ceiling (strace traces,
+farm-versions 7.2/NO_VERSION_UTIL) green. Full notes in
+build/ADDING_BINARIES.md (strace + strace-ui sections).
+
 ## 2026-09-04 batch: read-only install source fix (UNRELEASED, in tree)
 
 Implements enhancement-request-permissions-management.md (rewritten since

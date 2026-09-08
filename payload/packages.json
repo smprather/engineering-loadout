@@ -1280,6 +1280,44 @@
       ],
       "description": "Cross-shell customizable minimal prompt"
     },
+    "strace": {
+      "kind": "bin",
+      "bins": [
+        "strace"
+      ],
+      "version": "7.2",
+      "version_url": "https://github.com/strace/strace/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "debug",
+        "trace",
+        "core"
+      ],
+      "description": "System call tracer -- EL8 ships strace 5.18 (2022) with stale syscall tables; this bundles current upstream (built --without-libunwind: EPEL-only, -k unused)"
+    },
+    "strace-ui": {
+      "kind": "bin",
+      "bins": [
+        "strace-ui"
+      ],
+      "depends": [
+        "strace"
+      ],
+      "version": "b48e51a",
+      "pin_reason": "upstream has no tags (7 commits); commit hash IS the pin -- see build/build-strace-ui.sh OX_REPO_COMMIT for the matching OxCaml repo pin",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "debug",
+        "trace",
+        "tui"
+      ],
+      "optional": true,
+      "description": "Interactive TUI for strace output (Jane Street OxCaml/Bonsai_term) -- syscall browser with FD provenance tracking and struct hexdumps. Opt-in: install with ./loadout install strace-ui"
+    },
     "stylua": {
       "kind": "bin",
       "bins": [

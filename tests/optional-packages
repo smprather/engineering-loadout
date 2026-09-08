@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Smoke the optional packages no other gate ever probes: openssh, surfer,
-# cicwave. @shared excludes optional packages, so tests/prebuilt-binaries and
-# the Tier 3 container never see them (the rust trio has its own
-# tests/rust-offline-almalinux8).
+# cicwave, strace-ui. @shared excludes optional packages, so
+# tests/prebuilt-binaries and the Tier 3 container never see them (the rust
+# trio has its own tests/rust-offline-almalinux8).
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ env -i \
     HOME="$test_home" \
     PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
     LANG="${LANG:-C.UTF-8}" \
-    "$repo_dir/loadout" install -y openssh surfer cicwave --dest-dir "$dest_dir" --no-backup \
+    "$repo_dir/loadout" install -y openssh surfer cicwave strace-ui --dest-dir "$dest_dir" --no-backup \
     > "$test_home/install.log" 2>&1 || {
     tail -20 "$test_home/install.log" >&2
     fail "install exited non-zero"
@@ -66,5 +66,24 @@ cicwave_out=$("${probe_env[@]}" QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 \
     cicwave --help 2>&1) || fail "cicwave --help: ${cicwave_out:0:300}"
 grep -qiE 'usage|cicwave' <<< "$cicwave_out" || fail "unexpected cicwave output: ${cicwave_out:0:300}"
 echo "  OK: cicwave offscreen startup"
+
+# --- strace-ui: marker probe + dependency-cooperation smoke. Upstream has
+# no version string (-version prints NO_VERSION_UTIL, exit 0); the full TUI
+# render is proven at build time (build-strace-ui.sh pty smoke). Here prove
+# the installed pair cooperates: strace-ui resolves its hard dep strace,
+# and that strace traces a real syscall with the strace-ui flag set.
+echo "Smoke: strace-ui"
+[[ -x $local_prefix/bin/strace-ui ]] || fail "strace-ui not installed"
+sui_out=$("${probe_env[@]}" strace-ui -version 2>&1) || fail "strace-ui -version: $sui_out"
+[[ $sui_out == "NO_VERSION_UTIL" ]] || fail "unexpected strace-ui output: $sui_out"
+[[ -x $local_prefix/bin/strace ]] || fail "strace-ui hard dep strace not installed"
+"${probe_env[@]}" strace \
+    --absolute-timestamps=format:unix,precision:us \
+    --syscall-times --follow-forks --decode-fds=all --no-abbrev \
+    --strings-in-hex=non-ascii --string-limit=1024 \
+    -e trace=openat -o "$test_home/trace.log" true \
+    || fail "strace trace smoke"
+grep -q openat "$test_home/trace.log" || fail "trace.log has no openat"
+echo "  OK: NO_VERSION_UTIL + strace openat smoke"
 
 echo "Optional-packages smoke OK"

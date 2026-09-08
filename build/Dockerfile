@@ -97,6 +97,9 @@ RUN dnf install -y -q epel-release \
         # rpmbuild/dnf-plugins-core (dnf download --source + rpmbuild -bp,
         # for rebuilding a shanghai'd RPM from its own source + RH patches).
         binutils patchelf bzip2 gzip zstd tar cpio rpm-build dnf-plugins-core \
+        # rsync: oxcaml-compiler's `make install` copies its tree with rsync
+        # (build-strace-ui.sh probe, 2026-09-05 -- install dies 127 without).
+        rsync \
         # portable-python BUILD.md prerequisites: perl-IPC-Cmd / perl-Time-Piece
         # are required by CPython's configure; openssl-devel is needed to build
         # OpenSSL 3.5.x from source alongside the system one.
@@ -170,5 +173,29 @@ RUN curl -fsSL -o /tmp/cmake.tar.gz \
     && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/cpack /usr/local/bin/cpack \
     && rm /tmp/cmake.tar.gz \
     && cmake --version
+
+# opam: OCaml package manager, needed by build-strace-ui.sh (OxCaml switch).
+# Static upstream binary, no distro package involved.
+ARG OPAM_VERSION=2.5.2
+RUN curl -fsSL -o /usr/local/bin/opam \
+        "https://github.com/ocaml/opam/releases/download/${OPAM_VERSION}/opam-${OPAM_VERSION}-x86_64-linux" \
+    && chmod +x /usr/local/bin/opam \
+    && opam --version
+
+# GNU autoconf 2.72 alongside the distro 2.69 (which stays installed --
+# other builds may rely on it). oxcaml-compiler's configure.ac requires
+# >= 2.71 (build-strace-ui.sh probe, 2026-09-05). /usr/local/bin precedes
+# /usr/bin on the default PATH, so this shadows 2.69 unless a script asks
+# for the old one explicitly.
+ARG AUTOCONF_VERSION=2.72
+RUN curl -fsSL -o /tmp/autoconf.tar.xz \
+        "https://ftp.gnu.org/gnu/autoconf/autoconf-${AUTOCONF_VERSION}.tar.xz" \
+    && tar -xf /tmp/autoconf.tar.xz -C /tmp \
+    && cd /tmp/autoconf-${AUTOCONF_VERSION} \
+    && ./configure --prefix=/usr/local \
+    && make -j"$(nproc)" \
+    && make install \
+    && cd /tmp && rm -rf /tmp/autoconf.tar.xz /tmp/autoconf-${AUTOCONF_VERSION} \
+    && autoconf --version | head -1
 
 WORKDIR /repo

@@ -463,6 +463,21 @@ TOOLS = [
         strategy_flag(["--version"], r"starship ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "strace",
+        "strace",
+        "https://github.com/strace/strace",
+        strategy_flag(["-V"], r"strace -- version ([0-9]+\.[0-9]+)"),
+    ),
+    (
+        # strace-ui has no version string by upstream design (`-version`
+        # prints NO_VERSION_UTIL, exit 0). The marker proves the pinned
+        # commit build ran; the real pin lives in packages.json/build script.
+        "strace-ui",
+        "strace-ui",
+        "https://github.com/janestreet/strace_ui",
+        strategy_flag(["-version"], r"(NO_VERSION_UTIL)"),
+    ),
+    (
         "stylua",
         "stylua",
         "https://github.com/JohnnyMorganz/StyLua",

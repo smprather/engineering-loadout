@@ -140,6 +140,11 @@ PROBE_FLAGS = {
     # expect treats `--version` as a SCRIPT PATH and exits 1 with
     # `couldn't read file "--version"`. -version is the real flag.
     "expect": [["-version"]],
+    # strace-ui (OxCaml TUI) takes single-dash -version only, printing
+    # NO_VERSION_UTIL exit 0 by upstream design -- there is no version
+    # string. Bare invocation launches the TUI (timeout-counts-as-OK
+    # fallback), so pin the flag probe instead.
+    "strace-ui": [["-version"]],
     # pdftotext reads `--version` as an input filename (I/O Error, exit 1).
     "pdftotext": [["-v"]],
     "pdftotext.bin": [["-v"]],

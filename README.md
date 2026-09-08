@@ -284,6 +284,8 @@ OpenSSH for those.
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
 | sqlite | bin | 3.53.4 | SQLite database CLI and library — EL8 ships 3.26 from 2018; current upstream with readline line-editing and FTS4/5 + RTREE + session extensions |
 | starship | bin | 1.26.0 | Cross-shell customizable minimal prompt |
+| strace | bin | 7.2 | System call tracer — EL8 ships 5.18 (2022) with stale syscall tables; current upstream (built without libunwind/libselinux: EPEL-only / absent on newer distros, both unused by strace-ui) |
+| strace-ui | bin | b48e51a | Interactive TUI for strace output (Jane Street OxCaml/Bonsai_term) — syscall browser with FD provenance tracking. Opt-in: install with ./loadout install strace-ui |
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |

@@ -200,6 +200,8 @@ sha256  dc0c4daa5cc73d17c8bd40bcdc862e90cfe3952fa155d6c139be190cf7bb25a0  payloa
 sha256  7cadf150bf0560c77e66c16d999a673dd10db88af720796e522c5e1a1900b996  payload/el8.x86_64.glibc2p28/bin/starship.bz2
 sha256  292e6a25f2f5cd0ee18154b5729f944b50b20da7f7457b70190295581d1dbcef  payload/el8.x86_64.glibc2p28/bin/stat.bz2
 sha256  32cb5b2719fd0f50a76a63e92ed0d81f2770d4a260bcc1c096f7d8cec3dc0dc7  payload/el8.x86_64.glibc2p28/bin/stdbuf.bz2
+sha256  0437a89ba8b6c619b6b7c4fa2c1836cb3d132c791bee7da098d410f5270e32e9  payload/el8.x86_64.glibc2p28/bin/strace-ui.bz2
+sha256  4d71636f9db9d6f5740c9e1a2af4bbe4177aceea0e3d22a8a75a260d888f536c  payload/el8.x86_64.glibc2p28/bin/strace.bz2
 sha256  fddaf7592554e14867cef501599350affa19d95b408a7c1f4a75b043625f3253  payload/el8.x86_64.glibc2p28/bin/stty.bz2
 sha256  cab9afd1cd33eb9e0a507aee45579b0581b36f095a96ecfcc687d9f278716e81  payload/el8.x86_64.glibc2p28/bin/stylua.bz2
 sha256  6d62d65b8dcba1d9330f7e9375af1eddec1933d381917d43853a420df469f55c  payload/el8.x86_64.glibc2p28/bin/sum.bz2

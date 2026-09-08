@@ -100,6 +100,14 @@ owns `ssh10`, `ssh10.bin`, `ssh-keygen`, `ssh-add`, `ssh-agent`, and
 `ssh-keyscan`. Mainline OpenSSH 10.x rejects Red Hat crypto-policy's
 `GSSAPIKexAlgorithms`, so normal `ssh` must fall through to host `/usr/bin/ssh`.
 
+`strace` (in `@shared`) is source-built current upstream; configure with
+`--without-libunwind --without-libselinux` (EPEL-only / absent on newer
+distros; both serve flags strace-ui never passes). `strace-ui` is optional,
+`depends: [strace]`, built from a pinned commit hash (upstream has no tags)
+plus a pinned OxCaml repo commit via `build/build-strace-ui.sh`; opam/dune
+stay build-time only. Its `-version` prints `NO_VERSION_UTIL` (exit 0) by
+upstream design -- the smoke probe and farm-versions pin that marker.
+
 ### Resolver
 
 `resolve_tool_selection(args, registry)` in `loadout` performs:

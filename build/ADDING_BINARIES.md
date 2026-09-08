@@ -5344,3 +5344,52 @@ The block requires $prefix set beforehand and never tramples
 caller-set values. Rationale + failure catalogue: see the block's own
 header comment and the AGENTS.md GUI WRAPPER SHARED BLOCK paragraph.
 Users of it today: build-wezterm.sh (3 wrappers), build-surfer.sh.
+
+## strace 7.2 (added 2026-09-05)
+
+EL8 ships strace 5.18 (2022) with stale syscall decode tables; farm nodes
+run 6.x kernels where old strace prints bare syscall numbers. Source build,
+current upstream: `build/build-strace.sh --tag 7.2` (github releases
+tarball, version pinned by the built binary's own `strace -V`).
+
+- `--without-libunwind --without-libselinux`: libunwind is EPEL-only;
+  libselinux.so.1 is present on EL8 but ABSENT on newer distros (CachyOS
+  ceiling gate: loader hard-fails). Both serve only `-k`/`-Z`, unused by
+  strace-ui. Remaining NEEDED is glibc + libtinfo (already an unclaimed
+  lib64 stem, resolved via RPATH).
+- Stage-verify runs the EXACT flag set strace-ui shells out with (probe
+  confirmed EL8's 5.18 also accepts it, but 7.2 decodes modern kernels).
+- Payload: `bin/strace.bz2` 488K. Registry: non-optional (lands in @shared).
+
+## strace-ui b48e51a + OxCaml toolchain (added 2026-09-05)
+
+Upstream `janestreet/strace_ui` (branch `oxcaml`): 7 commits, no tags, so
+`--tag` takes the commit hash (nedit-ng precedent). Recipe:
+`build/build-strace-ui.sh --tag <hash>`. ~35 min (compiler ~10 + ~260 opam
+pkgs ~15 + dune). Pins: strace_ui commit + `OX_REPO_COMMIT` (oxcaml
+opam-repository -- pins compiler 5.2.0minus39 and the Jane Street set).
+
+Build-time-only closure (never ships): opam 2.5.2 static binary, OxCaml
+switch (264 installed pkgs, ~10G, trap-deleted after), dune from the
+switch. Dockerfile absorptions (grand-image rule): `rsync` (oxcaml-compiler
+`make install` dies 127 without), autoconf 2.72 from GNU source (distro
+2.69 fails oxcaml-compiler's configure.ac which needs >= 2.71; installed
+to /usr/local so 2.69 stays for everyone else).
+
+- `dune build --profile release`: dev profile fails warning-69-as-error
+  in src/virtual_list.ml on this compiler.
+- Dune declares `(modes byte exe)`: build emits main.bc (351M, needs
+  ocamlrun -- NEVER packaged) and main.exe (native, shipped). Stripped
+  76.8M -> 49.9M, bz2 12.7M single file (no chunking).
+- Linkage: NEEDED is glibc + libstdc++ + libgcc_s ONLY (re2 static, no
+  libunwind). GLIBCXX tops at 3.4.21 inside EL8's 3.4.25 -- host copy wins,
+  no static hackery. Script asserts NEEDED allow-list + C++ ceiling +
+  glibc <= 2.28 on every rebuild.
+- `-version` prints NO_VERSION_UTIL exit 0 by upstream design (smoke probe
+  + farm-versions pin the marker; real pin is the commit in packages.json).
+- Render proof requires a winsize-set pty (40x120): a 0x0 pty (docker exec
+  without -t, bare pty.fork) paints NOTHING -- harness artifact, not a
+  binary bug. The build script's inline python driver sets winsize and
+  requires a Syscalls/Details/execve frame against the staged strace.
+- Registry: optional (niche TUI), `depends: [strace]`. No wrapper needed
+  (single native binary, no bundled libs, no env block).
