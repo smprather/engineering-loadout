@@ -13,6 +13,39 @@ assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
 published sha256sums.txt. `v2026.08.28` notes retained below for history.
 
+## 2026-09-08 batch: strace 7.2 + strace-ui, tmux/nvim two-layer, nvim online probe, DPC terminology sweep (UNRELEASED, in tree)
+
+Four changes landed together (commits `8ecdccf`, `b105e63`, `1eb9b54` + the
+uncommitted probe/terminology work):
+
+1. **strace 7.2 + strace-ui** — see the 2026-09-05 batch section below for the
+   full record; gates were green before this batch and remain so.
+2. **tmux + Neovim two-layer config** — `env-tmux`/`env-nvim` expose only
+   `global -> user`; tmux XDG dispatcher + managed `tmux.global.conf` +
+   preserved `tmux.user.conf`; legacy `~/.tmux.local.conf` migration with
+   unattended/declined fallback; snapshot restore only removes the legacy file
+   when the snapshot carries it. Covered by `tests/install-env-tmux-nvim-layers`.
+3. **nvim online probe** — `vim.g.cfg_online` resolved in
+   `envs/nvim/lua/global/config.lua`: `LOADOUT_ONLINE` env → newest
+   `${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/detect-*` cache file → live 0.15s
+   TCP probe of `LOADOUT_CFG_ONLINE_DETECT_HOSTS` → false (offline-first).
+   Lazy's update checker now gates on `cfg_online and not cfg_offline`, so
+   plugins never stall on timeouts on air-gapped boxes. `cfg_dpc` renamed to
+   `cfg_offline` with a compat shim (old name honored, new wins).
+4. **DPC/nDPC terminology sweep** — Cadence-internal terms removed from all
+   docs; replaced with generic "online box" (partially online, R/W shared FS)
+   and "offline box" (air-gapped, R/O shared FS). `docs/DEPLOYMENT-RUNBOOK.md`,
+   the stash design spec, and `docs/HANDOFF.md` updated. The `anvil_release`
+   mount label in the offline detector is the actual filesystem marker and
+   stays.
+
+Gates: focused two-layer test green; `tests/install-nvim-deployments` green
+(both shapes, network blackholed); nvim headless probe matrix green (env
+1/0, cache 1/0, live probe); generators in sync; fast suite green except the
+two pre-existing host/checkout failures (`shell-typeahead` cannot load the
+staged zsh/zle module, and doctor reports the release-only nvim plugin-stash
+asset absent from this checkout).
+
 ## 2026-09-05 batch: strace 7.2 + strace-ui (UNRELEASED, in tree)
 
 Option A from the strace_ui scoping (build-time opam/OxCaml, ship one
@@ -2896,7 +2929,7 @@ elsewhere (Cadence `cds.lib` in vim-liberty, SAP `cds-lsp` in nvim) are not rela
 1. ~~**Exercise the laptop path for real.**~~ **DONE 2026-08-08** -- validated end
    to end against `v2026.08.07`, the first real asset-bearing release:
    `tools/download-release.ps1 -Tag v2026.08.07` on the Windows laptop, scp to
-   nDPC, `./tools/fetch-stash --from-file <stash> --sums sha256sums.txt`. The
+   online box, `./tools/fetch-stash --from-file <stash> --sums sha256sums.txt`. The
    whole air-gapped acquisition path (runbook section 2b) is no longer
    theoretical. Do not re-open this as unvalidated.
 2. **Finish the currency sweep.** The v2026.08.07 sweep was deliberately partial;

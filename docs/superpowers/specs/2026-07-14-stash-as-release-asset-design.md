@@ -20,10 +20,10 @@ must degrade, not break:
 | env | github | writes | notes |
 |---|---|---|---|
 | **Windows laptop** | most reliable | — | **PowerShell only.** No WSL, no VMs. |
-| **nDPC** (Linux) | *varies*: full / clone-pull only / blocked | R/W on the shared FS | today: clone/pull |
-| **DPC** (Linux, air-gapped) | none | **R/O** on the shared FS | where the users are |
+| **online box** (Linux) | *varies*: full / clone-pull only / blocked | R/W on the shared FS | today: clone/pull |
+| **offline box** (Linux, air-gapped) | none | **R/O** on the shared FS | where the users are |
 
-The shared filesystem is the bridge: **R/W from nDPC, R/O from DPC.**
+The shared filesystem is the bridge: **R/W from the online box, R/O from the offline box.**
 
 ## Design
 
@@ -54,23 +54,23 @@ that was not verified against the signed release.
 
 ### C — the stash is refreshable in place, with no release
 
-`refresh-stash <stash-dir>` runs on **nDPC** (which needs only clone/fetch, never push)
+`refresh-stash <stash-dir>` runs on **the online box** (which needs only clone/fetch, never push)
 and updates the bare mirrors **directly in the shared filesystem**:
 
 - existing mirrors: `git remote update --prune`
 - plugins new to the lockfile/catalog: mirror them fresh
 - removed plugins: left alone (a user may still have them enabled)
 
-DPC users then pick up new plugin versions on their next `:Lazy update`, which fetches
+offline-box users then pick up new plugin versions on their next `:Lazy update`, which fetches
 from the shared stash. **Plugin cadence decouples from loadout cadence**, and nothing is
 committed to git.
 
 ### The acquisition paths, in priority order
 
-1. **nDPC can reach github** (today): `refresh-stash` directly into the shared FS. No
+1. **The online box can reach github** (today): `refresh-stash` directly into the shared FS. No
    release, no laptop.
-2. **nDPC blocked, laptop only**: PowerShell downloads the release + stash asset and
-   verifies the sha256; you `scp` them to nDPC; `fetch-stash --from-file` installs the
+2. **The online box is blocked, laptop only**: PowerShell downloads the release + stash asset and
+   verifies the sha256; you `scp` them to the online box; `fetch-stash --from-file` installs the
    asset into the checkout, then a normal `@shared-all` install stages it.
 3. **Everything blocked**: the last-known-good stash on the shared FS keeps working
    indefinitely. It is read-only data; nothing expires.
@@ -83,7 +83,7 @@ committed to git.
 | `.gitignore` | stops the stash ever being committed again |
 | `release` | attaches the stash + its sha256 to the GitHub release |
 | `fetch-stash` | downloads + verifies the asset (or takes `--from-file` for the scp path); writes `.content-manifest.fetched` |
-| `refresh-stash` | ops-side in-place mirror refresh into the shared tree (nDPC) |
+| `refresh-stash` | ops-side in-place mirror refresh into the shared tree (the online box) |
 | `tools/download-release.ps1` | Windows/PowerShell path: fetch release + asset, verify sha256 |
 | `loadout_main.py` | loads `.content-manifest.fetched`; already skips cleanly with no stash |
 

@@ -12,7 +12,7 @@
 -- vim.g.loadout_user_plugins_only = true
 
 -- Other example overrides:
--- vim.g.cfg_dpc = true         -- disable plugin update checker notifications
+-- vim.g.cfg_offline = true     -- force offline: disable plugin update checker notifications
 -- vim.g.have_nerd_font = true  -- tell the config a nerd font is available
 
 return {}

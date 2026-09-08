@@ -85,8 +85,8 @@ if loadout_plugins_enabled then
     require("lazy").setup(specs, {
         git = loadout_git_opts,
         checker = {
-            enabled = not vim.g.cfg_dpc,
-            notify  = not vim.g.cfg_dpc,
+            enabled = vim.g.cfg_online and not vim.g.cfg_offline,
+            notify  = vim.g.cfg_online and not vim.g.cfg_offline,
         },
         ui = {
             icons = vim.g.have_nerd_font and {} or {
