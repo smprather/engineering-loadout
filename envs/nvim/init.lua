@@ -4,7 +4,7 @@ vim.g.maplocalleader = " "
 vim.g.loaded_netrw       = 1
 vim.g.loaded_netrwPlugin = 1
 
-local LAYERS = { "global", "corp", "site", "team", "project", "user" }
+local LAYERS = { "global", "user" }
 
 local function layer_dir(layer)
     return vim.fn.stdpath("config") .. "/lua/" .. layer
@@ -21,7 +21,7 @@ local function source_layer(layer, mod)
     end
 end
 
--- Phase 1: Config variables — global defaults, then corp/site/project/user override.
+-- Phase 1: Config variables — global defaults, then user overrides.
 for _, layer in ipairs(LAYERS) do
     source_layer(layer, "config")
 end

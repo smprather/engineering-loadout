@@ -125,7 +125,7 @@ needed for discovery, including `TERMINFO_DIRS` for bundled `st` terminfo.
 Windows and macOS are not supported (the platform vocabulary was retired
 2026-08-31); Linux-only is the whole surface.
 
-**Layered configuration.** Settings flow from lowest to highest precedence:
+**Layered configuration.** Shell settings flow from lowest to highest precedence:
 
 ```
 Global -> Corp -> Site -> Team -> Project -> User
@@ -134,7 +134,8 @@ Global -> Corp -> Site -> Team -> Project -> User
 Each layer overrides the previous without touching the upstream files.
 Personal tweaks, team conventions, and corporate defaults all coexist
 without forking anything. Pull a loadout update and your overrides still
-work.
+work. Neovim and tmux use the smaller `Global -> User` chain: loadout updates
+the global defaults while personal configuration remains untouched.
 
 **Opinionated but escapable.** Sensible defaults out of the box. Every
 preference is a `LOADOUT_CFG_*` variable you can override in your user layer:
@@ -462,3 +463,11 @@ Prefix `Ctrl-\`. Shift-arrows for pane navigation, Ctrl-arrows for windows,
 layout, `Prefix+o` to open a new seven-pane 3-column work window, and
 `Prefix+v` to capture the pane buffer into nvim. tmux-resurrect and
 tmux-continuum bundled -- your sessions come back after a reboot.
+
+`~/.tmux.conf` links to the XDG dispatcher at `~/.config/tmux/tmux.conf`.
+That dispatcher loads the managed `tmux.global.conf`, then the persistent
+`tmux.user.conf`, and finally initializes TPM. Put personal settings and plugin
+declarations in `~/.config/tmux/tmux.user.conf`; reinstalling `env-tmux` never
+overwrites it. When an older `~/.tmux.local.conf` is found, an interactive
+install offers to move it to the new user-layer path. Declined or unattended
+migrations keep loading the legacy file until `tmux.user.conf` exists.

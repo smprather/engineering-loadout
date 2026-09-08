@@ -56,7 +56,7 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 | `~/.config/bash/` | Layered bash config |
 | `~/.vimrc` | `envs/vim/vimrc` |
 | `~/.vim/` | `envs/vim/vim/` |
-| `~/.tmux.conf` | `envs/tmux/tmux.conf` |
+| `~/.tmux.conf` | -> XDG dispatcher (`tmux.global.conf` then preserved `tmux.user.conf`) |
 | `~/.tmux/` | `envs/tmux/vendor/plugins/` |
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |
 | `~/.config/nvim/` | `envs/nvim/` |

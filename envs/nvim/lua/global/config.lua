@@ -1,4 +1,4 @@
--- Feature toggles (override in corp/site/project/user config.lua)
+-- Feature toggles (override in user/config.lua)
 vim.g.cfg_enable_lsp        = true
 vim.g.cfg_enable_treesitter = true
 vim.g.cfg_enable_completion = true

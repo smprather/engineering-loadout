@@ -715,7 +715,7 @@ def _run_taplo_schemas(dry_run=False):
 
 
 def _run_tmux_plugins(dry_run=False):
-    tmux_conf = os.path.join(REPO, "envs", "tmux", "tmux.conf")
+    tmux_conf = os.path.join(REPO, "envs", "tmux", "tmux.global.conf")
     plugin_dir = os.path.join(REPO, "envs", "tmux", "vendor", "plugins")
 
     plugins = []
@@ -726,7 +726,7 @@ def _run_tmux_plugins(dry_run=False):
                 plugins.append(m.group(1))
 
     if not plugins:
-        print("No @plugin entries found in tmux.conf")
+        print("No @plugin entries found in tmux.global.conf")
         return True
 
     pins = _load_tmux_lock()

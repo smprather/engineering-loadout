@@ -33,6 +33,25 @@ table OK, optional-packages (new strace-ui section) green, Tier-3
 --full 304 OK, host @shared install + Arch ceiling (strace traces,
 farm-versions 7.2/NO_VERSION_UTIL) green. Full notes in
 build/ADDING_BINARIES.md (strace + strace-ui sections).
+## 2026-09-08 batch: tmux + Neovim two-layer config (UNRELEASED)
+
+`env-tmux` and `env-nvim` now expose only `global -> user`. Tmux installs an
+XDG dispatcher plus managed `tmux.global.conf` and preserved
+`tmux.user.conf`; TPM starts after both layers. Interactive installs offer to
+migrate `~/.tmux.local.conf`, unattended/declined installs keep it as a
+fallback, and conflicts or symlinks warn without changing user data. Neovim
+stops creating/loading corp/site/team/project layers, preserves existing ones,
+and warns when they contain files. `tests/install-env-tmux-nvim-layers` covers
+fresh installs, reinstall preservation, migration cases, backups, old/new
+snapshot restores, malformed canonical paths, and registry metadata. Restore
+removes `.tmux.local.conf` only when the snapshot contains that path, so a
+pre-layering snapshot cannot erase newer legacy config. `build/update
+tmux-plugins` now reads plugin declarations from the global layer rather than
+the dispatcher. Gates: focused two-layer test green;
+full `tests/install-linux-tmp-home` green; installed-size/content/README
+generators in sync; fast suite green except the two pre-existing host/checkout
+failures (`shell-typeahead` cannot load the staged zsh/zle module, and doctor
+reports the release-only nvim plugin-stash asset absent from this checkout).
 
 ## 2026-09-04 batch: read-only install source fix (UNRELEASED, in tree)
 

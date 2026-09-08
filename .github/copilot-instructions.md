@@ -6,7 +6,9 @@ alone.
 
 Engineering-loadout: offline-first, no-root package manager for
 engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
-x86_64/ARM/PowerPC), layered configuration (global -> corp -> site -> team -> project -> user).
+x86_64/ARM/PowerPC), six-layer shell configuration
+(global -> corp -> site -> team -> project -> user), and two-layer Neovim/tmux
+configuration (global -> user).
 `./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
 driven by `payload/packages.json` (`schema_version: 3`).
 
@@ -337,7 +339,9 @@ detail: `envs/bash/global/README.md` and `AGENTS.md` "Shell Architecture".
 
 Fresh Neovim config must start without network: if `lazy.nvim` is absent and
 `git` cannot clone it, `envs/nvim/init.lua` disables the plugin layer cleanly
-instead of erroring.
+instead of erroring. Its dispatcher loads only the managed `global` layer and
+the preserved `user` layer. Retired corp/site/team/project directories remain
+on disk but are inactive and warn when populated.
 Default-enabled Neovim LSPs must also start without optional tool packages:
 guard each server with `vim.fn.executable`, and keep missing tools in
 `vim.g.loadout_missing_lsp_servers` instead of enabling a server that will fail
@@ -357,13 +361,19 @@ accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
 
 Tmux and Vim plugins are vendored in-tree (no internet required):
 
-- `envs/tmux/` -- tmux.conf, word-boundary helper, pop-in/pop-out shell helpers,
+- `envs/tmux/` -- global/user tmux dispatcher, word-boundary helper, pop-in/pop-out shell helpers,
   and vendored plugins: tpm, resurrect, continuum, better-mouse-mode
 - `envs/vim/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
 - `envs/vim/vim/pack/vendor/opt/` -- optional plugins
 
 Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
-hook strips `.git` dirs on the next commit).
+hook strips `.git` dirs on the next commit). Plugin discovery reads the
+declarations in `envs/tmux/tmux.global.conf`, not the dispatcher.
+
+The tmux dispatcher is `~/.config/tmux/tmux.conf` (linked from `~/.tmux.conf`):
+managed `tmux.global.conf` -> preserved `tmux.user.conf` -> TPM. The installer
+offers interactive migration from `~/.tmux.local.conf`; unattended or declined
+migrations use the legacy file only while the new user file is absent.
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
 When a loadout nvim binary and env-nvim config are both present, the installer

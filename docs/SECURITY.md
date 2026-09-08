@@ -93,7 +93,7 @@ The tmux plugin bundle is likewise commit-pinned, via
 `envs/tmux/vendor/plugins.lock` (4 plugins). `./build/update tmux-plugins` reads that
 lock, clones each plugin and checks out the pinned commit, then rewrites the file
 with the commits it actually landed on. The plugin list is scraped from the
-`set -g @plugin` lines in `envs/tmux/tmux.conf`; commented-out entries are
+`set -g @plugin` lines in `envs/tmux/tmux.global.conf`; commented-out entries are
 skipped, so a disabled plugin is neither cloned nor pinned.
 
 ## 4. Behavioral analysis: `tests/dynamic-analysis`

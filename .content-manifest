@@ -3234,6 +3234,7 @@ sha256  c3ea348a2d10312ff1b6ddeada2bc45eac392333678c8ed3fe9e8c8b3d681eda  envs/t
 sha256  c3f41b2559ca5664a30394bec73a9727314483d905f3d870b4d8ed00f70484e6  payload/el8.x86_64.glibc2p28/lib64/libX11-xcb.so.1.bz2
 sha256  c4227964f1e2fa5d8b130b911831212aa822180497877d2bbfcf2296a6858c25  envs/tmux/vendor/plugins/tmux-continuum/scripts/helpers.sh
 sha256  c423373ce5c3cb3d1113cde99858c24bd6abd3dd518cd556aa23cd02e895d684  payload/el8.x86_64.glibc2p28/bin/mktemp.bz2
+sha256  c424e51742b6f0e970c2d30f947f2c549035df3c09bed35f9d65e141453a3bd7  payload/installed-sizes.json
 sha256  c43ad70dc3ce7787543d563792426a16fd7895e14be4b194b5665e36459dd917  payload/el8.x86_64.glibc2p28/wheels/pydantic-1.10.26-py3-none-any.whl
 sha256  c443e7061bafe87fbead67de8af05c1725ed01ba861b6f28d8d5bc4820bef1f4  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/csv.so.bz2
 sha256  c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5  payload/el8.x86_64.glibc2p28/wheels/pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -3809,6 +3810,7 @@ sha256  e88236abf5dee5d939665325a12640444e630616aa72d1d8797be86c193f97fd  payloa
 sha256  e88236abf5dee5d939665325a12640444e630616aa72d1d8797be86c193f97fd  payload/treesitter/vendor/nvim-treesitter/runtime/queries/sxhkdrc/highlights.scm
 sha256  e893ad1c2ac28f6598f4d9ea4d099d481455059aee2099d347a8e65f349088db  payload/treesitter/vendor/nvim-treesitter/tests/query/injections/cuda/macro-self-injection.cu
 sha256  e8a0d068ca63c75130fdf94ee289d53049fa8a509af666cceeac8f58a84de4ab  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/haskell_persistent.so.bz2
+sha256  e8a31f3a231e35687b282e3ad266724481f84fd981d1e7a6980c52800875a01e  payload/packages.json
 sha256  e8a83653b222e774c5b667e8a4bbcbb0966ca68a63979af2450bff6d9c14adb4  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/r/test.r
 sha256  e8ac64d2ccb4a8dbd6c8ab5ef6bfe6559ba551c9504365cf21df8275d2ecf6be  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/fortran/folds.scm
 sha256  e8ac64d2ccb4a8dbd6c8ab5ef6bfe6559ba551c9504365cf21df8275d2ecf6be  payload/treesitter/vendor/nvim-treesitter/runtime/queries/fortran/folds.scm

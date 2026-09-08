@@ -1,7 +1,6 @@
 -- User-specific configuration
--- Put any overrides here. This file is loaded in Phase 1 (config) after
--- the global/corp/site/team/project config files, so it can override
--- any global defaults.
+-- Put any overrides here. This file is loaded in Phase 1 (config) after the
+-- global config file, so it can override any global defaults.
 --
 -- To completely replace the plugin set (i.e., use only your own plugins
 -- and skip the bundled global plugins), set the following to true:

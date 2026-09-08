@@ -135,8 +135,9 @@ See `build/ADDING_BINARIES.md` for the full workflow and per-tool build notes.
 
 ## Configuration Layer System
 
-Configuration flows `global -> corp -> site -> team -> project -> user`. Each layer
-overrides the previous without touching upstream files.
+Shell configuration flows `global -> corp -> site -> team -> project -> user`.
+Neovim and tmux intentionally use only `global -> user`. In both models, later
+layers override earlier ones without modifying the repo-managed global files.
 
 ### Bash
 
@@ -164,17 +165,24 @@ Entry point: `envs/nvim/init.lua` -- thin dispatcher with four phases:
 3. Collect plugin specs from each layer's `plugins/` dir.
 4. Source `init.lua` per layer -> options, keymaps, autocmds, LSP.
 
-Layer dirs live at `~/.config/nvim/lua/<layer>/` -- user-created, never committed.
+Layer dirs live at `~/.config/nvim/lua/<layer>/`.
 
 ```
 ~/.config/nvim/lua/
   global/      <- repo-managed: config.lua, init.lua, plugins/
-  corp/        <- user-created
-  site/
-  team/
-  project/
-  user/
+  user/        <- personal overrides, preserved across reinstall
 ```
+
+Older `corp/`, `site/`, `team/`, and `project/` directories are left intact on
+install but are no longer loaded. The installer warns when any contains files.
+
+### Tmux
+
+`~/.tmux.conf` links to `~/.config/tmux/tmux.conf`, a managed dispatcher. It
+sources `tmux.global.conf`, then `tmux.user.conf`, then starts TPM so user plugin
+declarations are visible. The installer refreshes the global file and preserves
+the user file. A legacy `~/.tmux.local.conf` remains a fallback only while the
+new user file is absent; interactive installs offer to migrate it.
 
 ---
 
