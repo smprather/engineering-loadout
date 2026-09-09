@@ -5246,9 +5246,33 @@ def _artifact_paths(entry, repo_dir, platform_dir):
 
     src = entry.get("source")
     if src:
-        for root, _dirs, files in os.walk(os.path.join(repo_dir, src)):
-            for f in files:
-                out.add(os.path.join(root, f))
+        abs_src = os.path.join(repo_dir, src)
+        if os.path.isdir(abs_src) and not os.path.islink(abs_src):
+            for root, _dirs, files in os.walk(abs_src):
+                for f in files:
+                    out.add(os.path.join(root, f))
+        elif os.path.lexists(abs_src):
+            # File source (env-starship/wezterm/editorconfig/pip): os.walk on a
+            # file yields nothing, so the package sized as 0 B. Add it directly.
+            out.add(abs_src)
+
+    for link in entry.get("extra_links", []):
+        # Non-~/ targets name repo files the install also ships (env-starship's
+        # "starship/config-schema.json" = envs/starship/config-schema.json).
+        # ~/-targets point into the install root and are already covered by the
+        # source walk above, so only these need resolving here.
+        frm = (link.get("from", "") or "").strip()
+        if not frm or frm.startswith("~/"):
+            continue
+        for cand in (os.path.join(repo_dir, frm), os.path.join(repo_dir, "envs", frm)):
+            if os.path.isdir(cand) and not os.path.islink(cand):
+                for root, _dirs, files in os.walk(cand):
+                    for f in files:
+                        out.add(os.path.join(root, f))
+                break
+            if os.path.lexists(cand):
+                out.add(cand)
+                break
     return out
 
 
