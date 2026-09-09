@@ -24,17 +24,17 @@ end
 
 -- Returns the install path for parsers, parser info, and queries.
 -- If the specified directory does not exist, it is created.
+-- Loadout patch: the install tree is read-only in split deployments and every
+-- parser is prebuilt, so a failed mkdir must NOT log an error at startup --
+-- get_installed() calls this for every language. TSInstall may fail when
+-- actually invoked; startup must stay silent.
 ---@param dir_name string
 ---@return string
 function M.get_install_dir(dir_name)
   local dir = vim.fs.joinpath(config.install_dir, dir_name)
 
   if not vim.uv.fs_stat(dir) then
-    local ok, err = pcall(vim.fn.mkdir, dir, 'p', '0755')
-    if not ok then
-      local log = require('nvim-treesitter.log')
-      log.error(err --[[@as string]])
-    end
+    pcall(vim.fn.mkdir, dir, 'p', '0755')
   end
   return dir
 end
