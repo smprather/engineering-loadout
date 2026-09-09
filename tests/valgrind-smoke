@@ -5,6 +5,12 @@
 # AND valgrind's exit code. A bare --version does not satisfy this test --
 # the binary must actually detect the leak.
 #
+# Host-contract skip: on a host without glibc debuginfo valgrind cannot
+# START (it refuses: "Cannot continue -- exiting now"), which is a host
+# environment gap, not a payload defect. That specific failure SKIPs cleanly;
+# the Tier 3 EL8 container gate exercises valgrind on a box that ships
+# debuginfo. Any OTHER nonzero exit is a payload bug and fails.
+#
 # Traps encoded here:
 #   * valgrind's dispatcher resolves memcheck via VALGRIND_LIB, which the
 #     wrapper must export pointing at <prefix>/lib/valgrind. If the wrapper
@@ -114,6 +120,18 @@ env -i \
     PATH="$local_prefix/bin:/usr/bin:/bin" \
     valgrind --tool=memcheck --leak-check=full --error-exitcode=42 \
         "$smoke_bin" >"$memcheck_log" 2>&1 || rc=$?
+
+# Host-contract probe + assertion in one. valgrind cannot START on a host
+# without glibc debuginfo (it refuses: "Cannot continue -- exiting now"),
+# which is a host-environment gap, not a payload defect -- same class as the
+# cloc/meld/firefox host-contract skips. Where that is the failure, SKIP
+# cleanly (the T3 EL8 container gate exercises valgrind on a box that does
+# ship debuginfo). Any OTHER nonzero -- including a real memcheck crash
+# before analysis -- is a payload bug and must fail.
+if [[ "$rc" != 0 ]] && grep -q 'debuginfo\|Cannot continue' "$memcheck_log"; then
+    echo "SKIP: host lacks glibc debuginfo (valgrind cannot start); covered by Tier 3 container gate"
+    exit 0
+fi
 
 # valgrind MUST exit 42 on a leak when --error-exitcode=42 is given; and the
 # log MUST say it found the 16 bytes. Both assertions are required -- the
