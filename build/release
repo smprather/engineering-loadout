@@ -363,52 +363,36 @@ def _smoke_cache_dir():
     return os.path.join(base, SMOKE_CACHE_DIR_NAME)
 
 
-def _iter_smoke_source_files(script_dir):
-    """(relpath, fullpath) for every file whose bytes can change the smoke result.
+def _smoke_source_fingerprint(script_dir):
+    """Fingerprint of every file whose bytes can change the smoke result.
 
     Deliberately a SUPERSET of what `@shared` installs: hashing extra files only
     costs an occasional needless re-run, whereas MISSING one is a false green --
     a cache hit that ships an untested binary. That asymmetry is why this walks
     all of payload/ (not a per-platform subset) plus the installer and the probe
-    script itself."""
-    roots = [os.path.join(script_dir, "payload")]
-    for root in roots:
-        for dirpath, dirnames, filenames in os.walk(root):
-            dirnames.sort()
-            for name in sorted(filenames):
-                full = os.path.join(dirpath, name)
-                if os.path.isfile(full) and not os.path.islink(full):
-                    yield os.path.relpath(full, script_dir).replace(os.sep, "/"), full
-    # The installer that performs the install and the script that probes it are
-    # as load-bearing as the payload bytes.
-    for rel in ("loadout", "loadout_main.py", os.path.join("tests", "prebuilt-binaries")):
-        full = os.path.join(script_dir, rel)
-        if os.path.isfile(full):
-            yield rel.replace(os.sep, "/"), full
+    script itself.
 
-
-def _smoke_source_fingerprint(script_dir):
-    # ~4300 files / ~2.9 GB. Hash them concurrently (the box is beefy and sha256
-    # releases the GIL over the C hashing), then fold the per-file digests in a
-    # fixed sorted order so the result is deterministic regardless of which
-    # worker finished first. Keeps the fingerprint well under the parallel
-    # version gate it overlaps, so a cache hit costs seconds, not the 39 s a
-    # single-threaded walk took.
-    files = sorted(_iter_smoke_source_files(script_dir))
-    digests = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=(os.cpu_count() or 8)) as ex:
-        futs = {ex.submit(_sha256_file, full): rel for rel, full in files}
-        for fut in concurrent.futures.as_completed(futs):
-            digests[futs[fut]] = fut.result()
-
-    h = hashlib.sha256()
-    for rel, _ in files:
-        h.update(b"file\0")
-        h.update(rel.encode("utf-8", "surrogateescape"))
-        h.update(b"\0")
-        h.update(digests[rel].encode("ascii"))
-        h.update(b"\0")
-    return {"sha256": h.hexdigest(), "files": len(files)}
+    Delegates to build/fingerprint.py --exact (byte hashes, folded in sorted
+    order, platform-keyed) -- the same trust semantics as the previous inline
+    implementation, one implementation shared with the test suite."""
+    fp = os.path.join(script_dir, "build", "fingerprint.py")
+    roots = [
+        os.path.join(script_dir, "payload"),
+        os.path.join(script_dir, "loadout"),
+        os.path.join(script_dir, "loadout_main.py"),
+        os.path.join(script_dir, "tests", "prebuilt-binaries"),
+    ]
+    proc = subprocess.run(
+        [sys.executable, fp, "--exact", "--roots", *roots],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"fingerprint.py failed: {proc.stderr}")
+    data = json.loads(proc.stdout)
+    return {"sha256": data["sha256"], "files": data["files"]}
 
 
 def _platform_fingerprint():

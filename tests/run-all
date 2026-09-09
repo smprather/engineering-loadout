@@ -11,6 +11,15 @@
 #   ./tests/run-all             # Tier 1 + Tier 2
 #   ./tests/run-all --fast      # Tier 1 only
 #   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
+#   ./tests/run-all --no-cache  # ignore the Tier 2 result cache (see below)
+#
+# Tier 2 integration tests are cached: when the payload/envs/installer
+# fingerprint and the test script are unchanged since the last green run,
+# the cached PASS is reused instead of re-installing ~8 GB. The fingerprint
+# is mtime+size (fast); a touched-but-identical file costs one needless
+# re-run, never a false green. Failed tests have no cache entry and always
+# re-run. Cache lives in ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/
+# test-cache-v1; delete it to force a full re-run.
 
 set -euo pipefail
 
@@ -19,10 +28,12 @@ cd "$REPO_DIR"
 
 FAST=0
 CONTAINER=0
+NO_CACHE=0
 for arg in "$@"; do
     case "$arg" in
         --fast) FAST=1 ;;
         --container) CONTAINER=1 ;;
+        --no-cache) NO_CACHE=1 ;;
         -h|--help)
             sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -44,12 +55,58 @@ done
 [ -n "$PY" ] || { echo "ERROR: python3.14 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
 
 FAILURES=0
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/test-cache-v1"
+CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
+FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
+FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests")
+
+# Tier 2 integration tests install payloads into temp roots and are pure
+# functions of (payload + envs + installer + the test script itself +
+# platform). When nothing changed since the last green run, the cached PASS
+# is reused instead of re-installing ~8 GB. The fingerprint is mtime+size
+# (fast, ~2 s); a touched-but-identical file costs one needless re-run,
+# never a false green. --no-cache forces every test to run.
+#
+# The sidecar is written ONCE at the end of a run, not per test: writing it
+# mid-run would make the remaining tests see "unchanged" and cache against
+# a state the run itself is still verifying.
+CACHE_ACTIVE=0
+if [ "$NO_CACHE" -eq 0 ] && [ "$FAST" -eq 0 ]; then
+    CACHE_ACTIVE=1
+fi
+
 run_test() {
     local name=$1
     shift
     echo
     echo "=== $name"
+    if [ "$CACHE_ACTIVE" -eq 1 ] && [ -f "$CACHE_SIDECAR" ] \
+        && "$PY" "$FP_SCRIPT" --fast --check "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1; then
+        local test_script=""
+        for f in "$@"; do
+            case "$f" in
+                tests/*) test_script=$f; break ;;
+            esac
+        done
+        if [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
+            && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
+            echo "=== $name: CACHED PASS (inputs unchanged)"
+            return 0
+        fi
+    fi
     if "$@"; then
+        if [ "$CACHE_ACTIVE" -eq 1 ]; then
+            mkdir -p "$CACHE_DIR"
+            local test_script=""
+            for f in "$@"; do
+                case "$f" in
+                    tests/*) test_script=$f; break ;;
+                esac
+            done
+            if [ -n "$test_script" ]; then
+                sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
+            fi
+        fi
         echo "=== $name: PASS"
     else
         echo "=== $name: FAIL" >&2
@@ -157,6 +214,15 @@ if [ "$CONTAINER" -eq 1 ]; then
 fi
 
 echo
+# The sidecar is written even when some tests failed: it only records "inputs
+# unchanged", and the per-test .pass files are the actual cache entries -- a
+# failed test has no .pass file, so it always re-runs. Writing it here (not
+# per test) keeps the remaining tests from caching against a state the run
+# itself is still verifying.
+if [ "$CACHE_ACTIVE" -eq 1 ]; then
+    mkdir -p "$CACHE_DIR"
+    "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
+fi
 if [ "$FAILURES" -eq 0 ]; then
     echo "All tests passed."
 else
