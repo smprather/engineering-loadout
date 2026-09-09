@@ -3867,6 +3867,14 @@ Two more `xdesk` rules worth recording:
   GTK/Qt clients cannot escape to the outer compositor. Without it this repo's
   own guidance to set `QT_QPA_PLATFORM=wayland` on WSLg would send every Qt app
   in the nest to the outer desktop.
+- **`-s WxH` is authoritative; do not pass `-resizeable`.** Xephyr honors
+  `-screen` only while the window is fixed-size. With `-resizeable` the window
+  manager owns the size and assigns it on map (KWin window rules / Plasma Zones
+  / any tiling WM), Xephyr's root follows the frame, and an explicit
+  `-s 640x480` silently lands at whatever the WM places. Verified on KWin:
+  `-screen 640x480 -resizeable` reported 1720x1366; `-screen 640x480` reported
+  exactly 640x480. `tests/install-xdesk` asserts the requested size, so this
+  regression makes the gate red on any WM-managed host.
 
 ### Keyboard grabs -- expect them, they are not a defect
 

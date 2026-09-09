@@ -260,7 +260,14 @@ trap 'exit 143' TERM
 if [ "$fullscreen" -eq 1 ]; then
     screen_args="-fullscreen"
 else
-    screen_args="-screen $size -resizeable"
+    # Do NOT pass -resizeable here. Xephyr honors -screen WxH only while the
+    # window is fixed-size: with -resizeable the window manager owns the size
+    # and assigns it on map (KWin window rules / Plasma Zones / any tiling WM
+    # all do), Xephyr's root follows the frame, and an explicit `-s 640x480`
+    # silently lands at whatever the WM places -- a requested size that is a
+    # lie. Without it the root stays exactly the requested size.
+    # `-s` is the contract; resizeable is deliberately not opt-in here.
+    screen_args="-screen $size"
 fi
 
 # shellcheck disable=SC2086  # screen_args/auth_args are built here, splitting is intended
