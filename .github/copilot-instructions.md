@@ -267,8 +267,12 @@ key hashes the source payload bytes, scanner script, YARA binary/rules/tag, scan
 flags, and ClamAV engine/signature fingerprint, so payload/rule/script/signature
 changes force a fresh scan. `--no-cache` forces a fresh scan and `--clear-cache`
 deletes cached clean results. `tests/prebuilt-binaries` installs `@shared`
-into a temp `--dest-dir`, probes every executable in `<dest>/local/bin` with
-`PATH=<dest>/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`, checks editor runtime
+into a persistent install tree (`~/.cache/engineering-loadout/smoke-install-v1`,
+reused when the payload fingerprint is unchanged -- the tree is NOT
+relocatable, so it lives at its install path and the probe scratch dir
+symlinks to it), probes every executable in `<dest>/local/bin` with
+`PATH=<dest>/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` in parallel (16
+workers, memory-scaled), checks editor runtime
 sentinels, and runs installed `nvim` headless against its installed runtime
 before any tag is created. Portable Python keeps generic `python3`/`pip3` links in
 `~/.local/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
@@ -284,7 +288,13 @@ repo, and never mutate files under the checkout.
 When Docker is available, `tests/prebuilt-binaries-almalinux8`
 is the maximum-coverage variant: clean `almalinux:8.10`, read-only repo bind
 mount, in-container copy, `./loadout` bootstrap of the bundled Python, then the
-same `@shared` binary/runtime smoke. Expected host-contract skips are explicit:
+same `@shared` binary/runtime smoke. A persistent cache
+(`~/.cache/engineering-loadout/tier3-v1` bind-mounted at `/cache`) skips the
+`@shared` install phases on unchanged payloads (fingerprint sidecars stamped
+only after the phase passed; `install-linux-tmp-home` is never cached -- its
+install IS the assertion). The entrypoint runs a disk preflight (12 GB needed
+on /work) and fails fast instead of the confusing ENOSPC cascade. Expected
+host-contract skips are explicit:
 `cloc` needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and GL GUI apps
 need host GLVND/OpenGL dispatcher libs (`libGL.so.1`, etc.).
 

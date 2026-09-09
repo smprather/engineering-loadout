@@ -13,6 +13,71 @@ assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash 344 MB), and the stash hash `28a5adb...` matches the
 published sha256sums.txt. `v2026.08.28` notes retained below for history.
 
+## 2026-09-09 batch: gate speedups, OOM guard, Tier 3 install cache, read-only tree contract (RELEASED as v2026.09.09)
+
+Release v2026.09.09 shipped commits `8ecdccf`..`47e5876` (strace batch,
+tmux/nvim two-layer, nvim online probe, DPC terminology sweep, gate
+speedups, OOM guard, Tier 3 cache, RO-tree contract). Verified: signed tag
+good (ED25519), `origin/main == v2026.09.09^{commit}` (`78651ad`), all
+three assets present. The speedup/OOM/Tier3/RO work below is the
+post-release follow-up batch (commits `a547df8`, `47e5876`).
+
+### Gate speedups (049f4a3)
+
+- `build/fingerprint.py` — shared fingerprint module: `--fast` (mtime+size,
+  ~2 s) for test caches, `--exact` (byte-hash, ~40 s) for the release smoke
+  cache. `build/release` delegates to it (same trust semantics, one
+  implementation). `--exclude NAME` for release-asset/bootstrap dirs.
+- `tests/prebuilt-binaries` — persistent install tree at
+  `~/.cache/engineering-loadout/smoke-install-v1` (NOT relocatable: the
+  installer bakes absolute paths into taplo's schema catalog and tealdeer's
+  cache dir, so the tree lives at its install path and the probe scratch
+  dir symlinks to it; nvim runtime check uses realpath). Probes run in
+  parallel (16 workers, memory-scaled). Cache hit: 3m18s -> 9s.
+- `tests/run-all` — Tier 2 result cache keyed on (payload+envs+installer+
+  test-script fingerprint, platform). Full suite ~35 min -> ~1m22s on
+  unchanged inputs. `--no-cache` forces. Sidecar written once at end of
+  run; failed tests have no `.pass` entry and always re-run.
+
+### OOM guard (78651ad)
+
+The 2026-09-09 release dry-run OOM-killed the terminal: 32 GB box, 12 GB
+already in swap, four parallel gates (smoke installs ~8 GB, scan + hash
+read the whole payload). `build/release` now scales gate workers with
+MemAvailable (4 -> 2 -> sequential below 6 GB / 2 GB), a watchdog aborts
+with a clear message below 1 GB free, and the smoke probe/hash workers are
+memory-scaled too. The actual trigger was ENOSPC in /tmp (a killed
+terminal left a 3.2 GB test dir on the 16 GB tmpfs), which the disk
+preflight below now catches.
+
+### Tier 3 install cache + disk preflight (a547df8)
+
+- `tests/prebuilt-binaries-almalinux8` bind-mounts
+  `~/.cache/engineering-loadout/tier3-v1` at `/cache`; the entrypoint
+  fingerprints the tar-copied repo (proved deterministic across
+  containers) and skips the `@shared` install phases on unchanged payloads
+  (`install_cached` + `gen_stamp` sidecars, written only after the phase
+  passed). `install-split-shared-envs` honors `LOADOUT_TEST_SHARED_SEED`
+  to reuse the seeded tree. `install-linux-tmp-home` is NOT cached (the
+  install IS its assertion). Warm `--full` ~14 min -> ~8 min.
+- Gotchas fixed: `__pycache__/*.pyc` written by the pending-daemon spawn
+  into the fresh repo copy broke the fingerprint (excluded); `--check`
+  compares the fold fields only so older sidecars without `entries` still
+  validate; cache lock is a mkdir with a 15-min wait.
+- Disk preflight in the entrypoint: `df` check on /work (12 GB needed)
+  fails fast with a clear message instead of the confusing ENOSPC cascade.
+
+### Read-only install-tree contract (47e5876)
+
+`tests/install-readonly-tree` (Tier 2): installs `@shared` + per-user
+`@envs`, chmods the tree `a-w`, probes 15 binaries + tldr + python
+bytecode, and asserts ZERO write attempts into the tree via strace (the
+bundled strace serves as the trace engine). A negative control proves the
+detector fires on a deliberate write, so a clean scan is a real proof.
+Tree-identity check (path+size+mtime) is the no-strace backstop. The
+contract holds because portable-python/uv/tealdeer already redirect
+writes to user space; this gate now enforces it.
+
 ## 2026-09-08 batch: strace 7.2 + strace-ui, tmux/nvim two-layer, nvim online probe, DPC terminology sweep (UNRELEASED, in tree)
 
 Four changes landed together (commits `8ecdccf`, `b105e63`, `1eb9b54` + the
