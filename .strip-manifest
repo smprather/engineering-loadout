@@ -274,7 +274,7 @@ sha256  259f74e08d869f2911a371458e66404cc919ce27738878b78970e68534c7b0c6  payloa
 sha256  6a653ad5efe5af50f171d9835a04933b60bdd51c3904b4d7253a11e5e42c11cb  payload/el8.x86_64.glibc2p28/bin/yq.bz2
 sha256  56f4768c15aeff1f735ac984095a004ebeae7ec1ee4b14090e34da2c08a22c7b  payload/el8.x86_64.glibc2p28/bin/zellij.bz2
 sha256  cbef7b3593475cd091629645c10bb141e375c7d89afdfae226b784e17e271718  payload/el8.x86_64.glibc2p28/bin/zoxide.bz2
-sha256  1dbbfa9deba10e9fbcc2d1c34386fa2841bba95d52132678a4efbf265fbabf1f  payload/el8.x86_64.glibc2p28/bin/zsh.bz2
+sha256  2b6c31c116783c3d3ed9b95d110cf2f0efe22206ff24d2b59754572521cc0c9a  payload/el8.x86_64.glibc2p28/bin/zsh.bz2
 sha256  792a5feb10b7c06d903f086c056ea0172dfc8cf2f9728570fb72731e29cd6bce  payload/el8.x86_64.glibc2p28/lib64/libCbc.so.2.bz2
 sha256  6f66f7410f736051f9e797d3f75a95cb1074701b04f9f2934259c1335601e531  payload/el8.x86_64.glibc2p28/lib64/libCbcSolver.so.2.bz2
 sha256  78fc630348eb1e3915fecacfafaba541cda9af1e0ee23c814ffaae60d02b9855  payload/el8.x86_64.glibc2p28/lib64/libCgl.so.0.bz2
@@ -484,8 +484,8 @@ tar-meta  271233  1785979682  payload/el8.x86_64.glibc2p28/runtime/verilator.tar
 tar-meta  8148256  1785862091  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  648856  1786424664  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
-tar-meta  2038905  1784306307  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
-tar-meta  974636  1788901800  payload/tldr/tldr-pages.tar.bz2
+tar-meta  2037945  1788989391  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
+tar-meta  974636  1788985883  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2
 sha256  dd4de208187c47636fe5ac53fdbb31347902ba5372e2d19b3959acb6c91b2526  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/angular.so.bz2
