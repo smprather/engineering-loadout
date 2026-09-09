@@ -1642,6 +1642,32 @@ def smoke_runtime_layout(tmpdir, env):
     return failures
 
 
+def _mem_available_mb():
+    """MemAvailable from /proc/meminfo, or None when unreadable."""
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
+
+
+def _probe_workers():
+    """Probe workers scaled to free memory: each worker execs a binary and
+    captures its output, so ~325 concurrent-ish probes on a memory-tight box
+    can push the OOM killer. Cap at 16, drop to 4 when free memory is low."""
+    mem = _mem_available_mb()
+    if mem is None:
+        return 16
+    if mem < 2048:
+        return 4
+    if mem < 6144:
+        return 8
+    return 16
+
+
 def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
     """Probe every executable in bin_dir. Probes are independent, so they run
     in parallel (16 workers); the 4 s per-probe timeout budget dominates the
@@ -1689,7 +1715,7 @@ def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
             return ("ok", f"  {status}                 {fname:20s}  {detail}")
         return ("fail", f"  {status}                 {fname:20s}  {detail}", (fname, detail))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=_probe_workers()) as ex:
         futs = {ex.submit(classify, fname, fpath): fname for fname, fpath in entries}
         for fut in concurrent.futures.as_completed(futs):
             result = fut.result()

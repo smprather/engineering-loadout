@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 
 _d = os.path.dirname(os.path.abspath(__file__))
@@ -473,13 +474,77 @@ def _smoke_step(script_dir, smoke_test, use_cache):
     return result
 
 
+def _mem_available_mb():
+    """MemAvailable from /proc/meminfo, or None when unreadable."""
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
+
+
 def _run_parallel_pre_release_steps(
     script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
 ):
-    """Run all independent pre-release steps concurrently."""
+    """Run all independent pre-release steps concurrently.
+
+    The gates are memory-heavy: the smoke test installs ~8 GB, the malware
+    scan reads the whole payload, the fingerprint hashes it again. On a box
+    with little free RAM, running all four at once can push the kernel's OOM
+    killer into killing the terminal (observed 2026-09-09: 32 GB box, 12 GB
+    already in swap, four parallel gates -> OOM). So the worker count scales
+    with MemAvailable, and a watchdog aborts the run with a clear message
+    before the kernel gets the chance."""
     _print_heading("Starting independent pre-release steps in parallel")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    mem = _mem_available_mb()
+    if mem is not None and mem < 2048:
+        print(f"  WARNING: only {mem} MB available; running gates SEQUENTIALLY to avoid OOM", flush=True)
+        results = {}
+        for _name, _title, fn in (
+            (
+                "malware scan",
+                STEP_SCAN_TITLE,
+                lambda: (
+                    _skip_scan_step(script_dir, tag)
+                    if skip_scan
+                    else _command_step("malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
+                ),
+            ),
+            ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
+            ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
+        ):
+            result = fn()
+            _emit_step_result(result)
+            results[result.name] = result
+        return results
+
+    workers = 4
+    if mem is not None and mem < 6144:
+        workers = 2
+        print(f"  WARNING: {mem} MB available; running gates with {workers} workers to avoid OOM", flush=True)
+
+    stop = threading.Event()
+
+    def watchdog():
+        while not stop.wait(2.0):
+            avail = _mem_available_mb()
+            if avail is not None and avail < 1024:
+                print(
+                    f"\n  ABORT: free memory dropped to {avail} MB -- aborting gates to avoid the OOM killer.\n"
+                    "  Re-run with more RAM free, or let the gates run sequentially (they do so automatically).",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                os._exit(3)
+
+    watcher = threading.Thread(target=watchdog, daemon=True)
+    watcher.start()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {}
         if skip_scan:
             future = executor.submit(_skip_scan_step, script_dir, tag)
@@ -506,6 +571,7 @@ def _run_parallel_pre_release_steps(
             _emit_step_result(result)
             results[result.name] = result
 
+    stop.set()
     return results
 
 

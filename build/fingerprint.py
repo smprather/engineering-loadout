@@ -78,21 +78,41 @@ def _fold(entries):
     return h.hexdigest()
 
 
+def _mem_available_mb():
+    """MemAvailable from /proc/meminfo, or None when unreadable."""
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
+
+
+def _hash_workers():
+    """Hash workers scaled to free memory: each worker reads a 1 MB chunk at
+    a time, but the page cache pressure of ~3 GB of concurrent reads on a
+    memory-tight box can still push the OOM killer. Cap at 8, and drop to 2
+    when free memory is low."""
+    mem = _mem_available_mb()
+    if mem is None:
+        return 8
+    if mem < 2048:
+        return 2
+    if mem < 6144:
+        return 4
+    return 8
+
+
 def fingerprint(roots, exact):
     files = sorted(_iter_files(roots))
     if exact:
         digests = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=(os.cpu_count() or 8)) as ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_hash_workers()) as ex:
             futs = {ex.submit(_sha256_file, f): f for f in files}
             for fut in concurrent.futures.as_completed(futs):
                 digests[futs[fut]] = fut.result()
-        entries = [
-            (os.path.relpath(f, os.path.commonpath(roots)) if len(roots) > 1 else os.path.basename(f), digests[f])
-            for f in files
-        ]
-        # relpath against commonpath is wrong when roots are disjoint; use
-        # the path as given (relative to cwd) instead -- deterministic and
-        # unambiguous.
         entries = [(f, digests[f]) for f in files]
     else:
         entries = []
