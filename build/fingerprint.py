@@ -45,16 +45,24 @@ def _sha256_file(path):
     return h.hexdigest()
 
 
-def _iter_files(roots):
+def _excluded(path, excludes):
+    if not excludes:
+        return False
+    base = os.path.basename(path)
+    return any(x == base or x in path for x in excludes)
+
+
+def _iter_files(roots, excludes):
     for root in roots:
         if os.path.isfile(root):
-            yield root
+            if not _excluded(root, excludes):
+                yield root
             continue
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames.sort()
+            dirnames[:] = [d for d in dirnames if not _excluded(os.path.join(dirpath, d), excludes)]
             for name in sorted(filenames):
                 full = os.path.join(dirpath, name)
-                if os.path.isfile(full) and not os.path.islink(full):
+                if os.path.isfile(full) and not os.path.islink(full) and not _excluded(full, excludes):
                     yield full
 
 
@@ -105,8 +113,8 @@ def _hash_workers():
     return 8
 
 
-def fingerprint(roots, exact):
-    files = sorted(_iter_files(roots))
+def fingerprint(roots, exact, excludes=None):
+    files = sorted(_iter_files(roots, excludes or []))
     if exact:
         digests = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=_hash_workers()) as ex:
@@ -125,7 +133,20 @@ def fingerprint(roots, exact):
         "platform": _platform_fingerprint(),
         "files": len(files),
         "sha256": _fold(entries),
+        # Per-file entries in --write output only: makes fast-mode sidecars
+        # debuggable when a cached-tree check mismatches. Omitted from the
+        # --check comparison (the fold is what decides), so older sidecars
+        # without this field still validate.
+        "entries": entries if not exact else None,
     }
+
+
+def _fold_key(d):
+    """The fingerprint fields that decide a match. `entries` is a debug aid
+    (added later, and only in --write output), so it must not invalidate a
+    sidecar written by an older build of this script -- nor can a sidecar's
+    sha256 alone decide, since the fold is what carries the bytes."""
+    return {k: d.get(k) for k in ("schema", "mode", "platform", "files", "sha256")}
 
 
 def main():
@@ -133,13 +154,20 @@ def main():
     ap.add_argument("--fast", action="store_true", help="mtime+size fingerprint (seconds)")
     ap.add_argument("--exact", action="store_true", help="byte-hash fingerprint (~40 s)")
     ap.add_argument("--roots", nargs="+", required=True, help="files/dirs to fingerprint")
+    ap.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="exclude files/dirs whose basename matches (repeatable)",
+    )
     ap.add_argument("--check", metavar="SIDECAR", help="exit 0 if sidecar matches current state")
     ap.add_argument("--write", metavar="SIDECAR", help="record current state to sidecar")
     args = ap.parse_args()
 
     if args.fast == args.exact:
         ap.error("exactly one of --fast / --exact is required")
-    data = fingerprint(args.roots, exact=args.exact)
+    data = fingerprint(args.roots, exact=args.exact, excludes=args.exclude)
 
     if args.check:
         try:
@@ -147,7 +175,7 @@ def main():
                 prev = json.load(fh)
         except OSError:
             sys.exit(1)
-        sys.exit(0 if prev == data else 1)
+        sys.exit(0 if _fold_key(prev) == _fold_key(data) else 1)
 
     if args.write:
         os.makedirs(os.path.dirname(args.write) or ".", exist_ok=True)

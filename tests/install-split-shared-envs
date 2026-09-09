@@ -37,7 +37,18 @@ done
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd "$script_dir/.." && pwd)
 tmp_root=${TMPDIR:-/tmp}
-shared_root=$(mktemp -d "$tmp_root/loadout-shared-root.XXXXXX")
+# LOADOUT_TEST_SHARED_SEED: a pre-installed @shared tree (set by the Tier 3
+# entrypoint's install cache). The @shared install phase is skipped and the
+# seeded tree is used as-is -- the test still installs @envs fresh into its
+# temp HOME and runs the full smoke against the seeded tree. The seeded tree
+# is owned by the caller and must NOT be deleted here.
+seed=${LOADOUT_TEST_SHARED_SEED:-}
+if [[ -n "$seed" ]]; then
+    shared_root=$seed
+    [[ -d "$shared_root/local/bin" ]] || { echo "ERROR: seeded shared tree missing @shared install: $shared_root" >&2; exit 1; }
+else
+    shared_root=$(mktemp -d "$tmp_root/loadout-shared-root.XXXXXX")
+fi
 test_home=$(mktemp -d "$tmp_root/loadout-env-home.XXXXXX")
 test_cache=$(mktemp -d "$tmp_root/loadout-env-cache.XXXXXX")
 test_state=$(mktemp -d "$tmp_root/loadout-env-state.XXXXXX")
@@ -53,7 +64,11 @@ cleanup() {
         echo "Kept XDG_STATE_HOME: $test_state"
         echo "Kept run dir: $test_run"
     else
-        rm -rf "$shared_root" "$test_home" "$test_cache" "$test_state" "$test_run"
+        rm -rf "$test_home" "$test_cache" "$test_state" "$test_run"
+        # Only the temp-created tree is ours to delete.
+        if [[ -z "$seed" ]]; then
+            rm -rf "$shared_root"
+        fi
     fi
 }
 trap cleanup EXIT
@@ -85,8 +100,12 @@ run_loadout() {
         "$repo_dir/loadout" "$@"
 }
 
-echo "Installing @shared to non-home tree: $shared_root"
-run_loadout install -y @shared --dest-dir "$shared_root" --no-backup
+if [[ -z "$seed" ]]; then
+    echo "Installing @shared to non-home tree: $shared_root"
+    run_loadout install -y @shared --dest-dir "$shared_root" --no-backup
+else
+    echo "Using seeded @shared tree: $shared_root (skipping @shared install)"
+fi
 
 echo "Installing @envs to temp HOME: $test_home"
 env -i \

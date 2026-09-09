@@ -3,10 +3,34 @@ set -eu
 
 src=${LOADOUT_SMOKE_SRC:-/src}
 dst=${LOADOUT_SMOKE_WORKDIR:-/work/dotfiles}
+cache=${LOADOUT_SMOKE_CACHE:-/cache}
 
 if [ ! -d "$src" ]; then
     echo "ERROR: repo source not found: $src" >&2
     exit 2
+fi
+
+# --- Disk preflight ---------------------------------------------------------
+# The smoke installs ~8 GB into /work and the malware scan decompresses the
+# payload into $TMPDIR; an ENOSPC mid-install fails every later phase with a
+# confusing error (observed 2026-09-09: scan died on "No space left on
+# device" in /tmp and the release gate reported a failed scan with zero
+# output). Fail fast with a clear message instead.
+disk_fail=0
+_assert_disk() {
+    _dir="$1"; _need_mb="$2"; _what="$3"
+    _dir_mb=$(df -P -m "$_dir" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -z "$_dir_mb" ]; then
+        echo "ERROR: cannot read free space on $_dir" >&2
+        disk_fail=1
+    elif [ "$_dir_mb" -lt "$_need_mb" ]; then
+        echo "ERROR: only ${_dir_mb} MB free on $_dir, need ${_need_mb} MB for $_what" >&2
+        disk_fail=1
+    fi
+}
+_assert_disk /work 12000 "the smoke install tree"
+if [ "$disk_fail" -eq 1 ] && [ "${LOADOUT_SMOKE_DISK_FATAL:-1}" = "1" ]; then
+    exit 3
 fi
 
 rm -rf "$dst"
@@ -28,7 +52,9 @@ cd "$dst"
 
 sh -n loadout
 # Use loadout's own bootstrap path. The base image intentionally does not
-# install system Python for the harness.
+# install system Python for the harness. This also bootstraps the portable
+# interpreter into .loadout-bootstrap/ on first run (gitignored, so absent
+# from the tar copy above).
 ./loadout --help >/dev/null
 
 py=.loadout-bootstrap/bin/python3.14
@@ -37,7 +63,84 @@ if [ ! -x "$py" ]; then
     exit 1
 fi
 
+fp="$dst/build/fingerprint.py"
+FP_PAYLOAD_REL="payload loadout loadout_main.py"
+
 "$py" -m py_compile loadout_main.py tests/prebuilt-binaries
+
+# --- Persistent install-tree cache ------------------------------------------
+# The install phases (@shared for split-shared, @shared for prebuilt) are
+# pure functions of payload bytes. The nvim plugin stash is a release asset
+# OUTSIDE the git tree, so it is excluded from the fingerprint. The tar
+# round-trips mtimes, so a fresh repo copy fingerprints identically to the
+# host's tree as long as nothing changed -- mtime-based --fast is stable.
+#
+# Layout (all under the persistent bind mount):
+#   <cache>/fingerprint.lock    -- run-exclusive mkdir lock (two concurrent
+#                                  Tier 3 runs must not clobber each other)
+#   <cache>/split-shared/       -- @shared dest-dir tree, seeded for
+#                                  install-split-shared-envs (fingerprint.json
+#                                  sidecar written only after the test passed)
+#   <cache>/xdg/                -- XDG_CACHE_HOME for prebuilt-binaries
+#                                  (its smoke-install-v1 install cache lives
+#                                  here and persists across runs)
+# install-linux-tmp-home is NOT cached: the install phase IS its assertion
+# (post-install hooks, backup dir, symlinks, tealdeer path bake).
+CACHE_OK=0
+CACHE_DIR=${LOADOUT_SMOKE_CACHE_DIR:-$cache}
+if [ -d "$CACHE_DIR" ] && [ -w "$CACHE_DIR" ]; then
+    CACHE_OK=1
+elif [ -d "$CACHE_DIR" ]; then
+    echo "NOTE: cache dir $CACHE_DIR is read-only; installs run fresh."
+else
+    echo "NOTE: cache dir $CACHE_DIR not mounted; installs run fresh."
+    echo "      Bind-mount a persistent dir read-write at $CACHE_DIR to skip"
+    echo "      the ~20 min of install phases on unchanged payloads."
+fi
+
+if [ "$CACHE_OK" -eq 1 ]; then
+    _lock="$CACHE_DIR/fingerprint.lock"
+    trap 'rmdir "$_lock" 2>/dev/null || true' EXIT INT TERM
+    _waited=0
+    _got_lock=0
+    while [ "$_waited" -lt 900 ]; do
+        if mkdir "$_lock" 2>/dev/null; then
+            _got_lock=1
+            break
+        fi
+        sleep 2
+        _waited=$((_waited + 2))
+    done
+    if [ "$_got_lock" -eq 0 ]; then
+        echo "ERROR: cache lock $_lock held for ${_waited}s -- another Tier 3 run in progress?" >&2
+        exit 3
+    fi
+    export XDG_CACHE_HOME="$CACHE_DIR/xdg"
+fi
+
+gen_stamp() {
+    "$py" "$fp" --fast --write "$1" --roots $FP_PAYLOAD_REL \
+        --exclude nvim-plugin-stash.tar.bz2 --exclude __pycache__ >/dev/null 2>&1
+}
+
+install_cached() {  # install_cached <dest> <fingerprint> <install args...>
+    _dest="$1"; _fp="$2"; shift 2
+    _needed=1
+    if [ "$CACHE_OK" -eq 1 ] && [ -f "$_fp" ] && [ -d "$_dest" ]; then
+        if "$py" "$fp" --fast --check "$_fp" --roots $FP_PAYLOAD_REL \
+                --exclude nvim-plugin-stash.tar.bz2 --exclude __pycache__ >/dev/null 2>&1; then
+            echo "  cached install tree $_dest (payload unchanged)"
+            _needed=0
+        elif [ "${LOADOUT_SMOKE_DEBUG:-0}" = "1" ]; then
+            echo "  fingerprint mismatch for $_dest; reinstalling"
+        fi
+    fi
+    if [ "$_needed" -eq 1 ]; then
+        rm -rf "$_dest"
+        mkdir -p "$_dest"
+        ./loadout install -y "$@" --dest-dir "$_dest" --no-backup
+    fi
+}
 
 if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
     # Full mode: exercise the CLI surface and both integration installs in
@@ -64,10 +167,23 @@ if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
     "$py" tests/assurance-check
 
     echo "== full: fresh-user temp-HOME install"
+    # NOT cached: the install phase IS the assertion (post-install hooks,
+    # backup dir, symlinks, tealdeer cache_dir bake). Re-running it is the test.
     tests/install-linux-tmp-home
 
     echo "== full: split shared/envs install"
+    if [ "$CACHE_OK" -eq 1 ]; then
+        # The @shared phase is the expensive one; the @envs install into the
+        # temp HOME is cheap and must run fresh (it bakes the test's own
+        # paths). Seed the cached @shared tree, then let the test's smoke
+        # run against it. The sidecar is stamped only after the test passed.
+        install_cached "$CACHE_DIR/split-shared" "$CACHE_DIR/split-shared/fingerprint.json" @shared
+        export LOADOUT_TEST_SHARED_SEED="$CACHE_DIR/split-shared"
+    fi
     tests/install-split-shared-envs
+    if [ "$CACHE_OK" -eq 1 ]; then
+        gen_stamp "$CACHE_DIR/split-shared/fingerprint.json"
+    fi
 
     echo "== full: Environment Modules fresh-home smoke"
     tests/install-modules

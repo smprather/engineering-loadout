@@ -105,8 +105,18 @@ fi
 # docker run by hand if you truly need to fetch something in a shell.
 net_arg="--network=none"
 
+# Persistent install-tree cache: the container installs ~8 GB of @shared
+# trees during --full and the binary smoke; binding a persistent dir
+# read-write at /cache lets those install phases be skipped on unchanged
+# payloads (see almalinux8.10-smoke-entrypoint). Without the bind (or with
+# --no-cache), everything installs fresh -- correct, just ~20 min slower.
+cache_root=${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/tier3-v1
+mkdir -p "$cache_root"
+cache_arg="-v $cache_root:/cache"
+
 exec docker run --rm \
     $net_arg \
+    $cache_arg \
     -e "LOADOUT_SMOKE_FULL=$full" \
     -e "LOADOUT_SMOKE_DYNAMIC=$dynamic" \
     -v "$repo_dir:/src:ro" \
