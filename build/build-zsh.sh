@@ -23,6 +23,19 @@
 # zsh/sched. Only zsh/db/gdbm is dropped -- configure auto-disables it when
 # libgdbm-devel is absent, which it is on the EL8 build base.
 #
+# Relocatable-prefix design (2026-09-09): zsh bakes --prefix into libzsh as
+# its default module_path AND fpath (three NUL-terminated strings), and
+# MODULE_PATH from the environment is IGNORED (verified: importing it leaves
+# module_path on the baked value), so no wrapper can redirect it -- the old
+# /tmp/zsh-install-<ver> prefix shipped dead and zle never loaded anywhere.
+# The build therefore uses a long distinctive placeholder prefix
+# (ZSH_PLACEHOLDER_PREFIX, exactly 96 bytes -- the script asserts this), and
+# the installer rewrites it to the deployed prefix at install time
+# (_relocate_zsh_prefix in loadout_main.py: ELF in place with NUL pad, text
+# rewritten; refuses loudly when the real prefix does not fit). The token
+# literal must match on both sides; the stage-verify block at the end of
+# this script proves the round trip on a relocated copy.
+#
 # Note: official zsh prebuilts are source tarballs only; this script builds
 # from the GitHub mirror at a stable tagged release.
 #
@@ -71,7 +84,16 @@ loadout_enable_gcc_toolset
 loadout_require_cmds autoconf gcc make
 
 SRCDIR="/tmp/zsh-src-${tag}"
-INSTALL_PREFIX="/tmp/zsh-install-${tag}"
+# Placeholder install prefix (see header comment): long enough that every
+# real deployment prefix fits inside it for the install-time rewrite.
+# Length is load-bearing on BOTH sides -- loadout_main._relocate_zsh_prefix
+# constructs the same literal -- so assert it here.
+_pad="$(printf '%68s' '' | tr ' ' 'x')"
+INSTALL_PREFIX="/tmp/__LOADOUT_ZSH_PREFIX__/${_pad}"
+[ "${#INSTALL_PREFIX}" -eq 96 ] || {
+    echo "ERROR: placeholder prefix is ${#INSTALL_PREFIX} bytes, not 96 -- fix build-zsh.sh AND loadout_main._ZSH_PREFIX_TOKEN together" >&2
+    exit 1
+}
 
 if [ ! -d "$SRCDIR/.git" ]; then
     echo "Cloning $CLONE_URL ..."
@@ -257,9 +279,9 @@ fi
 # lib/zsh/<ver>/zsh/ and MUST ship alongside the functions so zmodload works.
 # The shell functions (compinit, add-zsh-hook, the _* completions, etc.) live
 # in share/zsh/<ver>/functions and share/zsh/site-functions and MUST ship --
-# without them fpath points at this gone /tmp build prefix and
-# compinit/add-zsh-hook fail (starship's zsh init hangs). zsh/zshrc points
-# fpath at the installed copy.
+# without them the default fpath (now the placeholder, patched at install)
+# has nothing behind it and compinit/add-zsh-hook fail (starship's zsh init
+# hangs). zsh/zshrc points fpath at the installed copy.
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 mkdir -p "$RUNTIME_DIR"
 echo "Packaging zsh function library + modules -> runtime/zsh.tar.bz2 ..."
@@ -291,6 +313,102 @@ case "$MAX_GLIBC" in
     *)
         echo "WARNING: $MAX_GLIBC > GLIBC_2.28 -- binary may not run on EL8" >&2 ;;
 esac
+
+# Stage-verify the placeholder round trip: the staged tree carries the
+# placeholder, so module_path must show it (negative control -- proves this
+# probe is sensitive), then a relocated copy patched with the installer's
+# rules must report the new prefix and actually LOAD modules from it. Uses
+# only python3.6-safe syntax (the EL8 box python is 3.6; loadout's 3.14-only
+# loadout_main.py cannot be imported here).
+echo "Verifying placeholder prefix round trip..."
+_unpatched_mp="$("$INSTALL_PREFIX/bin/zsh" -c 'print -r -- $module_path' 2>/dev/null)"
+case "$_unpatched_mp" in
+    *__LOADOUT_ZSH_PREFIX__*)
+        echo "  negative control OK: staged module_path shows placeholder" ;;
+    *)
+        echo "ERROR: staged module_path is '$_unpatched_mp' -- expected the placeholder. The build is not relocatable." >&2
+        exit 1 ;;
+esac
+PROOF_PREFIX="/tmp/zsh-reloc-proof"
+rm -rf "$PROOF_PREFIX"
+cp -a "$INSTALL_PREFIX" "$PROOF_PREFIX"
+python3 - "$INSTALL_PREFIX" "$PROOF_PREFIX" << 'PYEOF'
+import os
+import re
+import sys
+staged, proof = sys.argv[1], sys.argv[2]
+token = staged.encode("ascii")
+real = proof.encode("ascii")
+assert len(real) <= len(token), "proof prefix does not fit placeholder"
+# Same whole-occurrence rule as loadout_main._relocate_zsh_prefix: the token
+# is a PREFIX of longer baked paths, so rewrite real+suffix per occurrence.
+token_re = re.compile(re.escape(token) + rb"([^\0]*)")
+def patch_elf(data):
+    def sub(m):
+        new = real + m.group(1)
+        assert len(new) <= len(m.group(0)), m.group(0)[:60]
+        return new + b"\0" * (len(m.group(0)) - len(new))
+    return token_re.sub(sub, data)
+count = 0
+for dirpath, _dirnames, filenames in os.walk(proof):
+    for name in filenames:
+        path = os.path.join(dirpath, name)
+        with open(path, "rb") as fh:
+            data = fh.read()
+        if token not in data:
+            continue
+        if data.startswith(b"\x7fELF"):
+            new_data = patch_elf(data)
+            assert len(new_data) == len(data)
+            with open(path, "r+b") as fh:
+                fh.write(new_data)
+        else:
+            assert b"\0" not in data, path
+            new_data = data.decode("utf-8").replace(staged, proof).encode("utf-8")
+            with open(path, "wb") as fh:
+                fh.write(new_data)
+        count += 1
+leftover = []
+for dirpath, _dirnames, filenames in os.walk(proof):
+    for name in filenames:
+        path = os.path.join(dirpath, name)
+        with open(path, "rb") as fh:
+            if token in fh.read():
+                leftover.append(path)
+if leftover:
+    sys.exit("placeholder remains in: %s" % leftover[:3])
+print("  patched %d files, zero placeholder remains" % count)
+PYEOF
+# Probe transparently: under set -eu a failing $(...) exits silently, so
+# capture diagnostics explicitly instead of 2>/dev/null.
+set +e
+_patched_out="$("$PROOF_PREFIX/bin/zsh" -c 'print -r -- $module_path' 2>&1)"
+_rc=$?
+set -e
+[ $_rc -eq 0 ] || {
+    echo "ERROR: proof zsh would not start (rc=$_rc): $_patched_out" >&2
+    ldd "$PROOF_PREFIX/bin/zsh" >&2 || true
+    exit 1
+}
+_patched_mp="$_patched_out"
+[ "$_patched_mp" = "$PROOF_PREFIX/lib/zsh/$_zver" ] || {
+    echo "ERROR: relocated module_path is '$_patched_mp', expected '$PROOF_PREFIX/lib/zsh/$_zver'" >&2
+    exit 1
+}
+echo "  relocated module_path OK: $_patched_mp"
+"$PROOF_PREFIX/bin/zsh" -c 'zmodload zsh/zle && zmodload zsh/pcre && print "  zle+pcre load OK from relocated tree"' || {
+    echo "ERROR: modules do not load from the relocated tree" >&2
+    exit 1
+}
+_patched_fp="$("$PROOF_PREFIX/bin/zsh" -c 'print -r -- $fpath' 2>/dev/null)"
+case "$_patched_fp" in
+    *"$PROOF_PREFIX"*)
+        echo "  relocated fpath OK" ;;
+    *)
+        echo "ERROR: relocated fpath is '$_patched_fp' -- missing proof prefix" >&2
+        exit 1 ;;
+esac
+rm -rf "$PROOF_PREFIX"
 
 echo ""
 echo "Installed: $BIN_DIR/zsh.bz2"

@@ -3022,6 +3022,121 @@ def relocate_runtime_token(install_to, pkg_name, token, relocate_root):
     return len(replacements)
 
 
+# zsh is built with --prefix set to this placeholder (see build/build-zsh.sh,
+# which asserts the length). zsh bakes the prefix into libzsh as its default
+# module_path AND fpath, and MODULE_PATH from the environment is ignored, so
+# no wrapper can redirect it -- the bytes are patched to the deployed prefix
+# at install time by _relocate_zsh_prefix below.
+_ZSH_PREFIX_TOKEN = "/tmp/__LOADOUT_ZSH_PREFIX__/" + "x" * 68
+
+
+def _relocate_zsh_prefix(install_to):
+    """Rewrite zsh's build-prefix placeholder to the deployed install prefix.
+
+    ELF files get an in-place same-size patch (real prefix + NUL pad --
+    offsets must not move); text files a full rewrite. Lengths never grow.
+    Raises RuntimeError -- a loud phase FAIL, never a silently broken shell --
+    when the real prefix does not fit the placeholder or any token remains
+    afterwards. Returns the number of files patched; 0 when the token is
+    absent (pre-placeholder payloads, or an already-relocated tree).
+    """
+    token = _ZSH_PREFIX_TOKEN.encode("ascii")
+    root = os.path.abspath(install_to)
+    try:
+        real = root.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RuntimeError(f"zsh runtime: install prefix is not UTF-8: {root!r}") from exc
+    if b"\0" in real:
+        raise RuntimeError(f"zsh runtime: install prefix contains NUL: {root!r}")
+    if len(real) > len(token):
+        raise RuntimeError(
+            f"zsh runtime: install prefix {root!r} ({len(real)} bytes) "
+            f"does not fit the {len(token)}-byte build placeholder -- refusing "
+            "to ship a shell whose modules cannot load"
+        )
+
+    subtrees = (os.path.join(root, "bin", "zsh"), os.path.join(root, "lib", "zsh"), os.path.join(root, "share", "zsh"))
+    candidates = []
+    for base in subtrees:
+        if os.path.isfile(base) and not os.path.islink(base):
+            candidates.append(base)
+        elif os.path.isdir(base) and not os.path.islink(base):
+            for dirpath, _dirnames, filenames in os.walk(base):
+                for name in filenames:
+                    full = os.path.join(dirpath, name)
+                    # Never patch through a symlink: its target is patched via
+                    # its own path (or is outside the tree entirely).
+                    if not os.path.islink(full):
+                        candidates.append(full)
+    targets = []
+    for path in candidates:
+        try:
+            with open(path, "rb") as fh:
+                if token in fh.read():
+                    targets.append(path)
+        except OSError:
+            continue
+    if not targets:
+        return 0
+
+    # The token is always a PREFIX of a longer NUL-terminated baked path
+    # (token + b"/lib/zsh/5.9", token + b"/share/zsh/..."). Patching the
+    # token alone would NUL-terminate the string early and amputate the
+    # suffix (module_path would become the bare prefix). Rewrite each whole
+    # occurrence as real + suffix, NUL-padded to its original length.
+    token_re = re.compile(re.escape(token) + rb"([^\0]*)")
+
+    def _patch_elf_occurrence(match):
+        new = real + match.group(1)
+        if len(new) > len(match.group(0)):
+            raise RuntimeError(
+                f"zsh runtime: patched path does not fit ({len(new)} > {len(match.group(0))}) -- refusing"
+            )
+        return new + b"\0" * (len(match.group(0)) - len(new))
+
+    for path in targets:
+        require_writable_parent(path, "zsh runtime relocation")
+        with open(path, "rb") as fh:
+            data = fh.read()
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if data.startswith(b"\x7fELF"):
+            patched = token_re.sub(_patch_elf_occurrence, data)
+            assert len(patched) == len(data)
+            with open(path, "r+b") as fh:
+                fh.write(patched)
+        else:
+            if b"\0" in data:
+                raise RuntimeError(f"zsh runtime: placeholder found in binary data: {path}")
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise RuntimeError(f"zsh runtime: placeholder found in non-UTF-8 text: {path}") from exc
+            patched = text.replace(_ZSH_PREFIX_TOKEN, root).encode("utf-8")
+            fd, tmp_path = tempfile.mkstemp(prefix=".loadout-zsh.", dir=os.path.dirname(path))
+            try:
+                with os.fdopen(fd, "wb") as fh:
+                    fh.write(patched)
+                os.chmod(tmp_path, mode)
+                os.replace(tmp_path, path)
+            except BaseException:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(tmp_path)
+                raise
+
+    residual = []
+    for path in candidates:
+        try:
+            with open(path, "rb") as fh:
+                if token in fh.read():
+                    residual.append(path)
+        except OSError:
+            continue
+    if residual:
+        shown = ", ".join(residual[:3])
+        raise RuntimeError(f"zsh runtime: placeholder remains after patch: {shown}")
+    return len(targets)
+
+
 def install_runtime_archives(repo_dir, home, selected_tools, registry):
     """Generic runtime archive installer driven by packages.json metadata.
 
@@ -3084,6 +3199,21 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
 
         if pkg_name == "pyright":
             remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
+
+        if pkg_name == "zsh":
+            # libzsh bakes the build prefix as its default module_path/fpath
+            # (MODULE_PATH env is ignored) -- patch the placeholder the build
+            # script baked in to this deployment's prefix. Loud FAIL on any
+            # misfit: a zsh whose modules cannot load must never ship silent.
+            try:
+                relocated = _relocate_zsh_prefix(install_to)
+            except (InstallRefused, OSError, RuntimeError) as exc:
+                detail = f"prefix relocation failed: {exc}"
+                warn(f"{pkg_name} runtime: {detail}")
+                record_result(f"{pkg_name} runtime", "FAIL", detail)
+                continue
+            if relocated:
+                print(f"  Relocated {pkg_name} prefix: {relocated} files")
 
         relocate_token = entry.get("relocate_token")
         if relocate_token is not None:

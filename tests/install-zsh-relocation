@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""
+install-zsh-relocation -- zsh's build-prefix placeholder must relocate.
+
+zsh bakes --prefix into libzsh (default module_path + fpath) and ignores
+MODULE_PATH from the environment, so the build uses a placeholder prefix
+(build/build-zsh.sh) that the installer rewrites to the deployed prefix
+(loadout_main._relocate_zsh_prefix). Covers, against small synthetic trees
+(no payload, no network):
+- ELF files are patched in place (same size, NUL-padded, offsets stable).
+- text files are rewritten with the real prefix, mode preserved.
+- zero placeholder remains afterwards.
+- a real prefix longer than the placeholder refuses loudly (RuntimeError).
+- a tree without the placeholder is a no-op (returns 0).
+- symlinks are never followed/patched.
+
+Must run under the bundled Python 3.14 (loadout_main.py uses PEP 758
+syntax that older interpreters cannot parse). Exits 0/1.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import stat
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def main():
+    mod = load_loadout()
+    token = mod._ZSH_PREFIX_TOKEN
+    check("placeholder is 96 bytes", len(token) == 96, str(len(token)))
+    tmp = tempfile.mkdtemp(prefix="loadout-zsh-reloc.")
+    try:
+        root = os.path.join(tmp, "local")
+        os.makedirs(os.path.join(root, "lib", "zsh"))
+        os.makedirs(os.path.join(root, "share", "zsh"))
+        os.makedirs(os.path.join(root, "bin"))
+        elf_body = b"\x7fELF" + b"\x00" * 16 + token.encode() + b"/lib/zsh/5.9\x00" + b"\x01" * 32
+        elf_path = os.path.join(root, "lib", "zsh", "libzsh-5.9.so")
+        with open(elf_path, "wb") as f:
+            f.write(elf_body)
+        os.chmod(elf_path, 0o755)
+        text_path = os.path.join(root, "share", "zsh", "zshrc")
+        with open(text_path, "w") as f:
+            f.write("fpath=" + token + "/share/zsh/5.9/functions\n")
+        os.chmod(text_path, 0o644)
+        clean_path = os.path.join(root, "bin", "zsh")
+        with open(clean_path, "wb") as f:
+            f.write(b"\x7fELFclean-binary-no-token")
+        link_path = os.path.join(root, "lib", "zsh", "link.so")
+        os.symlink(elf_path, link_path)
+
+        patched = mod._relocate_zsh_prefix(root)
+        check("two files patched", patched == 2, str(patched))
+
+        with open(elf_path, "rb") as f:
+            elf_after = f.read()
+        check("ELF keeps exact size", len(elf_after) == len(elf_body), f"{len(elf_after)} vs {len(elf_body)}")
+        check("ELF token gone", token.encode() not in elf_after)
+        check("ELF carries real prefix", root.encode() in elf_after)
+        check(
+            "ELF keeps full path (suffix not amputated)",
+            root.encode() + b"/lib/zsh/5.9\x00" in elf_after,
+            elf_after[4:120],
+        )
+        check(
+            "ELF keeps executable bit",
+            bool(os.stat(elf_path).st_mode & stat.S_IXUSR),
+            oct(stat.S_IMODE(os.stat(elf_path).st_mode)),
+        )
+
+        with open(text_path) as f:
+            text_after = f.read()
+        check("text token gone", token not in text_after)
+        check(
+            "text carries real prefix",
+            text_after == "fpath=" + root + "/share/zsh/5.9/functions\n",
+            text_after[:80],
+        )
+        check(
+            "text keeps mode 644",
+            stat.S_IMODE(os.stat(text_path).st_mode) == 0o644,
+            oct(stat.S_IMODE(os.stat(text_path).st_mode)),
+        )
+        check("clean binary untouched", open(clean_path, "rb").read() == b"\x7fELFclean-binary-no-token")
+        check("symlink still a symlink", os.path.islink(link_path))
+
+        check("second run is a no-op", mod._relocate_zsh_prefix(root) == 0)
+
+        try:
+            mod._relocate_zsh_prefix("/" + "y" * 200)
+            refused = False
+        except RuntimeError:
+            refused = True
+        check("oversize prefix refuses loudly", refused)
+    finally:
+        import shutil
+
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

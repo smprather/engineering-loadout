@@ -2343,6 +2343,15 @@ Other build details:
   `$ORIGIN/../..` (finds `lib64/` deps).
 - Links `libncursesw.so.6`, `libcap.so.2` (both bundled / EL8 base), `libpcre.so.1` (bundled).
 - Config: `loadout install env-zsh` (depends `env-bash` for the shared layers).
+- Relocatable prefix (2026-09-09): the old `/tmp/zsh-install-<ver>` prefix
+  shipped dead inside libzsh (default module_path + fpath; MODULE_PATH env
+  ignored, verified) so zle never loaded anywhere. The build now uses a
+  96-byte placeholder prefix (asserted in-script) rewritten at install time
+  by `loadout_main._relocate_zsh_prefix` (ELF in place + NUL pad, text
+  rewritten, loud FAIL when the real prefix does not fit or any token
+  remains; no-op on token-absent trees). Token literal must match on both
+  sides. Stage-verify proves the round trip on a relocated copy (negative
+  control on the staged tree first): module_path, zle+pcre load, fpath.
 
 ## rust 1.96.0 -- Rust toolchain + offline crate store (repacked rustup stable)
 

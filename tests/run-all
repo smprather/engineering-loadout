@@ -165,6 +165,7 @@ run_test "assurance-check" "$PY" tests/assurance-check
 run_test "env-shell-parity" "$PY" tests/env-shell-parity
 run_test "cargo-offline-fallback" "$PY" tests/cargo-offline-fallback
 run_test "shell-typeahead" tests/shell-typeahead
+run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper
 run_test "env-helix-config" tests/env-helix-config
