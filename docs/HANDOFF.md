@@ -16,7 +16,7 @@ published sha256sums.txt. `v2026.08.28` notes retained below for history.
 ## 2026-09-09 batch: gate speedups, OOM guard, Tier 3 install cache, read-only tree contract (RELEASED as v2026.09.09)
 
 Release v2026.09.09 shipped commits `8ecdccf`..`47e5876` (strace batch,
-tmux/nvim two-layer, nvim online probe, DPC terminology sweep, gate
+tmux/nvim two-layer, nvim online probe, terminology sweep, gate
 speedups, OOM guard, Tier 3 cache, RO-tree contract). Verified: signed tag
 good (ED25519), `origin/main == v2026.09.09^{commit}` (`78651ad`), all
 three assets present. The speedup/OOM/Tier3/RO work below is the
@@ -78,7 +78,7 @@ Tree-identity check (path+size+mtime) is the no-strace backstop. The
 contract holds because portable-python/uv/tealdeer already redirect
 writes to user space; this gate now enforces it.
 
-## 2026-09-08 batch: strace 7.2 + strace-ui, tmux/nvim two-layer, nvim online probe, DPC terminology sweep (UNRELEASED, in tree)
+## 2026-09-08 batch: strace 7.2 + strace-ui, tmux/nvim two-layer, nvim online probe, terminology sweep (UNRELEASED, in tree)
 
 Four changes landed together (commits `8ecdccf`, `b105e63`, `1eb9b54` + the
 uncommitted probe/terminology work):
@@ -95,14 +95,14 @@ uncommitted probe/terminology work):
    `${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/detect-*` cache file → live 0.15s
    TCP probe of `LOADOUT_CFG_ONLINE_DETECT_HOSTS` → false (offline-first).
    Lazy's update checker now gates on `cfg_online and not cfg_offline`, so
-   plugins never stall on timeouts on air-gapped boxes. `cfg_dpc` renamed to
-   `cfg_offline` with a compat shim (old name honored, new wins).
-4. **DPC/nDPC terminology sweep** — Cadence-internal terms removed from all
+   plugins never stall on timeouts on air-gapped boxes. `cfg_offline` is the
+   read-only-overlay detector.
+4. **Terminology sweep** — Cadence-internal terms removed from all
    docs; replaced with generic "online box" (partially online, R/W shared FS)
    and "offline box" (air-gapped, R/O shared FS). `docs/DEPLOYMENT-RUNBOOK.md`,
-   the stash design spec, and `docs/HANDOFF.md` updated. The `anvil_release`
-   mount label in the offline detector is the actual filesystem marker and
-   stays.
+   the stash design spec, and `docs/HANDOFF.md` updated. The offline
+   detector is now generic: any read-only mount of the install root
+   (findmnt), no vendor-specific labels.
 
 Gates: focused two-layer test green; `tests/install-nvim-deployments` green
 (both shapes, network blackholed); nvim headless probe matrix green (env

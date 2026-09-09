@@ -35,7 +35,8 @@ vim.g.cfg_nvim_plugin_stash_dir =
 --   3. A live probe of LOADOUT_CFG_ONLINE_DETECT_HOSTS (default
 --      github.com/raw.githubusercontent.com/pypi.org :443) with the same
 --      0.15s timeout the shell probe uses. Backup only -- paid once per
---      nvim start, never cached here.
+--      nvim start, never cached here. The probe is generic: nc, then curl,
+--      then bash /dev/tcp -- whichever the host provides.
 --   4. Offline. The safe default: plugins never attempt network, so no
 --      timeout delays on air-gapped boxes.
 local function _cached_online_verdict()
@@ -60,12 +61,27 @@ local function _live_online_probe()
     local hosts = os.getenv("LOADOUT_CFG_ONLINE_DETECT_HOSTS")
         or "github.com:443 raw.githubusercontent.com:443 pypi.org:443"
     local t = os.getenv("LOADOUT_CFG_ONLINE_DETECT_TIMEOUT") or "0.15"
+    local nc = vim.fn.executable("nc") == 1
+    local curl = vim.fn.executable("curl") == 1
     for hp in hosts:gmatch("%S+") do
         local host, port = hp:match("([^:]+):(%d+)")
         if host and port then
-            vim.fn.system(string.format(
-                "timeout %s bash -c 'echo >/dev/tcp/%s/%s' 2>/dev/null", t, host, port))
-            if vim.v.shell_error == 0 then return true end
+            local ok = false
+            if nc then
+                vim.fn.system(string.format(
+                    "timeout %s nc -z -w %s %s %s 2>/dev/null", t, t, host, port))
+                ok = vim.v.shell_error == 0
+            elseif curl then
+                vim.fn.system(string.format(
+                    "timeout %s curl -s -o /dev/null --max-time %s https://%s:%s/ 2>/dev/null",
+                    t, t, host, port))
+                ok = vim.v.shell_error == 0
+            else
+                vim.fn.system(string.format(
+                    "timeout %s bash -c 'echo >/dev/tcp/%s/%s' 2>/dev/null", t, host, port))
+                ok = vim.v.shell_error == 0
+            end
+            if ok then return true end
         end
     end
     return false
@@ -80,27 +96,26 @@ vim.g.cfg_online = (function()
     return _live_online_probe()
 end)()
 
--- Offline machine detection: a read-only overlay mount (e.g. an air-gapped
--- deployment's read-only shared filesystem) means plugin update checks would
--- only fail or stall, so they are disabled up front.
---
--- Compatibility: cfg_dpc was the pre-2026-09-08 name. A user override set
--- before the rename must keep working; the new name wins when both are set.
-if vim.g.cfg_dpc ~= nil then
-    vim.g.cfg_offline = vim.g.cfg_dpc
-elseif vim.g.cfg_offline == nil then
-    vim.g.cfg_offline = (function()
-        local file = io.open("/proc/mounts", "r")
-        if not file then return false end
-        for line in file:lines() do
-            if string.match(line, "anvil_release.*ro,") then
-                file:close()
-                return true
-            end
+-- Offline machine detection: when the loadout install root sits on a
+-- read-only filesystem (the air-gapped farm shape), plugin update checks
+-- would only fail or stall, so they are disabled up front. Generic: any
+-- read-only mount of the install root counts -- no vendor-specific labels.
+local function _is_readonly_mount(path)
+    if not path or path == "" then return false end
+    local real = vim.fn.resolve(path)
+    local out = vim.fn.system(string.format(
+        "findmnt -rn -o OPTIONS --target %q 2>/dev/null", real))
+    if vim.v.shell_error == 0 and out ~= "" then
+        for opt in out:gmatch("[^,]+") do
+            if opt == "ro" then return true end
         end
-        file:close()
-        return false
-    end)()
+    end
+    return false
+end
+
+if vim.g.cfg_offline == nil then
+    vim.g.cfg_offline = _is_readonly_mount(
+        os.getenv("LOADOUT_CFG_SHARED_PREFIX") or vim.fn.expand("~/.local"))
 end
 
 -- Platform detection

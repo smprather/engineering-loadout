@@ -3,11 +3,11 @@
 
 This is the piece that decouples plugin cadence from loadout cadence.
 
-    nDPC (has github, clone/fetch only)          DPC (air-gapped)
+    online box (has github, clone/fetch only)     offline box (air-gapped)
         │                                             │
         │  ./tools/refresh-stash <shared>/.../plugin-stash  │
         ▼                                             ▼
-    shared filesystem  ── R/W from nDPC ──  R/O from DPC
+    shared filesystem  ── R/W from online box ──  R/O from offline box
         │
         └── users' nvim clones + :Lazy update FETCH from these mirrors
 
@@ -111,7 +111,7 @@ def main(argv):
         return 1
     if not args.dry_run and not os.access(stash, os.W_OK):
         eprint(f"ERROR: {stash} is not writable.")
-        eprint("  Run this on the box where the shared filesystem is R/W (nDPC), not on the")
+        eprint("  Run this on the box where the shared filesystem is R/W (the online box), not on the")
         eprint("  air-gapped side where it is mounted read-only.")
         return 1
 
