@@ -185,6 +185,7 @@ run_test "install-env-tcsh" tests/install-env-tcsh
 run_test "install-env-zsh" tests/install-env-zsh
 run_test "install-env-tmux-nvim-layers" env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
 run_test "install-readonly-source" "$PY" tests/install-readonly-source
+run_test "install-readonly-tree" tests/install-readonly-tree
 run_test "optional-packages" tests/optional-packages
 run_test "install-parity-plot" tests/install-parity-plot
 run_test "install-python-tool-upgrade" tests/install-python-tool-upgrade

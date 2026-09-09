@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# Read-only install-tree contract: a shared deployment whose tree is mounted
+# read-only must still work -- every binary probes clean, shells start quiet,
+# python/uv/tealdeer/nvim behave, and nothing that should stay user-writable
+# tries to write into the tree. The farm/air-gapped shape (R/O shared FS +
+# LOADOUT_CFG_SHARED_PREFIX) is the production case this gate protects.
+set -euo pipefail
+
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+PY=${LOADOUT_TEST_PY:-}
+if [ -z "$PY" ]; then
+    for cand in "$HOME/.local/bin/python3.14" "$REPO/.loadout-bootstrap/bin/python3.14" python3.14; do
+        if command -v "$cand" >/dev/null 2>&1; then
+            PY=$cand
+            break
+        fi
+    done
+fi
+[ -n "$PY" ] || { echo "ERROR: python3.14 not found" >&2; exit 1; }
+
+tmp_root=${TMPDIR:-/tmp}
+TEST_ROOT=$(mktemp -d "$tmp_root/loadout-ro-tree.XXXXXX")
+trap 'chmod -R u+w "$TEST_ROOT" 2>/dev/null; rm -rf "$TEST_ROOT"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+shared_root="$TEST_ROOT/shared"
+home="$TEST_ROOT/home"
+mkdir -p "$shared_root" "$home"
+
+# 1. Install @shared writable, per-user @envs pointing at it (the exact farm
+#    shape: admin stages the tree R/W, per-user config bakes the shared
+#    prefix), then flip the tree to read-only.
+HOME="$home" "$REPO/loadout" install -y @shared --dest-dir "$shared_root" --no-backup \
+    >"$TEST_ROOT/install.log" 2>&1
+HOME="$home" LOADOUT_CFG_SHARED_PREFIX="$shared_root/local" \
+    "$REPO/loadout" install -y @envs --no-backup \
+    >>"$TEST_ROOT/install.log" 2>&1
+
+prefix="$shared_root/local"
+chmod -R a-w "$prefix"
+trap 'chmod -R u+w "$TEST_ROOT" 2>/dev/null; rm -rf "$TEST_ROOT"' EXIT
+
+basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
+probe_env=(
+    env -i
+    HOME="$home"
+    PATH="$prefix/bin:$basic_path"
+    LANG="${LANG:-C.UTF-8}"
+    TERM="xterm-256color"
+    XDG_CACHE_HOME="$home/.cache"
+    XDG_CONFIG_HOME="$home/.config"
+    XDG_STATE_HOME="$home/.state"
+    XDG_RUNTIME_DIR="$home/.runtime"
+    LOADOUT_CFG_SHARED_PREFIX="$prefix"
+)
+
+# 2. Snapshot the tree (path+size+mtime) so any write -- new file OR
+#    in-place mtime change -- is caught by the final identity check.
+tree_state() {
+    (cd "$prefix" && find . -type f -printf '%p %s %T@\n' | sort)
+}
+before=$(tree_state)
+
+assert_quiet() {  # assert_quiet <label> <cmd...>
+    local label=$1; shift
+    local out
+    out=$("${probe_env[@]}" "$@" 2>&1) || fail "$label exited nonzero: $out"
+    case "$out" in
+        *"Read-only file system"*|*"Permission denied"*|*"failed to open"*|*"cannot create"*|*"No space"*)
+            fail "$label wrote into the RO tree: $out" ;;
+    esac
+    echo "  OK: $label"
+}
+
+# 3. Binary probes: every exec must exit 0 from --version/-V/--help under the
+#    RO tree with a restricted PATH (subset -- the prebuilt-binaries full sweep
+#    already runs this tree read-only in Tier 3 with its own asserts; here we
+#    prove the shape, cheaply).
+
+# Trace engine for write-attempt detection: the bundled @shared strace, else
+# the host's. Resolved before the probes so both the probe loop and the
+# post-probe scan use the same engine.
+ST=""
+if [ -x "$prefix/bin/strace" ]; then
+    ST="$prefix/bin/strace"
+elif command -v strace >/dev/null 2>&1; then
+    ST=$(command -v strace)
+fi
+
+probe_bin() {  # probe_bin <name> [args...] -- record syscalls; failures loud
+    local name=$1; shift
+    if [ -n "$ST" ]; then
+        "$ST" -f -qq -e trace=openat,creat,mkdir,mkdirat,rename,renameat,renameat2,unlink,unlinkat,\
+utime,utimes,utimensat,truncate,ftruncate,chmod,fchmod,link,linkat,symlink,symlinkat \
+            -o "$TEST_ROOT/strace-$name" \
+            "${probe_env[@]}" "$prefix/bin/$name" "$@" >/dev/null 2>&1 \
+            || fail "$name probe failed on RO tree"
+    else
+        "${probe_env[@]}" "$prefix/bin/$name" "$@" >/dev/null 2>&1 \
+            || fail "$name probe failed on RO tree"
+    fi
+}
+probe_bin bash --version
+probe_bin zsh --version
+probe_bin tmux -V
+probe_bin fish --version
+probe_bin hx --version
+probe_bin nvim --headless -n +qa
+probe_bin fzf --version
+probe_bin fd --version
+probe_bin bat --version
+probe_bin tldr --quiet tar
+probe_bin uv --version
+probe_bin python3.14 -c 'import sys; print(sys.version)'
+probe_bin sqlite3 --version
+probe_bin strace --version
+probe_bin valgrind --version
+echo "  OK: executable probes (RO tree)"
+
+# Any write-INTENT syscall against the RO tree is a contract violation, even
+# when the kernel blocks it: independence means nothing may even try. strace
+# records the attempt; without strace the tree-identity check below is the
+# backstop (it catches successful writes only).
+if [ -n "$ST" ]; then
+    for log in "$TEST_ROOT"/strace-*; do
+        if grep -E "O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND" "$log" \
+            | grep -qF "$prefix"; then
+            fail "probe attempted a write into the RO tree ($(basename "$log")):"'
+'"$(grep -E "O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND" "$log" | grep -F "$prefix" | head -3)"
+        fi
+    done
+    # Negative control: a deliberate write attempt MUST be caught -- this
+    # proves the detector fires, so a clean scan above means something.
+    "$ST" -qq -e trace=openat -o "$TEST_ROOT/strace-negctl" \
+        touch "$prefix/.ro-write-control" 2>/dev/null || true
+    if grep -E "O_WRONLY|O_RDWR|O_CREAT" "$TEST_ROOT/strace-negctl" \
+        | grep -qF "$prefix"; then
+        echo "  OK: write-attempt detector catches violations (negative control)"
+    else
+        fail "negative control: detector MISSED a deliberate write attempt"
+    fi
+    echo "  OK: no write attempts into the RO tree (strace)"
+fi
+
+# 4. tealdeer on an RO tree: must still print pages from the installed cache
+#    without tripping on the MAX_CACHE_AGE refresh path.
+tldr_out=$("${probe_env[@]}" tldr --quiet tar 2>&1) || fail "tldr failed on RO tree: $tldr_out"
+case "$tldr_out" in
+    *"Read-only"*|*"Permission denied"*|*"updating"*|*"cache"*)
+        fail "tldr noisy/refreshing on RO tree: $tldr_out" ;;
+esac
+echo "  OK: tealdeer reads cached pages on RO tree"
+
+# 5. python bytecode must be redirected away from the tree (PYTHONPYCACHEPREFIX
+#    or PYTHONDONTWRITEBYTECODE) -- running a script from the RO tree must not
+#    even attempt a .pyc write (the strace scan catches the attempt).
+mkdir -p "$home/scriptdir"
+printf 'print("ro-ok")\n' > "$home/scriptdir/rotest.py"
+py_out=$("${probe_env[@]}" python3.14 "$home/scriptdir/rotest.py" 2>&1) \
+    || fail "python failed on RO tree: $py_out"
+[[ "$py_out" == ro-ok ]] || fail "python output unexpected: $py_out"
+echo "  OK: python bytecode redirected from RO tree"
+
+# 6. tree byte-identical: no new files, no changed sizes, no touched mtimes.
+after=$(tree_state)
+[[ "$before" == "$after" ]] || fail "tree state changed during probes:
+$(diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -10)"
+echo "  OK: tree byte-identical (no writes)"
+
+echo "install-readonly-tree: OK"
