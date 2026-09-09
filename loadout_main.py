@@ -941,6 +941,42 @@ def nearest_existing_parent(path):
     return path
 
 
+def _grant_owner_write(path):
+    """Enforce the installer's intended permission on one path it owns.
+
+    Every file and directory the installer writes must stay owner-writable:
+    copy2/copystat preserve source modes (a read-only source would poison the
+    target), and a user-hardened tree (chmod -R a-w) must not break the next
+    install or later in-place rewrites (prefix bake, relocation tokens).
+    Only bits are ever ADDED (u+w; u+x too for directories so the tree stays
+    traversable) -- executable and group/other bits are preserved. Symlinks
+    are skipped (effective permission is the parent directory's). Never
+    raises: returns True when path is owner-writable afterwards, False when
+    the bit could not be set (foreign owner, read-only mount).
+    """
+    try:
+        if os.path.islink(path):
+            return True
+        if os.path.realpath(path) == os.path.abspath(os.sep):
+            return False
+        mode = os.stat(path).st_mode
+        want = stat.S_IWUSR | (stat.S_IXUSR if os.path.isdir(path) else 0)
+        if mode & want == want:
+            return True
+        os.chmod(path, mode | want)
+        return True
+    except OSError:
+        return False
+
+
+def _heal_writable_dir(path):
+    """Re-add owner-write (+x) to an existing directory, then re-check access."""
+    if not os.path.isdir(path) or os.path.islink(path):
+        return False
+    _grant_owner_write(path)
+    return os.access(path, os.W_OK | os.X_OK)
+
+
 def require_writable_dir(path, thing):
     target = os.path.abspath(path)
     existing = target if os.path.exists(target) else nearest_existing_parent(target)
@@ -948,9 +984,13 @@ def require_writable_dir(path, thing):
         existing = os.path.abspath(os.sep)
     if os.path.exists(target) and not os.path.isdir(target):
         existing = os.path.dirname(target)
-    if not os.path.isdir(existing) or not os.access(existing, os.W_OK | os.X_OK):
+    # Self-heal before refusing: the blocking directory may be our own tree
+    # marked read-only (user hardening or a previous install from RO sources).
+    # Reinstalling over it must stay idempotent, so re-add owner-write when we
+    # can and only refuse when we cannot (foreign owner, read-only mount).
+    if (not os.path.isdir(existing) or not os.access(existing, os.W_OK | os.X_OK)) and not _heal_writable_dir(existing):
         raise InstallRefused(f"{thing} target directory is not writable: {display_name(existing)}")
-    if os.path.isdir(target) and not os.access(target, os.W_OK | os.X_OK):
+    if os.path.isdir(target) and not os.access(target, os.W_OK | os.X_OK) and not _heal_writable_dir(target):
         raise InstallRefused(f"{thing} target directory is not writable: {display_name(target)}")
 
 
@@ -1305,6 +1345,9 @@ def _copy_tree_item(src, dest, excludes=(), rel_path=""):
             shutil.copystat(src, dest)
         except FileNotFoundError, OSError:
             pass
+        # copystat preserves the source dir mode -- a read-only source would
+        # leave the target un-enterable for later writes. Enforce intent.
+        _grant_owner_write(dest)
         return
     if os.path.lexists(dest):
         remove_path(dest)
@@ -1315,13 +1358,10 @@ def _copy_tree_item(src, dest, excludes=(), rel_path=""):
         return
     # The installer rewrites some installed files in place afterwards (shared
     # prefix bake, relocation tokens). A read-only install source would make
-    # those targets read-only too (copy2 preserves mode), so grant owner-write
-    # here: our own files must stay editable regardless of source modes.
-    # Executable and group/other bits are preserved -- only u+w is added.
-    try:
-        os.chmod(dest, os.stat(dest).st_mode | stat.S_IWUSR)
-    except OSError:
-        pass
+    # those targets read-only too (copy2 preserves mode), so enforce the
+    # intended permission here: our own files must stay editable regardless
+    # of source modes. Executable and group/other bits are preserved.
+    _grant_owner_write(dest)
 
 
 def sync_dir(src, dest, delete=False, excludes=None):
@@ -1377,6 +1417,9 @@ def install_path(src, dest, links_mode):
         if parent:
             ensure_dir(parent)
         shutil.copy2(src, dest)
+        # Same intended-permission rule as _copy_tree_item: copy2 preserves
+        # source modes, so enforce owner-write on our own installed file.
+        _grant_owner_write(dest)
         _vprint(f"  cp: {src} -> {dest}")
 
 

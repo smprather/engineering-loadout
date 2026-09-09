@@ -168,6 +168,15 @@ through 0o444 dests, mode preservation, no temp litter, helix relocation.
 Proven to catch the bug (fails on pre-fix code with 0o444). T1 green
 except zsh typeahead WIP; assurance 35/35, crate lock/policy OK.
 
+2026-09-09 follow-up (in tree): same rule extended to the destination side.
+`_grant_owner_write` factored out of `_copy_tree_item` and applied to the
+`install_path` file branch (bare copy2, no guard) and to dir `copystat`
+targets; `require_writable_dir` heals owner RO dirs instead of refusing,
+refuses only when healing fails (foreign owner, RO mount) — reinstall over
+`chmod -R a-w` stays idempotent, fresh files always carry intended modes
+(bins already explicit 755/644 via `write_bz2_atomic`). Test now 18 checks:
++dir-copy u+w/x, +install_path u+w, +gate-heals, +gate-still-refuses.
+
 ## 2026-09-04 batch: enhancement-request-permissions-management.md fielded
 
 #1 (REQUIRED, stale registry path): NOT a live bug -- already fixed by

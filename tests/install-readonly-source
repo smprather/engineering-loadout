@@ -9,8 +9,17 @@ so installed files inherit read-only modes -- and every later in-place edit
 the phase. The installer must never assume its own freshly-installed target
 files are writable.
 
+The same intended-permission rule covers a user-hardened destination
+(chmod -R a-w on the install tree): reinstalling over it must stay
+idempotent, so the writability gate heals owner-write on blocking
+directories instead of refusing, and only refuses when healing fails
+(foreign owner, read-only mount).
+
 Covers, against small synthetic trees (no payload, no network):
-- _copy_tree_item grants owner-write on the destination copy.
+- _copy_tree_item grants owner-write on the destination copy (file + dir).
+- install_path grants owner-write on a file copy from a read-only source.
+- require_writable_dir heals an owner read-only dir instead of refusing,
+  and still refuses when healing is impossible.
 - _rewrite_shared_prefix_line bakes through a read-only destination,
   atomically, preserving the source mode bits (+u+w), for bash and tcsh.
 - the helix languages.toml relocation survives a read-only destination.
@@ -82,6 +91,84 @@ def main():
         )
         with open(dest, "w") as f:
             f.write("rewrite works\n")
+
+        # --- _copy_tree_item: destination dir gains owner-write -------------
+        rosdir = os.path.join(tmp, "rosrc")
+        os.makedirs(rosdir)
+        with open(os.path.join(rosdir, "a.txt"), "w") as f:
+            f.write("a\n")
+        os.chmod(os.path.join(rosdir, "a.txt"), 0o444)
+        os.chmod(rosdir, 0o555)
+        roddest = os.path.join(tmp, "roddst")
+        mod._copy_tree_item(rosdir, roddest)
+        check("dir copy from read-only source lands", os.path.isfile(os.path.join(roddest, "a.txt")))
+        check(
+            "destination dir is owner-writable+traversable",
+            bool(os.stat(roddest).st_mode & stat.S_IWUSR) and bool(os.stat(roddest).st_mode & stat.S_IXUSR),
+            oct(stat.S_IMODE(os.stat(roddest).st_mode)),
+        )
+        check(
+            "nested file copy is owner-writable",
+            bool(os.stat(os.path.join(roddest, "a.txt")).st_mode & stat.S_IWUSR),
+            oct(stat.S_IMODE(os.stat(os.path.join(roddest, "a.txt")).st_mode)),
+        )
+        os.chmod(rosdir, 0o755)
+
+        # --- install_path: file copy from read-only source -------------------
+        ipsrc = os.path.join(tmp, "ipsrc.toml")
+        with open(ipsrc, "w") as f:
+            f.write("x = 1\n")
+        os.chmod(ipsrc, 0o444)
+        ipdest = os.path.join(tmp, "ipdst", "out.toml")
+        mod.install_path(ipsrc, ipdest, False)
+        check("install_path file copy lands", os.path.isfile(ipdest))
+        check(
+            "install_path copy is owner-writable",
+            bool(os.stat(ipdest).st_mode & stat.S_IWUSR),
+            oct(stat.S_IMODE(os.stat(ipdest).st_mode)),
+        )
+        check(
+            "install_path copy preserves group/other bits",
+            stat.S_IMODE(os.stat(ipdest).st_mode) == 0o644,
+            oct(stat.S_IMODE(os.stat(ipdest).st_mode)),
+        )
+
+        # --- require_writable_dir: heals owner RO dir, refuses the rest ------
+        healdir = os.path.join(tmp, "healme")
+        os.makedirs(healdir)
+        os.chmod(healdir, 0o555)
+        healed = False
+        heal_err = ""
+        try:
+            mod.require_writable_dir(healdir, "test")
+            healed = True
+        except Exception as exc:  # noqa: BLE001 - proving no raise is the point
+            heal_err = str(exc)
+        check("writability gate heals owner read-only dir", healed, heal_err)
+        check(
+            "healed dir carries owner-write",
+            bool(os.stat(healdir).st_mode & stat.S_IWUSR),
+            oct(stat.S_IMODE(os.stat(healdir).st_mode)),
+        )
+        if os.geteuid() != 0:
+            # As root os.access always passes, so the refuse path is only
+            # exercisable as a non-root user.
+            orig_grant = mod._grant_owner_write
+            mod._grant_owner_write = lambda p: False  # noqa: E731 - test double
+            stuck = os.path.join(tmp, "stuck")
+            os.makedirs(stuck)
+            os.chmod(stuck, 0o555)
+            try:
+                mod.require_writable_dir(stuck, "test")
+                refused = False
+            except mod.InstallRefused:
+                refused = True
+            finally:
+                mod._grant_owner_write = orig_grant
+                os.chmod(stuck, 0o755)
+            check("writability gate still refuses when healing fails", refused)
+        else:
+            print("  SKIP  refuse-path (root bypasses os.access)")
 
         # --- prefix bake through read-only destinations, both shells --------
         home = os.path.join(tmp, "home")
