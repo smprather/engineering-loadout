@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""
+oom-guard-reap -- the release OOM watchdog must reap its descendants.
+
+build/release's watchdog aborts with os._exit() when free memory drops, which
+does NOT reap children. The malware scan runs its clamscan shards as
+GRANDCHILDREN (ThreadPoolExecutor -> subprocess.run), so an abort once left
+~12 GB of orphaned clamscan processes running until they were killed by hand.
+_kill_descendants() walks /proc and SIGKILLs the whole descendant tree,
+leaves first.
+
+This gate proves that: it spawns a child that spawns a grandchild, calls
+_kill_descendants(), and asserts BOTH are dead. Fast, no payload, no network.
+
+Must run under the bundled Python 3.14 (loadout_main.py uses PEP 758 syntax
+that older interpreters cannot parse). Exits 0/1.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def load_release():
+    # build/release is an extensionless script that puts the vendored deps on
+    # sys.path itself at import time; replicate that for the loader.
+    sys.path.insert(0, os.path.join(REPO, "installer_vendor"))
+    loader = importlib.machinery.SourceFileLoader("loadout_release", os.path.join(REPO, "build", "release"))
+    spec = importlib.util.spec_from_loader("loadout_release", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def _alive(pid):
+    # A zombie is a killed process awaiting the parent's reap: the process is
+    # gone, but kill(pid, 0) still succeeds. Treat state Z as dead.
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            data = fh.read()
+    except OSError:
+        return False
+    state = data.rsplit(")", 1)[1].split()[0]
+    return state != "Z"
+
+
+def _wait_dead(pid, timeout=5.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _alive(pid):
+            return True
+        time.sleep(0.05)
+    return not _alive(pid)
+
+
+def main():
+    mod = load_release()
+    tmp = tempfile.mkdtemp(prefix="loadout-oomreap.")
+    sh_pid_file = os.path.join(tmp, "sh.pid")
+    sleep_pid_file = os.path.join(tmp, "sleep.pid")
+
+    # Child (sh) spawns grandchild (sleep) and records both pids.
+    script = f"sleep 300 & echo $! > {sleep_pid_file}; echo $$ > {sh_pid_file}; wait"
+    child = subprocess.Popen(["sh", "-c", script])
+
+    def read_pid(path):
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            try:
+                with open(path) as fh:
+                    val = fh.read().strip()
+                if val:
+                    return int(val)
+            except OSError, ValueError:
+                pass
+            time.sleep(0.05)
+        return None
+
+    try:
+        sh_pid = read_pid(sh_pid_file)
+        sleep_pid = read_pid(sleep_pid_file)
+        check("spawned child sh", sh_pid is not None)
+        check("spawned grandchild sleep", sleep_pid is not None)
+        if sh_pid is None or sleep_pid is None:
+            return 1
+        check("child + grandchild alive before reap", _alive(sh_pid) and _alive(sleep_pid))
+
+        mod._kill_descendants()
+
+        check("grandchild reaped", _wait_dead(sleep_pid), f"pid {sleep_pid} still alive")
+        check("child reaped", _wait_dead(sh_pid), f"pid {sh_pid} still alive")
+    finally:
+        try:
+            child.kill()
+        except OSError:
+            pass
+        for path in (sh_pid_file, sleep_pid_file):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        import shutil
+
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

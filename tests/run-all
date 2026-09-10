@@ -221,6 +221,7 @@ run_test "cargo-offline-fallback" "$PY" tests/cargo-offline-fallback
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "dep-capture" tests/dep-capture
+run_test "oom-guard-reap" "$PY" tests/oom-guard-reap
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper
 run_test "env-helix-config" tests/env-helix-config

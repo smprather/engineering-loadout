@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -486,6 +487,52 @@ def _mem_available_mb():
     return None
 
 
+def _kill_descendants():
+    """SIGKILL every descendant of this process, leaves first.
+
+    The OOM watchdog exits with os._exit(), which does NOT reap children. The
+    malware scan runs its clamscan shards as grandchildren (ThreadPoolExecutor
+    -> subprocess.run), so an abort left ~12 GB of orphaned clamscan processes
+    running until they were killed by hand (observed 2026-09-09). Walk /proc,
+    collect the descendant tree, and kill leaves before parents so nothing
+    reparents out of reach. Best-effort: never raises.
+    """
+    children = {}
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f"/proc/{entry}/stat", "rb") as fh:
+                data = fh.read()
+            ppid = int(data.rsplit(b")", 1)[1].split()[1])
+        except OSError, ValueError, IndexError:
+            continue
+        children.setdefault(ppid, []).append(int(entry))
+    victims = []
+    stack = list(children.get(os.getpid(), []))
+    while stack:
+        pid = stack.pop()
+        victims.append(pid)
+        stack.extend(children.get(pid, []))
+    for pid in reversed(victims):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+
+def _abort_oom(avail):
+    """Print the OOM abort message, reap descendants, and exit non-zero."""
+    print(
+        f"\n  ABORT: free memory dropped to {avail} MB -- aborting gates to avoid the OOM killer.\n"
+        "  Re-run with more RAM free, or let the gates run sequentially (they do so automatically).",
+        file=sys.stderr,
+        flush=True,
+    )
+    _kill_descendants()
+    os._exit(3)
+
+
 def _run_parallel_pre_release_steps(
     script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
 ):
@@ -503,6 +550,15 @@ def _run_parallel_pre_release_steps(
     mem = _mem_available_mb()
     if mem is not None and mem < 2048:
         print(f"  WARNING: only {mem} MB available; running gates SEQUENTIALLY to avoid OOM", flush=True)
+        seq_stop = threading.Event()
+
+        def seq_watchdog():
+            while not seq_stop.wait(2.0):
+                avail = _mem_available_mb()
+                if avail is not None and avail < 1024:
+                    _abort_oom(avail)
+
+        threading.Thread(target=seq_watchdog, daemon=True).start()
         results = {}
         for _name, _title, fn in (
             (
@@ -520,6 +576,7 @@ def _run_parallel_pre_release_steps(
             result = fn()
             _emit_step_result(result)
             results[result.name] = result
+        seq_stop.set()
         return results
 
     workers = 4
@@ -533,13 +590,7 @@ def _run_parallel_pre_release_steps(
         while not stop.wait(2.0):
             avail = _mem_available_mb()
             if avail is not None and avail < 1024:
-                print(
-                    f"\n  ABORT: free memory dropped to {avail} MB -- aborting gates to avoid the OOM killer.\n"
-                    "  Re-run with more RAM free, or let the gates run sequentially (they do so automatically).",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                os._exit(3)
+                _abort_oom(avail)
 
     watcher = threading.Thread(target=watchdog, daemon=True)
     watcher.start()

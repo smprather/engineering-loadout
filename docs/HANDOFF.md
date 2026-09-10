@@ -52,12 +52,15 @@ chain run (strip -> sizes -> manifest, both --check).
 three assets present (sha256sums.txt, default.content-manifest,
 nvim-plugin-stash.tar.bz2 328 MB). Smoke `All 325 binaries OK (1 skipped)`.
 
-**OOM-guard gap (follow-up, release tooling):** the memory watchdog aborts
-the gate parent when free RAM drops below threshold, but does NOT reap the
-in-flight parallel `clamscan` shard children -- one dry-run abort left 11
-orphans holding ~12 GB until manually `pkill`ed. Fix: kill the scan's child
-process group on watchdog abort (or have the shard runner trap). Not payload;
-did not block the release after cleanup.
+**OOM-guard reap (DONE, post-release):** the memory watchdog aborted the gate
+parent with `os._exit()` when free RAM dropped, but did NOT reap the in-flight
+parallel `clamscan` shard children (grandchildren of the release process) --
+one dry-run abort left 11 orphans holding ~12 GB until manually `pkill`ed.
+Fix: `_kill_descendants()` in `build/release` walks `/proc`, collects the
+descendant tree, and SIGKILLs leaves-first before exiting; the watchdog (both
+the parallel path and the low-memory sequential path) now calls `_abort_oom()`
+which reaps first. New T1 gate `tests/oom-guard-reap` spawns a child+grandchild
+and asserts both die (zombie-aware), with a proven negative control.
 
 **Tier 3 lock caveat:** `--full` runs a persistent bind-mounted install tree
 at `~/.cache/engineering-loadout/tier3-v1` and takes a `mkdir`
