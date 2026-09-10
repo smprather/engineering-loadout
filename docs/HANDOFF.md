@@ -47,6 +47,18 @@ container. Currency: check-versions no outdated rows; yara-rules/tldr-data
 already current (20260906 / refreshed); ClamAV DB current. Post-payload
 chain run (strip -> sizes -> manifest, both --check).
 
+**Published + verified (§9):** signed tag good (ED25519),
+`origin/main == v2026.09.09.1^{commit}` (`667832d`), `isDraft=false`, all
+three assets present (sha256sums.txt, default.content-manifest,
+nvim-plugin-stash.tar.bz2 328 MB). Smoke `All 325 binaries OK (1 skipped)`.
+
+**OOM-guard gap (follow-up, release tooling):** the memory watchdog aborts
+the gate parent when free RAM drops below threshold, but does NOT reap the
+in-flight parallel `clamscan` shard children -- one dry-run abort left 11
+orphans holding ~12 GB until manually `pkill`ed. Fix: kill the scan's child
+process group on watchdog abort (or have the shard runner trap). Not payload;
+did not block the release after cleanup.
+
 **Tier 3 lock caveat:** `--full` runs a persistent bind-mounted install tree
 at `~/.cache/engineering-loadout/tier3-v1` and takes a `mkdir`
 `fingerprint.lock`. Two concurrent `--full` runs collide; a run killed
