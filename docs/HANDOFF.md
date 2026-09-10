@@ -1,6 +1,66 @@
 # Current Handoff
 
-Last updated: 2026-09-04 (v2026.09.04 RELEASED). `v2026.09.04` is
+Last updated: 2026-09-09 (v2026.09.09.1 RELEASED). Batch below.
+
+## 2026-09-09 batch 2: installer size accounting, intended permissions, zsh relocatable prefix, xdesk -s fix (RELEASED as v2026.09.09.1)
+
+Class C (installer + payload). Five distinct fixes:
+
+1. **Transaction size accounting (commits `941b4e6`).** `_artifact_paths`
+   walked `source` with `os.walk`, which yields nothing for a FILE source --
+   `env-starship`/`env-wezterm`/`env-editorconfig`/`env-pip` all reported
+   `0 B`. File sources are now added directly, and non-`~/` `extra_links`
+   (`starship/config-schema.json`, 170 k) are resolved via repo/envs. Real
+   sizes now: env-starship 168 k, wezterm 4.6 k, editorconfig 298 B,
+   pip 35 B.
+2. **Intended-permissions rule (`85663fa`).** `_grant_owner_write` factored
+   out of `_copy_tree_item` and applied to the `install_path` file branch and
+   dir `copystat` targets; `require_writable_dir` heals owner-RO dirs instead
+   of refusing, refuses only when healing fails (foreign owner, RO mount).
+   Reinstall over `chmod -R a-w` is idempotent again; fresh files always
+   carry the installer's intended modes. `tests/install-readonly-source`
+   grown 9 -> 18 checks.
+3. **zsh relocatable prefix (`3b926f0` + payload `fa5381c`).** zsh bakes
+   `--prefix` into libzsh as default module_path+fpath and IGNORES
+   `MODULE_PATH`, so the shipped `/tmp/zsh-install-5.9` prefix was dead and
+   `zle` never loaded -- `shell-typeahead` (zsh leg) red everywhere. Build now
+   uses a 96-byte placeholder prefix (asserted in `build-zsh.sh`); installer
+   `_relocate_zsh_prefix` rewrites it to the deployed prefix (ELF in place +
+   NUL pad, whole-occurrence so suffixes survive, text rewritten, loud FAIL
+   on misfit). Build-script stage-verify proves the round trip on a relocated
+   copy (negative control first). New T1 `tests/install-zsh-relocation`
+   (14 checks). `shell-typeahead` now fully green.
+4. **xdesk `-s WxH` fix (`60cf22b`).** xdesk always passed `-resizeable`;
+   Xephyr honors `-screen` only while the window is fixed-size, so on any
+   WM-managed desktop (KWin window rules / Plasma Zones / tiling WMs) the WM
+   assigned the size on map and the root followed -- `-s 640x480` landed at
+   1720x1366. Verified: with `-resizeable` -> 1720x1366, without -> exactly
+   640x480. Dropped it; `-s` is now authoritative.
+5. **valgrind-smoke host-contract skip (`33f58e9`).** CachyOS dev host lacks
+   glibc debuginfo, so valgrind refuses to start ("Cannot continue"); that
+   specific failure now SKIPs cleanly (covered by the T3 EL8 container gate,
+   where it PASSes). Any other nonzero still fails.
+
+Gates: T1 green (incl. new install-zsh-relocation); T2 green (valgrind SKIP
+on host); T3 `--full` + `--dynamic` + rust-offline green in the EL8
+container. Currency: check-versions no outdated rows; yara-rules/tldr-data
+already current (20260906 / refreshed); ClamAV DB current. Post-payload
+chain run (strip -> sizes -> manifest, both --check).
+
+**Tier 3 lock caveat:** `--full` runs a persistent bind-mounted install tree
+at `~/.cache/engineering-loadout/tier3-v1` and takes a `mkdir`
+`fingerprint.lock`. Two concurrent `--full` runs collide; a run killed
+before its EXIT trap leaves the lock and the next waits 900 s then exits 3.
+Do NOT run `tests/prebuilt-binaries-almalinux8 --full` while
+`tests/run-all --container` is in flight.
+
+**Caching follow-up (not done):** Tier 2 cache is all-or-nothing on a
+payload+envs+installer superset hash, so any one payload byte change re-runs
+every T2 test. Per-test dependency manifests would fix it, but the superset
+is deliberate (a missed input false-greens a shipped binary) -- real work,
+deferred.
+
+Last updated (previous): 2026-09-04 (v2026.09.04 RELEASED). `v2026.09.04` is
 published and verified: signed tag good (ED25519), `origin/main ==
 v2026.09.04^{commit}` (`c0a6efb`), `isDraft=false`, all three release
 assets present. Fast path: targeted gates only (new regression test 9/9,
