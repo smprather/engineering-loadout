@@ -13,13 +13,16 @@
 #   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
 #   ./tests/run-all --no-cache  # ignore the Tier 2 result cache (see below)
 #
-# Tier 2 integration tests are cached: when the payload/envs/installer
-# fingerprint and the test script are unchanged since the last green run,
-# the cached PASS is reused instead of re-installing ~8 GB. The fingerprint
-# is mtime+size (fast); a touched-but-identical file costs one needless
-# re-run, never a false green. Failed tests have no cache entry and always
-# re-run. Cache lives in ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/
-# test-cache-v1; delete it to force a full re-run.
+# Tier 2 integration tests are cached: when the inputs a test actually
+# depends on are unchanged since its last green run, the cached PASS is
+# reused instead of re-installing ~8 GB. Installer-driven tests cache per
+# test against the exact payload files they touched (`--deps auto`, captured
+# by the installer); Tier 1 sync gates and non-installer tests cache against
+# the whole payload (`all`). Fingerprints are mtime+size (fast); a
+# touched-but-identical file costs one needless re-run, never a false green.
+# Failed tests have no cache entry and always re-run. Cache lives in
+# ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1; delete it to
+# force a full re-run.
 
 set -euo pipefail
 
@@ -60,52 +63,103 @@ CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
 FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
 FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests")
 
-# Tier 2 integration tests install payloads into temp roots and are pure
-# functions of (payload + envs + installer + the test script itself +
-# platform). When nothing changed since the last green run, the cached PASS
-# is reused instead of re-installing ~8 GB. The fingerprint is mtime+size
-# (fast, ~2 s); a touched-but-identical file costs one needless re-run,
-# never a false green. --no-cache forces every test to run.
+# Two cache modes:
 #
-# The sidecar is written ONCE at the end of a run, not per test: writing it
-# mid-run would make the remaining tests see "unchanged" and cache against
-# a state the run itself is still verifying.
+#  all  -- one global fingerprint over payload+envs+installer+tests. Used by
+#          the Tier 1 sync gates (which MUST see any payload drift) and by
+#          tests that are not installer-driven. Any one byte of payload
+#          invalidates every `all` test.
+#  auto -- per-test dependency fingerprint. The installer records the exact
+#          payload/installer files a test touched (see _record_install_deps in
+#          loadout_main.py, armed by the repo-local .loadout-dep-capture
+#          marker -- env vars do not survive the tests' `env -i`). The test's
+#          PASS is then keyed on the fingerprint of exactly those files, so
+#          rebuilding one artifact re-runs only the tests that use it.
+#
+# The `all` sidecar is written ONCE at the end of a run (not per test): writing
+# it mid-run would make remaining tests cache against a state the run itself
+# is still verifying. `auto` sidecars are written per test, after it passes.
 CACHE_ACTIVE=0
 if [ "$NO_CACHE" -eq 0 ] && [ "$FAST" -eq 0 ]; then
     CACHE_ACTIVE=1
 fi
 
+# Safety net: never leave the dependency-capture marker armed after a run.
+DEP_MARKER="$REPO_DIR/.loadout-dep-capture"
+DEP_LOG="$REPO_DIR/.loadout-deps.log"
+cleanup_dep_marker() { rm -f "$DEP_MARKER"; }
+trap cleanup_dep_marker EXIT INT TERM
+
+# Files every `auto` test always depends on: the harness itself, the
+# fingerprint tool, the installer, and the registry. Kept in the dep list so
+# editing any of them invalidates every auto cache (a bug in the harness or
+# fingerprint must not be masked by a stale green).
+AUTO_BASE_DEPS=(tests/run-all build/fingerprint.py loadout loadout_main.py payload/packages.json)
+
 run_test() {
     local name=$1
     shift
+    local deps_mode=all
+    if [ "$1" = "--deps" ]; then
+        deps_mode=$2
+        shift 2
+    fi
     echo
     echo "=== $name"
-    if [ "$CACHE_ACTIVE" -eq 1 ] && [ -f "$CACHE_SIDECAR" ] \
-        && "$PY" "$FP_SCRIPT" --fast --check "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1; then
-        local test_script=""
-        for f in "$@"; do
-            case "$f" in
-                tests/*) test_script=$f; break ;;
-            esac
-        done
-        if [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
+
+    local test_script=""
+    for f in "$@"; do
+        case "$f" in
+            tests/*) test_script=$f; break ;;
+        esac
+    done
+
+    local deps_file="$CACHE_DIR/$name.deps"
+    local fp_file="$CACHE_DIR/$name.fp.json"
+
+    # --- cache check ---
+    if [ "$CACHE_ACTIVE" -eq 1 ]; then
+        if [ "$deps_mode" = auto ] && [ -n "$test_script" ] \
+            && [ -f "$deps_file" ] && [ -f "$fp_file" ] \
+            && "$PY" "$FP_SCRIPT" --fast --check "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
+            echo "=== $name: CACHED PASS (deps unchanged)"
+            return 0
+        fi
+        if [ "$deps_mode" = all ] && [ -f "$CACHE_SIDECAR" ] \
+            && "$PY" "$FP_SCRIPT" --fast --check "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1 \
+            && [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
             && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
             echo "=== $name: CACHED PASS (inputs unchanged)"
             return 0
         fi
     fi
-    if "$@"; then
-        if [ "$CACHE_ACTIVE" -eq 1 ]; then
-            mkdir -p "$CACHE_DIR"
-            local test_script=""
-            for f in "$@"; do
-                case "$f" in
-                    tests/*) test_script=$f; break ;;
-                esac
-            done
-            if [ -n "$test_script" ]; then
-                sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
+
+    # --- run ---
+    local armed=0
+    if [ "$CACHE_ACTIVE" -eq 1 ] && [ "$deps_mode" = auto ] && [ -n "$test_script" ]; then
+        mkdir -p "$CACHE_DIR"
+        : > "$DEP_LOG"
+        touch "$DEP_MARKER"
+        armed=1
+    fi
+    local rc=0
+    "$@" || rc=1
+    if [ "$armed" -eq 1 ]; then
+        rm -f "$DEP_MARKER"
+        if [ "$rc" -eq 0 ]; then
+            { printf '%s\n' "$test_script"; printf '%s\n' "${AUTO_BASE_DEPS[@]}"; cat "$DEP_LOG"; } \
+                | sort -u > "$deps_file"
+            if ! "$PY" "$FP_SCRIPT" --fast --write "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
+                rm -f "$deps_file" "$fp_file"
             fi
+        else
+            rm -f "$deps_file" "$fp_file"
+        fi
+    fi
+    if [ "$rc" -eq 0 ]; then
+        if [ "$CACHE_ACTIVE" -eq 1 ] && [ "$deps_mode" = all ] && [ -n "$test_script" ]; then
+            mkdir -p "$CACHE_DIR"
+            sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
         fi
         echo "=== $name: PASS"
     else
@@ -166,6 +220,7 @@ run_test "env-shell-parity" "$PY" tests/env-shell-parity
 run_test "cargo-offline-fallback" "$PY" tests/cargo-offline-fallback
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
+run_test "dep-capture" tests/dep-capture
 run_test "check-installer" tests/check-installer
 run_test "st-wrapper" tests/st-wrapper
 run_test "env-helix-config" tests/env-helix-config
@@ -178,23 +233,25 @@ if [ "$FAST" -eq 1 ]; then
 fi
 
 # --- Tier 2: integration installs into temp roots --------------------------
-run_test "install-fonts-rejoin" "$PY" tests/install-fonts-rejoin
-run_test "install-modules" tests/install-modules
-run_test "valgrind-smoke" tests/valgrind-smoke
-run_test "install-env-st" tests/install-env-st
-run_test "install-env-tcsh" tests/install-env-tcsh
-run_test "install-env-zsh" tests/install-env-zsh
-run_test "install-env-tmux-nvim-layers" env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
-run_test "install-readonly-source" "$PY" tests/install-readonly-source
-run_test "install-readonly-tree" tests/install-readonly-tree
-run_test "optional-packages" tests/optional-packages
-run_test "install-parity-plot" tests/install-parity-plot
-run_test "install-python-tool-upgrade" tests/install-python-tool-upgrade
-run_test "install-typescript-language-server" tests/install-typescript-language-server
-run_test "install-linux-tmp-home" tests/install-linux-tmp-home
-run_test "install-split-shared-envs" tests/install-split-shared-envs
-run_test "install-nvim-deployments" tests/install-nvim-deployments
-run_test "install-xdesk" tests/install-xdesk
+# Installer-driven tests use --deps auto (per-test payload deps). The two
+# non-installer checks (completion, crate-store) keep the global `all` cache.
+run_test "install-fonts-rejoin" --deps auto "$PY" tests/install-fonts-rejoin
+run_test "install-modules" --deps auto tests/install-modules
+run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
+run_test "install-env-st" --deps auto tests/install-env-st
+run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
+run_test "install-env-zsh" --deps auto tests/install-env-zsh
+run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
+run_test "install-readonly-source" --deps auto "$PY" tests/install-readonly-source
+run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
+run_test "optional-packages" --deps auto tests/optional-packages
+run_test "install-parity-plot" --deps auto tests/install-parity-plot
+run_test "install-python-tool-upgrade" --deps auto tests/install-python-tool-upgrade
+run_test "install-typescript-language-server" --deps auto tests/install-typescript-language-server
+run_test "install-linux-tmp-home" --deps auto tests/install-linux-tmp-home
+run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
+run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
+run_test "install-xdesk" --deps auto tests/install-xdesk
 run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
 run_test "crate-store integrity" "$PY" build/verify-crate-store --check-lock
 run_test "crate-store policy" "$PY" build/verify-crate-store --check-policy

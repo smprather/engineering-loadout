@@ -66,11 +66,18 @@ before its EXIT trap leaves the lock and the next waits 900 s then exits 3.
 Do NOT run `tests/prebuilt-binaries-almalinux8 --full` while
 `tests/run-all --container` is in flight.
 
-**Caching follow-up (not done):** Tier 2 cache is all-or-nothing on a
-payload+envs+installer superset hash, so any one payload byte change re-runs
-every T2 test. Per-test dependency manifests would fix it, but the superset
-is deliberate (a missed input false-greens a shipped binary) -- real work,
-deferred.
+**Tier 2 per-test dependency cache (DONE, post-release):** the old cache was
+all-or-nothing on a payload+envs+installer superset hash, so any one payload
+byte change re-ran every T2 test. Installer-driven T2 tests now use
+`--deps auto`: the installer records the exact payload/installer files a test
+touched (`_record_install_deps` + `_dep_capture_add`, armed by the repo-local
+`.loadout-dep-capture` marker -- env vars do not survive the tests' `env -i`),
+and the test's PASS is keyed on that file set's fingerprint. T1 sync gates and
+non-installer tests keep the whole-payload `all` fingerprint. Verified: warm
+re-run 797s -> 55s; touching `bin/xdesk.bz2` re-ran only the 4 tests whose
+deps include it. New T1 gate `tests/dep-capture` proves armed-capture is
+correct and narrow and that unmarked installs capture nothing. Both capture
+files are gitignored and never written by production installs.
 
 Last updated (previous): 2026-09-04 (v2026.09.04 RELEASED). `v2026.09.04` is
 published and verified: signed tag good (ED25519), `origin/main ==

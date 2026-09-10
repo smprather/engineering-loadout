@@ -153,7 +153,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fast", action="store_true", help="mtime+size fingerprint (seconds)")
     ap.add_argument("--exact", action="store_true", help="byte-hash fingerprint (~40 s)")
-    ap.add_argument("--roots", nargs="+", required=True, help="files/dirs to fingerprint")
+    ap.add_argument("--roots", nargs="+", default=[], help="files/dirs to fingerprint")
+    ap.add_argument(
+        "--roots-from-file",
+        metavar="FILE",
+        help="read newline-separated roots from FILE (for long, per-test dependency "
+        "lists that would otherwise overflow ARG_MAX)",
+    )
     ap.add_argument(
         "--exclude",
         action="append",
@@ -167,7 +173,17 @@ def main():
 
     if args.fast == args.exact:
         ap.error("exactly one of --fast / --exact is required")
-    data = fingerprint(args.roots, exact=args.exact, excludes=args.exclude)
+
+    roots = list(args.roots)
+    if args.roots_from_file:
+        try:
+            with open(args.roots_from_file) as fh:
+                roots.extend(line.strip() for line in fh if line.strip())
+        except OSError as exc:
+            ap.error(f"cannot read --roots-from-file {args.roots_from_file}: {exc}")
+    if not roots:
+        ap.error("no roots given (--roots and/or --roots-from-file)")
+    data = fingerprint(roots, exact=args.exact, excludes=args.exclude)
 
     if args.check:
         try:

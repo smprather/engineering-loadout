@@ -2111,6 +2111,10 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     # phase. Running ldd now produced false "this binary may not run" warnings on every
     # @shared install. The check now runs once at the end of the whole install, after
     # every runtime archive has extracted (see the main install flow).
+    # Test-only dep capture: the ACTUAL bin/lib files this phase processed,
+    # including unclaimed lib stems no package declares. See _record_install_deps.
+    _dep_capture_add(_bin_bz2_files + _lib64_bz2_files, repo_dir)
+
     _bin_count = len(_bin_bz2_files)
     _lib_count = len(_lib64_bz2_files)
     _unchanged_note = ""
@@ -5449,6 +5453,73 @@ def _artifact_paths(entry, repo_dir, platform_dir):
     return out
 
 
+# Test-only dependency capture. tests/run-all caches each integration test's
+# PASS keyed on the exact payload/installer files that test touched, instead
+# of a single all-payload superset (which re-ran every test whenever ANY one
+# payload byte changed). The capture is gated on a marker file inside the
+# repo, so production installs never write anything: `env -i` in the tests
+# strips env vars, so an env-var switch would not reach the installer -- a
+# repo-local marker does, regardless of the test's environment.
+_DEP_CAPTURE_MARKER = ".loadout-dep-capture"
+_DEP_CAPTURE_LOG = ".loadout-deps.log"
+
+
+def _dep_capture_add(paths, repo_dir):
+    """Append repo-relative paths to the capture log, if the marker is armed.
+
+    Best-effort: capture is diagnostic and must never break an install. The
+    release-asset nvim plugin stash is excluded -- gitignored, absent on many
+    boxes, and its own test cache already excludes it.
+    """
+    try:
+        if not os.path.exists(os.path.join(repo_dir, _DEP_CAPTURE_MARKER)):
+            return
+        rels = sorted(os.path.relpath(p, repo_dir) for p in paths if os.path.exists(p) and "nvim-plugin-stash" not in p)
+        if rels:
+            with open(os.path.join(repo_dir, _DEP_CAPTURE_LOG), "a") as fh:
+                fh.write("\n".join(rels) + "\n")
+    except Exception:  # noqa: BLE001 - capture is diagnostic, never fatal
+        pass
+
+
+def _record_install_deps(selected, registry, repo_dir):
+    """Capture the files a selection depends on, if the marker is armed.
+
+    Uses the same _artifact_paths() the transaction-size and doctor checks
+    use, plus the installer and registry (so an installer or registry change
+    invalidates every installer-driven test). The binary phase additionally
+    captures the ACTUAL bin/lib files it processes (see
+    install_prebuilt_binaries), which covers the unclaimed lib stems
+    (libssl/libcrypto/readline/...) that no package declares.
+    """
+    try:
+        if not os.path.exists(os.path.join(repo_dir, _DEP_CAPTURE_MARKER)):
+            return
+        platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
+        paths = set()
+        for name in selected or ():
+            entry = registry.get(name, {})
+            paths |= _artifact_paths(entry, repo_dir, platform_dir)
+            # Directory archives (treesitter prebuilt/) are not files; walk them.
+            arch = entry.get("archive", "")
+            if arch:
+                resolved = arch
+                if "TS_PLATFORM" in resolved:
+                    resolved = resolved.replace("TS_PLATFORM", treesitter_platform_id())
+                if "PLATFORM" in resolved and platform_dir:
+                    resolved = resolved.replace("PLATFORM", os.path.basename(platform_dir))
+                full = os.path.join(repo_dir, resolved)
+                if os.path.isdir(full) and not os.path.islink(full):
+                    for root, _dirs, files in os.walk(full):
+                        for f in files:
+                            paths.add(os.path.join(root, f))
+        for fixed in ("loadout_main.py", "loadout", os.path.join("payload", "packages.json")):
+            paths.add(os.path.join(repo_dir, fixed))
+        _dep_capture_add(paths, repo_dir)
+    except Exception:  # noqa: BLE001 - capture is diagnostic, never fatal
+        pass
+
+
 _INSTALLED_SIZES = None
 _INSTALLED_SIZES_OK = False
 _PART_SUFFIX_RE = re.compile(r"\.part-\d+$")
@@ -5594,6 +5665,9 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
         return cmd_resolve(args, registry)
+
+    # Test-only dependency capture (no-op unless tests/run-all armed the marker).
+    _record_install_deps(selected_tools, registry, repo_dir)
 
     print(f"Loadout repo: {repo_dir}")
     if args.dest_dir:

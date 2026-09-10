@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# dep-capture -- the installer's test-only dependency capture must be correct.
+#
+# tests/run-all --deps auto caches each integration test's PASS against the
+# exact payload files that test touched, instead of a whole-payload superset
+# (which re-ran every test whenever one artifact changed). The capture is
+# armed by a repo-local marker (.loadout-dep-capture) because the tests use
+# `env -i`, which strips environment variables -- an env-var switch would
+# never reach the installer.
+#
+# This gate proves the mechanism without needing a full install:
+#   1. marker armed  -> a tiny install records its own inputs (installer +
+#      registry + the env source) and does NOT record unrelated payload.
+#   2. marker absent -> no capture at all (production installs stay clean).
+#
+# Fast: installs env-editorconfig (a single small file) into a temp dir.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo_dir"
+
+marker="$repo_dir/.loadout-dep-capture"
+log="$repo_dir/.loadout-deps.log"
+
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-depcapture-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-depcapture-dest.XXXXXX")
+
+cleanup() {
+    rm -f "$marker" "$log"
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "dep-capture failed: $*" >&2
+    exit 1
+}
+
+run_install() {
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+        LANG="${LANG:-C.UTF-8}" \
+        "$repo_dir/loadout" install -y env-editorconfig --dest-dir "$dest_dir" --no-backup \
+        > "$test_home/install.log" 2>&1 || {
+        tail -20 "$test_home/install.log" >&2
+        fail "install exited non-zero"
+    }
+}
+
+# --- 1. marker armed -> capture happens --------------------------------------
+rm -f "$log"
+: > "$marker"
+run_install
+rm -f "$marker"
+
+[[ -f "$log" ]] || fail "no capture log written while the marker was armed"
+
+for want in \
+    "loadout_main.py" \
+    "loadout" \
+    "payload/packages.json" \
+    "envs/editorconfig/editorconfig"; do
+    grep -qxF "$want" "$log" || fail "capture log missing expected input: $want"
+done
+
+# It must be NARROW: a tiny env install has no business recording payload
+# artifacts it never reads (that would defeat the whole point).
+if grep -q '^payload/el8\.' "$log"; then
+    grep '^payload/el8\.' "$log" | head -5 >&2
+    fail "capture recorded unrelated payload artifacts"
+fi
+echo "  OK: armed capture recorded inputs and stayed narrow"
+
+# --- 2. marker absent -> no capture -----------------------------------------
+rm -f "$log"
+run_install
+if [[ -e "$log" ]]; then
+    echo "--- unexpected capture log ---" >&2
+    head -5 "$log" >&2
+    fail "capture ran without the marker (production installs must stay clean)"
+fi
+echo "  OK: no marker, no capture"
+
+echo "dep-capture: OK"

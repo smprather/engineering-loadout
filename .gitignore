@@ -6,6 +6,11 @@
 skills-lock.json
 loadout_backups/
 .loadout-bootstrap/
+# Test-only per-test dependency capture (tests/run-all --deps auto); armed by a
+# repo-local marker so it reaches the installer through `env -i`. Never written
+# by production installs.
+.loadout-dep-capture
+.loadout-deps.log
 __pycache__/
 *.log
 !envs/bash/global/grc/share/grc/conf.log
