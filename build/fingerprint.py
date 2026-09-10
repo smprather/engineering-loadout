@@ -3,11 +3,14 @@
 
 Two modes, same output shape:
 
-  --fast   mtime+size sidecar fingerprint. ~2 s for the whole payload tree
-           (vs ~40 s for byte hashing). Correct for "did anything change
-           since the last run" -- the sidecar records the previous state, so
-           a touched-but-identical file costs one needless re-run, never a
-           false green. Use for test-result caches and the smoke install
+  --fast   mtime+size sidecar fingerprint, except Python source files use a
+           normalized-AST digest. ~2 s for the whole payload tree (vs ~40 s
+           for byte hashing). Correct for "did anything change since the last
+           run" -- the sidecar records the previous state, so a
+           touched-but-identical file costs one needless re-run, never a
+           false green. The AST digest means formatting-only changes (ruff,
+           comments) do not invalidate caches; unparseable files fall back to
+           mtime+size. Use for test-result caches and the smoke install
            tree cache.
   --exact  byte-hash fingerprint (sha256 of every file, folded in sorted
            order). ~40 s. Use for anything that must not trust mtimes:
@@ -24,6 +27,7 @@ Usage:
 """
 
 import argparse
+import ast
 import concurrent.futures
 import hashlib
 import json
@@ -86,6 +90,26 @@ def _fold(entries):
     return h.hexdigest()
 
 
+def _py_ast_digest(path):
+    """Semantic digest for a Python source file: the normalized AST.
+
+    Formatting-only changes (ruff, whitespace, comments) must not invalidate
+    caches -- a reformat is not a behavior change, but it bumps mtime and
+    byte-hash and used to re-run every cached test. The AST excludes comments
+    and layout; two files with the same AST behave the same. Returns None when
+    the file cannot be parsed, so the caller falls back to mtime+size (never a
+    false green: unparseable means we cannot prove equivalence).
+    """
+    try:
+        with open(path, "rb") as fh:
+            source = fh.read()
+        tree = ast.parse(source, filename=path)
+        canonical = ast.dump(tree, annotate_fields=False, include_attributes=False)
+        return "ast:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    except OSError, SyntaxError, ValueError:
+        return None
+
+
 def _mem_available_mb():
     """MemAvailable from /proc/meminfo, or None when unreadable."""
     try:
@@ -125,6 +149,11 @@ def fingerprint(roots, exact, excludes=None):
     else:
         entries = []
         for f in files:
+            if f.endswith(".py"):
+                digest = _py_ast_digest(f)
+                if digest is not None:
+                    entries.append((f, digest))
+                    continue
             st = os.stat(f)
             entries.append((f, f"{st.st_mtime_ns}:{st.st_size}"))
     return {
