@@ -37,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 
 _d = os.path.dirname(os.path.abspath(__file__))
@@ -487,6 +488,37 @@ def _mem_available_mb():
     return None
 
 
+_CI_LOG = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+    "engineering-loadout",
+    "ci-runtimes.tsv",
+)
+_CI_LOG_LOCK = threading.Lock()
+
+
+def _log_runtime(suite, test, seconds, status, detail=""):
+    """Append one CI runtime row (see build/ci-runtimes). Best-effort."""
+    try:
+        with _CI_LOG_LOCK:
+            os.makedirs(os.path.dirname(_CI_LOG), exist_ok=True)
+            ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            def clean(s):
+                return str(s).replace("\t", " ").replace("\n", " ").strip()
+
+            with open(_CI_LOG, "a") as fh:
+                fh.write(f"{ts}\t{clean(suite)}\t{clean(test)}\t{int(seconds)}\t{clean(status)}\t{clean(detail)}\n")
+    except OSError:
+        pass
+
+
+def _log_gate_result(result, seconds, detail=""):
+    status = "PASS" if result.returncode == 0 else "FAIL"
+    if "SKIPPED" in (result.output or ""):
+        status = "SKIP"
+    _log_runtime("release", result.name, seconds, status, detail)
+
+
 def _kill_descendants():
     """SIGKILL every descendant of this process, leaves first.
 
@@ -573,7 +605,9 @@ def _run_parallel_pre_release_steps(
             ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
             ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
         ):
+            t0 = time.monotonic()
             result = fn()
+            _log_gate_result(result, time.monotonic() - t0, tag)
             _emit_step_result(result)
             results[result.name] = result
         seq_stop.set()
@@ -597,19 +631,26 @@ def _run_parallel_pre_release_steps(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {}
+        submit_times = {}
+
+        def submit(fn, *args):
+            fut = executor.submit(fn, *args)
+            submit_times[fut] = time.monotonic()
+            return fut
+
         if skip_scan:
-            future = executor.submit(_skip_scan_step, script_dir, tag)
+            future = submit(_skip_scan_step, script_dir, tag)
         else:
-            future = executor.submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
+            future = submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
         futures[future] = ("malware scan", STEP_SCAN_TITLE)
 
-        future = executor.submit(_smoke_step, script_dir, smoke_test, use_smoke_cache)
+        future = submit(_smoke_step, script_dir, smoke_test, use_smoke_cache)
         futures[future] = ("binary smoke test", STEP_SMOKE_TITLE)
 
-        future = executor.submit(_version_step, farm_versions)
+        future = submit(_version_step, farm_versions)
         futures[future] = ("version table", STEP_VERSIONS_TITLE)
 
-        future = executor.submit(_checksum_step, script_dir)
+        future = submit(_checksum_step, script_dir)
         futures[future] = ("checksums", STEP_CHECKSUMS_TITLE)
 
         results = {}
@@ -619,6 +660,7 @@ def _run_parallel_pre_release_steps(
                 result = future.result()
             except Exception as exc:  # noqa: BLE001 - release gate must surface any worker failure.
                 result = StepResult(name=name, title=title, returncode=1, output=f"{exc}\n")
+            _log_gate_result(result, time.monotonic() - submit_times.get(future, time.monotonic()), tag)
             _emit_step_result(result)
             results[result.name] = result
 
@@ -927,6 +969,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
 
     signing = _preflight(dry_run, allow_unsigned)
 
+    release_t0 = time.monotonic()
     results = _run_parallel_pre_release_steps(
         script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
     )
@@ -951,6 +994,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
 
     if dry_run:
         print("\nDry run -- pre-release gates passed. Skipping tag and GitHub release.")
+        _log_runtime("release", "total", time.monotonic() - release_t0, "PASS", f"{tag} dry-run")
         return
 
     version_table = results["version table"].data or ""
@@ -1084,6 +1128,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
                 sys.exit(1)
 
     print(f"\nRelease {tag} created" + (" (signed tag)." if signing else " (UNSIGNED tag)."))
+    _log_runtime("release", "total", time.monotonic() - release_t0, "PASS", tag)
 
 
 if __name__ == "__main__":

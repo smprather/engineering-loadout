@@ -63,6 +63,19 @@ CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
 FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
 FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests")
 
+# CI runtime log (see build/ci-runtimes): every test and the suite total is
+# timed and appended, so slowdowns are visible instead of anecdotal. CACHED
+# runs are logged as CACHED (near-zero seconds) and never averaged with real
+# runs. Best-effort: logging must never fail the suite.
+CI_LOG="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/ci-runtimes.tsv"
+
+_log_runtime() {  # suite test seconds status detail
+    mkdir -p "$(dirname "$CI_LOG")" 2>/dev/null || return 0
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" \
+        >> "$CI_LOG" 2>/dev/null || true
+}
+
 # Two cache modes:
 #
 #  all  -- one global fingerprint over payload+envs+installer+tests. Used by
@@ -116,6 +129,7 @@ run_test() {
 
     local deps_file="$CACHE_DIR/$name.deps"
     local fp_file="$CACHE_DIR/$name.fp.json"
+    local t0=$SECONDS
 
     # --- cache check ---
     if [ "$CACHE_ACTIVE" -eq 1 ]; then
@@ -123,6 +137,7 @@ run_test() {
             && [ -f "$deps_file" ] && [ -f "$fp_file" ] \
             && "$PY" "$FP_SCRIPT" --fast --check "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
             echo "=== $name: CACHED PASS (deps unchanged)"
+            _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
             return 0
         fi
         if [ "$deps_mode" = all ] && [ -f "$CACHE_SIDECAR" ] \
@@ -130,6 +145,7 @@ run_test() {
             && [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
             && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
             echo "=== $name: CACHED PASS (inputs unchanged)"
+            _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
             return 0
         fi
     fi
@@ -162,8 +178,10 @@ run_test() {
             sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
         fi
         echo "=== $name: PASS"
+        _log_runtime "run-all" "$name" "$((SECONDS - t0))" "PASS" "mode=$deps_mode"
     else
         echo "=== $name: FAIL" >&2
+        _log_runtime "run-all" "$name" "$((SECONDS - t0))" "FAIL" "mode=$deps_mode"
         FAILURES=$((FAILURES + 1))
     fi
 }
@@ -229,7 +247,13 @@ run_test "update-cadence" "$PY" tests/update-cadence
 
 if [ "$FAST" -eq 1 ]; then
     echo
-    [ "$FAILURES" -eq 0 ] && echo "Tier 1 passed." || echo "$FAILURES test(s) FAILED." >&2
+    if [ "$FAILURES" -eq 0 ]; then
+        echo "Tier 1 passed."
+        _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=--fast"
+    else
+        echo "$FAILURES test(s) FAILED." >&2
+        _log_runtime "run-all" "total" "$SECONDS" "FAIL" "flags=--fast"
+    fi
     exit "$((FAILURES > 0 ? 1 : 0))"
 fi
 
@@ -285,7 +309,9 @@ if [ "$CACHE_ACTIVE" -eq 1 ]; then
 fi
 if [ "$FAILURES" -eq 0 ]; then
     echo "All tests passed."
+    _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=$*"
 else
     echo "$FAILURES test(s) FAILED." >&2
+    _log_runtime "run-all" "total" "$SECONDS" "FAIL" "flags=$*"
 fi
 exit "$((FAILURES > 0 ? 1 : 0))"

@@ -84,6 +84,13 @@ deps include it. New T1 gate `tests/dep-capture` proves armed-capture is
 correct and narrow and that unmarked installs capture nothing. Both capture
 files are gitignored and never written by production installs.
 
+**CI runtime tracking (DONE):** `tests/run-all` times every test and the suite
+total, `build/release` times every gate and the release total, all appended to
+`~/.cache/engineering-loadout/ci-runtimes.tsv` (machine-local, never committed).
+`build/ci-runtimes` shows per-test runs/last/median/max plus CACHED counts and
+flags `!!` when the last PASS exceeds 2x the median (and by >60 s); `--recent`
+lists suite totals, `--test` filters. CACHED rows never enter the averages.
+
 Last updated (previous): 2026-09-04 (v2026.09.04 RELEASED). `v2026.09.04` is
 published and verified: signed tag good (ED25519), `origin/main ==
 v2026.09.04^{commit}` (`c0a6efb`), `isDraft=false`, all three release

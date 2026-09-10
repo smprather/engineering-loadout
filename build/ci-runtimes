@@ -1,0 +1,118 @@
+#!/usr/bin/env python3.14
+"""ci-runtimes -- visibility into CI/test/release durations.
+
+Reads the append-only log written by tests/run-all (per-test) and
+build/release (per-gate):
+
+  ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/ci-runtimes.tsv
+  ts \\t suite \\t test \\t seconds \\t status \\t detail
+
+Usage:
+  build/ci-runtimes                 # per-test stats + regression flags
+  build/ci-runtimes --recent [N]    # last N suite totals (default 10)
+  build/ci-runtimes --test NAME     # history for one test (substring match)
+  build/ci-runtimes --suite S       # filter to a suite (run-all|release)
+
+A test is flagged !! when its last real PASS exceeds 2x its median PASS (and
+by more than 60 s) -- the signal that runtime "is getting away from us".
+CACHED runs are counted separately and never averaged with real runs; a test
+with no real runs yet shows no stats.
+"""
+
+import argparse
+import os
+import statistics
+import sys
+from collections import defaultdict
+
+LOG_PATH = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+    "engineering-loadout",
+    "ci-runtimes.tsv",
+)
+
+
+def _fmt_secs(s):
+    s = int(s)
+    if s < 60:
+        return f"{s}s"
+    m, sec = divmod(s, 60)
+    if m < 60:
+        return f"{m}m{sec:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m"
+
+
+def load_rows():
+    rows = []
+    try:
+        with open(LOG_PATH) as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) != 6:
+                    continue
+                ts, suite, test, seconds, status, detail = parts
+                try:
+                    seconds = int(seconds)
+                except ValueError:
+                    continue
+                rows.append((ts, suite, test, seconds, status, detail))
+    except OSError:
+        pass
+    return rows
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--recent", nargs="?", const=10, type=int, metavar="N")
+    ap.add_argument("--test", metavar="NAME")
+    ap.add_argument("--suite", metavar="S")
+    args = ap.parse_args(argv)
+
+    rows = load_rows()
+    if not rows:
+        print(f"no data yet at {LOG_PATH}")
+        print("rows are appended by tests/run-all and build/release on every run.")
+        return 0
+    if args.suite:
+        rows = [r for r in rows if r[1] == args.suite]
+
+    if args.recent is not None:
+        totals = [r for r in rows if r[2] == "total"]
+        for ts, suite, _t, secs, status, detail in totals[-args.recent :]:
+            print(f"{ts}  {suite:8s}  {_fmt_secs(secs):>8s}  {status:6s}  {detail}")
+        return 0
+
+    if args.test:
+        for ts, suite, test, secs, status, detail in rows:
+            if args.test in test:
+                print(f"{ts}  {suite:8s}  {test:50s}  {_fmt_secs(secs):>8s}  {status:6s}  {detail}")
+        return 0
+
+    by_test = defaultdict(list)
+    for r in rows:
+        by_test[(r[1], r[2])].append(r)
+
+    print(f"{'suite':8s}  {'test':44s}  {'runs':>4s}  {'last':>8s}  {'median':>8s}  {'max':>8s}  {'cached':>6s}")
+    for suite, test in sorted(by_test):
+        rs = by_test[(suite, test)]
+        if test == "total":
+            continue
+        real = [s for (_t, _s, _n, s, st, _d) in rs if st == "PASS"]
+        cached = sum(1 for r in rs if r[4] == "CACHED")
+        if not real:
+            print(f"{suite:8s}  {test:44s}  {len(rs):>4d}  {'-':>8s}  {'-':>8s}  {'-':>8s}  {cached:>6d}")
+            continue
+        last = real[-1]
+        med = statistics.median(real[:-1]) if len(real) > 1 else real[0]
+        mx = max(real)
+        flag = "!!" if len(real) > 1 and last > 2 * med and (last - med) > 60 else "  "
+        print(
+            f"{suite:8s}  {test:44s}  {len(real):>4d}  {_fmt_secs(last):>8s}  "
+            f"{_fmt_secs(med):>8s}  {_fmt_secs(mx):>8s}  {cached:>6d}  {flag}"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
