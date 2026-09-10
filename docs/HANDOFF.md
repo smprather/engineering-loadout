@@ -62,12 +62,14 @@ the parallel path and the low-memory sequential path) now calls `_abort_oom()`
 which reaps first. New T1 gate `tests/oom-guard-reap` spawns a child+grandchild
 and asserts both die (zombie-aware), with a proven negative control.
 
-**Tier 3 lock caveat:** `--full` runs a persistent bind-mounted install tree
-at `~/.cache/engineering-loadout/tier3-v1` and takes a `mkdir`
-`fingerprint.lock`. Two concurrent `--full` runs collide; a run killed
-before its EXIT trap leaves the lock and the next waits 900 s then exits 3.
-Do NOT run `tests/prebuilt-binaries-almalinux8 --full` while
-`tests/run-all --container` is in flight.
+**Tier 3 lock caveat (FIXED, post-release):** `--full` takes a `mkdir`
+`fingerprint.lock` on the persistent bind mount. Two real bugs, both fixed:
+(1) the entrypoint ended with `exec`, which replaces the shell so the EXIT
+trap removing the lock NEVER fired -- every successful run leaked the lock
+and the next stalled 900 s then exited 3 (fixed: run + exit instead of exec,
+so the trap fires); (2) a genuinely stale lock (killed run) still blocks --
+`rmdir ~/.cache/engineering-loadout/tier3-v1/fingerprint.lock` to clear it.
+Still do NOT run two `--full` runs concurrently.
 
 **Tier 2 per-test dependency cache (DONE, post-release):** the old cache was
 all-or-nothing on a payload+envs+installer superset hash, so any one payload

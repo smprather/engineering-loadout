@@ -198,7 +198,14 @@ if [ "${LOADOUT_SMOKE_DYNAMIC:-0}" = "1" ]; then
     echo "== dynamic: install nvim into a dest tree"
     ./loadout install -y nvim env-nvim treesitter-parsers --dest-dir /work/dyn --no-backup > /dev/null
     echo "== dynamic: behavioral analysis (canary + strace, network isolated)"
-    exec "$py" tests/dynamic-analysis --package nvim --bindir /work/dyn/local/bin
+    # Run, do NOT exec: exec replaces the shell, so the EXIT trap that removes
+    # the fingerprint lock never fires and every successful run leaves a stale
+    # lock that stalls the next T3 run for 900 s. A normal exit (even via
+    # set -e on failure) runs the trap.
+    "$py" tests/dynamic-analysis --package nvim --bindir /work/dyn/local/bin
+    exit $?
 fi
 
-exec "$py" tests/prebuilt-binaries "$@"
+# See above: no exec here either, or the fingerprint lock leaks.
+"$py" tests/prebuilt-binaries "$@"
+exit $?
