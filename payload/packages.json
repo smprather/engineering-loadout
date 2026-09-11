@@ -3550,6 +3550,8 @@
         "klayout",
         "verilator",
         "yosys",
+        "sby",
+        "z3",
         "spice-netlist-ls"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
@@ -3818,6 +3820,12 @@
         "yosys-filterlib",
         "yosys-smtbmc"
       ],
+      "libs": [
+        "libffi.so.6",
+        "libz.so.1",
+        "libtcl8.6.so",
+        "libedit.so.0"
+      ],
       "archive": "payload/PLATFORM/runtime/yosys.tar.bz2",
       "version": "0.68",
       "version_url": "https://github.com/YosysHQ/yosys/releases",
@@ -3836,7 +3844,57 @@
         "share/yosys"
       ],
       "missing_hint": "the Yosys techlib tree (share/yosys) will NOT be installed; `yosys` starts but every synth pass fails",
-      "description": "Yosys \u2014 open-source RTL synthesis (Verilog/SystemVerilog \u2192 netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"
+      "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"
+    },
+    "sby": {
+      "kind": "bin",
+      "bins": [
+        "sby"
+      ],
+      "archive": "payload/PLATFORM/runtime/sby.tar.bz2",
+      "version": "b1a1e98",
+      "version_url": "https://github.com/YosysHQ/sby",
+      "pin_reason": "upstream has no tags or releases (only yosys-compat markers, latest yosys-0.47); the commit hash IS the pin (strace-ui precedent). Proven compatible with bundled Yosys 0.68 by the build's prove smoke.",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "verilog",
+        "formal",
+        "verification"
+      ],
+      "depends": [
+        "yosys",
+        "z3",
+        "portable-python"
+      ],
+      "install_to": "~/.local",
+      "sentinel": "share/sby/sby.py",
+      "remove_before_extract": [
+        "share/sby"
+      ],
+      "missing_hint": "the sby Python sources (share/sby) will NOT be installed; `sby` starts but cannot load its engines",
+      "description": "SymbiYosys — front-end for Yosys-based formal hardware verification (bmc/prove/cover via yosys-smtbmc + Z3). Pure Python; needs yosys + z3 on PATH (both hard deps)."
+    },
+    "z3": {
+      "kind": "bin",
+      "bins": [
+        "z3"
+      ],
+      "version": "5.1.0.0",
+      "version_url": "https://github.com/Z3Prover/z3/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "solver",
+        "smt",
+        "formal"
+      ],
+      "install_to": "~/.local",
+      "description": "Z3 — SMT solver from Microsoft Research (bundled as sby's prove/bmc engine; also usable standalone). From the official manylinux_2_27 wheel (max GLIBC_2.26, GLIBCXX_3.4.22: runs on stock EL8, no C++ runtime bundled)."
     },
     "iverilog": {
       "kind": "bin",

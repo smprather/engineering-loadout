@@ -1,6 +1,18 @@
 # Current Handoff
 
-Last updated: 2026-09-09 (v2026.09.09.1 RELEASED). Batch below.
+Last updated: 2026-09-11 (sby+z3 UNRELEASED, in tree). Batch below.
+
+## sby + z3 (SymbiYosys formal + Z3 solver, UNRELEASED, in tree)
+
+`build/build-sby.sh --tag b1a1e98cba941ec8433f8dc27f416cd7bb7f14be` stages
+both: sby is pure Python (no stable upstream release -- commit-pinned,
+strace-ui precedent; click 8.4 vendored from the wheelhouse); z3 5.1.0.0 from
+the official manylinux_2_27 wheel (EL8-compatible by readelf, self-contained
+binary only). `yosys` gained explicit `libs` (libffi/libz/libtcl8.6/libedit)
+so minimal installs work on newer hosts (was free-riding on @shared).
+Proven: real `DONE (PASS` prove (2-bit counter, smtbmc+z3) with Yosys 0.68,
+plus host smoke 327 binaries OK. T1 green, README/farm-versions/AGENTS synced.
+Class C on release (touched @eda membership) -- needs T3 + release procedure.
 
 ## 2026-09-09 batch 2: installer size accounting, intended permissions, zsh relocatable prefix, xdesk -s fix (RELEASED as v2026.09.09.1)
 

@@ -4237,6 +4237,68 @@ silently fell back to the build prefix would pass. Note that this exact
 false-green is what bit the `iverilog` packaging (see its section).
 
 
+## sby (SymbiYosys, commit-pinned) + z3 5.1.0.0 -- formal verification
+
+**Build:** `build/build-sby.sh --tag <commit>` (one script stages BOTH
+artifacts; z3 is sby's solver here, though the `z3` package is usable
+standalone). Added 2026-09-11, member of `@eda`.
+
+**No stable release exists** -- no GitHub releases, no PyPI, only yosys-compat
+tags (latest `yosys-0.47`; we ship Yosys 0.68). So `--tag` takes the pinned
+COMMIT HASH (strace-ui precedent), version-stamped as the 7-char short hash
+with a `pin_reason` in packages.json. The build's prove smoke is the
+compatibility proof for the pin: sby tracks Yosys main, and a mismatch fails
+there, not on a user's box.
+
+**sby is pure Python** (`sbysrc/sby*.py`; `extern/launcher.c` is Windows-only,
+no Linux build needed). Install replicates `make install` seds with a
+relocatable layout: all sources in `share/sby/` (runtime/sby.tar.bz2),
+`bin/sby` sh wrapper deriving prefix from `$0` and exec'ing
+`<prefix>/bin/python3.14` (hard dep on portable-python, PATH fallback).
+`##yosys-sys-path##` becomes a no-op (siblings are already on sys.path[0]);
+`##yosys-release-version##` records the pin.
+
+**click is vendored** (`sby_core` imports it; portable-python is minimal and
+must stay that way). Copied -- package AND dist-info, because click 8.4
+resolves `__version__` via importlib.metadata -- out of the already-vendored
+`click-8.4.2` wheelhouse wheel into `share/sby/`. Pure Python, no deps. Bump
+with the wheelhouse and re-verify.
+
+**z3 from the official wheel, no EL8 C++ build.** `z3-solver 5.1.0.0`
+`manylinux_2_27` carries `data/bin/z3`, a self-contained 25 MB ELF (NEEDED is
+system libs only, no libz3.so -- only `bin/z3.bz2` ships). Pinned by version +
+sha256 in the script. Verified by readelf: max GLIBC_2.26 (<= EL8 2.28), max
+GLIBCXX_3.4.22 (<= EL8 libstdc++ 3.4.25) -- hard-fails the build otherwise.
+Stripped + RPATH `$ORIGIN/../lib64` like every ELF (harmless; it needs only
+system libs).
+
+**yosys needed a `libs` fix to make `install sby` work standalone.**
+`yosys` declared no `libs` and free-rode on `@shared` for `libffi.so.6`,
+`libz.so.1`, `libtcl8.6.so`, `libedit.so.0` -- a minimal `install yosys`
+died with `libffi.so.6: cannot open shared object file` on newer hosts
+(CachyOS has no .so.6). All four are bundled (gui_libs/clang/expect stems);
+yosys now claims them explicitly. No-op for `@shared` (already installed
+there), broken-to-working for minimal installs.
+
+**Smoke: `--help` proves nothing -- PROVE from a staged tree.** The build
+stages repo Yosys 0.68 (bins + runtime to a temp prefix; the build image has
+no yosys), then discharges a real assertion (`sby -f demo.sby`, smtbmc+z3)
+and requires `DONE (PASS`. The demo is a 2-bit counter asserting `cnt <= 3`
+-- holds from ANY start state (arbitrary initial values included), so both
+basecase and induction must pass. An earlier self-checking demo (`y ==
+$past(a)`) correctly FAILED from arbitrary start; that proved the flow finds
+real bugs but is the wrong shape for a PASS gate. Yosys 0.68 requires options
+before files (`read -formal -D FORMAL demo.v`, not `demo.v -D FORMAL`).
+
+Build gotchas hit while packaging (do not reintroduce):
+- `rm -rf` the directory the shell is sitting in, then `tar -C` fails with
+  `Cannot getcwd` -- `cd /` before cleanup.
+- `export PATH=...` REPLACING instead of prepending drops the bootstrap
+  python3.14; the sby wrapper then falls back to system python3.6, which dies
+  on `from __future__ import annotations` (3.7+). Always prepend.
+- `tar` the runtime archive from `$STAGE`, not from a deleted CWD (same bug).
+
+
 ## iverilog 13.0 -- Icarus Verilog simulator (EL8 SOURCE build)
 
 **Build:** `build/build-iverilog.sh --tag v13_0`

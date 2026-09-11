@@ -362,6 +362,21 @@ TOOLS = [
         strategy_flag(["-V"], r"Yosys ([0-9]+\.[0-9]+)"),
     ),
     (
+        # sby has no version flag and no upstream releases by design; the pin
+        # is a commit hash (packages.json + build-sby.sh). The marker proves
+        # the shipped binary starts; the real pin lives in packages.json.
+        "sby",
+        "sby",
+        "https://github.com/YosysHQ/sby",
+        strategy_flag(["--help"], r"(usage: sby)"),
+    ),
+    (
+        "z3",
+        "z3",
+        "https://github.com/Z3Prover/z3/releases",
+        strategy_flag(["--version"], r"Z3 version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "openroad",
         "openroad",
         "https://github.com/The-OpenROAD-Project/OpenROAD",
