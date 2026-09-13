@@ -377,6 +377,12 @@ TOOLS = [
         strategy_flag(["--version"], r"Z3 version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "bitwuzla",
+        "bitwuzla",
+        "https://github.com/bitwuzla/bitwuzla/releases",
+        strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "openroad",
         "openroad",
         "https://github.com/The-OpenROAD-Project/OpenROAD",

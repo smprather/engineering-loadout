@@ -1395,6 +1395,66 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (synth):        yosys  rc={proc.returncode} cells={cells} {detail}")
                 failures.append(("yosys", detail))
 
+    if has_bin("bitwuzla"):
+        # `bitwuzla --version` exits 0 from a solver that cannot solve. The EL8
+        # source build links GMP/MPFR statically into the binary (no bundled
+        # .so), so the failure this probe exists for is subtler than a missing
+        # lib: a build that dropped --lang silently changes how sby's smtbmc
+        # engine invokes it (pre-0.3 flags), and a broken arithmetic path
+        # returns the wrong answer. Assert both directions of a hand-checkable
+        # QF_BV query.
+        sat_file = os.path.join(tmpdir, "bitwuzla-sat.smt2")
+        with open(sat_file, "w") as fh:
+            fh.write(
+                "(set-logic QF_BV)\n"
+                "(declare-fun x () (_ BitVec 32))\n"
+                "(assert (distinct (bvadd x #x00000001) #x00000001))\n"
+                "(check-sat)\n"
+                "(get-model)\n"
+            )
+        unsat_file = os.path.join(tmpdir, "bitwuzla-unsat.smt2")
+        with open(unsat_file, "w") as fh:
+            fh.write(
+                "(set-logic QF_BV)\n"
+                "(declare-fun x () (_ BitVec 8))\n"
+                "(assert (= (bvand x #xff) #x00))\n"
+                "(assert (= x #xff))\n"
+                "(check-sat)\n"
+            )
+        try:
+            sat = subprocess.run(
+                [os.path.join(bin_dir, "bitwuzla"), "-m", sat_file],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+            unsat = subprocess.run(
+                [os.path.join(bin_dir, "bitwuzla"), unsat_file],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+        except Exception as exc:
+            print(f"  FAIL (solve):        bitwuzla  {exc}")
+            failures.append(("bitwuzla", str(exc)))
+        else:
+            sat_out = sat.stdout.decode("utf-8", "replace")
+            unsat_out = unsat.stdout.decode("utf-8", "replace")
+            if sat.returncode != 0 or "sat" not in sat_out or "#b11111111111111111111111111111111" not in sat_out:
+                detail = output_excerpt(sat.stdout)
+                print(f"  FAIL (solve):        bitwuzla  sat case: {detail}")
+                failures.append(("bitwuzla", detail))
+            elif unsat.returncode != 0 or unsat_out.strip() != "unsat":
+                detail = output_excerpt(unsat.stdout)
+                print(f"  FAIL (solve):        bitwuzla  unsat case: {detail}")
+                failures.append(("bitwuzla", detail))
+            else:
+                print("  OK   (solve):        bitwuzla  sat model + unsat proof")
+
     if has_bin("iverilog"):
         # `iverilog -V` prints a version banner from an install whose lib/ivl is
         # dead, and `vvp file.vvp` bypasses the generated shebang entirely --

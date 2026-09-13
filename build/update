@@ -94,6 +94,7 @@ AUTOMATED = {
 
 # Build-script: requires EL8 build machine.  script lives in BUILD/.
 BUILD_SCRIPTS = {
+    "bitwuzla": {"script": "build-bitwuzla.sh"},
     "fish": {"script": "build-fish.sh", "runtime": "fish.tar.bz2"},
     "gvim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
     "jq": {"script": "build-jq.sh"},

@@ -3549,11 +3549,12 @@
         "gtkwave",
         "klayout",
         "verilator",
-        "yosys",
-        "sby",
-        "z3",
-        "spice-netlist-ls"
-      ],
+      "yosys",
+      "sby",
+      "z3",
+      "bitwuzla",
+      "spice-netlist-ls"
+    ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
     "@gui-suite": {
@@ -3895,6 +3896,25 @@
       ],
       "install_to": "~/.local",
       "description": "Z3 — SMT solver from Microsoft Research (bundled as sby's prove/bmc engine; also usable standalone). From the official manylinux_2_27 wheel (max GLIBC_2.26, GLIBCXX_3.4.22: runs on stock EL8, no C++ runtime bundled)."
+    },
+    "bitwuzla": {
+      "kind": "bin",
+      "bins": [
+        "bitwuzla"
+      ],
+      "version": "0.9.1",
+      "version_url": "https://github.com/bitwuzla/bitwuzla/releases",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "solver",
+        "smt",
+        "formal"
+      ],
+      "install_to": "~/.local",
+      "description": "Bitwuzla — SMT solver for bit-vectors, floating-point arithmetic, arrays and uninterpreted functions (SMT2/BTOR2 input, model generation, unsat cores). EL8 source build with static GMP 6.3 + MPFR 4.2.2; sby accepts it as an `smtbmc bitwuzla` engine."
     },
     "iverilog": {
       "kind": "bin",

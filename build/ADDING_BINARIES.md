@@ -4299,6 +4299,68 @@ Build gotchas hit while packaging (do not reintroduce):
 - `tar` the runtime archive from `$STAGE`, not from a deleted CWD (same bug).
 
 
+## bitwuzla 0.9.1 -- SMT solver (EL8 SOURCE build)
+
+**Build:** `build/build-bitwuzla.sh --tag 0.9.1`. Added 2026-09-12, member of
+`@eda`; a plain single ELF (no wrapper, no runtime tree). The third solver in
+the payload beside z3; sby drives it via `smtbmc bitwuzla` with zero changes
+(yosys-smtbmc's `smtio.py` has implemented the engine since 0.3 and detects
+support by `--lang` in `--help`).
+
+**Why source, not the official zip.** Upstream ships
+`Bitwuzla-Linux-x86_64-static.zip`, but "static" means its own deps only: the
+binary still NEEDs host `libgmp.so.10`/`libmpfr.so.6` and is built on modern
+Ubuntu -- max GLIBC_2.38 / GLIBCXX_3.4.32, dead on EL8.
+
+**Why GMP/MPFR are built from source.** bitwuzla >= 0.9.0 requires
+GMP >= 6.3 and MPFR >= 4.2.1 (0.9.0 removed the GMP fallback subproject).
+EL8 has gmp 6.1.2 / mpfr 3.1.6 and no newer package in any repo. The script
+downloads `gmp-6.3.0.tar.xz` + `mpfr-4.2.2.tar.xz`, builds them
+`--disable-shared --enable-static --with-pic` into a private prefix, and links
+them statically. Shipped NEEDED is therefore exactly
+`libstdc++.so.6, libgcc_s.so.1, libm.so.6, libpthread.so.0, libc.so.6` --
+verified by an allowlist in the script and asserted by build/farm-versions
+like every other bin.
+
+**The one patch.** `src/main/meson.build` adds `-static` to the executable
+link when `default_library=static` (upstream wants a fully static binary on
+Linux; CI builds it that way). EL8 cannot supply static libc/libstdc++ under
+this repo's policy (host always supplies both; never bundle or static-link
+them), so the script removes that single `link_args += ['-static']` line with
+an assertion that the target text exists. Everything else is upstream's
+default: `-Ddefault_library=static -Dcadical=true` (CaDiCaL comes from the
+meson subproject wrap; Kissat is off by default upstream and we keep it off),
+`-Dtesting=disabled -Dpython=false -Ddocs=false`. `default_library=static`
+also sets `static: true` on the gmp/mpfr pkg-config lookups, which is what
+resolves our private `.a` files via PKG_CONFIG_PATH.
+
+**Base gcc 8.5.0 is enough -- do NOT enable gcc-toolset-14.** The codebase is
+C++17; base gcc compiles it cleanly (measured, not guessed). GMP/MPFR are C.
+Out: GLIBC_2.14 / GLIBCXX_3.4.22, both checked as hard gates. gcc-toolset-14
+would raise the GLIBCXX floor for no benefit.
+
+**Meson >= 0.64 is a build-prereq baked into the image.** EL8 powertools ships
+meson 0.58.2 and bitwuzla's `meson.build` rejects it. `build/Dockerfile`
+installs meson 1.11.1 via `python3.12 -m pip` (python3.12 is in the base image
+already); `/usr/local/bin` precedes `/usr/bin` on PATH so it shadows nothing
+that matters. This follows the grand-image rule -- the next rebuild must not
+`dnf install` anything mid-build.
+
+**Build gotchas.**
+- Upstream's `configure.py` workaround (`patch_mpfr_pc`) is unnecessary when
+  you point PKG_CONFIG_PATH at a prefix whose own `mpfr.pc` already carries
+  `Requires: gmp` (MPFR's configure emits that when built with `--with-gmp`).
+- The upstream tag has no `v` prefix (`0.9.1`); `--version` prints the bare
+  version with no program name, so the build asserts exact string equality.
+- The build RPATHs the executable at `<build-prefix>/lib64` (meson
+  `install_rpath`); the script accepts only the build prefix and
+  `loadout_package_bin` overwrites it with the repo default. A future upstream
+  change that RPATHs a real runtime dep fails the check loudly.
+- Stage smoke is functional (sat model + unsat proof on hand-checkable QF_BV
+  plus the `--lang` presence check); `--version` proves nothing. The same
+  probe (without `--lang`) lives in `tests/prebuilt-binaries`.
+
+
 ## iverilog 13.0 -- Icarus Verilog simulator (EL8 SOURCE build)
 
 **Build:** `build/build-iverilog.sh --tag v13_0`

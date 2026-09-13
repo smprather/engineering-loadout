@@ -1,6 +1,28 @@
 # Current Handoff
 
-Last updated: 2026-09-11 (sby+z3 UNRELEASED, in tree). Batch below.
+Last updated: 2026-09-12 (bitwuzla UNRELEASED, in tree). Batches below.
+
+## bitwuzla 0.9.1 (SMT solver, UNRELEASED, in tree)
+
+`build/build-bitwuzla.sh --tag 0.9.1` (new). EL8 SOURCE build of the third
+solver beside z3; plain single ELF, no wrapper/runtime tree, member of `@eda`.
+Upstream's official Linux zip is GLIBC_2.38/GLIBCXX_3.4.32 (dead on EL8) and
+0.9.0+ requires GMP>=6.3 + MPFR>=4.2.1 (EL8: 6.1.2/3.1.6), so the script
+builds GMP 6.3.0 + MPFR 4.2.2 statically from GNU tarballs and links them in;
+NEEDED stays system-only (libstdc++/libgcc_s/libm/libpthread/libc). Base gcc
+8.5.0 suffices (GLIBC_2.14 / GLIBCXX_3.4.22 out). One asserted patch: drop
+upstream's forced `-static` executable link in `src/main/meson.build` (EL8
+never static-links libc/libstdc++). Meson 1.11.1 + python3.12 baked into
+`build/Dockerfile` (powertools meson is 0.58.2, < 0.64 required); CaDiCaL from
+the meson wrap at build time. sby's `smtbmc bitwuzla` engine works with zero
+changes (smtio detects `--lang`); proven end-to-end from an installed tree:
+`DONE (PASS` (2-bit counter). Post-payload chain run; T1+T2 green; Tier 3
+`--full` green in the EL8 container (`All 307 binaries OK (22 skipped)`, both
+bitwuzla lines OK); new functional probe in `tests/prebuilt-binaries`
+(`OK (solve): bitwuzla sat model + unsat proof`); host smoke
+`All 328 binaries OK (1 skipped)`. README/AGENTS/ADDING_BINARIES/
+farm-versions/packages.json/completion synced. Class C on release (touched
+@eda membership) -- release procedure still owed; T3 already run.
 
 ## sby + z3 (SymbiYosys formal + Z3 solver, UNRELEASED, in tree)
 

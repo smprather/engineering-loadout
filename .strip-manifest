@@ -13,6 +13,7 @@ sha256  74d8c21e3f075bfa1b62e8753283ebfd6fde2d9a0d0989d91ae839188387e9f2  payloa
 sha256  b56cb31894147914a88f14656ffc0d9b4a6feae18bd715b553f0f7d4fe27efae  payload/el8.x86_64.glibc2p28/bin/bash.bz2
 sha256  e5bfde14cafd378a196bb2963d3fea9f486ad0a11276f7780cec8fa2b065caf0  payload/el8.x86_64.glibc2p28/bin/bat.bz2
 sha256  b04380a06a3a8b605c99d1c94c9f4f8769b6ac8f3b60f386b537b81513405ec6  payload/el8.x86_64.glibc2p28/bin/biome.bz2
+sha256  2f38aebcd5bfc57a14b4647a298037e56f4c9637b067d26e734dd907913a78c5  payload/el8.x86_64.glibc2p28/bin/bitwuzla.bz2
 sha256  796b6771b3788b2560fceca639688fe72d5a304b11b194a6bd4bbfcd66a2a334  payload/el8.x86_64.glibc2p28/bin/broot.bz2
 sha256  ec352cb82c51cb586f1724fc9a4ebd5100d4d78970d5032d5e5fb3aca8b82e32  payload/el8.x86_64.glibc2p28/bin/btm.bz2
 sha256  9b02288377fa7ea47ede47b58aefa15e2e93673be2a8a2209508121360b57998  payload/el8.x86_64.glibc2p28/bin/btop.bz2

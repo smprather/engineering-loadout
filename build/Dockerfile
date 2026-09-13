@@ -182,6 +182,16 @@ RUN curl -fsSL -o /usr/local/bin/opam \
     && chmod +x /usr/local/bin/opam \
     && opam --version
 
+# Meson for the bitwuzla source build: EL8 powertools ships meson 0.58.2 and
+# bitwuzla's meson.build rejects anything < 0.64. python3.12 is already in the
+# image; the pinned meson installs into /usr/local/bin, which precedes
+# /usr/bin on the default PATH. 1.11.1 is current-stable-adjacent and supports
+# python3.12 (requires-python >= 3.7); verified against bitwuzla 0.9.1.
+ARG MESON_VERSION=1.11.1
+RUN dnf install -y -q python3.12-pip \
+    && python3.12 -m pip install -q --no-cache-dir "meson==${MESON_VERSION}" \
+    && meson --version
+
 # GNU autoconf 2.72 alongside the distro 2.69 (which stays installed --
 # other builds may rely on it). oxcaml-compiler's configure.ac requires
 # >= 2.71 (build-strace-ui.sh probe, 2026-09-05). /usr/local/bin precedes
