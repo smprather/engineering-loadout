@@ -150,6 +150,10 @@ RUN dnf install -y -q epel-release \
         # next time that target is rebuilt -- this is the first sweep):
         # fio, sqlite, ngspice, verilator, yosys, zsh, openssh, tmux:
         libaio-devel readline-devel fftw-devel help2man autoconf-archive \
+        # firefox's decode-only FFmpeg codec bundle (build-firefox.sh):
+        # nasm is FFmpeg's asm assembler; bsdtar extracts the Alma RPMs for
+        # the --from-rpms staging path inside the container.
+        nasm bsdtar \
         # klayout's ruby-plugin build needs ruby headers (probe with
         # --disable-gems; see AGENTS.md klayout entry):
         ruby-devel \

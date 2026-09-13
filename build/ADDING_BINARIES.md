@@ -1735,11 +1735,57 @@ Script:
     firefox-bin                          # RPATH=$ORIGIN -- finds bundled libmoz*.so
     libxul.so                            # ~150 MB, all the Mozilla code
     libmozsandbox.so, libgkcodecs.so, ...  # bundled, $ORIGIN-resolved
+    libavcodec.so.61, libavutil.so.59, libswresample.so.5  # decode-only FFmpeg
     omni.ja, browser/omni.ja             # packed JS/CSS/XUL frontend
     browser/extensions/langpack-*.xpi    # bundled langpacks
     browser/defaults/preferences/        # real dir (was symlink)
 ./share/applications/firefox.desktop     # XDG menu entry
 ```
+
+### H.264 / AAC need a bundled system FFmpeg (Facebook-Reels trap)
+
+Firefox's built-in `ffvpx` decoder covers VP8/VP9/AV1/Opus/Vorbis/FLAC/MP3
+and needs nothing from the host. It does **not** cover H.264 or AAC. For
+those, `FFmpegRuntimeLinker` `dlopen`s a *system* FFmpeg by soname --
+preferred candidate `libavcodec.so.61` first, down to `.53` -- and drives it
+through `FFmpegLibWrapper`'s symbol table; `canPlayType('video/mp4;
+codecs="avc1..."')` answers `""` without one.
+
+EL8 ships no FFmpeg and no EPEL package exists, so every H.264/AAC source
+(Facebook Reels, AVC YouTube, WebRTC H.264) failed with
+`NS_ERROR_DOM_MEDIA_METADATA_ERR` while the `--version`-only probe stayed
+green -- the fourth firefox universal-host regression of this shape.
+
+`build-firefox.sh` now builds a **decode-only FFmpeg 7.1.5** in the container
+and co-locates three libs in `lib/firefox/` (`RPATH=$ORIGIN`, so they resolve
+each other; the wrapper already prepends that dir to `LD_LIBRARY_PATH`):
+
+| lib | note |
+|---|---|
+| `libavcodec.so.61` | macro 61 == Firefox's first dlopen candidate; `--disable-everything --enable-decoder=h264,hevc,aac,aac_latm,mp3,flac,opus,vorbis,av1,vp8,vp9` |
+| `libavutil.so.59` | NEEDED by avcodec |
+| `libswresample.so.5` | NEEDED by avcodec; AAC resampling |
+
+Why build rather than shanghai: no EL8 rpm exists, and a full upstream build
+drags in hundreds of encoders/muxers Firefox never calls. Output is ~5.7 MB
+stripped. Tarball pinned by sha256.
+
+**ABI guard, asserted every build** (`build/firefox/check-decode.py`):
+`avcodec_version()` macro must be `<= 61` (a `.62` lib is never attempted --
+it would be silently ignored) and micro `>= 100` (marks FFmpeg, not LibAV;
+`FFmpegLibWrapper` refuses LibAV and anything below 54.35.1); then `h264` and
+`aac` decoders must resolve, and both must actually decode committed
+elementary-stream vectors through the exact
+parser -> `avcodec_send_packet` -> `avcodec_receive_frame` sequence Firefox
+uses. Same script runs in stage-verify and in `tests/prebuilt-binaries`
+against the installed tree. The vectors (`build/firefox/{h264,aac}.es`) are
+raw Annex-B / ADTS, not MP4 -- libavcodec's parser expects elementary
+framing, which is also what streamed media presents.
+
+**Never stage these into `$prefix/lib64`.** They would join the loader path
+of every application on newer hosts, shadowing the host's own (complete)
+FFmpeg with this narrow decode-only build. `lib/firefox/` is private to the
+browser.
 
 ### NSS / NSPR are BUNDLED (the version-`NSS_3.107`-not-found trap)
 

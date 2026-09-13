@@ -2308,7 +2308,7 @@
     "payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2": 103718766,
     "payload/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2": 1672857,
     "payload/el8.x86_64.glibc2p28/runtime/expect.tar.bz2": 2252745,
-    "payload/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2": 348679694,
+    "payload/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2": 354563278,
     "payload/el8.x86_64.glibc2p28/runtime/fish.tar.bz2": 0,
     "payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2": 22173037,
     "payload/el8.x86_64.glibc2p28/runtime/gnuplot.tar.bz2": 119536,

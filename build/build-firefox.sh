@@ -301,6 +301,131 @@ if [ -e "$STAGE/lib/firefox/libnssckbi.so" ] || [ -e "$STAGE/lib/firefox/libnsss
     exit 1
 fi
 
+# --- Bundle the decode-only FFmpeg codec set (H.264/AAC) ------------------
+# WHY: Firefox ships its own ffvpx decoder for VP8/VP9/AV1/Opus/Vorbis/FLAC/
+# MP3, but it does NOT ship an H.264 or AAC decoder.  For those it dlopens a
+# SYSTEM FFmpeg from FFmpegRuntimeLinker's candidate list
+# (libavcodec.so.61 first, down to .53) and drives it through
+# FFmpegLibWrapper's function table.  EL8 ships no FFmpeg at all, so every
+# H.264/AAC source -- Facebook Reels, YouTube (progressive/AVC), WebRTC H.264
+# -- fails with NS_ERROR_DOM_MEDIA_METADATA_ERR while canPlayType('avc1...')
+# answers "".  Debian/Ubuntu Firefox behaves the same way and solves it by
+# depending on the distro ffmpeg; we solve it by carrying the two libs.
+#
+# We build FFmpeg 7.1.x decode-only ourselves (--enable-decoder=<list>,
+# --disable-everything else) rather than shanghai an EL8 RPM: no EL8 ffmpeg
+# rpm exists (no EPEL package either), and the full upstream build would drag
+# in hundreds of encoders/muxers this bundle never calls.  Output is
+# libavcodec.so.61 (macro 61 == the first entry in Firefox 140's dlopen
+# ladder) + libavutil.so.59 + libswresample.so.5, ~5.7 MB stripped.
+#
+# ABI contract, asserted below so a future FFmpeg bump fails the build rather
+# than silently losing H.264 at runtime:
+#   * libavcodec major must stay <= 61 (FFmpegRuntimeLinker's newest
+#     candidate; a .62 lib is not even attempted).  We pin 7.1.x == 61.
+#   * avcodec_version()&0xffff >= 100 marks an FFmpeg (not LibAV) build;
+#     FFmpegLibWrapper refuses LibAV and refuses FFmpeg < 54.35.1.
+#   * Every symbol FFmpegLibWrapper's AV_FUNC table requires is checked by
+#     loading the built lib and looking them up.
+#
+# Co-location mirrors the NSS set: files land IN $libdir (which the wrapper
+# prepends to LD_LIBRARY_PATH) with RPATH=$ORIGIN, so libavcodec finds its
+# libavutil/libswresample siblings without any host FFmpeg present -- and a
+# host that DOES have a compatible FFmpeg still wins nothing, since the
+# loader searches $libdir first.  Never put these in $prefix/lib64: on
+# newer hosts that would shadow the host FFmpeg with our narrow
+# decode-only build for every other application.
+FFMPEG_VERSION="7.1.5"
+FFMPEG_SHA256="de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f"
+FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+FFMPEG_DECODERS="h264,hevc,aac,aac_latm,mp3,flac,opus,vorbis,av1,vp8,vp9"
+FFMPEG_PARSERS="h264,hevc,aac,av1,vp9,vp8,opus,vorbis,flac,mpegaudio"
+
+echo "==> Building decode-only FFmpeg ${FFMPEG_VERSION} for H.264/AAC ..."
+need curl
+need nasm
+FF_WORK=$(mktemp -d "${TMPDIR:-/tmp}/firefox-ffmpeg-XXXXXX")
+# shellcheck disable=SC2064  # expand FF_WORK now, not at trap time
+trap 'rm -rf "$STAGE" ${_RPMS_EXTRACT:-} ${FF_WORK:-}' EXIT
+curl -fL --retry 3 --retry-delay 2 -o "$FF_WORK/ffmpeg.tar.xz" "$FFMPEG_URL"
+got=$(sha256sum "$FF_WORK/ffmpeg.tar.xz" | awk '{print $1}')
+[ "$got" = "$FFMPEG_SHA256" ] || {
+    echo "ERROR: ffmpeg tarball sha256 mismatch" >&2
+    echo "  want $FFMPEG_SHA256" >&2
+    echo "  got  $got" >&2
+    exit 1
+}
+tar xf "$FF_WORK/ffmpeg.tar.xz" -C "$FF_WORK"
+(
+    cd "$FF_WORK/ffmpeg-${FFMPEG_VERSION}"
+    ./configure \
+        --prefix="$FF_WORK/inst" \
+        --disable-everything \
+        --disable-programs \
+        --disable-doc \
+        --disable-network \
+        --disable-autodetect \
+        --disable-static \
+        --enable-shared \
+        --enable-pic \
+        --enable-decoder="$FFMPEG_DECODERS" \
+        --enable-parser="$FFMPEG_PARSERS"
+    make -j"$(nproc 2>/dev/null || echo 2)"
+    make install
+) > "$FF_WORK/build.log" 2>&1 || {
+    echo "ERROR: FFmpeg build failed; tail of log:" >&2
+    tail -30 "$FF_WORK/build.log" >&2
+    exit 1
+}
+
+# Stage the three runtime libs + soname links.  RPATH=$ORIGIN is what lets
+# libavcodec find libavutil/libswresample inside $libdir.
+FF_LIBS=""
+for pair in "libavcodec.so.61" "libavutil.so.59" "libswresample.so.5"; do
+    real=$(ls "$FF_WORK/inst/lib/$pair".* 2>/dev/null | sort -V | tail -1)
+    [ -n "$real" ] || { echo "ERROR: $pair not built" >&2; exit 1; }
+    base=$(basename "$real")
+    case "$base" in
+        *.*.*) ;;
+        *) echo "ERROR: unexpected ffmpeg lib name: $base" >&2; exit 1 ;;
+    esac
+    cp "$real" "$STAGE/lib/firefox/$base"
+    strip --strip-debug "$STAGE/lib/firefox/$base"
+    "$PATCHELF" --set-rpath '$ORIGIN' "$STAGE/lib/firefox/$base"
+    chmod 755 "$STAGE/lib/firefox/$base"
+    ln -sf "$base" "$STAGE/lib/firefox/$pair"
+    FF_LIBS="$FF_LIBS $pair"
+done
+
+# ABI guard: avcodec macro must be within FFmpegRuntimeLinker's ladder, and
+# every decoder Firefox asks this bundle for must be present.
+FF_AC="$STAGE/lib/firefox/libavcodec.so.61"
+# shellcheck disable=SC2016  # $ORIGIN is an ld.so token in the sibling libs
+LD_LIBRARY_PATH="$STAGE/lib/firefox${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+python3 - "$FF_AC" "$FFMPEG_DECODERS" <<'PY' || exit 1
+import ctypes
+import os
+import sys
+
+lib_path, want = sys.argv[1], sys.argv[2].split(",")
+lib = ctypes.CDLL(os.path.abspath(lib_path))
+version = lib.avcodec_version()
+macro = (version >> 16) & 0xFF
+micro = version & 0xFF
+print(f"  avcodec_version={version:#x} macro={macro} micro={micro}")
+if macro > 61:
+    sys.exit(f"ERROR: libavcodec macro {macro} > 61 -- Firefox will not load it")
+if micro < 100:
+    sys.exit(f"ERROR: libavcodec looks like LibAV (micro={micro}); Firefox refuses it")
+lib.avcodec_find_decoder_by_name.restype = ctypes.c_void_p
+lib.avcodec_find_decoder_by_name.argtypes = [ctypes.c_char_p]
+missing = [d for d in want if not lib.avcodec_find_decoder_by_name(d.encode())]
+if missing:
+    sys.exit(f"ERROR: decoders missing from libavcodec: {', '.join(missing)}")
+print(f"  decoders present: {', '.join(want)}")
+PY
+echo "  bundled:$FF_LIBS"
+
 # Firefox auto-mounts plugins from MOZ_PLUGIN_PATH; not needed for the
 # default browser experience.  The optional system langpacks under
 # /usr/lib64/firefox/langpacks are already included by the cp -a above.
@@ -371,6 +496,30 @@ elif [ -r /usr/share/applications/firefox.desktop ]; then
     cp /usr/share/applications/firefox.desktop "$STAGE/share/applications/"
 fi
 
+# ---------------------------------------------------------------------------
+# Stage-verify: the FFmpeg pair must actually decode H.264 and AAC.
+#
+# The ABI guard above proves the decoder entries exist; this proves they run,
+# by exercising the exact call sequence FFmpegLibWrapper uses (parser ->
+# open decoder -> send_packet -> receive_frame).  Hand-rolled rather than
+# calling ffmpeg(1): no ffmpeg CLI ships in the bundle, the EL8 build box has
+# none, and the CLI would not test the dlopen path Firefox takes anyway.
+#
+# Media are tiny hand-built elementary streams committed under build/firefox/
+# (dev-only, export-ignored, same precedent as build/iverilog/smoke.v):
+#   h264.es - 160x120 testsrc, 2 s, x264 main profile, Annex-B
+#   aac.es  - 440 Hz sine, 2 s, AAC-LC, ADTS
+# Raw elementary streams, not MP4: the check drives libavcodec's own parser,
+# which expects Annex-B / ADTS framing, not MP4 length prefixes.
+# ---------------------------------------------------------------------------
+echo "==> Stage-verify: decode H.264 + AAC with the bundled FFmpeg ..."
+FF_VERIFY="$REPO/build/firefox"
+[ -f "$FF_VERIFY/h264.es" ] || { echo "ERROR: missing $FF_VERIFY/h264.es" >&2; exit 1; }
+[ -f "$FF_VERIFY/aac.es" ] || { echo "ERROR: missing $FF_VERIFY/aac.es" >&2; exit 1; }
+
+LD_LIBRARY_PATH="$STAGE/lib/firefox${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+python3 "$REPO/build/firefox/check-decode.py" "$STAGE/lib/firefox" "$FF_VERIFY" || exit 1
+
 echo "==> Packaging ..."
 mkdir -p "$RUNTIME_DIR"
 ARCHIVE="$RUNTIME_DIR/firefox.tar.bz2"
@@ -393,8 +542,10 @@ if 'firefox' in pkgs:
     print(f'packages.json: firefox version -> {ver}')
 else:
     print('WARNING: firefox not in packages.json -- add the entry manually')
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+# ensure_ascii=False: the registry carries UTF-8 (em dashes, arrows); the
+# default escaping churned every description string in the file on each bump.
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 " "$REPO/payload/packages.json" "$TAG"
 

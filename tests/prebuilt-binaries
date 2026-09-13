@@ -1696,6 +1696,44 @@ def smoke_runtime_layout(tmpdir, env):
         require_path(os.path.join(parsers, "queries", "python", "highlights.scm"), "tree-sitter python query", failures)
         require_path(os.path.join(parsers, "parser-info", "python.lua"), "tree-sitter python parser-info", failures)
 
+    if os.path.isdir(os.path.join(tmpdir, "local", "lib", "firefox")):
+        # firefox's OWN ffvpx handles VP8/VP9/AV1/Opus; H.264 and AAC come
+        # from a system FFmpeg it dlopens by soname.  EL8 has no FFmpeg, so
+        # the bundle carries a decode-only one -- and until 2026-09-13 it did
+        # not, which meant every H.264/AAC site (Facebook Reels, AVC YouTube)
+        # failed with NS_ERROR_DOM_MEDIA_METADATA_ERR while the --version-only
+        # probe stayed green.  This is the same class as the three earlier
+        # firefox universal-host regressions (libffi soname, libjpeg soname,
+        # trust proxy): the generic probe cannot see any of them.
+        #
+        # The check runs build/firefox/check-decode.py, the exact script
+        # build-firefox.sh stage-verifies with, against the INSTALLED tree --
+        # so a broken RPATH, a missing sibling lib after chunked extraction,
+        # or an FFmpeg bump outside Firefox's dlopen ladder all fail here.
+        ff_libdir = os.path.join(tmpdir, "local", "lib", "firefox")
+        check = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "firefox", "check-decode.py")
+        ff_env = dict(env, LD_LIBRARY_PATH=ff_libdir)
+        try:
+            proc = subprocess.run(
+                [sys.executable, check, ff_libdir, os.path.dirname(check)],
+                cwd=tmpdir,
+                env=ff_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+        except Exception as exc:
+            print(f"  FAIL (codecs):       firefox H.264/AAC  {exc}")
+            failures.append(("firefox codecs", str(exc)))
+        else:
+            out = proc.stdout.decode("utf-8", "replace")
+            if proc.returncode == 0 and "H.264 + AAC decode OK" in out:
+                print("  OK   (codecs):       firefox  H.264 + AAC decode")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (codecs):       firefox H.264/AAC  {detail}")
+                failures.append(("firefox codecs", detail))
+
     if not failures:
         print("Runtime payloads OK")
     print()

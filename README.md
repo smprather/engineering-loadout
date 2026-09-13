@@ -319,7 +319,7 @@ OpenSSH for those.
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
-| firefox | bin | 140.14.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin) |
+| firefox | bin | 140.14.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin). Ships a decode-only FFmpeg, so H.264/AAC sites (Facebook Reels, AVC YouTube) play on hosts with no system FFmpeg |
 | zsh | bin | 5.9 | Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive |
 | fish | bin | 4.8.1 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |

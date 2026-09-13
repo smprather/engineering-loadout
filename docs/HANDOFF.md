@@ -1,6 +1,37 @@
 # Current Handoff
 
-Last updated: 2026-09-12 (bitwuzla UNRELEASED, in tree). Batches below.
+Last updated: 2026-09-13 (firefox media codecs + portable-python TLS fix, UNRELEASED). Batches below.
+
+## firefox H.264/AAC codecs (UNRELEASED, in tree)
+
+Firefox's ffvpx covers VP8/VP9/AV1/Opus/Vorbis/FLAC/MP3 but NOT H.264/AAC;
+those come from a system FFmpeg it dlopens by soname (libavcodec.so.61 first,
+down to .53). EL8 ships none, so Facebook Reels / AVC YouTube failed
+NS_ERROR_DOM_MEDIA_METADATA_ERR while the `--version` probe stayed green.
+
+`build/build-firefox.sh` now builds a decode-only FFmpeg 7.1.5 (avcodec .61 +
+avutil .59 + swresample .5, ~5.7 MB stripped, sha256-pinned tarball, nasm from
+the image) and co-locates it in lib/firefox/ with RPATH $ORIGIN. ABI guard
+(macro <=61, micro >=100, decoders resolve) plus a real decode of committed
+raw H.264/ADTS vectors via build/firefox/check-decode.py -- the same script
+tests/prebuilt-binaries runs against the installed tree (27 video + 88 audio
+frames). Verified: host smoke `All 328 binaries OK`; Tier 3 `--full`
+`All 307 binaries OK (22 skipped)` with `OK (codecs)`; installed-tree
+screenshot shows H.264/AAC and VP9/Opus both `LOADED 160x120 ok`. Docs synced
+(AGENTS/ADDING_BINARIES/README). Class C on release (payload + registry not
+touched but firefox tar bytes changed -- B/C boundary is the payload change
+plus the still-owed currency sweep).
+
+Also fixed this session (committed `e04edf6`): portable-python's
+sitecustomize.py hardcoded only the EL8 CA path, so bundled Python 3.14 / pip
+/ check-versions / build/update all failed every HTTPS request on
+Debian/Arch hosts (OpenSSL fell back to the vanished build prefix
+/opt/cpython3147p/ssl/cert.pem). Now probes distro CA paths in order.
+
+STILL OPEN from the interrupted release prep: `check-versions --outdated-only`
+prints "(no rows)" when every lookup fails (false green that hid 36+ outdated
+packages); yara-rules 20260913 + tldr-data refreshes are in the working tree
+uncommitted; currency sweep incomplete.
 
 ## bitwuzla 0.9.1 (SMT solver, UNRELEASED, in tree)
 
@@ -1077,6 +1108,9 @@ the artifact on disk, and serialise anything that writes `payload/`.
   `--version` only -- that is why THREE universal-host regressions
   (libffi soname, libjpeg soname, trust proxy) all shipped green. Add an
   HTTPS fetch/smoke to the firefox probe on the dest-dir shape.
+  **PARTIAL FIX 2026-09-13:** the codec probe (below) now runs the bundled
+  FFmpeg through a real decode on every smoke; the HTTPS fetch check is
+  still open.
 * **firefox bytes not build-box-canonical:** the 140.14.0 tar was
   strip/bzip2'd on CachyOS. Content is identical (RPATH'd ELFs skip strip)
   but a future EL8 rebuild will churn hashes; expected, harmless.
