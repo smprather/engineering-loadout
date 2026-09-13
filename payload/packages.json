@@ -22,7 +22,7 @@
     "supports_layers": "For kind='env': ordered layer names the environment supports (for example global/user or global/corp/site/team/project/user).",
     "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
     "bins": "List of bin/*.bz2 stems (without .bz2) owned by this package.",
-    "libs": "List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools \u2014 those are always installed.",
+    "libs": "List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools — those are always installed.",
     "typelibs": "List of typelibs/*.typelib files required by this package (documentation only; all typelibs in the dir are always installed).",
     "wheels": "List of Python package names whose wheels are bundled in wheels/ for offline uv tool install.",
     "uv_tool": "Base package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
@@ -219,7 +219,7 @@
         "eda",
         "liberty"
       ],
-      "description": "liberty-filter \u2014 strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only",
+      "description": "liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only",
       "version_url": "https://github.com/smprather/liberty-filter/tags"
     },
     "lefdef-tools": {
@@ -252,7 +252,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "lefdef-tools \u2014 fast LEF/DEF parsing and query tools (Rust backend)"
+      "description": "lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend)"
     },
     "liberty-tools": {
       "kind": "python-tool",
@@ -306,7 +306,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "liberty-tools \u2014 Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools"
+      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools"
     },
     "vcd-toggle-profiler": {
       "kind": "runtime",
@@ -336,7 +336,7 @@
       "recommends": [
         "pigz"
       ],
-      "description": "VCD toggle profiler \u2014 C++17 VCD signal toggle analysis with offline self-contained HTML reports"
+      "description": "VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports"
     },
     "pdftotext": {
       "kind": "bin",
@@ -363,7 +363,7 @@
         "document",
         "text"
       ],
-      "description": "pdftotext (poppler-utils) \u2014 extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper"
+      "description": "pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper"
     },
     "p7zip": {
       "kind": "bin",
@@ -378,7 +378,7 @@
       "tags": [
         "compress"
       ],
-      "description": "p7zip \u2014 Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.)"
+      "description": "p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.)"
     },
     "bzip2": {
       "kind": "bin",
@@ -475,7 +475,7 @@
         "dev",
         "data"
       ],
-      "description": "Sloc, Cloc and Code \u2014 fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps"
+      "description": "Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps"
     },
     "tokei": {
       "kind": "bin",
@@ -619,7 +619,7 @@
       "tags": [
         "benchmark"
       ],
-      "description": "Flexible I/O tester \u2014 storage and filesystem performance benchmark"
+      "description": "Flexible I/O tester — storage and filesystem performance benchmark"
     },
     "fzf": {
       "kind": "bin",
@@ -786,7 +786,7 @@
         "system",
         "disk"
       ],
-      "description": "NCurses disk usage \u2014 interactive disk space analyzer (Zig v2)"
+      "description": "NCurses disk usage — interactive disk space analyzer (Zig v2)"
     },
     "openroad": {
       "kind": "bin",
@@ -819,7 +819,7 @@
         "place-and-route",
         "timing"
       ],
-      "description": "OpenROAD \u2014 RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.14 and the matching Tcl 8.6.17 script library \u2014 mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
+      "description": "OpenROAD — RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.14 and the matching Tcl 8.6.17 script library — mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
       "missing_hint": "openroad will not run: it needs the bundled COIN-OR/SCIP solver libs in lib64"
     },
     "openvaf": {
@@ -837,7 +837,7 @@
         "compiler",
         "verilog-a"
       ],
-      "description": "OpenVAF \u2014 Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + LLVM. Single self-contained binary (glibc + libstdc++ + libgcc_s only, no runtime LLVM dep). Build with build/build-openvaf.sh --tag OpenVAF-v23.5.0"
+      "description": "OpenVAF — Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + LLVM. Single self-contained binary (glibc + libstdc++ + libgcc_s only, no runtime LLVM dep). Build with build/build-openvaf.sh --tag OpenVAF-v23.5.0"
     },
     "openssh": {
       "kind": "bin",
@@ -860,7 +860,7 @@
         "ssh",
         "shell"
       ],
-      "description": "OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional \u2014 opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated."
+      "description": "OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated."
     },
     "jq": {
       "kind": "bin",
@@ -929,7 +929,7 @@
         "pager",
         "viewer"
       ],
-      "description": "less pager \u2014 the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling)"
+      "description": "less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling)"
     },
     "llvm-bolt": {
       "kind": "bin",
@@ -1183,14 +1183,14 @@
         "scripting",
         "ruby"
       ],
-      "description": "Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream \u2014 stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher"
+      "description": "Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher"
     },
     "ruff": {
       "kind": "bin",
       "bins": [
         "ruff"
       ],
-      "version": "0.16.2",
+      "version": "0.16.7",
       "platforms": [
         "linux"
       ],
@@ -1407,7 +1407,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.72",
+      "version": "0.0.80",
       "platforms": [
         "linux"
       ],
@@ -1519,14 +1519,14 @@
         "core",
         "compat"
       ],
-      "description": "GNU coreutils \u2014 individual binaries (ls, cp, mv, etc.) built from source on EL8"
+      "description": "GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8"
     },
     "uv": {
       "kind": "bin",
       "bins": [
         "uv"
       ],
-      "version": "0.12.3",
+      "version": "0.12.13",
       "platforms": [
         "linux"
       ],
@@ -1596,7 +1596,7 @@
         "gui_libs",
         "mesa3d_libs"
       ],
-      "description": "Surfer \u2014 waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer"
+      "description": "Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer"
     },
     "mesa3d_libs": {
       "kind": "runtime",
@@ -1613,7 +1613,7 @@
       "depends": [
         "gui_libs"
       ],
-      "description": "Mesa 3D userspace runtime \u2014 Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs)",
+      "description": "Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs)",
       "sentinel": "lib64/dri/swrast_dri.so",
       "install_to": "~/.local",
       "remove_before_extract": [
@@ -1799,7 +1799,7 @@
         "terminal",
         "gui"
       ],
-      "description": "rxvt-unicode \u2014 X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"
+      "description": "rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled)"
     },
     "xephyr": {
       "kind": "bin",
@@ -1830,7 +1830,7 @@
         "gui",
         "desktop"
       ],
-      "description": "Xephyr \u2014 nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
+      "description": "Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
     },
     "wezterm": {
       "kind": "bin",
@@ -1849,7 +1849,7 @@
         "gui_libs",
         "mesa3d_libs"
       ],
-      "description": "WezTerm terminal emulator \u2014 shanghai bundle from system install; sample app for bundled Mesa 3D runtime",
+      "description": "WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime",
       "sentinel": "bin/wezterm",
       "install_to": "~/.local",
       "remove_before_extract": [
@@ -1889,7 +1889,7 @@
         "gui"
       ],
       "archive": "payload/PLATFORM/runtime/st.tar.bz2",
-      "description": "suckless st \u2014 minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)",
+      "description": "suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY)",
       "sentinel": "share/terminfo/s/st-256color",
       "install_to": "~/.local",
       "missing_hint": "st-256color terminfo with undercurl caps will NOT be installed"
@@ -2041,7 +2041,7 @@
       "recommends": [
         "octave"
       ],
-      "description": "ngspice \u2014 open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix",
+      "description": "ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix",
       "sentinel": "lib/ngspice/analog.cm",
       "install_to": "~/.local",
       "missing_hint": "ngspice spinit/code models will be missing"
@@ -2083,7 +2083,7 @@
       "depends": [
         "gui_libs"
       ],
-      "description": "GTKWave \u2014 VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); the 3 GUI frontends ship env-only launchers (Wayland GDK_BACKEND=x11 + GIO suppression on newer hosts), nothing embeds the build prefix. Tcl scripting (gtkwave -S) is not compiled in",
+      "description": "GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); the 3 GUI frontends ship env-only launchers (Wayland GDK_BACKEND=x11 + GIO suppression on newer hosts), nothing embeds the build prefix. Tcl scripting (gtkwave -S) is not compiled in",
       "sentinel": "share/gtkwave-gtk3/examples/des.fst",
       "install_to": "~/.local",
       "remove_before_extract": [
@@ -2133,7 +2133,7 @@
         "bin/strmxor"
       ],
       "missing_hint": "KLayout will NOT be installed",
-      "description": "KLayout \u2014 GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.14; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
+      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.14; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
     },
     "verilator": {
       "kind": "bin",
@@ -2165,7 +2165,7 @@
       "relocate_token": "/__LOADOUT_RELOC_ROOT__",
       "relocate_root": "share/pkgconfig",
       "missing_hint": "the Verilator C++ include tree (verilated.h / verilated.mk) will NOT be installed; `verilator` starts but every generated model fails to compile",
-      "description": "Verilator \u2014 Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models). Needs host perl for its driver and host g++ to compile the generated model. `verilator --debug` is unavailable: the 104 MB verilator_bin_dbg is deliberately not shipped"
+      "description": "Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models). Needs host perl for its driver and host g++ to compile the generated model. `verilator --debug` is unavailable: the 104 MB verilator_bin_dbg is deliberately not shipped"
     },
     "spice-netlist-ls": {
       "kind": "bin",
@@ -2186,7 +2186,7 @@
         "lsp",
         "lint"
       ],
-      "description": "spice-netlist-ls \u2014 `gofmt` for SPICE netlists: an opinionated formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format with pluggable dialects (HSPICE, NGSPICE, Spectre-SPICE, LTspice). Ships two static-pie musl binaries: `spicefmt` (CLI formatter+linter) and `spice-netlist-ls` (LSP server for diagnostics, formatting, go-to-definition on X instantiations \u2192 .subckt). Complements the bundled simulators (ngspice/iverilog/verilator) by formatting+linting the decks they consume; .scs files with `simulator lang=spice`/`lang=spectre` directives get per-section dialect routing. First-party (smprather), MIT"
+      "description": "spice-netlist-ls — `gofmt` for SPICE netlists: an opinionated formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format with pluggable dialects (HSPICE, NGSPICE, Spectre-SPICE, LTspice). Ships two static-pie musl binaries: `spicefmt` (CLI formatter+linter) and `spice-netlist-ls` (LSP server for diagnostics, formatting, go-to-definition on X instantiations → .subckt). Complements the bundled simulators (ngspice/iverilog/verilator) by formatting+linting the decks they consume; .scs files with `simulator lang=spice`/`lang=spectre` directives get per-section dialect routing. First-party (smprather), MIT"
     },
     "spice-subckt-rc-reduce": {
       "kind": "bin",
@@ -2280,7 +2280,7 @@
         "gui_libs",
         "gobject-typelibs"
       ],
-      "description": "GTK3 visual diff and merge tool (shanghai bundle \u2014 system py3.6 + bundled PyGObject/GtkSource)"
+      "description": "GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource)"
     },
     "mate-terminal": {
       "kind": "bin",
@@ -2301,7 +2301,7 @@
       "depends": [
         "gui_libs"
       ],
-      "description": "MATE Terminal \u2014 GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed)"
+      "description": "MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed)"
     },
     "firefox": {
       "kind": "bin",
@@ -2352,7 +2352,7 @@
       "tags": [
         "shell"
       ],
-      "description": "Z shell \u2014 powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive"
+      "description": "Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive"
     },
     "fish": {
       "kind": "bin",
@@ -2372,7 +2372,7 @@
         "shell"
       ],
       "archive": "payload/PLATFORM/runtime/fish.tar.bz2",
-      "description": "Fish shell \u2014 friendly interactive shell with autosuggestions and syntax highlighting",
+      "description": "Fish shell — friendly interactive shell with autosuggestions and syntax highlighting",
       "sentinel": "share/fish/vendor_functions.d",
       "install_to": "~/.local",
       "remove_before_extract": "share/fish",
@@ -2394,7 +2394,7 @@
       "tags": [
         "lang"
       ],
-      "description": "Tcl scripting language \u2014 tclsh interpreter and runtime library"
+      "description": "Tcl scripting language — tclsh interpreter and runtime library"
     },
     "tclint": {
       "kind": "python-tool",
@@ -2426,7 +2426,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "tclint \u2014 modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (editor integration for nvim/helix). Pure-Python (py3-none-any); zero-ver project (https://0ver.org/) pinned to the latest stable release. Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml"
+      "description": "tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (editor integration for nvim/helix). Pure-Python (py3-none-any); zero-ver project (https://0ver.org/) pinned to the latest stable release. Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml"
     },
     "tk": {
       "kind": "bin",
@@ -2449,7 +2449,7 @@
         "lang",
         "gui"
       ],
-      "description": "Tk GUI toolkit \u2014 wish interpreter and embedded Tk runtime"
+      "description": "Tk GUI toolkit — wish interpreter and embedded Tk runtime"
     },
     "nodejs": {
       "kind": "bin",
@@ -2461,7 +2461,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.7.0",
+      "version": "26.8.2",
       "platforms": [
         "linux"
       ],
@@ -2646,7 +2646,7 @@
       ],
       "uv_tool": "time-plot",
       "rolling_git": "https://github.com/smprather/time-plot.git",
-      "version": "v0.2.0",
+      "version": "v2026.9.13",
       "platforms": [
         "linux"
       ],
@@ -2695,7 +2695,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "text-serdes \u2014 short-lived encrypted text transport for copy/paste workflows (enc/dec)"
+      "description": "text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec)"
     },
     "cicwave": {
       "kind": "python-tool",
@@ -2739,7 +2739,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "cicwave \u2014 PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave"
+      "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave"
     },
     "parity-plot": {
       "kind": "python-tool",
@@ -2986,7 +2986,7 @@
       "recommends": [
         "env-starship"
       ],
-      "description": "Bash 5-layer config (system \u2192 corp \u2192 site \u2192 project \u2192 user) with prompt, aliases, completions"
+      "description": "Bash 5-layer config (system → corp → site → project → user) with prompt, aliases, completions"
     },
     "env-zsh": {
       "kind": "env",
@@ -3344,7 +3344,7 @@
         "shell",
         "hpc"
       ],
-      "description": "Environment Modules \u2014 module load/unload for shell environment management (HPC-style)",
+      "description": "Environment Modules — module load/unload for shell environment management (HPC-style)",
       "depends": [
         "tcl"
       ],
@@ -3374,7 +3374,7 @@
       "sentinel": "bin/cargo",
       "install_to": "~/.local",
       "missing_hint": "Rust toolchain (rustc/cargo) will NOT be installed",
-      "description": "Rust toolchain \u2014 rustc + cargo + std libraries (offline source build target)"
+      "description": "Rust toolchain — rustc + cargo + std libraries (offline source build target)"
     },
     "rust-crate-store": {
       "kind": "data",
@@ -3402,7 +3402,7 @@
         "rust"
       ],
       "optional": true,
-      "description": "Cargo offline config \u2014 points cargo at the bundled local-registry"
+      "description": "Cargo offline config — points cargo at the bundled local-registry"
     },
     "@core-cli": {
       "kind": "group",
@@ -3549,12 +3549,12 @@
         "gtkwave",
         "klayout",
         "verilator",
-      "yosys",
-      "sby",
-      "z3",
-      "bitwuzla",
-      "spice-netlist-ls"
-    ],
+        "yosys",
+        "sby",
+        "z3",
+        "bitwuzla",
+        "spice-netlist-ls"
+      ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
     "@gui-suite": {
@@ -3762,7 +3762,7 @@
         "modules",
         "lua-language-server"
       ],
-      "description": "Curated loadout \u2014 shared packages, per-user config bundles, and selected package groups"
+      "description": "Curated loadout — shared packages, per-user config bundles, and selected package groups"
     },
     "rust-analyzer": {
       "kind": "bin",
@@ -3776,7 +3776,7 @@
       "tags": [
         "lsp"
       ],
-      "description": "Rust language server (LSP) \u2014 diagnostics, go-to-def, completions"
+      "description": "Rust language server (LSP) — diagnostics, go-to-def, completions"
     },
     "gopls": {
       "kind": "bin",
@@ -3790,7 +3790,7 @@
       "tags": [
         "lsp"
       ],
-      "description": "Go language server (LSP) \u2014 diagnostics, go-to-def, completions"
+      "description": "Go language server (LSP) — diagnostics, go-to-def, completions"
     },
     "lua-language-server": {
       "kind": "bin",
@@ -3805,7 +3805,7 @@
         "lsp"
       ],
       "archive": "payload/PLATFORM/runtime/lua-language-server.tar.bz2",
-      "description": "Lua language server (LSP) \u2014 useful for nvim config and Lua tooling",
+      "description": "Lua language server (LSP) — useful for nvim config and Lua tooling",
       "sentinel": "share/lua-language-server/bin/lua-language-server",
       "install_to": "~/.local",
       "remove_before_extract": "share/lua-language-server",
@@ -3944,7 +3944,7 @@
       "relocate_token": "/__LOADOUT_RELOC_ROOT__",
       "relocate_root": "lib/ivl",
       "missing_hint": "the Icarus Verilog code-generator tree (lib/ivl) will NOT be installed; `iverilog` starts but cannot compile anything",
-      "description": "Icarus Verilog \u2014 Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design"
+      "description": "Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design"
     },
     "markdown-oxide": {
       "kind": "bin",
@@ -3961,7 +3961,7 @@
         "markdown",
         "notes"
       ],
-      "description": "PKM markdown language server \u2014 wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
+      "description": "PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua."
     },
     "taplo": {
       "kind": "bin",
@@ -3982,7 +3982,7 @@
       ],
       "archive": "payload/PLATFORM/runtime/taplo-schemas.tar.bz2",
       "archive_name": "taplo-schemas.tar.bz2",
-      "description": "taplo \u2014 the TOML toolkit: `taplo lint`, `taplo format` and `taplo lsp stdio` in one static binary. Ships an OFFLINE JSON Schema catalog (49 SchemaStore-upstream schemas covering Cargo.toml, pyproject.toml, ruff/uv/rustfmt/starship and friends); without it taplo's remote catalogs are dead on a farm node and lint silently degrades to grammar-only. bin/taplo is a wrapper that points `lint` at the bundled catalog; any explicit --schema/--no-schema/--default-schema-catalogs wins. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml. Refresh schemas with ./build/update taplo-schemas",
+      "description": "taplo — the TOML toolkit: `taplo lint`, `taplo format` and `taplo lsp stdio` in one static binary. Ships an OFFLINE JSON Schema catalog (49 SchemaStore-upstream schemas covering Cargo.toml, pyproject.toml, ruff/uv/rustfmt/starship and friends); without it taplo's remote catalogs are dead on a farm node and lint silently degrades to grammar-only. bin/taplo is a wrapper that points `lint` at the bundled catalog; any explicit --schema/--no-schema/--default-schema-catalogs wins. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml. Refresh schemas with ./build/update taplo-schemas",
       "sentinel": "share/taplo/schemas/catalog.json",
       "install_to": "~/.local",
       "remove_before_extract": "share/taplo/schemas",
@@ -4017,7 +4017,7 @@
         "profiling",
         "core"
       ],
-      "description": "Valgrind 3.27.1 \u2014 instrumenting binary analysis framework (memcheck, cachegrind, callgrind, helgrind, massif, drd). Wrapper at bin/valgrind exports VALGRIND_LIB to the relocated libexec/valgrind/ tree."
+      "description": "Valgrind 3.27.1 — instrumenting binary analysis framework (memcheck, cachegrind, callgrind, helgrind, massif, drd). Wrapper at bin/valgrind exports VALGRIND_LIB to the relocated libexec/valgrind/ tree."
     },
     "pyright": {
       "kind": "bin",
@@ -4040,7 +4040,7 @@
       "sentinel": "bin/pyright",
       "install_to": "~/.local",
       "missing_hint": "Run: ./build/build-pyright.sh --tag <version>",
-      "description": "Python language server (LSP) \u2014 type-checking, go-to-def, completions; upstream npm package running directly on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads)"
+      "description": "Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package running directly on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads)"
     },
     "typescript-language-server": {
       "kind": "bin",
@@ -4064,7 +4064,7 @@
       "sentinel": "bin/typescript-language-server",
       "install_to": "~/.local",
       "missing_hint": "Run: ./build/build-typescript-language-server.sh --tag <version>",
-      "description": "TypeScript/JavaScript language server (LSP) \u2014 upstream npm package plus bundled TypeScript 6.x running directly on loadout's bundled Node.js (no npm install, no runtime downloads)"
+      "description": "TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x running directly on loadout's bundled Node.js (no npm install, no runtime downloads)"
     },
     "tmux-path-store": {
       "kind": "python-tool",
@@ -4088,7 +4088,7 @@
         "tmux",
         "python"
       ],
-      "description": "Tmux window-name-keyed directory/file path store \u2014 shell aliases for per-window path bookmarks",
+      "description": "Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks",
       "version_url": "https://github.com/smprather/tmux-path-store/releases"
     }
   }

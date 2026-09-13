@@ -380,8 +380,10 @@ def update_packages_json(packages_json_path, version, dry_run):
         eprint("warning: 'nodejs' not found in packages.json; skipping version update")
         return
     data["packages"]["nodejs"]["version"] = version
-    with open(packages_json_path, "w") as fh:
-        json.dump(data, fh, indent=2)
+    # ensure_ascii=False + utf-8: see build-firefox.sh -- default escaping
+    # rewrites every em dash in the registry on each bump.
+    with open(packages_json_path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     print(f"packages.json: nodejs.version = {version}")
 

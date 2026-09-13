@@ -123,8 +123,11 @@ def main():
             print(f"   wrote {out} ({os.path.getsize(out)} bytes)")
             registry["packages"][tool]["version"] = ver
 
-    with open(reg_path, "w") as f:
-        json.dump(registry, f, indent=2)
+    # ensure_ascii=False + utf-8: the registry carries em dashes/arrows in its
+    # descriptions; the default escaping rewrote every string in the file on
+    # each bump (same bug fixed in build-firefox.sh).
+    with open(reg_path, "w", encoding="utf-8") as f:
+        json.dump(registry, f, indent=2, ensure_ascii=False)
         f.write("\n")
     print("packages.json versions stamped")
 
