@@ -2305,7 +2305,7 @@
     "payload/el8.x86_64.glibc2p28/lib64/libxml2.so.2.bz2": 1506976,
     "payload/el8.x86_64.glibc2p28/lib64/libxxhash.so.0.bz2": 80272,
     "payload/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2": 105344,
-    "payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2": 103717873,
+    "payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2": 103718766,
     "payload/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2": 1672857,
     "payload/el8.x86_64.glibc2p28/runtime/expect.tar.bz2": 2252745,
     "payload/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2": 348679694,
@@ -2580,7 +2580,7 @@
     "payload/fonts/UbuntuMono.zip": 28536830,
     "payload/packages.json": 108549,
     "payload/pending-daemon/loadout-pending-daemon": 11012,
-    "payload/tldr/tldr-pages.tar.bz2": 4299872,
+    "payload/tldr/tldr-pages.tar.bz2": 4307128,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/build-info/platform.env": 344,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ada.lua": 178,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/agda.lua": 178,
@@ -6074,6 +6074,6 @@
     "payload/treesitter/vendor/treesitter-parser-registry/registry.json": 114050,
     "payload/treesitter/vendor/treesitter-parser-registry/schemas/schema.json": 8132,
     "payload/yara/release-tag.txt": 9,
-    "payload/yara/yara-rules-full.yar.bz2": 20844983
+    "payload/yara/yara-rules-full.yar.bz2": 20863303
   }
 }
