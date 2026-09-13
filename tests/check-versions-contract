@@ -1,0 +1,117 @@
+#!/usr/bin/env python3.14
+"""check-versions -- unit tests for the currency report's honesty contract.
+
+The 2026-09-02 portable-python CA regression made EVERY upstream lookup fail.
+check-versions filtered error rows out under --outdated-only and printed
+"(no rows)"; build/update then swallowed the non-zero exit into an empty map.
+Both layers therefore reported "nothing is behind upstream" for two releases
+while 36+ packages were outdated. The release procedure's currency sweep is a
+mandatory class-C gate, so a false green here is exactly the kind of silent
+failure the repo designs against.
+
+These tests pin the contract without touching the network: the renderers and
+the main() error path are driven directly with synthetic rows.
+"""
+
+import contextlib
+import importlib.machinery
+import importlib.util
+import io
+import os
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+loader = importlib.machinery.SourceFileLoader("cv_mod", os.path.join(REPO, "build", "check-versions"))
+spec = importlib.util.spec_from_loader("cv_mod", loader)
+cv = importlib.util.module_from_spec(spec)
+# check-versions imports rich_click (from installer_vendor); it is importable
+# in this repo's environment, but make the failure mode obvious if not.
+try:
+    loader.exec_module(cv)
+except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+    sys.exit(f"check-versions could not import its dependencies: {exc}")
+
+FAILURES = []
+
+
+def check(label, cond, detail=""):
+    if cond:
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append(label)
+
+
+def row(name, status="outdated", error=None, latest="2.0"):
+    return {
+        "name": name,
+        "current": "1.0",
+        "latest": latest,
+        "source": "github",
+        "status": status,
+        "pin_reason": "",
+        "error": error,
+    }
+
+
+def main():
+    print("status_of")
+    check("equal versions -> current", cv.status_of("1.0", "1.0") == "current")
+    check("older -> outdated", cv.status_of("1.0", "2.0") == "outdated")
+    check("newer -> ahead", cv.status_of("2.0", "1.0") == "ahead")
+    check("failed lookup -> ?", cv.status_of("1.0", "") == "?")
+    check("pinned stays pinned", cv.status_of("1.0", "2.0", "hold") == "pinned")
+
+    print("render_text surfaces failures")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        cv.render_text([row("widget", status="?", error="boom", latest="")], include_na=False)
+    out = buf.getvalue()
+    check("error row is printed, not dropped", "widget" in out and "boom" in out, out)
+
+    print("main() exit contract under --outdated-only")
+
+    # Drive main() with synthetic rows and an offline stub, so the test never
+    # touches the network.  The property under test: a failed lookup must NOT
+    # be filtered away, and the process must exit non-zero.
+    def fake_upstream_for(name, entry, homepages):
+        if name == "broken":
+            return ("github", "", "lookup exploded")
+        return ("github", "2.0", None)
+
+    real_upstream_for = cv.upstream_for
+    real_load_packages = cv.load_packages
+    real_load_homepages = cv.load_homepages
+    try:
+        cv.upstream_for = fake_upstream_for
+        cv.load_packages = lambda: {"broken": {"version": "1.0"}, "fine": {"version": "1.0"}}
+        cv.load_homepages = lambda: {}
+        buf = io.StringIO()
+        err = io.StringIO()
+        rc = 0
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                cv.main.callback(fmt="tsv", outdated_only=True, include_na=False, offline=False, jobs=1)
+        except SystemExit as exc:
+            rc = exc.code or 0
+        out = buf.getvalue()
+        errtxt = err.getvalue()
+        check("failed lookup survives --outdated-only filter", "broken" in out, out)
+        check("lookup failure exits non-zero", rc == 2, f"rc={rc}")
+        check("warning names the incomplete report", "INCOMPLETE" in errtxt, errtxt)
+    finally:
+        cv.upstream_for = real_upstream_for
+        cv.load_packages = real_load_packages
+        cv.load_homepages = real_load_homepages
+
+    print()
+    if FAILURES:
+        print(f"check-versions-contract: {len(FAILURES)} FAILED")
+        return 1
+    print("check-versions-contract: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

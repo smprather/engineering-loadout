@@ -446,7 +446,14 @@ def main(fmt, outdated_only, include_na, offline, jobs):
                 rows.append(f.result())
 
     if outdated_only:
-        rows = [r for r in rows if r["status"] in ("outdated", "pinned")]
+        # Errors are NOT filtered out.  A lookup that failed leaves the row's
+        # status as "?" (status_of("x", "") -> "?"), and filtering to
+        # ("outdated","pinned") dropped it -- so a run whose every request
+        # died, e.g. on the broken portable-python CA path that shipped
+        # 2026-09-02, printed "(no rows)" and read as "nothing is behind
+        # upstream".  That false green was believed for two releases.  Keep
+        # failures visible here and let the exit code (below) say so.
+        rows = [r for r in rows if r["status"] in ("outdated", "pinned") or r["error"]]
 
     if fmt == "text":
         render_text(rows, include_na)
@@ -454,6 +461,24 @@ def main(fmt, outdated_only, include_na, offline, jobs):
         render_tsv(rows, include_na)
     else:
         render_json(rows, include_na)
+
+    # A currency report is only trustworthy when every lookup answered.  Exit
+    # non-zero on any error row so scripts (and humans skimming a release log)
+    # cannot mistake "could not check" for "checked, all current".  --offline
+    # is exempt: it makes no lookups, so there is nothing to fail.
+    if not offline:
+        failed = [r for r in rows if r["error"]]
+        if failed:
+            print(
+                f"WARNING: {len(failed)} of {len(work)} upstream lookups failed -- "
+                "results are INCOMPLETE, not a clean bill of health:",
+                file=sys.stderr,
+            )
+            for r in sorted(failed, key=lambda r: r["name"])[:10]:
+                print(f"  {r['name']}: {r['error']}", file=sys.stderr)
+            if len(failed) > 10:
+                print(f"  ... and {len(failed) - 10} more", file=sys.stderr)
+            sys.exit(2)
 
 
 if __name__ == "__main__":

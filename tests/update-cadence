@@ -133,6 +133,51 @@ def main():
             bad.append(f"{name}: {exc}")
     check("every declared auto_update_interval parses", not bad, "; ".join(bad))
 
+    print("check-versions failure surfaces through _fetch_latest_map")
+    # The 2026-09-02..13 portable-python TLS break made every upstream lookup
+    # fail; check-versions printed "(no rows)" and build/update swallowed the
+    # non-zero exit into {}, so both reported a healthy currency state. Pin
+    # the contract: partial answers are kept, and a failed report is visible.
+    import subprocess as _sp
+
+    _orig_check = _sp.check_output
+    _orig_run = _sp.run
+
+    def _broken_run(cmd, *a, **kw):
+        if any(str(c).endswith("check-versions") for c in cmd):
+            return _sp.CompletedProcess(cmd, 2, b"", b"boom")
+        return _orig_run(cmd, *a, **kw)
+
+    def _partial_run(cmd, *a, **kw):
+        if any(str(c).endswith("check-versions") for c in cmd):
+            row = b"name\tcurrent\tlatest\tsource\tstatus\tpin_reason\terror\n"
+            row += b"widget\t1.0\t2.0\tgithub\toutdated\t\t\n"
+            return _sp.CompletedProcess(cmd, 2, row, b"1 lookup failed")
+        return _orig_run(cmd, *a, **kw)
+
+    import contextlib
+    import io
+
+    try:
+        _sp.run = _broken_run
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            got = upd._fetch_latest_map()
+        check("all-lookups-failed -> {} and a warning", got == {} and "INCOMPLETE" in buf.getvalue(), repr(got))
+
+        _sp.run = _partial_run
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            got = upd._fetch_latest_map()
+        check(
+            "partial answers kept despite rc=2",
+            got.get("widget") == ("2.0", "outdated") and "INCOMPLETE" in buf.getvalue(),
+            repr(got),
+        )
+    finally:
+        _sp.run = _orig_run
+        _sp.check_output = _orig_check
+
     print()
     if FAILURES:
         print(f"update-cadence: {len(FAILURES)} FAILED")

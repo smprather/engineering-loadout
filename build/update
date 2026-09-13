@@ -1217,21 +1217,31 @@ def _show_pypi_wheel(name):
 
 
 def _fetch_latest_map():
-    """Run check-versions --format tsv; return {name: latest_version_str}."""
+    """Run check-versions --format tsv; return {name: (latest, status)}.
+
+    check-versions exits 2 when any upstream lookup failed; that is a signal
+    the report is INCOMPLETE, not that it is unusable -- the rows that did
+    answer are still good.  Parse stdout either way and warn, rather than
+    (as before) catching the non-zero exit and returning {} so that every
+    package silently showed no latest version at all.
+    """
     cv = os.path.join(BUILD, "check-versions")
     if not os.path.isfile(cv):
         return {}
     try:
-        out = subprocess.check_output(
+        proc = subprocess.run(
             [sys.executable, cv, "--format", "tsv"],
             cwd=REPO,
-            timeout=60,
-            stderr=subprocess.DEVNULL,
-        ).decode("utf-8")
-    except Exception:
+            timeout=180,
+            capture_output=True,
+        )
+    except Exception as exc:
+        print(f"WARNING: check-versions did not run ({exc}); latest versions unknown")
         return {}
+    if proc.returncode != 0:
+        print("WARNING: check-versions reported failed upstream lookups -- latest versions are INCOMPLETE")
     result = {}
-    for line in out.splitlines()[1:]:
+    for line in proc.stdout.decode("utf-8", "replace").splitlines()[1:]:
         parts = line.split("\t")
         if len(parts) >= 3 and parts[0] and parts[2]:
             status = parts[4] if len(parts) >= 5 else ""
