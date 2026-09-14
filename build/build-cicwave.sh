@@ -26,6 +26,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib.sh
+. "$REPO/build/lib.sh"
 PLATFORM="el8.x86_64.glibc2p28"
 WHEELS_DIR="$REPO/payload/$PLATFORM/wheels"
 PATCH="$REPO/build/cicwave/0001-port-pyside6-to-pyqt6.patch"
@@ -97,6 +99,8 @@ for w in "$WHEELS_DIR"/*.whl; do
         rm -f "$w"
     fi
 done
+
+loadout_stamp_version cicwave "$tag"
 
 echo
 echo "Done. Next:"

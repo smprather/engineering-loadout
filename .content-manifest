@@ -683,6 +683,7 @@ sha256  27af381927ed6876263f9740a76738b642875e08c836b31a6131ec2a8ff3ed5d  payloa
 sha256  27b2a53706b1b0d22a61eedd56312cad9f11b6fff5020e064b5b4cffcdbc1644  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/starlark/test.bzl
 sha256  27c1ca24f12f13a381db9dd5fc2d9dbd2dccf839daa38b048635d120f48ef5b5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/capnp/locals.scm
 sha256  27c1ca24f12f13a381db9dd5fc2d9dbd2dccf839daa38b048635d120f48ef5b5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/capnp/locals.scm
+sha256  27c8f98d687f0cdc95177130813bf32d2194cf21a47befdd86176e991469ac7b  payload/packages.json
 sha256  27f3ad093877a977c82b3f2f3b14be5995054de5d17980284342f39745afb44c  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/vento/highlights.scm
 sha256  27f3ad093877a977c82b3f2f3b14be5995054de5d17980284342f39745afb44c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/vento/highlights.scm
 sha256  281536c8e957ee2d5d9f515806319b573effb3b7ad1db3fa25a7392f0cf43313  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/switch.c
@@ -1682,7 +1683,6 @@ sha256  654180c6199a102e09cc4af1a70e766cae5dc9225f5f4445faa49df7e1b5f106  payloa
 sha256  656aeb45d089cbf1e268be3ccd6c69a9443504fa7cc7aa37005ee27ee27a4a45  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/jsonnet/highlights.scm
 sha256  656aeb45d089cbf1e268be3ccd6c69a9443504fa7cc7aa37005ee27ee27a4a45  payload/treesitter/vendor/nvim-treesitter/runtime/queries/jsonnet/highlights.scm
 sha256  65826dc5ef9165c992c1443849bc1fa2daa95b5bfbdb5ac3f22691da674b1721  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/racket.lua
-sha256  6594b7e965cca123a0a8f651f154178a7618bcb2570d610ad28a3f28eb057842  payload/packages.json
 sha256  65d4ec61eae9408e50c0544bd54fc9902dfb8b86faf7cd86fdce937b8f0bd3f5  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/json.lua
 sha256  65e55d72de119c2da0ee9c5e097a409dfbbdade86e4aa5155c5f4e523a516d9f  payload/el8.x86_64.glibc2p28/bin/yank.bz2
 sha256  65fcd4f7748b00ac9c123f976ea1b7a6bb639088e4e7565d3e591a3d7682013e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/jinja/highlights.scm
