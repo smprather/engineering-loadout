@@ -62,3 +62,12 @@
 2026-09-13T23:03:31Z	https://github.com/astral-sh/ruff/releases/download/0.16.7/ruff-x86_64-unknown-linux-gnu.tar.gz	73894c7b7c9a53fd66ed715eb3a1ec65077f316328e377057a98bdb7fcba0326
 2026-09-13T23:03:33Z	https://github.com/astral-sh/ty/releases/download/0.0.80/ty-x86_64-unknown-linux-gnu.tar.gz	6c4142846197f39a3ac963a01512126eea2c01813c2fb4cd0ce7356fc1c9304b
 2026-09-13T23:03:35Z	https://github.com/astral-sh/uv/releases/download/0.12.13/uv-x86_64-unknown-linux-gnu.tar.gz	745765a3b6e360ad76743599ae5c42e9278c7edf8bbff9fc76d05bf2623a04dd
+2026-09-14T02:05:04Z	https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-linux_amd64.tar.gz	05e6813a337cc722c3ed07e54a764b75cc5d671e2e60459db0ba696ee5fa7504
+2026-09-14T02:05:05Z	https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_linux_x86_64.tar.gz	02beacbcda0fa342e50ae3480ba8147307353af3fb28e1d5f790e02329c201a6
+2026-09-14T02:05:07Z	https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64.tar.gz	38b907b21b1b04327fb9481c595331d925a67c6ee1aabd0ef419d0b7d12dfb3d
+2026-09-14T02:05:43Z	https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64.tar.gz	38b907b21b1b04327fb9481c595331d925a67c6ee1aabd0ef419d0b7d12dfb3d
+2026-09-14T02:05:45Z	https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64	76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
+2026-09-14T02:05:45Z	https://github.com/boyter/scc/releases/download/v4.1.0/scc_Linux_x86_64.tar.gz	c7328436d3027f4357d3d7853f7dc3ac2bbcb4ca08f1adad91a27c593884079b
+2026-09-14T02:05:47Z	https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Linux_x86_64.tar.gz	13e05e4b2acc18d2aee44291aefe6325b077ec321b631a0cfa780e8e3bc33f78
+2026-09-14T02:05:48Z	https://github.com/asheshgoplani/agent-deck/releases/download/v1.16.10/agent-deck_1.16.10_linux_amd64.tar.gz	178ecccfea8452ad154f7807ab04b0a03e9f602eba92b16bd4725671661040b5
+2026-09-14T02:05:50Z	https://github.com/andyrewlee/amux/releases/download/v0.0.20/amux_0.0.20_linux_amd64.tar.gz	9f929e47e08dbd7b11b30d7ae60ce5c75582e609b26e4566d2ce24883a0f21aa

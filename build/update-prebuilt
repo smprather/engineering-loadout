@@ -29,6 +29,13 @@ RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
 PATCHELF = os.path.expanduser("~/.local/bin/patchelf")
 
 # URL templates copied from build/verify-binaries TOOLS (keep in sync).
+#
+# Entries are (url_template, binary_name_in_archive[, archive_kind]).  The
+# script strips, RPATH-patches dynamic ELFs and bzip2s into payload/bin/, so a
+# tool only belongs here when its upstream asset is an x86_64 Linux binary
+# whose archive needs no extra processing.  {ver} is substituted verbatim: a
+# tag format with a leading v must spell it in the template, and the version
+# passed on the command line must match the tool's own `--version` output.
 TOOLS = {
     "ruff": ("https://github.com/astral-sh/ruff/releases/download/{ver}/ruff-x86_64-unknown-linux-gnu.tar.gz", "ruff"),
     "uv": ("https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz", "uv"),
@@ -39,6 +46,35 @@ TOOLS = {
     ),
     "procs": ("https://github.com/dalance/procs/releases/download/v{ver}/procs-v{ver}-x86_64-linux.zip", "procs"),
     "miller": ("https://github.com/johnkerl/miller/releases/download/v{ver}/miller-{ver}-linux-amd64.tar.gz", "mlr"),
+    # Go: statically linked upstream, no glibc floor to clear (verified per
+    # bump -- tree-sitter/bottom showed static ≠ automatic for Rust; Go's
+    # goreleaser assets here are CGO-free static and have been for years).
+    "fzf": ("https://github.com/junegunn/fzf/releases/download/v{ver}/fzf-{ver}-linux_amd64.tar.gz", "fzf"),
+    "lazygit": (
+        "https://github.com/jesseduffield/lazygit/releases/download/v{ver}/lazygit_{ver}_linux_x86_64.tar.gz",
+        "lazygit",
+    ),
+    "yq": (
+        "https://github.com/mikefarah/yq/releases/download/v{ver}/yq_linux_amd64.tar.gz",
+        "yq_linux_amd64",
+        "",
+        "yq",
+    ),
+    "shfmt": (
+        "https://github.com/mvdan/sh/releases/download/v{ver}/shfmt_v{ver}_linux_amd64",
+        "shfmt",
+        "raw",
+    ),
+    "scc": ("https://github.com/boyter/scc/releases/download/v{ver}/scc_Linux_x86_64.tar.gz", "scc"),
+    "glow": (
+        "https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_Linux_x86_64.tar.gz",
+        "glow",
+    ),
+    "agent-deck": (
+        "https://github.com/asheshgoplani/agent-deck/releases/download/v{ver}/agent-deck_{ver}_linux_amd64.tar.gz",
+        "agent-deck",
+    ),
+    "amux": ("https://github.com/andyrewlee/amux/releases/download/v{ver}/amux_{ver}_linux_amd64.tar.gz", "amux"),
 }
 
 
@@ -101,12 +137,28 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="loadout-update.") as tmp:
         for tool, ver in updates:
-            url_tpl, want = TOOLS[tool]
+            entry = TOOLS[tool]
+            url_tpl, member = entry[0], entry[1]
+            kind = entry[2] if len(entry) > 2 else ""
+            # Output stem defaults to the archive member name; tools whose
+            # archive member differs from the installed binary name (yq's
+            # yq_linux_amd64 -> yq) provide a fourth element.
+            stem = entry[3] if len(entry) > 3 else member
             url = url_tpl.format(ver=ver)
             print(f"== {tool} -> {ver}")
             archive = os.path.join(tmp, tool + ".archive")
-            download(url, archive)
-            binpath = extract(archive, want, tmp)
+            if kind == "raw":
+                download(url, archive)
+                binpath = os.path.join(tmp, stem)
+                shutil.copyfile(archive, binpath)
+                os.chmod(binpath, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+            else:
+                download(url, archive)
+                binpath = extract(archive, member, tmp)
+                if stem != member:
+                    renamed = os.path.join(tmp, stem)
+                    os.rename(binpath, renamed)
+                    binpath = renamed
             subprocess.run(["/usr/bin/strip", binpath], capture_output=True)
             if is_dynamic(binpath):
                 r = subprocess.run([PATCHELF, "--set-rpath", RPATH, binpath], capture_output=True)
@@ -115,9 +167,16 @@ def main():
                 print("   patchelf RPATH applied (dynamic ELF)")
             else:
                 print("   static ELF, no patchelf")
+            # Version echo: catching a mis-resolved asset at build time beats
+            # discovering it on a farm node.  Not a hard assertion because a
+            # few tools print no parseable version from -V.
+            probe = subprocess.run([binpath, "--version"], capture_output=True, text=True, timeout=30)
+            first = (probe.stdout or probe.stderr).splitlines()
+            if first:
+                print(f"   runs: {first[0][:70]}")
             with open(binpath, "rb") as f:
                 data = f.read()
-            out = os.path.join(BIN_DIR, want + ".bz2")
+            out = os.path.join(BIN_DIR, stem + ".bz2")
             with open(out, "wb") as f:
                 f.write(bz2.compress(data, 9))
             print(f"   wrote {out} ({os.path.getsize(out)} bytes)")

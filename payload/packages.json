@@ -43,7 +43,7 @@
       "bins": [
         "agent-deck"
       ],
-      "version": "1.11.0",
+      "version": "1.16.10",
       "platforms": [
         "linux"
       ],
@@ -467,7 +467,7 @@
       "bins": [
         "scc"
       ],
-      "version": "3.7.0",
+      "version": "4.1.0",
       "platforms": [
         "linux"
       ],
@@ -664,7 +664,7 @@
       "bins": [
         "glow"
       ],
-      "version": "2.1.2",
+      "version": "3.0.0",
       "platforms": [
         "linux"
       ],
@@ -1219,7 +1219,7 @@
       "bins": [
         "shfmt"
       ],
-      "version": "3.13.1",
+      "version": "3.14.1",
       "platforms": [
         "linux"
       ],
@@ -1913,7 +1913,7 @@
       "bins": [
         "yq"
       ],
-      "version": "4.53.3",
+      "version": "4.53.6",
       "platforms": [
         "linux"
       ],
