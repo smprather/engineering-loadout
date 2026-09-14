@@ -1,7 +1,26 @@
 # Current Handoff
 
-Last updated: 2026-09-14 (Tier 3 lock fixed + `--full` green, UNCOMMITTED;
-release ready pending `./build/release`). Start here after a context clear.
+Last updated: 2026-09-14 (`v2026.09.14` RELEASED + verified, HEAD `21503fe`,
+tree clean). Start here after a context clear.
+
+## v2026.09.14 (RELEASED 2026-09-14)
+
+Class C (currency sweep batches 1-5 + nodejs RPATH fix + cicwave stamp +
+Tier 3 lock hardening). §9 verified: signed tag good (ED25519),
+`origin/main == v2026.09.14^{commit}` (`21503fe`), `isDraft=false`, all
+three assets present (sha256sums.txt, default.content-manifest,
+nvim-plugin-stash.tar.bz2 328 MB, hash `28a5adb...` matches sums =
+byte-reused stash), published manifest matches tree. Gates: T1+T2 green,
+Tier 3 `--full` green (`All 307 binaries OK (22 skipped)`, codecs OK),
+release dry-run gates passed (scan CLEAN 0/74178 YARA+ClamAV, smoke 328 OK
+cached, versions, checksums). Release-run notes: first dry-run scan died
+ENOSPC on the 16 GB /tmp tmpfs (parallel scan+smoke) -- re-ran with
+`TMPDIR=/var/tmp/loadout-release-tmp` per the dev-host scratch rule, then
+CLEAN; second dry-run exited after steps 1-3 with no Step 0/verdict (cause
+unknown -- scan run directly afterwards was fine), third dry-run fully
+green. Follow-ups: (1) that silent dry-run2 exit wants an explanation if
+seen again; (2) jupyterlab 4.6.3 + 7 crate-store closures still deferred
+(below); (3) system-package-precedence methodology still NOT STARTED.
 
 ## Session state (read this first)
 
