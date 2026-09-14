@@ -1,8 +1,7 @@
 # Current Handoff
 
-Last updated: 2026-09-13 late (currency sweep batches 1-5 + nodejs RPATH fix,
-ALL COMMITTED through `0eefd39`; release blocked ONLY on the Tier 3 lock bug
-below). Start here after a context clear.
+Last updated: 2026-09-14 (Tier 3 lock fixed + `--full` green, UNCOMMITTED;
+release ready pending `./build/release`). Start here after a context clear.
 
 ## Session state (read this first)
 
@@ -47,43 +46,46 @@ completion, assurance 35/35). Security data current: ClamAV daily Sep 13,
 yara 20260913, tldr refreshed. No assurance-tracked package bumped (rust/
 nvim/git-nvim/treesitter-parsers untouched) so no re-pin owed.
 
-## BLOCKER: Tier 3 fails on a phantom cache lock -- do NOT just re-run
+## BLOCKER (RESOLVED 2026-09-14): Tier 3 phantom cache lock -- fixed, --full green
 
-`tests/prebuilt-binaries-almalinux8 --no-build --full` failed TWICE with
-identical output (rc=3, right after the python bootstrap line):
+`tests/prebuilt-binaries-almalinux8 --no-build --full` failed twice Sep 13
+(rc=3, `cache lock /cache/fingerprint.lock held for 900s`). Root causes, three
+lock-logic defects in `build/docker/almalinux8.10-smoke-entrypoint` (all fixed,
+uncommitted):
 
-    ERROR: cache lock /cache/fingerprint.lock held for 900s -- another Tier 3
-    run in progress?
+1. Silent 900 s wait: the loop printed nothing until the timeout, so the
+   failure looked like it happened "right after the python bootstrap line"
+   after 15 min of silence. Now announces immediately + progress every 60 s.
+2. EXIT trap deleted locks it never owned (`rmdir $_lock` unconditionally):
+   a waiter timing out on a LIVE lock freed a second runner into the same
+   cache tree. Now `_release_lock` checks `_got_lock` -- waiters never touch
+   another run's lock.
+3. No distinction between contention and a broken mount: mkdir failing with
+   no lock dir present now fails fast with `ls -lad`/`id`/`df` diagnostics
+   instead of a hopeless 900 s wait.
 
-Per the repetition rule, a third unchanged re-run is forbidden. Evidence
-gathered so far:
+Plus forensics: owner stamp (`host:pid + UTC date` in `$lock/owner`, removed
+before rmdir) and `LOADOUT_SMOKE_OWNER=$(hostname):$$` from the wrapper; the
+timeout message prints the stamp (or notes its absence = pre-fix stale lock),
+the exact host-side `rmdir` to clear, and `docker ps` advice. Lock semantics
+proven without a full run (extracted-block harness: acquire+release,
+stale-preserved + exit 3).
 
-- No lock dir exists on the host at ~/.cache/engineering-loadout/tier3-v1/
-  (only split-shared/ and xdg/ subdirs) -- checked AFTER each failure.
-- `docker ps` shows NO running containers at any check.
-- Suspicious origin: right before the first failure I ran `docker rm -f ff61`
-  (force-kill = SIGKILL = EXIT trap never fires = possible stale lock left in
-  the bind-mounted /cache). But run 1's failure path apparently removed it
-  (host showed clean), and run 2 STILL failed identically -- so stale-lock
-  alone does not explain both failures.
-- Leading hypothesis: self-deadlock. `--full` mode = prebuilt smoke +
-  install-linux-tmp-home + split-shared-envs; if the harness nests a second
-  docker run that shares the same /cache bind-mount, the inner container
-  sees the outer's fingerprint.lock and waits 900s. Alternatively the
-  failure path creates-then-fails-against its own lock, or there is a
-  lock-creation ordering bug when a fingerprint mismatch forces a phase
-  re-run (the node.tar.bz2 fingerprint changed this session).
+What actually happened Sep 13: stale lock from the `docker rm -f ff61`
+SIGKILL (trap never fires); both failures waited the silent 900 s against it.
+First failure's trap accidentally cleaned it, so the next `--full` (Sep 14,
+with fix, full rebuild so the image carries the new entrypoint) acquired
+instantly and went green: doctor/resolvers/completion/unit
+(63+11+7)/assurance (35) clean, tmp-home + split-shared + modules passed,
+`All 307 binaries OK (22 skipped)`, firefox `OK (codecs)`, lock released
+(log `/var/tmp/tier3-full8.log`).
 
-NEXT STEPS, in order:
-1. Read tests/prebuilt-binaries-almalinux8: find every mkdir/fingerprint.lock
-   site, the 900s wait loop, and whether --full spawns nested docker runs
-   sharing /cache.
-2. Reproduce cheaply: run with a shortened wait or strace the lock path; check
-   whether the lock appears on the host DURING the 900s wait (run it in
-   background, poll the dir).
-3. Fix the lock logic (or remove the stale-lock origin), THEN re-run --full.
-4. If --full passes: docs sync (this file's stale sections already pruned),
-   then release.
+NEXT: `./build/release` (gates: scan-for-malware, tests/prebuilt-binaries,
+farm-versions tsv, sha256sums; tag/publish waits), then post-publish
+verification per docs/RELEASE.md. Release notes should add: nodejs 26.8.2
+re-import (runpath fix), cicwave 0.7.2 wheel + regenerated patch, Tier 3
+lock-logic fix, jupyterlab deferral (below). Working tree has ONLY the two
+intended files dirty (entrypoint + wrapper).
 
 ## Release plan (class C, everything else is done)
 
@@ -259,6 +261,11 @@ trap removing the lock NEVER fired -- every successful run leaked the lock
 and the next stalled 900 s then exited 3 (fixed: run + exit instead of exec,
 so the trap fires); (2) a genuinely stale lock (killed run) still blocks --
 `rmdir ~/.cache/engineering-loadout/tier3-v1/fingerprint.lock` to clear it.
+(3) 2026-09-14 hardening: the wait is noisy (announce + 60 s progress), the
+trap only removes the lock the run itself acquired (waiters never steal a
+live lock), mkdir-failing-with-no-lock-dir fails fast with mount
+diagnostics, and the lock carries an owner stamp (`host:pid + date`, via
+`LOADOUT_SMOKE_OWNER`) printed by the timeout message.
 Still do NOT run two `--full` runs concurrently.
 
 **Tier 2 per-test dependency cache (DONE, post-release):** the old cache was
@@ -344,7 +351,9 @@ preflight below now catches.
 - Gotchas fixed: `__pycache__/*.pyc` written by the pending-daemon spawn
   into the fresh repo copy broke the fingerprint (excluded); `--check`
   compares the fold fields only so older sidecars without `entries` still
-  validate; cache lock is a mkdir with a 15-min wait.
+  validate; cache lock is a mkdir with a noisy 900 s wait (announce + 60 s
+progress), own-lock-only EXIT-trap removal, fail-fast mount diagnostics, and
+an owner stamp printed on timeout.
 - Disk preflight in the entrypoint: `df` check on /work (12 GB needed)
   fails fast with a clear message instead of the confusing ENOSPC cascade.
 

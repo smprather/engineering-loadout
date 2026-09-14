@@ -100,19 +100,67 @@ fi
 
 if [ "$CACHE_OK" -eq 1 ]; then
     _lock="$CACHE_DIR/fingerprint.lock"
-    trap 'rmdir "$_lock" 2>/dev/null || true' EXIT INT TERM
-    _waited=0
     _got_lock=0
+    # Only ever remove the lock WE created. An earlier draft removed $_lock
+    # on every EXIT, so a run that timed out waiting on a stale lock deleted
+    # it (good accident) -- but a run that timed out waiting on a LIVE lock
+    # deleted that too, freeing a second concurrent run into the same cache
+    # tree (bad). The trap below checks _got_lock, so a waiter never touches
+    # another run's lock; clear a genuinely stale lock by hand (see timeout
+    # message).
+    _release_lock() {
+        if [ "${_got_lock:-0}" = "1" ]; then
+            rm -f "$_lock/owner" 2>/dev/null || true
+            rmdir "$_lock" 2>/dev/null || true
+        fi
+    }
+    trap '_release_lock' EXIT INT TERM
+    _waited=0
+    _announced=0
     while [ "$_waited" -lt 900 ]; do
         if mkdir "$_lock" 2>/dev/null; then
             _got_lock=1
+            # Owner stamp for forensics (which container/host run holds it).
+            # Removed by _release_lock before rmdir, so the dir stays rmdir-able.
+            { echo "host=${LOADOUT_SMOKE_OWNER:-unknown} pid=$$ date=$(date -u +%FT%TZ)"; } >"$_lock/owner" 2>/dev/null || true
             break
         fi
-        sleep 2
-        _waited=$((_waited + 2))
+        if [ ! -d "$_lock" ]; then
+            # mkdir keeps failing but no lock dir exists: not contention, a
+            # broken mount (permissions, read-only remount, full disk...).
+            # Waiting 900 s cannot help -- fail fast with diagnostics.
+            echo "ERROR: cannot create cache lock $_lock, yet no lock dir exists" >&2
+            echo "       (mount problem, not contention). Diagnostics:" >&2
+            ls -lad "$CACHE_DIR" 2>&1 | sed 's/^/       /' >&2
+            id 2>&1 | sed 's/^/       /' >&2
+            df -P -m "$CACHE_DIR" 2>&1 | sed 's/^/       /' >&2
+            exit 3
+        fi
+        if [ "$_announced" -eq 0 ]; then
+            echo "NOTE: cache lock $_lock held -- waiting up to 900 s (another Tier 3 run in progress?)"
+            _announced=1
+        fi
+        sleep 10
+        _waited=$((_waited + 10))
+        if [ "$_waited" -gt 0 ] && [ $((_waited % 60)) -eq 0 ] && [ "$_waited" -lt 900 ]; then
+            echo "NOTE: still waiting on cache lock (${_waited}s elapsed)..."
+        fi
     done
     if [ "$_got_lock" -eq 0 ]; then
         echo "ERROR: cache lock $_lock held for ${_waited}s -- another Tier 3 run in progress?" >&2
+        echo "       If no Tier 3 run is active, the lock is stale (a killed run before" >&2
+        echo "       the own-lock-only trap fix could leave one; SIGKILL still skips traps)." >&2
+        ls -la "$CACHE_DIR" 2>&1 | sed 's/^/       /' >&2
+        if [ -f "$_lock/owner" ]; then
+            echo "       Lock owner stamp:" >&2
+            sed 's/^/       /' "$_lock/owner" >&2
+        else
+            echo "       (no owner stamp: lock predates the stamp fix -- almost surely stale" >&2
+            echo "       if no container is running; check 'docker ps')." >&2
+        fi
+        echo "       Clear it with: rmdir \"$CACHE_DIR/fingerprint.lock\"" >&2
+        echo "       (on the HOST: ~/.cache/engineering-loadout/tier3-v1/fingerprint.lock)." >&2
+        echo "       Do NOT run two --full runs concurrently." >&2
         exit 3
     fi
     export XDG_CACHE_HOME="$CACHE_DIR/xdg"

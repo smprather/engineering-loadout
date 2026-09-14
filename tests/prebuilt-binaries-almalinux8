@@ -119,6 +119,7 @@ exec docker run --rm \
     $cache_arg \
     -e "LOADOUT_SMOKE_FULL=$full" \
     -e "LOADOUT_SMOKE_DYNAMIC=$dynamic" \
+    -e "LOADOUT_SMOKE_OWNER=$(hostname):$$" \
     -v "$repo_dir:/src:ro" \
     "$image" \
     "$@"
