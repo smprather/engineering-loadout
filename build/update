@@ -96,8 +96,16 @@ AUTOMATED = {
 BUILD_SCRIPTS = {
     "bitwuzla": {"script": "build-bitwuzla.sh"},
     "fish": {"script": "build-fish.sh", "runtime": "fish.tar.bz2"},
+    "gnuplot": {"script": "build-gnuplot.sh", "runtime": "gnuplot.tar.bz2"},
     "gvim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
+    "htop": {"script": "build-simple-c.sh", "tool": "htop"},
     "jq": {"script": "build-jq.sh"},
+    # klayout/verilator/tree-sitter/yosys were missing entirely: _classify
+    # fell through to "download" (any kind=bin not listed), so --list-outdated
+    # advertised a one-liner prebuilt recipe that does not exist for tools
+    # that are EL8 source builds.  A sweep following that guidance would have
+    # downloaded a GLIBC_2.34+ upstream build and shipped a dead binary.
+    "klayout": {"script": "build-klayout.sh"},
     "micro": {"script": "build-micro.sh"},
     "modules": {"script": "build-modules.sh", "runtime": "modules.tar.bz2"},
     "ncdu": {"script": "build-ncdu.sh"},
@@ -105,15 +113,23 @@ BUILD_SCRIPTS = {
     "nvim": {"script": "build-nvim.sh", "runtime": "nvim.tar.bz2"},
     "nvim-qt": {"script": "build-nvim-qt.sh"},
     "octave": {"script": "build-octave.sh", "runtime": "octave.tar.bz2"},
+    "rsync": {"script": "build-simple-c.sh", "tool": "rsync"},
     "st": {"script": "build-st.sh"},
     "tmux": {"script": "build-tmux.sh"},
+    "tree-sitter": {"script": "build-tree-sitter.sh"},
     "typescript-language-server": {
         "script": "build-typescript-language-server.sh",
         "runtime": "typescript-language-server.tar.bz2",
     },
     "urxvt": {"script": "build-urxvt.sh"},
     "vcd-toggle-profiler": {"script": "build-vcd-toggle-profiler.sh", "runtime": "vcd-toggle-profiler.tar.bz2"},
+    "verilator": {"script": "build-verilator.sh"},
     "vim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
+    "xsel": {"script": "build-simple-c.sh", "tool": "xsel"},
+    "xterm": {"script": "build-xterm.sh"},
+    "yank": {"script": "build-simple-c.sh", "tool": "yank"},
+    "yara": {"script": "build-simple-c.sh", "tool": "yara"},
+    "yosys": {"script": "build-yosys.sh"},
     "zsh": {"script": "build-zsh.sh"},
 }
 
@@ -1120,7 +1136,8 @@ def _show_build(name):
         print(f"  current: v{ver}")
     print()
     print("  On EL8 build machine:")
-    print("    ./build/{} --tag vX.Y.Z".format(info["script"]))
+    tool_arg = f" --tool {info['tool']}" if "tool" in info else ""
+    print("    ./build/{}{} --tag vX.Y.Z".format(info["script"], tool_arg))
     if "runtime" in info:
         print("    (also produces payload/<platform>/runtime/{})".format(info["runtime"]))
     print()
