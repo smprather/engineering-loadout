@@ -223,7 +223,7 @@ OpenSSH for those.
 | biome | bin | 2.5.13 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | broot | bin | 1.60.1 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
-| ipython | python-tool | 9.16.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
+| ipython | python-tool | 9.17.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
 | klayout | bin | 0.30.12 | KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5); embeds the loadout Ruby 3.3 and portable Python 3.14 |
 | verilator | bin | 5.052 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
 | yazi | bin | 26.9.1 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
@@ -269,7 +269,7 @@ OpenSSH for those.
 | miller | bin | 6.21.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
-| fresh | bin | 0.3.8 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
+| fresh | bin | 0.5.1 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
 | nvim | bin | 0.12.5 | Hyperextensible Vim-based text editor |
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
@@ -289,7 +289,7 @@ OpenSSH for those.
 | strace-ui | bin | b48e51a | Interactive TUI for strace output (Jane Street OxCaml/Bonsai_term) — syscall browser with FD provenance tracking. Opt-in: install with ./loadout install strace-ui |
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
-| tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
+| tldr | bin | 1.9.0 | Simplified community man pages (tealdeer) |
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7c | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
@@ -357,7 +357,7 @@ OpenSSH for those.
 | pyright | bin | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads) |
 | typescript-language-server | bin | 6.0.0 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |
 | taplo | bin | 0.10.0 | TOML toolkit — linter, formatter and language server in one binary. Ships an offline JSON Schema catalog (49 SchemaStore schemas: Cargo.toml, pyproject.toml, ruff, uv, rustfmt, starship …) so `taplo lint` validates keys on an air-gapped node instead of silently degrading to grammar-only. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml |
-| tmux-path-store | python-tool | 1.1.0 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
+| tmux-path-store | python-tool | 2026.8.26 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 ### Parity plots
 
 `./loadout install parity-plot` installs the CLI and its local designer, with no

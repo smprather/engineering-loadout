@@ -66,6 +66,11 @@ TOOLS = {
         "raw",
     ),
     "scc": ("https://github.com/boyter/scc/releases/download/v{ver}/scc_Linux_x86_64.tar.gz", "scc"),
+    "tldr": (
+        "https://github.com/dbrgn/tealdeer/releases/download/v{ver}/tealdeer-linux-x86_64-musl",
+        "tldr",
+        "raw",
+    ),
     "glow": (
         "https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_Linux_x86_64.tar.gz",
         "glow",
@@ -95,6 +100,10 @@ TOOLS = {
     "dust": (
         "https://github.com/bootandy/dust/releases/download/v{ver}/dust-v{ver}-x86_64-unknown-linux-musl.tar.gz",
         "dust",
+    ),
+    "fresh": (
+        "https://github.com/sinelaw/fresh/releases/download/v{ver}/fresh-min-size-x86_64-unknown-linux-musl.tar.xz",
+        "fresh-min-size-x86_64-unknown-linux-musl/fresh",
     ),
     "fd": (
         "https://github.com/sharkdp/fd/releases/download/v{ver}/fd-v{ver}-x86_64-unknown-linux-musl.tar.gz",

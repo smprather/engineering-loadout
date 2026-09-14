@@ -59,7 +59,7 @@ sha256  85f95ab54a45ee964a63b5f6ba193e08d92523a34c0e9ab9762d44155521edfc  payloa
 sha256  36eab85ea3fbd6b1a2be174f1d009fcc26bc6e5130668c25b58dc22008b87341  payload/el8.x86_64.glibc2p28/bin/fish.bz2
 sha256  71c69f9a5bcfd4e328674bf252d198b7ce3af6727b1f069c4a1dcf882d7e5088  payload/el8.x86_64.glibc2p28/bin/fmt.bz2
 sha256  ed02e52236b570b5cff3fd761dd404d44d082bf23134848befcc7cda497cf637  payload/el8.x86_64.glibc2p28/bin/fold.bz2
-sha256  9417d5871a9ea02f7d0396759f2238b09cd8bfd675c22b24d6be5f014ca4fa74  payload/el8.x86_64.glibc2p28/bin/fresh.bz2
+sha256  8724c4ce8d60b6533db5db4089f54a195e084ed2943ba5cd29b38806db302694  payload/el8.x86_64.glibc2p28/bin/fresh.bz2
 sha256  338cb2c9a815d77de2c8c9158b8752ebc927b61619eb7c80ed3fdf479e9bea43  payload/el8.x86_64.glibc2p28/bin/fst2vcd.bz2
 sha256  cf8867e865d26d7f4d7ef5af238e73711260995ac4c9420aed2195a53bab953c  payload/el8.x86_64.glibc2p28/bin/fstminer.bz2
 sha256  ab9c14fb09b9a046527482ee299d686e7161ced511b6c45050eab0b0a19d0d68  payload/el8.x86_64.glibc2p28/bin/fzf.bz2
@@ -219,7 +219,7 @@ sha256  41433f6f6d2cf70f23e2ae1ffdfc4fa8946d346acadf3a2b9dc32d1bb6636b78  payloa
 sha256  fea4da869c4abd53a3e8b177585465e363a0a634ca3287bcb558394405a269ef  payload/el8.x86_64.glibc2p28/bin/test.bz2
 sha256  6cc3c5e147d4c7d95743cf7c9d08a1e1a4f39a745a6883c0950490e003fe63d4  payload/el8.x86_64.glibc2p28/bin/timeout.bz2
 sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  payload/el8.x86_64.glibc2p28/bin/tkdiff.bz2
-sha256  8d0227bcb09fb3f9f8af4dd7c23dc0dae64995de05f6440b2f0981b16354d5a2  payload/el8.x86_64.glibc2p28/bin/tldr.bz2
+sha256  e3d2801ba3e5e263f1a51031112ebb769ae8ff212d7e0f902a99e31fcc08c548  payload/el8.x86_64.glibc2p28/bin/tldr.bz2
 sha256  d247020ac6543c44857cfc381210287aed9c268d8de002a632ab857e622d50ae  payload/el8.x86_64.glibc2p28/bin/tmux.bz2
 sha256  af29060493c7feec98af4650f51e40fda2f2164009fae0311fd047654a3b2572  payload/el8.x86_64.glibc2p28/bin/tokei.bz2
 sha256  e4882b9e915b954a7af639b05cef427bc83490a67af2e85cea780d6a2cbf64ac  payload/el8.x86_64.glibc2p28/bin/touch.bz2
