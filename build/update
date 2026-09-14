@@ -106,7 +106,9 @@ BUILD_SCRIPTS = {
     # that are EL8 source builds.  A sweep following that guidance would have
     # downloaded a GLIBC_2.34+ upstream build and shipped a dead binary.
     "klayout": {"script": "build-klayout.sh"},
+    "lua-language-server": {"script": "build-lua-language-server.sh"},
     "micro": {"script": "build-micro.sh"},
+    "models": {"script": "build-models.sh"},
     "modules": {"script": "build-modules.sh", "runtime": "modules.tar.bz2"},
     "ncdu": {"script": "build-ncdu.sh"},
     "nedit-ng": {"script": "build-nedit-ng.sh"},
@@ -116,6 +118,7 @@ BUILD_SCRIPTS = {
     "rsync": {"script": "build-simple-c.sh", "tool": "rsync"},
     "st": {"script": "build-st.sh"},
     "tmux": {"script": "build-tmux.sh"},
+    "tokei": {"script": "build-tokei.sh"},
     "tree-sitter": {"script": "build-tree-sitter.sh"},
     "typescript-language-server": {
         "script": "build-typescript-language-server.sh",

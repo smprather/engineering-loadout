@@ -129,7 +129,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.5.7",
+      "version": "2.5.13",
       "platforms": [
         "linux"
       ],
@@ -145,7 +145,7 @@
       "bins": [
         "broot"
       ],
-      "version": "1.58.0",
+      "version": "1.60.1",
       "platforms": [
         "linux"
       ],
@@ -161,7 +161,7 @@
         "yazi",
         "ya"
       ],
-      "version": "26.5.6",
+      "version": "26.9.1",
       "platforms": [
         "linux"
       ],
@@ -183,7 +183,7 @@
       "bins": [
         "btm"
       ],
-      "version": "0.14.7",
+      "version": "0.14.9",
       "platforms": [
         "linux"
       ],
@@ -482,7 +482,7 @@
       "bins": [
         "tokei"
       ],
-      "version": "14.0.0",
+      "version": "15.0.0",
       "platforms": [
         "linux"
       ],
@@ -539,7 +539,7 @@
       "bins": [
         "dust"
       ],
-      "version": "1.2.4",
+      "version": "1.2.5",
       "platforms": [
         "linux"
       ],
@@ -593,7 +593,7 @@
       "bins": [
         "fd"
       ],
-      "version": "10.4.2",
+      "version": "10.5.0",
       "platforms": [
         "linux"
       ],
@@ -626,7 +626,7 @@
       "bins": [
         "fzf"
       ],
-      "version": "0.74.2",
+      "version": "0.74.4",
       "platforms": [
         "linux"
       ],
@@ -710,7 +710,7 @@
       "bins": [
         "gping"
       ],
-      "version": "1.20.4",
+      "version": "1.21.0",
       "platforms": [
         "linux"
       ],
@@ -902,7 +902,7 @@
       "bins": [
         "lazygit"
       ],
-      "version": "0.64.0",
+      "version": "0.65.1",
       "platforms": [
         "linux"
       ],
@@ -1928,7 +1928,7 @@
       "bins": [
         "zellij"
       ],
-      "version": "0.44.3",
+      "version": "0.45.1",
       "platforms": [
         "linux"
       ],
@@ -2173,7 +2173,7 @@
         "spicefmt",
         "spice-netlist-ls"
       ],
-      "version": "0.3.0",
+      "version": "2026.8.0",
       "version_url": "https://github.com/smprather/spice-netlist-ls/releases",
       "version_pattern": "spice-netlist-ls/releases/tag/v([0-9]+\\.[0-9]+\\.[0-9]+)",
       "platforms": [
@@ -3322,7 +3322,7 @@
       "bins": [
         "models"
       ],
-      "version": "0.14.0",
+      "version": "0.14.1",
       "platforms": [
         "linux"
       ],
@@ -3797,7 +3797,7 @@
       "bins": [
         "lua-language-server"
       ],
-      "version": "3.19.0",
+      "version": "3.19.1",
       "platforms": [
         "linux"
       ],
