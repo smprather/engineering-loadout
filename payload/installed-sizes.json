@@ -2322,7 +2322,7 @@
     "payload/el8.x86_64.glibc2p28/runtime/mesa3d_libs.tar.bz2": 390234273,
     "payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2": 1190506,
     "payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2": 888679,
-    "payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2": 129454328,
+    "payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2": 129458920,
     "payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2": 22284317,
     "payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2": 17133117,
     "payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2": 12929271,

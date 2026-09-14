@@ -66,7 +66,12 @@ _UNAME = _find_tool("/usr/bin/uname", "/bin/uname")
 _LDD = _find_tool("/usr/bin/ldd", "/lib64/ld-linux-x86-64.so.2")
 _GETCONF = _find_tool("/usr/bin/getconf")
 _OBJDUMP = _find_tool("/usr/bin/objdump", "/usr/bin/gobjdump")
-_PATCHELF = _find_tool("/usr/bin/patchelf", "/usr/local/bin/patchelf")
+_PATCHELF = _find_tool(
+    os.environ.get("LOADOUT_PATCHELF", ""),
+    os.path.expanduser("~/.local/bin/patchelf"),
+    "/usr/bin/patchelf",
+    "/usr/local/bin/patchelf",
+)
 _STRIP = _find_tool("/usr/bin/strip")
 
 
