@@ -1,6 +1,132 @@
 # Current Handoff
 
-Last updated: 2026-09-13 (firefox media codecs + portable-python TLS fix, UNRELEASED). Batches below.
+Last updated: 2026-09-13 late (currency sweep batches 1-5 + nodejs RPATH fix,
+ALL COMMITTED through `0eefd39`; release blocked ONLY on the Tier 3 lock bug
+below). Start here after a context clear.
+
+## Session state (read this first)
+
+Everything below is committed and the working tree is clean. HEAD = `0eefd39`.
+The firefox-codecs, bitwuzla, sby+z3 sections further down are still accurate
+(all UNRELEASED in-tree, all formerly Tier-3-green). Since those sections were
+written, this session also landed:
+
+- `bfc71cc` check-versions false-green fix + `tests/check-versions-contract`
+  (T1). `--outdated-only` no longer hides error rows; exits 2 on lookup
+  failure. Exposed 36+ outdated packages that had been hidden two releases.
+- Currency sweep batches 1-5 (`cdd3304`, `8e3d4b2`, `b9fff15`, `c322a7f`,
+  `f95e4c1`, `8360b2f`): ~45 package bumps -- astral tools, nodejs 26.8.2,
+  fish 4.9.3, vim 9.2.1099, tmux 3.7c, yosys 0.69, verilator 5.052, klayout
+  0.30.12, tree-sitter 0.27.0, htop, rsync, xterm, Go/Rust static CLIs, musl
+  Rust CLIs, tokei + models EL8 source builds, cicwave 0.7.2 (broken PyQt6
+  patch regenerated; import of `cicwave.wave_pg` verified from installed
+  tree), ipython 9.17.1, tldr 1.9.0, fresh 0.5.1, tmux-path-store 2026.8.26.
+  packages.json normalized to raw UTF-8 (ensure_ascii=False everywhere;
+  three writers fixed). update-prebuilt: per-tool stamping (mid-batch yq
+  crash used to leave registry unstamped), Go+musl+raw-asset support.
+  build/update BUILD_SCRIPTS now classifies EL8 source builds (klayout/
+  verilator/xterm/tree-sitter/yosys/htop/rsync) so `--list-outdated` stops
+  advertising download recipes for source tools.
+- `e632ad4` + `d890fcb` cicwave registry stamp fix (build-cicwave.sh never
+  wrote version back; now sources build/lib.sh + loadout_stamp_version).
+- `0eefd39` nodejs RPATH fix -- IMPORTANT regression story: the 26.8.2 import
+  ran on the host, where import-nodejs's patchelf probe (/usr/bin,
+  /usr/local/bin only) found nothing, so bin/node shipped WITHOUT its
+  `$ORIGIN/../lib64` RUNPATH. Node NEEDs libatomic.so.1 (declared + bundled),
+  but without the runpath it died exit 127 for node/npm/npx/pyright/
+  typescript-language-server. Tier 3 caught it (T1+T2 were green; CachyOS
+  host has system libatomic.so.1 = ceiling masking the floor gap). Fixed:
+  probe honors LOADOUT_PATCHELF + ~/.local/bin; archive re-imported IN THE
+  CONTAINER with runpath verified; `node --version` = v26.8.2 from an
+  installed dest tree. LESSON: run import-nodejs (and any patchelf-dependent
+  import) inside build-shell, or export LOADOUT_PATCHELF.
+
+Gates status: T1+T2 `tests/run-all` rc=0 (includes new check-versions-contract).
+Sync gates all green (content-manifest, installed-sizes, README table,
+completion, assurance 35/35). Security data current: ClamAV daily Sep 13,
+yara 20260913, tldr refreshed. No assurance-tracked package bumped (rust/
+nvim/git-nvim/treesitter-parsers untouched) so no re-pin owed.
+
+## BLOCKER: Tier 3 fails on a phantom cache lock -- do NOT just re-run
+
+`tests/prebuilt-binaries-almalinux8 --no-build --full` failed TWICE with
+identical output (rc=3, right after the python bootstrap line):
+
+    ERROR: cache lock /cache/fingerprint.lock held for 900s -- another Tier 3
+    run in progress?
+
+Per the repetition rule, a third unchanged re-run is forbidden. Evidence
+gathered so far:
+
+- No lock dir exists on the host at ~/.cache/engineering-loadout/tier3-v1/
+  (only split-shared/ and xdg/ subdirs) -- checked AFTER each failure.
+- `docker ps` shows NO running containers at any check.
+- Suspicious origin: right before the first failure I ran `docker rm -f ff61`
+  (force-kill = SIGKILL = EXIT trap never fires = possible stale lock left in
+  the bind-mounted /cache). But run 1's failure path apparently removed it
+  (host showed clean), and run 2 STILL failed identically -- so stale-lock
+  alone does not explain both failures.
+- Leading hypothesis: self-deadlock. `--full` mode = prebuilt smoke +
+  install-linux-tmp-home + split-shared-envs; if the harness nests a second
+  docker run that shares the same /cache bind-mount, the inner container
+  sees the outer's fingerprint.lock and waits 900s. Alternatively the
+  failure path creates-then-fails-against its own lock, or there is a
+  lock-creation ordering bug when a fingerprint mismatch forces a phase
+  re-run (the node.tar.bz2 fingerprint changed this session).
+
+NEXT STEPS, in order:
+1. Read tests/prebuilt-binaries-almalinux8: find every mkdir/fingerprint.lock
+   site, the 900s wait loop, and whether --full spawns nested docker runs
+   sharing /cache.
+2. Reproduce cheaply: run with a shortened wait or strace the lock path; check
+   whether the lock appears on the host DURING the 900s wait (run it in
+   background, poll the dir).
+3. Fix the lock logic (or remove the stale-lock origin), THEN re-run --full.
+4. If --full passes: docs sync (this file's stale sections already pruned),
+   then release.
+
+## Release plan (class C, everything else is done)
+
+docs/RELEASE.md is authoritative. State: currency sweep done, security data
+fresh, post-payload chain run + committed, T1+T2 green, assurance green.
+Remaining: Tier 3 --full green (blocked above), then ./build/release (gates:
+scan-for-malware, tests/prebuilt-binaries, farm-versions tsv, sha256sums;
+tag/publish waits on those), then post-publish verification per RELEASE.md.
+Release should also note: nodejs 26.8.2 re-import (runpath fix), cicwave 0.7.2
+wheel + regenerated patch, jupyterlab deferral (below).
+
+## Deferred currency debt (all with evidence, all deliberate)
+
+- jupyterlab 4.6.1 -> 4.6.3: the historical pip --platform resolver blocker
+  is GONE (90 wheels resolve cleanly now, no backtracking). But the closure
+  moves 29 wheels including shared deps (prompt_toolkit, traitlets, pygments)
+  that other bundled tools resolve against -- exactly the "silently changes
+  what OTHER tools resolve" hazard ADDING_BINARIES documents. Deferred to a
+  dedicated bump with per-tool smokes, NOT this release.
+- ncdu 2.9.2 -> ?: upstream (code.blicky.net) timed out during version check;
+  delta unconfirmed.
+- pdftotext 26.04.0 -> 26.09.0: deliberately pinned (poppler >= 26.06 needs
+  fontconfig >= 2.15; EL8 has 2.13.1). pin_reason in registry.
+- Crate-store: 7 bumped tool closures NOT absorbed --
+  cargo-local-registry cannot build in the container (curl-sys/openssl
+  compile failure) and the host binary needs libgit2.so.1.9 (absent on EL8).
+  Store validates (2776 crates, 0 mismatch) and --check-policy is green
+  against the new refs; absorb in a follow-up.
+
+## After release: system-package-precedence methodology (user ask, NOT STARTED)
+
+User's standing request, in their words: investigate a methodology to skip
+installing packages when a newer/manually-preferred system package takes
+precedence. Nothing done yet. Design constraints to respect: offline-first
+(no network probes at install), forward-compat (host wins for anything it
+supplies -- same principle as lib64 sonames), the `optional:true` field is
+the only existing gating mechanism, and doctor already knows how to compare
+versions. Likely shape: opt-in registry field or CLI flag causing the
+resolver to drop pkgs whose payload version <= an equivalent system package
+version (needs a detection story that works offline: PATH probe + vercomp at
+install time, or a user-pinned skip list like --skip but persistent).
+NOT designed, NOT implemented -- user asked for methodology investigation
+first.
 
 ## firefox H.264/AAC codecs (UNRELEASED, in tree)
 
@@ -18,9 +144,8 @@ tests/prebuilt-binaries runs against the installed tree (27 video + 88 audio
 frames). Verified: host smoke `All 328 binaries OK`; Tier 3 `--full`
 `All 307 binaries OK (22 skipped)` with `OK (codecs)`; installed-tree
 screenshot shows H.264/AAC and VP9/Opus both `LOADED 160x120 ok`. Docs synced
-(AGENTS/ADDING_BINARIES/README). Class C on release (payload + registry not
-touched but firefox tar bytes changed -- B/C boundary is the payload change
-plus the still-owed currency sweep).
+(AGENTS/ADDING_BINARIES/README). Class C on release (payload tar bytes
+changed); the formerly-owed currency sweep is now done -- see Session state.
 
 Also fixed this session (committed `e04edf6`): portable-python's
 sitecustomize.py hardcoded only the EL8 CA path, so bundled Python 3.14 / pip
@@ -28,10 +153,10 @@ sitecustomize.py hardcoded only the EL8 CA path, so bundled Python 3.14 / pip
 Debian/Arch hosts (OpenSSL fell back to the vanished build prefix
 /opt/cpython3147p/ssl/cert.pem). Now probes distro CA paths in order.
 
-STILL OPEN from the interrupted release prep: `check-versions --outdated-only`
-prints "(no rows)" when every lookup fails (false green that hid 36+ outdated
-packages); yara-rules 20260913 + tldr-data refreshes are in the working tree
-uncommitted; currency sweep incomplete.
+(The former "STILL OPEN" items from the interrupted release prep -- the
+check-versions false green, the uncommitted yara/tldr refreshes, the
+incomplete currency sweep -- are all fixed and committed; see Session state
+above.)
 
 ## bitwuzla 0.9.1 (SMT solver, UNRELEASED, in tree)
 
@@ -1067,7 +1192,7 @@ two-step chain.
 `payload/`, so `.content-manifest` hashes it. Sizes last means the manifest pins
 the previous sizes file.
 
-## Start here after a context clear
+## Evergreen notes (former "start here" section, still all true)
 
 Three things changed shape recently and are easy to trip over:
 
