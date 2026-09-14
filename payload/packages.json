@@ -725,7 +725,7 @@
       "bins": [
         "htop"
       ],
-      "version": "3.5.2",
+      "version": "3.5.3",
       "platforms": [
         "linux"
       ],
@@ -1140,7 +1140,7 @@
       "libs": [
         "libxxhash.so.0"
       ],
-      "version": "3.4.4",
+      "version": "3.5.0",
       "platforms": [
         "linux"
       ],
@@ -1378,7 +1378,7 @@
       "libs": [
         "libevent_core-2.1.so.6"
       ],
-      "version": "3.7b",
+      "version": "3.7c",
       "platforms": [
         "linux"
       ],
@@ -1392,7 +1392,7 @@
       "bins": [
         "tree-sitter"
       ],
-      "version": "0.26.12",
+      "version": "0.27.0",
       "platforms": [
         "linux"
       ],
@@ -1542,7 +1542,7 @@
         "vim",
         "vim.bin"
       ],
-      "version": "9.2.0901",
+      "version": "9.2.1099",
       "platforms": [
         "linux"
       ],
@@ -1558,7 +1558,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2.0901",
+      "version": "9.2.1099",
       "platforms": [
         "linux"
       ],
@@ -1768,7 +1768,7 @@
       "depends": [
         "gui_libs"
       ],
-      "version": "410",
+      "version": "411",
       "platforms": [
         "linux"
       ],
@@ -2094,7 +2094,7 @@
     "klayout": {
       "kind": "bin",
       "bins": [],
-      "version": "0.30.10",
+      "version": "0.30.12",
       "version_url": "https://github.com/KLayout/klayout/tags",
       "platforms": [
         "linux"
@@ -2146,7 +2146,7 @@
         "verilator_profcfunc"
       ],
       "archive": "payload/PLATFORM/runtime/verilator.tar.bz2",
-      "version": "5.050",
+      "version": "5.052",
       "version_url": "https://github.com/verilator/verilator/tags",
       "platforms": [
         "linux"
@@ -2364,7 +2364,7 @@
         "libpcre2-8.so.0",
         "libpcre2-32.so.0"
       ],
-      "version": "4.8.1",
+      "version": "4.9.3",
       "platforms": [
         "linux"
       ],
@@ -3828,7 +3828,7 @@
         "libedit.so.0"
       ],
       "archive": "payload/PLATFORM/runtime/yosys.tar.bz2",
-      "version": "0.68",
+      "version": "0.69",
       "version_url": "https://github.com/YosysHQ/yosys/releases",
       "platforms": [
         "linux"

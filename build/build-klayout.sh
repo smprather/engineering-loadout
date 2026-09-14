@@ -77,6 +77,11 @@ PLATFORM_DIR="$REPO/payload/el8.x86_64.glibc2p28"
 LIB64_DIR="$PLATFORM_DIR/lib64"
 RUNTIME_DIR="$PLATFORM_DIR/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
+# LOADOUT_PATCHELF (exported by build/build-shell) wins: the container runs
+# with HOME=/tmp, where a bare $HOME/.local/bin path does not exist.
+PATCHELF="${LOADOUT_PATCHELF:-$PATCHELF}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 DOWNLOADS_LOG="$REPO/assurance/downloads.log"
 MIRROR="https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages"
 TAG=""
@@ -167,7 +172,16 @@ pkg-config --exists Qt5XmlPatterns || {
     exit 1
 }
 
-PY_PREFIX="$HOME/.local"
+# Prefer LOADOUT_PY_PREFIX (build/build-shell sets HOME=/tmp in the
+# container, where no ~/.local tree exists); otherwise the repo's own
+# bootstrap Python, which carries the same headers, then ~/.local.
+if [ -n "${LOADOUT_PY_PREFIX:-}" ]; then
+    PY_PREFIX="$LOADOUT_PY_PREFIX"
+elif [ -f "$HOME/.local/include/python3.14/Python.h" ]; then
+    PY_PREFIX="$HOME/.local"
+else
+    PY_PREFIX="$REPO/.loadout-bootstrap"
+fi
 PY_INC="$PY_PREFIX/include/python3.14"
 PY_LIB="$PY_PREFIX/lib/libpython3.14.so"
 [ -f "$PY_INC/Python.h" ] || {
@@ -621,8 +635,8 @@ if 'klayout' in pkgs:
     print(f'packages.json: klayout version -> {ver}')
 else:
     print('WARNING: klayout not found in packages.json, skipping version update')
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION"
 

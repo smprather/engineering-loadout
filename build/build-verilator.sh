@@ -322,8 +322,8 @@ if 'verilator' in pkgs:
     print(f'packages.json: verilator version -> {ver}')
 else:
     print('WARNING: verilator not found in packages.json, skipping version update')
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION"
 

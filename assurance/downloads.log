@@ -80,3 +80,7 @@
 2026-09-14T02:14:03Z	https://github.com/zellij-org/zellij/releases/download/v0.45.1/zellij-x86_64-unknown-linux-musl.tar.gz	40bcc2e03f5d5ae8e054e39f676081fe12ab70871506996ba595834c3718eefc
 2026-09-14T02:20:30Z	https://github.com/ClementTsang/bottom/releases/download/0.14.9/bottom_x86_64-unknown-linux-musl.tar.gz	b4bee5b193e7d3f6e090ac14f0ca15acec2e7fe4ef64988e0bfc492e16c28c9a
 2026-09-14T02:20:31Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.5.13/biome-linux-x64-musl	bcf687baae8fcb2e15e1dff8dc2557a98295d26debfb1e353a2cdb01f63a9e62
+2026-09-14T02:40:53Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-devel-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	11c56a5abd6188745b4a21b6f1aef438c84296475c60d7f048ed9691bdf12ab3
+2026-09-14T02:40:53Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
+2026-09-14T02:40:54Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
+2026-09-14T02:40:54Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9

@@ -43,6 +43,12 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
+# LOADOUT_PATCHELF (exported by build/build-shell) wins: the container runs
+# with HOME=/tmp, where a bare $HOME/.local/bin path does not exist, and
+# patchelf lives at /usr/bin there.
+PATCHELF="${LOADOUT_PATCHELF:-$PATCHELF}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 CLONE_URL="https://github.com/fish-shell/fish-shell.git"
 CMAKE="${CMAKE:-cmake}"
 
@@ -204,8 +210,8 @@ path, ver = sys.argv[1], sys.argv[2]
 with open(path) as f:
     data = json.load(f)
 data['packages']['fish']['version'] = ver
-with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 print('packages.json: fish version -> ' + ver)
 " "$TOOLS_JSON" "$ver"

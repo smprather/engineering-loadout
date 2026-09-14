@@ -215,19 +215,19 @@ OpenSSH for those.
 
 | Package | Kind | Version | Description |
 |---------|------|---------|-------------|
-| agent-deck | bin | 1.11.0 | TUI dashboard for AI agent orchestration |
+| agent-deck | bin | 1.16.10 | TUI dashboard for AI agent orchestration |
 | amux | bin | 0.0.20 | TUI for orchestrating parallel coding agents via git worktrees + tmux |
 | bash | bin | 5.3.15 | Portable GNU Bash ahead of EL8 system version |
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
-| biome | bin | 2.5.7 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
-| broot | bin | 1.58.0 | Interactive tree navigator with fuzzy search |
+| biome | bin | 2.5.13 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
+| broot | bin | 1.60.1 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.16.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
-| klayout | bin | 0.30.10 | KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5); embeds the loadout Ruby 3.3 and portable Python 3.14 |
-| verilator | bin | 5.050 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
-| yazi | bin | 26.5.6 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
-| btm | bin | 0.14.7 | Cross-platform system resource monitor (TUI) |
+| klayout | bin | 0.30.12 | KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5); embeds the loadout Ruby 3.3 and portable Python 3.14 |
+| verilator | bin | 5.052 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
+| yazi | bin | 26.9.1 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
+| btm | bin | 0.14.9 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
 | lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
@@ -239,30 +239,30 @@ OpenSSH for those.
 | choose | bin | 1.3.7 | awk/cut alternative for column field selection |
 | clang | bin | 23.0git | LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link) |
 | cloc | bin | 2.10 | Count Lines of Code by language (blank/comment/code). Self-contained Perl script; requires host perl |
-| scc | bin | 3.7.0 | Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
-| tokei | bin | 14.0.0 | Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28 |
+| scc | bin | 4.1.0 | Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
+| tokei | bin | 15.0.0 | Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28 |
 | dasel | bin | 3.11.2 | Query and modify YAML/JSON/TOML/XML/CSV data |
 | delta | bin | 0.19.2 | Git diff pager with syntax highlighting |
 | duf | bin | 0.9.1 | df replacement with colored usage table |
-| dust | bin | 1.2.4 | du replacement with visual bar chart |
+| dust | bin | 1.2.5 | du replacement with visual bar chart |
 | expect | bin | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 | eza | bin | 0.23.5 | ls replacement with icons, colors, git status |
-| fd | bin | 10.4.2 | Fast and user-friendly find alternative |
+| fd | bin | 10.5.0 | Fast and user-friendly find alternative |
 | fio | bin | 3.42 | Flexible I/O tester — storage and filesystem performance benchmark |
-| fzf | bin | 0.74.2 | General-purpose command-line fuzzy finder |
+| fzf | bin | 0.74.4 | General-purpose command-line fuzzy finder |
 | gnuplot | bin | 6.0.5 | Command-line graphing and plotting utility |
-| glow | bin | 2.1.2 | Terminal markdown renderer/pager with styles |
+| glow | bin | 3.0.0 | Terminal markdown renderer/pager with styles |
 | gocheat | bin | 0.1.1 | Interactive terminal cheatsheet browser (EL8 source build, CGO_ENABLED=0 static) |
 | keyb | bin | 0.8.0 | Customizable TUI cheatsheet for keybindings/aliases; fuzzy filter, fzf/rofi export |
-| gping | bin | 1.20.4 | Ping with live graph visualization |
-| htop | bin | 3.5.2 | Interactive process viewer and manager |
+| gping | bin | 1.21.0 | Ping with live graph visualization |
+| htop | bin | 3.5.3 | Interactive process viewer and manager |
 | hx | bin | 25.07-984-g079a789e | Modern modal text editor with tree-sitter and LSP |
 | hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
 | ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
 | openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
 | jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
 | just | bin | 1.58.0 | Command runner, ergonomic Makefile alternative |
-| lazygit | bin | 0.64.0 | TUI git client for staging, committing, rebasing |
+| lazygit | bin | 0.65.1 | TUI git client for staging, committing, rebasing |
 | less | bin | 704 | less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling) |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
@@ -277,11 +277,11 @@ OpenSSH for those.
 | pv | bin | 1.6.6 | Monitor and show progress of data through a pipe |
 | rg | bin | 15.2.0 | Extremely fast grep alternative (ripgrep) |
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
-| rsync | bin | 3.4.4 | Efficient file sync with delta-transfer algorithm |
+| rsync | bin | 3.5.0 | Efficient file sync with delta-transfer algorithm |
 | ruby | bin | 3.3.10 | Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher |
-| ruff | bin | 0.16.2 | Extremely fast Python linter and formatter |
+| ruff | bin | 0.16.7 | Extremely fast Python linter and formatter |
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
-| shfmt | bin | 3.13.1 | Shell script formatter and parser |
+| shfmt | bin | 3.14.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
 | sqlite | bin | 3.53.4 | SQLite database CLI and library — EL8 ships 3.26 from 2018; current upstream with readline line-editing and FTS4/5 + RTREE + session extensions |
 | starship | bin | 1.26.0 | Cross-shell customizable minimal prompt |
@@ -291,43 +291,43 @@ OpenSSH for those.
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | tldr | bin | 1.8.1 | Simplified community man pages (tealdeer) |
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
-| tmux | bin | 3.7b | Terminal multiplexer with session management |
-| tree-sitter | bin | 0.26.12 | Incremental parser generator and query tool |
-| ty | bin | 0.0.72 | Fast Python type checker (Astral) |
+| tmux | bin | 3.7c | Terminal multiplexer with session management |
+| tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
+| ty | bin | 0.0.80 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
-| uv | bin | 0.12.3 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.0901 | Vi IMproved text editor |
-| gvim | bin | 9.2.0901 | GTK3 GUI Vim with clipboard and font rendering |
+| uv | bin | 0.12.13 | Extremely fast Python package and project manager |
+| vim | bin | 9.2.1099 | Vi IMproved text editor |
+| gvim | bin | 9.2.1099 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
 | yara | bin | 4.5.8 | Malware pattern matching and classification tool |
-| xterm | bin | 410 | X11 terminal emulator with Unicode and color |
+| xterm | bin | 411 | X11 terminal emulator with Unicode and color |
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
 | wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
 | st | bin | 0.9.3 | suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
 | xephyr | bin | 1.20.11-28.el8_10.3 | Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port) |
 | yank | bin | 1.4.0 | Select terminal output and copy to clipboard |
-| yq | bin | 4.53.3 | YAML/JSON/XML/CSV processor (jq for YAML) |
-| zellij | bin | 0.44.3 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
+| yq | bin | 4.53.6 | YAML/JSON/XML/CSV processor (jq for YAML) |
+| zellij | bin | 0.45.1 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
 | octave | bin | 11.3.0 | GNU scientific computing language (MATLAB-compatible) |
 | ngspice | bin | 46 | ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix |
 | spice-subckt-rc-reduce | bin | 0.1.1 | Reduce parasitic RC networks in SPICE .subckt models (TICER / merge), preserving port behavior to cut simulation time |
-| spice-netlist-ls | bin | 0.3.0 | spice-netlist-ls — `gofmt` for SPICE netlists: formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format (HSPICE, NGSPICE, Spectre-SPICE, LTspice dialects). Ships `spicefmt` (CLI) + `spice-netlist-ls` (LSP); .scs files get per-section dialect routing. Member of @eda |
+| spice-netlist-ls | bin | 2026.8.0 | spice-netlist-ls — `gofmt` for SPICE netlists: formatter, linter, and LSP server for the classic SPICE circuit-simulation netlist format (HSPICE, NGSPICE, Spectre-SPICE, LTspice dialects). Ships `spicefmt` (CLI) + `spice-netlist-ls` (LSP); .scs files get per-section dialect routing. Member of @eda |
 | visidata | python-tool | 3.4 | TUI spreadsheet for CSV/TSV/JSON data |
 | meld | bin | 3.20.4 | GTK3 visual diff and merge tool (shanghai bundle — system py3.6 + bundled PyGObject/GtkSource) |
 | mate-terminal | bin | 1.26.1 | MATE Terminal — GTK3 tabbed VTE terminal (shanghai bundle from EL8 EPEL; GSettings keyfile backend, no dconf-service needed) |
 | firefox | bin | 140.14.0 | Mozilla Firefox ESR (shanghai bundle from EL8 BaseOS; thin POSIX-sh launcher exec's bundled firefox-bin). Ships a decode-only FFmpeg, so H.264/AAC sites (Facebook Reels, AVC YouTube) play on hosts with no system FFmpeg |
 | zsh | bin | 5.9 | Z shell — powerful interactive shell with advanced tab completion; dynamically-loaded modules (regex, pcre, mathfunc, stat, mapfile, parameter, complist, zprof, zpty, socket, tcp, zftp, system, cap, clone, datetime, langinfo, terminfo, zutil, files, watch, attr, nearcolor, zselect) shipped via runtime archive |
-| fish | bin | 4.8.1 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
+| fish | bin | 4.9.3 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |
 | tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
-| nodejs | bin | 26.7.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
+| nodejs | bin | 26.8.2 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
-| time-plot | python-tool | v0.2.0 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
+| time-plot | python-tool | v2026.9.13 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | cicwave | python-tool | 0.5.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
@@ -338,21 +338,21 @@ OpenSSH for those.
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
 | git-nvim | runtime | 2.43.7 | PRIVATE git for nvim/lazy only -- installed to lib/loadout-git/, never on the user's PATH (a loadout git would shadow the corp git and break its subcommands/credential helpers, cf. openssh/ssh10). Optional: @shared-all or by name. nvim uses it only when the system has no git. |
 | nvim-plugin-stash | data |  | Offline git stash for nvim plugins -- 78 bare mirrors covering the active set plus catalog, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update/sync fetches from it, so plugin updates work with no network. The installer runs headless `Lazy! sync` from this stash whenever a loadout nvim binary and env-nvim config are both present. Needs git (system, or the optional git-nvim package). |
-| models | bin | 0.14.0 | TUI/CLI to browse AI models + benchmarks from models.dev (needs network for live data) |
+| models | bin | 0.14.1 | TUI/CLI to browse AI models + benchmarks from models.dev (needs network for live data) |
 | modules | runtime | 5.6.1 | Environment Modules — module load/unload for shell environment management (HPC-style) |
 | rust | runtime | 1.96.0 | Rust toolchain — rustc + cargo + std libraries (offline source build target) |
 | rust-crate-store | data |  | Offline Cargo local-registry (top crates.io crates + full dependency closure) |
 | espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
-| yosys | bin | 0.68 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
+| yosys | bin | 0.69 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
 | sby | bin | b1a1e98 | SymbiYosys — front-end for Yosys-based formal hardware verification (bmc/prove/cover via yosys-smtbmc + Z3). Pure Python; commit-pinned (upstream has no releases). Member of @eda |
 | z3 | bin | 5.1.0.0 | Z3 — SMT solver from Microsoft Research, bundled as sby's prove/bmc engine (also usable standalone). From the official manylinux wheel; runs on stock EL8. Member of @eda |
 | bitwuzla | bin | 0.9.1 | Bitwuzla — SMT solver for bit-vectors, floating-point arithmetic, arrays and uninterpreted functions (SMT2/BTOR2 input, model generation, unsat cores). EL8 source build (static GMP 6.3 + MPFR 4.2.2); sby accepts it as an `smtbmc bitwuzla` engine. Member of @eda |
 | iverilog | bin | 13.0 | Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design |
 | openroad | bin | 26Q3 | OpenROAD — RTL-to-GDS place & route: floorplanning, placement, clock-tree synthesis, global/detailed routing and parasitic extraction, driven from Tcl or Python. Ships `sta` (standalone OpenSTA timing) alongside. Completes the open flow already here: yosys synthesises → openroad places & routes → klayout views the layout |
 | openvaf | bin | 23.5.0 | OpenVAF — Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + statically-linked LLVM (no runtime LLVM dep). Member of @eda |
-| lua-language-server | bin | 3.19.0 | Lua language server (LSP) — useful for nvim config and Lua tooling |
+| lua-language-server | bin | 3.19.1 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |
 | pyright | bin | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads) |
 | typescript-language-server | bin | 6.0.0 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |

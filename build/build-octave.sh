@@ -30,6 +30,12 @@ BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
 PATCHELF="$HOME/.local/bin/patchelf"
+# LOADOUT_PATCHELF (exported by build/build-shell) wins: the container runs
+# with HOME=/tmp, where a bare $HOME/.local/bin path does not exist, and
+# patchelf lives at /usr/bin there.
+PATCHELF="${LOADOUT_PATCHELF:-$PATCHELF}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 VERSION=""
 while [ "$#" -gt 0 ]; do
     case "$1" in

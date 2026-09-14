@@ -26,7 +26,11 @@ set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
-PATCHELF="${HOME}/.local/bin/patchelf"
+# LOADOUT_PATCHELF (set by build/build-shell) wins: the build container runs
+# with HOME=/tmp, so a bare ${HOME}/.local/bin path does not exist there.
+PATCHELF="${LOADOUT_PATCHELF:-$HOME/.local/bin/patchelf}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 DIST_URL_BASE="https://invisible-island.net/archives/xterm"
 
 tag=""
