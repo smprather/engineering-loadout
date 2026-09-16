@@ -1,7 +1,56 @@
 # Current Handoff
 
-Last updated: 2026-09-14 (`v2026.09.14` RELEASED + verified, HEAD `8003271`,
-tree clean, origin/main synced). Start here after a context clear.
+Last updated: 2026-09-16 (portable Python FTS5 fix UNCOMMITTED, UNRELEASED;
+native + Tier 3 + full integration green). Start here after a context clear.
+
+## 2026-09-16: portable Python SQLite FTS5 fix (UNCOMMITTED, UNRELEASED)
+
+The old `portable-python-3.14.7-el8-clang23.tar.bz2` imported `sqlite3` but its
+private SQLite **3.53.1 lacked FTS5**. SQLite **3.53.4 CLI/lib64** already had
+FTS5 and is separate: `_sqlite3` NEEDED `libsqlite3.so`, RUNPATH
+`$ORIGIN/../..`, resolves `local/lib/libsqlite3.so -> libsqlite3.so.3.53.1`.
+
+- Fixed entirely offline in the EL8 `loadout-build` container: fresh-unpack
+  cached SQLite source, configure with `--enable-fts5`, build only the shared
+  library, strip-debug then patchelf `$ORIGIN`, replace the real private lib
+  (755, symlinks preserved), update archive `BUILD.md`, and import in-container.
+  **No CPython rebuild.** Reproducible narrow recipe: `build/ADDING_BINARIES.md`,
+  "Portable Python 3.14.7 -- private SQLite FTS5 fix". External future builder
+  `/home/mylesp/build-work/ppy147/build.sh:59` also adds `--enable-fts5`.
+- Evidence: NEEDED glibc + `libz.so.1` only, max `GLIBC_2.28`, RUNPATH
+  `$ORIGIN`, no SONAME (same as original). Archive-member SHA comparison:
+  only real SQLite library + `BUILD.md` changed; all other **4074** members
+  (Python/libpython/`_sqlite3` included) untouched. Compile-options sole delta:
+  `ENABLE_FTS5`.
+- Offline EL8 create/insert/`MATCH` proof passed; CPython `test_sqlite3`:
+  **510 tests, OK (5 skipped)**. Permanent Python FTS5 smoke added in
+  `tests/prebuilt-binaries`, independent of the tkinter capability skip.
+- Metadata chain **strip -> sizes -> manifest completed IN EL8**. Final
+  `TMPDIR=/var/tmp tests/run-all --fast` passed. Native `tests/prebuilt-binaries`: **rc=0, All 328 binaries OK
+  (1 skipped)**. EL8 `tests/prebuilt-binaries-almalinux8 --no-build --full`:
+  **rc=0, All 307 binaries OK (22 skipped)**. Python FTS5 passed both;
+  **full integration green**.
+- Ruff + py_compile passed. Advisory `ty check loadout_main.py` reports
+  **5 diagnostics**: 2 TaskID invalid-argument and 3 click unresolved-attribute
+  reports. Installer unchanged; these are existing documented categories,
+  not new installer regressions. The documented baseline of 11 is stale.
+- No commit or release done. Developer host `~/.local` intentionally NOT
+  reinstalled. Preserve unrelated changes, including deleted `.codex` files.
+
+**Rollout:** obtain the updated checkout/archive on the other machine, run
+`./loadout reinstall portable-python -y`, then restart Python processes /
+notebook kernels (old mapped library persists). Quick installed-Python proof:
+
+```bash
+~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+```
+
+Next: rollout (reinstall + process restarts) and commit when requested. The
+clean-tree/HEAD/gate claims below are historical, not the state of this
+uncommitted fix.
+
+Previous update: 2026-09-14 (`v2026.09.14` RELEASED + verified, HEAD `8003271`,
+tree clean, origin/main synced).
 
 ## v2026.09.14 (RELEASED 2026-09-14)
 

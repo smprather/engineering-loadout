@@ -358,6 +358,18 @@ OpenSSH for those.
 | typescript-language-server | bin | 6.0.0 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |
 | taplo | bin | 0.10.0 | TOML toolkit — linter, formatter and language server in one binary. Ships an offline JSON Schema catalog (49 SchemaStore schemas: Cargo.toml, pyproject.toml, ruff, uv, rustfmt, starship …) so `taplo lint` validates keys on an air-gapped node instead of silently degrading to grammar-only. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml |
 | tmux-path-store | python-tool | 2026.8.26 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
+
+Portable Python's standard-library `sqlite3` uses its own bundled SQLite,
+separate from the `sqlite3` CLI, with FTS5 built into that private library.
+To apply the fix on another machine, obtain the updated
+checkout/archive, run `./loadout reinstall portable-python -y`, and restart
+Python processes, including notebook kernels; already-running processes retain
+the old mapped library. Verify with:
+
+```bash
+~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+```
+
 ### Parity plots
 
 `./loadout install parity-plot` installs the CLI and its local designer, with no

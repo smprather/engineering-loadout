@@ -278,6 +278,10 @@ before any tag is created. Portable Python keeps generic `python3`/`pip3` links 
 `~/.local/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
 holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
+Python's private SQLite in `<prefix>/lib` must include built-in FTS5
+(`--enable-fts5`); the separate SQLite CLI/lib64 copy is not used by `_sqlite3`.
+`tests/prebuilt-binaries` checks Python FTS5 independently of tkinter skips;
+verification results and current state are recorded in `docs/HANDOFF.md`.
 Run `tests/install-split-shared-envs` for the production deployment shape:
 `@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with
 `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes Bash startup, shared

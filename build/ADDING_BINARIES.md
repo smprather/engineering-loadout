@@ -5011,6 +5011,84 @@ ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
 OpenROAD-flow-scripts (ORFS) is a scripts + PDK layer **on top of** this binary;
 it changes nothing here and only decides whether the PDK data also ships.
 
+## Portable Python 3.14.7 -- private SQLite FTS5 fix (2026-09-16)
+
+Artifact: `payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2`.
+The old archive's `sqlite3` module imported successfully, but its private
+SQLite **3.53.1 lacked FTS5**. The separate SQLite **3.53.4 CLI/library in
+lib64/** already had FTS5; rebuilding or reinstalling that package cannot fix
+Python. `_sqlite3` has NEEDED `libsqlite3.so` and RUNPATH `$ORIGIN/../..`,
+resolving `local/lib/libsqlite3.so -> libsqlite3.so.3.53.1` in the archive.
+FTS5 must be built into this private library, not loaded as an extension.
+
+### Narrow offline rebuild and import
+
+All compilation, packaging, import, and metadata generation ran **offline in
+`loadout-build` (EL8, `--network=none`)**, using the existing image's compiler,
+make, zlib headers, strip, patchelf, tar/bzip2, and Python/importer dependencies.
+No CPython rebuild and no dynamic dependency installs were needed.
+
+1. Bind-mount the repo at `/repo` and the cached source read-only from
+   `/home/mylesp/build-work/ppy147/Python-3.14.7/deps/src/sqlite-autoconf-3530100.tar.gz`.
+   Use fresh, disk-backed scratch mounted at `/work`; unpack the source afresh
+   rather than reusing configured objects. Extract the existing payload archive
+   separately, retaining its `portable-python-3.14.7-el8-clang23` directory name,
+   metadata, and symlinks. Set `PORTABLE_DIR` to that extracted directory.
+2. From the freshly unpacked SQLite source directory, run exactly:
+
+   ```bash
+   ./configure --prefix=/work/deps/prefix --enable-shared --disable-static --enable-fts5
+   make libsqlite3.so
+   strip --strip-debug libsqlite3.so
+   patchelf --set-rpath '$ORIGIN' libsqlite3.so
+   install -m 755 libsqlite3.so "$PORTABLE_DIR/local/lib/libsqlite3.so.3.53.1"
+   ```
+
+   Replace only the real library; preserve all existing SQLite symlinks. Do
+   not strip CPython, libpython, or `_sqlite3` (the archive remains NOSTRIP).
+3. Update the extracted archive's `BUILD.md` SQLite configure recipe to include
+   `--enable-fts5`, leaving the rest unchanged. The external future-build recipe
+   `/home/mylesp/build-work/ppy147/build.sh:59` also adds `--enable-fts5`; it is
+   outside this repo and must retain that flag on future full Python builds.
+4. From `/repo`, still inside the container, package the extracted directory and
+   finish the ordered metadata chain:
+
+   ```bash
+   ./build/import-portable-python "$PORTABLE_DIR" --platform el8.x86_64.glibc2p28
+   ./build/strip-all-elf-binaries
+   python3.14 build/gen-installed-sizes
+   python3.14 build/gen-content-manifest
+   ```
+
+### Evidence and rollout
+
+- New library NEEDED: glibc components + `libz.so.1` only; maximum symbol
+  `GLIBC_2.28`; RUNPATH `$ORIGIN`; **no SONAME**, matching the original.
+- Archive-member SHA comparison: only the real SQLite library and `BUILD.md`
+  changed; all other **4074** members, including Python, libpython, and
+  `_sqlite3`, were untouched. `PRAGMA compile_options` had exactly one delta:
+  `ENABLE_FTS5`.
+- Offline EL8 Python create/insert/`MATCH` proof passed; CPython `test_sqlite3`
+  reported **510 tests, OK (5 skipped)**. `tests/prebuilt-binaries` now has a
+  permanent Python FTS5 smoke independent of the tkinter capability skip.
+- Strip/size/manifest chain completed in EL8; prior T1 passed. Native
+  `tests/prebuilt-binaries`: rc=0, **All 328 binaries OK (1 skipped)**.
+  EL8 `tests/prebuilt-binaries-almalinux8 --no-build --full`: rc=0,
+  **All 307 binaries OK (22 skipped)**. Python FTS5 passed both; full
+  integration green. Ruff + py_compile passed; advisory ty details are in
+  `docs/HANDOFF.md`.
+- This fix is uncommitted and unreleased; the developer's live `~/.local`
+  was intentionally not reinstalled.
+
+On another machine, obtain the updated checkout/archive first, then run
+`./loadout reinstall portable-python -y` and restart Python processes (including
+notebook kernels): an existing process retains the old mapped library. Verify
+with the installed interpreter, not the separate `sqlite3` CLI:
+
+```bash
+~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+```
+
 ## sqlite 3.53.4 -- SQLite CLI + libsqlite3 (EL8 SOURCE build, C)
 
 Date: 2026-08-22. Build: `./build/build-sqlite.sh --tag 3.53.4` (needs

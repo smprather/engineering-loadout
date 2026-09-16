@@ -1690,6 +1690,41 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (tkinter):      python tkinter  {detail}")
                 failures.append(("python tkinter", detail))
 
+        py = os.path.join(bin_dir, "python3.14")
+        needle = "loadout_fts5_needle_xyzzy"
+        script = "\n".join(
+            [
+                "import sqlite3",
+                f"needle = {needle!r}",
+                "con = sqlite3.connect(':memory:')",
+                "con.execute('CREATE VIRTUAL TABLE t USING fts5(body)')",
+                "con.execute('INSERT INTO t(body) VALUES (?)', (needle,))",
+                "rows = con.execute('SELECT body FROM t WHERE t MATCH ?', (needle,)).fetchall()",
+                "assert rows == [(needle,)], rows",
+                "print('FTS5_OK', rows[0][0])",
+            ]
+        )
+        try:
+            proc = subprocess.run(
+                [py, "-c", script],
+                cwd=tmpdir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  FAIL (fts5):         python sqlite fts5  {exc}")
+            failures.append(("python sqlite fts5", str(exc)))
+        else:
+            expected = f"FTS5_OK {needle}\n".encode()
+            if proc.returncode == 0 and proc.stdout == expected:
+                print("  OK   (fts5):         python sqlite fts5")
+            else:
+                detail = output_excerpt(proc.stdout)
+                print(f"  FAIL (fts5):         python sqlite fts5  rc={proc.returncode} {detail}")
+                failures.append(("python sqlite fts5", detail))
+
     parsers = os.path.join(tmpdir, "local", "share", "nvim", "tree-sitter-parsers")
     if os.path.isdir(parsers):
         require_path(os.path.join(parsers, "parser", "python.so"), "tree-sitter python parser", failures)
