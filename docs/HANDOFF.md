@@ -1,8 +1,25 @@
 # Current Handoff
 
-Last updated: 2026-09-19 (release in progress, class C: sweep done,
-security data fresh, chain green, uncommitted). Start here after a
-context clear.
+Last updated: 2026-09-19 (`v2026.09.18` RELEASED + verified, HEAD `44f4613`,
+origin/main synced). Start here after a context clear.
+
+## v2026.09.18 (RELEASED 2026-09-19)
+
+Class C (mermaid-ascii + netlistsvg additions, klayout launcher fix,
+portable-Python FTS5 fix, currency sweep). §9 verified: signed tag good
+(ED25519), `origin/main == v2026.09.18^{commit}` (`44f4613`),
+`isDraft=false`, all three assets present (sha256sums.txt,
+default.content-manifest, nvim-plugin-stash.tar.bz2 328 MB, hash
+`28a5adb...` matches sums = byte-reused stash), published manifest matches
+tree. Gates: T1+T2 green, Tier 3 `--full` green, release dry-run gates
+passed (scan CLEAN 0/76773 YARA+ClamAV), `All 310 binaries OK (22
+skipped)`. Release-run notes: freshclam log-locked by a running daemon,
+but ClamAV daily 28127 dated 2026-09-18 verified current via clamscan;
+TMPDIR=/var/tmp/loadout-release-tmp used per the dev-host scratch rule.
+Follow-ups: (1) jupyterlab 4.6.3 + crate-store closures (now incl. ty/uv
+at new refs, store unrebuilt) still deferred; (2) less pinned at 704
+(upstream 710 deleted lesskey); (3) system-package-precedence methodology
+still NOT STARTED.
 
 ## 2026-09-19 release (IN PROGRESS, class C)
 
@@ -23,10 +40,8 @@ carried closure follow-up) -- its ty/uv closures are still the old
 versions' deps. Security: yara 20260913 current,
 tldr refreshed, ClamAV daily 28127 dated 2026-09-18 (freshclam log-locked
 by a running daemon; signatures verified current via clamscan).
-Post-payload chain + all --check modes green. Blockers: ssh-agent fixed
-socket holds no key (passphrase needed from owner); release tagging
-waits on that. Next: commit, full gates (T1+T2+Tier 3), dry-run, publish,
-§9 verification.
+Post-payload chain + all --check modes green. Release completed as
+v2026.09.18 (see top). Next: deferred follow-ups above.
 
 ## 2026-09-19: netlistsvg 1.0.2 onboarded (UNCOMMITTED, UNRELEASED)
 
