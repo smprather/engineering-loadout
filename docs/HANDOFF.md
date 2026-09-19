@@ -16,7 +16,11 @@ Deliberate deferrals (carried): jupyterlab 4.6.1 (shared-dep hazard),
 less 704 (upstream 710 deleted lesskey; pin_reason added to registry),
 ncdu 2.9.2 (code.blicky.net 503s version checks), pdftotext pinned
 (fontconfig floor), crate-store closures follow-up, system-package-
-precedence methodology NOT STARTED. Security: yara 20260913 current,
+precedence methodology NOT STARTED. Crate-store: rust-tool-locks.txt
+re-pinned ty 0.0.82 + uv 0.12.17 to match the bumps (--check-policy green,
+--check-lock green) but the store was NOT rebuilt (known-broken env: see
+carried closure follow-up) -- its ty/uv closures are still the old
+versions' deps. Security: yara 20260913 current,
 tldr refreshed, ClamAV daily 28127 dated 2026-09-18 (freshclam log-locked
 by a running daemon; signatures verified current via clamscan).
 Post-payload chain + all --check modes green. Blockers: ssh-agent fixed
