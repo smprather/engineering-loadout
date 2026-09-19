@@ -86,3 +86,10 @@
 2026-09-14T02:40:54Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
 2026-09-14T03:10:24Z	https://github.com/sinelaw/fresh/releases/download/v0.5.1/fresh-min-size-x86_64-unknown-linux-musl.tar.xz	7b1b5c284eb08b98a35db85519cb44ed7b430b44b247b006159b0633a73a2ccc
 2026-09-14T03:11:45Z	https://github.com/dbrgn/tealdeer/releases/download/v1.9.0/tealdeer-linux-x86_64-musl	dc7263b550e90c0689ea2cb434e3144469805d5dddecbb1f7fc534e1185b7408
+2026-09-19T01:26:16Z	https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/1.6.1/mermaid-ascii_Linux_x86_64.tar.gz	9c2844824635415982a8d34be301a0abb1f64599f019892f7d844c4620ce8d41
+2026-09-19T02:09:37Z	https://github.com/astral-sh/ruff/releases/download/0.16.8/ruff-x86_64-unknown-linux-gnu.tar.gz	c4a8c7c152532bcb7e7ede4bd6ccd440dcacddffcdcdd79b90090ac6021f41c2
+2026-09-19T02:10:09Z	https://github.com/astral-sh/ruff/releases/download/0.16.8/ruff-x86_64-unknown-linux-gnu.tar.gz	c4a8c7c152532bcb7e7ede4bd6ccd440dcacddffcdcdd79b90090ac6021f41c2
+2026-09-19T02:10:11Z	https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-unknown-linux-gnu.tar.gz	fa82fd8dde8e8eefdecada6aa0889666556cfceb690d06e0c3bca49eb3070a63
+2026-09-19T02:10:15Z	https://github.com/astral-sh/ty/releases/download/0.0.82/ty-x86_64-unknown-linux-gnu.tar.gz	e446dd69dbb49443b0b1d731c296ba8eb2aa72b98ac0376433d6ae793c2e361a
+2026-09-19T02:10:18Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.5.14/biome-linux-x64-musl	d15a39b256ca1294fe8f8817f9162f7c26229ca0cb8bd19d0369540c1a01d781
+2026-09-19T02:10:22Z	https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-unknown-linux-musl.tar.gz	cbf2cb5c9d6227e46fc4b29c03dc43b8632020dfc5cf269d263d6e29c399e044

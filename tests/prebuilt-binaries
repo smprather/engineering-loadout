@@ -266,6 +266,22 @@ EXPECT_NONZERO = {
     ),
     # gocheat is a TUI; it opens /dev/tty before parsing arguments.
     "gocheat": (["--version"], 1, ("could not open a new TTY",), "TUI; opens /dev/tty before argument parsing"),
+    # netlistsvg CLIs are yargs-6 programs whose demand(1) input-file check
+    # fires before --help/--version handling, so every flag exits 1 after
+    # printing the usage banner -- which is what proves the wrapper reached
+    # bundled node. Covered functionally by the netlistsvg SVG render below.
+    "netlistsvg": (
+        ["--help"],
+        1,
+        ("input_json_file",),
+        "yargs-6 demand: usage banner proves it ran; needs an input file to exit 0",
+    ),
+    "netlistsvg-dumplayout": (
+        ["--help"],
+        1,
+        ("input_json_file",),
+        "yargs-6 demand: usage banner proves it ran; needs an input file to exit 0",
+    ),
 }
 
 
@@ -1550,6 +1566,71 @@ def smoke_runtime_layout(tmpdir, env):
                 detail = output_excerpt(proc.stdout)
                 print(f"  FAIL (synth):        yosys  rc={proc.returncode} cells={cells} {detail}")
                 failures.append(("yosys", detail))
+
+    if has_bin("netlistsvg"):
+        # Neither netlistsvg CLI has a zero-exit flag invocation (yargs-6
+        # demand rejects --help/--version with exit 1; pinned above), and a
+        # usage banner says nothing about whether ELK layout + SVG emission
+        # work. What must be proven is a real render: a hand-written
+        # write_json-shaped fixture (2-input AND gate) through the installed
+        # absolute-node wrapper must exit 0 and emit an <svg> document.
+        nl_work = os.path.join(tmpdir, "netlistsvg-smoke")
+        os.makedirs(nl_work, exist_ok=True)
+        with open(os.path.join(nl_work, "and.json"), "w") as fh:
+            json.dump(
+                {
+                    "creator": "loadout-smoke",
+                    "modules": {
+                        "top": {
+                            "ports": {
+                                "a": {"direction": "input", "bits": [2]},
+                                "b": {"direction": "input", "bits": [3]},
+                                "y": {"direction": "output", "bits": [4]},
+                            },
+                            "cells": {
+                                "$and$top$1": {
+                                    "hide_name": 1,
+                                    "type": "$and",
+                                    "parameters": {},
+                                    "attributes": {},
+                                    "port_directions": {"A": "input", "B": "input", "Y": "output"},
+                                    "connections": {"A": [2], "B": [3], "Y": [4]},
+                                }
+                            },
+                            "netnames": {
+                                "a": {"hide_name": 0, "bits": [2], "attributes": {}},
+                                "b": {"hide_name": 0, "bits": [3], "attributes": {}},
+                                "y": {"hide_name": 0, "bits": [4], "attributes": {}},
+                            },
+                        }
+                    },
+                },
+                fh,
+            )
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "netlistsvg"), "and.json", "-o", "and.svg"],
+                cwd=nl_work,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+            svg = b""
+            svg_path = os.path.join(nl_work, "and.svg")
+            if proc.returncode == 0 and os.path.isfile(svg_path):
+                with open(svg_path, "rb") as fh:
+                    svg = fh.read()
+        except Exception as exc:
+            print(f"  FAIL (render):       netlistsvg  {exc}")
+            failures.append(("netlistsvg render", str(exc)))
+        else:
+            if proc.returncode == 0 and b"<svg" in svg:
+                print(f"  OK   (render):       netlistsvg  AND-gate fixture -> {len(svg)}-byte SVG")
+            else:
+                detail = output_excerpt(proc.stdout) if proc.returncode != 0 else "rendered output has no <svg element"
+                print(f"  FAIL (render):       netlistsvg  {detail}")
+                failures.append(("netlistsvg render", detail))
 
     if has_bin("bitwuzla"):
         # `bitwuzla --version` exits 0 from a solver that cannot solve. The EL8

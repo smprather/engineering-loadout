@@ -75,6 +75,10 @@ TOOLS = {
         "https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_Linux_x86_64.tar.gz",
         "glow",
     ),
+    "mermaid-ascii": (
+        "https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/{ver}/mermaid-ascii_Linux_x86_64.tar.gz",
+        "mermaid-ascii",
+    ),
     "agent-deck": (
         "https://github.com/asheshgoplani/agent-deck/releases/download/v{ver}/agent-deck_{ver}_linux_amd64.tar.gz",
         "agent-deck",

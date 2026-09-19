@@ -224,10 +224,10 @@ OpenSSH for those.
 |---------|------|---------|-------------|
 | agent-deck | bin | 1.16.10 | TUI dashboard for AI agent orchestration |
 | amux | bin | 0.0.20 | TUI for orchestrating parallel coding agents via git worktrees + tmux |
-| bash | bin | 5.3.15 | Portable GNU Bash ahead of EL8 system version |
+| bash | bin | 5.3.20 | Portable GNU Bash ahead of EL8 system version |
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
-| biome | bin | 2.5.13 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
+| biome | bin | 2.5.14 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | broot | bin | 1.60.1 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.17.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
@@ -251,7 +251,7 @@ OpenSSH for those.
 | dasel | bin | 3.11.2 | Query and modify YAML/JSON/TOML/XML/CSV data |
 | delta | bin | 0.19.2 | Git diff pager with syntax highlighting |
 | duf | bin | 0.9.1 | df replacement with colored usage table |
-| dust | bin | 1.2.5 | du replacement with visual bar chart |
+| dust | bin | 1.2.6 | du replacement with visual bar chart |
 | expect | bin | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
 | eza | bin | 0.23.5 | ls replacement with icons, colors, git status |
 | fd | bin | 10.5.0 | Fast and user-friendly find alternative |
@@ -274,6 +274,7 @@ OpenSSH for those.
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
 | miller | bin | 6.21.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |
+| mermaid-ascii | bin | 1.6.1 | Terminal mermaid-to-ASCII renderer — flowcharts as text diagrams |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.5.1 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
@@ -286,7 +287,7 @@ OpenSSH for those.
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
 | rsync | bin | 3.5.0 | Efficient file sync with delta-transfer algorithm |
 | ruby | bin | 3.3.10 | Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher |
-| ruff | bin | 0.16.7 | Extremely fast Python linter and formatter |
+| ruff | bin | 0.16.8 | Extremely fast Python linter and formatter |
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.14.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
@@ -300,11 +301,11 @@ OpenSSH for those.
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7c | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
-| ty | bin | 0.0.80 | Fast Python type checker (Astral) |
+| ty | bin | 0.0.82 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
-| uv | bin | 0.12.13 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.1099 | Vi IMproved text editor |
-| gvim | bin | 9.2.1099 | GTK3 GUI Vim with clipboard and font rendering |
+| uv | bin | 0.12.17 | Extremely fast Python package and project manager |
+| vim | bin | 9.2.1119 | Vi IMproved text editor |
+| gvim | bin | 9.2.1119 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
@@ -332,9 +333,9 @@ OpenSSH for those.
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |
 | tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
-| nodejs | bin | 26.8.2 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
+| nodejs | bin | 26.9.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
-| time-plot | python-tool | v2026.9.13 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
+| time-plot | python-tool | v2026.9.15 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | cicwave | python-tool | 0.7.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
@@ -356,6 +357,7 @@ OpenSSH for those.
 | sby | bin | b1a1e98 | SymbiYosys — front-end for Yosys-based formal hardware verification (bmc/prove/cover via yosys-smtbmc + Z3). Pure Python; commit-pinned (upstream has no releases). Member of @eda |
 | z3 | bin | 5.1.0.0 | Z3 — SMT solver from Microsoft Research, bundled as sby's prove/bmc engine (also usable standalone). From the official manylinux wheel; runs on stock EL8. Member of @eda |
 | bitwuzla | bin | 0.9.1 | Bitwuzla — SMT solver for bit-vectors, floating-point arithmetic, arrays and uninterpreted functions (SMT2/BTOR2 input, model generation, unsat cores). EL8 source build (static GMP 6.3 + MPFR 4.2.2); sby accepts it as an `smtbmc bitwuzla` engine. Member of @eda |
+| netlistsvg | bin | 1.0.2 | netlistsvg — Yosys-netlist-to-SVG schematic renderer (`netlistsvg` + `netlistsvg-dumplayout`); upstream npm package plus vendored production deps on loadout's bundled Node.js, fully offline. Member of @eda |
 | iverilog | bin | 13.0 | Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design |
 | openroad | bin | 26Q3 | OpenROAD — RTL-to-GDS place & route: floorplanning, placement, clock-tree synthesis, global/detailed routing and parasitic extraction, driven from Tcl or Python. Ships `sta` (standalone OpenSTA timing) alongside. Completes the open flow already here: yosys synthesises → openroad places & routes → klayout views the layout |
 | openvaf | bin | 23.5.0 | OpenVAF — Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + statically-linked LLVM (no runtime LLVM dep). Member of @eda |

@@ -1,8 +1,137 @@
 # Current Handoff
 
-Last updated: 2026-09-17 (klayout launcher env-adaptation fix UNCOMMITTED,
-UNRELEASED; native + T1 + full Tier 3 + real-GUI green). Start here after a
+Last updated: 2026-09-19 (release in progress, class C: sweep done,
+security data fresh, chain green, uncommitted). Start here after a
 context clear.
+
+## 2026-09-19 release (IN PROGRESS, class C)
+
+Scheduled release since v2026.09.14. New packages: mermaid-ascii 1.6.1
+(@core-cli), netlistsvg 1.0.2 (@eda). Launcher fix: klayout host-GL/
+Fontconfig adaptation + xcb default. Private SQLite FTS5 for portable
+Python (rebuilt lib only). Currency bumps: ruff 0.16.8, uv 0.12.17, ty
+0.0.82, biome 2.5.14, dust 1.2.6, nodejs 26.9.0, time-plot v2026.9.15,
+vim/gvim 9.2.1119, bash 5.3.20. lefdef-tools unchanged (no rebuild).
+Deliberate deferrals (carried): jupyterlab 4.6.1 (shared-dep hazard),
+less 704 (upstream 710 deleted lesskey; pin_reason added to registry),
+ncdu 2.9.2 (code.blicky.net 503s version checks), pdftotext pinned
+(fontconfig floor), crate-store closures follow-up, system-package-
+precedence methodology NOT STARTED. Security: yara 20260913 current,
+tldr refreshed, ClamAV daily 28127 dated 2026-09-18 (freshclam log-locked
+by a running daemon; signatures verified current via clamscan).
+Post-payload chain + all --check modes green. Blockers: ssh-agent fixed
+socket holds no key (passphrase needed from owner); release tagging
+waits on that. Next: commit, full gates (T1+T2+Tier 3), dry-run, publish,
+§9 verification.
+
+## 2026-09-19: netlistsvg 1.0.2 onboarded (UNCOMMITTED, UNRELEASED)
+
+New `kind:bin` package following the pyright/typescript-language-server
+pure-Node runtime pattern: Neil Turley Yosys-netlist→SVG renderer (npm
+`netlistsvg@1.0.2`, still the latest upstream; GitHub tag `v1.0.2`, 2020, no
+release assets -- the npm tarball is the source). Build note with source URL +
+sha512 + pinned dep closure + smoke in `build/ADDING_BINARIES.md`
+("netlistsvg 1.0.2").
+
+- `build/build-netlistsvg.sh --tag 1.0.2` modeled on
+  `build-typescript-language-server.sh`: fetch_npm with dist.integrity sha512
+  verification (`g6E7Q58H...WfQw==`, matches registry metadata), then
+  `npm install --omit=dev --no-audit --no-fund` with the loadout node/npm at
+  build time (no lockfile upstream; 78 packages vendored), ELF guard (pure JS),
+  two absolute-node sh wrappers (`netlistsvg` over `bin/netlistsvg.js`,
+  `netlistsvg-dumplayout` over `bin/exportLayout.js`), functional stage-verify.
+  One deviation from the brief: `--help` does NOT exit 0 -- yargs 6 demand(1)
+  fires before help/version handling, so both CLIs exit 1 with a usage banner
+  (verified: `--version` behaves identically, so there is no version output at
+  all). The script asserts the usage text and carries weight with the AND-gate
+  fixture render (`<svg` asserted). Payload built IN the loadout-build
+  container (fresh `--rm` container each `build-shell` run, so nodejs is
+  staged + build chained in ONE invocation):
+  `build/build-shell sh -c '... ./loadout install nodejs --dest-dir
+  /var/tmp/loadout-node-stage ...; ./build/build-netlistsvg.sh --tag 1.0.2'`
+  (image ships only python3.6, so PATH is prefixed with
+  `/repo/.loadout-bootstrap/bin`; TMPDIR=/var/tmp disk-backed). Output:
+  `payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2` (2.3M archive,
+  13601068 B installed; 0 ELF stripped).
+- `payload/packages.json`: `kind:bin`, `bins: [netlistsvg,
+  netlistsvg-dumplayout]`, hard `depends: [nodejs]`, version 1.0.2,
+  `tags: [eda, yosys, svg]`; member of `@eda` next to yosys/sby/z3/bitwuzla.
+  Non-optional, so synthetic `@shared` (and transitively
+  `@engineering-loadout`) reaches it -- verified via `./loadout resolve`
+  (`@eda` = 17 packages incl. netlistsvg; `@engineering-loadout` contains it).
+- `build/farm-versions`: NO entry (neither CLI exposes a version: `--version`
+  exits 1 with the yargs demand banner; gocheat precedent -- version tracked
+  only in packages.json; check-versions reports n/a, accepted).
+- `tests/prebuilt-binaries`: EXPECT_NONZERO entries for both CLIs
+  (`--help`, exit 1, `input_json_file` marker) + a functional
+  `netlistsvg (render)` block in `smoke_runtime_layout` (hand-written AND-gate
+  `write_json` fixture → exit 0 + `<svg` in output).
+- Regen chain IN container: gen-readme-table --check OK (row added by hand --
+  descriptions hand-owned), completion regen (`netlistsvg` + tags svg/yosys),
+  strip-all-elf-binaries (1 tar rewritten = the new archive, 814 skipped),
+  gen-installed-sizes (6082 artifacts), gen-content-manifest (4420 files).
+- Verify: `TMPDIR=/var/tmp ./loadout install netlistsvg --dest-dir
+  /var/tmp/loadout-nlsvg-test -y` rc=0 (`done` on nodejs + netlistsvg
+  runtimes); AND-gate fixture through the installed absolute wrapper with
+  `env -i PATH=/usr/bin:/bin` renders a 2079-byte SVG (`INSTALLED-RENDER-OK`);
+  `doctor --verify` rc=0 (4421 files match). `TMPDIR=/var/tmp tests/run-all
+  --fast` rc=0 (Tier 1 passed). Native `tests/prebuilt-binaries` rc=0
+  (`All 331 binaries OK (1 skipped)` -- was 329 pre-netlistsvg; skips
+  unchanged; render smoke `OK (render)`).
+- README diff is exactly the one new row (plus the still-uncommitted
+  mermaid-ascii row); no other docs warranted. The pre-existing uncommitted
+  mermaid-ascii work (bin/mermaid-ascii.bz2 + registry/docs edits) is
+  preserved untouched -- this diff only adds netlistsvg files.
+- Pre-existing `/var/tmp/nlsvg-probe/` host scratch (tarball + flag probing
+  with `~/.local/bin` loadout node, read-only, no payload writes) and
+  `/var/tmp/loadout-nlsvg-test/` dest-dir install are disposable; safe to rm.
+
+Next: Tier 3 `tests/prebuilt-binaries-almalinux8 --full` (deferred, time --
+  covers both mermaid-ascii and netlistsvg); commit + release when requested
+  (payload bytes added -> class C).
+
+## 2026-09-19: mermaid-ascii 1.6.1 onboarded (UNCOMMITTED, UNRELEASED)
+
+New `kind:bin` package following the glow/update-prebuilt pattern: terminal
+mermaid-to-ASCII renderer (Go, statically linked, upstream tag `1.6.1` with no
+`v` prefix). Build note with source URL + sha256 + smoke in
+`build/ADDING_BINARIES.md` ("mermaid-ascii 1.6.1").
+
+- `build/update-prebuilt`: `mermaid-ascii` entry in the Go section, `{ver}`
+  template bare (no `v`). `build/verify-binaries` has NO glow entry to mirror
+  (its registry covers only a subset; absent tools SKIP) -- no mirror added.
+- `payload/packages.json`: `kind:bin`, `bins: [mermaid-ascii]`, version 1.6.1,
+  `tags: [diagram,mermaid,ascii]`; member of `@core-cli` next to glow.
+  Non-optional, so synthetic `@shared` (and transitively `@engineering-loadout`)
+  reaches it -- verified via `./loadout resolve`.
+- `build/farm-versions`: NO entry (binary has zero version output: `--version`
+  errors `unknown flag`; gocheat precedent -- version tracked only in
+  packages.json; check-versions reports n/a, accepted).
+- Payload built IN the loadout-build container:
+  `build/build-shell /repo/.loadout-bootstrap/bin/python3.14
+  ./build/update-prebuilt mermaid-ascii=1.6.1` (image ships only python3.6, so
+  the warm bootstrap interpreter is driven explicitly). Output: `static ELF, no
+  patchelf`; `runs: Error: unknown flag: --version`; wrote
+  `payload/el8.x86_64.glibc2p28/bin/mermaid-ascii.bz2`; registry 1.6.1 -> 1.6.1.
+  Tarball sha256 `9c284482...ce8d41` matches the published checksums file
+  (assurance/downloads.log +1 line).
+- Regen chain IN container: gen-readme-table (row added by hand -- descriptions
+  hand-owned), completion regen (`mermaid-ascii` + tags ascii/diagram/mermaid;
+  verified byte-identical to a fresh `./loadout completion bash`),
+  strip-all-elf-binaries (1 stripped = the new file, 813 manifest-skipped),
+  gen-installed-sizes (6081 artifacts, mermaid-ascii 13524440 B installed),
+  gen-content-manifest (4419 files).
+- Verify: `TMPDIR=/var/tmp ./loadout install mermaid-ascii --dest-dir
+  /var/tmp/loadout-mermaid-test -y` rc=0 (`done / pre-built binaries`);
+  `graph LR / A --> B` via stdin exits 0 with correct ASCII boxes (`--help`
+  also exits 0, so the default smoke probe passes with no new entry);
+  `doctor --verify` rc=0 (4420 files match). `TMPDIR=/var/tmp tests/run-all
+  --fast` rc=0 (Tier 1 passed). Native `tests/prebuilt-binaries` rc=0
+  (`All 329 binaries OK (1 skipped)` -- was 328, skips unchanged).
+- README diff is exactly the one new row; no other docs warranted.
+
+Next: Tier 3 `tests/prebuilt-binaries-almalinux8 --full` (deferred, time);
+commit + release when requested (payload bytes added -> class C).
 
 ## 2026-09-17: klayout launcher environment fix (UNCOMMITTED, UNRELEASED)
 

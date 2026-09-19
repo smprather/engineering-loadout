@@ -77,7 +77,7 @@
       "bins": [
         "bash"
       ],
-      "version": "5.3.15",
+      "version": "5.3.20",
       "version_url": "https://ftp.gnu.org/gnu/bash/?C=M&O=D",
       "version_pattern": "bash-([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\\.tar",
       "version_scheme": "gnu-patchlevel",
@@ -129,7 +129,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.5.13",
+      "version": "2.5.14",
       "platforms": [
         "linux"
       ],
@@ -539,7 +539,7 @@
       "bins": [
         "dust"
       ],
-      "version": "1.2.5",
+      "version": "1.2.6",
       "platforms": [
         "linux"
       ],
@@ -674,6 +674,22 @@
         "tui"
       ],
       "description": "Terminal markdown renderer/pager with styles"
+    },
+    "mermaid-ascii": {
+      "kind": "bin",
+      "bins": [
+        "mermaid-ascii"
+      ],
+      "version": "1.6.1",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "diagram",
+        "mermaid",
+        "ascii"
+      ],
+      "description": "Terminal mermaid-to-ASCII renderer — flowcharts as text diagrams"
     },
     "gocheat": {
       "kind": "bin",
@@ -920,6 +936,7 @@
         "lesskey"
       ],
       "version": "704",
+      "pin_reason": "upstream 710 deleted the lesskey binary; bumping needs a recipe decision (drop lesskey from bins/smoke/packaging)",
       "version_url": "https://www.greenwoodsoftware.com/less/download.html",
       "version_pattern": "RECOMMENDED</strong>\\s*version\\s*([0-9]+)",
       "platforms": [
@@ -1190,7 +1207,7 @@
       "bins": [
         "ruff"
       ],
-      "version": "0.16.7",
+      "version": "0.16.8",
       "platforms": [
         "linux"
       ],
@@ -1407,7 +1424,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.80",
+      "version": "0.0.82",
       "platforms": [
         "linux"
       ],
@@ -1526,7 +1543,7 @@
       "bins": [
         "uv"
       ],
-      "version": "0.12.13",
+      "version": "0.12.17",
       "platforms": [
         "linux"
       ],
@@ -1542,7 +1559,7 @@
         "vim",
         "vim.bin"
       ],
-      "version": "9.2.1099",
+      "version": "9.2.1119",
       "platforms": [
         "linux"
       ],
@@ -1558,7 +1575,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2.1099",
+      "version": "9.2.1119",
       "platforms": [
         "linux"
       ],
@@ -2461,7 +2478,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.8.2",
+      "version": "26.9.0",
       "platforms": [
         "linux"
       ],
@@ -2646,7 +2663,7 @@
       ],
       "uv_tool": "time-plot",
       "rolling_git": "https://github.com/smprather/time-plot.git",
-      "version": "v2026.9.13",
+      "version": "v2026.9.15",
       "platforms": [
         "linux"
       ],
@@ -3424,6 +3441,7 @@
         "numr",
         "yazi",
         "glow",
+        "mermaid-ascii",
         "keyb",
         "gocheat",
         "models",
@@ -3553,7 +3571,8 @@
         "sby",
         "z3",
         "bitwuzla",
-        "spice-netlist-ls"
+        "spice-netlist-ls",
+        "netlistsvg"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
@@ -4065,6 +4084,31 @@
       "install_to": "~/.local",
       "missing_hint": "Run: ./build/build-typescript-language-server.sh --tag <version>",
       "description": "TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x running directly on loadout's bundled Node.js (no npm install, no runtime downloads)"
+    },
+    "netlistsvg": {
+      "kind": "bin",
+      "bins": [
+        "netlistsvg",
+        "netlistsvg-dumplayout"
+      ],
+      "depends": [
+        "nodejs"
+      ],
+      "version": "1.0.2",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "yosys",
+        "svg"
+      ],
+      "archive": "payload/PLATFORM/runtime/netlistsvg.tar.bz2",
+      "archive_name": "netlistsvg.tar.bz2",
+      "sentinel": "bin/netlistsvg",
+      "install_to": "~/.local",
+      "missing_hint": "Run: ./build/build-netlistsvg.sh --tag <version>",
+      "description": "Yosys-netlist-to-SVG schematic renderer — upstream npm package plus vendored production deps running directly on loadout's bundled Node.js (no npm install, no runtime downloads)"
     },
     "tmux-path-store": {
       "kind": "python-tool",

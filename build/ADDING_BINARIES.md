@@ -5662,3 +5662,119 @@ to /usr/local so 2.69 stays for everyone else).
   requires a Syscalls/Details/execve frame against the staged strace.
 - Registry: optional (niche TUI), `depends: [strace]`. No wrapper needed
   (single native binary, no bundled libs, no env block).
+
+## mermaid-ascii 1.6.1 -- terminal mermaid-to-ASCII renderer (Go static prebuilt, added 2026-09-19)
+
+mermaid-ascii (github.com/AlexanderGrooff/mermaid-ascii) renders mermaid
+flowcharts as ASCII boxes on stdin/stdout. Upstream tags carry NO `v` prefix,
+so the update-prebuilt URL template spells `{ver}` bare:
+
+```text
+source: https://github.com/AlexanderGrooff/mermaid-ascii/releases/download/1.6.1/mermaid-ascii_Linux_x86_64.tar.gz
+sha256: 9c2844824635415982a8d34be301a0abb1f64599f019892f7d844c4620ce8d41 (matches the published checksums file)
+members: LICENSE, README.md, mermaid-ascii (bare binary name)
+```
+
+`file` says statically linked Go, already stripped -- no glibc floor to clear,
+no RPATH, no patchelf (the updater prints `static ELF, no patchelf`), no libs.
+Packaging is the plain glow-pattern download path, run INSIDE the loadout-build
+container (the image ships only python3.6, so drive the updater with the warm
+bootstrap interpreter):
+
+```bash
+build/build-shell /repo/.loadout-bootstrap/bin/python3.14 ./build/update-prebuilt mermaid-ascii=1.6.1
+# download -> extract mermaid-ascii -> strip -> static, no patchelf -> bzip2
+# payload/el8.x86_64.glibc2p28/bin/mermaid-ascii.bz2 (13.5 MB installed)
+```
+
+Then the standard chain, same container: README row (by hand -- descriptions
+are hand-owned), completion regen, strip-all-elf-binaries, gen-installed-sizes,
+gen-content-manifest.
+
+- packages.json `kind: bin`, `tags: [diagram,mermaid,ascii]`, member of
+  `@core-cli` next to glow; non-optional, so synthetic `@shared` (and
+  transitively `@engineering-loadout`) reaches it.
+- **Not in build/verify-binaries:** the mirrored registry there covers only a
+  subset of update-prebuilt tools -- glow itself has no entry either (absent
+  tools report SKIP `not in verify-binaries registry`). No mirror added.
+- **Not in farm-versions:** the binary has NO version output at all --
+  `--version` prints `Error: unknown flag: --version` and exits nonzero, and
+  no other flag reports one either (gocheat precedent: version tracked only in
+  packages.json). check-versions lists such packages as n/a, which is accepted.
+- Smoke is functional, not flag-based: `printf 'graph LR\nA --> B\n' | mermaid-ascii`
+  exits 0 and draws ASCII boxes. The tests/prebuilt-binaries default probe
+  (`--version`, `-V`, `-version`, `--help` in order) passes on `--help`.
+
+Install: `./loadout install mermaid-ascii` (also in `@core-cli` and the full
+`@engineering-loadout` bundle).
+
+## netlistsvg 1.0.2 -- Yosys-netlist-to-SVG renderer (pure-Node runtime archive, added 2026-09-19)
+
+netlistsvg (Neil Turley, github.com/nturley/netlistsvg) renders Yosys
+`write_json` netlists as SVG schematics. 1.0.2 (2020, GitHub tag `v1.0.2`) is
+still the latest upstream release and the Yosys-ecosystem standard render path.
+Upstream ships NO release assets, so the npm tarball IS the source:
+
+```text
+source: https://registry.npmjs.org/netlistsvg/-/netlistsvg-1.0.2.tgz
+sha512: g6E7Q58HLevr+ls7FZTMf1xT3iXXxUVD+s7I4ijGKH+bhaobjnZbzKAi+Ex1AlNWK7fzujz3x4V3xMKOGiWfQw==
+package.json bin map: {"netlistsvg": "bin/netlistsvg.js", "netlistsvg-dumplayout": "bin/exportLayout.js"}
+```
+
+Build: `./build/build-netlistsvg.sh --tag 1.0.2`, modeled on
+`build-typescript-language-server.sh` (fetch_npm + dist.integrity sha512
+verification, ELF guard, absolute-node sh wrappers, tar.bz2 packaging). One
+structural difference: the package ships no lockfile, so the script resolves
+production deps at build time with the loadout node/npm (network allowed at
+build time, container only) via `npm install --omit=dev --no-audit --no-fund`
+inside the staged package dir, then vendors the whole tree
+(`lib/node_modules/netlistsvg/` with `node_modules/` intact) into
+`payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2` (2.3M archive,
+13601068 B installed). The installed tree is fully offline. Built with loadout
+node v26.8.2 / npm 11.19.1, `added 78 packages`. Resolved production closure
+(`npm ls --omit=dev`, pinned for reproducibility):
+
+```text
+netlistsvg@1.0.2
++-- @types/clone@0.1.30
++-- @types/json5@0.0.30
++-- @types/lodash@4.17.25
++-- ajv-errors@1.0.1
++-- ajv@6.15.0
++-- clone@2.1.2
++-- elkjs@0.3.0
++-- fs-extra@1.0.0
++-- json5@0.5.1
++-- lodash@4.18.1
++-- onml@0.3.1
+`-- yargs@6.6.0
+```
+
+Wrappers mirror the TLS shape exactly (self-contained sh, exec loadout node by
+absolute path so GUI-launched shells need no PATH setup):
+
+```sh
+PREFIX=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "$PREFIX/bin/node" "$PREFIX/lib/node_modules/netlistsvg/bin/netlistsvg.js" "$@"
+```
+
+`bin/netlistsvg-dumplayout` is the same shape over `bin/exportLayout.js`.
+
+- packages.json `kind: bin`, `bins: [netlistsvg, netlistsvg-dumplayout]`,
+  hard `depends: [nodejs]`, `tags: [eda, yosys, svg]`, member of `@eda`;
+  non-optional, so synthetic `@shared` (and transitively
+  `@engineering-loadout`) reaches it -- verified via `./loadout resolve`.
+- **Not in farm-versions:** neither CLI exposes a version -- `--version` and
+  `--help` both exit 1 under yargs 6 (the `demand(1)` input-file validation
+  fires before help/version handling, printing `usage: ... input_json_file`
+  plus `Not enough non-option arguments`). Verified empirically against the
+  staged tree with loadout node; gocheat precedent applies (version tracked
+  only in packages.json; check-versions reports n/a, accepted).
+- Smoke is functional, not flag-based (`--help` proves nothing here either):
+  a hand-written Yosys `write_json`-shaped fixture (modules/top, ports a/b/y,
+  one `$and` cell, netnames) renders via
+  `netlistsvg fixture.json -o out.svg` (exit 0) and the output contains `<svg`
+  (build script asserts this; the fixture text lives inline in the script).
+
+Install: `./loadout install netlistsvg` (pulls `nodejs`; also in `@eda` and
+the full `@engineering-loadout` bundle).
