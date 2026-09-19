@@ -426,8 +426,10 @@ fi
 echo "  OK: no RUNPATH references the build prefix"
 
 echo "==> Installing launchers ..."
+[ -r "$REPO/build/gui-wrapper-env.sh" ] || exit 1
 for l in $LAUNCHERS; do
-    cp "$REPO/build/klayout/klayout" "$STAGE/bin/$l"
+    sed -e "/^loadout_gui_env$/r $REPO/build/gui-wrapper-env.sh" \
+        -e '/^loadout_gui_env$/d' "$REPO/build/klayout/klayout" > "$STAGE/bin/$l"
     chmod 755 "$STAGE/bin/$l"
 done
 

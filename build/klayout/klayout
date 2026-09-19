@@ -9,7 +9,7 @@
 # Library resolution is by baked RPATH ($ORIGIN + ../../lib64 + ../../lib), not
 # LD_LIBRARY_PATH -- the LD_LIBRARY_PATH set below is only for the Mesa vendor
 # libraries, which are dlopen'd by GLVND rather than linked.
-prefix=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+prefix=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 name=${0##*/}
 real="$prefix/lib/klayout/$name"
 if [ ! -x "$real" ]; then
@@ -19,17 +19,10 @@ fi
 
 libdir="$prefix/lib64"
 
-# OpenGL: bundled Mesa vendor side (mesa3d_libs); the GLVND dispatcher
-# (libGL.so.1 / libGLX.so.0 / libGLdispatch.so.0) stays host-provided. Same
-# block as the wezterm and surfer launchers.
-if [ -d "$libdir" ]; then
-    export LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    if [ -d "$libdir/dri" ]; then
-        export LIBGL_DRIVERS_PATH="$libdir/dri${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
-    fi
-fi
-if [ -d "$prefix/share/glvnd/egl_vendor.d" ]; then
-    export __EGL_VENDOR_LIBRARY_DIRS="$prefix/share/glvnd/egl_vendor.d${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+loadout_gui_env
+
+if [ -z "${QT_QPA_PLATFORM+x}" ] && [ -n "${DISPLAY:-}" ]; then
+    export QT_QPA_PLATFORM=xcb
 fi
 
 # Qt platform plugin, same convention envs/bash/global/bashrc uses for gui_libs

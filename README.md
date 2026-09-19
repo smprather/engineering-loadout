@@ -172,6 +172,13 @@ Python 3.14 first. The smoke reports deliberate host contracts as skips: `cloc`
 needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and OpenGL GUI apps need
 host GLVND dispatchers such as `libGL.so.1`.
 
+KLayout ships one EL8-compatible build for all supported Linux distributions.
+Its launchers prefer host Fontconfig and avoid exporting bundled Mesa paths when
+host GL is available. With `DISPLAY` present, Qt defaults to `xcb` (X11/XWayland);
+an explicitly set `QT_QPA_PLATFORM` always wins. Native Wayland visibility is not
+verified. The shared `LOADOUT_GUI_HOST_GL` and `LOADOUT_GUI_HOST_FONTCONFIG`
+overrides also apply to KLayout; no system configuration changes are needed.
+
 ```bash
 tests/prebuilt-binaries-almalinux8          # binary probe only
 tests/prebuilt-binaries-almalinux8 --full   # + doctor, resolvers, unit tests,

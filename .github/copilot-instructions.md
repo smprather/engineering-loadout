@@ -302,6 +302,15 @@ host-contract skips are explicit:
 `cloc` needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and GL GUI apps
 need host GLVND/OpenGL dispatcher libs (`libGL.so.1`, etc.).
 
+KLayout remains one EL8-compatible build, not per-distro variants. Its 13
+launchers inline `build/gui-wrapper-env.sh` at build time (the
+`loadout_gui_env` line in `build/klayout/klayout` is a template marker).
+Host Fontconfig wins; Mesa exports are host-GL-gated. `DISPLAY` defaults Qt to
+`xcb` only when `QT_QPA_PLATFORM` is unset; explicit caller values win.
+Native Wayland visibility is unverified. Regression tests in
+`tests/prebuilt-binaries` check all 13 installed wrappers even without GLVND.
+Test only absolute isolated loadout binaries, never a system KLayout workaround.
+
 The Helix runtime lives at `payload/<platform>/runtime/helix.tar.bz2`; the
 installer extracts it to `~/.local/share/helix/runtime`; `runtime/tutor` is the
 sentinel file. The Vim runtime lives at `payload/<platform>/runtime/vim92.tar.bz2`;

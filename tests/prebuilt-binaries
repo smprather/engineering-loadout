@@ -529,6 +529,155 @@ def probe_binary(binary_path, env, cwd):
     )
 
 
+def smoke_klayout_wrappers(tmpdir):
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(repo, "build", "klayout", "klayout")) as fh:
+        template = fh.read()
+    with open(os.path.join(repo, "build", "gui-wrapper-env.sh")) as fh:
+        expected = template.replace("loadout_gui_env\n", fh.read())
+    with open(os.path.join(repo, "build", "build-klayout.sh")) as fh:
+        names = re.search(r'^LAUNCHERS="([^"]+)"$', fh.read(), re.M)[1].split()
+    assert len(names) == 13
+    cache = subprocess.check_output([shutil.which("ldconfig", path=BASIC_PATH), "-p"], text=True)
+    preload = re.search(r"libc\.so\.6 .* => (\S+)", cache)[1]
+    with tempfile.TemporaryDirectory(prefix=".loadout-klayout-wrapper-") as scratch:
+        prefix = os.path.join(scratch, "relocated prefix")
+        for path in (
+            "bin",
+            "lib/klayout",
+            "lib64/dri",
+            "share/glvnd/egl_vendor.d",
+            "share/ruby",
+            "lib/python3.14",
+            "probe",
+        ):
+            os.makedirs(os.path.join(prefix, path))
+        libdir = os.path.join(prefix, "lib64")
+        open(os.path.join(libdir, "libqxcb.so"), "w").close()
+        probe = os.path.join(prefix, "probe", "ldconfig")
+        with open(probe, "w") as fh:
+            fh.write(
+                '#!/bin/sh\nif [ "$STUB_HOST" = 1 ]; then\n'
+                'printf "libEGL.so.1 => /host/libEGL.so.1\\nlibfontconfig.so.1 => %s\\n" "$STUB_PRELOAD"\nfi\n'
+            )
+        os.chmod(probe, 0o755)
+        base = {
+            "PATH": os.path.dirname(probe) + ":" + BASIC_PATH,
+            "HOME": scratch,
+            "STUB_PRELOAD": preload,
+            "STUB_HOST": "1",
+            "DISPLAY": ":99",
+            "XDG_SESSION_TYPE": "wayland",
+        }
+        cases = [
+            (
+                {},
+                {
+                    "QT_QPA_PLATFORM": "xcb",
+                    "LD_LIBRARY_PATH": None,
+                    "LD_PRELOAD": preload,
+                    "LIBGL_DRIVERS_PATH": None,
+                    "__EGL_VENDOR_LIBRARY_DIRS": None,
+                },
+            ),
+            ({"WAYLAND_DISPLAY": "wayland-0"}, {"QT_QPA_PLATFORM": "xcb"}),
+            ({"XDG_SESSION_TYPE": "x11"}, {"QT_QPA_PLATFORM": "xcb"}),
+            ({"DISPLAY": "", "WAYLAND_DISPLAY": "wayland-0"}, {"QT_QPA_PLATFORM": None}),
+            ({"DISPLAY": "", "XDG_SESSION_TYPE": ""}, {"QT_QPA_PLATFORM": None}),
+            ({"QT_QPA_PLATFORM": "wayland"}, {"QT_QPA_PLATFORM": "wayland"}),
+            ({"QT_QPA_PLATFORM": "offscreen"}, {"QT_QPA_PLATFORM": "offscreen"}),
+            ({"QT_QPA_PLATFORM": ""}, {"QT_QPA_PLATFORM": ""}),
+            (
+                {"STUB_HOST": "0"},
+                {
+                    "LD_LIBRARY_PATH": libdir,
+                    "LD_PRELOAD": None,
+                    "LIBGL_DRIVERS_PATH": libdir + "/dri",
+                    "__EGL_VENDOR_LIBRARY_DIRS": prefix + "/share/glvnd/egl_vendor.d",
+                },
+            ),
+            (
+                {
+                    "LOADOUT_GUI_HOST_GL": "0",
+                    "LOADOUT_GUI_HOST_FONTCONFIG": "0",
+                    "LD_LIBRARY_PATH": "/caller/lib",
+                    "LIBGL_DRIVERS_PATH": "/caller/dri",
+                    "__EGL_VENDOR_LIBRARY_DIRS": "/caller/egl",
+                },
+                {
+                    "LD_LIBRARY_PATH": libdir + ":/caller/lib",
+                    "LD_PRELOAD": None,
+                    "LIBGL_DRIVERS_PATH": libdir + "/dri:/caller/dri",
+                    "__EGL_VENDOR_LIBRARY_DIRS": prefix + "/share/glvnd/egl_vendor.d:/caller/egl",
+                },
+            ),
+            (
+                {
+                    "LOADOUT_GUI_HOST_GL": "1",
+                    "LOADOUT_GUI_HOST_FONTCONFIG": preload,
+                    "LD_LIBRARY_PATH": "/caller/lib",
+                    "LD_PRELOAD": preload,
+                    "QT_QPA_PLATFORM_PLUGIN_PATH": "/caller/qt",
+                    "KLAYOUT_PYTHONHOME": "/caller/python",
+                    "RUBYLIB": "/caller/ruby",
+                    "GEM_HOME": "/caller/gems",
+                    "GEM_PATH": "/caller/gems",
+                },
+                {
+                    "LD_LIBRARY_PATH": "/caller/lib",
+                    "LD_PRELOAD": preload + ":" + preload,
+                    "QT_QPA_PLATFORM_PLUGIN_PATH": "/caller/qt",
+                    "KLAYOUT_PYTHONHOME": "/caller/python",
+                    "RUBYLIB": prefix
+                    + "/lib64/ruby:"
+                    + prefix
+                    + "/share/ruby:"
+                    + prefix
+                    + "/share/rubygems:/caller/ruby",
+                    "GEM_HOME": "/caller/gems",
+                    "GEM_PATH": "/caller/gems",
+                },
+            ),
+        ]
+        for name in names:
+            installed = os.path.join(tmpdir, "local", "bin", name)
+            with open(installed) as fh:
+                wrapper = fh.read()
+            assert wrapper == expected, f"{name}: installed wrapper differs from composed source"
+            launcher = os.path.join(prefix, "bin", name)
+            shutil.copy2(installed, launcher)
+            real = os.path.join(prefix, "lib", "klayout", name)
+            with open(real, "w") as fh:
+                fh.write('#!/bin/sh\nprintf "DISPATCH=%s\\n" "${0##*/}"\nprintf "ARG=%s\\n" "$@"\nexec /usr/bin/env\n')
+            os.chmod(real, 0o755)
+            for overrides, values in cases:
+                proc = subprocess.run(
+                    [launcher, "-zz", "two words", ""],
+                    env=base | overrides,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                )
+                assert not proc.stderr, f"{name}: {proc.stderr}"
+                lines = proc.stdout.splitlines()
+                assert [line for line in lines if line.startswith("ARG=")] == ["ARG=-zz", "ARG=two words", "ARG="]
+                actual = dict(line.split("=", 1) for line in lines if "=" in line)
+                defaults = {
+                    "DISPATCH": name,
+                    "QT_QPA_PLATFORM_PLUGIN_PATH": libdir,
+                    "KLAYOUT_PYTHONHOME": prefix,
+                    "RUBYLIB": prefix + "/lib64/ruby:" + prefix + "/share/ruby:" + prefix + "/share/rubygems",
+                    "GEM_HOME": prefix + "/share/gems",
+                    "GEM_PATH": prefix + "/share/gems",
+                }
+                for key, value in (defaults | values).items():
+                    assert actual.get(key) == value, (
+                        f"{name}: {overrides}: {key}={actual.get(key)!r}, expected {value!r}"
+                    )
+    print(f"  OK   (wrapper):      klayout {len(names)} launchers x {len(cases)} environment cases")
+
+
 def smoke_runtime_layout(tmpdir, env):
     failures = []
     bin_dir = os.path.join(tmpdir, "local", "bin")
@@ -874,6 +1023,13 @@ def smoke_runtime_layout(tmpdir, env):
                     failures.append(("gtkwave runtime", detail))
                 else:
                     print("  OK   (convert):      gtkwave runtime")
+
+    if has_bin("klayout"):
+        try:
+            smoke_klayout_wrappers(tmpdir)
+        except Exception as exc:
+            print(f"  FAIL (wrapper):      klayout {exc}")
+            failures.append(("klayout wrappers", str(exc)))
 
     kl_real = os.path.join(tmpdir, "local", "lib", "klayout", "klayout")
     kl_host_sos = host_required_sos(ldd_check(kl_real)) if os.path.isfile(kl_real) else []

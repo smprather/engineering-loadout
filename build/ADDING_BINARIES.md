@@ -3296,9 +3296,11 @@ on EL8.
 KLayout installs **flat**: one directory with the `klayout` binary, 12 `strm*` tools,
 ~35 `libklayout_*.so` (plus `.so`/`.so.0`/`.so.0.30` symlink chains), `db_plugins/`,
 `lay_plugins/`, and `pymod/` (the standalone `import klayout` package). That tree ships
-verbatim as `<prefix>/lib/klayout/`, with **13 copies of `build/klayout/klayout` in
-`bin/`** that dispatch on their own basename -- one script, 13 names, the
-wezterm/vcd-toggle-profiler shape.
+verbatim as `<prefix>/lib/klayout/`, with **13 composed launchers in `bin/`**
+that dispatch on their own basename. `build/klayout/klayout` is the template;
+`build/build-klayout.sh` replaces its `loadout_gui_env` line with
+`build/gui-wrapper-env.sh` at build time. Installed wrappers are self-contained,
+with no repository dependency; the shared adaptation logic is not duplicated.
 
 RPATHs are per-depth, because the tree is flat and each level needs its own hop count
 back to `<prefix>/lib64` (bundled Qt5/ruby/X11) and `<prefix>/lib` (portable-python's
@@ -3322,7 +3324,9 @@ Plus `lib64/libQt5XmlPatterns.so.5.bz2`.
 **GL:** `libGL.so.1`/`libGLX.so.0`/`libGLdispatch.so.0` are direct NEEDEDs, so the
 package `depends` on `mesa3d_libs` for the Mesa vendor side while the GLVND dispatcher
 stays host-provided -- the surfer/wezterm arrangement, and the launcher carries the
-same `LD_LIBRARY_PATH`/`LIBGL_DRIVERS_PATH`/`__EGL_VENDOR_LIBRARY_DIRS` block.
+shared host-GL-gated `LD_LIBRARY_PATH`/`LIBGL_DRIVERS_PATH`/`__EGL_VENDOR_LIBRARY_DIRS`
+block. When the host provides GL, no bundled Mesa paths are exported. Host
+Fontconfig is preloaded when available so its library matches `/etc/fonts`.
 Full `depends`: `gui_libs`, `mesa3d_libs`, `ruby`, `portable-python`.
 
 **LIMITATION -- host GLVND is required even for BATCH use.** The 12 `strm*`

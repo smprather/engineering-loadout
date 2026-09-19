@@ -1,9 +1,73 @@
 # Current Handoff
 
-Last updated: 2026-09-16 (portable Python FTS5 fix UNCOMMITTED, UNRELEASED;
-native + Tier 3 + full integration green). Start here after a context clear.
+Last updated: 2026-09-17 (klayout launcher env-adaptation fix UNCOMMITTED,
+UNRELEASED; native + T1 + full Tier 3 + real-GUI green). Start here after a
+context clear.
 
-## 2026-09-16: portable Python SQLite FTS5 fix (UNCOMMITTED, UNRELEASED)
+## 2026-09-17: klayout launcher environment fix (UNCOMMITTED, UNRELEASED)
+
+Diagnosed on the CachyOS dev host (KDE/Wayland): the installed klayout 0.30.10
+wrapper unconditionally exported `$prefix/lib64` on LD_LIBRARY_PATH, so the
+bundled EL8 fontconfig 2.13 parsed the host's newer `/etc/fonts` and printed ~91
+diagnostics; Qt auto-selected its Wayland platform even with WAYLAND_DISPLAY
+unset (XDG_SESSION_TYPE=wayland is enough) and rendered invisibly. Verified
+fix conditions: host `LD_PRELOAD=/usr/lib/libfontconfig.so.1` clears every
+diagnostic; `QT_QPA_PLATFORM=xcb` + host fontconfig yields a real PID-mapped
+800x600 window on DISPLAY=:0 in ~3 s. Deep native-Wayland root cause NOT
+established; do not claim one.
+
+- Fix is launcher/packaging only; **no C++ rebuild, all 85 ELF payload members
+  byte-identical** (SHA256 proof; only the 13 `bin/` launcher members + strip's
+  0775->0755 directory-mode normalization changed; member set identical).
+- `build/klayout/klayout` is now a TEMPLATE: its single `loadout_gui_env` line
+  is replaced by `build/gui-wrapper-env.sh` in `build/build-klayout.sh` at
+  packaging time (wezterm/surfer pattern; sed `r` in-place marker replacement).
+  Installed wrappers stay self-contained. Qt defaults to xcb when DISPLAY is
+  set AND `QT_QPA_PLATFORM` is unset (`${VAR+x}` — explicit values, including
+  empty, always win); host Fontconfig preload + host-GL-gated Mesa exports now
+  shared via the existing block, knobs LOADOUT_GUI_HOST_GL/HOST_FONTCONFIG
+  apply. One EL8-compatible build for all distros; no per-distro builds.
+- Repack done IN the loadout-build EL8 container (--network=none): replaced the
+  13 launcher members in `payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2`
+  (rejoin -> splice -> bzip2), pruned stale part-shards, then strip -> sizes ->
+  manifest IN container. Original archive kept at
+  `/var/tmp/loadout-klayout-fix/original.tar.bz2`.
+- New regression: `smoke_klayout_wrappers` in `tests/prebuilt-binaries` —
+  installed wrappers must equal the composed template and pass 143
+  relocation/environment cases (13 launchers x 11: xcb default with DISPLAY,
+  caller overrides incl. empty, GL-less fallback exports, additive caller
+  paths, ruby/python derivation). Runs in the clean Tier 3 container without
+  host GLVND. Test evidence uses ONLY the absolute isolated payload path
+  (`--dest-dir /var/tmp/loadout-klayout-fix/install`); system klayout
+  (workaround install) never invoked.
+- Real-GUI proof from the isolated updated payload: `klayout -nc -rx` with
+  DISPLAY=:0 and no WAYLAND_DISPLAY → two PID-matched viewable windows
+  ("KLayout 0.30.12" 800x600 + Tip dialog), stderr EMPTY (zero fontconfig
+  diagnostics), host libfontconfig + bundled libqxcb mapped, no libqwayland.
+- Gates: ruff + py_compile + shellcheck + `sh -n` green; `ty check
+  loadout_main.py` = same 5 advisory diagnostics (installer untouched).
+  `tests/run-all --fast` rc=0; native `tests/prebuilt-binaries` rc=0
+  (`All 328 binaries OK (1 skipped)`, klayout wrapper+DRC+batch OK);
+  Tier 3 `tests/prebuilt-binaries-almalinux8 --no-build --full` rc=0
+  (`All 307 binaries OK (22 skipped)`; GLVND skips expected — batch tools
+  NEED host libGL, and the wrapper matrix still ran).
+- Docs synced: README (isolated test discipline + behavior),
+  copilot-instructions (template + don't-use-system-KLayout rule),
+  AGENTS (klayout entry + GUI WRAPPER SHARED BLOCK member list + ty 5),
+  ADDING_BINARIES (composition + GL/fontconfig behavior). Mermaid-ascii
+  documentation deferred by user request — do not implement.
+
+**Rollout (authorized repo-package fix; live `~/.local` intentionally NOT
+touched):** `./loadout reinstall klayout -y` (re-extracts the runtime archive
+and rewrites the 13 launchers; the running GUI, if any, must be restarted).
+Then verify: `~/.local/bin/klayout -v` and on the desktop
+`klayout <file>.gds` should map a visible 800x600 window with zero fontconfig
+noise; if a session ever needs the old behavior,
+`LOADOUT_GUI_HOST_FONTCONFIG=0 QT_QPA_PLATFORM=wayland ~/.local/bin/klayout`.
+
+Next: commit + release when requested (payload bytes changed → class C).
+
+## 2026-09-16: portable Python SQLite FTS5 fix (COMMITTED 2422c0a, UNRELEASED)
 
 The old `portable-python-3.14.7-el8-clang23.tar.bz2` imported `sqlite3` but its
 private SQLite **3.53.1 lacked FTS5**. SQLite **3.53.4 CLI/lib64** already had
