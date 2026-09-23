@@ -1,0 +1,84 @@
+# Gruvppuccin — Gruvbox × Catppuccin blend for btop
+# Warm earthy tones with Catppuccin's cooler accents
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#181a1b"
+
+# Main text color
+theme[main_fg]="#d4be98"
+
+# Title color for boxes
+theme[title]="#d4be98"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#e78a4e"
+
+# Background color of selected items
+theme[selected_bg]="#d8a657"
+
+# Foreground color of selected items
+theme[selected_fg]="#181a1b"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#5a524c"
+
+# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+theme[graph_text]="#5a524c"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#a9b665"
+
+# Cpu box outline color
+theme[cpu_box]="#413c39"
+
+# Memory/disks box outline color
+theme[mem_box]="#413c39"
+
+# Net up/down box outline color
+theme[net_box]="#413c39"
+
+# Processes box outline color
+theme[proc_box]="#413c39"
+
+# Box divider line and small boxes line color
+theme[div_line]="#413c39"
+
+# Temperature graph colors (sapphire → peach → red: cool to hot)
+theme[temp_start]="#7daea3"
+theme[temp_mid]="#e78a4e"
+theme[temp_end]="#ea6962"
+
+# CPU graph colors (green → yellow → red: load gradient)
+theme[cpu_start]="#a9b665"
+theme[cpu_mid]="#d8a657"
+theme[cpu_end]="#ea6962"
+
+# Mem/Disk free meter (teal → green → yellow)
+theme[free_start]="#89b482"
+theme[free_mid]="#a9b665"
+theme[free_end]="#d8a657"
+
+# Mem/Disk cached meter (sapphire → sky → teal)
+theme[cached_start]="#7daea3"
+theme[cached_mid]="#8dbcb0"
+theme[cached_end]="#89b482"
+
+# Mem/Disk available meter (yellow → peach → red)
+theme[available_start]="#d8a657"
+theme[available_mid]="#e78a4e"
+theme[available_end]="#ea6962"
+
+# Mem/Disk used meter (red → maroon → peach)
+theme[used_start]="#ea6962"
+theme[used_mid]="#e07868"
+theme[used_end]="#e78a4e"
+
+# Download graph colors (sky → sapphire → lavender)
+theme[download_start]="#8dbcb0"
+theme[download_mid]="#7daea3"
+theme[download_end]="#afa4cc"
+
+# Upload graph colors (mauve → pink → flamingo)
+theme[upload_start]="#c28fd6"
+theme[upload_mid]="#d4879c"
+theme[upload_end]="#e09b8a"

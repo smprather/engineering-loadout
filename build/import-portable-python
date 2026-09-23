@@ -143,6 +143,52 @@ def detect_platform():
 # ---------------------------------------------------------------------------
 
 
+def _dynsym_repair_tool():
+    """Path to build/repair-libpython-dynsym, which sits next to this script."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "repair-libpython-dynsym")
+
+
+def repair_libpython_dynsym(portable_dir):
+    """Repair invalid .dynsym section indices in the tree's libpython.
+
+    The portable-python build is produced with --enable-bolt, and BOLT's
+    section rewriting leaves every DATA-OBJECT .dynsym entry pointing at a
+    RELOCATION section (.rela.data.rel.ro, ...) instead of the section that
+    actually holds the object (.data, .bss). Consumers that EMBED libpython
+    then cannot get a COPY relocation and bind the object to a zero-filled
+    .bss slot or a frozen absolute address -- `openroad -python` segfaults in
+    Py_InitializeFromConfig while plain Tcl mode stays green.
+
+    Repairing the tree here means the archive is correct when it is packaged,
+    so nothing downstream has to know about the defect. A tree with no
+    libpython (or an already-clean one) is a no-op.
+    """
+    lib_dir = os.path.join(portable_dir, "local", "lib")
+    tool = _dynsym_repair_tool()
+    if not os.path.isdir(lib_dir):
+        return
+    targets = sorted(
+        os.path.join(lib_dir, n)
+        for n in os.listdir(lib_dir)
+        if re.match(r"^libpython3\.\d+\.so", n) and os.path.isfile(os.path.join(lib_dir, n))
+    )
+    if not targets:
+        return
+    if not os.path.isfile(tool):
+        eprint(f"warning: no repair tool at {tool}; skipping the .dynsym gate")
+        return
+    for t in targets:
+        # Repair is idempotent, and the tool re-checks after writing.
+        r = subprocess.run([sys.executable, tool, t], capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.stderr.write(r.stderr)
+        if r.returncode != 0:
+            die(
+                f"libpython .dynsym repair FAILED on {t} (rc={r.returncode}); "
+                "refusing to package a defective interpreter"
+            )
+
+
 def detect_python_version(portable_dir):
     """Run python3.x from local/bin to get the version string."""
     bin_dir = os.path.join(portable_dir, "local", "bin")
@@ -242,6 +288,11 @@ def main(portable_dir, platform_override, output, dry_run):
     # Platform
     platform = platform_override or detect_platform()
     print(f"platform   : {platform}")
+
+    # The .dynsym gate. Runs BEFORE packaging so a defective interpreter can
+    # never reach the payload; see repair_libpython_dynsym() for the failure.
+    if not dry_run:
+        repair_libpython_dynsym(portable_dir)
 
     # Output path
     if output:

@@ -136,7 +136,13 @@ PROBE_FLAGS = {
     # --- X clients: single-dash -version, --version exits 1 ---------------
     "xterm": [["-version"]],
     "resize": [["-version"]],
+    # xclip takes -version only; --version/-V/--help all read the flag as an
+    # input FILENAME and exit 1 ("No such file or directory").
+    "xclip": [["-version"]],
     "nedit-ng": [["-V"]],
+    # nethogs takes single-dash -V/-h only (getopt; --version and --help exit 1
+    # with a usage dump). -V prints " version 0.9.0" and exits 0.
+    "nethogs": [["-V"]],
     # --- Tcl/poppler/util tools whose flag is single-dash ------------------
     # expect treats `--version` as a SCRIPT PATH and exits 1 with
     # `couldn't read file "--version"`. -version is the real flag.
@@ -165,6 +171,9 @@ PROBE_FLAGS = {
     "python3.14-config": [["--help"]],
     "spice-subckt-rc-reduce": [["--help"]],
     "st-reload": [["--help"]],
+    # btop-theme-tour takes no version flag -- `--version` is an unknown option
+    # (exit 2). --help is the real probe.
+    "btop-theme-tour": [["--help"]],
     "strip-ansi-escapes": [["--help"]],
     "text-serdes-dec": [["--help"]],
     "text-serdes-enc": [["--help"]],
@@ -694,6 +703,76 @@ def smoke_klayout_wrappers(tmpdir):
     print(f"  OK   (wrapper):      klayout {len(names)} launchers x {len(cases)} environment cases")
 
 
+def smoke_pythonpath_launcher_wrappers(tmpdir, failures):
+    """Verify uv_tool launchers that must export the tool venv's PYTHONPATH.
+
+    LibreLane runs some of its steps as `openroad -python <script>`, and
+    openroad executes those scripts with its EMBEDDED interpreter -- in this
+    bundle, portable-python, which ships no click/rich/yaml. The odbpy scripts
+    import all three. LibreLane's own venv has them, but a venv's site-packages
+    is not on a subprocess's sys.path; only PYTHONPATH crosses that boundary.
+    The installer therefore replaces uv's launcher symlink with a small sh
+    wrapper that prepends the venv site-packages.
+
+    This gate fails if the wrapper is missing (the flow would die at the first
+    Odb.* step with "No module named 'click'") or if it does not point at a
+    real directory (a moved/renamed venv would silently stop resolving).
+    """
+    bin_dir = os.path.join(tmpdir, "local", "bin")
+    launcher = os.path.join(bin_dir, "librelane")
+    if not os.path.exists(launcher):
+        return  # librelane not installed in this tree -- nothing to check
+
+    if os.path.islink(launcher):
+        detail = "still a plain symlink; helper scripts would fail to import click"
+        print(f"  FAIL (wrapper):      librelane {detail}")
+        failures.append(("librelane PYTHONPATH wrapper", detail))
+        return
+
+    try:
+        with open(launcher) as fh:
+            text = fh.read()
+    except OSError as exc:
+        print(f"  FAIL (wrapper):      librelane {exc}")
+        failures.append(("librelane PYTHONPATH wrapper", str(exc)))
+        return
+
+    if "_LOADOUT_PYTHONPATH_WRAPPER" not in text:
+        detail = "launcher carries no loadout PYTHONPATH wrapper"
+        print(f"  FAIL (wrapper):      librelane {detail}")
+        failures.append(("librelane PYTHONPATH wrapper", detail))
+        return
+
+    match = re.search(r'^PYTHONPATH="([^"]+)"', text, re.M)
+    if not match:
+        detail = "wrapper does not export PYTHONPATH"
+        print(f"  FAIL (wrapper):      librelane {detail}")
+        failures.append(("librelane PYTHONPATH wrapper", detail))
+        return
+    site_packages = match[1]
+    if not os.path.isdir(site_packages):
+        detail = f"wrapper points at a missing site-packages: {site_packages}"
+        print(f"  FAIL (wrapper):      librelane {detail}")
+        failures.append(("librelane PYTHONPATH wrapper", detail))
+        return
+    for module in ("click", "rich"):
+        if not os.path.isdir(os.path.join(site_packages, module)):
+            detail = f"{module} absent from the wrapped site-packages ({site_packages})"
+            print(f"  FAIL (wrapper):      librelane {detail}")
+            failures.append(("librelane PYTHONPATH wrapper", detail))
+            return
+
+    # The wrapper must still exec something that exists.
+    target = re.search(r'^exec "([^"]+)"', text, re.M)
+    if not target or not os.path.isfile(target[1]):
+        detail = "wrapper exec target is missing"
+        print(f"  FAIL (wrapper):      librelane {detail}")
+        failures.append(("librelane PYTHONPATH wrapper", detail))
+        return
+
+    print(f"  OK   (wrapper):      librelane PYTHONPATH -> {site_packages}")
+
+
 def smoke_runtime_layout(tmpdir, env):
     failures = []
     bin_dir = os.path.join(tmpdir, "local", "bin")
@@ -1040,12 +1119,104 @@ def smoke_runtime_layout(tmpdir, env):
                 else:
                     print("  OK   (convert):      gtkwave runtime")
 
+    if has_bin("btop"):
+        # `btop --version` exits 0 whatever its theme directory holds, so the
+        # generic probe cannot see the two failures that matter here:
+        #
+        #   1. btop resolves its theme directory from `/proc/self/exe` ->
+        #      `<real binary>/../share/btop/themes` (src/btop.cpp, v1.4.7). A
+        #      payload that installs the binary but no themes leaves btop with a
+        #      two-entry menu (Default/TTY) and NO error at all.
+        #   2. `btop-theme-tour` derives that same prefix from its own argv[0].
+        #
+        # Both halves are proven from the installed tree with no PATH help: the
+        # tour (running from <dest>/local/bin) must enumerate the shipped set,
+        # and btop itself must open the bundled directory. A managed btop.conf
+        # naming a theme outside the shipped set is the other silent failure --
+        # btop falls back to Default_theme without a warning.
+        themes_dir = os.path.join(tmpdir, "local", "share", "btop", "themes")
+        shipped = sorted(glob.glob(os.path.join(themes_dir, "*.theme"))) if os.path.isdir(themes_dir) else []
+        if not require_path(
+            os.path.join(themes_dir, "default_black.theme"),
+            "btop themes",
+            failures,
+        ):
+            pass
+        else:
+            print(f"  OK   (themes):       btop runtime ({len(shipped)} themes)")
+            tour = os.path.join(bin_dir, "btop-theme-tour")
+            if os.path.isfile(tour):
+                try:
+                    proc = subprocess.run(
+                        [tour, "--list"],
+                        cwd=tmpdir,
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        timeout=30,
+                    )
+                except Exception as exc:
+                    print(f"  FAIL (tour):         btop runtime  {exc}")
+                    failures.append(("btop theme tour", str(exc)))
+                else:
+                    listed = [
+                        line.split(None, 1)[1].strip()
+                        for line in proc.stdout.decode("utf-8", "replace").splitlines()
+                        if re.match(r"\s*\d+\s+\S", line)
+                    ]
+                    # Compare as SETS: the tour lists in shell-glob order, which
+                    # follows the caller's locale collation (adwaita-dark sorts
+                    # before adwaita under en_US.UTF-8), so an ordering
+                    # assertion here would be a locale test, not a payload one.
+                    # Membership + count is the claim that matters.
+                    expected = sorted(os.path.basename(p)[: -len(".theme")] for p in shipped)
+                    if proc.returncode != 0:
+                        print(f"  FAIL (tour):         btop runtime  {output_excerpt(proc.stdout)}")
+                        failures.append(("btop theme tour", output_excerpt(proc.stdout)))
+                    elif sorted(listed) != expected:
+                        detail = (
+                            f"tour listed {len(listed)} themes, installed set has {len(expected)}"
+                            f" (missing={sorted(set(expected) - set(listed))[:3]}"
+                            f" extra={sorted(set(listed) - set(expected))[:3]})"
+                        )
+                        print(f"  FAIL (tour):         btop runtime  {detail}")
+                        failures.append(("btop theme tour", detail))
+                    else:
+                        print(f"  OK   (tour):         btop runtime ({len(listed)} themes listed)")
+            else:
+                print("  FAIL (tour):         btop runtime  btop-theme-tour missing from bin/")
+                failures.append(("btop theme tour", "btop-theme-tour missing"))
+
+            # The managed config must name a theme the shipped set provides:
+            # a mismatch renders Default_theme with zero diagnostics. The config
+            # is a separate package (env-btop), so this only fires when one is
+            # installed next to the binary. XDG_CONFIG_HOME is set to
+            # <tmpdir>/.config by test_env, so that is where it lands.
+            cfg = os.path.join(tmpdir, ".config", "btop", "btop.conf")
+            if os.path.isfile(cfg):
+                named = ""
+                with open(cfg) as fh:
+                    for line in fh:
+                        stripped = line.strip()
+                        if stripped.startswith("color_theme"):
+                            named = stripped.split("=", 1)[1].strip().strip('"')
+                            break
+                stems = [os.path.basename(p)[: -len(".theme")] for p in shipped]
+                if named in stems or named in ("Default", "TTY"):
+                    print(f"  OK   (config):       btop runtime (color_theme={named})")
+                else:
+                    detail = f"env-btop selects '{named}', which no shipped .theme provides"
+                    print(f"  FAIL (config):       btop runtime  {detail}")
+                    failures.append(("btop theme config", detail))
+
     if has_bin("klayout"):
         try:
             smoke_klayout_wrappers(tmpdir)
         except Exception as exc:
             print(f"  FAIL (wrapper):      klayout {exc}")
             failures.append(("klayout wrappers", str(exc)))
+
+    smoke_pythonpath_launcher_wrappers(tmpdir, failures)
 
     kl_real = os.path.join(tmpdir, "local", "lib", "klayout", "klayout")
     kl_host_sos = host_required_sos(ldd_check(kl_real)) if os.path.isfile(kl_real) else []
@@ -1961,6 +2132,45 @@ def smoke_runtime_layout(tmpdir, env):
                 detail = output_excerpt(proc.stdout)
                 print(f"  FAIL (fts5):         python sqlite fts5  rc={proc.returncode} {detail}")
                 failures.append(("python sqlite fts5", detail))
+
+        # libpython .dynsym integrity. The shipped archive once carried a
+        # libpython3.14.so.1.0 whose DATA-OBJECT .dynsym entries pointed at
+        # RELOCATION sections (a BOLT artifact), so any consumer that EMBEDS
+        # libpython and takes the address of PyExc_*/Py*_Type got a zero-filled
+        # .bss slot and segfaulted in Py_InitializeFromConfig -- `openroad
+        # -python`, i.e. every LibreLane flow above stage 15. The interpreter
+        # itself is unaffected, which is why a `python3.14 -c pass` smoke cannot
+        # catch it. build/repair-libpython-dynsym fixes it; this asserts the
+        # INSTALLED library is clean. Pure readelf-level check, no execution.
+        libpy = os.path.join(tmpdir, "local", "lib", "libpython3.14.so.1.0")
+        if os.path.exists(libpy):
+            repair = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "build",
+                "repair-libpython-dynsym",
+            )
+            if os.path.exists(repair):
+                try:
+                    proc = subprocess.run(
+                        [sys.executable, repair, "--check", libpy],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        timeout=60,
+                    )
+                except Exception as exc:
+                    print(f"  FAIL (dynsym):       libpython dynsym  {exc}")
+                    failures.append(("libpython dynsym", str(exc)))
+                else:
+                    if proc.returncode == 0:
+                        print("  OK   (dynsym):       libpython .dynsym indices")
+                    else:
+                        detail = output_excerpt(proc.stdout)
+                        print(f"  FAIL (dynsym):       libpython .dynsym indices  rc={proc.returncode} {detail}")
+                        print(
+                            "       Consumers embedding this libpython will segfault"
+                            " in Py_InitializeFromConfig (openroad -python)."
+                        )
+                        failures.append(("libpython dynsym", detail))
 
     parsers = os.path.join(tmpdir, "local", "share", "nvim", "tree-sitter-parsers")
     if os.path.isdir(parsers):

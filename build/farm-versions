@@ -397,6 +397,12 @@ TOOLS = [
         strategy_flag(["--version"], r"openvaf ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     (
+        "librelane",
+        "librelane",
+        "https://github.com/librelane/librelane",
+        strategy_flag(["--version"], r"LibreLane v([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "markdown-oxide",
         "markdown-oxide",
         "https://github.com/Feel-ix-343/markdown-oxide",
@@ -612,6 +618,12 @@ TOOLS = [
         "https://github.com/kfish/xsel",
         strategy_flag(["--version"], r"xsel version ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
+    (
+        "xclip",
+        "xclip",
+        "https://github.com/astrand/xclip",
+        strategy_flag(["-version"], r"xclip version ([0-9]+\.[0-9]+)"),
+    ),
     ("yank", "yank", "https://github.com/mptre/yank", strategy_flag(["-v"], r"yank ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("yq", "yq", "https://github.com/mikefarah/yq", strategy_flag(["--version"], r"version v([0-9]+\.[0-9]+\.[0-9]+)")),
     (
@@ -640,6 +652,14 @@ TOOLS = [
         strategy_flag(["--version"], r"tmux-path-store ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("ncdu", "ncdu", "https://dev.yorhel.nl/ncdu", strategy_flag(["--version"], r"ncdu ([0-9]+\.[0-9]+\.[0-9]+)")),
+    # nethogs -V prints just " version 0.9.0" -- no program name. Anchor on
+    # "version " rather than on the tool name.
+    (
+        "nethogs",
+        "nethogs",
+        "https://github.com/raboof/nethogs",
+        strategy_flag(["-V"], r"version ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     (
         "gtkwave",
         "gtkwave",

@@ -157,6 +157,11 @@ RUN dnf install -y -q epel-release \
         # klayout's ruby-plugin build needs ruby headers (probe with
         # --disable-gems; see AGENTS.md klayout entry):
         ruby-devel \
+        # nethogs (build-simple-c.sh): libpcap is its packet-capture backend.
+        # The -devel headers are BUILD-side only -- the runtime libpcap.so.1
+        # is bundled into payload/lib64 separately (it is present on EL8 base
+        # but NOT guaranteed on newer hosts, so it cannot be assumed).
+        libpcap-devel \
         # tcl (expect) and a python3 for host-driven build tooling:
         tcl-devel python3 \
     && dnf clean all

@@ -3974,11 +3974,13 @@ cookie-less connection is refused, and that the server and its state dir are
 gone afterwards. It **skips** when `$DISPLAY` is unset, so the container and any
 headless CI stay green.
 
-## htop / rsync / xsel / yank / yara -- small C tools (EL8 source builds)
+## htop / rsync / xsel / xclip / yank / yara -- small C tools (EL8 source builds)
 
 These five shipped for months with **no build script and no note here**, which
 this file's own mandate forbids. Each bump therefore meant re-deriving the
 procedure from scratch; the 2026-08-04 sweep did exactly that and wrote it down.
+`xclip` joined 2026-09-22 through the same script and is documented here with
+them.
 
 **Build:** `build/build-simple-c.sh --tool <name> --tag <version> --src <tarball>`
 
@@ -3998,6 +4000,7 @@ Per-tool notes, and why each flag is there:
 | `rsync` | `./configure --disable-md2man` | skips the man-page toolchain. Do **not** disable xxhash/lz4/zstd: `packages.json` ships `libxxhash.so.0` for rsync, and the rest are EL8 base. |
 | `htop` | `./autogen.sh && ./configure --disable-unicode --enable-static=no` | dynamic against the bundled ncurses. |
 | `xsel` | `./autogen.sh \|\| autoreconf -fi; ./configure` | upstream's `missing` script is older than the host automake, which prints a warning and is harmless. |
+| `xclip` | `./bootstrap; ./configure` | GitHub tags ship `configure.ac` + `bootstrap` only (no generated `configure`), so `bootstrap` -> `autoreconf -i` runs first. Needs `libX11-devel` + `libXmu-devel` at build time, both in the image. |
 | `yank` | plain `make` | no configure; pure C, `libc` only. |
 
 Verified NEEDED sets at the 2026-08-04 versions (yara 4.5.8, rsync 3.4.4,
@@ -4005,6 +4008,8 @@ htop 3.5.2, xsel 1.2.1, yank 1.4.0):
 
 - `yank` -- `libc` only (max symbol GLIBC_2.3)
 - `xsel` -- `libX11`, `libc` (GLIBC_2.14); libX11 comes from `gui_libs`
+- `xclip` -- `libXmu`, `libX11`, `libc` (GLIBC_2.14); both X libs come from
+  `gui_libs`, so the registry entry carries `depends: [gui_libs]`
 - `yara` -- `libm`, `libpthread`, `libc` (GLIBC_2.17)
 - `htop` -- `libcap`, `libncurses`, `libtinfo`, `libdl`, `libm`, `libc` (GLIBC_2.17)
 - `rsync` -- `libacl`, `libpopt`, `liblz4`, `libzstd`, `libxxhash`, `libcrypto`, `libc` (GLIBC_2.14)
@@ -4012,6 +4017,17 @@ htop 3.5.2, xsel 1.2.1, yank 1.4.0):
 `libpopt`, `liblz4`, `libzstd`, `libcrypto` and `libacl` are EL8 base and are
 deliberately not bundled; only `libxxhash.so.0` is, because EL8 has no system
 xxhash.
+
+xclip (0.13, 2026-09-22) ships one binary from `github.com/astrand/xclip` tag
+`0.13` (`https://github.com/astrand/xclip/archive/refs/tags/0.13.tar.gz`,
+sha256 `ca5b8804e3c910a66423a882d79bf3c9450b875ac8528791fb60ec9de667f758`).
+Note `--version`/`-V`/`--help` are read as input FILENAMEs by xclip and exit 1;
+`-version` is the real flag, so `tests/prebuilt-binaries` pins
+`PROBE_FLAGS["xclip"] = [["-version"]]`. The build stamps the registry version
+through the same `python3.14 -` block as the other five -- run it with
+`/repo/.loadout-bootstrap/bin` on PATH inside the container (the EL8 image has
+no system 3.14). Member of `@gui-suite` next to xsel, `farm-versions` entry uses
+`-version`.
 
 ## lua-language-server 3.19.0 -- LSP server for Lua (upstream linux-x64 prebuilt)
 
@@ -4285,6 +4301,58 @@ non-empty `cells` object back. The build script runs that smoke against a
 copy while the original still exists proves nothing, because a binary that
 silently fell back to the build prefix would pass. Note that this exact
 false-green is what bit the `iverilog` packaging (see its section).
+
+### `yosys` is a WRAPPER, and `-y` is why (added 2026-09-22)
+
+`bin/yosys` used to be the raw ELF and it needed no wrapper -- true for
+synthesis, false for LibreLane. Every shipped LibreLane flow runs its first two
+stages (`Yosys.JsonHeader`, `Yosys.Synthesis`) as `yosys -y <script.py>`, and
+`-y` is compile-time-gated in `kernel/driver.cc`: it is registered ONLY under
+`YOSYS_ENABLE_PYTHON`, i.e. `-DYOSYS_WITH_PYTHON=ON`, which additionally wants
+a Python 3.14 development prefix and a PyosysEnv with `pybind11>=3,<4` plus
+`cxxheaderparser` or `uv`. Our EL8 build container has none of those. Without
+the flag the option does not exist at all, so the flow dies at stage 5 with
+`Error parsing options: Option 'y' does not exist`.
+
+So the tree now ships a wrapper, the same arrangement as wezterm/expect/octave:
+
+| path | what it is |
+|---|---|
+| `bin/yosys` | the wrapper: `${0%/*}/yosys.bin` unless `-y` is used |
+| `bin/yosys.bin` | the real Yosys ELF (this build) |
+| `lib/yosys-pyosys/pyosys/{__init__.py,libyosys.so}` | upstream `pyosys` wheel's import surface |
+| `lib/yosys-pyosys/click/` | vendored click (the pyosys scripts are click CLIs) |
+
+On `-y SCRIPT` the wrapper execs `<prefix>/bin/python3.14 SCRIPT "$@"` with
+`PYTHONPATH=<prefix>/lib/yosys-pyosys` **prepended** -- prepended because
+LibreLane sets `PYTHONPATH` to its own `scripts/pyosys` dir and those sibling
+imports must keep resolving. `/proc/self/exe` then points at the prefix's
+`python3.14`, so `libyosys` finds the ALREADY-INSTALLED `share/yosys` and
+`yosys-abc` -- which is why the wheel's own ~32 MB duplicate data tree and
+second `yosys-abc` are dropped and only `__init__.py` + `libyosys.so`
+(~49 MB) ship.
+
+**The wheel is a build input, committed under `payload/<platform>/wheels/`**
+(`pyosys-<ver>-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl`,
+29 MB, sha256 `c357596079333319795925dcd76babd257f306b4a9cfbb598335c4cc7f680147`
+for 0.69) -- matching `build-cicwave.sh`/`build-sby.sh`, which also pull wheels
+from the payload wheelhouse. `build-yosys.sh` fetches it from PyPI if absent
+and verifies it against a per-version sha256 pin; a version with no pin warns
+rather than accepting silently. `libyosys.so`'s floor is max GLIBC_2.27 /
+GLIBCXX_3.4.22 -- inside EL8's 2.28/3.4.25.
+
+Both trees ride in the ONE runtime archive the registry declares
+(`archive` is a single field, so a second archive has nowhere to be listed):
+`tar cjf runtime/yosys.tar.bz2 -C "$INST" ./share ./lib`, with
+`remove_before_extract` carrying one entry per top-level tree
+(`share/yosys`, `lib/yosys-pyosys`).
+
+The relocation smoke gained a `-y` leg alongside the synthesise leg: a script
+using the exact API the LibreLane scripts use (`Design()`,
+`run_pass("read_verilog ...")`, `run_pass("synth")`, `run_pass("stat")`,
+reading `ys.Globals.yosys_version_str`), run from the relocated copy. This is
+the load-bearing smoke: the Tcl/synthesis path cannot catch a broken `-y`, and
+a broken `-y` is invisible until stage 5 of an 80-stage flow.
 
 
 ## sby (SymbiYosys, commit-pinned) + z3 5.1.0.0 -- formal verification
@@ -4996,6 +5064,51 @@ nets** through the Tcl API. The test also fails specifically on `init.tcl`
 appearing in the output, so a Tcl regression is named rather than showing up as
 a generic mismatch.
 
+### Bundled libs, and the ICU dependency that was undeclared
+
+`SOLVER_LIBS` in `build-openroad.sh` packages the OR-Tools solvers that stay
+shared even in a static build (`libCbcSolver`, `libOsiCbc`, `libCbc`, `libCgl`,
+`libClpSolver`, `libOsiClp`, `libClp`, `libOsi`, `libCoinUtils`, `libscip*`),
+each stripped and patched to RPATH `$ORIGIN`.
+
+`SHARED_WITH_PAYLOAD` is the separate list of sonames the binary NEEDs that this
+script must NOT package, because the payload already carries them from another
+package's files:
+
+| soname | why openroad needs it | existing owner |
+|---|---|---|
+| `libicudata.so.60` | SWIG `*_py` modules link the ICU-using python prefix | `gui_libs` |
+| `libicui18n.so.60` | same | `gui_libs` |
+| `libicuuc.so.60` | same | `gui_libs` |
+
+Two packages owning one payload path is an accepted pattern here (`libz.so.1`,
+`libffi.so.6`, `libpcre2-8.so.0`, ... all already do it). What is NOT optional is
+the registry DECLARATION: these three were shipping in the payload but openroad
+did not list them, so a minimal `openroad` + `portable-python` install put
+nothing named `libicu*` on the loader path and the binary died with
+`error while loading shared libraries: libicudata.so.60`. The build script now
+also asserts each `SHARED_WITH_PAYLOAD` `.bz2` exists, so declaring a lib whose
+payload file is absent fails the build instead of the install.
+
+### TRAP 4 -- the smoke was environment-masked by the container's /usr/lib64
+
+The functional smoke stages the packaged binary, its solver libs and
+portable-python into a tree shaped like a real install -- then ran it with the
+container's `/usr/lib64` implicitly on the search path. Every host-provided
+soname therefore resolved for free, and the smoke stayed GREEN while a deployed
+tree could not load at all. That is how the ICU gap above survived to a passing
+build.
+
+The smoke now walks each staged binary's DIRECT `DT_NEEDED` entries with
+`readelf` -- deliberately not `ldd`, which searches the container's paths and
+would re-introduce the masking -- and fails on any soname that is neither
+staged, nor in `$SOLVER_LIBS $SHARED_WITH_PAYLOAD`, nor on an explicit
+host-provided allowlist (glibc, the C++ runtime, and the EL8-BASEOS compression
+/ OpenMP libs `libbz2.so.1`, `liblzma.so.5`, `libzstd.so.1`, `libgomp.so.1`,
+each verified with `rpm -qf` inside the container). Negative control: dropping
+the ICU claim makes the check flag `libicudata.so.60`, so the declaration is
+load-bearing rather than decorative.
+
 ### Floors
 
 `-static-libstdc++ -static-libgcc` is mandatory: gcc-toolset-14 is required for
@@ -5092,6 +5205,219 @@ with the installed interpreter, not the separate `sqlite3` CLI:
 ```bash
 ~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
 ```
+
+## Portable Python 3.14.7 -- `libpython` data symbols broken for embedders (FIXED, 2026-09-22)
+
+**This is a payload DEFECT that breaks every program embedding this
+`libpython3.14.so.1.0`.** Found while fixing OpenROAD's `-python` mode (see the
+OpenROAD note); it is independent of OpenROAD and will hit anything that links
+libpython and takes the ADDRESS of a CPython data object.
+
+### Symptom
+
+A PIE/C program that references `PyExc_TypeError` (or any `Py*_Type`,
+`_Py_NoneStruct`, `PyObject_GenericGetAttr` ...) and links this libpython gets
+a pointer that is **NULL at runtime**, then SIGSEGVs on first dereference --
+e.g. inside `Py_InitializeFromConfig -> pycore_interp_init -> type_ready ->
+PyErr_Format`. Programs that never take such an address are unaffected, which
+is why the interpreter itself, every `python3.14` invocation, and all 4000+
+existing consumers still work: `bin/python3.14` takes zero of these addresses
+(0 `A`-class Py symbols) and embeds fine.
+
+### Minimal reproducer (4 lines, no OpenROAD)
+
+The reference must be in a SEPARATE non-static function that RETURNS the
+address, and it must not be optimised away -- a `(void)PyExc_TypeError;` inside
+a function body is dead-code-eliminated and the bug stays hidden.
+
+```c
+#include <Python.h>
+#include <stdio.h>
+PyObject *py_type_error_address(void) { return PyExc_TypeError; }
+int main(int argc, char **argv) {
+  PyConfig c; PyConfig_InitPythonConfig(&c);
+  PyConfig_SetBytesArgv(&c, argc, argv); c.inspect = 0;
+  if (PyStatus_Exception(Py_InitializeFromConfig(&c))) return 2;
+  PyConfig_Clear(&c);
+  printf("address = %p\n", (void *)py_type_error_address());
+  return 0;
+}
+```
+
+Compile with `-pie` and link it once against the payload libpython and once
+against the distro's:
+
+| link target | result |
+|---|---|
+| `~/.local/lib/libpython3.14.so.1.0` (payload) | **SIGSEGV** (prints nothing) |
+| `/usr/lib/libpython3.14.so.1.0` (system, 3.14.7) | `address = 0x7f017d3f7180` |
+
+Same source, same flags, only the library differs. Note the link emits
+`warning: creating DT_TEXTREL in a PIE` for BOTH -- that warning is not the
+discriminator.
+
+### Root cause
+
+`readelf --dyn-syms` on the payload library:
+
+```
+payload: PyExc_TypeError  value=0x67ebb8  OBJECT GLOBAL  shndx=38
+system : PyExc_TypeError  value=0x5f7678  OBJECT GLOBAL  shndx=24
+```
+
+Section `38` in the payload is **`.rela.data.rel.ro`** -- a RELOCATION
+section. Section `24` in the system library is **`.data`**, which is correct.
+
+`readelf --dyn-syms -W` on the FUNC side, same shape:
+
+```
+1252: 00000000002227a0  8617 FUNC  GLOBAL DEFAULT  34 PyObject_GenericGetAttr
+```
+
+Section `34` is **`.rela.rodata`**. 1822 entries in total: 205 OBJECT and 1617
+FUNC.
+
+That invalid `st_shndx` changes the relocation the LINKER emits in the consumer,
+and that is the whole bug:
+
+| consumer | relocation emitted | runtime |
+|---|---|---|
+| linked vs payload | `R_X86_64_PC32` at the exe's own `.bss` slot | slot holds **0** -> NULL deref |
+| linked vs system | `R_X86_64_COPY` from libpython | slot holds the real pointer |
+
+A COPY relocation requires the defining library's `.dynsym` entry to name a
+**real section**; because the payload's entry points at a relocation section the
+linker cannot emit one, falls back to a PC-relative reference to a local
+zero-filled `.bss` slot, and nothing ever fills it. Confirmed under gdb: the
+payload consumer's slot reads `0x0000000000000000`, the system consumer's holds
+the live object.
+
+Scale of the damage: **1822 symbols** in the payload library have `st_shndx`
+pointing at `.rela.*` sections -- 205 OBJECT (170 at `.rela.data.rel.ro`, 27 at
+`.rela.init_array`, 7 at `.rela.eh_frame`, 1 at `.rela.fini_array`) and 1617
+FUNC (all at `.rela.rodata`). The system library has **0**.
+
+The `.symtab` in the payload is FINE (`D PyExc_TypeError`) -- only `.dynsym`,
+the table the dynamic linker and every consumer actually use, is wrong. This is
+why the bug is invisible to `nm` without `-D`, to `readelf -s` (which merges
+both tables), and to anything that never links against the library.
+
+### Almost certainly `--enable-bolt`
+
+The suspect is the BOLT pass in the upstream portable-python recipe
+(`--enable-bolt` with `llvm-bolt` + `merge-fdata`, BUILD.md "LLVM and BOLT
+requirements"). BOLT's rewrite of `libpython3.14.so.1.0` is what rewrote the
+section indices; the EL8 system python (3.6, no BOLT) and the Arch system
+python (3.14, no BOLT) both have correct `.dynsym` section indices. BOLT is also
+why this archive is in `NOSTRIP_ARCHIVE_PREFIXES`.
+
+**Not yet confirmed** which BOLT invocation causes it. The repair chosen here
+sidesteps the question entirely -- see the next section. Two candidate
+directions if the archive is ever REBUILT from source, in preference order:
+
+1. Rebuild portable-python WITHOUT `--enable-bolt` (keeps PGO+LTO, loses the
+   BOLT layout wins) and confirm the `.dynsym` indices come out correct. This is
+   the safe fix and costs only BOLT's few-percent layout improvement.
+2. Keep BOLT but post-process `.dynsym` -- or find the BOLT version/flag
+   combination that preserves section indices. BOLT is upstream-CPython
+   machinery, so this may simply be a bug in the pinned LLVM 23 build.
+
+### The fix, as implemented (2026-09-22)
+
+`./build/repair-libpython-dynsym [--check] FILE` rewrites each bad
+`.dynsym st_shndx` from the intact `.symtab` entry of the same name. It refuses
+to write unless every bad symbol is present in `.symtab`, the two tables agree
+on `st_value` AND on the symbol type, the target section is of the right kind
+(executable for a FUNC, an allocated data section with a known object-bearing
+name for an OBJECT), and the value lies inside that section; it also refuses a
+partial fix and re-checks the file after writing. `--check` is the gate form
+(rc=1 when defective).
+
+Measured on the shipped archive: **1822 repairs** -- 205 OBJECT (`.data` 170,
+`.bss` 27, `.rodata` 7, `.PyRuntime` 1) and **1617 FUNC** (`.text` 1617).
+
+**Do not repair only the OBJECT symbols.** Functions look harmless because they
+normally resolve by name through the PLT/GOT, but a consumer that takes a
+function's ADDRESS gets the same `A` shadowing, and CPython's type machinery
+does exactly that (`tp_getattro = PyObject_GenericGetAttr`, `tp_new =
+PyType_GenericNew`, ...). An OBJECT-only pass left the openroad 26Q3 build with
+one surviving `A` symbol -- `PyObject_GenericGetAttr` -- and it still crashed.
+A `PyTypeObject` with six function pointers distinguishes the two cases:
+OBJECT-only repair -> 6 `A` symbols, core dump; full repair -> 0 `A`, runs.
+
+`./build/repack-portable-python-dynsym.sh` runs the repair **inside the EL8
+container** (payload bytes must come from the EL8 userland -- the CachyOS host
+bzip2 1.0.8 does not round-trip EL8's 1.0.6, see the Build Machine Mandate) and
+repacks the archive. Verified result: **byte-identical member list (4076
+entries), exactly one file changed** (`local/lib/libpython3.14.so.1.0`).
+
+### End-state proof on the SHIPPED bytes (2026-09-22)
+
+Run against the archive as committed, not a working copy:
+
+```text
+sha256 08cc56011a751b37dd68f0cac10ac80862d911434e9fa0ad9ab1cd3256ff00e4
+  (portable-python-3.14.7-el8-clang23.tar.bz2; matches .content-manifest)
+repair-libpython-dynsym --check  ->  .dynsym OK   (rc=0)
+
+data-object consumer (PyExc_TypeError):
+  R_X86_64_COPY   0000000000404018  PyExc_TypeError + 0
+  runs -> 0x404018                      (was: R_X86_64_PC32 -> own .bss -> 0x0 -> SIGSEGV)
+
+function-address consumer (PyObject_GenericGetAttr, the FUNC class):
+  absolute (A) symbols in the consumer: NONE   (was: 6 with the OBJECT-only repair)
+  runs -> a real .text address
+```
+
+The FUNC line is the one that matters for regressions: an OBJECT-only repair
+leaves `A` symbols visible in the CONSUMER's symbol table, so that is the cheap
+assertion to check if this class of defect ever returns.
+
+Two traps that script records, both of which would corrupt the archive silently:
+
+- **`__pycache__` contamination.** Merely RUNNING the tree's interpreter writes
+  `__pycache__/*.pyc` into it, and a repack then ships them. The shipped archive
+  has zero such entries. The smoke test runs against a COPY (`-B`,
+  `PYTHONDONTWRITEBYTECODE=1`) and the script hard-fails if any appear.
+- **`--strip-components=1` on this archive drops the `local/` prefix**, which
+  makes `install.sh` nest the tree one level deeper. Extract whole.
+
+`./build/import-portable-python` now calls the repair as a gate before
+packaging, so a defective interpreter cannot reach the payload again.
+
+### Verification for any future archive
+
+A rebuild is only correct if a program that takes `&PyExc_TypeError` still works.
+Add this to the portable-python import/verify path -- a plain `python3.14 -c
+'print(1)'` CANNOT catch it:
+
+```bash
+./build/repair-libpython-dynsym --check <prefix>/lib/libpython3.14.so.1.0   # rc must be 0
+```
+
+And for the CONSUMER side, the discriminator is NOT the symbol class -- it is
+whether a COPY relocation exists to fill the symbol:
+
+```bash
+# correct consumer: B/D/R/W Py data symbols ALL have a matching COPY relocation
+nm -D --defined-only <bin> | grep -E ' [ABDRW] Py'      # any ' A ' here is fatal
+objdump -R <bin> | grep COPY                            # must cover the above
+```
+
+A broken link shows the same `B PyExc_TypeError` symbol with NO COPY relocation
+for it. `build/build-openroad.sh` implements exactly this check.
+
+### Impact on this repo
+
+- `openroad -python` (Blocker 3 of the librelane audit) was blocked on this, not
+  on the PIE link: the PIE change is necessary (it removes a separate failure
+  mode) but not sufficient. Fixed 2026-09-22 by the repair above; see
+  docs/HANDOFF.md for the verified before/after.
+- Every shipped consumer that only embeds Python for `Py_Initialize` and never
+  takes a data-object address is fine, which is the majority.
+- No other loadout package embeds libpython today. Anything that does -- a
+  `gdb` with python support, a Python-embedding editor plugin, `libpython`-based
+  tools -- would hit this.
 
 ## sqlite 3.53.4 -- SQLite CLI + libsqlite3 (EL8 SOURCE build, C)
 
@@ -5778,3 +6104,410 @@ exec "$PREFIX/bin/node" "$PREFIX/lib/node_modules/netlistsvg/bin/netlistsvg.js" 
 
 Install: `./loadout install netlistsvg` (pulls `nodejs`; also in `@eda` and
 the full `@engineering-loadout` bundle).
+
+## librelane 3.0.6 -- LibreLane ASIC flow infrastructure (python-tool, added 2026-09-20)
+
+librelane (librelane.org, github.com/librelane/librelane) is the Python-layer
+successor to OpenLane 2: Classic/Chip reference flows, configuration DSL, and
+step/state/CLI machinery. 3.0.6 ships a pure `py3-none-any` wheel
+(`Requires-Python: >=3.10`; ours is 3.14).
+
+Python layer ONLY. Upstream's own Python-only install is documented as
+"advanced, not recommended" because flows shell out to compiled EDA tools and
+PDKs -- this bundle ships the Python layer with its FULL wheel closure and
+none of the tools/PDK. Bring your own OpenROAD/Yosys/KLayout binaries and PDK
+(the Nix and Docker installs remain the supported full environments).
+Tools/PDK are explicitly out of scope for this package.
+
+### Console scripts (uv launchers come from these)
+
+`librelane-3.0.6.dist-info/entry_points.txt` declares six console scripts, and
+`bins` mirrors them 1:1 (the documented `python -m librelane` CLI is the same
+`librelane.__main__:cli` object as the `librelane` launcher):
+
+```text
+librelane=librelane.__main__:cli
+librelane.config=librelane.config.__main__:cli
+librelane.env_info=librelane:env_info_cli
+librelane.help=librelane.help.__main__:cli
+librelane.state=librelane.state.__main__:cli
+librelane.steps=librelane.steps.__main__:cli
+```
+
+### Wheel closure (29 distributions, machine-verified)
+
+Resolved for cp314/Linux with the `packaging` marker evaluator over the
+wheelhouse: 29 visited, zero missing, zero spec conflicts. Bundled versions
+(`payload/el8.x86_64.glibc2p28/wheels/`):
+
+```text
+librelane 3.0.6, ciel 2.6.1 (<3 bound honored -- pip's unconstrained
+resolve picks 3.0.0, which violates librelane's ciel>=2.3.1,<3), click 8.2.1
+(<8.3 bound -- the house 8.4.x wheels do NOT satisfy it; both coexist, uv
+picks per-env), cloup 3.1.0, deprecated 1.3.1, httpx 0.28.1, klayout 0.30.12,
+lln-libparse 0.56.0 (source-built, see below), lxml 6.1.3, psutil 7.2.2,
+pyyaml 6.0.3, rapidfuzz 3.14.6, rich 15.0.0, semver 3.1.0, yamlcore 0.0.4,
+anyio 4.15.1, certifi 2026.7.22, h11 0.16.0, httpcore 1.0.9, idna 3.20,
+typing-extensions 4.16.0, markdown-it-py 4.2.0, mdurl 0.1.2, pcpp 1.30,
+pygments 2.21.0, wrapt 2.4.1, zstandard 0.25.0, wheel 0.48.0, packaging 26.3
+```
+
+`wheel` + `packaging` are load-bearing, not incidental: lln-libparse's
+METADATA has `Requires-Dist: wheel`, and wheel 0.48 requires
+`packaging>=24` -- without both, `uv tool install --no-index` fails
+resolution. (Two false-positive gaps in a naive METADATA scan:
+`exceptiongroup` is `python_version < "3.11"`-gated and `inspect2` is
+`python_version < "3"`-gated; neither applies to 3.14.)
+
+Download pattern (all acceptable platform tags, per the wheel-download rule):
+
+```bash
+PIP_REQUIRE_VIRTUALENV=0 python3.14 -m pip download "librelane==3.0.6" \
+  --platform manylinux_2_28_x86_64 --platform manylinux2010_x86_64 \
+  --platform manylinux2014_x86_64 --platform manylinux1_x86_64 \
+  --platform any --python-version 3.14 --only-binary :all: \
+  -d payload/el8.x86_64.glibc2p28/wheels/ --no-deps
+# then each direct dep WITH deps (librelane itself must stay --no-deps:
+# lln-libparse is sdist-only and breaks --only-binary resolution)
+```
+
+### klayout wheel decision: bundle the upstream wheel, do NOT shim pymod
+
+`klayout==0.30.12` is pinned to match the source-built KLayout 0.30.12 in
+this repo. Upstream's
+`klayout-0.30.12-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl`
+is bundled as-is (byte-identical to the previously verified trial download).
+Floor evidence: the `manylinux_2_27` tag implies glibc <= 2.27 < 2.28 floor,
+and the extension `.so` files are self-contained (RPATH-resolved, no host
+beyond glibc/libstdc++). Live proof under our python3.14: `import klayout`
+plus `from klayout.rdb import ReportDatabase; ReportDatabase(...)`
+constructs. The source-built tree's `lib/klayout/pymod` serves the bundled
+runtime's embedded interpreter and is NOT wired into the uv venv.
+
+### lln-libparse 0.56.0: EL8 source build (the one sdist-only dep)
+
+PyPI carries lln-libparse wheels for cp38-cp313 only (manylinux_2_27/2_28,
+i.e. upstream itself targets our floor) -- no cp314 wheel exists, so the
+cp314 wheel is built from the sdist in the `loadout-build` container:
+
+```bash
+sdist: https://files.pythonhosted.org/packages/17/28/70011f1ad509af0d481c581c07243e20ee47e808873709405f28a589d42d/lln_libparse-0.56.0.tar.gz
+```
+
+Recipe (base gcc 8.5.0 is sufficient; do NOT enable gcc-toolset-14):
+venv from the bootstrap python3.14, `pip install "pybind11==2.13.6"
+setuptools wheel` (pybind11 3.x needs CMake; 2.13.6 is setuptools-only),
+then `setup.py bdist_wheel` with `CC=gcc CXX=g++`. Two container traps,
+both from the bootstrap python baking the portable-python build flags into
+sysconfig: (1) the baked `CC` points at the host LLVM/clang path, which does
+not exist in the container -- hence the gcc override (without it pybind11's
+`auto_cpp_level` dies "Unsupported compiler"); (2) the baked CFLAGS carry
+`-fuse-ld=lld`, which setuptools appends to (env `CFLAGS`/`LDFLAGS` do NOT
+replace baked flags), and lld is not installed -- hence a `fakebin/ld.lld ->
+/usr/bin/ld` symlink on PATH so GNU ld does the final link. Then `strip`
+the `_libparse` `.so` and retag `linux_x86_64` ->
+`manylinux_2_28_x86_64` (edited `dist-info/WHEEL` Tag + regenerated zip and
+RECORD). The retag is honest: audit shows NEEDED = libstdc++/libm/libgcc_s/
+libpthread/libc only, no RPATH, max symbol versions GLIBC_2.14,
+GLIBCXX_3.4.21, CXXABI_1.3.11 -- same system-only closure class as z3/yosys.
+
+Result: `lln_libparse-0.56.0-cp314-cp314-manylinux_2_28_x86_64.whl`.
+
+### Registry, groups, farm-versions
+
+- packages.json `kind: python-tool`, `uv_tool: librelane`, `bins` = the six
+  console scripts, `wheels` = the 29-distribution closure above,
+  `version: 3.0.6`, `tags: [eda, flow, asic]`, hard
+  `depends: [portable-python, uv]` (satisfies the registry-integrity
+  python-tool convention check). Member of `@eda` next to
+  yosys/sby/z3/bitwuzla (`./loadout resolve @eda` = 19 packages incl.
+  librelane); non-optional, so synthetic `@shared` reaches it.
+- farm-versions entry (the CLI exposes a clean parseable version, so no
+  gocheat-style skip): `strategy_flag(["--version"],
+  r"LibreLane v([0-9]+\.[0-9]+\.[0-9]+)")` against
+  https://github.com/librelane/librelane.
+
+### Smoke (level-1, dest-dir install, restricted PATH)
+
+`TMPDIR=/var/tmp ./loadout install librelane --dest-dir
+/var/tmp/loadout-librelane-test -y` rc=0 (`installed: librelane`). Through
+the installed absolute paths with `env -i PATH=/usr/bin:/bin`: all six
+launchers `--help` exit 0, `python -m librelane --help` exit 0,
+`python -m librelane --version` prints `LibreLane v3.0.6`,
+`Flow.factory.get('Classic')` imports, and
+`from klayout.rdb import ReportDatabase` constructs, all exit 0.
+
+### Updating
+
+Re-run the download pattern above (mind the ciel/click upper bounds), check
+PyPI for a cp314 lln-libparse wheel first and only rebuild from source if
+still absent, then the standard post-payload chain (sizes, manifest,
+completion, readme-table --check).
+
+### Re-pinned to 3.0.14, and the end-to-end blockers found behind it (2026-09-22)
+
+Re-pinned from 3.0.6 to **3.0.14** (`librelane-3.0.14-py3-none-any.whl`, same
+`py3-none-any` shape, same wheel-closure method; offline install verified).
+
+Running the flow for real then exposed four defects that a version bump and a
+`--help` smoke cannot see. All four are fixed; the details are worth keeping
+because each is a CLASS of bug, not a one-off.
+
+**1. yosys `-y` argv contract.** LibreLane's `Yosys.JsonHeader` /
+`Yosys.Synthesis` steps run `yosys -y <script>`, and `kernel/driver.cc:530-553`
+is authoritative: `sys.argv = [scriptfile] + special_args`, where `special_args`
+is everything after a literal `--`. The wrapper was passing the whole original
+argv, so the script saw the wrong `sys.argv` and dropped into interactive mode.
+Fixed in `build/yosys/yosys-wrapper`; the build smoke now runs a script shaped
+like the real `scripts/pyosys/json_header.py` and asserts
+`sys.argv == [script, --config-in, cfg]`.
+
+**2. The `libpython3.14.so.1.0` `.dynsym` defect.** See the portable-python
+section elsewhere in this file -- invalid `st_shndx` on 1822 entries (205 OBJECT
+and 1617 FUNC) made `openroad -python` SIGSEGV at stage 16.
+
+**3. `openroad`'s ICU dependency was undeclared.** The binary NEEDs
+`libicudata/libicui18n/libicuuc.so.60`. The payload already carried all three
+(as `gui_libs`' files) but the openroad registry entry did not list them, so a
+minimal install had no ICU on the loader path. Now declared; see the OpenROAD
+section elsewhere in this file for why the build script must NOT re-package
+them.
+
+**4. `openroad -python` helper scripts could not import their dependencies.**
+With 1-3 cleared the flow ran 17 stages and then died at
+`Odb.SetPowerConnections`: `librelane/steps/odb.py` runs ODB steps as
+`openroad -python <script>`, and openroad executes that script with its EMBEDDED
+interpreter -- in this bundle, portable-python, which ships no click/rich/yaml.
+The odbpy scripts import all three (`power_utils.py` -> `reader.py`). LibreLane's
+own venv has them, but a venv's site-packages is NOT on a subprocess's sys.path:
+only PYTHONPATH crosses that boundary, and LibreLane only appends its scripts
+dir to it.
+
+Fix lives in the installer, not in more bundling:
+`_UV_TOOL_LAUNCHER_PYTHONPATH` + `_wrap_uv_tool_launchers()` in
+`loadout_main.py`. After `uv tool install`, uv's `<bin>/librelane` symlink is
+replaced by a small sh wrapper that PREPENDS the tool venv's site-packages to
+PYTHONPATH and execs the real console script. Prepending (never replacing) is
+load-bearing: LibreLane appends its scripts dir to whatever PYTHONPATH it
+inherits and must keep resolving. The wrapper is idempotent -- it refuses to
+wrap an already-wrapped launcher, so reinstalls are safe -- and adding the same
+treatment for another uv_tool package is one table entry.
+
+Result: the smoke advanced from stage 17 to **stage 32**
+(`OpenROAD.RepairDesignPostGPL`), i.e. through every Odb.* step.
+
+### Remaining smoke failure is NOT a packaging defect
+
+After all four fixes, `librelane --smoke-test` fails at
+`OpenROAD.RepairDesignPostGPL` with `[DPL-0038] Utilization greater than 100%,
+impossible to legalize`. Measured against the reference image
+(`ghcr.io/librelane/librelane:3.0.14`, which completes the smoke in 73 distinct
+stages), the inputs to that stage are identical -- same floorplan utilization
+(0.457), same global-placement result (52.040%, Movable area 3294.410 um^2),
+same `repair_design -verbose -max_wire_length 0.0 -slew_margin 20.0 -cap_margin
+20.0` flags, and the first 32 stages match the reference's first 32 exactly. The
+repair then diverges: ours finds 37 slew + 35 cap violations and inserts 4353
+buffers; the reference finds 2 slew violations and inserts 25.
+
+So this is a TOOL-VERSION behavior difference, not a broken bundle (packaging is
+proven clean by the 32 identical stages):
+
+| tool | this bundle | librelane 3.0.14 image |
+|---|---|---|
+| Verilator | 5.052 | 5.044 |
+| Yosys | 0.69 | 0.62 |
+| OpenROAD | 26Q3 (tag) | git `dcf36133` (2026-02-17 snapshot) |
+
+Do not chase the toolchain blindly over this stage; isolate which tool produces
+the extra violations first (see HANDOFF for the three options).
+
+## btop 1.4.7 -- theme set + btop-theme-tour (added 2026-09-21)
+
+btop's binary was already a payload member (build/update-prebuilt, EL8 source
+build, dynamic GNU). What this section documents is everything **around** the
+binary: the bundled theme directory, `btop-theme-tour`, and the two silent
+failure modes that made them necessary.
+
+### The two silent failures
+
+1. **Empty theme directory.** btop resolves its theme directory from the REAL
+   binary's path -- `/proc/self/exe` -> `<dir>/../share/btop/themes`, then
+   `/usr/local/share/btop/themes`, then `/usr/share/btop/themes`
+   (`src/btop.cpp`, v1.4.7). The payload installs the binary at
+   `<root>/local/bin/btop`, so the first candidate is
+   `<root>/local/share/btop/themes` -- which the payload never populated. On a
+   farm node with no `/usr/share/btop`, btop's Options menu shows a two-entry
+   list ("Default"/"TTY") and prints nothing: no error, no warning, no log
+   line. `btop --version` stays green throughout.
+2. **A config naming a missing theme.** `color_theme` that matches no `.theme`
+   stem renders `Default_theme` silently. Only a check that cross-references
+   the config against the shipped set catches that pair drifting.
+
+### Layout
+
+| Path | Owner | Notes |
+|---|---|---|
+| `<root>/local/bin/btop` | package | real ELF, no wrapper |
+| `<root>/local/bin/btop-theme-tour` | package | script, `bin/*.bz2` |
+| `<root>/local/share/btop/themes/*.theme` | package | 84 themes, from `runtime/btop-themes.tar.bz2` |
+| `~/.config/btop/btop.conf` | env-btop | managed config |
+| `~/.config/btop/themes/` | user | never touched -- hand-downloaded themes live here |
+
+### Why there is no btop wrapper
+
+Passing `--themes-dir` would have made the bundled directory explicit, but
+`Theme::updateThemes()` searches `custom_theme_dir` -> `user_theme_dir` ->
+`theme_dir` (`src/btop_theme.cpp`), so the flag OUTRANKS `~/.config/btop/themes`
+and would hide the user's own themes -- including the directory btop itself
+writes to when a theme is picked from its Options menu. And because
+`<real binary>/../share/btop/themes` is already a default, the explicit flag
+buys nothing on any host where `/proc/self/exe` resolves. So `bin/btop` stays
+the real ELF. Verified with strace under a sized pty: with an empty
+`~/.config/btop/themes`, btop opens
+`<root>/local/share/btop/themes/default_black.theme` -- resolved by itself,
+no flags.
+
+### Build / repack
+
+`build/build-btop.sh --tag 1.4.7` builds both artifacts:
+
+- `payload/<platform>/runtime/btop-themes.tar.bz2` -- the theme tree staged as
+  `share/btop/themes/*`, deterministic bytes (sorted entries, zeroed mtime,
+  uid/gid 0, `GNU_FORMAT`, pinned bzip2 block size), so repacking unchanged
+  themes does not churn `.content-manifest`. No ELF inside, so
+  `strip-all-elf-binaries` records it as a tar-meta entry and leaves it alone.
+- `payload/<platform>/bin/btop-theme-tour.bz2` -- `build/btop/btop-theme-tour`
+  verbatim (plain script: no strip, no patchelf).
+
+`build/build-btop.sh --tag 1.4.7 --check` verifies: the archive exists and
+holds exactly the shipped themes, every theme byte-matches
+`envs/btop/themes/`, the tour bz2 matches its source, `env-btop`'s
+`color_theme` exists in the shipped set, and the registry points at the
+archive/sentinel/bins this script writes.
+
+Themes are added by dropping a `.theme` file into `envs/btop/themes/` and
+re-running the chain (repack -> strip-all -> sizes -> manifest ->
+`build-btop.sh --check`). Provenance of the 84 files (41 upstream + the
+btop/bpytop collections + third-party sets with attribution) is recorded in
+`envs/btop/README.md`.
+
+### Smoke
+
+`tests/prebuilt-binaries` carries the permanent regression:
+
+- `btop-theme-tour` gets an explicit `PROBE_FLAGS` entry (`--version` is an
+  unknown option, exit 2; `--help` is the real probe).
+- `smoke_runtime_layout` proves, from the installed tree with no PATH help,
+  that the themes directory holds the shipped set, that `btop-theme-tour
+  --list` enumerates exactly those themes (its prefix resolution from argv[0]),
+  and -- when `env-btop`'s config is installed alongside -- that the
+  configured `color_theme` is one of them.
+
+### Updating
+
+Binary bumps go through `build/update-prebuilt` as before. A theme-set change
+only needs `build/build-btop.sh --tag <ver>` plus the standard post-payload
+chain. The tour script is hand-owned (`build/btop/btop-theme-tour`); keep it
+tab-free and shellcheck-clean.
+
+## nethogs 0.9.0 -- per-process network bandwidth monitor (EL8 SOURCE build, C++14, added 2026-09-22)
+
+A `top` for network traffic: per-process TX/RX rates, resolved from
+`/proc/net/tcp*` inodes against `proc`'s fd table. Small, two upstream
+dependencies (`libpcap` + `ncurses`), and both are handled below in different
+ways -- this is the first member of `build-simple-c.sh` that also ships a
+runtime LIBRARY, so its libpcap handling is the part worth reading.
+
+Build: `build/build-simple-c.sh --tool nethogs --tag 0.9.0 --src <tarball>`
+(run inside `build/build-shell`; `--src` wants the extracted-ready tarball from
+`https://github.com/raboof/nethogs/archive/refs/tags/v0.9.0.tar.gz`, sha256
+`5961bef2155c05695d2fe7e79aa11194981b5afd1cad9bf1f259c7f30d5487c3`).
+
+### Why the build is trivial and the library is not
+
+`make -C src -f MakeApp.mk nethogs VERSION=0.9.0` -- that is the whole build.
+No configure, no autotools; the Makefile is hand-written. Two details:
+
+- **Base gcc, not gcc-toolset-14.** nethogs is C++14 and needs nothing newer,
+  so enabling the EL8 gcc 14 toolset would raise its `GLIBCXX` floor for no
+  benefit. The script deliberately does NOT call `loadout_enable_gcc_toolset`.
+  Result: max glibc symbol `GLIBC_2.17`.
+- **`VERSION=` is passed explicitly.** The Makefile otherwise runs
+  `./determineVersion.sh`, which does `git describe --tags` in a git checkout
+  and falls back to parsing the DIRECTORY NAME (`nethogs-0.9.0` -> `0.9.0`).
+  GitHub's tag tarball is not a git repo, so the fallback happens to work --
+  but passing the version makes `-V` independent of how the tarball was
+  unpacked.
+
+`NEEDED` after the build: `libpcap.so.1 libncurses.so.6 libtinfo.so.6
+libstdc++.so.6 libm.so.6 libgcc_s.so.1 libc.so.6`. `libncurses.so.6` and
+`libtinfo.so.6` already ship as UNCLAIMED payload lib64 stems (the sqlite
+readline arrangement), so the `$ORIGIN/../lib64` RPATH resolves them with
+nothing new to bundle.
+
+### The libpcap trap (this is the load-bearing part)
+
+`libpcap.so.1` is NOT on every host: EL8 base ships it, but a newer distro may
+not, and a farm node without it cannot capture a single packet. So it ships.
+
+**Do not bundle the EL8 RPM.** It looks perfect -- soname `libpcap.so.1`, glibc
+floor 2.28 -- but it carries `NEEDED libibverbs.so.1`, because the EL8 spec
+calls `%configure --enable-rdma` (`libpcap.spec:61`). `libibverbs` is not
+installed on EL8 base, is ABSENT from the CachyOS dev host, and drags in a
+closure of its own. That library loads on neither a stock farm node nor the
+ceiling-gate host, and `tests/prebuilt-binaries` would flag it as a loader
+failure only at the point someone tried to run nethogs.
+
+**Build the same upstream version with three flags off.** `libpcap 1.9.1` --
+byte-identical to the tarball inside EL8's own `libpcap-1.9.1-5.el8.src.rpm`
+(sha256 `635237637c5b619bcceba91900666b64d56ecb7be63f298f601ec786ce087094`;
+upstream publishes `libpcap-1.9.1.tar.gz.sig`, RSA key
+`1F166A5742ABB9E0249A8D30E089DEF1D9C15D0D`) -- configured with:
+
+| flag | removes | why it is needed |
+|---|---|---|
+| `--disable-rdma` | `libibverbs.so.1` | configure only probes ibverbs when rdma != "no" (`configure:10920-10934`) |
+| `--disable-bluetooth` | bluez sniffers | needs `bluetooth/bluetooth.h`, absent on EL8 base |
+| `--disable-dbus` | `libdbus-1.so.3` | the BT-monitor probe links D-Bus (`configure:10846-10874`); that soname belongs to `gui_libs` and nethogs is not a GUI tool |
+
+Result: `NEEDED` = `libc.so.6` alone, glibc floor `GLIBC_2.14`, soname
+`libpcap.so.1`, 89 `pcap_*` symbols exported.
+
+The script ASSERTS that outcome -- it fails the build if any NEEDED soname
+other than `libc.so.6` appears. That guard is the point: a configure probe
+finding a build-box library is invisible in the build log and shows up only as
+a dead binary on someone else's machine.
+
+Packaged as `payload/<platform>/lib64/libpcap.so.1.bz2`, stripped and with
+RPATH `$ORIGIN` (it is a library in `lib64/`, so `$ORIGIN` is the correct rpath
+-- the `$ORIGIN/../lib64` form belongs to the binaries). Installed as an
+**unclaimed stem**: `_lib_selected` installs any stem no package claims, so it
+needs no registry `libs` entry and is present on every install.
+
+### The one thing a smoke test must not do
+
+`nethogs -V` prints only ` version 0.9.0` -- no program name, leading space --
+and `--version`/`--help` are NOT accepted (getopt, single dash only; both exit
+1 with a usage dump to stdout). `farm-versions` therefore anchors on
+`version ([0-9]+\.[0-9]+\.[0-9]+)`, and `tests/prebuilt-binaries` carries a
+`PROBE_FLAGS` entry pinning `-V`.
+
+A version probe proves nothing about this tool, though: it exercises no
+capture, no inode resolution and no ncurses. The functional check run at
+onboarding was
+
+```
+sudo ./payload-install/bin/nethogs -t -d 1 -c 2 <real-interface>
+```
+
+which must resolve at least one real PID (`unknown TCP/0/0` rows are the
+kernel's, not a failure -- but a run that prints ONLY those has resolved
+nothing). On the dev host it named a live Chrome NetworkService process, which
+is the proof that `/proc` inode resolution works.
+
+### Permissions
+
+Capturing needs root, or `cap_net_admin`, `cap_net_raw`, `cap_dac_read_search`
+and `cap_sys_ptrace`. The README and registry description say so; the loader
+does not set capabilities (that is a site-policy decision, and file caps do not
+survive the bz2/atomic-rename install path anyway).

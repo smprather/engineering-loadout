@@ -20,6 +20,14 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="loadout-build"
 
+# Persistent build cache, bind-mounted at /cache. The container is --rm, so
+# anything a build writes to its own /tmp dies with it -- fine for a 2-minute
+# binary, ruinous for openroad (60-90 min, most of it OR-Tools). Long builds
+# point their prefixes here (see LOADOUT_BUILD_CACHE in build-openroad.sh), so a
+# failed run resumes instead of starting from zero.
+CACHE_DIR="${LOADOUT_BUILD_CACHE:-$HOME/.cache/loadout-build}"
+mkdir -p "$CACHE_DIR"
+
 docker build -q -t "$IMAGE" -f "$REPO/build/Dockerfile" "$REPO/build" >/dev/null
 
 if [ "$#" -eq 0 ]; then
@@ -38,6 +46,8 @@ exec docker run --rm $tty_flags \
     -u "$(id -u):$(id -g)" \
     -v /etc/passwd:/etc/passwd:ro \
     -v /etc/group:/etc/group:ro \
+    -v "$CACHE_DIR:/cache" \
     -e HOME=/tmp \
+    -e LOADOUT_BUILD_CACHE=/cache \
     -e LOADOUT_PATCHELF=/usr/bin/patchelf \
     "$IMAGE" "$@"

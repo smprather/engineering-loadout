@@ -1,0 +1,81 @@
+# Carbonfox theme for btop
+# https://github.com/EdenEast/nightfox.nvim
+
+# Main background, empty for terminal default
+theme[main_bg]="#161616"
+
+# Main text color
+theme[main_fg]="#f2f4f8"
+
+# Title color for boxes
+theme[title]="#78a9ff"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#25be6a"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#2a2a2a"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#f2f4f8"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#535353"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#33b1ff"
+
+# Cpu box outline color
+theme[cpu_box]="#535353"
+
+# Memory/disks box outline color
+theme[mem_box]="#535353"
+
+# Net up/down box outline color
+theme[net_box]="#535353"
+
+# Processes box outline color
+theme[proc_box]="#535353"
+
+# Box divider line and small boxes line color
+theme[div_line]="#535353"
+
+# Temperature graph colors
+theme[temp_start]="#25be6a"
+theme[temp_mid]="#08bdba"
+theme[temp_end]="#ee5396"
+
+# CPU graph colors
+theme[cpu_start]="#25be6a"
+theme[cpu_mid]="#08bdba"
+theme[cpu_end]="#ee5396"
+
+# Mem/Disk free meter
+theme[free_start]="#25be6a"
+theme[free_mid]=""
+theme[free_end]=""
+
+# Mem/Disk cached meter
+theme[cached_start]="#78a9ff"
+theme[cached_mid]=""
+theme[cached_end]=""
+
+# Mem/Disk available meter
+theme[available_start]="#33b1ff"
+theme[available_mid]=""
+theme[available_end]=""
+
+# Mem/Disk used meter
+theme[used_start]="#25be6a"
+theme[used_mid]="#08bdba"
+theme[used_end]="#ee5396"
+
+# Download graph colors
+theme[download_start]="#78a9ff"
+theme[download_mid]="#be95ff"
+theme[download_end]="#ee5396"
+
+# Upload graph colors
+theme[upload_start]="#25be6a"
+theme[upload_mid]="#08bdba"
+theme[upload_end]="#3ddbd9"

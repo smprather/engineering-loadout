@@ -97,6 +97,20 @@ loadout-only patch corrects the stale module version and embeds Plotly in
 generated HTML because the upstream CDN form is not offline-safe; retain it.
 Kaleido static images still require an already-installed host Chrome/Chromium.
 
+Some uv_tool launchers are WRAPPED after install, not left as uv's symlink:
+`_UV_TOOL_LAUNCHER_PYTHONPATH` + `_wrap_uv_tool_launchers()` in `loadout_main.py`
+replace `<bin>/<name>` with a small sh wrapper that PREPENDS the tool venv's
+site-packages to `PYTHONPATH`, then execs the real console script (idempotent --
+refuses to wrap an already-wrapped launcher). Needed when a tool runs helper
+scripts through a DIFFERENT interpreter than its own venv: LibreLane's ODB steps
+are `openroad -python <script>`, executed by the EMBEDDED portable-python
+(deliberately minimal, no click/rich/yaml), while the venv that HAS those deps
+cannot put its site-packages on a subprocess's `sys.path` -- only `PYTHONPATH`
+crosses that boundary. Prepending is load-bearing (the tool appends its own
+scripts dir to the inherited value and must keep resolving). `tests/prebuilt-binaries`
+gates the installed wrapper's presence, target and reachable deps. Adding a
+package to this treatment is one table entry.
+
 `openssh` is optional and must not expose bare `ssh`, `scp`, or `sftp`; loadout
 owns `ssh10`, `ssh10.bin`, `ssh-keygen`, `ssh-add`, `ssh-agent`, and
 `ssh-keyscan`. Mainline OpenSSH 10.x rejects Red Hat crypto-policy's

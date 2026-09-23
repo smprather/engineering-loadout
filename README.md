@@ -235,10 +235,11 @@ OpenSSH for those.
 | verilator | bin | 5.052 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
 | yazi | bin | 26.9.1 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
 | btm | bin | 0.14.9 | Cross-platform system resource monitor (TUI) |
-| btop | bin | 1.4.7 | Resource monitor with graphs and mouse support |
+| btop | bin | 1.4.7 | Resource monitor with graphs and mouse support, plus the bundled theme set and btop-theme-tour |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
 | lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | liberty-tools | python-tool | v2026.06.01.1-35-g73af358 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools |
+| librelane | python-tool | 3.0.14 | librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled). Ships `librelane` + `librelane.config/env_info/help/state/steps` (or `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel. Member of @eda |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
 | p7zip | bin | 16.02 | p7zip — Unix port of 7-Zip; 7za standalone binary (LZMA2, zip, gzip, bzip2, tar, cab, etc.) |
@@ -266,6 +267,7 @@ OpenSSH for those.
 | hx | bin | 25.07-984-g079a789e | Modern modal text editor with tree-sitter and LSP |
 | hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
 | ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
+| nethogs | bin | 0.9.0 | Per-process network bandwidth monitor (a `top` for network traffic). Ships its own libpcap.so.1 — built from source with rdma/bluetooth/dbus disabled so it needs nothing but libc (the EL8 rpm hard-links libibverbs). Needs root or cap_net_admin/cap_net_raw/cap_dac_read_search/cap_sys_ptrace to capture. |
 | openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
 | jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
 | just | bin | 1.58.0 | Command runner, ergonomic Makefile alternative |
@@ -310,6 +312,7 @@ OpenSSH for those.
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
+| xclip | bin | 0.13 | X11 clipboard command-line access tool — pipe stdin to a selection, stdout from it; member of @gui-suite (NEEDs the gui_libs Xmu/X11 stack) |
 | yara | bin | 4.5.8 | Malware pattern matching and classification tool |
 | xterm | bin | 411 | X11 terminal emulator with Unicode and color |
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |

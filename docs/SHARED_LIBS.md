@@ -50,7 +50,15 @@ other in `~/.local/lib64/`.
   `libqwayland-generic.so` (flat in `~/.local/lib64/`).
 - **GTK3 3.22**: `libgtk-3`, `libgdk-3`, `libgdk_pixbuf-2.0`, `libatk-1.0`,
   `libatk-bridge-2.0`, `libatspi`.
-- **ICU 60**: `libicudata`, `libicui18n`, `libicuuc` (~27 MB).
+- **ICU 60**: `libicudata`, `libicui18n`, `libicuuc` (~27 MB). **Not only Qt5's**:
+  `openroad` NEEDs all three (its SWIG `*_py` modules link the ICU-using python
+  prefix) and declares them in its registry `libs`, so a minimal
+  `openroad` + `portable-python` install pulls them in too. Two packages owning
+  one payload path is the accepted pattern here (`libz.so.1` is declared by fio,
+  gui_libs and yosys; `libffi.so.6` by gui_libs and yosys) — but the
+  DECLARATION is what matters: these shipped in the payload for months while
+  openroad did not list them, and a minimal install died with `error while
+  loading shared libraries: libicudata.so.60`.
 - **Cairo/Pango**: `libcairo`, `libpango-1.0`, `libharfbuzz`, `libfribidi`,
   `libgraphite2`.
 - **xcb extensions**: `libxcb-icccm`, `libxcb-image`, `libxcb-keysyms`,

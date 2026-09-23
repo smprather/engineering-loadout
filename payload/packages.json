@@ -195,7 +195,8 @@
     "btop": {
       "kind": "bin",
       "bins": [
-        "btop"
+        "btop",
+        "btop-theme-tour"
       ],
       "version": "1.4.7",
       "platforms": [
@@ -204,7 +205,12 @@
       "tags": [
         "monitor"
       ],
-      "description": "Resource monitor with graphs and mouse support"
+      "archive": "payload/PLATFORM/runtime/btop-themes.tar.bz2",
+      "archive_name": "btop-themes.tar.bz2",
+      "sentinel": "share/btop/themes/default_black.theme",
+      "install_to": "~/.local",
+      "missing_hint": "btop will see only ~/.config/btop/themes -- its Options menu lists Default/TTY and whatever you added by hand",
+      "description": "Resource monitor with graphs and mouse support, plus the bundled theme set and btop-theme-tour"
     },
     "liberty-filter": {
       "kind": "bin",
@@ -307,6 +313,63 @@
         "uv"
       ],
       "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools"
+    },
+    "librelane": {
+      "kind": "python-tool",
+      "bins": [
+        "librelane",
+        "librelane.config",
+        "librelane.env_info",
+        "librelane.help",
+        "librelane.state",
+        "librelane.steps"
+      ],
+      "wheels": [
+        "librelane",
+        "anyio",
+        "certifi",
+        "ciel",
+        "click",
+        "cloup",
+        "deprecated",
+        "h11",
+        "httpcore",
+        "httpx",
+        "idna",
+        "klayout",
+        "lln-libparse",
+        "lxml",
+        "markdown-it-py",
+        "mdurl",
+        "packaging",
+        "pcpp",
+        "psutil",
+        "pygments",
+        "pyyaml",
+        "rapidfuzz",
+        "rich",
+        "semver",
+        "typing-extensions",
+        "wheel",
+        "wrapt",
+        "yamlcore",
+        "zstandard"
+      ],
+      "uv_tool": "librelane",
+      "version": "3.0.14",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "flow",
+        "asic"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "description": "librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled, bring your own). Console scripts `librelane`, `librelane.config`, `librelane.env_info`, `librelane.help`, `librelane.state`, `librelane.steps` (equivalently `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel"
     },
     "vcd-toggle-profiler": {
       "kind": "runtime",
@@ -804,6 +867,24 @@
       ],
       "description": "NCurses disk usage — interactive disk space analyzer (Zig v2)"
     },
+    "nethogs": {
+      "kind": "bin",
+      "bins": [
+        "nethogs"
+      ],
+      "version": "0.9.0",
+      "version_url": "https://github.com/raboof/nethogs/tags",
+      "version_pattern": "v([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "network",
+        "monitoring",
+        "system"
+      ],
+      "description": "Per-process network bandwidth monitor (TUI, like top for network traffic). NEEDs libpcap.so.1 \u2014 shipped as an unclaimed lib64 stem, built from the libpcap 1.9.1 tarball with --disable-rdma/--disable-bluetooth/--disable-dbus so its own closure stays at libc (the EL8 rpm hard-links libibverbs, absent on both EL8 base and newer hosts). Root or cap_net_admin/cap_net_raw/cap_dac_read_search/cap_sys_ptrace is required to capture."
+    },
     "openroad": {
       "kind": "bin",
       "bins": [
@@ -820,7 +901,10 @@
         "libClp.so.1",
         "libOsi.so.0",
         "libCoinUtils.so.2",
-        "libscip.so.9.2"
+        "libscip.so.9.2",
+        "libicudata.so.60",
+        "libicui18n.so.60",
+        "libicuuc.so.60"
       ],
       "version": "26Q3",
       "version_url": "https://github.com/The-OpenROAD-Project/OpenROAD/tags",
@@ -1761,6 +1845,24 @@
         "clipboard"
       ],
       "description": "X11 clipboard command-line access tool"
+    },
+    "xclip": {
+      "kind": "bin",
+      "bins": [
+        "xclip"
+      ],
+      "version": "0.13",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "gui",
+        "clipboard"
+      ],
+      "depends": [
+        "gui_libs"
+      ],
+      "description": "X11 clipboard command-line access tool (X11 selections as stdin/stdout pipes); NEEDs libXmu.so.6/libX11.so.6, both from gui_libs"
     },
     "yara": {
       "kind": "bin",
@@ -3190,6 +3292,22 @@
       ],
       "description": "Starship prompt config (Linux/macOS variant)"
     },
+    "env-btop": {
+      "kind": "env",
+      "source": "envs/btop/btop.conf",
+      "install_to": "~/.config/btop/btop.conf",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "env",
+        "monitor"
+      ],
+      "recommends": [
+        "btop"
+      ],
+      "description": "btop config: managed btop.conf; the theme set ships with the btop package into <prefix>/share/btop/themes, and ~/.config/btop/themes stays yours"
+    },
     "env-tcsh": {
       "kind": "env",
       "optional": true,
@@ -3572,7 +3690,8 @@
         "z3",
         "bitwuzla",
         "spice-netlist-ls",
-        "netlistsvg"
+        "netlistsvg",
+        "librelane"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
@@ -3584,6 +3703,7 @@
         "gobject-typelibs",
         "xterm",
         "xsel",
+        "xclip",
         "yank",
         "urxvt",
         "st",
@@ -3861,7 +3981,8 @@
       "install_to": "~/.local",
       "sentinel": "share/yosys/simlib.v",
       "remove_before_extract": [
-        "share/yosys"
+        "share/yosys",
+        "lib/yosys-pyosys"
       ],
       "missing_hint": "the Yosys techlib tree (share/yosys) will NOT be installed; `yosys` starts but every synth pass fails",
       "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"

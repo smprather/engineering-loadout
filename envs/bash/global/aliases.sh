@@ -60,16 +60,16 @@ alias lha='lah'
 alias lsg='lg'
 tree() {
     case ${LOADOUT_CFG_PREFERRED_LS:-} in
-        eza | lsd)
-            ls -T "$@"
-            ;;
-        *)
-            if command -v tree >/dev/null 2>&1; then
-                command tree "$@"
-            else
-                /bin/ls -R "$@"
-            fi
-            ;;
+    eza | lsd)
+        ls -T "$@"
+        ;;
+    *)
+        if command -v tree >/dev/null 2>&1; then
+            command tree "$@"
+        else
+            /bin/ls -R "$@"
+        fi
+        ;;
     esac
 }
 
@@ -298,7 +298,7 @@ a() {
 }
 alias clean_bash='echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME USER=$(/bin/whoami) /bin/bash --rcfile ~/.clean.bashrc"'
 alias vman="MANPAGER='nvim +Man\!' man"
-st() { strace -o "$(loadout_tmp_root)/strace.${USER:-user}" -f -v -s 1000000 "$@"; }
+str() { strace -o "$(loadout_tmp_root)/strace.${USER:-user}" -f -v -s 1000000 "$@"; }
 alias sp1="set_prompt"
 alias sp2="set_prompt include_host"
 alias fsbm='fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test; rm ./fio_test'

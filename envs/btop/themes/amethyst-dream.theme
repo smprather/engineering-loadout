@@ -1,0 +1,51 @@
+# Main background and text colors
+theme[main_bg]="#28262B"       # Transparent
+theme[main_fg]="#C6C5CC"       # Soft White text
+theme[title]="#FFFFFF"         # Pure White headers
+theme[hi_fg]="#FF9580"         # Bright Coral highlight
+theme[selected_bg]="#4B465A"   # Selection background
+
+theme[cpu_box]="#61526B"
+theme[mem_box]="#61526B"
+theme[net_box]="#61526B"
+theme[proc_box]="#61526B"
+
+theme[meter_bg]="#4B465A"
+theme[graph_text]="#FFC480"
+theme[proc_misc]="#D99241"
+theme[div_line]="#61526B"
+
+theme[temp_start]="#94BDFF"
+theme[temp_mid]="#FFC480"
+theme[temp_end]="#E26D5C"
+
+theme[cpu_start]="#4B8FFF"
+theme[cpu_mid]="#BEB3FF"
+theme[cpu_end]="#E26D5C"
+
+theme[process_start]="#9B8BF7"  # Green
+theme[process_mid]="#FFC480"    # Yellow
+theme[process_end]="#FF9580"    # Coral
+
+theme[cached_start]="#4B8FFF"  # Palette  4: Blue (Cached Ram)
+theme[cached_end]="#94BDFF"    # Palette 12: Bright Blue
+
+theme[available_start]="#9B8BF7" # Palette  3: Magenta (Available Ram)
+theme[available_mid]="#BEB3FF"   # Palette 11: Bright Magenta
+theme[available_end]="#c6c5cc"   # Palette 11: Bright Magenta
+
+theme[free_start]="#E26D5C"
+theme[free_mid]="#FFC480"
+theme[free_end]="#9B8BF7"
+
+theme[used_start]="#BEB3FF"
+theme[used_mid]="#FFC480"
+theme[used_end]="#FF9580"
+
+theme[download_start]="#9B8BF7" # Palette 10: Bright Mint Green
+theme[download_mid]="#BEB3FF"   # Palette 9: Bright Coral Red
+theme[download_end]="#b46440"   # Palette 9: Bright Coral Red
+
+theme[upload_start]="#4B8FFF"   # Palette 11: Bright Yellow
+theme[upload_mid]="#94bdff"
+theme[upload_end]="#b46440"     # Palette 1: Salmon Red

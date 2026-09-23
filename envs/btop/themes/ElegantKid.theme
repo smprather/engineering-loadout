@@ -1,0 +1,65 @@
+# ElegantKid Theme for BTOP
+# Based on palette: #3F9AAE #79C9C5 #FFE2AF #F96E5B
+# Matches oh-my-posh, ghostty, and colorls themes
+
+# Main UI colors
+theme[main_bg]="#1a1f2e"           # Dark blue-gray background
+theme[main_fg]="#FFE2AF"           # Cream - main text
+theme[title]="#79C9C5"             # Turquoise - titles
+theme[hi_fg]="#F96E5B"             # Coral - highlighted text
+theme[selected_bg]="#3F9AAE"       # Teal - selected item background
+theme[selected_fg]="#1a1f2e"       # Dark - selected item text
+theme[inactive_fg]="#5fb4c7"       # Light teal - inactive elements
+theme[graph_text]="#FFE2AF"        # Cream - graph text
+theme[meter_bg]="#2a3a4e"          # Lighter dark blue-gray
+theme[proc_misc]="#FFE2AF"         # Cream - process misc text
+
+# Box colors (matching the 4-palette)
+theme[cpu_box]="#3F9AAE"           # Teal
+theme[mem_box]="#79C9C5"           # Turquoise
+theme[net_box]="#FFE2AF"           # Cream
+theme[proc_box]="#F96E5B"          # Coral
+
+# Divider lines
+theme[div_line]="#3F9AAE"          # Teal
+
+# Temperature gradients (cool to hot)
+theme[temp_start]="#79C9C5"        # Turquoise - cool
+theme[temp_mid]="#FFE2AF"          # Cream - warm
+theme[temp_end]="#F96E5B"          # Coral - hot
+
+# CPU usage gradient (low to high)
+theme[cpu_start]="#79C9C5"         # Turquoise - low usage
+theme[cpu_mid]="#FFE2AF"           # Cream - medium usage
+theme[cpu_end]="#F96E5B"           # Coral - high usage
+
+# Memory gradients
+theme[free_start]="#79C9C5"
+theme[free_mid]="#9ae0dc"
+theme[free_end]="#3F9AAE"
+
+theme[cached_start]="#3F9AAE"
+theme[cached_mid]="#5fb4c7"
+theme[cached_end]="#79C9C5"
+
+theme[available_start]="#FFE2AF"
+theme[available_mid]="#fff0d4"
+theme[available_end]="#79C9C5"
+
+theme[used_start]="#F96E5B"
+theme[used_mid]="#ff8a7a"
+theme[used_end]="#FFE2AF"
+
+# Network gradients (download/upload)
+theme[download_start]="#79C9C5"
+theme[download_mid]="#FFE2AF"
+theme[download_end]="#F96E5B"
+
+theme[upload_start]="#3F9AAE"
+theme[upload_mid]="#79C9C5"
+theme[upload_end]="#9ae0dc"
+
+# Process list gradient
+theme[process_start]="#3F9AAE"
+theme[process_mid]="#79C9C5"
+theme[process_end]="#FFE2AF"

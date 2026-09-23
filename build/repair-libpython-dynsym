@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+"""
+repair-libpython-dynsym: fix invalid st_shndx values in a shared object's
+.dynsym, in place.
+
+WHY THIS EXISTS
+    The portable-python 3.14.7 payload archive (built with --enable-bolt) ships
+    a libpython3.14.so.1.0 whose .dynsym entries point at RELOCATION sections
+    (.rela.data.rel.ro, .rela.init_array, .rela.rodata, ...) instead of the
+    sections that actually hold the symbols (.data, .bss, .rodata, .text).
+
+    That invalid st_shndx changes what the LINKER emits in a consumer that
+    embeds this libpython:
+
+      - a correct entry lets the linker emit an R_X86_64_COPY relocation for a
+        data object, so the loader copies it into the consumer at run time, or a
+        GLOB_DAT reference for a function;
+      - the broken entry makes the linker treat the symbol as LOCALLY DEFINED by
+        the consumer instead: a PC-relative reference to a zero-filled `.bss`
+        slot for a data object, or an ABSOLUTE (`A`) definition frozen at the
+        link-time vaddr for anything whose address is taken. Nothing ever fills
+        either one, so the first dereference faults.
+
+    Symptom in practice: `openroad -python` SIGSEGV inside
+    Py_InitializeFromConfig -> pycore_interp_init -> type_ready -> PyErr_Format,
+    while openroad's plain Tcl mode stays green. Reproduced minimally with a
+    12-line program; see build/ADDING_BINARIES.md.
+
+    Scale: 205 OBJECT and 1617 FUNC symbols in the shipped library.
+
+    Do NOT be tempted to repair only the OBJECT symbols. A consumer that takes
+    the ADDRESS of a CPython function -- PyType_Ready installs tp_getattro =
+    PyObject_GenericGetAttr, tp_new = PyType_GenericNew, tp_repr = PyObject_Repr
+    and so on -- hits the same failure, and an OBJECT-only repair leaves exactly
+    those behind. Measured: the openroad 26Q3 build still carried one `A`
+    symbol, PyObject_GenericGetAttr, after an OBJECT-only pass.
+
+WHAT IT DOES
+    The library's .symtab is NOT corrupted -- it carries the correct section
+    indices for the same symbols. This tool rewrites each bad .dynsym st_shndx
+    from the .symtab entry of the same name. Only the 2-byte st_shndx field of
+    those entries changes; no other byte of any other section is touched.
+
+    It refuses to write unless every bad symbol is present in .symtab, the
+    .symtab entry names a real object-bearing section, the st_value agrees
+    between the two tables, and the value lies inside the claimed section.
+
+USAGE
+    ./repair-libpython-dynsym [--check] FILE...
+
+    --check   report only; exit 1 if any file is defective (use as a gate)
+
+Exit codes: 0 = clean or repaired, 1 = defective under --check, 2 = error.
+"""
+
+import argparse
+import os
+import struct
+import sys
+
+SHT_SYMTAB = 2
+SHT_RELA = 4
+SHT_NOBITS = 8
+SHT_REL = 9
+SHT_DYNSYM = 11
+SHT_GROUP = 17
+
+SHF_WRITE = 0x1
+SHF_ALLOC = 0x2
+SHF_EXECINSTR = 0x4
+
+SHN_UNDEF = 0
+SHN_ABS = 0xFFF1
+SHN_COMMON = 0xFFF2
+
+NOTYPE = 0
+OBJECT = 1
+FUNC = 2
+
+# Sections that may hold a data OBJECT a consumer can take the address of.
+# Only used as a secondary sanity check; the primary test is the section's
+# flags (ALLOC, not EXECINSTR) plus the value lying inside it.
+GOOD_OBJECT_SECTIONS = {
+    ".data",
+    ".bss",
+    ".rodata",
+    ".data.rel.ro",
+    ".tdata",
+    ".tbss",
+    ".PyRuntime",
+}
+
+
+def eprint(*a):
+    print(*a, file=sys.stderr)
+
+
+def die(msg, rc=2):
+    eprint(f"error: {msg}")
+    sys.exit(rc)
+
+
+class Elf:
+    def __init__(self, path):
+        self.path = path
+        with open(path, "rb") as fh:
+            self.data = bytearray(fh.read())
+        d = self.data
+        if len(d) < 64 or d[:4] != b"\x7fELF":
+            die(f"{path}: not an ELF file")
+        if d[4] != 2:
+            die(f"{path}: only 64-bit ELF is supported")
+        (self.e_shoff,) = struct.unpack_from("<Q", d, 0x28)
+        (self.e_shentsize,) = struct.unpack_from("<H", d, 0x3A)
+        (self.e_shnum,) = struct.unpack_from("<H", d, 0x3C)
+        (self.e_shstrndx,) = struct.unpack_from("<H", d, 0x3E)
+        self.sections = [self._section(i) for i in range(self.e_shnum)]
+        st = self.sections[self.e_shstrndx]
+        self.shstrtab = bytes(d[st["offset"] : st["offset"] + st["size"]])
+        for s in self.sections:
+            s["name"] = self._cstr(self.shstrtab, s["nameoff"])
+
+    def _section(self, i):
+        o = self.e_shoff + i * self.e_shentsize
+        (nameoff, typ, flags, addr, offset, size, link, info, align, entsize) = struct.unpack_from(
+            "<IIQQQQIIQQ", self.data, o
+        )
+        return {
+            "index": i,
+            "nameoff": nameoff,
+            "type": typ,
+            "flags": flags,
+            "addr": addr,
+            "offset": offset,
+            "size": size,
+            "link": link,
+            "info": info,
+            "align": align,
+            "entsize": entsize,
+        }
+
+    def _cstr(self, blob, off):
+        end = blob.index(b"\x00", off)
+        return blob[off:end].decode("utf-8", "replace")
+
+    def symbols(self, sec):
+        """Parse a SYMTAB/DYNSYM section into a list of symbol dicts."""
+        if sec["entsize"] == 0:
+            die(f"section {sec['name']}: zero entsize")
+        strtab = self.sections[sec["link"]]
+        strs = bytes(self.data[strtab["offset"] : strtab["offset"] + strtab["size"]])
+        out = []
+        for k in range(sec["size"] // sec["entsize"]):
+            p = sec["offset"] + k * sec["entsize"]
+            nameoff, info, other, shndx, value, size = struct.unpack_from("<IBBHQQ", self.data, p)
+            out.append(
+                {
+                    "pos": p,
+                    "name": self._cstr(strs, nameoff),
+                    "info": info,
+                    "other": other,
+                    "shndx": shndx,
+                    "value": value,
+                    "size": size,
+                    "bind": info >> 4,
+                    "etype": info & 0xF,
+                }
+            )
+        return out
+
+
+def is_relocation(sec):
+    return sec["type"] in (SHT_RELA, SHT_REL, SHT_GROUP)
+
+
+def is_code(sec):
+    """A section holding executable code -- the legal home for a FUNC symbol."""
+    return bool(sec["flags"] & SHF_EXECINSTR)
+
+
+def is_data(sec):
+    """An allocated section that holds data (not code)."""
+    return bool(sec["flags"] & SHF_ALLOC) and not (sec["flags"] & SHF_EXECINSTR)
+
+
+def find_bad(elf):
+    """Return the list of (dynsym_entry, offending_section) entries needing repair.
+
+    BOTH object and function symbols are considered.
+
+    OBJECT symbols matter because a consumer that embeds libpython gets a COPY
+    relocation for them, and a COPY relocation cannot be emitted when the
+    defining .dynsym entry does not name a real section -- the consumer silently
+    binds a zero-filled .bss slot instead and segfaults on first dereference.
+
+    FUNC symbols matter too, which is easy to get wrong: a consumer that takes
+    the ADDRESS of a CPython function (PyType_Ready installs tp_getattro =
+    PyObject_GenericGetAttr, tp_new = PyType_GenericNew, tp_repr = PyObject_Repr
+    and so on) gets an ABSOLUTE (`A`) definition frozen at the link-time vaddr
+    instead of a proper GLOB_DAT reference, because the invalid section index
+    makes the linker treat it as a locally-defined symbol. libpython's own
+    internal references then bind to that address, and once the library is
+    relocated the stale value faults. Measured: openroad 26Q3 kept exactly one
+    `A` symbol after the OBJECT-only repair -- PyObject_GenericGetAttr.
+    """
+    dynsym = next((s for s in elf.sections if s["type"] == SHT_DYNSYM), None)
+    if dynsym is None:
+        die(f"{elf.path}: no .dynsym")
+    bad = []
+    for s in elf.symbols(dynsym):
+        if s["etype"] not in (OBJECT, FUNC):
+            continue
+        if s["shndx"] in (SHN_UNDEF, SHN_ABS, SHN_COMMON):
+            continue
+        if s["shndx"] >= len(elf.sections):
+            bad.append((s, None))
+            continue
+        sec = elf.sections[s["shndx"]]
+        if is_relocation(sec):
+            bad.append((s, sec))
+    return dynsym, bad
+
+
+def check(path):
+    elf = Elf(path)
+    _, bad = find_bad(elf)
+    if not bad:
+        print(f"{path}: .dynsym OK")
+        return 0
+    print(f"{path}: {len(bad)} .dynsym entr(ies) point at relocation sections")
+    for s, sec in bad[:10]:
+        where = sec["name"] if sec else "out-of-range index"
+        print(f"  {s['name']}: points at {where}")
+    if len(bad) > 10:
+        print(f"  ... and {len(bad) - 10} more")
+    return 1
+
+
+def repair(path):
+    elf = Elf(path)
+    dynsym, bad = find_bad(elf)
+    if not bad:
+        print(f"{path}: .dynsym OK -- nothing to do")
+        return 0
+
+    symtab = next((s for s in elf.sections if s["type"] == SHT_SYMTAB), None)
+    if symtab is None:
+        die(f"{path}: no .symtab -- cannot derive correct section indices; rebuild the library instead of repairing it")
+    symsyms = {s["name"]: s for s in elf.symbols(symtab) if s["name"]}
+
+    print(f"{path}: {len(bad)} .dynsym entr(ies) point at relocation sections")
+    failures = []
+    targets = {}
+    repaired = 0
+    for s, _sec in bad:
+        src = symsyms.get(s["name"])
+        if src is None:
+            failures.append(f"{s['name']}: not present in .symtab")
+            continue
+        if src["value"] != s["value"]:
+            failures.append(
+                f"{s['name']}: st_value differs between .dynsym (0x{s['value']:x}) and .symtab (0x{src['value']:x})"
+            )
+            continue
+        if src["etype"] != s["etype"]:
+            failures.append(
+                f"{s['name']}: symbol type differs between .dynsym ({s['etype']}) and .symtab ({src['etype']})"
+            )
+            continue
+        gi = src["shndx"]
+        if gi >= len(elf.sections):
+            failures.append(f"{s['name']}: .symtab section index {gi} out of range")
+            continue
+        gsec = elf.sections[gi]
+        # The target section must be able to CONTAIN this symbol:
+        #   FUNC  -> an executable section (.text, .init, .plt, ...)
+        #   OBJECT-> an allocated data section, and in practice one of the
+        #            known object-bearing names (a custom section like
+        #            .PyRuntime is legitimate; an unknown one is a red flag).
+        if is_relocation(gsec):
+            failures.append(f"{s['name']}: .symtab also names a relocation section {gsec['name']!r}")
+            continue
+        if s["etype"] == FUNC:
+            if not is_code(gsec):
+                failures.append(f"{s['name']}: FUNC but .symtab names non-executable section {gsec['name']!r}")
+                continue
+        else:
+            if not is_data(gsec):
+                failures.append(f"{s['name']}: OBJECT but .symtab names non-data section {gsec['name']!r}")
+                continue
+            if gsec["name"] not in GOOD_OBJECT_SECTIONS:
+                failures.append(
+                    f"{s['name']}: .symtab says section {gsec['name']!r}, which is not a known object-bearing section"
+                )
+                continue
+        if gsec["type"] != SHT_NOBITS and not (gsec["addr"] <= s["value"] < gsec["addr"] + gsec["size"]):
+            failures.append(
+                f"{s['name']}: value 0x{s['value']:x} lies outside "
+                f"{gsec['name']} [0x{gsec['addr']:x},0x{gsec['addr'] + gsec['size']:x})"
+            )
+            continue
+        # st_shndx lives at byte offset 6 of the 24-byte Elf64_Sym entry.
+        struct.pack_into("<H", elf.data, s["pos"] + 6, gi)
+        key = f"{gsec['name']}"
+        targets[key] = targets.get(key, 0) + 1
+        repaired += 1
+
+    if failures:
+        eprint(f"{path}: refusing to write -- {len(failures)} entr(ies) failed validation:")
+        for f in failures[:20]:
+            eprint(f"  {f}")
+        return 2
+    if repaired != len(bad):
+        die(f"{path}: repaired {repaired} of {len(bad)} -- refusing a partial fix")
+
+    with open(path, "wb") as fh:
+        fh.write(elf.data)
+
+    # Re-read and confirm the write landed.
+    after = Elf(path)
+    _, remaining = find_bad(after)
+    if remaining:
+        die(f"{path}: {len(remaining)} entr(ies) still bad after write")
+
+    print(f"  repaired {repaired}: " + ", ".join(f"{k} ({v})" for k, v in sorted(targets.items(), key=lambda x: -x[1])))
+    print("  re-check clean")
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Repair invalid .dynsym section indices in a shared object.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__.split("USAGE")[1] if "USAGE" in __doc__ else None,
+    )
+    ap.add_argument("files", nargs="+", metavar="FILE")
+    ap.add_argument("--check", action="store_true", help="report only; exit 1 if any file is defective")
+    args = ap.parse_args()
+
+    rc = 0
+    for path in args.files:
+        if not os.path.isfile(path):
+            die(f"no such file: {path}")
+        r = check(path) if args.check else repair(path)
+        if r != 0:
+            rc = r
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,165 @@
+#!/bin/sh
+# `yosys` front-end: executes scripts normally, and adds the `-y` option that
+# only exists on Yosys builds compiled with Python support.
+#
+# WHY THIS EXISTS
+#   LibreLane (and OpenLane before it) runs every synthesis step as
+#     yosys -y <script.py> -Q -q -- --config-in ... --output ...
+#   `-y` is a COMPILE-TIME option in Yosys: the flag is registered only when the
+#   binary was built with YOSYS_ENABLE_PYTHON (-DYOSYS_WITH_PYTHON=ON plus a
+#   Python development prefix and a pybind11/cxxheaderparser build env). The
+#   loadout yosys build carries none of that, so
+#     $ yosys -y
+#     Error parsing options: Option 'y' does not exist
+#   and every LibreLane flow dies at stage 5 (Yosys.JsonHeader) before it has
+#   synthesised anything. See docs/HANDOFF.md, "librelane component audit".
+#
+# WHAT IT DOES
+#   - No `-y` on the command line: `exec`s the real `yosys.bin` unchanged, so
+#     ordinary synthesis and every other consumer behave exactly as before.
+#   - `-y <script.py>`: runs the script under the prefix's own python3.14 with
+#     the pyosys package on sys.path, mirroring what the real `-y`
+#     implementation does (kernel/driver.cc, the scriptfile_python branch):
+#     sys.argv = [script] + special_args, script's directory first on sys.path.
+#
+#   The pyosys package supplies libyosys.so -- the SAME library the real `-y`
+#   flag calls into -- so this is a faithful substitute, not an emulation of
+#   yosys's API surface.
+#
+# WHY A WRAPPER, NOT A REBUILD
+#   Enabling YOSYS_ENABLE_PYTHON inside build-yosys.sh would require a Python
+#   3.14 development prefix plus pybind11 and cxxheaderparser inside the EL8
+#   build container. The upstream wheel already ships a libyosys built from the
+#   same release, so the wrapper is both smaller and closer to what upstream
+#   ships for non-python builds.
+#
+#   `yosys.bin` is the real binary. It resolves its data tree from its own
+#   location, so nothing here rewrites any path.
+#
+# KNOWN DIVERGENCE
+#   Yosys's own flags (-q, -Q, -l, -g, ...) are not re-applied to the script
+#   run: the script talks to libyosys directly and librelane parses its metrics
+#   from the --output JSON, not from stdout. Both real flows this repo drives
+#   (`librelane --smoke-test`, project flows) pass only `-Q -q`, and their
+#   metrics were verified to parse. A command line combining `-y` with `-p`,
+#   `-s` or `-c` is not supported -- yosys itself lets `-y` win over `-s`, and
+#   this wrapper runs the `-y` script and ignores the rest.
+#
+# ENV
+#   LOADOUT_YOSYS_BIN     path to the real binary (default <prefix>/bin/yosys.bin)
+#   LOADOUT_PYOSYS_DIR    dir containing the pyosys package
+#                         (default <prefix>/lib/yosys-pyosys)
+#   LOADOUT_PYOSYS_PYTHON interpreter (default <prefix>/bin/python3.14)
+
+set -eu
+
+SELF=$(readlink -f "${0}")
+HERE=$(cd "$(dirname "$SELF")" && pwd)
+PREFIX=$(cd "$HERE/.." && pwd)
+
+YOSYS_BIN=${LOADOUT_YOSYS_BIN:-$PREFIX/bin/yosys.bin}
+PYOSYS_DIR=${LOADOUT_PYOSYS_DIR:-$PREFIX/lib/yosys-pyosys}
+PYTHON=${LOADOUT_PYOSYS_PYTHON:-$PREFIX/bin/python3.14}
+
+# Locate the script path for `-y`, mirroring kernel/driver.cc: options before
+# `--` are yosys's, everything after belongs to the script. Value-taking options
+# are listed so that a VALUE is never mistaken for the `-y` flag; `-y` itself
+# takes the script path.
+#
+# THIS RUNS IN A SUBSHELL (command substitution) ON PURPOSE. A parsing loop run
+# in this shell consumes "$@" via `shift`, and the passthrough path below then
+# execs the real binary with a MANGLED argument list -- `yosys -p "synth"` would
+# arrive as a bare `yosys` and drop into an interactive prompt. Keeping the loop
+# in a subshell leaves the caller's "$@" intact.
+_pyscript_from() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y | --py-scriptfile)
+                [ $# -ge 2 ] || return 1
+                printf '%s' "$2"
+                return 0
+                ;;
+            --)
+                return 1
+                ;;
+            # Options that consume a following value (driver.cc's option table).
+            # Flags are deliberately absent -- `-g`, `-q`, `-Q`, `-t`, `-d`, `-S`,
+            # `-C` and friends take none, and listing one here would swallow a `-y`
+            # that follows it.
+            -b|--backend|-f|--frontend|-s|--scriptfile|-p|--commands|-r|--top|\
+            -m|--plugin|-D|--define|-l|--logfile|-L|--line-buffered-logfile|\
+            -o|--outfile|-P|--dump-design|-E|--deps-file|-v|--verbose|\
+            -x|--experimental|-W|--warning-as-warning|-w|--warning-as-message|\
+            -e|--warning-as-error)
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+    return 1
+}
+
+script=$(_pyscript_from "$@") || script=""
+
+if [ -z "$script" ]; then
+    [ -x "$YOSYS_BIN" ] || {
+        echo "yosys: no real binary at $YOSYS_BIN" >&2
+        exit 1
+    }
+    exec "$YOSYS_BIN" "$@"
+fi
+
+[ -x "$PYTHON" ] || {
+    echo "yosys: -y needs the bundled interpreter, but $PYTHON is missing." >&2
+    echo "       (install portable-python in the same prefix)" >&2
+    exit 1
+}
+[ -f "$PYOSYS_DIR/pyosys/__init__.py" ] || {
+    echo "yosys: -y needs the pyosys package, but $PYOSYS_DIR/pyosys is missing." >&2
+    echo "       (reinstall the yosys package: it ships lib/yosys-pyosys)" >&2
+    exit 1
+}
+[ -f "$script" ] || {
+    echo "yosys: -y script not found: $script" >&2
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
+# argv contract -- kernel/driver.cc:530-553 is the specification.
+#
+#   special_args = every argv entry AFTER the literal `--`
+#   sys.argv     = [scriptfile] + special_args
+#
+# LibreLane's PyosysStep.get_command() builds
+#   yosys -y <script.py> [-Q] [-q|-qq] -- --config-in <config.json> [--extra-in <extra.json>]
+# and its scripts are `click` commands that read --config-in/--extra-in out of
+# sys.argv. Passing the ORIGINAL argv through would hand the script
+# `["-y", "-Q", "-q", "--", "--config-in", ...]` -- click rejects the leading
+# `-y` and the config-in path is never reached, so every stage-5 script dies.
+#
+# `$@` is mutated here on purpose: we exec immediately below, so there is no
+# caller left to observe it. The earlier _pyscript_from call runs in a command
+# substitution (subshell) and therefore did NOT consume the caller's "$@" --
+# that is what keeps the passthrough path above intact.
+# ---------------------------------------------------------------------------
+while [ $# -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+        shift
+        break
+    fi
+    shift
+done
+
+# Running the file directly gives the other two properties driver.cc sets:
+# Python puts the script's directory at sys.path[0], and `python <file>` runs it
+# as __main__ -- matching PyRun_SimpleFile.
+#
+# PYOSYS_DIR goes FIRST on PYTHONPATH and is prepended, not replaced: librelane
+# appends its own scripts/ directory (ys_common.py, construct_abc_script.py) to
+# the PYTHONPATH it hands the subprocess, and those imports must keep working.
+# It carries the vendored click that those scripts import (portable-python has
+# no site-packages click).
+PYTHONPATH="$PYOSYS_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    exec "$PYTHON" "$script" "$@"

@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""
+doctor-system-newer -- unit tests for the doctor system-newer report helpers
+in loadout_main.py (_ver_tuple, _ver_cmp, _find_system_bin,
+_probe_bin_version, _system_newer_rows).
+
+Everything runs against synthetic registries and fake bindirs under a temp
+root -- no payload, no network. Must run under the bundled Python 3.14
+(loadout_main.py uses PEP 758 syntax that older interpreters cannot parse).
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import stat
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+mod = load_loadout()
+
+# --- _ver_tuple -----------------------------------------------------------
+check("plain dotted", mod._ver_tuple("ripgrep 15.2.0") == (15, 2, 0))
+check("coreutils line", mod._ver_tuple("base64 (GNU coreutils) 9.11") == (9, 11))
+check("letter-run is not a version", mod._ver_tuple("base64") is None)
+check("v-prefix accepted", mod._ver_tuple("v1.2.3") == (1, 2, 3))
+check("bare integer", mod._ver_tuple("version 704") == (704,))
+check("empty", mod._ver_tuple("") is None)
+check("no digits", mod._ver_tuple("no version here") is None)
+check("None", mod._ver_tuple(None) is None)
+
+# --- _ver_cmp -------------------------------------------------------------
+check("older", mod._ver_cmp((9, 7), (9, 11)) == -1)
+check("newer", mod._ver_cmp((9, 11), (9, 7)) == 1)
+check("zero-padded equal", mod._ver_cmp((5, 9), (5, 9, 0)) == 0)
+check("shorter is older", mod._ver_cmp((5, 9), (5, 9, 2)) == -1)
+
+# --- fake bindirs ---------------------------------------------------------
+tmp = tempfile.mkdtemp(prefix="doctor-system-newer-")
+loadbin = os.path.join(tmp, "loadbin")
+sysbin = os.path.join(tmp, "sysbin")
+os.makedirs(loadbin)
+os.makedirs(sysbin)
+
+
+def script(path, body):
+    with open(path, "w") as fh:
+        fh.write("#!/bin/sh\n" + body)
+    os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+script(os.path.join(sysbin, "newtool"), 'echo "newtool version 2.0"\n')
+script(os.path.join(loadbin, "newtool"), 'echo "newtool version 1.0"\n')
+script(os.path.join(sysbin, "oldtool"), 'echo "oldtool 1.0"\n')
+script(os.path.join(sysbin, "noversion"), "exit 1\n")
+script(os.path.join(loadbin, "loadonly"), 'echo "loadonly 1.0"\n')
+os.symlink(
+    os.path.join(loadbin, "newtool"),
+    os.path.join(sysbin, "linkback"),
+)
+
+REGISTRY = {
+    "newtool": {"kind": "bin", "bins": ["newtool"], "version": "1.0"},
+    "oldtool": {"kind": "bin", "bins": ["oldtool"], "version": "2.0"},
+    "noversion": {"kind": "bin", "bins": ["noversion"], "version": "9.9"},
+    "noparse": {"kind": "bin", "bins": ["newtool"], "version": "abc"},
+    "loadonly": {"kind": "bin", "bins": ["loadonly"], "version": "1.0"},
+    "nobins": {"kind": "bin", "version": "1.0"},
+}
+
+LOADOUT_DIRS = {os.path.realpath(loadbin)}
+
+# --- _find_system_bin -----------------------------------------------------
+found = mod._find_system_bin("newtool", sysbin + os.pathsep + loadbin, LOADOUT_DIRS)
+check("finds PATH copy outside loadout dirs", found == os.path.join(sysbin, "newtool"), repr(found))
+check(
+    "loadout-only bin has no system copy",
+    mod._find_system_bin("loadonly", sysbin + os.pathsep + loadbin, LOADOUT_DIRS) is None,
+)
+link = mod._find_system_bin("linkback", sysbin + os.pathsep + loadbin, LOADOUT_DIRS)
+check("symlink into loadout dir is not a system copy", link is None, repr(link))
+
+# --- _probe_bin_version ---------------------------------------------------
+check(
+    "probe reads --version",
+    mod._probe_bin_version(os.path.join(sysbin, "newtool")) == (2, 0),
+)
+check(
+    "probe gives up when no flag answers",
+    mod._probe_bin_version(os.path.join(sysbin, "noversion")) is None,
+)
+
+# --- _system_newer_rows ---------------------------------------------------
+rows = mod._system_newer_rows(REGISTRY, loadbin + os.pathsep + sysbin, LOADOUT_DIRS)
+by_bin = {r[1]: r for r in rows}
+check("newer system copy reported", "newtool" in by_bin)
+if "newtool" in by_bin:
+    pkg, b, pver, spath, sver, standing = by_bin["newtool"]
+    check("row carries payload version", pver == "1.0", repr(pver))
+    check("row carries system version", sver == "2.0", repr(sver))
+    check("loadout-first means payload-wins", standing == "payload-wins", repr(standing))
+check("older system copy silent", "oldtool" not in by_bin)
+check("unparseable probe silent", "noversion" not in by_bin)
+check("unparseable payload silent", all(r[0] != "noparse" for r in rows))
+check("loadout-only silent", "loadonly" not in by_bin)
+
+rows = mod._system_newer_rows(REGISTRY, sysbin + os.pathsep + loadbin, LOADOUT_DIRS)
+by_bin = {r[1]: r for r in rows}
+check(
+    "system-first means system-wins",
+    by_bin.get("newtool", (None,) * 6)[5] == "system-wins",
+    repr(by_bin.get("newtool")),
+)
+
+rows = mod._system_newer_rows(REGISTRY, sysbin, LOADOUT_DIRS)
+by_bin = {r[1]: r for r in rows}
+check(
+    "loadout off PATH means off-path",
+    by_bin.get("newtool", (None,) * 6)[5] == "off-path",
+    repr(by_bin.get("newtool")),
+)
+
+print(f"\n{PASSED} passed, {FAILED} failed")
+sys.exit(1 if FAILED else 0)

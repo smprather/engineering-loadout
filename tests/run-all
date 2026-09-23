@@ -225,6 +225,7 @@ collect_python_files
 run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
 run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
+run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
 run_test "registry-integrity" "$PY" tests/registry-integrity
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify

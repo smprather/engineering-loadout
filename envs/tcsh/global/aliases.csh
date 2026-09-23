@@ -200,9 +200,10 @@ alias agrep     'alias | g'
 # `a`: dump the alias table to a temp file and edit it. The bash version also
 # dumps `declare -f`; csh has no functions, so the alias table is the whole set.
 alias a         'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; set _lo_alias = "$_lo_tmp/alias.$$" ; alias | sort > "$_lo_alias" ; $LOADOUT_CFG_PREFERRED_VI "$_lo_alias" ; rm -f "$_lo_alias" ; unset _lo_alias _lo_tmp'
-# NOTE: shadows the bundled `st` terminal, exactly as the bash env's st() does.
-# Kept for parity -- run the terminal as `\st` or by full path.
-alias st        'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; strace -o "$_lo_tmp/strace.$USER" -f -v -s 1000000 \!* ; unset _lo_tmp'
+# `str`: run strace with big output to a temp file. Named `str`, not `st` --
+# `st` is the bundled suckless terminal binary, and an alias of that name
+# would shadow it (the bash env renamed its st() for the same reason).
+alias str       'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; strace -o "$_lo_tmp/strace.$USER" -f -v -s 1000000 \!* ; unset _lo_tmp'
 # sp1 / sp2: prompt without / with the hostname. The bash env re-runs its
 # set_prompt function; csh has no functions, so these reassign the prompt lead
 # that global/tcshrc left in place for exactly this purpose (and that precmd

@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+# btop-theme-tour - walk through every btop theme, one per btop run, then pick a favorite.
+#
+# Controls (also printed at start):
+#   quit btop normally (q)  -> the next theme loads
+#   Ctrl+C while btop runs  -> stop the tour and jump to the picker
+#   changed the theme from btop's Options menu? It is noted and offered as your pick.
+#
+# Options:
+#   --start <N|name>   start at theme number N (see --list) or at that theme name
+#   --list             print the numbered theme list and exit
+#   -h, --help         this help
+#
+# Env overrides (mainly for testing):
+#   BTOP_CYCLE_CONF     config file to read/copy (and update when picking)
+#   BTOP_CYCLE_THEMES   theme directory LIST, colon separated; when set, the list
+#                       is passed to btop via --themes-dir and an explicit override
+#                       wins over btop's own search (first directory wins a name clash)
+#   BTOP_CYCLE_BTOP     btop binary
+#
+# WHICH THEMES ARE TOURED. btop searches two directories of interest here
+# (src/btop.cpp, v1.4.7):
+#
+#   1. <config dir>/themes       your own, where hand-downloaded themes live --
+#                                btop WRITES here when you pick a theme from its
+#                                Options menu
+#   2. <real binary>/../share/btop/themes
+#                                the bundled set the loadout payload installs
+#
+# Both are walked, in that order, so a theme you own shadows a bundled one with
+# the same name. The directory btop actually renders from is its own business:
+# by default this script passes no --themes-dir and lets btop resolve the pair
+# exactly as it would for a normal launch, because --themes-dir OUTRANKS your
+# own theme directory and would hide it. It is only passed for an explicit
+# BTOP_CYCLE_THEMES override, where honoring the caller matters more.
+
+set -u
+
+CONF=${BTOP_CYCLE_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/btop/btop.conf}
+BTOP=${BTOP_CYCLE_BTOP:-btop}
+
+me=${0##*/}
+
+# Resolve our own prefix the way the other loadout script wrappers do: follow a
+# PATH lookup when argv[0] is a bare name, so the bundled theme directory is
+# found from a real install and from a repo checkout alike.
+case "$0" in
+    /*) _self=$0 ;;
+    *) _self=$(command -v -- "$0") || _self=$0 ;;
+esac
+_prefix=$(CDPATH='' cd -- "$(dirname -- "$_self")/.." && pwd 2>/dev/null) || _prefix=""
+
+USER_THEMES=${XDG_CONFIG_HOME:-$HOME/.config}/btop/themes
+if [ -n "$_prefix" ] && [ -d "$_prefix/share/btop/themes" ]; then
+    BUNDLE_THEMES=$_prefix/share/btop/themes
+else
+    BUNDLE_THEMES=""
+fi
+
+if [ -n "${BTOP_CYCLE_THEMES:-}" ]; then
+    THEMES_LIST=$BTOP_CYCLE_THEMES
+    FORCE_DIR=1
+else
+    THEMES_LIST=$USER_THEMES
+    [ -n "$BUNDLE_THEMES" ] && THEMES_LIST="$THEMES_LIST:$BUNDLE_THEMES"
+    FORCE_DIR=0
+fi
+
+usage() {
+    cat <<'EOF'
+usage: btop-theme-tour [--start <N|name>] [--list]
+
+Cycles through every .theme btop can see -- your own ~/.config/btop/themes plus
+the bundled theme set -- launching btop once per theme. Quit btop normally (q)
+to advance; press Ctrl+C to stop the tour early and go to the picker. At the
+end, type a number or a theme name to set color_theme in btop's config (Enter
+keeps the current setting).
+EOF
+}
+
+START=""
+LIST=0
+while (($#)); do
+    case $1 in
+        --list)    LIST=1; shift ;;
+        --start)   START=${2:-}; shift; (($#)) && shift ;;
+        --start=*) START=${1#*=}; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) printf '%s: unknown option: %s\n' "$me" "$1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+command -v "$BTOP" >/dev/null 2>&1 || { printf '%s: btop not found (looked for "%s")\n' "$me" "$BTOP" >&2; exit 1; }
+
+# ---- split the directory list ---------------------------------------------
+IFS=: read -r -a theme_dirs <<< "$THEMES_LIST"
+
+# ---- collect themes (deduped by name; earlier directories win) -------------
+themes=()
+for dir in "${theme_dirs[@]}"; do
+    [ -n "$dir" ] || continue
+    for f in "$dir"/*.theme; do
+        [ -e "$f" ] || continue
+        stem=${f##*/}; stem=${stem%.theme}
+        case $stem in
+            ''|*[!A-Za-z0-9._-]*) printf '%s: skipping theme with unsupported name: %s\n' "$me" "$f" >&2; continue ;;
+        esac
+        for known in ${themes[@]+"${themes[@]}"}; do
+            [ "$known" = "$stem" ] && continue 2
+        done
+        themes+=("$stem")
+    done
+done
+N=${#themes[@]}
+((N)) || { printf '%s: no .theme files in %s\n' "$me" "$THEMES_LIST" >&2; exit 1; }
+
+# btop's --themes-dir is fatal on a missing directory, so only hand it one that
+# really holds themes; otherwise let btop search on its own.
+launch_dir=""
+if ((FORCE_DIR)); then
+    for dir in "${theme_dirs[@]}"; do
+        [ -n "$dir" ] || continue
+        for f in "$dir"/*.theme; do
+            [ -e "$f" ] || continue
+            launch_dir=$dir
+            break
+        done
+        [ -n "$launch_dir" ] && break
+    done
+fi
+
+if ((LIST)); then
+    for ((i=0; i<N; i++)); do printf '%3d  %s\n' "$((i+1))" "${themes[i]}"; done
+    exit 0
+fi
+
+# ---- resolve --start ------------------------------------------------------
+from=1
+if [ -n "$START" ]; then
+    case $START in
+        *[!0-9]*)
+            found=0
+            for ((i=0; i<N; i++)); do
+                [ "${themes[i]}" = "$START" ] && { found=$((i+1)); break; }
+            done
+            ((found)) || { printf '%s: no theme named "%s" in %s\n' "$me" "$START" "$THEMES_LIST" >&2; exit 2; }
+            from=$found ;;
+        *) from=$START ;;
+    esac
+    if ((10#$from < 1 || 10#$from > N)); then
+        printf '%s: --start out of range (1..%d)\n' "$me" "$N" >&2; exit 2
+    fi
+fi
+
+# ---- temp workspace / terminal guard -------------------------------------
+tmpd=$(mktemp -d "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/btop-theme-tour.XXXXXX") || exit 1
+tmpconf=$tmpd/btop.conf
+trap 'rm -rf -- "$tmpd"' EXIT
+
+saved_tty=""
+if [ -t 0 ]; then saved_tty=$(stty -g 2>/dev/null) || saved_tty=""; fi
+
+abort=0
+trap 'abort=1' INT
+
+menu_pick=""
+seen=()
+
+# ---- helpers --------------------------------------------------------------
+read_theme_setting() {
+    # prints the color_theme value from $1 ("" if none)
+    [ -f "$1" ] || return 0
+    grep -E '^[[:space:]]*color_theme[[:space:]]*=' "$1" 2>/dev/null | tail -n1 \
+        | sed -E 's/^[^=]*=[[:space:]]*//' \
+        | sed -E 's/^"//; s/".*$//' \
+        | sed -E 's/[[:space:]]*#.*$//'
+}
+
+write_theme_setting() {
+    # $1 = file, $2 = theme name
+    local f=$1 t=$2
+    if grep -qE '^[[:space:]]*color_theme[[:space:]]*=' "$f" 2>/dev/null; then
+        sed -i -E "s|^[[:space:]]*color_theme[[:space:]]*=.*|color_theme = \"$t\"|" "$f"
+    else
+        printf 'color_theme = "%s"\n' "$t" >> "$f"
+    fi
+}
+
+theme_exists() {
+    # does any configured directory hold $1.theme?
+    local t=$1 dir
+    for dir in "${theme_dirs[@]}"; do
+        [ -n "$dir" ] || continue
+        [ -f "$dir/$t.theme" ] && return 0
+    done
+    return 1
+}
+
+apply() {
+    local t=$1 now
+    printf '\nsetting color_theme = "%s" in %s\n' "$t" "$CONF"
+    if [ -f "$CONF" ]; then
+        cp -f -- "$CONF" "$CONF.bak"
+        printf 'backup saved: %s.bak\n' "$CONF"
+    fi
+    write_theme_setting "$CONF" "$t"
+    now=$(read_theme_setting "$CONF")
+    if [ "$now" = "$t" ]; then
+        printf 'done - btop will now start with "%s".\n' "$t"
+    else
+        printf 'ERROR: failed to update %s (found "%s")\n' "$CONF" "${now:-<empty>}"
+    fi
+}
+
+# ---- banner ---------------------------------------------------------------
+cat <<EOF
+$me: touring $N themes from $THEMES_LIST
+
+  * quit btop normally (q)  -> the next theme loads
+  * Ctrl+C                  -> stop the tour and pick a theme
+  * changed a theme in btop's own Options menu? it will be offered at the end.
+
+EOF
+
+# ---- tour -----------------------------------------------------------------
+k=$from
+while ((k <= N)); do
+    if ((abort)); then printf 'tour stopped.\n'; break; fi
+    theme=${themes[k-1]}
+
+    # fresh copy of the real config, pointed at this theme (the real file is never touched)
+    if [ -f "$CONF" ]; then
+        cp -f -- "$CONF" "$tmpconf"
+    else
+        : > "$tmpconf"
+    fi
+    write_theme_setting "$tmpconf" "$theme"
+
+    printf '[%d/%d] %s\n' "$k" "$N" "$theme"
+    if [ -n "$launch_dir" ]; then
+        "$BTOP" --config "$tmpconf" --themes-dir "$launch_dir"
+    else
+        "$BTOP" --config "$tmpconf"
+    fi
+    rc=$?
+    [ -n "$saved_tty" ] && stty "$saved_tty" 2>/dev/null
+    sleep 0.15  # let a pending Ctrl+C trap fire before we look at the flag
+
+    cur=$(read_theme_setting "$tmpconf")
+    if [ -n "$cur" ] && [ "$cur" != "$theme" ]; then
+        menu_pick=$cur
+        printf '  noted: you switched to "%s" in btop\n' "$cur"
+    fi
+
+    seen+=("$theme")
+    if ((abort)); then printf 'tour stopped at %d/%d\n' "$k" "$N"; break; fi
+    if ((rc != 0)); then printf '  (btop exited with status %d)\n' "$rc"; fi
+    k=$((k+1))
+done
+
+# ---- picker ---------------------------------------------------------------
+printf '\n'
+if ((${#seen[@]})); then
+    printf 'Themes viewed (%d):\n' "${#seen[@]}"
+    i=1; for t in "${seen[@]}"; do printf '%3d  %s\n' "$i" "$t"; i=$((i+1)); done
+    printf '\n'
+fi
+cur_real=$(read_theme_setting "$CONF")
+printf 'current setting: color_theme = "%s"\n' "${cur_real:-<unset>}"
+if ((k <= N)); then printf 'resume later with: %s --start %d\n' "$me" "$k"; fi
+
+attempts=0
+while :; do
+    if [ -n "$menu_pick" ]; then
+        printf 'pick a theme - number from the list, or a name; Enter = use "%s" (changed inside btop)\n' "$menu_pick"
+    else
+        printf 'pick a theme - number from the list, or a name; Enter = keep current\n'
+    fi
+    printf '> '
+    if ! read -r ans; then ans=""; fi
+
+    if [ -z "$ans" ]; then
+        if [ -n "$menu_pick" ]; then apply "$menu_pick"; else printf 'kept "%s".\n' "${cur_real:-<unset>}"; fi
+        break
+    fi
+
+    case $ans in
+        *[!0-9]*)
+            if theme_exists "$ans"; then apply "$ans"; break
+            else printf '%s: no theme named "%s" in %s\n' "$me" "$ans" "$THEMES_LIST"; fi ;;
+        *)
+            if ((10#$ans >= 1 && 10#$ans <= ${#seen[@]})); then apply "${seen[10#$ans-1]}"; break
+            else printf '%s: number out of range (1..%d)\n' "$me" "${#seen[@]}"; fi ;;
+    esac
+
+    attempts=$((attempts+1))
+    if ((attempts >= 3)); then printf 'too many invalid tries - leaving the config unchanged.\n'; break; fi
+done

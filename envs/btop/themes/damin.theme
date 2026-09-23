@@ -1,0 +1,72 @@
+# damin — btop theme. Palette: #98ABCC (blue) · #E890B0 (pink) on #1e1e1e.
+# https://github.com/miniex/btop-theme-damin
+
+theme[main_bg]="#1e1e1e"
+theme[main_fg]="#ffffff"
+
+# Titles / shortcuts / selection — pink accent (matches tmux + kitty active borders).
+theme[title]="#E890B0"
+theme[hi_fg]="#E890B0"
+theme[selected_bg]="#E890B0"
+theme[selected_fg]="#1e1e1e"
+
+theme[inactive_fg]="#555555"
+theme[graph_text]="#98ABCC"
+theme[meter_bg]="#2a2a2a"
+theme[proc_misc]="#C09EBE"
+
+# Box outlines blue; pink is reserved for titles.
+theme[cpu_box]="#98ABCC"
+theme[mem_box]="#98ABCC"
+theme[net_box]="#98ABCC"
+theme[proc_box]="#98ABCC"
+
+theme[div_line]="#3a3a3a"
+
+# Load / heat: blue → mauve → pink (cool → warm = calm → active).
+theme[temp_start]="#98ABCC"
+theme[temp_mid]="#C09EBE"
+theme[temp_end]="#E890B0"
+
+theme[cpu_start]="#98ABCC"
+theme[cpu_mid]="#C09EBE"
+theme[cpu_end]="#E890B0"
+
+# Capacity (free / cached / available) stays in the blue family — abundance reads as calm.
+theme[free_start]="#7A8AAA"
+theme[free_mid]="#98ABCC"
+theme[free_end]="#B5C5DE"
+
+theme[cached_start]="#6F7E96"
+theme[cached_mid]="#8597B8"
+theme[cached_end]="#A2B5D2"
+
+theme[available_start]="#98ABCC"
+theme[available_mid]="#B5C5DE"
+theme[available_end]="#D4E0EF"
+
+# Used: pink only — keeps "occupied" visually distinct from cpu/temp "loaded".
+theme[used_start]="#A3677D"
+theme[used_mid]="#E890B0"
+theme[used_end]="#F5B2C8"
+
+# Network + process reuse the load arc.
+theme[download_start]="#98ABCC"
+theme[download_mid]="#C09EBE"
+theme[download_end]="#E890B0"
+
+theme[upload_start]="#98ABCC"
+theme[upload_mid]="#C09EBE"
+theme[upload_end]="#E890B0"
+
+theme[process_start]="#98ABCC"
+theme[process_mid]="#C09EBE"
+theme[process_end]="#E890B0"
+
+# Process state — overrides btop's default red pause / saturated banners.
+theme[proc_pause_bg]="#3a3a3a"
+theme[proc_follow_bg]="#98ABCC"
+theme[proc_banner_bg]="#C09EBE"
+theme[proc_banner_fg]="#1e1e1e"
+theme[followed_bg]="#E890B0"
+theme[followed_fg]="#1e1e1e"
