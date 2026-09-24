@@ -60,6 +60,13 @@ done
 FAILURES=0
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/test-cache-v1"
 CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
+# Container tests get their own sidecar. A plain (non---container) run must not
+# bless the tree for them: it writes CACHE_SIDECAR, and sharing that sidecar
+# let a later --container run CACHED-PASS the container smoke on a stale .pass
+# from a previous container run (observed 2026-09-23: Tier 2's sidecar rewrite
+# made the Tier 3 smoke skip against a payload it had never seen). Only
+# --container runs write CACHE_SIDECAR_CONTAINER.
+CACHE_SIDECAR_CONTAINER="$CACHE_DIR/fingerprint-container.json"
 FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
 FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests")
 
@@ -140,8 +147,10 @@ run_test() {
             _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
             return 0
         fi
-        if [ "$deps_mode" = all ] && [ -f "$CACHE_SIDECAR" ] \
-            && "$PY" "$FP_SCRIPT" --fast --check "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1 \
+        local sidecar="$CACHE_SIDECAR"
+        [ "$deps_mode" = container ] && sidecar="$CACHE_SIDECAR_CONTAINER"
+        if { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -f "$sidecar" ] \
+            && "$PY" "$FP_SCRIPT" --fast --check "$sidecar" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1 \
             && [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
             && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
             echo "=== $name: CACHED PASS (inputs unchanged)"
@@ -173,7 +182,7 @@ run_test() {
         fi
     fi
     if [ "$rc" -eq 0 ]; then
-        if [ "$CACHE_ACTIVE" -eq 1 ] && [ "$deps_mode" = all ] && [ -n "$test_script" ]; then
+        if [ "$CACHE_ACTIVE" -eq 1 ] && { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -n "$test_script" ]; then
             mkdir -p "$CACHE_DIR"
             sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
         fi
@@ -285,9 +294,9 @@ run_test "crate-store policy" "$PY" build/verify-crate-store --check-policy
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------
 if [ "$CONTAINER" -eq 1 ]; then
-    run_test "almalinux8.10 container smoke (--full)" \
+    run_test "almalinux8.10 container smoke (--full)" --deps container \
         tests/prebuilt-binaries-almalinux8 --full
-    run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" \
+    run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" --deps container \
         tests/prebuilt-binaries-almalinux8 --no-build --dynamic
     # The crate store's whole reason to exist is `cargo build --offline` on a
     # farm node, and NOTHING in this suite exercised it -- so when the tool
@@ -295,7 +304,7 @@ if [ "$CONTAINER" -eq 1 ]; then
     # cloning 15.1.0, the offline rebuild broke and stayed broken for 13 days.
     # verify-crate-store checks hashes and coverage; only this proves the
     # closure actually resolves.
-    run_test "rust offline rebuild from the crate store (network isolated)" \
+    run_test "rust offline rebuild from the crate store (network isolated)" --deps container \
         tests/rust-offline-almalinux8
 fi
 
@@ -308,6 +317,9 @@ echo
 if [ "$CACHE_ACTIVE" -eq 1 ]; then
     mkdir -p "$CACHE_DIR"
     "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
+    if [ "$CONTAINER" -eq 1 ]; then
+        "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR_CONTAINER" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
+    fi
 fi
 if [ "$FAILURES" -eq 0 ]; then
     echo "All tests passed."

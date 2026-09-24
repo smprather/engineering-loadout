@@ -225,7 +225,7 @@ with open(path) as f:
     data = json.load(f)
 data['packages']['modules']['version'] = ver
 with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\\n')
 print(f'packages.json: modules version -> {ver}')
 " "$REPO/payload/packages.json" "$VERSION"

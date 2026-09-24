@@ -416,7 +416,7 @@ if 'gtkwave' in pkgs:
 else:
     print('WARNING: gtkwave not found in packages.json, skipping version update')
 with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION"
 

@@ -217,6 +217,12 @@ Key rules:
 - `uv_extras` -- for `python-tool`: extras appended to `uv_tool` as
   `package[extra,...]`. Bundle the complete locked wheel closure for every extra;
   offline installs cannot fetch it later.
+- packages.json is stored as RAW UTF-8. Any script that re-dumps the whole file
+  must pass `ensure_ascii=False`; the default escapes every em-dash and churns
+  every description on the next rebuild (regressed twice via new build scripts).
+  Prefer the surgical `loadout_stamp_version` from `build/lib.sh`, which only
+  rewrites the version string. `tests/registry-integrity` fails on any `\uXXXX`
+  escape in the file.
 
 For a tool with a single binary, no exclusive libs, and no deps:
 `"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "description": "..."}`.
@@ -5938,7 +5944,19 @@ FTR
 The block requires $prefix set beforehand and never tramples
 caller-set values. Rationale + failure catalogue: see the block's own
 header comment and the AGENTS.md GUI WRAPPER SHARED BLOCK paragraph.
-Users of it today: build-wezterm.sh (3 wrappers), build-surfer.sh.
+
+**Composition invariant:** every fragment you concatenate into a wrapper must
+end in a newline. A fragment whose last line has no newline fuses with the next
+fragment's first line -- `cat gui-wrapper-env.sh gtk3-launcher-env.sh` shipped
+`unset _host_fc _fc_mode# build/gtk3-launcher-env.sh ...` in the gtkwave/gvim/
+twinwave/rtlbrowse/mate-terminal wrappers: it still runs, but leaks `not a
+valid identifier` to stderr and leaves `_fc_mode` set. `tests/prebuilt-binaries`
+asserts fragment newline-termination and scans every installed wrapper for the
+fused line (found by the marktext composition smoke).
+
+Users of it today: build-wezterm.sh (3 wrappers), build-surfer.sh,
+build-klayout.sh (13 launchers, via the `loadout_gui_env` template marker),
+build-marktext.sh, build-gvim.sh, build-gtkwave.sh, build-mate-terminal.sh.
 
 ## strace 7.2 (added 2026-09-05)
 
@@ -6511,3 +6529,173 @@ Capturing needs root, or `cap_net_admin`, `cap_net_raw`, `cap_dac_read_search`
 and `cap_sys_ptrace`. The README and registry description say so; the loader
 does not set capabilities (that is a site-policy decision, and file caps do not
 survive the bz2/atomic-rename install path anyway).
+
+## MarkText 0.19.1 -- markdown editor (Electron GUI shanghai repack, added 2026-09-23)
+
+`marktext/marktext`, official Linux release `marktext-linux-0.19.1.tar.gz`
+(127,322,569 bytes, sha256 `d1ecc7e47fe2cfdd6191330dd9360fdaae47508f458f179cc5f4948b7f3e6f1d`,
+verified against the release's `SHA256SUMS.txt`).
+
+Stable-release policy selects **v0.19.1**: the newest upstream release is
+`v0.20.0-rc.5`, a prerelease.
+
+### Why a repack and not a source build
+
+Measured floors of the official bundle:
+
+| component | upstream requirement | EL8 has | verdict |
+|---|---|---|---|
+| `marktext` (main ELF) | GLIBC_2.25 | 2.28 | OK |
+| NSS usage | NSS_3.30 | 3.90 | OK |
+| `ced.node` | **GLIBCXX_3.4.29** | 3.4.25 | FAIL |
+| `native-keymap.node` | **GLIBC_2.34** | 2.28 | FAIL |
+
+Both broken addons are loaded by a **top-level `require()`** in the bundled
+main process (`out/main/index.js`), so the app cannot start at all on EL8 with
+upstream bytes -- it is not a lazily-triggered or feature-gated failure. This
+was confirmed the hard way: running the stock bundle on EL8 aborts inside
+`Module._load`.
+
+Rebuilding only those two addons against EL8 removes the problem entirely
+(both land at GLIBC 2.14 / GLIBCXX 3.4.21). No Electron source build, no
+Chromium build.
+
+### Build prerequisites (baked into `build/Dockerfile`)
+
+- **gcc-toolset-14** (`/opt/rh/gcc-toolset-14/enable`) -- both addons'
+  `binding.gyp` request `-std=gnu++20`, which base gcc 8.5 rejects
+  (`unrecognized command line option '-std=gnu++20'`).
+- **python3.14 for node-gyp** -- node-gyp 10's bundled gyp uses PEP 572
+  (walrus) syntax that EL8's Python 3.6 cannot even *parse*; `configure` dies
+  with `SyntaxError: invalid syntax` inside `gyp/pylib/gyp/common.py`. The
+  build script points `npm_config_python` at the loadout payload's
+  cold-bootstrapped 3.14 instead of installing a second Python into the image.
+- **node** from the loadout payload (`runtime/node.tar.bz2`) -- the image
+  carries no system node. Note the payload node NEEDs `libatomic.so.1`, so the
+  build script stages `payload/<plat>/lib64/*` onto `LD_LIBRARY_PATH` before
+  invoking it.
+- **nss, nspr, libsecret, libxkbfile, cups-libs, avahi-libs** runtime rpms
+  (to co-locate from). cups-libs/avahi-libs are NOT installed by stock
+  almalinux:8.10 -- the first "assume host" cut shipped without libcups and
+  the Tier 3 gate caught it (`libcups.so.2: cannot open shared object file`).
+- **xorg-x11-server-Xvfb + xdpyinfo** (real-window stage verify).
+
+### Build
+
+```bash
+./build/build-shell build/build-marktext.sh --tag v0.19.1
+```
+
+Pinned inputs (all sha256-checked in-script):
+
+- release tarball: see above
+- `ced@2.0.0` npm tarball: `d6af33f18dd18ab1972b43c274d7b3c756371d48aca6514ad44cffe3d98252b9`
+- `native-keymap@3.3.9` npm tarball: `f6f3844be47e4cf8b6f8b9cc7d9b4b1d76922485d5897e77e0e1119168609935`
+- Electron headers target `42.1.0` (`NODE_MODULE_VERSION` **146** -- the
+  bundle is Electron 42.1.0, so the addon ABI must match that, not the
+  payload node's).
+
+The native-keymap rebuild applies **MarkText's own patch**
+(`patches/native-keymap+3.3.9.patch`, lifted straight out of the app's asar)
+so the rebuild matches what the app expects rather than guessing.
+
+### What the package ships
+
+```
+bin/marktext                              wrapper (prefix-derived)
+lib/marktext/                             official bundle, 2 addons swapped
+lib64/                                    co-located closure (16 libs)
+share/applications/marktext.desktop
+share/icons/hicolor/256x256/apps/marktext.png
+```
+
+### The closure (the load-bearing analysis)
+
+Walking every ELF in the bundle gives 34 NEEDED sonames for the main binary
+plus the addons' own. Bucketed:
+
+- **app-local**: `libffmpeg.so` (the bundle's own; main ELF carries
+  `RPATH=$ORIGIN`, so no wrapper export is needed to resolve it)
+- **payload**: 20 sonames from `gui_libs` + `libgbm.so.1` from `mesa3d_libs`
+- **glibc/C++ runtime**: host-provided by policy (7)
+- **unbundled**: 9 -- and each got an explicit decision:
+
+| soname | decision | why |
+|---|---|---|
+| `libnss3/libnssutil3/libsmime3/libssl3/libnspr4/libplc4/libplds4/libsoftokn3/libfreebl3/libfreeblpriv3/libnssdbm3` | **co-locate** | needed by the main ELF; NSS dlopens softoken/freebl from libnss3's own directory, so the family must land in one place |
+| `libsecret-1.so.0` | **co-locate** | NEEDed by `keytar.node` |
+| `libxkbfile.so.1` | **co-locate** | NEEDed by `native-keymap.node` -- a *new* runtime need created by our own rebuild |
+| `libcups.so.2` | **co-locate** | direct NEEDED of the main ELF. EL8 AppStream `cups-libs`, but stock almalinux:8.10 does NOT install it -- the first "assume host" cut failed Tier 3 with `libcups.so.2: cannot open shared object file`. The rest of its closure (krb5/gnutls/selinux/audit/com_err/keyutils/crypt/z) IS in the EL8 base image and on newer hosts |
+| `libavahi-client.so.3` / `libavahi-common.so.3` | **co-locate** | NEEDed by the co-located libcups; also absent from stock almalinux:8.10 |
+| `libudev.so.1` | assume host | EL8 BaseOS `systemd-libs`, PRESENT in a stock image |
+| `libgbm.so.1` | payload | `mesa3d_libs` already ships it (declared dependency) |
+
+The co-located set goes to `<prefix>/lib64` (where `gui_libs` lands), each
+stamped `RPATH=$ORIGIN`. `libnssckbi.so` is **deliberately excluded** -- same
+hard rule as the firefox bundle: on EL8 it is a p11-kit proxy reading
+distro-specific trust paths, and bundling it broke TLS on every non-EL8 host.
+
+### The sandbox (why chrome-sandbox is deleted)
+
+Chromium's setuid helper only works owned root:root mode 4755 -- impossible in
+a no-root per-user install -- and Chromium **FATAL-aborts** when it finds the
+helper present but misconfigured, instead of degrading. Verified both
+directions:
+
+- user namespaces available -> Chromium takes the namespace sandbox and a
+  **plain run creates a real 1200x800 window** under Xvfb;
+- user namespaces blocked (Docker default seccomp) -> "not configured
+  correctly" abort.
+
+So the build **deletes** `chrome-sandbox` from the bundle, making the
+namespace path deterministic on any normal host. On a userns-less host the
+failure is a clear "No usable sandbox" plus the documented `--no-sandbox`
+escape hatch, rather than a bogus configuration complaint.
+
+### Stage verify (four gates, because --version alone is not enough)
+
+1. **Addon dlopen** via `ELECTRON_RUN_AS_NODE=1` + `require()` on each `.node`.
+   This matters because `marktext --version` does **not** load
+   `native-keymap` (proved by poisoning its soname and watching the run stay
+   green) -- a `--version`-only smoke would pass with a broken addon.
+2. **Negative controls** (two, because two processes consume the closure):
+   prepend a poison dir holding a garbage file named for the co-located
+   soname and require failure. The ADDON control poisons only
+   `libsecret-1.so.0` + `libxkbfile.so.1` -- the libs the main binary does not
+   itself link. Poisoning `libnss3.so` (as the first cut did) kills the
+   process before the addons load and proves nothing. The MAIN-process
+   control poisons `libcups.so.2` + `libavahi-*` in a separate dir and
+   requires `marktext --version` to fail; without it the build container's
+   own cups would mask a missing co-located copy -- exactly how the first cut
+   shipped, caught only by Tier 3. If either control succeeds, the libs
+   resolved from the build container rather than `$STAGE/lib64` and the gate
+   is meaningless (AGENTS.md environment-masking lesson; the container has
+   its own `libxkbfile.so.1`).
+3. **Real window under Xvfb** -- pass condition is a window named
+   `Untitled-1` on the root window. This is the only gate that exercises the
+   GTK3 stack and window creation.
+
+### Post-build (mandatory, in order)
+
+```bash
+./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.14 build/gen-installed-sizes"'
+./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.14 build/gen-content-manifest"'
+```
+
+(`strip-all-elf-binaries` runs inside the build script; it auto-chunks the
+~114 MB archive into 3 `.part-NNN` shards.)
+
+**Gotcha found the hard way**: the work tree MUST NOT live inside `$REPO`.
+`strip-all-elf-binaries` walks the whole repository, so an in-repo scratch dir
+gets stripped and recorded into `.strip-manifest` as if it were payload -- a
+first attempt using `$REPO/.scratch-marktext/build-work` injected **706 bogus
+entries**. The script now uses `mktemp -d` under `TMPDIR`, like every other
+build script.
+
+### Install
+
+```bash
+./loadout install marktext            # or: @editor-gui (with gvim + meld)
+```
+
+Member of `@editor-gui`, non-optional, so it also joins `@shared`.

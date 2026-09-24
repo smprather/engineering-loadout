@@ -325,6 +325,17 @@ Native Wayland visibility is unverified. Regression tests in
 `tests/prebuilt-binaries` check all 13 installed wrappers even without GLVND.
 Test only absolute isolated loadout binaries, never a system KLayout workaround.
 
+MarkText is an Electron 42 repack: the official Linux bundle with `ced.node`
+and `native-keymap.node` rebuilt against the EL8 toolchain (gcc-toolset-14; the
+upstream addons need GLIBCXX_3.4.29 / GLIBC_2.34), an NSS/NSPR + libsecret +
+libxkbfile + cups/avahi closure co-located in the package's `lib64`, and `chrome-sandbox`
+removed (Chromium needs unprivileged user namespaces; hosts that block
+CLONE_NEWUSER skip the probe, like firefox). Its launcher composes
+`build/gui-wrapper-env.sh` + `build/gtk3-launcher-env.sh`; every fragment must
+end in a newline — a missing one fuses the last line into the next fragment's
+first and shipped in the gtkwave/gvim/twinwave/rtlbrowse/mate-terminal wrappers
+until `tests/prebuilt-binaries` gained a composition + fused-line scan.
+
 The Helix runtime lives at `payload/<platform>/runtime/helix.tar.bz2`; the
 installer extracts it to `~/.local/share/helix/runtime`; `runtime/tutor` is the
 sentinel file. The Vim runtime lives at `payload/<platform>/runtime/vim92.tar.bz2`;

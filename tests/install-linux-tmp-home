@@ -145,6 +145,15 @@ if ! grep -Eq "env-bash[[:space:]|│]+done" "$install_log"; then
     echo "Expected 'env-bash' done row in Summary table" >&2
     exit 1
 fi
+# No phase may be FAILED: the curated set must install completely. This is
+# what catches an artifact that could not be installed (e.g. a python-tool
+# whose offline wheel closure lost a dependency): the phase prints FAILED but
+# the install still exits 0.
+if grep -Eq "FAILED" "$install_log"; then
+    echo "Install reported FAILED phase(s):" >&2
+    grep "FAILED" "$install_log" >&2
+    exit 1
+fi
 if [[ "$with_fonts" != "1" && -d "$test_home/local/share/fonts" ]]; then
     echo "Expected no fonts dir when @fonts-all is skipped" >&2
     exit 1

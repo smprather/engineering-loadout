@@ -144,7 +144,7 @@ with open(path) as f:
     data = json.load(f)
 data['packages']['nvim-qt']['version'] = ver
 with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 print('packages.json: nvim-qt version -> ' + ver)
 PYEOF

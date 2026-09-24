@@ -215,7 +215,7 @@ if 'flameshot' in data['packages']:
 else:
     print('WARNING: flameshot not in packages.json')
 with open(path, 'w') as f:
-    json.dump(data, f, indent=2); f.write('\n')
+    json.dump(data, f, indent=2, ensure_ascii=False); f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION"
 
 echo "==> Running strip-all-elf-binaries ..."

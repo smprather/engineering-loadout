@@ -164,6 +164,19 @@ RUN dnf install -y -q epel-release \
         libpcap-devel \
         # tcl (expect) and a python3 for host-driven build tooling:
         tcl-devel python3 \
+        # marktext (build-marktext.sh): the shanghai bundle co-locates an
+        # NSS/NSPR + libsecret + libxkbfile + cups/avahi runtime closure, so
+        # the EL8 runtime rpms must be present to copy from (the script reads
+        # them via ldconfig -- it never shells out to dnf).  Note libxkbfile's
+        # RUNTIME rpm is separate from the -devel package above.  cups-libs +
+        # avahi-libs are deliberately explicit: stock almalinux:8.10 does NOT
+        # install them, which is why the first cut shipped without co-locating
+        # libcups and failed Tier 3.
+        nss nspr libsecret libxkbfile cups-libs avahi-libs \
+        # marktext stage-verify runs the real app under a virtual display
+        # (a --version banner alone does not load native-keymap -- verified),
+        # so a headless X server plus an inspection client are prerequisites.
+        xorg-x11-server-Xvfb xdpyinfo \
     && dnf clean all
 
 # Current CMake from Kitware's official binary tarball, shadowing the removed

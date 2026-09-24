@@ -234,7 +234,7 @@ if 'tkdiff' in pkgs:
     if 'tk' not in deps:
         deps.append('tk')
 with open(path, 'w') as f:
-    json.dump(data, f, indent=2)
+    json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
 " "$REPO/payload/packages.json" "$VERSION" "$TKLIB_NAME"
 

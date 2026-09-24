@@ -883,7 +883,7 @@
         "monitoring",
         "system"
       ],
-      "description": "Per-process network bandwidth monitor (TUI, like top for network traffic). NEEDs libpcap.so.1 \u2014 shipped as an unclaimed lib64 stem, built from the libpcap 1.9.1 tarball with --disable-rdma/--disable-bluetooth/--disable-dbus so its own closure stays at libc (the EL8 rpm hard-links libibverbs, absent on both EL8 base and newer hosts). Root or cap_net_admin/cap_net_raw/cap_dac_read_search/cap_sys_ptrace is required to capture."
+      "description": "Per-process network bandwidth monitor (TUI, like top for network traffic). NEEDs libpcap.so.1 — shipped as an unclaimed lib64 stem, built from the libpcap 1.9.1 tarball with --disable-rdma/--disable-bluetooth/--disable-dbus so its own closure stays at libc (the EL8 rpm hard-links libibverbs, absent on both EL8 base and newer hosts). Root or cap_net_admin/cap_net_raw/cap_dac_read_search/cap_sys_ptrace is required to capture."
     },
     "openroad": {
       "kind": "bin",
@@ -2210,6 +2210,57 @@
       ],
       "missing_hint": "GTKWave man pages, example waveforms, and desktop/MIME/icon registration will NOT be installed; the viewer and converters still work"
     },
+    "marktext": {
+      "kind": "bin",
+      "bins": [],
+      "archive": "payload/PLATFORM/runtime/marktext.tar.bz2",
+      "version": "0.19.1",
+      "version_url": "https://github.com/marktext/marktext/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "markdown",
+        "editor",
+        "gui"
+      ],
+      "depends": [
+        "gui_libs",
+        "mesa3d_libs"
+      ],
+      "description": "MarkText — simple and elegant markdown editor (Electron/Chromium GUI). Ships the official Linux release bundle with two native addons rebuilt against EL8: upstream ced.node needs GLIBCXX_3.4.29 and native-keymap.node needs GLIBC_2.34, both above the EL8 floor, and both are loaded by top-level require() at startup. An NSS/NSPR + libsecret + libxkbfile + cups/avahi closure is co-located in lib64; libudev is assumed host-provided (EL8 BaseOS).",
+      "install_to": "~/.local",
+      "sentinel": "bin/marktext",
+      "chmod_sentinel": true,
+      "remove_before_extract": [
+        "bin/marktext",
+        "lib/marktext",
+        "lib64/libnss3.so"
+      ],
+      "missing_hint": "MarkText will NOT be installed (it is an optional GUI editor)",
+      "libs": [
+        "libX11.so.6",
+        "libXcomposite.so.1",
+        "libXdamage.so.1",
+        "libXext.so.6",
+        "libXfixes.so.3",
+        "libXrandr.so.2",
+        "libasound.so.2",
+        "libatk-1.0.so.0",
+        "libatk-bridge-2.0.so.0",
+        "libatspi.so.0",
+        "libcairo.so.2",
+        "libdbus-1.so.3",
+        "libexpat.so.1",
+        "libgio-2.0.so.0",
+        "libglib-2.0.so.0",
+        "libgobject-2.0.so.0",
+        "libgtk-3.so.0",
+        "libpango-1.0.so.0",
+        "libxcb.so.1",
+        "libxkbcommon.so.0"
+      ]
+    },
     "klayout": {
       "kind": "bin",
       "bins": [],
@@ -2758,6 +2809,7 @@
         "numpy",
         "rich-click",
         "uplot-python",
+        "plotext",
         "msgpack",
         "rich",
         "markdown-it-py",
@@ -3616,7 +3668,8 @@
       "kind": "group",
       "members": [
         "gvim",
-        "meld"
+        "meld",
+        "marktext"
       ],
       "description": "GUI editors (depend on gui_libs)"
     },
@@ -3955,6 +4008,7 @@
       "kind": "bin",
       "bins": [
         "yosys",
+        "yosys.bin",
         "yosys-abc",
         "yosys-config",
         "yosys-filterlib",

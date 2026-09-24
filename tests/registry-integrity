@@ -28,6 +28,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -195,6 +196,18 @@ def main():
         if mapped not in registry and mapped not in bin_owners:
             stray.append(tool)
     check("farm-versions TOOLS names map to registry packages", not stray, ", ".join(stray))
+
+    # 9. packages.json is stored as raw UTF-8, not \uXXXX escapes. Every build
+    # script that re-dumps the file must pass ensure_ascii=False; a writer that
+    # forgets churns every non-ASCII description on its next run (regressed
+    # twice -- the second time via a brand-new build script).
+    text = open(PACKAGES_JSON, encoding="utf-8").read()
+    escapes = re.findall(r"\\u[0-9a-fA-F]{4}", text)
+    check(
+        "packages.json is raw UTF-8 (no \\uXXXX escapes)",
+        not escapes,
+        f"{len(escapes)} escaped characters",
+    )
 
     # 8. scan-for-malware target directories must exist. A rename that leaves a
     # stale path turns the scan into a silent no-op (this is exactly how the

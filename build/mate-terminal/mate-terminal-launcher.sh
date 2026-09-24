@@ -97,7 +97,8 @@ if [ "$_fc_mode" != "0" ]; then
     export LD_PRELOAD
   fi
 fi
-unset _host_fc _fc_mode# build/gtk3-launcher-env.sh -- GTK3-on-newer-hosts adaptation block for GUI
+unset _host_fc _fc_mode
+# build/gtk3-launcher-env.sh -- GTK3-on-newer-hosts adaptation block for GUI
 # launchers. Inlined by build scripts (cat it in; the installed wrapper must
 # stay a self-contained script with no repo runtime dependency), AFTER
 # build/gui-wrapper-env.sh, which owns the host-GL probe and the

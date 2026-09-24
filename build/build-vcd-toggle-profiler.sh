@@ -137,7 +137,7 @@ with open(path, encoding="utf-8") as fh:
     data = json.load(fh)
 data["packages"]["vcd-toggle-profiler"]["version"] = version
 with open(path, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2, ensure_ascii=True)
+    json.dump(data, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
 print(f"packages.json: vcd-toggle-profiler version -> {version}")
 PY

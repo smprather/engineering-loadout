@@ -91,6 +91,17 @@ HOST_REQUIRED_CAPABILITIES = {
         "user namespaces -- firefox's sandbox calls clone(CLONE_NEWUSER) before it "
         "will even print --version, and Docker blocks that by default",
     ),
+    # MarkText is Electron 42: the zygote requires a usable sandbox. The SUID
+    # helper is not installable in a no-root per-user tree (chrome-sandbox needs
+    # owner root:root mode 4755), so the app relies on UNSHARED USER NAMESPACES.
+    # Electron FATALs -- "No usable sandbox!" -- before it prints a version on
+    # any host that denies userns (Docker's default seccomp profile, AppArmor
+    # userns restrictions on newer Ubuntu): a skip, exactly like firefox, and
+    # NOT a packaging defect. On hosts with userns the probe runs and exits 0.
+    "marktext": (
+        ["unshare", "-U", "true"],
+        "user namespaces -- Electron's sandbox needs unprivileged CLONE_NEWUSER, and Docker blocks that by default",
+    ),
     # IDLE imports Tkinter at module scope, before it parses arguments, so it
     # cannot reach exit 0 without a loadable Tk -- not even for -h.
     "idle3": (["python3.14", "-c", "import tkinter"], "a loadable Tk for IDLE"),
@@ -191,6 +202,9 @@ PROBE_FLAGS = {
     # rejects `--version`/`--help` with "unknown option". Running the `quit`
     # command exits 0 and proves the interpreter came up.
     "yosys-abc": [["-c", "quit"]],
+    # MarkText takes the Electron set: --version prints the Electron/Chromium
+    # banner and exits 0 without a display.
+    "marktext": [["--version"]],
 }
 DEFAULT_PROBE = [["--version"], ["-V"], ["-version"], ["--help"]]
 
@@ -701,6 +715,116 @@ def smoke_klayout_wrappers(tmpdir):
                         f"{name}: {overrides}: {key}={actual.get(key)!r}, expected {value!r}"
                     )
     print(f"  OK   (wrapper):      klayout {len(names)} launchers x {len(cases)} environment cases")
+
+
+def smoke_marktext_wrapper(tmpdir):
+    """Verify the installed marktext launcher and its native-addon payload.
+
+    Three independent things must hold, and each has a failure mode that a
+    `--version` smoke alone does not catch:
+
+    1. COMPOSITION -- the wrapper is assembled at build time from
+       build/gui-wrapper-env.sh + build/gtk3-launcher-env.sh (the mate-terminal /
+       gvim idiom). Those fragments are concatenated with `cat`, so a fragment
+       that does not END IN A NEWLINE fuses its last line with the next
+       fragment's first: the shipped line became
+           unset _host_fc _fc_mode# build/gtk3-launcher-env.sh -- ...
+       which runs (bash keeps going) but leaks `not a valid identifier` noise to
+       stderr and leaves _fc_mode set. That defect shipped in gtkwave/gvim/
+       twinwave/rtlbrowse/mate-terminal wrappers. Asserting the composed bytes
+       match the sources AND that no line carries a fused comment catches it.
+
+    2. FUSED-LINE SCAN -- over EVERY installed wrapper, not just marktext, so a
+       fragment edit cannot silently reintroduce the class.
+
+    3. NATIVE ADDONS -- ced.node and native-keymap.node are module-scope
+       requires with no try/catch, so an unloadable one is startup-fatal rather
+       than degraded. The official bundle ships them built for a newer glibc
+       (GLIBC_2.34 / GLIBCXX_3.4.29); the build script rebuilds both against the
+       EL8 toolchain, and this asserts the shipped copies stay loadable at the
+       EL8 floor. `marktext --version` does NOT load native-keymap (proven with
+       a poison test), which is exactly why this runs the addons directly via
+       ELECTRON_RUN_AS_NODE instead of trusting the version smoke.
+    """
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prefix = os.path.join(tmpdir, "local")
+    installed = os.path.join(prefix, "bin", "marktext")
+    assert os.path.isfile(installed), "marktext wrapper not installed"
+    with open(installed) as fh:
+        wrapper = fh.read()
+
+    # 1. composition
+    parts = []
+    for fragment in ("gui-wrapper-env.sh", "gtk3-launcher-env.sh"):
+        with open(os.path.join(repo, "build", fragment)) as fh:
+            text = fh.read()
+        assert text.endswith("\n"), (
+            f"build/{fragment} does not end in a newline -- concatenating it into "
+            f"a launcher fuses its last line with the next fragment's first"
+        )
+        parts.append(text)
+    assert all(part in wrapper for part in parts), "marktext wrapper lacks a composed fragment"
+    # and every line of the composed fragments must be intact
+    for fragment, text in zip(("gui-wrapper-env.sh", "gtk3-launcher-env.sh"), parts, strict=True):
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                assert stripped in wrapper, f"build/{fragment}: line lost in composition: {stripped[:60]}"
+
+    # 2. fused-line scan over every installed wrapper (regression guard)
+    fused = []
+    bindir = os.path.join(prefix, "bin")
+    for name in sorted(os.listdir(bindir)):
+        path = os.path.join(bindir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                head = fh.read(4096)
+        except OSError:
+            continue
+        if not head.startswith(b"#!") or b"sh" not in head.split(b"\n", 1)[0]:
+            continue
+        with open(path, errors="replace") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if "_host_fc _fc_mode#" in line:
+                    fused.append(f"{name}:{lineno}")
+    assert not fused, "fused composition lines in installed wrappers: " + ", ".join(fused)
+
+    # 3. native addons load at the EL8 floor
+    #
+    # Paths mirror what the app's own module-scope requires resolve to; both a
+    # `bin/linux-x64-146/` prebuilt and a `build/Release/` copy ship for ced and
+    # native-keymap, and the app loads the linux-x64-146 one (it carries the
+    # process.versions.modules ABI in its directory name). keytar ships only the
+    # build/Release form.
+    addon_root = os.path.join(prefix, "lib", "marktext", "resources", "app.asar.unpacked", "node_modules")
+    addons = {
+        "ced": os.path.join(addon_root, "ced", "bin", "linux-x64-146", "ced.node"),
+        "native-keymap": os.path.join(addon_root, "native-keymap", "bin", "linux-x64-146", "native-keymap.node"),
+        "keytar": os.path.join(addon_root, "keytar", "build", "Release", "keytar.node"),
+    }
+    real = os.path.join(prefix, "lib", "marktext", "marktext")
+    env = {
+        "HOME": tmpdir,
+        "PATH": os.path.join(prefix, "bin") + ":" + BASIC_PATH,
+        "LD_LIBRARY_PATH": os.path.join(prefix, "lib64"),
+        "ELECTRON_RUN_AS_NODE": "1",
+    }
+    missing = [name for name, path in addons.items() if not os.path.isfile(path)]
+    assert not missing, "native addon payload missing: " + ", ".join(missing)
+    for name, path in addons.items():
+        proc = subprocess.run(
+            [real, "-e", f'process.dlopen(module, "{path}"); console.log("LOADED {name}")'],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert proc.returncode == 0 and f"LOADED {name}" in proc.stdout, (
+            f"{name}.node failed to load: rc={proc.returncode} {(proc.stderr or proc.stdout).strip()[:200]}"
+        )
+    print(f"  OK   (wrapper):      marktext launcher composition + {len(addons)} native addons")
 
 
 def smoke_pythonpath_launcher_wrappers(tmpdir, failures):
@@ -1215,6 +1339,13 @@ def smoke_runtime_layout(tmpdir, env):
         except Exception as exc:
             print(f"  FAIL (wrapper):      klayout {exc}")
             failures.append(("klayout wrappers", str(exc)))
+
+    if has_bin("marktext"):
+        try:
+            smoke_marktext_wrapper(tmpdir)
+        except Exception as exc:
+            print(f"  FAIL (wrapper):      marktext {exc}")
+            failures.append(("marktext wrapper", str(exc)))
 
     smoke_pythonpath_launcher_wrappers(tmpdir, failures)
 

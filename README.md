@@ -277,6 +277,7 @@ OpenSSH for those.
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
 | miller | bin | 6.21.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |
 | mermaid-ascii | bin | 1.6.1 | Terminal mermaid-to-ASCII renderer — flowcharts as text diagrams |
+| marktext | bin | 0.19.1 | MarkText — simple and elegant markdown editor (Electron/Chromium GUI). Ships the official Linux release bundle with two native addons rebuilt against EL8 (`ced.node` upstream needs GLIBCXX_3.4.29 and `native-keymap.node` needs GLIBC_2.34 — both above the EL8 floor, and both loaded by top-level `require()` at startup); an NSS/NSPR + libsecret + libxkbfile + cups/avahi closure is co-located in `lib64`. Member of @editor-gui |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.5.1 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |

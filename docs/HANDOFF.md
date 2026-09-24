@@ -1,10 +1,117 @@
 # Current Handoff
 
-Last updated: 2026-09-22 (btop theme-set/tour finished + xclip onboarded;
-librelane audited -- 3 blockers found, unfixed; UNCOMMITTED). Prior release:
-`v2026.09.18` RELEASED + verified, HEAD `f306c23`.
+Last updated: 2026-09-23 (marktext onboarded + fused GTK3 launcher composition
+fixed; release v2026.09.23 being cut). Committed since v2026.09.18: `b6e769a`
+(librelane end-to-end, btop themes, nethogs, xclip) and this release's marktext
++ launcher fix. Prior release: `v2026.09.18` RELEASED + verified (tag
+`44f4613`, docs commit `f306c23`).
 
-## 2026-09-22: xclip 0.13 onboarded + btop theme set finished (UNCOMMITTED, UNRELEASED)
+## 2026-09-23: marktext 0.19.1 + fused-line launcher fix (release v2026.09.23)
+
+### marktext (NEW package, `@editor-gui`)
+
+Electron 42 markdown editor: official Linux release bundle repacked (not a
+source build). Two native addons are module-scope `require()`s with no
+fallback and ship built above the EL8 floor: `ced.node` (GLIBCXX_3.4.29) and
+`native-keymap.node` (GLIBC_2.34). Both rebuilt against EL8 (gcc-toolset-14,
+node-gyp run via portable-python; native-keymap uses MarkText's own patch).
+NSS/NSPR + libsecret + libxkbfile + libcups/avahi co-located in the package
+lib64 (RPATH $ORIGIN; never libnssckbi -- firefox rule). The first cut assumed
+libcups host-provided ("EL8 AppStream"); a STOCK almalinux:8.10 image has no
+cups-libs/avahi-libs, so Tier 3 failed the marktext addon smoke with
+`libcups.so.2: cannot open shared object file`. Rebuilt with the three libs
+co-located and a new main-process poison negative control in the build verify
+(the build image's own cups had masked the gap); re-verified in a stock EL8
+container: no missing NEEDEDs, `marktext --no-sandbox --version` = v0.19.1.
+`chrome-sandbox` deleted (SUID 4755 impossible in a per-user tree; Chromium
+FATALs on a misconfigured helper), so the app needs unprivileged userns: the
+probe skips when CLONE_NEWUSER is blocked, like firefox. depends [gui_libs, mesa3d_libs]; non-optional, so it
+joins `@shared` and `@editor-gui` (gvim+meld+marktext). Artifacts:
+`runtime/marktext.tar.bz2.part-000..002` + `build/build-marktext.sh` (both
+untracked before this release). Build: `build/build-marktext.sh --tag v0.19.1`
+in the EL8 container; pinned hashes + stage-verify in ADDING_BINARIES.md.
+Dest-dir verified: `marktext --version` = `MarkText: v0.19.1` / Electron
+42.1.0, all three addons dlopen via ELECTRON_RUN_AS_NODE, wrapper has no fused
+line.
+
+### Fused GTK3 launcher composition (payload fix)
+
+`build/gui-wrapper-env.sh` had no trailing newline, so the next concatenated
+fragment's first line fused into its last: `unset _host_fc _fc_mode# ...`
+shipped in gtkwave/twinwave/rtlbrowse/gvim/mate-terminal wrappers (still runs,
+but leaks `not a valid identifier` to stderr and leaves `_fc_mode` set). Fixed
+in the fragment + `build/gvim-launcher.sh` + the mate-terminal launcher; the
+five payload artifacts repacked. `build/klayout/klayout` dropped the blank
+line after the marker so the (unrepacked) KLayout payload still matches the
+composed source byte-for-byte -- verified by recomposition. `tests/prebuilt-binaries`
+now asserts fragment newline-termination, composes marktext's wrapper against
+the sources, and fused-line-scans EVERY installed wrapper (RED proven by the
+marktext smoke before the fix).
+
+### packages.json writer regression (fixed)
+
+`build/build-marktext.sh` re-dumped the whole registry with the json default
+`ensure_ascii=True`, escaping every em-dash and violating the file's raw-UTF-8
+policy (set 2026-09-14). All 17 whole-file writers now pass
+`ensure_ascii=False` (firefox/fish/klayout/verilator already did);
+`tests/registry-integrity` gained a `\uXXXX`-escape gate (RED/GREEN proven).
+HEAD itself had one escaped line (nethogs, from build-simple-c.sh) -- also
+normalized.
+
+### run-all Tier 3 cache hole (fixed)
+
+`tests/run-all`'s all-mode cache compared the current tree against a sidecar
+written by the LAST full run -- and a plain (non---container) Tier 2 run
+rewrote that sidecar. A following `--container` run therefore CACHED-PASSed
+the container smoke on a stale `.pass` from any earlier container run
+(observed this session: the first `--container` after T2 reported CACHED PASS
+for a payload the container had never seen). Container tests now use their own
+`fingerprint-container.json`, written only by `--container` runs, so a plain
+Tier 2 run can no longer bless them. The re-run immediately found the libcups
+defect above, which had shipped through the build-time stage verify.
+
+### Currency + security (this release)
+
+- `check-versions --outdated-only`: agent-deck 1.16.16, fio 3.43, gvim/vim
+  9.2.1125, jupyterlab 4.6.4, nodejs 26.10.0, rsync 3.5.1, ty 0.0.83, uv
+  0.12.18 -- all DELIBERATELY carried (see deferrals); ncdu lookup 503;
+  less/pdftotext remain pinned.
+- `./build/update --currency`: every automated package `held` (6mo cadence;
+  v2026.09.18 swept four days ago). Named refreshes only.
+- Security: yara-rules 20260913 -> 20260920; tldr-data refreshed; ClamAV
+  daily built 2026-09-23 (freshclam log-locked by the running daemon --
+  benign, DB verified current).
+- Post-payload chain re-run to green: sizes 6196 artifacts, manifest 4450
+  files; strip in the EL8 container rewrote 2 tars (tldr + yara data
+  pass-through).
+- assurance: no re-pin owed (portable-python is not assurance-tracked;
+  nvim/rust/treesitter/git-nvim/crate-store untouched); `assurance-check`
+  35/35 green.
+
+### Carried deferrals (unchanged from v2026.09.18)
+
+jupyterlab shared-dep hazard (now 4.6.4), ncdu (code.blicky.net 503), less 704
+(upstream 710 deleted lesskey), pdftotext pin (fontconfig floor), crate-store
+closures for bumped ty/uv, librelane stage-32 tool-version skew (see the
+librelane section below -- packaging complete, not chased).
+
+### Release checklist state (v2026.09.23, class C)
+
+- [x] gh auth ok; signing key loaded into `~/.ssh/loadout-agent.sock`
+- [x] currency + security above
+- [x] post-payload chain + `--check`s (sizes 6197 artifacts, manifest 4451)
+- [x] docs sync: README table, AGENTS (marktext + composition invariant),
+      copilot-instructions, ADDING_BINARIES, completion regen, this file
+- [x] Tier 1/2/3 green on the final tree: `tests/run-all --container` rc=0;
+      container smoke `All 320 binaries OK (23 skipped)`; marktext wrapper
+      smoke `OK (wrapper): launcher composition + 3 native addons` (the
+      `--version` skip is the probe-based userns host contract)
+- [x] Two gate findings fixed during the release (see above): libcups/avahi
+      co-location + the run-all container-cache hole
+- [ ] commit, `./build/release --tag v2026.09.23`, §9 verify -- results in the
+      post-release docs commit
+
+## 2026-09-22: xclip 0.13 onboarded + btop theme set finished (COMMITTED b6e769a, UNRELEASED)
 
 Two workstreams, both from the 2026-09-21 btop session's leftovers (that
 session was interrupted while proving them; xclip had been requested and only
@@ -69,7 +176,7 @@ mermaid-ascii, netlistsvg, librelane -- one run); commit + release when
 requested (payload bytes added -> class C). librelane is NOT yet runnable
 end-to-end -- see the audit below (three blockers).
 
-## 2026-09-22: librelane component audit -- three blockers, ALL FIXED (UNCOMMITTED, UNRELEASED)
+## 2026-09-22: librelane component audit -- three blockers, ALL FIXED (COMMITTED b6e769a, UNRELEASED)
 
 Question asked: does the onboarded `librelane` package have every component a
 real flow needs? Answer: no. Audit used the package's own acceptance test,
@@ -347,7 +454,7 @@ functions every Python-bound tool exports) and can miss broken ones.
 - `--smoke-test` needs real tools + a PDK, so it cannot live in T1/T2; it
   belongs in the container/native EDA gate once the blockers are fixed.
 
-## 2026-09-20: librelane 3.0.6 onboarded (UNCOMMITTED, UNRELEASED)
+## 2026-09-20: librelane 3.0.6 onboarded (COMMITTED b6e769a, UNRELEASED)
 
 New `kind:python-tool` package: LibreLane ASIC implementation-flow
 infrastructure, **Python layer only** (Classic/Chip flows; EDA tools and PDKs
