@@ -1,9 +1,9 @@
 # Current Handoff
 
-Last updated: 2026-09-23 (marktext onboarded + fused GTK3 launcher composition
-fixed; release v2026.09.23 being cut). Committed since v2026.09.18: `b6e769a`
-(librelane end-to-end, btop themes, nethogs, xclip) and this release's marktext
-+ launcher fix. Prior release: `v2026.09.18` RELEASED + verified (tag
+Last updated: 2026-09-24 (v2026.09.23 RELEASED + verified; release commit
+`032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane end-to-end,
+btop themes, nethogs, xclip) and `032c1d0` (marktext + fused-line launcher
+fix + gate fixes). Prior release: `v2026.09.18` RELEASED + verified (tag
 `44f4613`, docs commit `f306c23`).
 
 ## 2026-09-23: marktext 0.19.1 + fused-line launcher fix (release v2026.09.23)
@@ -108,8 +108,25 @@ librelane section below -- packaging complete, not chased).
       `--version` skip is the probe-based userns host contract)
 - [x] Two gate findings fixed during the release (see above): libcups/avahi
       co-location + the run-all container-cache hole
-- [ ] commit, `./build/release --tag v2026.09.23`, §9 verify -- results in the
-      post-release docs commit
+- [x] committed `032c1d0`; `./build/release --tag v2026.09.23` published;
+      §9 verified (below)
+
+### v2026.09.23 (RELEASED 2026-09-24)
+
+Class C. Tag signed ED25519 (Good signature), `origin/main ==
+v2026.09.23^{commit}` (`032c1d0`), `isDraft=false`. All three assets present:
+sha256sums.txt, default.content-manifest, nvim-plugin-stash.tar.bz2
+(344538464 B; sha `28a5ad38...` matches both the local stash and the
+v2026.09.18 hash -- bytes unchanged, re-uploaded as a new-tag asset).
+Published `.content-manifest` sha `b62d2acc...` matches the local file. Gates:
+T1+T2+T3 `tests/run-all --container` rc=0 (container smoke `All 320 binaries
+OK (23 skipped)`), dry-run + real scan CLEAN 0/78645 (YARA-Forge 20260920,
+ClamAV 1.5.4/28132), native smoke `All 342 binaries OK (1 skipped)`. Release
+notes table still comes from farm-versions (open defect entry 9). Two gate
+defects were found and fixed BY this release cycle: the libcups/avahi closure
+and the run-all container-cache hole (both above). Follow-ups carried:
+jupyterlab 4.6.4, ncdu (code.blicky.net 503), less 704, pdftotext pin,
+crate-store closures, librelane stage-32 tool-version skew.
 
 ## 2026-09-22: xclip 0.13 onboarded + btop theme set finished (COMMITTED b6e769a, UNRELEASED)
 
