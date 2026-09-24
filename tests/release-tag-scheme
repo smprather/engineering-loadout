@@ -1,0 +1,127 @@
+#!/usr/bin/env python3.14
+"""release-tag-scheme -- pin the YYYY.M.N tag policy in ./build/release.
+
+The release tag is derived, not typed, so the derivation gets pinned without a
+real release:
+
+  1. Month-scoped, 1-based, unpadded counter (canonical PEP 440): `2026.9.1`,
+     never `2026.09.1`. Legacy `v<YYYY.MM.DD>` tags and other months never count.
+  2. A bare run bumps only when the month's latest tag has a fully published
+     release; a tag with no release, a draft, or an unreadable state must REFUSE
+     (naming the exact `--tag` repair) rather than silently bump past a
+     half-finished release. Explicit --tag stays the overwrite/repair path.
+"""
+
+import datetime
+import importlib.machinery
+import importlib.util
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+loader = importlib.machinery.SourceFileLoader("release_mod", os.path.join(REPO, "build", "release"))
+spec = importlib.util.spec_from_loader("release_mod", loader)
+rel = importlib.util.module_from_spec(spec)
+loader.exec_module(rel)
+
+FAILURES = []
+
+
+def check(label, cond, detail=""):
+    if cond:
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append(label)
+
+
+def _fake_gh(tmp, script):
+    """Install a fake `gh` on PATH; returns the previous PATH value."""
+    path = os.path.join(tmp, "gh")
+    with open(path, "w") as fh:
+        fh.write("#!/bin/sh\n")
+        fh.write(script)
+    os.chmod(path, 0o755)
+    old = os.environ.get("PATH", "")
+    os.environ["PATH"] = tmp + os.pathsep + old
+    return old
+
+
+def main():
+    sep = datetime.date(2026, 9, 24)
+
+    print("month counter")
+    check("no tags -> None", rel._month_counter([], sep) is None)
+    check("plain tags -> max", rel._month_counter(["2026.9.1", "2026.9.2"], sep) == 2)
+    check("double digits are numeric, not lexical", rel._month_counter(["2026.9.9", "2026.9.10"], sep) == 10)
+    check("legacy v-tags ignored", rel._month_counter(["v2026.09.23", "v2026.9.22"], sep) is None)
+    check("zero-padded segments ignored", rel._month_counter(["2026.09.1", "2026.9.01"], sep) is None)
+    check("zero counter ignored (scheme is 1-based)", rel._month_counter(["2026.9.0"], sep) is None)
+    check("other months ignored", rel._month_counter(["2026.8.7", "2026.10.1"], sep) is None)
+    check("ignores legacy while counting real", rel._month_counter(["2026.9.1", "v2026.9.23", "2026.10.1"], sep) == 1)
+    check("month 10+ works", rel._month_counter(["2026.10.3"], datetime.date(2026, 10, 2)) == 3)
+
+    print("bump / refuse")
+    tag, refusal = rel._plan_next_tag(sep, None, False)
+    check("first release of the month is .1", tag == "2026.9.1" and refusal is None, f"{tag!r} {refusal!r}")
+
+    tag, refusal = rel._plan_next_tag(sep, 4, True)
+    check("published latest -> bump", tag == "2026.9.5" and refusal is None, f"{tag!r} {refusal!r}")
+
+    tag, refusal = rel._plan_next_tag(sep, 4, False)
+    check("unpublished latest -> refuse", tag is None and refusal is not None, f"{tag!r} {refusal!r}")
+    check(
+        "refusal names the exact repair tag",
+        refusal is not None and "--tag 2026.9.4" in refusal,
+        repr(refusal),
+    )
+
+    tag, refusal = rel._plan_next_tag(datetime.date(2026, 10, 1), None, False)
+    check("month reset starts at .1", tag == "2026.10.1" and refusal is None, f"{tag!r} {refusal!r}")
+
+    tag, refusal = rel._plan_next_tag(datetime.date(2027, 1, 1), None, False)
+    check("year rollover starts at .1", tag == "2027.1.1" and refusal is None, f"{tag!r} {refusal!r}")
+
+    print("release state check (fake gh on PATH)")
+    with tempfile.TemporaryDirectory() as tmp:
+        old_path = _fake_gh(tmp, "echo '{\"isDraft\": false}'\n")
+        try:
+            published, detail = rel._release_published("2026.9.4")
+        finally:
+            os.environ["PATH"] = old_path
+        check("published release -> True", published and not detail, f"{published!r} {detail!r}")
+
+        old_path = _fake_gh(tmp, "echo '{\"isDraft\": true}'\n")
+        try:
+            published, detail = rel._release_published("2026.9.4")
+        finally:
+            os.environ["PATH"] = old_path
+        check(
+            "draft -> False with a DRAFT reason",
+            not published and "DRAFT" in detail,
+            f"{published!r} {detail!r}",
+        )
+
+        old_path = _fake_gh(tmp, "echo 'no such release' >&2\nexit 1\n")
+        try:
+            published, detail = rel._release_published("2026.9.4")
+        finally:
+            os.environ["PATH"] = old_path
+        check(
+            "unreadable/missing -> False (no silent bump)",
+            not published and detail,
+            f"{published!r} {detail!r}",
+        )
+
+    print()
+    if FAILURES:
+        print(f"release-tag-scheme: {len(FAILURES)} FAILED")
+        return 1
+    print("release-tag-scheme: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

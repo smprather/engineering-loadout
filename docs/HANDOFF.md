@@ -6,6 +6,26 @@ btop themes, nethogs, xclip) and `032c1d0` (marktext + fused-line launcher
 fix + gate fixes). Prior release: `v2026.09.18` RELEASED + verified (tag
 `44f4613`, docs commit `f306c23`).
 
+## 2026-09-24: release versioning scheme -> `YYYY.M.N` (unreleased)
+
+`./build/release` no longer derives `v<YYYY.MM.DD>` tags. New tags are
+`YYYY.M.N` (canonical PEP 440: no leading zeros, no `v` prefix), N a 1-based
+month counter; the first new-scheme release is therefore `2026.9.1`, then
+`2026.10.1` after the month rolls (September's legacy `v2026.09.*` releases do
+not count). Old `v*` tags/releases stay -- renaming them would break the signed
+trust chain -- and `_get_version` / `.release-version` need no change (git
+describe just returns the new string).
+
+Bare runs derive the next N and REFUSE to bump when the month's latest tag has
+no fully published release (missing/draft/unreadable -> prints the exact
+`--tag YYYY.M.N` repair). Explicit `--tag` is the overwrite/repair path and now
+prints the old release's `publishedAt` before replacing. Policy (docs/RELEASE.md
+section 8): overwrite only a release that has not earned trust (bad before
+section 9 verification / half-finished run); once trusted, any fix however small
+gets the next N -- offline consumers cannot see an in-place tag move (`-V` is
+unchanged), so a new N is the only update signal. Pinned by T1
+`tests/release-tag-scheme` (fake-`gh` draft/missing cases included).
+
 ## 2026-09-23: marktext 0.19.1 + fused-line launcher fix (release v2026.09.23)
 
 ### marktext (NEW package, `@editor-gui`)

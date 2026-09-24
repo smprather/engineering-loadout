@@ -290,8 +290,31 @@ SSH_AUTH_SOCK=<keyed-socket> ./build/release --dry-run    # gates only, no tag/p
 SSH_AUTH_SOCK=<keyed-socket> ./build/release              # tag + publish
 ```
 
-Useful flags: `--tag vX.Y.Z` (default `v<today>`), `--no-cache` / `--clear-cache`
-(force fresh smoke + scan). Do **not** use `--skip-scan` or `--allow-unsigned`.
+Useful flags: `--tag <tag>` (default: derived, see below), `--no-cache` /
+`--clear-cache` (force fresh smoke + scan). Do **not** use `--skip-scan` or
+`--allow-unsigned`.
+
+**Tag scheme: `YYYY.M.N`.** No leading `v`; N is a 1-based counter within the
+month, unpadded (canonical PEP 440 -- date-based release segments are permitted,
+leading zeros are not). A bare run derives the next counter for the current
+month: `2026.9.1`, `2026.9.2`, ..., then `2026.10.1` when the month rolls over.
+Old `v<YYYY.MM.DD>` tags and releases stay as history -- renaming them would
+break the signed trust chain -- and they are never counted.
+
+**Bump vs. overwrite.** These are the only two moves, and the choice is
+exposure/trust, not the size of the fix:
+
+| the release being superseded | move |
+|---|---|
+| **not yet trusted** -- a half-finished run, or a defect found before section 9 verification | **overwrite**: `./build/release --tag 2026.9.N` replaces that release and moves the tag (stash reused when bytes match) |
+| **trusted** -- section 9 verified, plausibly consumed | **bump**: bare run, next N, however small the fix |
+
+A bare run refuses to bump when the month's latest tag has no fully published
+release (missing, draft, or unreadable state): it prints the exact `--tag`
+repair instead of stranding it. Once a release is trusted, never overwrite it:
+consumers are offline-first, `-V` cannot distinguish an overwritten tag, so a
+new N is the only update signal they get. "No new packages / no CLI change" is a
+sanity check on that judgment, not the criterion.
 
 **The branch is pushed before the tag, by the script.** Through v2026.08.09 this
 script pushed only the tag, so `origin/main` could still point at the *previous*
@@ -342,6 +365,10 @@ git ls-remote origin refs/heads/main    # must equal `git rev-parse <tag>^{commi
 
 The 2026-07-22 release shipped an unsigned tag silently because nothing ever
 re-read the object. Re-read it.
+
+A release becomes *trusted* for the overwrite policy in section 8 once these
+checks pass. Before that, an in-place repair with `--tag <same tag>` is
+legitimate; after it, cut the next N -- never move a verified tag.
 
 ---
 

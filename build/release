@@ -3,8 +3,8 @@
 release: run pre-release gates, then create a GitHub release.
 
 Usage:
-    ./build/release                  # tag today's date, create release
-    ./build/release --tag v2026.05.12
+    ./build/release                  # derive the next YYYY.M.N tag, create release
+    ./build/release --tag 2026.9.7   # exact tag (repair/overwrite, or a pinned release)
     ./build/release --dry-run        # run gates only, no tag or GitHub release
     ./build/release --skip-scan      # skip the malware scan (NOT recommended; for a
                                # known yara false positive only)
@@ -19,9 +19,14 @@ Every release then runs independent pre-release gates in parallel: malware scan,
 binary smoke test, version table, and checksum generation. The final tag and
 GitHub release step runs only after the mandatory gates pass.
 
-The tag is date-based (v<YYYY.MM.DD>). Re-running on the same day REPLACES the
-existing release and tag with the current tree, rather than failing on the
-collision -- a given day's release is always the latest state.
+Tags are `YYYY.M.N` (no leading `v`), N a 1-based counter within the month --
+canonical PEP 440, so no leading zeros (`2026.9.1`, never `2026.09.01`). A bare
+run derives the next counter, but only when the month's latest release is fully
+published: a tag with no release, a draft, or an unreadable state blocks the run
+and names the repair command. Re-running with an explicit existing `--tag`
+REPLACES that release and moves the tag -- the overwrite path for a release that
+has not earned trust yet. Once a release is trusted, ship the next N, however
+small the change (docs/RELEASE.md section 8).
 
 Requires: gh (GitHub CLI) authenticated, git repo with remote set.
 """
@@ -31,6 +36,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -779,15 +785,124 @@ def _push_release_branch():
     print(f"  origin/{branch} verified at {local[:7]}")
 
 
+def _collect_tags():
+    """Local + remote tag names, unioned.
+
+    The remote list is mandatory: a stale clone (or one that never fetched this
+    month's tags) must not lower the counter and mint a tag that already exists.
+    Aborts when `git ls-remote` fails -- an unreadable remote is not proof the
+    counter is free.
+    """
+    tags = set()
+    local = subprocess.run(["git", "tag", "--list"], capture_output=True, text=True)
+    if local.returncode == 0:
+        tags.update(local.stdout.split())
+    remote = subprocess.run(["git", "ls-remote", "--tags", "origin"], capture_output=True, text=True)
+    if remote.returncode != 0:
+        lines = (remote.stderr or remote.stdout).strip().splitlines()
+        detail = lines[-1] if lines else "git ls-remote failed"
+        print(f"Release blocked: cannot read remote tags ({detail}).", file=sys.stderr)
+        sys.exit(1)
+    for line in remote.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].startswith("refs/tags/"):
+            name = parts[1][len("refs/tags/") :]
+            if not name.endswith("^{}"):
+                tags.add(name)
+    return tags
+
+
+def _month_counter(tags, today):
+    """Highest N among `YYYY.M.N` tags for TODAY's month, or None.
+
+    Legacy `v<YYYY.MM.DD>` names, other months, zero-padded segments and the
+    zero counter are ignored: the scheme is unpadded (canonical PEP 440) and
+    1-based, so `2026.9.01` / `2026.9.0` are not ours to count.
+    """
+    prefix = f"{today.year}.{today.month}"
+    pat = re.compile(rf"^{re.escape(prefix)}\.([1-9][0-9]*)$")
+    numbers = [int(m.group(1)) for tag in tags if (m := pat.match(tag))]
+    return max(numbers) if numbers else None
+
+
+def _plan_next_tag(today, latest, latest_published):
+    """The bump rule: (next_tag, None), or (None, refusal message).
+
+    Bump only when the month's latest tag has a fully published release. A tag
+    with no release, a draft, or an unconfirmable state is a half-finished
+    release; bumping past it would strand it, so the refusal names the exact
+    `--tag` repair instead.
+    """
+    prefix = f"{today.year}.{today.month}"
+    if latest is None:
+        return f"{prefix}.1", None
+    if not latest_published:
+        return None, (
+            f"the latest tag {prefix}.{latest} is not a fully published release; "
+            f"repair it with `./build/release --tag {prefix}.{latest}` "
+            "or delete the tag before cutting the next release."
+        )
+    return f"{prefix}.{latest + 1}", None
+
+
+def _release_published(tag):
+    """(published, detail) for TAG's GitHub release.
+
+    True only on positive proof: `gh release view` succeeded and the release is
+    not a draft. Any unreadable state counts as not published -- the bump rule
+    requires evidence the previous release finished, not an absence of evidence.
+    """
+    r = subprocess.run(["gh", "release", "view", tag, "--json", "isDraft"], capture_output=True, text=True)
+    if r.returncode != 0:
+        lines = (r.stderr or r.stdout).strip().splitlines()
+        return False, (lines[-1] if lines else "gh release view failed")
+    try:
+        if json.loads(r.stdout).get("isDraft"):
+            return False, "release is still a DRAFT (invisible to /releases/latest)"
+    except ValueError, AttributeError:
+        return False, "gh release view returned unreadable JSON"
+    return True, ""
+
+
+def _derive_next_tag():
+    """Derive the next `YYYY.M.N` tag for the current month.
+
+    Runs after the preflight (it needs the authenticated `gh` for the release
+    state check), before the gates, so a busy counter or a half-finished
+    previous release surfaces at kickoff rather than after the scan and smoke
+    test. Explicit --tag bypasses this entirely (the overwrite/repair path).
+    """
+    today = datetime.date.today()
+    latest = _month_counter(_collect_tags(), today)
+    published, detail = (True, "") if latest is None else _release_published(f"{today.year}.{today.month}.{latest}")
+    tag, refusal = _plan_next_tag(today, latest, published)
+    if refusal is not None:
+        print(f"\nRelease blocked: {refusal}", file=sys.stderr)
+        if detail:
+            print(f"  ({detail})", file=sys.stderr)
+        sys.exit(1)
+    return tag
+
+
 def _replace_existing_release(tag):
-    """Project policy: a given day's release is always the latest state, and the
-    tag is date-based (v<YYYY.MM.DD>), so a same-day re-run must REPLACE any
-    existing release/tag rather than fail on the collision. Tears down the
-    GitHub release (and its assets) and the remote+local tag; a no-op for a
-    brand-new tag."""
-    exists = subprocess.run(["gh", "release", "view", tag], capture_output=True, text=True)
-    if exists.returncode == 0:
-        print(f"  replacing existing GitHub release {tag} ...")
+    """Replace TAG's GitHub release and tag ref with the current tree.
+
+    This is the explicit-`--tag` overwrite/repair path: the operator named the
+    exact release, so a deliberate replacement cannot be confused with the bare
+    run's append-only bump. Policy (docs/RELEASE.md section 8): overwrite only a
+    release that has not earned trust yet; once trusted, cut the next N instead.
+    Prints the old release's publication time so a stale overwrite is visible.
+    Tears down the GitHub release (and its assets) and the remote+local tag; a
+    no-op for a brand-new tag."""
+    view = subprocess.run(
+        ["gh", "release", "view", tag, "--json", "isDraft,publishedAt"], capture_output=True, text=True
+    )
+    if view.returncode == 0:
+        try:
+            published_at = json.loads(view.stdout).get("publishedAt") or "unknown time"
+        except ValueError, AttributeError:
+            published_at = "unknown time"
+        print(f"  replacing existing GitHub release {tag} (published {published_at}) ...")
         subprocess.run(["gh", "release", "delete", tag, "--yes"])
     _delete_tag(tag)
 
@@ -904,7 +1019,12 @@ def _record_skip_scan_justification(script_dir, tag):
     name="release",
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-@click.option("--tag", default=None, metavar="TAG", help="Release tag (default: v<today YYYY.MM.DD>).")
+@click.option(
+    "--tag",
+    default=None,
+    metavar="TAG",
+    help="Exact release tag (default: next YYYY.M.N counter for this month).",
+)
 @click.option(
     "--dry-run",
     "dry_run",
@@ -955,7 +1075,6 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     smoke_test = os.path.join(script_dir, "tests", "prebuilt-binaries")
     farm_versions = os.path.join(script_dir, "build", "farm-versions")
     malware_scan = os.path.join(script_dir, "build/scan-for-malware")
-    tag = tag or "v{}".format(datetime.date.today().strftime("%Y.%m.%d"))
 
     if clear_cache:
         shutil.rmtree(_smoke_cache_dir(), ignore_errors=True)
@@ -968,6 +1087,13 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
         scan_flags.append("--no-cache")
 
     signing = _preflight(dry_run, allow_unsigned)
+
+    # Tag derivation needs the authenticated gh (release state) and the network
+    # (remote tags). Settling it here means a counter collision or a
+    # half-finished previous release blocks at kickoff, before the slow gates.
+    if tag is None:
+        tag = _derive_next_tag()
+        print(f"  release tag   : {tag} (auto: next YYYY.M.N counter for this month)", flush=True)
 
     release_t0 = time.monotonic()
     results = _run_parallel_pre_release_steps(
@@ -1059,9 +1185,12 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     # every post-publish check while advertising a tree nobody can pull.
     _push_release_branch()
 
-    # Same-day releases replace the existing one (date-based tag). When reusing the
-    # stash we must KEEP the release object (it holds the 328 MB asset), so only
-    # the tag is moved; otherwise the whole release is torn down and recreated.
+    # Explicit --tag targets exactly that release: replace it. A bare run only
+    # reaches here after deriving the next counter off a fully published
+    # previous release, so an existing release for THIS tag means the operator
+    # named it deliberately. When reusing the stash we must KEEP the release
+    # object (it holds the 328 MB asset), so only the tag is moved; otherwise
+    # the whole release is torn down and recreated.
     if reuse_stash:
         _delete_tag(tag)
     else:
