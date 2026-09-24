@@ -1,0 +1,172 @@
+#!/usr/bin/env python3.14
+"""sbom -- CycloneDX SBOM of the pinned closure, for the release assets.
+
+syft (pinned in build/security_tools.py) catalogs the Python wheelhouse; wheels
+are zip archives, so they are extracted to a temp tree first (syft's python
+cataloger reads the *.dist-info/METADATA inside). syft does not understand
+assurance/crate-store.lock (it is a loadout lock, not a Cargo.lock), so the
+Rust crate components are appended from that lock, and the registry's own
+binaries/runtimes are appended from payload/packages.json. Composition is
+recorded in the document's metadata.properties.
+
+The output (default sbom.cdx.json at the repo root) is attached to the release
+and covered by sha256sums.txt: build/release generates it inside the checksum
+step, so the signed sums bind it.
+
+    ./build/sbom                        # write sbom.cdx.json
+    ./build/sbom --output /tmp/x.json
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import zipfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import security_tools  # noqa: E402
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RUST_LOCK = os.path.join(REPO, "assurance", "crate-store.lock")
+REGISTRY = os.path.join(REPO, "payload", "packages.json")
+
+
+def _safe_extract_wheel(wheel_path, dest):
+    """Extract a wheel, refusing members that would escape dest."""
+    with zipfile.ZipFile(wheel_path) as zf:
+        for member in zf.infolist():
+            name = member.filename
+            if name.startswith(("/", "\\")) or ".." in name.replace("\\", "/").split("/"):
+                continue
+            zf.extract(member, dest)
+
+
+def _rust_components():
+    """[(name, version)] from the loadout crate lock (name version sha256)."""
+    packages = []
+    if not os.path.isfile(RUST_LOCK):
+        return packages
+    with open(RUST_LOCK) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) >= 2:
+                packages.append((parts[0], parts[1]))
+    return packages
+
+
+def _registry_components():
+    """Registry packages as components (the shipped binaries/runtimes)."""
+    with open(REGISTRY) as fh:
+        packages = json.load(fh).get("packages", {})
+    out = []
+    for name, entry in sorted(packages.items()):
+        if name.startswith("@") or "version" not in entry:
+            continue
+        out.append((name, str(entry["version"]), entry.get("kind", "bin")))
+    return out
+
+
+def _component(name, version, ctype, purl=None, extra=None):
+    comp = {"type": ctype, "name": name, "version": version}
+    if purl:
+        comp["purl"] = purl
+    if extra:
+        comp["properties"] = extra
+    return comp
+
+
+def main(argv):
+    output = os.path.join(REPO, "sbom.cdx.json")
+    if "--output" in argv:
+        output = argv[argv.index("--output") + 1]
+
+    platform_dir = security_tools.payload_platform_dir()
+    wheels_dir = os.path.join(platform_dir, "wheels")
+    wheels = sorted(f for f in os.listdir(wheels_dir) if f.endswith(".whl"))
+    if not wheels:
+        print(f"ERROR: no wheels in {wheels_dir}", file=sys.stderr)
+        return 2
+
+    syft = security_tools.tool_path("syft")
+    with tempfile.TemporaryDirectory(prefix=".loadout-sbom-") as tmp:
+        tree = os.path.join(tmp, "wheels")
+        os.makedirs(tree)
+        for i, wheel in enumerate(wheels, 1):
+            _safe_extract_wheel(os.path.join(wheels_dir, wheel), tree)
+            if i % 50 == 0:
+                print(f"  extracted {i}/{len(wheels)} wheels", flush=True)
+        print(f"  extracted {len(wheels)} wheels; running syft ...", flush=True)
+        # Directory scans include syft's file cataloger by default, which emits
+        # one component per extracted file (~28k of them). The SBOM's purpose is
+        # the dependency inventory, so restrict to the python cataloger; the
+        # crate lock and registry components are appended below.
+        proc = subprocess.run(
+            [syft, f"dir:{tree}", "-o", "cyclonedx-json", "-q", "--override-default-catalogers", "python"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            print(proc.stderr, file=sys.stderr)
+            print("ERROR: syft failed.", file=sys.stderr)
+            return 2
+        try:
+            doc = json.loads(proc.stdout)
+        except ValueError:
+            print("ERROR: syft produced unreadable JSON.", file=sys.stderr)
+            return 2
+
+    components = doc.setdefault("components", [])
+    # CycloneDX output adds one `file` component per file in every package
+    # (~28k here; ~10x the dependency signal). .content-manifest already pins
+    # every shipped file's sha256, so drop the file evidence from the SBOM.
+    file_refs = {c.get("bom-ref") for c in components if c.get("type") == "file"}
+    if file_refs:
+        components = [c for c in components if c.get("type") != "file"]
+        doc["components"] = components
+        for dep in doc.get("dependencies", []):
+            dep["dependsOn"] = [r for r in dep.get("dependsOn", []) if r not in file_refs]
+        doc["dependencies"] = [d for d in doc.get("dependencies", []) if d.get("ref") not in file_refs]
+    seen = {(c.get("name"), c.get("version"), c.get("purl")) for c in components}
+    added_rust = added_registry = 0
+    for name, version in _rust_components():
+        key = (name, version, f"pkg:cargo/{name}@{version}")
+        if key not in seen:
+            components.append(_component(name, version, "library", key[2]))
+            seen.add(key)
+            added_rust += 1
+    for name, version, kind in _registry_components():
+        key = (name, version, f"pkg:generic/{name}@{version}")
+        if key not in seen:
+            components.append(
+                _component(
+                    name,
+                    version,
+                    "application",
+                    key[2],
+                    [{"name": "loadout:kind", "value": kind}],
+                )
+            )
+            seen.add(key)
+            added_registry += 1
+
+    meta = doc.setdefault("metadata", {})
+    props = meta.setdefault("properties", [])
+    props.append({"name": "loadout:source", "value": "syft (wheels) + crate-store.lock + packages.json"})
+    props.append({"name": "loadout:wheels", "value": str(len(wheels))})
+    props.append({"name": "loadout:rust-added", "value": str(added_rust)})
+    props.append({"name": "loadout:registry-added", "value": str(added_registry)})
+
+    with open(output, "w") as fh:
+        json.dump(doc, fh, indent=2)
+        fh.write("\n")
+    print(f"sbom: {len(components)} components -> {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

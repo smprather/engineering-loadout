@@ -255,6 +255,7 @@ run_test "st-wrapper" tests/st-wrapper
 run_test "env-helix-config" tests/env-helix-config
 run_test "update-cadence" "$PY" tests/update-cadence
 run_test "release-tag-scheme" "$PY" tests/release-tag-scheme
+run_test "security-pipeline" "$PY" tests/security-pipeline
 run_test "check-versions-contract" "$PY" tests/check-versions-contract
 
 if [ "$FAST" -eq 1 ]; then

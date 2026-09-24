@@ -58,7 +58,8 @@ _YARA_DIR = os.path.join(REPO, "build", "yara")
 _YARA_RULES_BZ2 = os.path.join(_YARA_DIR, "yara-rules-full.yar.bz2")
 _YARA_TAG_FILE = os.path.join(_YARA_DIR, "release-tag.txt")
 _YARA_API_LATEST = "https://api.github.com/repos/YARAHQ/yara-forge/releases/latest"
-_YARA_ZIP_URL = "https://github.com/YARAHQ/yara-forge/releases/download/{tag}/yara-forge-rules-full.zip"
+_YARA_ZIP_ASSET = "yara-forge-rules-full.zip"
+_YARA_ZIP_URL = "https://github.com/YARAHQ/yara-forge/releases/download/{tag}/" + _YARA_ZIP_ASSET
 _YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
 
 
@@ -557,6 +558,30 @@ def _download_file(url, dest, expected_sha256=None):
     return digest
 
 
+def _yara_asset_digest(tag):
+    """(hex sha256 or None, detail) for the full-rules zip of TAG.
+
+    GitHub publishes a per-asset digest; when present, the download is
+    cryptographically bound to the release instead of trusted on fetch. A
+    missing digest is warned about and falls back to TOFU (recorded in
+    assurance/downloads.log); a MISMATCH is fatal. Rules are dev tooling
+    (build/yara/), but stale-or-replaced rules silently change scan verdicts.
+    """
+    api = f"https://api.github.com/repos/YARAHQ/yara-forge/releases/tags/{tag}"
+    try:
+        meta = _fetch_json(api)
+    except Exception as exc:  # noqa: BLE001 - metadata failure falls back to TOFU, loudly
+        return None, f"release metadata unreadable: {exc}"
+    for asset in meta.get("assets", []):
+        if asset.get("name") != _YARA_ZIP_ASSET:
+            continue
+        digest = asset.get("digest") or ""
+        if digest.startswith("sha256:"):
+            return digest[len("sha256:") :], "ok"
+        return None, f"asset publishes no sha256 digest ({digest or 'none'})"
+    return None, f"asset {_YARA_ZIP_ASSET} not found in release {tag}"
+
+
 def _run_yara_rules(dry_run=False, tag=None):
     if tag:
         resolved_tag = tag
@@ -575,6 +600,12 @@ def _run_yara_rules(dry_run=False, tag=None):
         return True
 
     zip_url = _YARA_ZIP_URL.format(tag=resolved_tag)
+    digest, digest_detail = _yara_asset_digest(resolved_tag)
+    if digest:
+        print(f"  GitHub asset digest: sha256:{digest}")
+    else:
+        print(f"  WARNING: verified digest unavailable ({digest_detail})")
+        print("           falling back to TOFU; the fetched sha256 is recorded in assurance/downloads.log")
     if dry_run:
         print(f"$ [download {zip_url} -> build/yara/]")
         return True
@@ -582,7 +613,7 @@ def _run_yara_rules(dry_run=False, tag=None):
     with tempfile.TemporaryDirectory(prefix="yara-forge-") as tmp:
         zip_path = os.path.join(tmp, "rules-full.zip")
         print(f"Downloading {resolved_tag} rules...")
-        _download_file(zip_url, zip_path)
+        _download_file(zip_url, zip_path, expected_sha256=digest)
 
         print(f"  Extracting {_YARA_ZIP_MEMBER}...")
         with zipfile.ZipFile(zip_path) as zf:

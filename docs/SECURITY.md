@@ -77,6 +77,13 @@ structural APPX/MSIX heuristic). The offensive-security tldr pages
 allowlisted -- `./build/update tldr-data` prunes them from the bundled cache
 entirely (`_TLDR_OFFENSIVE_GLOBS`).
 
+**Rule freshness + pinning.** `./build/update yara-rules` verifies the
+downloaded full-rules zip against the sha256 GitHub publishes for that release
+asset (`assets[].digest`); a mismatch aborts the update. If GitHub returns no
+digest the update warns and falls back to TOFU, recording the fetched sha256 in
+`assurance/downloads.log`. The scan cache keys on the rules sha256, so a
+replaced rules file cannot reuse a clean verdict.
+
 ## 3. Plugin pinning (Neovim)
 
 The Neovim plugin bundle is the largest third-party attack surface. It is now
@@ -203,3 +210,33 @@ pins:
 validates these pins, so a record cannot silently drift from reality. `nvim`,
 `rust`, `rust-crate-store`, and `treesitter-parsers` are `status = verified`;
 coverage rolls out package-by-package.
+
+## 8. Secret scan, vulnerability scan, SBOM (added 2026-09-24)
+
+Three pipeline gates run on every release, alongside the malware scan:
+
+- **Secret scan** (`build/secret-scan`): gitleaks over the working tree AND the
+  full git history. The engine is committed under `build/gitleaks/` (pinned +
+  provenance, static, offline-capable), and the config
+  (`build/gitleaks/loadout.toml`) extends the default rules with an allowlist
+  for vendored trees and generated hash inventories only -- every entry is a
+  reviewed false positive (commit SHAs matching `generic-api-key`, completion
+  word lists). A real finding is a rotation event: an old-commit secret cannot
+  be fixed by editing. `tests/security-pipeline` runs the tree scan in Tier 1.
+- **Vulnerability scan** (`build/vuln-scan`): osv-scanner over the wheelhouse
+  (newest version per package -- what a fresh uv resolve selects) and the crate
+  store, converted to Cargo.lock shape. Python findings must be accepted in
+  `assurance/vuln-baseline.json` by exact `package@version` + advisory id with a
+  written reason; stale entries are reported. Crate-store findings are
+  ADVISORY (source-only offline registry, not shipped executables) unless
+  `--strict-rust`. Distro libraries (glibc/openssl/Qt) are outside OSV
+  ecosystems and out of scope.
+- **SBOM** (`build/sbom`): a CycloneDX document for the release: Python wheels
+  via syft, the Rust crate store, and every registry package. Generated inside
+  the checksum step, so its sha256 is in `sha256sums.txt` and the signed tag
+  binds it; attached to the release as `sbom.cdx.json`.
+
+Tools: gitleaks is committed (offline T1), syft and osv-scanner are fetched on
+demand and verified against pinned URL + sha256 digests in
+`build/security_tools.py` (both static; EL8-verified with `--network=none`).
+None of this enters `payload/`, the registry, or an install.

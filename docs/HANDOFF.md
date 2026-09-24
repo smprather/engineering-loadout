@@ -26,6 +26,42 @@ gets the next N -- offline consumers cannot see an in-place tag move (`-V` is
 unchanged), so a new N is the only update signal. Pinned by T1
 `tests/release-tag-scheme` (fake-`gh` draft/missing cases included).
 
+## 2026-09-24: security pipeline -- secret scan, vulnerability scan, SBOM, rules pinning (unreleased)
+
+"Use security software to the max" on the pipeline side, not the product:
+
+- `build/gitleaks/` (engine 8.30.1: bzip2 + sha256 + PROVENANCE + config) and
+  `build/secret-scan`: gitleaks over the working tree AND full history (both
+  ~seconds; the 638 initial hits were all vendored trees or generated hash
+  inventories -- allowlisted in `loadout.toml`; first-party residue was zero).
+  Wired into T1 (`tests/security-pipeline`) and the release gates.
+- `build/security_tools.py`: pinned syft 1.52.0 + osv-scanner 2.6.0 (URL +
+  asset/member sha256 from the GitHub releases API; both static, run in stock
+  almalinux:8.10 with `--network=none`). Fetched on demand into the per-user
+  cache; nothing enters `payload/` or the registry.
+- `build/sbom`: CycloneDX (syft over extracted wheels + crate-store + registry
+  components; file-evidence components pruned because `.content-manifest`
+  already pins every file). Built inside the release checksum step so
+  `sha256sums.txt` covers it; attached as a fourth release asset.
+- `build/vuln-scan`: osv-scanner over the wheelhouse (newest per package -- what
+  a fresh uv resolve selects) and the crate store (converted to Cargo.lock
+  shape). Wheel findings are baseline-gated via `assurance/vuln-baseline.json`
+  (8 packages / 32 advisories, every one with a published fix -- a security
+  wheel refresh is the immediate follow-up; stale-baseline reporting forces the
+  entries out as each refresh lands). Crate-store findings are reported
+  ADVISORY (source-only offline registry) unless `--strict-rust`.
+- `./build/update yara-rules` now verifies the downloaded rules zip against the
+  sha256 GitHub publishes for that asset; mismatch aborts, missing digest warns
+  and falls back to TOFU (recorded in `assurance/downloads.log`).
+- `build/release` step numbering is now: Step 4 secret scan, Step 5
+  vulnerability scan, Step 6 tag and release; the checksum step also generates the SBOM. Docs synced:
+  `docs/SECURITY.md` section 8, `docs/RELEASE.md` sections 0/8/9, AGENTS.md,
+  `.github/copilot-instructions.md`.
+- Verified: `tests/security-pipeline` green; `run-all --fast` green;
+  secret-scan tree+history CLEAN; vuln-scan CLEAN with the curated baseline;
+  sbom 3185 components / 1.7 MB; yara-rules digest dry-run prints the pinned
+  digest for an older tag.
+
 ## 2026-09-24: scanner tooling out of the product; yara engine/rules -> build/ (unreleased)
 
 De-productification, following the versioning-scheme commit: the malware

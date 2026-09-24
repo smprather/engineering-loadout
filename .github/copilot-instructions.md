@@ -273,9 +273,12 @@ backend avoids this.
 
 **Release gate: `./build/release --dry-run`** runs independent pre-release gates in
 parallel: `scan-for-malware`, `tests/prebuilt-binaries`,
-`build/farm-versions --format tsv`, and `sha256sums.txt` generation. Final
-tag/release work waits for those gates; malware scan, binary smoke, and
-checksum generation are mandatory. `scan-for-malware` caches only clean results
+`build/farm-versions --format tsv`, `sha256sums.txt` + SBOM generation,
+`build/secret-scan` (tree + history), and `build/vuln-scan` (osv-scanner;
+wheelhouse findings must be baselined in `assurance/vuln-baseline.json`,
+crate-store findings are advisory). Final tag/release work waits for those
+gates; malware scan, binary smoke, secret scan, vulnerability scan, and
+checksum/SBOM generation are mandatory. `scan-for-malware` caches only clean results
 under `${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/malware-scan-v1/`; its
 key hashes the source payload bytes, scanner script, YARA binary/rules/tag, scan
 flags, and ClamAV engine/signature fingerprint, so payload/rule/script/signature

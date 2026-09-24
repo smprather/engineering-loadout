@@ -1,0 +1,18 @@
+gitleaks 8.30.1 -- secret scanner (dev tooling; not a shipped package)
+
+Upstream asset:
+  https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+  sha256 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  (digest as published by the GitHub releases API)
+
+This directory carries the extracted binary, bzip2'd (gitleaks.bz2) like the
+YARA scan engine under build/yara/. It is git-tracked so the T1 secret-scan
+gate works offline, export-ignored (build/ never enters a release tarball),
+and never part of payload/ or the registry.
+
+Static (CGO_ENABLED=0): `file` reports "statically linked" and it runs on a
+stock almalinux:8.10 container with --network=none. Re-verify both on every
+bump, then update version.txt and sha256.txt.
+
+Config: loadout.toml (extends the default rules; allowlists vendored trees and
+generated hash inventories -- see the file for the reviewed false positives).

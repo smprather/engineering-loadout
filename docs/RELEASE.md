@@ -7,9 +7,9 @@ release then reconstructed it from memory and missed something different. This
 file is the single source. If you change the release process, change it here.
 
 **`./build/release` is not the procedure.** It runs the *gates* — malware scan, binary
-smoke, version table, checksums, tag, publish. Everything that makes the payload
-correct in the first place happens before you invoke it, and `./build/release` cannot
-tell that you forgot it.
+smoke, version table, checksums + SBOM, secret scan, vulnerability scan, tag, publish.
+Everything that makes the payload correct in the first place happens before you invoke
+it, and `./build/release` cannot tell that you forgot it.
 
 ---
 
@@ -320,8 +320,8 @@ sanity check on that judgment, not the criterion.
 script pushed only the tag, so `origin/main` could still point at the *previous*
 release while the new release advertised a commit that was on no remote branch —
 reachable only through the tag. Anyone pulling `main` got the pre-release tree.
-Section 9's checks all pass while that is true, which is why it survived. Step 4
-now runs `_push_release_branch()` first: it refuses a detached HEAD, pushes the
+Section 9's checks all pass while that is true, which is why it survived. The tag
+step (Step 6) now runs `_push_release_branch()` first: it refuses a detached HEAD, pushes the
 current branch, and re-reads `git ls-remote` to confirm the remote ref actually
 moved. Ordering is deliberate — a branch pushed without a release is an ordinary
 commit, a release published without its branch is the broken state — so a failure
@@ -340,6 +340,14 @@ here blocks the release rather than half-publishing one.
   missed input would false-green a shipped-but-untested binary — so treat a
   payload change as ~10 minutes of gates, always.
 
+**Secret scan, vulnerability scan, SBOM.** Every release also runs
+`build/secret-scan` (tree + full history), `build/vuln-scan` (wheelhouse
+findings must be baselined in `assurance/vuln-baseline.json` with a written
+reason; crate-store findings are advisory), and `build/sbom` (inside the
+checksum step, so `sbom.cdx.json` is covered by `sha256sums.txt` and attached
+as a fourth asset). None of the three is cached; together they cost about a
+minute. See `docs/SECURITY.md` section 8.
+
 ---
 
 ## 9. Verify after publishing
@@ -353,8 +361,8 @@ git tag -v <tag>          # must print a Good signature
 
 Confirm `isDraft=false` — deleting a tag drafts its release, and a draft is
 invisible to `/releases/latest`, which is what `./tools/fetch-stash` resolves. Confirm
-all three assets are present (`sha256sums.txt`, `default.content-manifest`,
-`nvim-plugin-stash.tar.bz2`) and the stash size matches local.
+all four assets are present (`sha256sums.txt`, `default.content-manifest`,
+`nvim-plugin-stash.tar.bz2`, `sbom.cdx.json`) and the stash size matches local.
 
 Also confirm the released commit is on the remote branch — every check above can
 pass while it is not (see section 8):
@@ -391,7 +399,7 @@ what now catches it — where nothing does, that is the open risk.
 | 10 | Test version literals (`0.5.0`) went stale on every bump | `tests/install-parity-plot` reads the expected version from `packages.json` |
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |
 | 12 | `./build/update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
-| 13 | v2026.08.09 published with its commit on **no remote branch** — `./build/release` pushed the tag only, so `origin/main` still held the previous release while §9's checks all passed | `_push_release_branch()` runs first in Step 4: refuses a detached HEAD, pushes the branch, re-reads `git ls-remote` to confirm |
+| 13 | v2026.08.09 published with its commit on **no remote branch** — `./build/release` pushed the tag only, so `origin/main` still held the previous release while §9's checks all passed | `_push_release_branch()` runs first in the tag step (Step 6): refuses a detached HEAD, pushes the branch, re-reads `git ls-remote` to confirm |
 | 14 | `ty` was in `rust-tool-locks.txt` but absent from **every crate store ever built** — `astral-sh/ty` is a thin repo whose Rust source is a `ruff` submodule, so it had no root `Cargo.lock`, the builder WARNed and skipped it, and exited 0. `surfer` was missing the same way (submodule *path deps*, so its sync failed even though it has a lock). `--check-policy` printed OK throughout, because it compared **refs** to `packages.json` and never store **contents** | builder records per-tool crate counts to `assurance/crate-store-tools.tsv`; `verify-crate-store` gained `check_coverage()`, called from `check_policy()`, which fails on any pinned tool with 0 crates. Submodules are now initialised unconditionally after every clone |
 | 15 | `tests/rust-offline-almalinux8` cloned a **hardcoded ripgrep 15.1.0** while the locks and registry moved to 15.2.0 (`552fb4e`, 2026-08-04), so the offline rebuild could not resolve `globset`'s deps. Broken for 13 days: **nothing in `tests/run-all` ever invoked this test**, at any tier | version now read from `payload/packages.json` and passed as a `--build-arg` (same fix as entry 10); the test is wired into Tier 3, so `--container` runs it |
 

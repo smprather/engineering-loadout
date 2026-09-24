@@ -1,0 +1,132 @@
+#!/usr/bin/env python3.14
+"""security-pipeline -- pin the security gates' inputs and policy.
+
+1. build/security_tools.py PINS are well-formed (https URL, lowercase sha256,
+   version present in the URL) -- that table is the fetch-on-demand trust
+   anchor for syft/osv-scanner.
+2. The committed gitleaks engine matches build/gitleaks/sha256.txt, and the
+   tree secret scan is CLEAN (the T1 half of the release gate; history is
+   covered in build/release).
+3. build/vuln-scan's wheel inventory is newest-per-package and normalized
+   (synthetic wheelhouse), and its rust lock parser handles the lock shape.
+4. assurance/vuln-baseline.json is schema-valid, and every accepted entry
+   carries advisories plus a written reason.
+"""
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+security_tools = _load("security_tools_mod", os.path.join(REPO, "build", "security_tools.py"))
+vuln = _load("vuln_scan_mod", os.path.join(REPO, "build", "vuln-scan"))
+
+FAILURES = []
+
+
+def check(label, cond, detail=""):
+    if cond:
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append(label)
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def main():
+    print("security-tool pins")
+    problems = security_tools.check_pins()
+    check("pin table validates", not problems, "; ".join(problems))
+    check("syft and osv-scanner pinned", {"syft", "osv-scanner"} <= set(security_tools.PINS))
+
+    print("gitleaks engine + tree scan")
+    bz2 = os.path.join(REPO, "build", "gitleaks", "gitleaks.bz2")
+    wanted = open(os.path.join(REPO, "build", "gitleaks", "sha256.txt")).read().split()[0]
+    check("committed engine matches sha256.txt", _sha256(bz2) == wanted)
+    proc = subprocess.run(
+        [sys.executable, os.path.join(REPO, "build", "secret-scan")],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    check("secret-scan --tree is CLEAN", proc.returncode == 0, (proc.stderr or proc.stdout)[-300:])
+
+    print("wheel inventory (newest per package)")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in (
+            "aiohttp-3.14.1-cp314-cp314-manylinux_2_28_x86_64.whl",
+            "aiohttp-3.14.3-cp314-cp314-manylinux_2_28_x86_64.whl",
+            "Click-8.4.1-py3-none-any.whl",
+            "click-8.4.2-py3-none-any.whl",
+            "soupsieve-2.8.4-py3-none-any.whl",
+            "README.txt",
+        ):
+            open(os.path.join(tmp, name), "w").close()
+        got = vuln.newest_wheels(tmp)
+        check(
+            "newest per normalized package, non-wheels ignored",
+            got == [("aiohttp", "3.14.3"), ("click", "8.4.2"), ("soupsieve", "2.8.4")],
+            repr(got),
+        )
+
+    print("rust lock parsing")
+    with tempfile.TemporaryDirectory() as tmp:
+        lock = os.path.join(tmp, "crate-store.lock")
+        with open(lock, "w") as fh:
+            fh.write("# comment\n\n")
+            fh.write(f"foo 1.2.3 {'a' * 64}\n")
+            fh.write(f"bar 4.5.6 {'b' * 64}\n")
+        got = vuln.read_rust_lock(lock)
+        check("name/version parsed, comments/blank skipped", got == [("foo", "1.2.3"), ("bar", "4.5.6")], repr(got))
+        text = vuln.cargo_lock_text(got)
+        check(
+            "Cargo.lock shape produced",
+            text.count("[[package]]") == 2 and 'name = "foo"' in text and 'version = "4.5.6"' in text,
+            text[:120],
+        )
+
+    print("vulnerability baseline")
+    baseline_path = os.path.join(REPO, "assurance", "vuln-baseline.json")
+    with open(baseline_path) as fh:
+        baseline = json.load(fh)
+    entries = baseline.get("accepted", {})
+    check("schema is 1 with accepted entries", baseline.get("schema") == 1 and isinstance(entries, dict))
+    bad = [
+        key
+        for key, entry in entries.items()
+        if not entry.get("advisories") or not str(entry.get("reason", "")).strip() or "@" not in key
+    ]
+    check("every entry has advisories + a written reason", not bad, ", ".join(bad))
+
+    print()
+    if FAILURES:
+        print(f"security-pipeline: {len(FAILURES)} FAILED")
+        return 1
+    print("security-pipeline: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,30 @@
+# loadout secret-scan config: default gitleaks rules, allowlisting only
+# reviewed non-secrets. See build/secret-scan and docs/SECURITY.md section 4.
+title = "loadout secret-scan config"
+minVersion = "v8.25.0"
+
+[extend]
+useDefault = true
+
+# One global allowlist. Every path here is either vendored third-party content
+# (never authored here, so a finding is not ours to rotate) or a generated
+# inventory of hashes (false positives: gitleaks' generic-api-key and
+# sourcegraph-access-token rules match 40/64-hex commit and artifact digests).
+[[allowlists]]
+description = "vendored trees, generated hash inventories, and this tool's own data"
+paths = [
+    '''^payload/''',                       # shipped third-party content (wheels, plugins, fonts, ...)
+    '''^envs/[^/]+/vendor/''',             # nvim/tmux plugin mirrors
+    '''^envs/bash/global/github\.scop\.bash-completion/''',
+    '''^envs/bash/global/grc/''',
+    '''^assurance/treesitter-parser-locks\.json$''',  # generated parser commit-hash lock
+    '''^assurance/records/''',             # generated provenance records (commit + artifact hashes)
+    '''^build/yara/''',                    # YARA rule data
+    '''^build/gitleaks/''',                # this scanner's own binary/provenance
+    '''^\.git/''',
+    '''^\.loadout-bootstrap/''',           # per-clone portable-python bootstrap (gitignored)
+    '''^\.codex/''',                       # local agent state (gitignored)
+    '''^\.loadout-deps\.log$''',          # installer dep-capture log (repo-local marker)
+    '''^\.loadout-dep-capture$''',
+    '''^sbom\.cdx\.json$''',               # generated release SBOM (gitignored)
+]
