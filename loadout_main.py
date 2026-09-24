@@ -201,7 +201,7 @@ BASH_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
 NVIM_LAYERS = ("user",)
 
-# Repo-relative payload home: platform dirs, packages.json, fonts, tldr, yara,
+# Repo-relative payload home: platform dirs, packages.json, fonts, tldr,
 # crate-store, treesitter prebuilt/vendor, pending-daemon. Renamed from the
 # historical "pre_built" in the 2026-07 reorg.
 PAYLOAD_DIR = "payload"

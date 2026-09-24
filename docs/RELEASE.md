@@ -134,7 +134,7 @@ Bumping any of `nvim`, `rust`, `rust-crate-store`, `treesitter`, `git-nvim`,
 ### 2b. Security data must be current, not merely present
 
 ```bash
-./build/update yara-rules              # YARA-Forge ruleset -> payload/yara/
+./build/update yara-rules              # YARA-Forge ruleset -> build/yara/ (dev tooling)
 sudo freshclam                   # ClamAV signatures (needs sudo; do it yourself)
 ./build/update tldr-data               # offline tldr cache
 ```

@@ -32,7 +32,8 @@ drop.
 
 Two engines; the scan fails if **either** detects:
 
-- **YARA-Forge** full ruleset (vendored `yara` + `payload/yara/`), one
+- **YARA-Forge** full ruleset (pinned `yara` engine + rules under `build/yara/`;
+  dev tooling, never in a release tarball or the installed payload), one
   `--scan-list` invocation over all files.
 - **ClamAV** (`clamscan`) when present; degrades to YARA-only with a warning if
   absent. Refresh signatures with `freshclam` on the build box.
@@ -61,8 +62,8 @@ both fixed. The Windows payload left coverage when the platform was retired
 `${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/malware-scan-v1/`. Only clean
 verdicts are cached; detections are never cached. The cache key hashes the
 source scan corpus (compressed payloads plus vendored plugin trees, or the
-explicit `--path` tree), `scan-for-malware` itself, vendored YARA binary/rules,
-the YARA release tag, scan mode flags, and the ClamAV engine/signature
+explicit `--path` tree), `scan-for-malware` itself, the `build/yara/` engine
+and rules, the YARA release tag, scan mode flags, and the ClamAV engine/signature
 fingerprint from `clamscan --version`. Any payload byte change, rule update,
 allowlist/script edit, or ClamAV signature update misses the cache and performs
 a full scan. `--verbose` bypasses the cache so raw YARA output is available.

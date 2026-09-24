@@ -3990,6 +3990,12 @@ them.
 
 **Build:** `build/build-simple-c.sh --tool <name> --tag <version> --src <tarball>`
 
+**One exception: `yara` is not a shipped package.** It is the engine for
+`build/scan-for-malware` (the rules live beside it under `build/yara/`), so the
+script writes it to `build/yara/` — export-ignored, git-tracked for the dev box,
+never in a release tarball, the installer, or the registry — and stamps
+`build/yara/version.txt`. No payload manifest step applies to it.
+
 One script, five recipes, because the configure flags genuinely differ. What is
 shared is the packaging contract every loadout binary owes: `strip` ->
 `patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib'` -> `bzip2`, plus a hard

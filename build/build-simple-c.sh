@@ -19,6 +19,10 @@
 #
 # Then, as for every payload change:
 #   ./build/strip-all-elf-binaries && python3.14 build/gen-content-manifest
+#
+# yara is the exception: it is the engine for build/scan-for-malware -- dev
+# tooling, not a shipped package. Its output lands in build/yara/ (export-
+# ignored; never in a release tarball) and no payload manifest step applies.
 
 set -eu
 
@@ -40,6 +44,12 @@ done
 [ -n "$TOOL" ] || { echo "ERROR: --tool is required (htop|nethogs|rsync|xsel|xclip|yank|yara)" >&2; exit 1; }
 [ -n "$TAG" ]  || { echo "ERROR: --tag is required" >&2; exit 1; }
 [ -f "$SRC_TARBALL" ] || { echo "ERROR: --src tarball not found: $SRC_TARBALL" >&2; exit 1; }
+
+# yara is dev tooling: redirect it out of the payload bin dir (see header).
+if [ "$TOOL" = "yara" ]; then
+    BIN_DIR="$REPO/build/yara"
+    mkdir -p "$BIN_DIR"
+fi
 
 PATCHELF="$HOME/.local/bin/patchelf"
 [ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
@@ -143,6 +153,9 @@ echo "    NEEDED: $(objdump -p "$STAGE/out" | awk '/NEEDED/ {printf "%s ", $2}')
 bzip2 -kf "$STAGE/out"
 cp "$STAGE/out.bz2" "$BIN_DIR/$TOOL.bz2"
 chmod 644 "$BIN_DIR/$TOOL.bz2"
+if [ "$TOOL" = "yara" ]; then
+    printf '%s\n' "$TAG" > "$BIN_DIR/version.txt"
+fi
 
 # ---------------------------------------------------------------------------
 # Runtime libraries, for tools that need one the host cannot be assumed to have.

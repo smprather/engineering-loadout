@@ -79,13 +79,29 @@ def main():
         and name not in listed
     )
 
+    # The mirror failure of a missing row: a REMOVED package leaves its row
+    # behind, because the generator only rewrites cells for names still in the
+    # registry. Every row on purpose names a registry package (the table does
+    # not enumerate env-*/font-*), so any other name is stale.
+    row_names = {
+        m.group(1)
+        for m in (ROW.match(line.rstrip("\n")) for line in lines)
+        if m and m.group(1) != "Package" and not set(m.group(1)) <= set("-")
+    }
+    stale_rows = sorted(name for name in row_names if name not in packages and not name.startswith(UNLISTED_PREFIXES))
+
     if check:
-        if stale or missing:
+        if stale or missing or stale_rows:
             if stale:
                 print(f"README package table is stale ({len(stale)} row(s)):")
                 for name, have, want in stale:
                     print(f"  {name}: README says {have}, registry says {want}")
                 print("Run build/gen-readme-table to fix.")
+            if stale_rows:
+                print(f"README package table names {len(stale_rows)} package(s) not in the registry:")
+                for name in stale_rows:
+                    print(f"  {name}: row left behind by a removed package?")
+                print("Delete the row by hand (the generator only rewrites live rows).")
             if missing:
                 print(f"README package table is missing {len(missing)} package(s):")
                 for name in missing:
@@ -100,6 +116,11 @@ def main():
         # Not a rewrite this tool can do (descriptions are hand-owned), but it
         # must not pass in silence either.
         print(f"WARNING: {len(missing)} package(s) have no README row: {', '.join(missing)}")
+
+    if stale_rows:
+        # A removed package leaves its row behind: nothing rewrites it, so
+        # without this the table drifts out of the registry silently.
+        print(f"WARNING: {len(stale_rows)} README row(s) name no registry package: {', '.join(stale_rows)}")
 
     if stale:
         with open(README, "w") as fh:

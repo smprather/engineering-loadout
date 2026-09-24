@@ -12,7 +12,7 @@
     "envs/bash/global/completions/_zoxide": 6150,
     "envs/bash/global/completions/bat.bash": 4347,
     "envs/bash/global/completions/hyperfine.bash": 8908,
-    "envs/bash/global/completions/loadout.bash": 7437,
+    "envs/bash/global/completions/loadout.bash": 7392,
     "envs/bash/global/completions/module.bash": 2599,
     "envs/bash/global/completions/rg.bash": 21272,
     "envs/bash/global/completions/taplo.bash": 24009,
@@ -1937,7 +1937,6 @@
     "payload/el8.x86_64.glibc2p28/bin/7za.bz2": 1156256,
     "payload/el8.x86_64.glibc2p28/bin/Xephyr.bin.bz2": 2574896,
     "payload/el8.x86_64.glibc2p28/bin/Xephyr.bz2": 1988,
-    "payload/el8.x86_64.glibc2p28/bin/agent-deck.bz2": 37598392,
     "payload/el8.x86_64.glibc2p28/bin/amux.bz2": 12379144,
     "payload/el8.x86_64.glibc2p28/bin/base32.bz2": 48920,
     "payload/el8.x86_64.glibc2p28/bin/base64.bz2": 48920,
@@ -2203,7 +2202,6 @@
     "payload/el8.x86_64.glibc2p28/bin/xterm.bz2": 845984,
     "payload/el8.x86_64.glibc2p28/bin/ya.bz2": 1823728,
     "payload/el8.x86_64.glibc2p28/bin/yank.bz2": 23904,
-    "payload/el8.x86_64.glibc2p28/bin/yara.bz2": 524472,
     "payload/el8.x86_64.glibc2p28/bin/yazi.bz2": 24379616,
     "payload/el8.x86_64.glibc2p28/bin/yes.bz2": 44728,
     "payload/el8.x86_64.glibc2p28/bin/yosys-abc.bz2": 24300928,
@@ -2701,7 +2699,7 @@
     "payload/fonts/RobotoMono.zip": 88847602,
     "payload/fonts/SourceCodePro.zip": 99242463,
     "payload/fonts/UbuntuMono.zip": 28536830,
-    "payload/packages.json": 115192,
+    "payload/packages.json": 114470,
     "payload/pending-daemon/loadout-pending-daemon": 11012,
     "payload/tldr/tldr-pages.tar.bz2": 4333735,
     "payload/treesitter/prebuilt/linux-x86_64-glibc/build-info/platform.env": 344,
@@ -6195,8 +6193,6 @@
     "payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry/hosts.lua": 4142,
     "payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry/http.lua": 4163,
     "payload/treesitter/vendor/treesitter-parser-registry/registry.json": 114050,
-    "payload/treesitter/vendor/treesitter-parser-registry/schemas/schema.json": 8132,
-    "payload/yara/release-tag.txt": 9,
-    "payload/yara/yara-rules-full.yar.bz2": 20852918
+    "payload/treesitter/vendor/treesitter-parser-registry/schemas/schema.json": 8132
   }
 }

@@ -19,11 +19,16 @@ Asserts:
   8. Every tool name in farm-versions' TOOLS table maps to a registry package
      (directly or via the known alias table) -- catches the "shipped but never
      registered" drift class.
+  9. The malware-scan engine/rules live under build/yara/ (dev tooling) and
+     never in payload/: the scanner must not re-enter the shipped product.
+ 10. packages.json is stored as raw UTF-8 (no backslash-u escapes).
+ 11. scan/update target directories exist.
 
 Must run under the bundled Python 3.14. Exits 0 if all cases pass, 1 otherwise.
 """
 
 import ast
+import glob
 import importlib.machinery
 import importlib.util
 import json
@@ -209,12 +214,37 @@ def main():
         f"{len(escapes)} escaped characters",
     )
 
-    # 8. scan-for-malware target directories must exist. A rename that leaves a
+    # 10. The malware-scan engine/rules are dev tooling, never shipped payload:
+    # build/ is export-ignored, so a release tarball must not carry them and
+    # the installer must not install them. This is how yara entered the
+    # product once already (a registered bin + payload/yara rules).
+    leftover_scanner = [
+        p
+        for p in [
+            os.path.join(REPO, "payload", "yara"),
+            *glob.glob(os.path.join(REPO, "payload", "*", "bin", "yara.bz2")),
+        ]
+        if os.path.exists(p)
+    ]
+    check(
+        "scanner tooling is not in the release payload",
+        not leftover_scanner,
+        ", ".join(os.path.relpath(p, REPO) for p in leftover_scanner),
+    )
+    scanner_files = ["yara.bz2", "yara-rules-full.yar.bz2", "release-tag.txt"]
+    missing_scanner = [f for f in scanner_files if not os.path.isfile(os.path.join(REPO, "build", "yara", f))]
+    check(
+        "scanner engine/rules present under build/yara",
+        not missing_scanner,
+        ", ".join(missing_scanner),
+    )
+
+    # 11. scan-for-malware target directories must exist. A rename that leaves a
     # stale path turns the scan into a silent no-op (this is exactly how the
     # crate-store and the four ./build/update artifact paths drifted after the reorg).
     scan_targets = [
         os.path.join(REPO, "payload", "crate-store"),
-        os.path.join(REPO, "payload", "yara"),
+        os.path.join(REPO, "build", "yara"),
         os.path.join(REPO, "payload", "tldr"),
         os.path.join(REPO, "envs", "tmux"),
         os.path.join(REPO, "envs", "nvim", "vendor", "plugins"),

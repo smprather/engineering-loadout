@@ -132,7 +132,6 @@ _REGISTRY = {
 
 # Tools with no public binary release (source builds, dev, custom, scripts)
 _SKIP_REASONS = {
-    "agent-deck": "no public binary release",
     "bash": "built from source",
     "bzip2": "built from source",
     "expect": "built from source (source-only SourceForge release; requires Tcl 8.6 + GCC 14 compat patches)",
@@ -156,7 +155,6 @@ _SKIP_REASONS = {
     "xclip": "built from source",
     "xterm": "built from source",
     "yank": "built from source",
-    "yara": "built from source (no Linux prebuilt in official releases)",
     "rg": "GNU ABI; ripgrep ships musl-only for Linux releases -- EL8 RPM or source build",
     "eza": "EL8 source build (cargo from v0.23.5 git tag; 0.23.x not published to crates.io)",
     "fd": "NEEDED libs differ from official release -- EL8 source build",

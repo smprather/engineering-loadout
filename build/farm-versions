@@ -152,12 +152,6 @@ def strategy_first(*strategies):
 
 TOOLS = [
     (
-        "agent-deck",
-        "agent-deck",
-        "https://github.com/asheshgoplani/agent-deck",
-        strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)"),
-    ),
-    (
         "amux",
         "amux",
         "https://github.com/andyrewlee/amux",
@@ -770,7 +764,6 @@ TOOLS = [
         strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
     ("node", "nodejs", "https://github.com/nodejs/node", strategy_flag(["--version"], r"v([0-9]+\.[0-9]+\.[0-9]+)")),
-    ("yara", "yara", "https://github.com/VirusTotal/yara", strategy_flag(["--version"], r"([0-9]+\.[0-9]+\.[0-9]+)")),
     (
         "zellij",
         "zellij",

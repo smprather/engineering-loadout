@@ -222,7 +222,6 @@ OpenSSH for those.
 
 | Package | Kind | Version | Description |
 |---------|------|---------|-------------|
-| agent-deck | bin | 1.16.10 | TUI dashboard for AI agent orchestration |
 | amux | bin | 0.0.20 | TUI for orchestrating parallel coding agents via git worktrees + tmux |
 | bash | bin | 5.3.20 | Portable GNU Bash ahead of EL8 system version |
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
@@ -314,7 +313,6 @@ OpenSSH for those.
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
 | xclip | bin | 0.13 | X11 clipboard command-line access tool — pipe stdin to a selection, stdout from it; member of @gui-suite (NEEDs the gui_libs Xmu/X11 stack) |
-| yara | bin | 4.5.8 | Malware pattern matching and classification tool |
 | xterm | bin | 411 | X11 terminal emulator with Unicode and color |
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
 | wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |

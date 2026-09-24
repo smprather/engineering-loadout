@@ -122,7 +122,9 @@ OCTAVE_DEV='fftw-devel openblas-devel lapack-devel hdf5-devel arpack-devel
             libcurl-devel libsndfile-devel portaudio-devel rapidjson-devel
             boost-devel openssl3-devel'
 
-SECURITY='clamav clamav-update yara'
+# YARA is deliberately absent: the engine is pinned dev tooling under
+# build/yara/ (it scans our own payload; it is not something users install).
+SECURITY='clamav clamav-update'
 
 CRYPTO_TLS='gnutls-utils gnupg2'
 
@@ -141,7 +143,7 @@ fi
 if ask "Install Octave build deps (large -- ~50 -devel packages)?"; then
     do_ "sudo dnf install -y $OCTAVE_DEV"
 fi
-if ask "Install security scanners (clamav + yara) for release-gate scanning?"; then
+if ask "Install the ClamAV scanner (with the vendored YARA engine) for release-gate scanning?"; then
     do_ "sudo dnf install -y $SECURITY"
     do_ "sudo freshclam || true"
 fi

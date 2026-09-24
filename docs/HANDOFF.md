@@ -26,6 +26,35 @@ gets the next N -- offline consumers cannot see an in-place tag move (`-V` is
 unchanged), so a new N is the only update signal. Pinned by T1
 `tests/release-tag-scheme` (fake-`gh` draft/missing cases included).
 
+## 2026-09-24: scanner tooling out of the product; yara engine/rules -> build/ (unreleased)
+
+De-productification, following the versioning-scheme commit: the malware
+scanner is pipeline tooling, not something users install.
+
+- `yara` (registered `bin`) and `agent-deck` removed from
+  `payload/packages.json`; `@security` dissolved (its only other member was
+  agent-deck, an AI-agent session manager -- not security software, and not a
+  good fit here: it drives the default tmux server and mutates it -- status
+  line, bind-key, global set-option -- unless its own opt-in socket isolation
+  is configured, and its installer edits `~/.tmux.conf`, which loadout manages
+  as a symlink).
+- The YARA-Forge rules and the scan engine moved `payload/` -> `build/yara/`
+  (export-ignored: no release tarball, no content-manifest entry, not
+  installer-visible; still git-tracked for the EL8 build box).
+  `build/update yara-rules` writes there and no longer touches payload
+  manifests; `build/update yara` guidance now says `git add build/yara/` and
+  reports the version from `build/yara/version.txt`; `build-simple-c.sh
+  --tool yara` redirects its output and stamps that file.
+- `build/dev-onboard` no longer installs system yara (the engine is pinned
+  under build/); ClamAV remains the system-provided half.
+- New regression gates: `tests/registry-integrity` asserts scanner tooling is
+  absent from payload/ and present under build/yara/; `build/gen-readme-table`
+  gained a stale-row check (a removed package used to leave its README row
+  behind forever).
+- Verified: `./tests/run-all --fast` green; `./build/scan-for-malware --fast
+  --no-clamav` CLEAN 0/461 loading the engine from build/yara/; manifests,
+  sizes, README table and bash completion regenerated.
+
 ## 2026-09-23: marktext 0.19.1 + fused-line launcher fix (release v2026.09.23)
 
 ### marktext (NEW package, `@editor-gui`)

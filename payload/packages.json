@@ -38,21 +38,6 @@
     "description": "One-line description shown by 'loadout list'."
   },
   "packages": {
-    "agent-deck": {
-      "kind": "bin",
-      "bins": [
-        "agent-deck"
-      ],
-      "version": "1.16.10",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "agent",
-        "tui"
-      ],
-      "description": "TUI dashboard for AI agent orchestration"
-    },
     "amux": {
       "kind": "bin",
       "bins": [
@@ -1863,20 +1848,6 @@
         "gui_libs"
       ],
       "description": "X11 clipboard command-line access tool (X11 selections as stdin/stdout pipes); NEEDs libXmu.so.6/libX11.so.6, both from gui_libs"
-    },
-    "yara": {
-      "kind": "bin",
-      "bins": [
-        "yara"
-      ],
-      "version": "4.5.8",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "security"
-      ],
-      "description": "Malware pattern matching and classification tool"
     },
     "xterm": {
       "kind": "bin",
@@ -3791,14 +3762,6 @@
         "lefdef-tools"
       ],
       "description": "Optional Python tools installed via uv tool install"
-    },
-    "@security": {
-      "kind": "group",
-      "members": [
-        "yara",
-        "agent-deck"
-      ],
-      "description": "Security and agent tooling"
     },
     "@core-environments": {
       "kind": "group",

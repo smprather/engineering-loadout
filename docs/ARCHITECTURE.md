@@ -23,7 +23,7 @@ config bundle, font, data cache, Python tool.
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
 | `env` | Per-user config bundle (shell rc, editor configs) |
 | `font` | Font archive -> `~/.local/share/fonts/` |
-| `data` | Data archive (tldr pages, YARA rules, etc.) |
+| `data` | Data archive (tldr pages, etc.) |
 | `group` | Virtual group -- no artifacts; just a `members` list |
 
 Every package also declares:
