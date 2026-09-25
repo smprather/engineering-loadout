@@ -2757,7 +2757,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "4.6.1",
+      "version": "4.6.4",
       "platforms": [
         "linux"
       ],

@@ -1,10 +1,54 @@
 # Current Handoff
 
-Last updated: 2026-09-24 (v2026.09.23 RELEASED + verified; release commit
-`032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane end-to-end,
-btop themes, nethogs, xclip) and `032c1d0` (marktext + fused-line launcher
-fix + gate fixes). Prior release: `v2026.09.18` RELEASED + verified (tag
-`44f4613`, docs commit `f306c23`).
+Last updated: 2026-09-25 (security wheel refresh landed, vuln baseline
+emptied; 3 commits from 2026-09-24 unpushed). Prior release: `v2026.09.23`
+RELEASED + verified (release commit `032c1d0`). Committed since v2026.09.18:
+`b6e769a` (librelane end-to-end, btop themes, nethogs, xclip), `032c1d0`
+(marktext + fused-line launcher fix + gate fixes), and the three 2026-09-24
+gates (versioning scheme, scanner de-productification, security pipeline).
+
+## 2026-09-25: security wheel refresh -- vuln baseline emptied (unreleased)
+
+The 8-package / 32-advisory debt from the 2026-09-24 security pipeline is
+cleared. This is the "dedicated bump with per-tool smokes" the jupyterlab
+deferral called for:
+
+| wheel | from -> to | resolved by |
+|---|---|---|
+| aiohttp | 3.14.1 -> 3.14.3 | parity-plot |
+| cryptography | 48.0.0 -> 50.0.1 | text-serdes |
+| jupyter-server | 2.20.0 -> 2.21.1 | jupyterlab |
+| jupyterlab | 4.6.1 -> 4.6.4 | registry `version` + README row |
+| msgpack | 1.1.2 -> 1.2.2 | time-plot |
+| setuptools | 82.0.1 -> 84.0.0 | (closure member; no tool resolves it) |
+| soupsieve | 2.8.4 -> 2.10 | jupyterlab |
+| tornado | 6.5.7 -> 6.5.10 | jupyterlab |
+
+EL8/cp314-compatible wheels (manylinux_2_28 / abi3 / py3-none-any) fetched
+with `pip download --no-deps` + every acceptable platform tag; the
+superseded wheels pruned so no stale sibling sits in `--find-links`.
+
+Preservation proof, because the shared-wheelhouse hazard is exactly that a
+bump changes what OTHER tools resolve:
+
+- uv `pkg==version` closure captured for all 13 `python-tool` packages
+  BEFORE and AFTER against a rejoined flat wheelhouse. The only moves are the
+  8 wheels above, inside the 4 dependent tools (jupyterlab closure,
+  parity-plot, text-serdes, time-plot); the other 9 closures are identical.
+- all 13 tools installed OFFLINE from the candidate wheelhouse with the
+  installer's exact `uv tool install --no-index --find-links ...`; all OK.
+- end-to-end `./loadout install jupyterlab parity-plot text-serdes time-plot
+  --dest-dir` on the real payload: venvs carry the fixed versions and the
+  four CLIs smoke clean.
+- `build/vuln-scan`: CLEAN with `assurance/vuln-baseline.json` now
+  `accepted: {}` -- all 8 old entries reported STALE after the refresh.
+- `tests/run-all --fast` green; `tests/install-parity-plot` and
+  `tests/install-python-tool-upgrade` green; `gen-installed-sizes` (exactly
+  the 8 wheel keys changed), `gen-content-manifest`, `gen-readme-table`
+  regenerated. No ELF work: wheels are not stripped.
+
+Next: push the four local commits when ready, then a class-C release
+(first new-scheme tag would be `2026.9.1`).
 
 ## 2026-09-24: release versioning scheme -> `YYYY.M.N` (unreleased)
 
@@ -46,9 +90,10 @@ unchanged), so a new N is the only update signal. Pinned by T1
 - `build/vuln-scan`: osv-scanner over the wheelhouse (newest per package -- what
   a fresh uv resolve selects) and the crate store (converted to Cargo.lock
   shape). Wheel findings are baseline-gated via `assurance/vuln-baseline.json`
-  (8 packages / 32 advisories, every one with a published fix -- a security
-  wheel refresh is the immediate follow-up; stale-baseline reporting forces the
-  entries out as each refresh lands). Crate-store findings are reported
+  (landed with 8 packages / 32 advisories, every one with a published fix;
+  the 2026-09-25 security wheel refresh cleared them all and the baseline is
+  now `accepted: {}` -- stale-baseline reporting forces entries out as
+  refreshes land). Crate-store findings are reported
   ADVISORY (source-only offline registry) unless `--strict-rust`.
 - `./build/update yara-rules` now verifies the downloaded rules zip against the
   sha256 GitHub publishes for that asset; mismatch aborts, missing digest warns

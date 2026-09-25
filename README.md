@@ -336,7 +336,7 @@ OpenSSH for those.
 | tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
 | nodejs | bin | 26.9.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
-| jupyterlab | python-tool | 4.6.1 | Web-based interactive development environment for notebooks, code, and data |
+| jupyterlab | python-tool | 4.6.4 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | v2026.9.15 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
 | cicwave | python-tool | 0.7.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
