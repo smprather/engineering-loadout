@@ -264,6 +264,7 @@ sha256  16fb1705b4d8bd15e5bb5a920e658d63156b3e0c792553f7d9834a6aa1ef1640  payloa
 sha256  2d9baf49e8333edf159fc33dd47dc90c3784c5255a3526d959592934993e136d  payload/el8.x86_64.glibc2p28/bin/xclip.bz2
 sha256  f9bccfa45b9e18b0a83e6a9e926280a05250ab2cba67e0833c8ccb51dd5163e4  payload/el8.x86_64.glibc2p28/bin/xdesk.bz2
 sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
+sha256  d57b7cc82eeabc40b4fc40332ad8d77dbe05cb1d5574ff96b148cc17044eee5f  payload/el8.x86_64.glibc2p28/bin/xschem.bz2
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
 sha256  9adc32b8295fef0c69248d88300ac02cef5842ee0b4ba19c3703299d3ee1d107  payload/el8.x86_64.glibc2p28/bin/xterm.bz2
 sha256  afedd364087fdaa110f10973f2c5b12103be435ca546d00e7bdeb0224c9dde66  payload/el8.x86_64.glibc2p28/bin/ya.bz2
@@ -494,6 +495,7 @@ tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-pr
 tar-meta  284862  1789353499  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
 tar-meta  8183296  1789784146  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
+tar-meta  3922221  1790482906  payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2
 tar-meta  14850054  1790108766  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2037945  1788989391  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  980102  1790221423  payload/tldr/tldr-pages.tar.bz2

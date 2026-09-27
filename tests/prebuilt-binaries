@@ -1934,6 +1934,76 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (render):       netlistsvg  {detail}")
                 failures.append(("netlistsvg render", detail))
 
+    if has_bin("xschem"):
+        # `xschem -v` proves the loader found the binary and its private Tcl/Tk,
+        # but it touches none of the three things most likely to be broken:
+        # the Tcl SCRIPT library, the relocatable XSCHEM_LIBRARY_PATH (upstream
+        # ships that block commented out, so a bad build silently falls back to
+        # the dead build prefix and loses its symbol library), and the device
+        # .sym files. All three are proven by ONE real headless netlist: a
+        # subcircuit whose pins come from the shipped device library must come
+        # out fully expanded, with no "Symbol not found" and no "IS MISSING".
+        # -x keeps it X-free, so this runs in the Tier 3 container too.
+        xs_work = os.path.join(tmpdir, "xschem-smoke")
+        os.makedirs(xs_work, exist_ok=True)
+        # Copy a real shipped example under a UNIQUE name. The unique name
+        # matters: XSCHEM_LIBRARY_PATH puts the bundled examples dir on the
+        # search path, so netlisting "test.sch" in place would resolve to the
+        # BUNDLED copy and pass without ever consulting the path we want to
+        # prove. Renaming it to loadout_smoke.sch forces the top level to come
+        # from THIS directory, while its child cell (nand2.sch + nand2.sym) can
+        # only be found through the shipped library path -- so one netlist
+        # proves the cwd file was used AND the device/example library resolved.
+        xs_name = "loadout_smoke.sch"
+        xs_src = os.path.join(tmpdir, "local", "share", "doc", "xschem", "examples", "test.sch")
+        if not os.path.isfile(xs_src):
+            print("  FAIL (netlist):      xschem     no bundled examples to smoke with")
+            failures.append(("xschem netlist", "share/doc/xschem/examples/test.sch missing"))
+        xs_sch = os.path.join(xs_work, xs_name)
+        if os.path.isfile(xs_src):
+            with open(xs_src, "rb") as src, open(xs_sch, "wb") as dst:
+                dst.write(src.read())
+        try:
+            proc = subprocess.run(
+                [os.path.join(bin_dir, "xschem"), xs_name, "-q", "-x", "-r", "-n", "-o", "out"],
+                cwd=xs_work,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=180,
+            )
+            net = ""
+            net_path = os.path.join(xs_work, "out", "loadout_smoke.spice")
+            if os.path.isfile(net_path):
+                with open(net_path, errors="replace") as fh:
+                    net = fh.read()
+        except Exception as exc:
+            print(f"  FAIL (netlist):      xschem     {exc}")
+            failures.append(("xschem netlist", str(exc)))
+        else:
+            # xschem exits 10 when a netlist completes WITH warnings (upstream's
+            # own harness treats 10 as completion); the content is the assertion.
+            # The child cell's expansion is the load-bearing part: it can only
+            # come from the shipped xschem_library/examples, i.e. the
+            # XSCHEM_LIBRARY_PATH the relocatable xschemrc rebuilds.
+            if (
+                ".subckt loadout_smoke" in net
+                and ".subckt nand2" in net
+                and "IS MISSING" not in net
+                and xs_work in net  # top level came from OUR copy, not the library
+            ):
+                print(
+                    f"  OK   (netlist):      xschem     headless NAND netlist, {len(net.splitlines())} lines, 0 missing symbols"
+                )
+            else:
+                detail = (
+                    output_excerpt(proc.stdout)
+                    if not net
+                    else ("netlist has unresolved symbols" if "IS MISSING" in net else "netlist missing the top subckt")
+                )
+                print(f"  FAIL (netlist):      xschem     {detail}")
+                failures.append(("xschem netlist", detail))
+
     if has_bin("bitwuzla"):
         # `bitwuzla --version` exits 0 from a solver that cannot solve. The EL8
         # source build links GMP/MPFR statically into the binary (no bundled

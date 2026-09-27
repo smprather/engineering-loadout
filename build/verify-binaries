@@ -153,6 +153,7 @@ _SKIP_REASONS = {
     "vim": "custom build (vim.bin wrapper + binary)",
     "xsel": "built from source",
     "xclip": "built from source",
+    "xschem": "built from source (Codeberg-only release tags; needs a private Tcl/Tk 8.6 that no upstream binary carries)",
     "xterm": "built from source",
     "yank": "built from source",
     "rg": "GNU ABI; ripgrep ships musl-only for Linux releases -- EL8 RPM or source build",

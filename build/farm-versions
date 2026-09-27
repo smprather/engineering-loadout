@@ -740,6 +740,12 @@ TOOLS = [
         strategy_flag(["--version"], r"ngspice-([0-9]+(?:\.[0-9]+)*)"),
     ),
     (
+        "xschem",
+        "xschem",
+        "https://codeberg.org/stef_xschem/xschem/",
+        strategy_flag(["-v"], r"XSCHEM V([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
+    (
         "ls",
         "gnu-coreutils",
         "https://www.gnu.org/software/coreutils/",

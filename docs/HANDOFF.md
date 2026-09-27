@@ -1,11 +1,97 @@
 # Current Handoff
 
-Last updated: 2026-09-25 (security wheel refresh landed, vuln baseline
-emptied; 3 commits from 2026-09-24 unpushed). Prior release: `v2026.09.23`
-RELEASED + verified (release commit `032c1d0`). Committed since v2026.09.18:
-`b6e769a` (librelane end-to-end, btop themes, nethogs, xclip), `032c1d0`
-(marktext + fused-line launcher fix + gate fixes), and the three 2026-09-24
-gates (versioning scheme, scanner de-productification, security pipeline).
+Last updated: 2026-09-27 (xschem 3.4.7 onboarded; 4 commits from 2026-09-24
+unpushed). Prior release: `v2026.09.23` RELEASED + verified (release commit
+`032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane end-to-end,
+btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line launcher
+fix + gate fixes), the three 2026-09-24 gates (versioning scheme, scanner
+de-productification, security pipeline), and the 2026-09-25 security wheel
+refresh.
+
+## 2026-09-27: xschem 3.4.7 onboarded + strip walk-scope fix (unreleased)
+
+New `kind:bin` package: xschem, the schematic-capture / SPICE-VHDL-Verilog
+netlister from Codeberg (`stef_xschem/xschem`, tags carry no release assets, so
+it is a mandatory source build). It is the capture front end for what we already
+ship (ngspice to simulate, the `liberty-*` models, spice-netlist-ls for netlist
+hygiene) and the only loadout alternative for the job. Member of `@eda`, so
+`@eda` now resolves 20 packages; non-optional, so it also joins `@shared`.
+`depends: [gui_libs]` for the X11/cairo/xcb/jpeg side. Full recipe + the four
+traps in `build/ADDING_BINARIES.md`; invariants in AGENTS.md.
+
+**The design decision: it is a Tcl/Tk application, so it ships a private Tcl/Tk
+8.6.** `xschem.tcl` IS the netlister and UI and the ELF imports
+`Tk_Init`/`Tk_MainLoop`, so the `-ltk8.6` link is REQUIRED. The payload's
+`tcl`/`tk` packages are 9.0 and xschem's layer is 8.6-era; EL8's Tcl/Tk 8.6 is
+AppStream, not BaseOS, so a host Tk is not acceptable either. The build
+therefore makes it self-contained: Tcl 8.6.16 + Tk 8.6.16 from pinned tarballs
+into `lib/xschem/lib` beside `lib/xschem/bin/xschem.bin`, with the `tcl8.6`/
+`tcl8`/`tk8.6` script libraries. **No `TCL_LIBRARY`/`TK_LIBRARY` export and
+nothing under `<prefix>/lib/tcl8.6`** -- Tcl's own `<exedir>/../lib/tcl8.6`
+fallback finds the script library, so the LAYOUT is the mechanism and
+portable-python's tree is untouched (the `package require -exact` cross-clobber
+hazard). Pinned to 8.6.16 to MATCH expect's `libtcl8.6.so`, so the payload's two
+same-soname copies can never skew a script-library patchlevel check.
+
+**Four traps, each of which shipped a broken binary before being fixed:**
+1. strip BEFORE patchelf (stripping after moves `.dynstr` out of PT_LOAD ->
+   "no version information available"; immediate here, everything is versioned).
+2. a DT_RPATH ANYWHERE in the loaded set disables the executable's DT_RUNPATH
+   PROCESS-WIDE -- Tcl bakes its build-tree RPATH into `libtcl8.6.so`, so
+   `gui_libs`' `libjpeg.so.62` was never searched and xschem died with
+   "cannot open shared object file" DESPITE gui_libs being installed. Caught by
+   the NATIVE ceiling install (CachyOS has no libjpeg.so.62; the container has
+   system X11/cairo/jpeg, so it would have shipped). The build now
+   `--remove-rpath`s the private Tcl and ASSERTS no DT_RPATH survives.
+3. RPATH depth counts from the ELF: at `<prefix>/lib/xschem/bin/` the payload
+   lib64 is `../../../lib64`; a two-level element silently resolves to the
+   nonexistent `<prefix>/lib/lib64`. Stage-verify asserts each element resolves.
+4. upstream ships the system `xschemrc` library-path block COMMENTED OUT and on
+   Unix only rebuilds it from `XSCHEM_SHAREDIR` when it thinks it is in a source
+   dir, so a relocated install silently loses its symbol library. Fixed at
+   upstream's own documented customization point (the shipped `xschemrc` derives
+   the path from the launcher's `XSCHEM_SHAREDIR`) -- no ELF rewrite, unlike the
+   zsh `_relocate_zsh_prefix` route.
+
+The launcher composes `build/gui-wrapper-env.sh`: without it the payload's EL8
+fontconfig 2.13 parses a newer host's `/etc/fonts` and prints pages of
+"invalid constant used" on every launch (4+ measured on the dev host, 0 after).
+
+Also shipped: `tk-devel` added to `build/Dockerfile` (xschem's `Makefile.conf.in`
+requires the tk node, so configure ABORTS without it), `build/update`
+BUILD_SCRIPTS entry, `verify-binaries` skip reason, `farm-versions` entry
+(`-v` -> `XSCHEM V3.4.7`), README row, completion regen, and a FUNCTIONAL smoke
+in `tests/prebuilt-binaries`: a headless netlist (`-q -x -r -n -o out`, no
+display, so it runs in the Tier 3 container too) of a bundled example copied
+under a UNIQUE name -- the unique name forces the top level from the caller's
+directory while the child cell resolves only through the shipped library path.
+Exit 10 = netlist completed WITH warnings (upstream's own harness says so), so
+the gate asserts CONTENT, never exit 0.
+
+**Collateral defect fixed: `strip-all-elf-binaries` walked `build/`.** Calling it
+from a build script re-stripped the committed `build/gitleaks/gitleaks.bz2`,
+CHANGING its bytes and breaking the pinned digest `tests/security-pipeline`
+asserts, and it recorded three `build/` archives in `.strip-manifest` -- which no
+committed manifest ever contained. `build` is now in `_WALK_SKIP_DIRS`:
+committed dev tooling (the pinned gitleaks engine, the build/yara engine+rules
+moved OUT of payload on 2026-09-24 precisely to stop being installer-visible) is
+not payload and must never be touched by the payload strip pass. Same class as
+the marktext in-repo-scratch trap, one directory over. Verified: a strip run
+now reports `Processed: 0` and leaves `build/` byte-identical.
+
+Verified: build script stage-verifies green (relocated netlist with the BUILD
+PREFIX MOVED AWAY = 0 missing symbols; every RUNPATH element asserted; GUI up
+under Xvfb); `tests/prebuilt-binaries` native `All 341 binaries OK (1 skipped)`
+with `OK (netlist): xschem headless NAND netlist, 22 lines, 0 missing symbols`;
+Tier 3 `tests/prebuilt-binaries-almalinux8 --no-build` `All 319 binaries OK
+(23 skipped)` with the same netlist assertion on the EL8 floor; `run-all --fast`
+green; sizes (12.9 MB installed) + manifest + README table + completion
+regenerated. xschem's footprint: 3.9 MB archive (27 MB upstream install minus
+the 12 MB HTML manual and the 7.7 MB gschem importer), no `.part-NNN` chunking.
+
+Next: Tier 3 `--full` (doctor/resolver/completion/idempotence) is deferred to the
+release cycle as usual; commit is ready. A release would be class C (new payload
+bytes) and, under the new scheme, would be the first `2026.9.1`.
 
 ## 2026-09-25: security wheel refresh -- vuln baseline emptied (unreleased)
 

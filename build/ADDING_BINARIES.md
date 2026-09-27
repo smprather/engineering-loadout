@@ -6705,3 +6705,148 @@ build script.
 ```
 
 Member of `@editor-gui`, non-optional, so it also joins `@shared`.
+
+## xschem 3.4.7 -- schematic capture + SPICE/VHDL/Verilog netlister (added 2026-09-27)
+
+X11 schematic editor and netlist generator for VLSI/analog design. Bundled as the
+capture front end for what we already ship: `ngspice` (simulate), the `liberty-*`
+tools (models), and `spice-netlist-ls`/`openroad` (netlist hygiene and the RTL
+side). Every real analog bring-up starts by drawing the schematic, and xschem is
+the incumbent open-source tool for that; its `.sym`/`.sch` library is also what
+ngspice-oriented PDK kits expect.
+
+**Build**: `build/build-xschem.sh --tag 3.4.7` in the EL8 container (`build/build-shell`).
+Source is Codeberg-only (`https://codeberg.org/stef_xschem/xschem.git`), tags are
+bare versions with no release ASSETS -- so it is a mandatory source build
+(`build/verify-binaries` has a `_SKIP_REASONS` entry, `build/farm-versions` reads
+`xschem -v` -> `XSCHEM V3.4.7`).
+
+The build system is scconfig (a Tcl program that compiles its own interpreter
+`scconfig/sccbox` on first `./configure`); `./configure --prefix=...` then
+`make` + `make install`. It probes and links cairo, libjpeg, xcb and
+**Tcl/Tk 8.6**. Prerequisites are all baked into `build/Dockerfile`; `tk-devel`
+was ADDED for this package (xschem's `Makefile.conf.in` requires the tk node, so
+`configure` ABORTS with "Node libs/script/tk/* is required but provided
+detection callback fails" when only `tcl-devel` is present).
+
+### It is a Tcl/Tk application, and that drives the whole layout
+
+xschem is not a C program with an optional script layer: `xschem.tcl` IS the
+netlister and UI, and the binary calls `Tcl_Init`/`Tk_Init` (it imports
+`Tk_MainLoop`, `Tk_MainEx`, ...). So the link against `libtk8.6.so` is REQUIRED,
+not incidental.
+
+The payload's `tcl`/`tk` packages are **9.0**, and xschem's Tcl layer is 8.6-era
+(`winfo containing`, `::tk::unsupported::MacWindowStyle`, `::tk::GetSelection`
+for clipboard). Linking 9.0 is not an option, and on EL8 Tcl/Tk 8.6 is an
+**AppStream** package, so a host-provided Tk is not acceptable on a minimal farm
+node either.
+
+So the build makes it **self-contained**: Tcl 8.6.16 + Tk 8.6.16 are built from
+source (pinned tarball sha256s, both from the SourceForge `tcl` project -- note
+Tk lives under `/Tcl/`, not `/Tcltk/`) and co-located with the binary:
+
+```
+bin/xschem                                  sh launcher (this script)
+lib/xschem/bin/xschem.bin                   the real ELF
+lib/xschem/lib/libtcl8.6.so                private Tcl 8.6.16
+lib/xschem/lib/libtk8.6.so                 private Tk 8.6.16
+lib/xschem/lib/{tcl8.6,tcl8,tk8.6}/        Tcl/Tk SCRIPT libraries
+share/xschem/                               xschem.tcl, systemlib, xschemrc, devices
+share/doc/xschem/{examples,ngspice,logic,pcb,rom8k,...}
+share/man/man1/xschem.1
+```
+
+**No TCL_LIBRARY/TK_LIBRARY is exported and nothing is installed under
+`<prefix>/lib/tcl8.6`**: Tcl and Tk find their script libraries through their own
+`<exedir>/../lib/tcl8.6` and `<exedir>/../lib/tk8.6` fallbacks (the compiled-in
+prefix is dead once deployed), so the LAYOUT does the work. That also keeps
+portable-python's `lib/tcl8.6` (different patchlevel) untouched -- the
+`package require -exact` cross-clobber hazard documented for `expect`. Tcl/Tk are
+pinned to **8.6.16** to match the payload's existing `libtcl8.6.so` (expect's
+copy), so the two same-soname copies in one payload can never skew a script
+library's patchlevel check.
+
+The payload ships TWO `libtcl8.6.so` (expect's in `lib64/`, ours in
+`lib/xschem/lib/`). That is safe and intentional: each app resolves its own copy
+through `$ORIGIN`, and unlike expect's copy, ours is never on the global loader
+path. It is the price of not coupling xschem's script library to whatever patch
+level expect's build happens to be at.
+
+### Four traps, all of which shipped a broken binary until they were fixed
+
+1. **strip BEFORE patchelf, never after.** The first build stripped the staged
+   ELFs after setting the RPATH; the result died at load with `no version
+   information available` / `undefined symbol: , version`. Stripping moves
+   `.dynstr` outside `PT_LOAD` -- the failure documented in AGENTS.md for the
+   whole payload, and immediate here because xschem, Tcl and Tk all carry
+   versioned symbol references.
+2. **A DT_RPATH anywhere disables the executable's DT_RUNPATH for the whole
+   process.** Tcl's build bakes an RPATH pointing at its build tree into
+   `libtcl8.6.so`. glibc then switches to legacy RPATH semantics process-wide
+   and ignores the executable's RUNPATH, so `$ORIGIN/../../../lib64` (where
+   `gui_libs` keeps `libjpeg.so.62`) was never searched and xschem failed with
+   `libjpeg.so.62: cannot open shared object file` even with `gui_libs`
+   installed. The script now `--remove-rpath`s the private Tcl and ASSERTS no
+   DT_RPATH survives in any shipped ELF. (`libtk8.6.so` keeps `$ORIGIN`, because
+   DT_RUNPATH of the executable does not apply to a dependency's own
+   dependencies -- a RUNPATH, never an RPATH.)
+3. **RPATH depth is counted from the ELF, not the prefix.** The ELF lives at
+   `<prefix>/lib/xschem/bin/`, so the payload lib64 is `../../../lib64`, not
+   `../../lib64` -- a two-level element silently resolves to the nonexistent
+   `<prefix>/lib/lib64`. The stage-verify asserts each RUNPATH element resolves
+   (and the 3-level depth explicitly), because the build container HAS system
+   X11/cairo/jpeg and would netlist happily with a broken element.
+4. **Relocation: upstream ships the library path commented out.** The compiled
+   `XSCHEM_LIBRARY_PATH` points at the build prefix, and on Unix xschem only
+   rebuilds it from `XSCHEM_SHAREDIR` when it thinks it is running from a source
+   dir -- so an installed, relocated tree silently loses its symbol library and
+   netlists full of `IS MISSING`. Rather than patch the ELF (the zsh
+   `_relocate_zsh_prefix` route), the shipped system `xschemrc` gets the path
+   derivation uncommented/added -- upstream's own documented customization point,
+   keyed on the `XSCHEM_SHAREDIR` the launcher exports. No env pinning, no ELF
+   rewriting, and `--dest-dir`/fake-HOME installs work.
+
+### GUI env adaptation
+
+`bin/xschem` is composed from `build/gui-wrapper-env.sh` (same as wezterm /
+surfer / gtkwave) plus the `XSCHEM_SHAREDIR` handoff. Without the block, the
+payload's EL8 fontconfig 2.13 parses a newer host's `/etc/fonts` and prints a
+page of `invalid constant used` warnings on every launch (cairo pulls
+fontconfig in) -- measured 4+ warnings on the CachyOS dev host, 0 after.
+
+The script asserts the fragment ends in a newline (the fused-line invariant) and
+that the launcher embeds no build path (the no-prefix invariant).
+
+### What ships and what does not
+
+Excluded from the 27 MB upstream install: `xschem_man/` (12 MB HTML/PDF manual)
+and `gschem_import/` (7.7 MB gschem symbol converter), like gtkwave's `.odt` and
+octave's doc tree -- the `.1` man page is the reference that works offline. The
+final archive is ~3.9 MB, under the 40 MiB chunk threshold (no `.part-NNN`).
+
+### Smoke
+
+`xschem -v` proves the loader found the binary and the private Tcl/Tk. The real
+proof is a **headless netlist** (`xschem file.sch -q -x -r -n -o out`, no display,
+so it runs in the Tier 3 container): a copy of a bundled example is netlisted
+under a UNIQUE name, which forces the top level to come from the caller's
+directory while its child cell resolves only through the shipped library path.
+`tests/prebuilt-binaries` asserts the netlist contains both subckts, zero
+`IS MISSING`, and the smoke's own path. The build script proves the same thing
+with the BUILD PREFIX MOVED AWAY, and additionally brings the GUI up under Xvfb
+(`Tk_Init` + X11 + cairo).
+
+Exit-code note: xschem exits **10** when a netlist completes *with warnings*
+(upstream's own `tests/netlisting.tcl` documents 10 as netlisting completion).
+Gating on exit 0 alone would fail on a perfectly good netlist; the content is the
+assertion.
+
+### Install
+
+```bash
+./loadout install xschem          # or: @eda (with yosys, openroad, ngspice peers)
+```
+
+Member of `@eda`; non-optional, so it also joins `@shared`. `depends: [gui_libs]`
+for the X11/cairo/xcb/jpeg side -- the private Tcl/Tk needs no dependency.

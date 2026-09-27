@@ -115,7 +115,24 @@ def tar_bz2_path(path):
 # repo-managed); `.loadout-bootstrap` is the per-clone portable-python
 # extraction (contains Python's own stdlib test archives with intentionally-
 # crafted special-file members that would crash safe extraction).
-_WALK_SKIP_DIRS = (".git", "loadout_backups", ".loadout-bootstrap", "agent_ignore")
+# Directories never walked by the strip pass.
+#
+# `build` is here because it holds COMMITTED dev tooling that is deliberately
+# NOT payload: build/gitleaks/gitleaks.bz2 is a pinned static binary whose
+# sha256 (build/gitleaks/sha256.txt) tests/security-pipeline asserts, and
+# build/yara/ ships the scan engine + rules (moved out of payload/ on
+# 2026-09-24 precisely so they stop being installer-visible). Walking build/
+# re-stripped gitleaks.bz2, which changed its bytes and broke that pinned
+# digest -- and recorded three build/ archives in .strip-manifest, which no
+# committed manifest ever contained. Same class as the marktext in-repo scratch
+# trap documented in ADDING_BINARIES.md, one directory over.
+_WALK_SKIP_DIRS = (
+    ".git",
+    "build",
+    "loadout_backups",
+    ".loadout-bootstrap",
+    "agent_ignore",
+)
 
 
 def walk_files(repo_dir):

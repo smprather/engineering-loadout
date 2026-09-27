@@ -135,6 +135,10 @@ BUILD_SCRIPTS = {
     "vim": {"script": "build-gvim.sh", "runtime": "vim92.tar.bz2"},
     "xsel": {"script": "build-simple-c.sh", "tool": "xsel"},
     "xclip": {"script": "build-simple-c.sh", "tool": "xclip"},
+    # xschem builds its own private Tcl/Tk 8.6 runtime alongside the binary
+    # (the payload's tcl/tk are 9.0 and EL8's are AppStream-only), so the
+    # script wraps both the tool build and that runtime.
+    "xschem": {"script": "build-xschem.sh", "runtime": "xschem.tar.bz2"},
     "xterm": {"script": "build-xterm.sh"},
     "yank": {"script": "build-simple-c.sh", "tool": "yank"},
     "yara": {"script": "build-simple-c.sh", "tool": "yara"},

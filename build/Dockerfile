@@ -162,8 +162,10 @@ RUN dnf install -y -q epel-release \
         # is bundled into payload/lib64 separately (it is present on EL8 base
         # but NOT guaranteed on newer hosts, so it cannot be assumed).
         libpcap-devel \
-        # tcl (expect) and a python3 for host-driven build tooling:
-        tcl-devel python3 \
+        # tcl (expect), tk (xschem: its Makefile.conf.in requires the tk
+        # script node, so configure aborts without it) and a python3 for
+        # host-driven build tooling:
+        tcl-devel tk-devel python3 \
         # marktext (build-marktext.sh): the shanghai bundle co-locates an
         # NSS/NSPR + libsecret + libxkbfile + cups/avahi runtime closure, so
         # the EL8 runtime rpms must be present to copy from (the script reads

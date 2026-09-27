@@ -1922,6 +1922,37 @@
       ],
       "description": "Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
     },
+    "xschem": {
+      "kind": "bin",
+      "bins": [
+        "xschem"
+      ],
+      "archive": "payload/PLATFORM/runtime/xschem.tar.bz2",
+      "sentinel": "share/xschem/xschem.tcl",
+      "install_to": "~/.local",
+      "remove_before_extract": [
+        "lib/xschem",
+        "share/xschem",
+        "share/doc/xschem"
+      ],
+      "depends": [
+        "gui_libs"
+      ],
+      "version": "3.4.7",
+      "version_url": "https://codeberg.org/stef_xschem/xschem/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "eda",
+        "schematic",
+        "spice",
+        "analog",
+        "x11"
+      ],
+      "missing_hint": "xschem ships a private Tcl/Tk 8.6 runtime; if its archive is missing the launcher cannot start (no init.tcl)",
+      "description": "Schematic capture and SPICE/VHDL/Verilog netlister for VLSI and analog design — pairs with the bundled ngspice simulator and liberty models; ships a private Tcl/Tk 8.6 so it needs no host Tcl"
+    },
     "wezterm": {
       "kind": "bin",
       "bins": [],
@@ -3715,7 +3746,8 @@
         "bitwuzla",
         "spice-netlist-ls",
         "netlistsvg",
-        "librelane"
+        "librelane",
+        "xschem"
       ],
       "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
     },
