@@ -1,12 +1,106 @@
 # Current Handoff
 
-Last updated: 2026-09-27 (xschem 3.4.7 onboarded; 4 commits from 2026-09-24
-unpushed). Prior release: `v2026.09.23` RELEASED + verified (release commit
-`032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane end-to-end,
-btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line launcher
-fix + gate fixes), the three 2026-09-24 gates (versioning scheme, scanner
-de-productification, security pipeline), and the 2026-09-25 security wheel
-refresh.
+Last updated: 2026-09-27 (librelane stage-32 root cause found + io_place
+source patch landed; 5 commits unpushed). Prior release: `v2026.09.23`
+RELEASED + verified (release commit `032c1d0`). Committed since v2026.09.18:
+`b6e769a` (librelane end-to-end, btop themes, nethogs, xclip), `032c1d0`
+(marktext + fused-line launcher fix + gate fixes), the three 2026-09-24 gates
+(versioning scheme, scanner de-productification, security pipeline), the
+2026-09-25 security wheel refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-09-27: librelane stage-32 -- root cause + io_place source patch (unreleased)
+
+The 2026-09-22 open question assumed a tool-version *skew* in slew/cap
+estimation. That premise was wrong. The resizer was reacting to a **corrupt
+placement input**, and the whole cascade traces to one upstream API unit
+change.
+
+**Root cause: `dbTechLayer::getArea()` changed its return units between
+OpenROAD 24Q3 and 26Q1.** Measured on both binaries against the same LEF:
+
+| | `met2 getArea()` | computed pin length | signal-pin y |
+| --- | --- | --- | --- |
+| reference (Feb-2026 build) | 0.0676 (um^2) | 280 dbu | +107,180 (die edge) |
+| ours (26Q3) | 67600 (dbu^2) | 241,428,572 dbu | -120,714,286 (~60,000 um off-die) |
+
+67600 dbu^2 IS 0.0676 um^2 -- the same physical area in different units (the
+return type went `double` -> `int64_t`, a breaking SWIG change). LibreLane
+3.0.14's `io_place.py` (step `Odb.CustomIOPlacement`) computes the pin length
+as `getArea() * micron_in_units^2 / WIDTH`, which assumes um^2, so against a
+>=26Q1 OpenROAD the length inflates ~1e6x and **every signal IO pin lands
+~120 million dbu below the die**. The placer then reports HPWL 4,581,651 um
+instead of 1,778 um, the resizer inserts 4374 buffers (35 slew violations),
+and the flow dies at `OpenROAD.RepairDesignPostGPL` with DPL-0038 (283%
+utilization). The documented "2 slew vs 37 slew" was a downstream symptom of long
+nets, not a STA difference.
+
+**Isolation (all measured, all reproducible):**
+
+- Both flows re-run to a kept run dir; the reference (docker
+  `ghcr.io/librelane/librelane:3.0.14`, our PDK mounted at the same absolute
+  path) completes all 80 stages.
+- Synthesized netlists are structurally identical (222 cells, same mix) ->
+  yosys 0.69 vs 0.62 exonerated.
+- Die/core, 161 fixed taps, PDN fill (62), and the resolved config
+  (`PL_TARGET_DENSITY_PCT` 57.3812, padding 0, routability 1) all identical.
+- Stage-26 ODBs: same 259 nets, 383 instances, and **identical instance
+  name->location for all 383**.
+- **2x2 with one fixed binary**: our OpenROAD on the REFERENCE's stage-26 ODB
+  -> HPWL 1,768 um (healthy); on OUR ODB -> 4,581,651 um. Deterministic over
+  3 repeats. So the binary is fine and the ODB is the problem.
+- Probe fidelity control: the reference binary + reference ODB through the
+  same standalone probe reproduces 1,778.559 -- bit-identical to the
+  reference flow's own number.
+- The 9-corner liberty read works standalone (exit 0); the stage-32/35/47
+  deaths in my runs are this box's transient SIGKILLs, not a tool defect.
+
+**The fix (option B, user-chosen): a loadout-local source patch, not an
+OpenROAD regression.** `_UV_TOOL_SOURCE_PATCHES` + `_patch_uv_tool_sources()`
+in `loadout_main.py` rewrite the installed copy of `io_place.py` after every
+`uv tool install` (which recreates the venv, so the patch is re-applied every
+time by design). It normalizes a dbu^2-scale area back to um^2 in **both** the
+H and V length branches -- patching only V was caught by the end-to-end run
+(HPWL 6.0e5 instead of 1.8e3). The shipped WHEEL BYTES STAY PRISTINE: the
+artifact in payload/ is the pinned upstream wheel, hash-covered by
+`.content-manifest`, so the trust chain over what we ship is untouched; the
+patch only ever touches the installed copy.
+
+Each patch is idempotent (re-run finds the new text and no-ops) and GUARDED
+(if the anchor is absent and the new text is absent too, upstream moved the
+code -- warn and leave it alone rather than blind-write). The result is
+compile-checked before writing, and the write is atomic with the original mode
+preserved.
+
+**Verified (cheap, no multi-GB install):**
+
+- `tests/python-tool-source-patches` (new T1): every anchor occurs exactly once
+  in the real payload wheel, the replacement differs from the anchor, and the
+  patched upstream file compiles. This makes the anchor load-bearing -- a wheel
+  bump that moves the code fails the gate instead of silently no-op'ing the
+  patch (the exact failure mode the installer's own guard exists for).
+- A/B on the same input ODB, same LEFs, same config, same binary -- only the
+  patch differs: pristine upstream `io_place.py` places the signal pin at
+  **y = -120,714,286**; the installer-patched one at **y = -140** (die edge).
+  Both exit 0, so the script runs either way -- the difference is purely
+  where the pins land.
+- A real `./loadout install librelane --dest-dir` reports
+  `Patched librelane/.../io_place.py (upstream/toolchain incompatibility)` and
+  the installed file compiles.
+
+**NOT yet verified: the full 80-stage flow.** Every patched run clears stage
+32 (the documented blocker) and reaches 35/47, then dies at a *different* heavy
+stage each time -- consistent with this box's transient SIGKILLs, but not
+proven. The end-to-end confirmation (flow reaches stage 80 like the reference)
+is deferred until the RAM upgrade; it needs the multi-GB payload install plus
+the long flow, which is exactly what this box cannot currently take.
+
+Also landed today: `tk-devel` added to `build/Dockerfile` (xschem's
+`Makefile.conf.in` requires the tk node or configure ABORTS), and
+`strip-all-elf-binaries` now skips `build/` -- calling it from a build script
+re-stripped the committed `build/gitleaks/gitleaks.bz2`, changing its bytes and
+breaking the pinned digest `tests/security-pipeline` asserts, and recorded
+three `build/` archives in `.strip-manifest` that no committed manifest ever
+contained.
 
 ## 2026-09-27: xschem 3.4.7 onboarded + strip walk-scope fix (unreleased)
 
@@ -607,7 +701,10 @@ functions every Python-bound tool exports) and can miss broken ones.
   stages (was 17) and stops at `OpenROAD.RepairDesignPostGPL` on a detail-placer
   utilization error.
 - **OPEN QUESTION for the next session: the tool-version skew between this
-  bundle and the upstream LibreLane image.** The `--smoke-test` diverges at
+  bundle and the upstream LibreLane image.** RESOLVED 2026-09-27 -- the
+  premise was wrong, and the real cause is a single upstream API unit change.
+  See the top entry of this file ("librelane stage-32: root cause + io_place
+  patch"). The skew table below is kept as the evidence that started it. The `--smoke-test` diverges at
   stage 32 with identical inputs and identical placement -- the ONLY difference
   is tool versions:
 

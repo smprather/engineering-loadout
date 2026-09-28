@@ -2311,6 +2311,118 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
 }
 
 
+# Source patches applied to an installed uv_tool's own files, keyed by package.
+#
+# These exist for UPSTREAM INCOMPATIBILITIES with the toolchain we ship, not as
+# a general patching mechanism: each entry is one bug with a measured cause, and
+# the shipped WHEEL BYTES STAY PRISTINE (the artifact in payload/ is the pinned
+# upstream wheel, hash-covered by .content-manifest), so the trust chain over
+# what we ship is untouched. The patch only ever touches the INSTALLED copy,
+# which is a derived artifact uv recreates on every install (`uv tool install
+# --force`), so the patch is re-applied on every install by design.
+#
+# Each patch must be:
+#   * IDEMPOTENT -- re-running finds the new text and does nothing;
+#   * GUARDED -- if neither the old nor the new text is present (upstream moved
+#     the code), we warn and leave the file alone rather than blind-writing;
+#   * SELF-CONTAINED -- it must not depend on a private import of this module.
+#
+# Current entries:
+#   librelane / io_place.py -- dbTechLayer.getArea() unit change (see the
+#     comment on the patch body below).
+# Named constants so the table below reads as data and each fragment can be
+# unit-checked on its own.
+#
+# The defect: dbTechLayer::getArea() changed its return units between OpenROAD
+# 24Q3 (double, um^2) and 26Q1+ (int64_t, dbu^2) -- a breaking change to the
+# SWIG binding, still unfixed upstream (librelane master, 2026-09-27).
+# io_place.py multiplies the area by micron_in_units^2, which assumes um^2, so
+# against a >=26Q1 OpenROAD the computed pin length inflates by ~1e6 and
+# Odb.CustomIOPlacement puts signal pins ~120 million dbu off-die. The placer
+# then reports astronomic HPWL (4.6e6 um instead of 1.8e3), the resizer
+# inserts 4374 buffers, and the flow dies at OpenROAD.RepairDesignPostGPL with
+# DPL-0038 (utilization > 100%). Each patch normalizes a dbu^2-scale area back
+# to um^2 first; the 1000 threshold sits far above any real layer area in um^2
+# and far below any dbu^2 area.
+#
+# TWO entries, not one: upstream computes H_LENGTH and V_LENGTH from two
+# different layers in two separate blocks. Patching only the V branch leaves
+# half the pins mis-placed -- measured GPL HPWL 6.0e5 instead of 1.8e3, still
+# far off the reference. Both branches must be normalized.
+_LIBRELANE_IO_PLACE_REL = "lib/python3.14/site-packages/librelane/scripts/odbpy/io_place.py"
+
+IO_PLACE_H_OLD = """\
+    else:
+        H_LENGTH = max(
+            int(
+                math.ceil(
+                    H_LAYER.getArea() * micron_in_units * micron_in_units / H_WIDTH
+                )
+            ),
+            H_WIDTH,
+        )"""
+
+IO_PLACE_H_NEW = """\
+    else:
+        # LOADOUT PATCH: getArea() returns dbu^2 on OpenROAD >= 26Q1 (um^2 before).
+        _loadout_h_area = H_LAYER.getArea()
+        if _loadout_h_area > 1000:  # dbu^2 -> um^2
+            _loadout_h_area = _loadout_h_area / (micron_in_units * micron_in_units)
+        H_LENGTH = max(
+            int(
+                math.ceil(
+                    _loadout_h_area * micron_in_units * micron_in_units / H_WIDTH
+                )
+            ),
+            H_WIDTH,
+        )"""
+
+IO_PLACE_V_OLD = """\
+    if ver_length is not None:
+        V_LENGTH = int(micron_in_units * ver_length)
+    else:
+        V_LENGTH = max(
+            int(
+                math.ceil(
+                    V_LAYER.getArea() * micron_in_units * micron_in_units / V_WIDTH
+                )
+            ),
+            V_WIDTH,
+        )"""
+
+IO_PLACE_V_NEW = """\
+    if ver_length is not None:
+        V_LENGTH = int(micron_in_units * ver_length)
+    else:
+        # LOADOUT PATCH: getArea() returns dbu^2 on OpenROAD >= 26Q1 (um^2 before).
+        _loadout_v_area = V_LAYER.getArea()
+        if _loadout_v_area > 1000:  # dbu^2 -> um^2
+            _loadout_v_area = _loadout_v_area / (micron_in_units * micron_in_units)
+        V_LENGTH = max(
+            int(
+                math.ceil(
+                    _loadout_v_area * micron_in_units * micron_in_units / V_WIDTH
+                )
+            ),
+            V_WIDTH,
+        )"""
+
+_UV_TOOL_SOURCE_PATCHES = {
+    "librelane": [
+        {
+            "path": _LIBRELANE_IO_PLACE_REL,
+            "old": IO_PLACE_H_OLD,
+            "new": IO_PLACE_H_NEW,
+        },
+        {
+            "path": _LIBRELANE_IO_PLACE_REL,
+            "old": IO_PLACE_V_OLD,
+            "new": IO_PLACE_V_NEW,
+        },
+    ],
+}
+
+
 def _wrap_uv_tool_launchers(pkg_name, bin_home, tools_home):
     """Rewrite a uv_tool launcher so helper scripts can import the venv's deps.
 
@@ -2375,6 +2487,78 @@ def _wrap_uv_tool_launchers(pkg_name, bin_home, tools_home):
         warn(f"could not write PYTHONPATH wrapper for {launcher}: {exc}")
         return []
     return [launcher]
+
+
+def _patch_uv_tool_sources(pkg_name, tools_home):
+    """Apply the registered source patches to an installed uv_tool's files.
+
+    Runs after every `uv tool install` (which recreates the venv, so the patch
+    must be re-applied each time). Idempotent: a file already carrying the new
+    text is left alone. Guarded: if the expected old text is absent AND the new
+    text is absent too, upstream moved the code -- warn and leave it alone
+    rather than blind-writing, because a blind write into unexpected upstream
+    code is how a packaging fix becomes an outage.
+
+    Returns the list of "path:status" strings actually acted on.
+    """
+    patches = _UV_TOOL_SOURCE_PATCHES.get(pkg_name)
+    if not patches:
+        return []
+    venv_root = os.path.join(tools_home, pkg_name)
+    results = []
+    for patch in patches:
+        rel = patch["path"]
+        target = os.path.join(venv_root, rel)
+        label = f"{pkg_name}/{rel}"
+        if not os.path.isfile(target):
+            warn(f"cannot patch {label}: {target} does not exist")
+            results.append(f"{label}: missing")
+            continue
+        try:
+            with open(target, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError as exc:
+            warn(f"cannot read {label} for patching: {exc}")
+            results.append(f"{label}: unreadable")
+            continue
+        if patch["new"] in text:
+            results.append(f"{label}: already-patched")
+            continue
+        if text.count(patch["old"]) != 1:
+            warn(
+                f"cannot patch {label}: expected text not found exactly once "
+                f"({text.count(patch['old'])} matches) -- upstream changed; "
+                "leaving the file untouched"
+            )
+            results.append(f"{label}: anchor-miss")
+            continue
+        patched = text.replace(patch["old"], patch["new"])
+        # Never write a file we would then have to parse: a syntax error in a
+        # tool's own source is silent until that step runs, hours later.
+        try:
+            compile(patched, target, "exec")
+        except SyntaxError as exc:
+            warn(f"refusing to patch {label}: result is not valid Python ({exc})")
+            results.append(f"{label}: would-break-syntax")
+            continue
+        tmp = f"{target}.loadout-patch.tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(patched)
+            # Keep the original mode/ownership: uv created it, and a
+            # read-only or group-writable venv must not gain a surprise.
+            shutil.copymode(target, tmp)
+            os.replace(tmp, target)
+        except OSError as exc:
+            warn(f"could not write patched {label}: {exc}")
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            results.append(f"{label}: write-failed")
+            continue
+        results.append(f"{label}: patched")
+    return results
 
 
 def install_python_tools(repo_dir, home, selected_tools, registry):
@@ -2493,6 +2677,10 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                         _vprint(
                             f"  Wrapped {launcher} launcher with the tool venv's PYTHONPATH (helper scripts need it)"
                         )
+                    for outcome in _patch_uv_tool_sources(pkg_name, _tools_home):
+                        _vprint(f"  Source patch: {outcome}")
+                        if outcome.endswith(": patched"):
+                            print(f"  Patched {outcome.rsplit(': ', 1)[0]} (upstream/toolchain incompatibility)")
             finally:
                 progress.advance()
     finally:

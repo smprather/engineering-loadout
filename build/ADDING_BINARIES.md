@@ -6850,3 +6850,68 @@ assertion.
 
 Member of `@eda`; non-optional, so it also joins `@shared`. `depends: [gui_libs]`
 for the X11/cairo/xcb/jpeg side -- the private Tcl/Tk needs no dependency.
+
+## librelane 3.0.14 -- io_place.py source patch for OpenROAD >= 26Q1 (added 2026-09-27)
+
+**The defect.** `dbTechLayer::getArea()` changed its return units between
+OpenROAD 24Q3 and 26Q1: `double` um^2 -> `int64_t` dbu^2 (a breaking change to
+the SWIG binding; `db.h` shows `double getArea() const` in 24Q3 and
+`int64_t getArea() const` from 26Q1 on). LibreLane 3.0.14's
+`scripts/odbpy/io_place.py` (step `Odb.CustomIOPlacement`) computes the IO pin
+length as
+
+```python
+V_LENGTH = max(ceil(V_LAYER.getArea() * micron_in_units**2 / V_WIDTH), V_WIDTH)
+```
+
+which assumes um^2. Against a >=26Q1 OpenROAD the length inflates ~1e6x and
+**every signal IO pin lands ~120 million dbu (~60,000 um) below the die**. The
+placer then reports astronomic HPWL, the resizer inserts thousands of buffers,
+and the flow dies at `OpenROAD.RepairDesignPostGPL` with DPL-0038.
+
+Measured on the same LEF, both binaries:
+
+| | `met2 getArea()` | computed pin length | signal-pin y |
+| --- | --- | --- | --- |
+| reference (Feb-2026 build) | 0.0676 (um^2) | 280 dbu | +107,180 (die edge) |
+| ours (26Q3) | 67600 (dbu^2) | 241,428,572 dbu | -120,714,286 (~60,000 um off-die) |
+
+67600 dbu^2 *is* 0.0676 um^2 -- the same physical area in different units.
+
+**Why a source patch and not an OpenROAD pin.** The alternatives were: rebuild
+OpenROAD at 24Q3 (the last tag with the old semantics) -- a ~7-quarter
+regression for one field; or wait for upstream librelane, whose **master still
+has the unpatched code** (checked 2026-09-27), so there is no release to bump
+to. The patch is the minimal fix at the actual incompatibility.
+
+**The patch** (`_UV_TOOL_SOURCE_PATCHES` + `_patch_uv_tool_sources()` in
+`loadout_main.py`): after every `uv tool install` (which recreates the venv, so
+the patch is re-applied every time by design), rewrite the installed copy of
+`io_place.py` so a dbu^2-scale area is normalized back to um^2 before the
+multiplication. **Both** the H and V length branches -- patching only V was
+caught by the end-to-end run (GPL HPWL 6.0e5 instead of 1.8e3).
+
+The shipped WHEEL BYTES STAY PRISTINE: the artifact in `payload/` is the pinned
+upstream wheel, hash-covered by `.content-manifest`, so the trust chain over
+what we ship is untouched. The patch only ever touches the installed copy.
+
+Each patch is idempotent (re-run finds the new text and no-ops) and GUARDED (if
+the anchor is absent and the new text is absent too, upstream moved the code --
+warn and leave it alone rather than blind-write). The result is compile-checked
+before writing, and the write is atomic with the original mode preserved.
+
+`tests/python-tool-source-patches` (T1) makes the anchors load-bearing: every
+`old` must occur exactly once in the real payload wheel, so a wheel bump that
+moves the code fails the gate instead of silently no-op'ing the patch.
+
+**Verified:** A/B on the same input ODB, same LEFs, same config, same binary --
+only the patch differs. Pristine upstream `io_place.py` places the signal pin
+at y = -120,714,286; the installer-patched one at y = -140 (die edge). Both exit
+0, so the script runs either way -- the difference is purely where the pins
+land. A real `./loadout install librelane --dest-dir` reports
+`Patched librelane/.../io_place.py (upstream/toolchain incompatibility)`.
+
+**Not yet verified:** the full 80-stage flow. Every patched run clears stage 32
+(the documented blocker) and reaches 35/47, then dies at a different heavy stage
+each time -- consistent with this box's transient SIGKILLs, but unproven. The
+end-to-end confirmation is deferred until the RAM upgrade.
