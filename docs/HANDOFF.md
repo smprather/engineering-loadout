@@ -1,12 +1,12 @@
 # Current Handoff
 
-Last updated: 2026-09-27 (librelane stage-32 root cause found + io_place
-source patch landed; 5 commits unpushed). Prior release: `v2026.09.23`
-RELEASED + verified (release commit `032c1d0`). Committed since v2026.09.18:
-`b6e769a` (librelane end-to-end, btop themes, nethogs, xclip), `032c1d0`
-(marktext + fused-line launcher fix + gate fixes), the three 2026-09-24 gates
-(versioning scheme, scanner de-productification, security pipeline), the
-2026-09-25 security wheel refresh, and the 2026-09-27 xschem onboarding.
+Last updated: 2026-09-28 (librelane stage-32 verified fixed: flow reaches stage
+80; 7 commits unpushed). Prior release: `v2026.09.23` RELEASED + verified
+(release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
+end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
+launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
+scanner de-productification, security pipeline), the 2026-09-25 security wheel
+refresh, and the 2026-09-27 xschem onboarding.
 
 ## 2026-09-27: librelane stage-32 -- root cause + io_place source patch (unreleased)
 
@@ -87,12 +87,37 @@ preserved.
   `Patched librelane/.../io_place.py (upstream/toolchain incompatibility)` and
   the installed file compiles.
 
-**NOT yet verified: the full 80-stage flow.** Every patched run clears stage
-32 (the documented blocker) and reaches 35/47, then dies at a *different* heavy
-stage each time -- consistent with this box's transient SIGKILLs, but not
-proven. The end-to-end confirmation (flow reaches stage 80 like the reference)
-is deferred until the RAM upgrade; it needs the multi-GB payload install plus
-the long flow, which is exactly what this box cannot currently take.
+**VERIFIED (2026-09-28, within the RAM constraint): the flow now reaches stage
+80.** Two separate blockers were found and separated:
+
+1. **The io_place patch fixes the documented stage-32 blocker.** With it, the
+   flow clears `OpenROAD.RepairDesignPostGPL` every run and progresses to the
+   end. Measured on the way: stage-26 signal pins move from y = -120,714,286 to
+   y = -140 (die edge), and stage-28 GPL HPWL from 4,581,651 um to 1,769.9 um
+   (reference: 1,778.6).
+2. **A second, independent blocker sits one step from the end: `Netgen.LVS`.**
+   It is NOT a payload defect -- it is the dev host's *system* netgen. The
+   reference container's netgen (1.5.316, compiled Feb-2026) runs headless
+   fine and its stage-70 log ends `Circuits match uniquely. LVS Done.`; the
+   dev host's netgen is GUI-bound and fails fast with `no display name and no
+   $DISPLAY` when DISPLAY is unset, and HANGS (needs SIGKILL) when DISPLAY=:0
+   is set. With `--skip Netgen.LVS` the flow runs all 80 stages and logs
+   `Flow complete.` with **0 ERROR lines** (only the expected `lvs_error_count
+   not reported` / `VSRC_LOC_FILES` warnings from the skip).
+
+So the patch is confirmed end-to-end as far as this box allows: the flow is
+sound through stage 80, and the only step that cannot run here is the one that
+needs a headless netgen the dev host does not have. On a farm node (or once
+netgen is available headless) that step should pass the same way, since the
+reference image proves the step itself works.
+
+Also resolved along the way: the earlier "dies at a different heavy stage each
+time" pattern was partly a CORRUPT SCRATCH INSTALL, not the flow -- the first
+`--dest-dir` install was SIGKILLed mid-extraction, leaving `ruby` as a mix of
+3.3.10 and 3.4.10 (`ruby lib version (3.3.10) doesn't match executable version
+(3.4.10)`), which broke klayout at stage 62. Reinstalling ruby + klayout fixed
+it. Worth remembering: a killed install leaves a half-written tree that fails
+much later and far from the cause.
 
 Also landed today: `tk-devel` added to `build/Dockerfile` (xschem's
 `Makefile.conf.in` requires the tk node or configure ABORTS), and
