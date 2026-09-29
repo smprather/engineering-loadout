@@ -335,6 +335,7 @@ OpenSSH for those.
 | fish | bin | 4.9.3 | Fish shell — friendly interactive shell with autosuggestions and syntax highlighting |
 | tcl | bin | 9.0.3 | Tcl scripting language — tclsh interpreter and runtime library |
 | tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
+| mdformat | python-tool | 1.0.0 | mdformat — opinionated CommonMark Markdown formatter (pure-Python). Drives conform.nvim for the `markdown` filetype in envs/nvim; `--wrap keep` is passed so hand-wrapped prose is never reflowed and code blocks are left untouched. |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
 | nodejs | bin | 26.9.0 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.4 | Web-based interactive development environment for notebooks, code, and data |

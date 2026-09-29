@@ -1,0 +1,156 @@
+#!/usr/bin/env python3.14
+"""nvim-formatters-resolve: every conform.nvim filetype must map to a formatter
+that actually EXISTS on a loadout install.
+
+The bug this gate exists for: `envs/nvim/lua/global/plugins/conform.lua` mapped
+`markdown` to `rumdl`, which was never a loadout package. conform.nvim resolves
+a formatter name to a binary on PATH; finding none, it did not error -- it fell
+through to `lsp_format = "fallback"`, and for a filetype with no LSP that is a
+silent no-op. Markdown therefore had NO formatter at all, and nothing said so.
+The same class of breakage is invisible to every other gate in the repo: the
+payload was complete, the registry was valid, the manifest matched.
+
+So the assertion is mechanical: for each filetype, each formatter name must
+resolve to something real. Three ways to satisfy it:
+
+  * SHIPPED  -- a `bins` entry in payload/packages.json. The binary is installed
+                to ~/.local/bin, so it is on PATH in any real install.
+  * CONSOLE  -- a console script from an installed python-tool wheel. uv
+                exposes every entry point in the tool's venv to ~/.local/bin,
+                even when the registry `bins` list is empty (tclint -> tclfmt).
+                Verified against the entry points declared by the wheels in the
+                payload wheelhouse.
+  * LSP      -- supplied by a running language server at format time rather than
+                by a binary (ruff_format / ruff_organize_imports come from
+                ruff's LSP).
+
+Anything a user is expected to supply themselves (npm globals, host tools) goes
+in KNOWN_EXTERNAL. Entries in that table are NOT endorsements -- they are
+recorded debt, each with a reason, so that adding a fourth broken formatter is
+a red test rather than another silent no-op. The current ones predate this gate
+and are reported in docs/HANDOFF.md.
+
+Must run under the bundled Python 3.14. Exits 0 if every name resolves.
+"""
+
+import json
+import os
+import re
+import sys
+import zipfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WHEELS = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28", "wheels")
+CONFORM = os.path.join(REPO, "envs", "nvim", "lua", "global", "plugins", "conform.lua")
+
+# Provided by a language server at format time, not by a binary on PATH.
+LSP_PROVIDED = {
+    "ruff_format": "ruff's LSP formatting (envs/nvim/lsp/ruff.lua)",
+    "ruff_organize_imports": "ruff's LSP source.organizeImports code action",
+}
+
+# Not shipped by the loadout. Each entry is known debt, not an endorsement.
+KNOWN_EXTERNAL = {
+    "prettierd": "npm global; envs/nvim/package.json declares prettier 3.8.1 but "
+    "nothing runs an npm install, so this is absent on a real install",
+    "prettier": "same as prettierd (`stop_after_first` makes the pair a pair)",
+    "yamlfmt": "not a loadout package; the yaml filetype has no formatter",
+}
+
+FAILED = 0
+
+
+def fail(msg):
+    global FAILED
+    FAILED += 1
+    print(f"  FAIL  {msg}")
+
+
+def ok(msg):
+    print(f"  PASS  {msg}")
+
+
+def load_shipped_bins():
+    """Binary names the payload installs onto PATH."""
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        reg = json.load(fh)["packages"]
+    bins = set()
+    for entry in reg.values():
+        bins.update(entry.get("bins") or [])
+    return bins
+
+
+def load_console_scripts():
+    """Entry points every installed python-tool wheel puts in ~/.local/bin."""
+    scripts = set()
+    for name in sorted(os.listdir(WHEELS)):
+        if not name.endswith(".whl"):
+            continue
+        with zipfile.ZipFile(os.path.join(WHEELS, name)) as zf:
+            for entry in zf.namelist():
+                if not entry.endswith("entry_points.txt"):
+                    continue
+                for line in zf.read(entry).decode("utf-8", "replace").splitlines():
+                    m = re.match(r"^([A-Za-z0-9_.+-]+)\s*=", line)
+                    if m:
+                        scripts.add(m.group(1).strip())
+    return scripts
+
+
+def parse_formatters_by_ft():
+    """{filetype: [formatter, ...]} from the conform.nvim spec's table."""
+    with open(CONFORM, encoding="utf-8") as fh:
+        body = fh.read()
+    table = re.search(r"local formatters_by_ft = \{(.*?)\n\}", body, re.S)
+    if not table:
+        return None
+    out = {}
+    for line in table.group(1).splitlines():
+        line = line.split("--", 1)[0]  # strip a trailing comment
+        m = re.match(r"\s*([A-Za-z0-9_]+)\s*=\s*\{(.*)\}\s*,?\s*$", line)
+        if not m:
+            continue
+        names = re.findall(r'"([A-Za-z0-9_+-]+)"', m.group(2))
+        if names:
+            out[m.group(1)] = names
+    return out
+
+
+def main():
+    print("nvim-formatters-resolve:")
+
+    shipped = load_shipped_bins()
+    console = load_console_scripts()
+    by_ft = parse_formatters_by_ft()
+    if by_ft is None:
+        fail("could not find the formatters_by_ft table in conform.lua")
+        return 1
+    if not by_ft:
+        fail("formatters_by_ft parsed empty -- the parse is broken")
+        return 1
+
+    for ft in sorted(by_ft):
+        for name in by_ft[ft]:
+            if name in shipped:
+                ok(f"{ft}: {name} -> payload bin")
+            elif name in console:
+                ok(f"{ft}: {name} -> console script of an installed python-tool")
+            elif name in LSP_PROVIDED:
+                ok(f"{ft}: {name} -> {LSP_PROVIDED[name]}")
+            elif name in KNOWN_EXTERNAL:
+                ok(f"{ft}: {name} -> KNOWN_EXTERNAL (recorded debt: {KNOWN_EXTERNAL[name]})")
+            else:
+                fail(
+                    f"{ft}: {name} resolves to nothing -- no payload bin, no console "
+                    "script, no LSP provider, and not recorded in KNOWN_EXTERNAL. "
+                    "conform.nvim will silently fall through to lsp_format=fallback."
+                )
+
+    print(f"\n{len(by_ft)} filetypes mapped, {len(shipped)} payload bins known")
+    if FAILED:
+        print(f"{FAILED} unresolved formatter(s)")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,12 +1,75 @@
 # Current Handoff
 
-Last updated: 2026-09-28 (librelane stage-32 verified fixed: flow reaches stage
-80; 7 commits unpushed). Prior release: `v2026.09.23` RELEASED + verified
+Last updated: 2026-09-29 (mdformat added: markdown formatting actually works in
+env-nvim; 8 commits unpushed). Prior release: `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-09-29: mdformat 1.0.0 -- markdown formatting enabled in env-nvim (unreleased)
+
+**The bug.** `envs/nvim/lua/global/plugins/conform.lua` mapped
+`markdown = { "rumdl" }`, but rumdl was never a loadout package and is not
+installed. conform.nvim resolves a formatter name to a binary on PATH; finding
+none it does not error -- it falls through to `lsp_format = "fallback"`, and a
+filetype with no LSP then gets a **silent no-op**. Markdown therefore had no
+formatter at all, and nothing said so: the payload was complete, the registry
+valid, the manifest matched, and every existing gate stayed green. The file
+also carried a **dead `formatters.mdformat` entry** (`--wrap keep`) that nothing
+referenced -- someone had started exactly this change and never finished it.
+
+**The fix.** `mdformat` is now a non-optional `python-tool`. It was the right
+pick over the alternatives:
+
+- **pure-Python, py3-none-any** -- installs offline from the wheelhouse with no
+  source build and no glibc risk (contrast rumdl, a Rust tool that would have
+  needed a cargo build wired into `build/update`).
+- **closure is 1 new wheel** -- `markdown-it-py` and `mdurl` were ALREADY in
+  the wheelhouse (my first grep missed them because wheel filenames use
+  underscores, not hyphens); `tomli` is gated `python_version < "3.11"`, so the
+  whole addition is `mdformat-1.0.0-py3-none-any.whl` (53 KB).
+- conform.nvim's pinned version already has a built-in `mdformat` formatter
+  (`command = "mdformat", args = { "-" }`), so `prepend_args = { "--wrap", "keep" }`
+  yields the effective `mdformat --wrap keep -`. `keep` matters: without it
+  mdformat would rewrap every hand-wrapped paragraph in this repo's docs on
+  save.
+- the pre-existing, already-correct `formatters.mdformat` entry is finally live.
+
+**The gate this forced.** `tests/nvim-formatters-resolve` (T1, wired into
+`run-all`) parses conform.nvim's `formatters_by_ft` and requires every named
+formatter to resolve to a payload `bins` entry, a python-tool **console script**
+(uv exposes every wheel entry point to `~/.local/bin` even when the registry
+`bins` list is empty -- that is how `tclfmt` resolves via tclint), or an LSP
+provider. RED/GREEN proven: restoring `rumdl` fails the gate, `mdformat` passes.
+
+**Pre-existing debt the gate now records rather than hides.** The same
+silent-no-op class affects two more formatters, recorded in the test's
+`KNOWN_EXTERNAL` table with reasons, NOT fixed here (out of scope for this
+change, and they are real gaps worth a decision):
+
+- `javascript = { "prettierd", "prettier" }` -- `envs/nvim/package.json`
+  declares `prettier 3.8.1` as a devDependency, but **nothing runs an npm
+  install** and the env ships no `node_modules`, so both are absent.
+- `yaml = { "yamlfmt" }` -- not a loadout package.
+
+**Verified:**
+
+- `./loadout resolve mdformat` -> 3 packages; offline
+  `uv tool install mdformat --no-index --find-links <wheelhouse>` resolves
+  (3 packages, 6 ms) and `mdformat --version` -> `mdformat 1.0.0`.
+- a real `./loadout install mdformat --dest-dir` installs the launcher and it
+  formats correctly.
+- **headless nvim end-to-end**: with the repo env as the config and the real
+  loadout install on PATH, `conform.format()` on a messy `.md` normalised the
+  heading, converted `*` lists to `-`, collapsed stray prose spacing and
+  re-padded the table, leaving the code fence alone. The **negative control**
+  matters: the same test against the *installed* `~/.config/nvim` (still
+  rumdl) produced NO CHANGE, which is exactly the broken state being fixed.
+- regen chain in the required order (completion -> sizes -> manifest; running
+  sizes before completion re-staled it, since sizes hashes the completion file),
+  all three sync gates green, `run-all --fast` green.
 
 ## 2026-09-27: librelane stage-32 -- root cause + io_place source patch (unreleased)
 

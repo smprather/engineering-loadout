@@ -6,7 +6,13 @@ local formatters_by_ft = {
     javascript = { "prettierd", "prettier", stop_after_first = true },
     bash       = { "shfmt" },
     sh         = { "shfmt" },
-    markdown   = { "rumdl" },
+    -- mdformat is a payload python-tool (pure-Python, py3-none-any), so it is on
+    -- PATH in every @shared install and needs no npm/toolchain. This mapping
+    -- used to name `rumdl`, which was never a loadout package -- conform found no
+    -- binary and silently fell through to lsp_format = "fallback", i.e. the
+    -- markdown filetype had no formatter at all. The `formatters.mdformat` entry
+    -- below (--wrap keep) was already present and unused; this makes it live.
+    markdown   = { "mdformat" },
     yaml       = { "yamlfmt" },
     json       = { "biome" },
     jsonc      = { "biome" },
@@ -20,6 +26,10 @@ local formatters = {
     injected = { options = { ignore_errors = true } },
     yamlfmt  = { prepend_args = { "-quiet" }, options = { ignore_errors = true } },
     prettier = { prepend_args = { "--tab-width", "4" } },
+    -- `keep` = never reflow prose. conform's built-in mdformat runs `mdformat -`
+    -- (stdin -> stdout); prepend_args land before that, so the effective command
+    -- is `mdformat --wrap keep -`. Reflowing would rewrap the hand-wrapped
+    -- paragraphs in this repo docs on every save.
     mdformat = { prepend_args = { "--wrap", "keep" } },
 }
 

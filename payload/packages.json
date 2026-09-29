@@ -2914,6 +2914,34 @@
       ],
       "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave"
     },
+    "mdformat": {
+      "kind": "python-tool",
+      "uv_tool": "mdformat",
+      "bins": [
+        "mdformat"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "wheels": [
+        "mdformat",
+        "markdown-it-py",
+        "mdurl"
+      ],
+      "version": "1.0.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "markdown",
+        "format",
+        "docs",
+        "python"
+      ],
+      "version_url": "https://pypi.org/project/mdformat/",
+      "description": "mdformat — opinionated CommonMark Markdown formatter (pure-Python, py3-none-any). Wired into envs/nvim conform.nvim for `markdown` filetype: normalises headings/lists/tables/fences and leaves code blocks alone. `--wrap keep` is passed so prose line breaks are never reflowed — the repo's docs are hand-wrapped and reflowing them would churn every file. Minimal closure: markdown-it-py + mdurl (already in the wheelhouse), tomli only below py3.11"
+    },
     "parity-plot": {
       "kind": "python-tool",
       "bins": [
