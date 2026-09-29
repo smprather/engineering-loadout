@@ -50,12 +50,13 @@ LSP_PROVIDED = {
 }
 
 # Not shipped by the loadout. Each entry is known debt, not an endorsement.
-KNOWN_EXTERNAL = {
-    "prettierd": "npm global; envs/nvim/package.json declares prettier 3.8.1 but "
-    "nothing runs an npm install, so this is absent on a real install",
-    "prettier": "same as prettierd (`stop_after_first` makes the pair a pair)",
-    "yamlfmt": "not a loadout package; the yaml filetype has no formatter",
-}
+# Currently EMPTY: markdown, javascript and yaml all had broken mappings
+# (rumdl / prettierd+prettier / yamlfmt named binaries the payload never
+# installed) and all three are now real payload packages -- mdformat (python-tool),
+# prettier (npm runtime archive on the bundled Node.js) and yamlfmt (static Go
+# binary). The table stays so a future filetype that expects a host/npm-supplied
+# formatter has a place to record WHY, rather than silently no-op'ing.
+KNOWN_EXTERNAL: dict[str, str] = {}
 
 FAILED = 0
 

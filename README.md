@@ -284,6 +284,7 @@ OpenSSH for those.
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
 | procs | bin | 0.14.12 | ps replacement with colors and process tree |
+| prettier | bin | 3.8.1 | Opinionated JavaScript/TypeScript/JSON/YAML/CSS formatter — upstream npm package on loadout's bundled Node.js (no npm install); drives conform.nvim for the `javascript` filetype in envs/nvim |
 | pv | bin | 1.6.6 | Monitor and show progress of data through a pipe |
 | rg | bin | 15.2.0 | Extremely fast grep alternative (ripgrep) |
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
@@ -320,6 +321,7 @@ OpenSSH for those.
 | xephyr | bin | 1.20.11-28.el8_10.3 | Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port) |
 | yank | bin | 1.4.0 | Select terminal output and copy to clipboard |
 | yq | bin | 4.53.6 | YAML/JSON/XML/CSV processor (jq for YAML) |
+| yamlfmt | bin | 0.21.0 | YAML formatter and fixer (google/yamlfmt) — static Go binary, no glibc dep; drives conform.nvim for the `yaml` filetype in envs/nvim |
 | zellij | bin | 0.45.1 | Terminal workspace multiplexer (no-web build; WASM plugins disabled) |
 | zoxide | bin | 0.10.0 | Smarter cd with frecency ranking (z/zi) |
 | octave | bin | 11.3.0 | GNU scientific computing language (MATLAB-compatible) |

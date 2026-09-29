@@ -6915,3 +6915,62 @@ land. A real `./loadout install librelane --dest-dir` reports
 (the documented blocker) and reaches 35/47, then dies at a different heavy stage
 each time -- consistent with this box's transient SIGKILLs, but unproven. The
 end-to-end confirmation is deferred until the RAM upgrade.
+
+## prettier 3.8.1 + yamlfmt 0.21.0 -- the two missing conform.nvim formatters (added 2026-09-29)
+
+`env-nvim`'s conform.nvim config named four formatters the payload never
+installed. conform resolves a formatter name to a binary on PATH; finding none
+it does not error, it falls through to `lsp_format = "fallback"`, so those
+filetypes had **no formatter at all** and nothing said so -- the payload was
+complete, the registry was valid, the manifest matched, and every existing gate
+stayed green. `markdown` was already fixed (mdformat, python-tool, see the
+2026-09-29 HANDOFF entry); this adds the remaining two.
+
+### prettier (javascript / typescript) -- npm runtime archive
+
+Same shape as `pyright` / `netlistsvg` / `typescript-language-server`: the
+upstream npm package vendored under `lib/node_modules/prettier` and run on
+loadout's bundled Node.js through a prefix-derived sh launcher. Unlike the other
+npm packages prettier has **zero runtime dependencies** (single entry point
+`bin/prettier.cjs`, `engines.node >= 14`), so the tarball IS the whole payload
+-- nothing to vendor alongside it. `depends: [nodejs]`.
+
+Integrity is the npm registry's own `dist.integrity` (sha512, base64), pinned
+per version in `build/build-prettier.sh` and recomputed from the downloaded
+bytes; a mismatch aborts before the archive is even unpacked.
+
+**The invocation detail that matters (it is not `-`):** conform's built-in
+`prettier` formatter reads the buffer on **stdin** and passes
+`--stdin-filepath $FILENAME`, because prettier infers the parser (js/ts/json/
+yaml/css) from that filename's extension. Passing a bare `-` makes prettier exit
+with `No files matching the pattern were found: "-"` and format nothing. The
+launcher therefore just execs the cjs entry point and lets conform do the
+rest. The build script asserts both the positive form and that a bare `-` is
+rejected, so a future prettier that changed this would be noticed.
+
+`prettierd` (fsouza/prettierd) is deliberately NOT shipped: it is a separate
+daemon package that only exists to speed up repeated formats, and its conform
+entry does config-file discovery (`cwd` walks for `.prettierrc*`). Plain
+`prettier` formats correctly without a daemon, so the mapping is just
+`javascript = { "prettier" }`.
+
+### yamlfmt (yaml) -- static Go binary, no build
+
+`google/yamlfmt` publishes per-platform tarballs and a `checksums.txt` covering
+all of them. The linux/x86_64 archive is verified with `sha256sum -c` against
+that file before the binary is used. The binary is **statically linked** (zero
+`NEEDED` entries, no glibc involvement), so it is a plain download+strip+bzip2
+with no compile step, and the build script asserts it is still static (a dynamic
+build would mean upstream changed the release layout and the "no glibc floor"
+argument in the header would no longer hold).
+
+conform invokes yamlfmt with `-` (its own stdin convention, unlike prettier),
+which the build script smoke-tests end to end.
+
+### What this proves, and what it does not
+
+`tests/nvim-formatters-resolve` (T1) parses conform's `formatters_by_ft` and
+requires every named formatter to resolve to a payload bin, a python-tool
+console script, or an LSP provider -- RED/GREEN proven on the original `rumdl`
+bug. With prettier and yamlfmt shipped, its `KNOWN_EXTERNAL` table is now
+EMPTY: every filetype conform maps has a real, installed formatter.

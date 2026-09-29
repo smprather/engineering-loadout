@@ -1,12 +1,70 @@
 # Current Handoff
 
-Last updated: 2026-09-29 (mdformat added: markdown formatting actually works in
-env-nvim; 8 commits unpushed). Prior release: `v2026.09.23` RELEASED + verified
+Last updated: 2026-09-29 (all conform.nvim formatters now resolve to real
+payload binaries — mdformat + prettier + yamlfmt; 9 commits unpushed). Prior
+release: `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-09-29: prettier 3.8.1 + yamlfmt 0.21.0 -- the last two formatters (unreleased)
+
+Closes the two gaps the mdformat entry above recorded as debt. `env-nvim`'s
+conform.nvim config named **four** formatters the payload never installed; all
+four filetypes (markdown / javascript / yaml) silently fell through to
+`lsp_format = "fallback"`. After this change every formatter conform names
+resolves to a real, installed payload binary, and the
+`tests/nvim-formatters-resolve` gate's `KNOWN_EXTERNAL` table is EMPTY.
+
+**prettier** (javascript/typescript) -- the same npm runtime-archive shape as
+`pyright`/`netlistsvg`/`typescript-language-server`: the upstream npm package
+vendored under `lib/node_modules/prettier` and run on loadout's bundled
+Node.js through a prefix-derived sh launcher, `depends: [nodejs]`. Unlike the
+other npm packages prettier has **zero runtime dependencies** (single entry
+point `bin/prettier.cjs`, `engines.node >= 14`), so the tarball IS the whole
+payload. Integrity is the npm registry's own `dist.integrity` (sha512, base64),
+pinned per version in `build/build-prettier.sh` and recomputed from the
+downloaded bytes; a mismatch aborts before unpacking.
+
+**yamlfmt** (yaml) -- `google/yamlfmt` publishes per-platform tarballs plus a
+`checksums.txt`; the linux/x86_64 archive is verified with `sha256sum -c`
+before use. The binary is **statically linked** (zero `NEEDED`, no glibc
+involvement), so it is a plain download+strip+bzip2 with no compile step, and
+the build script asserts it is still static (a dynamic build would mean
+upstream changed the release layout and the "no glibc floor" argument in its
+header would no longer hold).
+
+**Two invocation gotchas, both load-bearing (documented in ADDING_BINARIES):**
+
+1. **prettier is NOT fed `-`.** conform's built-in `prettier` formatter reads
+   the buffer on **stdin** and passes `--stdin-filepath $FILENAME` (prettier
+   infers the parser from that filename's extension). A bare `-` makes prettier
+   exit with `No files matching the pattern were found: "-"` and format
+   NOTHING -- silently, because conform treats a no-op formatter as success.
+   The build script asserts both the positive form and that `-` is rejected.
+2. **prettierd is deliberately NOT shipped.** It is a separate daemon npm
+   package (fsouza/prettierd) that only exists to speed up repeated formats,
+   and its conform entry does config-file discovery (`cwd` walks for
+   `.prettierrc*`). Plain `prettier` formats correctly without a daemon, so
+   the mapping is now just `javascript = { "prettier" }` and `prettierd` is
+   dropped from it (and from the gate's KNOWN_EXTERNAL).
+
+**Verified:**
+
+- `./loadout resolve prettier yamlfmt` -> 3 packages (nodejs pulled in);
+  a real `./loadout install prettier yamlfmt --dest-dir` installs both
+  launchers plus the nodejs dependency, and `prettier --version` -> 3.8.1,
+  `yamlfmt --version` -> 0.21.0.
+- **headless nvim end-to-end**: with the repo env as config and the real
+  loadout installs on PATH, `conform.format()` on a messy `.js` and `.yaml`
+  reformatted both (js object literal spacing + function body; yaml key and
+  list-item spacing).
+- the gate now reports 12 filetypes mapped, zero unresolved, KNOWN_EXTERNAL
+  empty.
+- regen chain in the correct order, all three sync gates green, `run-all
+  --fast` green.
 
 ## 2026-09-29: mdformat 1.0.0 -- markdown formatting enabled in env-nvim (unreleased)
 
@@ -45,14 +103,16 @@ formatter to resolve to a payload `bins` entry, a python-tool **console script**
 provider. RED/GREEN proven: restoring `rumdl` fails the gate, `mdformat` passes.
 
 **Pre-existing debt the gate now records rather than hides.** The same
-silent-no-op class affects two more formatters, recorded in the test's
-`KNOWN_EXTERNAL` table with reasons, NOT fixed here (out of scope for this
-change, and they are real gaps worth a decision):
+silent-no-op class affected two more formatters, recorded in the test's
+`KNOWN_EXTERNAL` table with reasons rather than hidden:
 
 - `javascript = { "prettierd", "prettier" }` -- `envs/nvim/package.json`
   declares `prettier 3.8.1` as a devDependency, but **nothing runs an npm
-  install** and the env ships no `node_modules`, so both are absent.
+  install** and the env ships no `node_modules`, so both were absent.
 - `yaml = { "yamlfmt" }` -- not a loadout package.
+
+Both were closed the same day (see the entry below), so `KNOWN_EXTERNAL` is
+now EMPTY.
 
 **Verified:**
 

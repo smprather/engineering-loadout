@@ -268,6 +268,7 @@ sha256  d57b7cc82eeabc40b4fc40332ad8d77dbe05cb1d5574ff96b148cc17044eee5f  payloa
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
 sha256  9adc32b8295fef0c69248d88300ac02cef5842ee0b4ba19c3703299d3ee1d107  payload/el8.x86_64.glibc2p28/bin/xterm.bz2
 sha256  afedd364087fdaa110f10973f2c5b12103be435ca546d00e7bdeb0224c9dde66  payload/el8.x86_64.glibc2p28/bin/ya.bz2
+sha256  e9858d4293f9b279573b8ae895d2743e16be377c2d61af1d7547b78377b4e3b9  payload/el8.x86_64.glibc2p28/bin/yamlfmt.bz2
 sha256  65e55d72de119c2da0ee9c5e097a409dfbbdade86e4aa5155c5f4e523a516d9f  payload/el8.x86_64.glibc2p28/bin/yank.bz2
 sha256  4f84f6688a7aa4f2717791dfadf90acceec173d2499ab43684a6d47a3bcf38f6  payload/el8.x86_64.glibc2p28/bin/yazi.bz2
 sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  payload/el8.x86_64.glibc2p28/bin/yes.bz2
@@ -484,6 +485,7 @@ tar-meta  39333995  1789784142  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz
 tar-meta  4858261  1787539454  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
+tar-meta  1642087  1790703932  payload/el8.x86_64.glibc2p28/runtime/prettier.tar.bz2
 tar-meta  3082228  1787409797  payload/el8.x86_64.glibc2p28/runtime/pyright.tar.bz2
 tar-meta  3992335  1788465896  payload/el8.x86_64.glibc2p28/runtime/ruby.tar.bz2
 tar-meta  247124  1789147092  payload/el8.x86_64.glibc2p28/runtime/sby.tar.bz2

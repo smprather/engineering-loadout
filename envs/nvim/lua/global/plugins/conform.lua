@@ -3,7 +3,12 @@ local utils = require("global.utils")
 local formatters_by_ft = {
     lua        = { "stylua" },
     python     = { "ruff_format", "ruff_organize_imports" },
-    javascript = { "prettierd", "prettier", stop_after_first = true },
+    -- prettier is the vendored upstream npm package on loadout's bundled Node.js
+    -- (no npm install). prettierd is deliberately NOT listed: it is a separate
+    -- daemon package (fsouza/prettierd) we do not ship, and it only exists to
+    -- speed up repeated formats -- the plain `prettier` below formats fine
+    -- without a daemon, and `stop_after_first` keeps the list to one.
+    javascript = { "prettier" },
     bash       = { "shfmt" },
     sh         = { "shfmt" },
     -- mdformat is a payload python-tool (pure-Python, py3-none-any), so it is on
@@ -25,6 +30,9 @@ local formatters = {
     stylua   = { prepend_args = { "--indent-type", "Spaces", "--collapse-simple-statement", "Always" } },
     injected = { options = { ignore_errors = true } },
     yamlfmt  = { prepend_args = { "-quiet" }, options = { ignore_errors = true } },
+    -- conform's built-in `prettier` feeds the buffer on stdin and passes
+    -- `--stdin-filepath $FILENAME` (it does NOT use `-`, which prettier
+    -- rejects), so prettier infers the parser from that filename's extension.
     prettier = { prepend_args = { "--tab-width", "4" } },
     -- `keep` = never reflow prose. conform's built-in mdformat runs `mdformat -`
     -- (stdin -> stdout); prepend_args land before that, so the effective command

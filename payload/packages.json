@@ -1187,6 +1187,30 @@
       ],
       "description": "Monitor and show progress of data through a pipe"
     },
+    "prettier": {
+      "kind": "bin",
+      "bins": [
+        "prettier"
+      ],
+      "depends": [
+        "nodejs"
+      ],
+      "version": "3.8.1",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "format",
+        "javascript",
+        "typescript"
+      ],
+      "archive": "payload/PLATFORM/runtime/prettier.tar.bz2",
+      "archive_name": "prettier.tar.bz2",
+      "sentinel": "bin/prettier",
+      "install_to": "~/.local",
+      "missing_hint": "Run: ./build/build-prettier.sh --tag 3.8.1",
+      "description": "Opinionated JavaScript/TypeScript/JSON/YAML/CSS formatter (prettier) — upstream npm package running on loadout's bundled Node.js (no npm install, no node_modules, no runtime downloads); pinned and integrity-verified against the npm registry's dist.integrity. Drives conform.nvim for the javascript filetype in envs/nvim"
+    },
     "rg": {
       "kind": "bin",
       "bins": [
@@ -2043,6 +2067,22 @@
         "core"
       ],
       "description": "YAML/JSON/XML/CSV processor (jq for YAML)"
+    },
+    "yamlfmt": {
+      "kind": "bin",
+      "bins": [
+        "yamlfmt"
+      ],
+      "version": "0.21.0",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "format",
+        "yaml"
+      ],
+      "version_url": "https://github.com/google/yamlfmt/releases",
+      "description": "YAML formatter and fixer (google/yamlfmt) — static Go binary, so no glibc floor and no runtime libs; sha256-verified against the release checksums.txt. Drives conform.nvim for the yaml filetype in envs/nvim"
     },
     "zellij": {
       "kind": "bin",
