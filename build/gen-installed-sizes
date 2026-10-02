@@ -162,11 +162,11 @@ def measure(rel):
             finally:
                 fh.close()
 
-        # lstat, not getsize: three vendored tmux-resurrect entries are symlinks
-        # into a tmux-test submodule that is not vendored, so getsize raises
-        # ENOENT on them. A symlink installs as a symlink and costs its target
-        # path, which is what lstat reports -- and a dangling one is not an error
-        # worth a warning on every run.
+        # lstat, not getsize: some vendored plugin entries are symlinks (the
+        # tmux-persist tree ships ~30 under .claude/skills) whose targets are not
+        # vendored, so getsize raises ENOENT on them. A symlink installs as a
+        # symlink and costs its target path, which is what lstat reports -- and
+        # a dangling one is not an error worth a warning on every run.
         return rel, os.lstat(abs_path).st_size
     except Exception as exc:  # noqa: BLE001 - a bad artifact must not kill the sweep
         print(f"WARNING: {rel}: {exc}", file=sys.stderr)

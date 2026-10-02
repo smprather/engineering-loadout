@@ -3367,7 +3367,7 @@
         "env",
         "terminal"
       ],
-      "description": "tmux global/user config layers + pop-in/pop-out helpers + bundled tpm/resurrect/continuum plugins"
+      "description": "tmux global/user config layers + pop-in/pop-out helpers + bundled tpm/tmux-persist/better-mouse-mode plugins"
     },
     "env-helix": {
       "kind": "env",

@@ -14,10 +14,18 @@ Prefix: **`Ctrl-\`** (not `Ctrl-b` -- your fingers will thank you)
 | `Prefix+v` | Capture pane buffer -> nvim |
 | `Prefix+r` | Reload config |
 | `Prefix+X` | Confirm-before kill-session |
-| `Prefix+Ctrl-s` | Save session (resurrect) |
-| `Prefix+Ctrl-r` | Restore session (resurrect) |
+| `Prefix+Ctrl-s` | Save session (tmux-persist) |
+| `Prefix+Ctrl-r` | Restore session (tmux-persist) |
 
-tmux-continuum auto-saves every 60 minutes.
+tmux-persist ([hyoretsu/tmux-persist](https://github.com/hyoretsu/tmux-persist),
+the maintained fork of the abandoned tmux-resurrect) auto-saves pane contents
+and layout per session on detach/exit/start, and restores a session when one of
+the same name is created -- so this replaces both tmux-resurrect and
+tmux-continuum. Snapshots live in `~/.tmux/persist` (override with
+`set -g @persist-dir '<path>'`) and older than 7 days are pruned
+(`@persist-delete-backup-after`). Coming from resurrect, existing snapshots
+are migrated on first load and unset `@persist-*` options fall back to the old
+`@resurrect-*` names.
 
 ## Configuration layers
 

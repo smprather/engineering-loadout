@@ -98,7 +98,7 @@ Name packages or groups the same way `dnf` or `apt` works:
 | **[Bash](https://www.gnu.org/software/bash/)** | Layered shell config, 100+ aliases, fzf / zoxide / eza / bat integration |
 | **[Neovim](https://neovim.io)** | LSP, 326 offline Tree-sitter parsers, curated plugin set |
 | **[Vim](https://www.vim.org)** | Vim 9.2 with NERDTree, SimpylFold, and vim-liberty bundled |
-| **[Tmux](https://github.com/tmux/tmux)** | Sessions that survive reboot (resurrect + continuum), `Ctrl-\` prefix |
+| **[Tmux](https://github.com/tmux/tmux)** | Sessions that survive reboot (tmux-persist), `Ctrl-\` prefix |
 | **[Helix](https://helix-editor.com)** | Ready to run offline |
 | **[Starship](https://starship.rs)** | Cross-shell prompt, Linux config |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
@@ -491,8 +491,10 @@ points at a shared tcsh config root.
 Prefix `Ctrl-\`. Shift-arrows for pane navigation, Ctrl-arrows for windows,
 `Prefix+1`-`5` for layout presets, `Prefix+6` to reapply the custom 3-column
 layout, `Prefix+o` to open a new seven-pane 3-column work window, and
-`Prefix+v` to capture the pane buffer into nvim. tmux-resurrect and
-tmux-continuum bundled -- your sessions come back after a reboot.
+`Prefix+v` to capture the pane buffer into nvim. tmux-persist bundled (the
+maintained fork of the abandoned tmux-resurrect) -- it auto-saves pane contents
+and layout per session on detach/exit, so your sessions come back after a
+reboot.
 
 `~/.tmux.conf` links to the XDG dispatcher at `~/.config/tmux/tmux.conf`.
 That dispatcher loads the managed `tmux.global.conf`, then the persistent
