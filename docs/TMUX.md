@@ -31,11 +31,18 @@ are migrated on first load and unset `@persist-*` options fall back to the old
 
 `~/.tmux.conf` links to the XDG dispatcher at
 `~/.config/tmux/tmux.conf`. It sources the loadout-managed
-`tmux.global.conf`, then the preserved `tmux.user.conf`, and initializes TPM
-last so the user layer can declare plugins.
+`tmux-settings-global.conf`, then the preserved `tmux-settings-user.conf`
+(which wins), then the managed `tmux-global.conf`, then the preserved
+`tmux-user.conf`, and initializes TPM last so the user layer can declare
+plugins. The settings layers hold user-facing knobs -- currently just the
+`@theme` choice, defaulting to `loadout1` -- and the global layer loads the
+selected `themes/tmux-theme-<name>.conf` plus the generated
+`word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
+Helper scripts live in `scripts/`.
 
-On a fresh install, loadout seeds `tmux.user.conf` only when it is absent. If
+On a fresh install, loadout seeds `tmux-user.conf` and
+`tmux-settings-user.conf` only when absent. If
 the older `~/.tmux.local.conf` exists, an interactive install offers to move
-it; unattended or declined migrations keep loading it until the canonical
-user layer exists. When both files exist, neither is changed and
-`tmux.user.conf` wins.
+it; the legacy file is no longer loaded, so unattended or declined migrations
+need a manual move into `tmux-user.conf`. When both files exist, neither is changed and
+`tmux-user.conf` wins.

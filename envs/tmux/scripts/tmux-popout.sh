@@ -84,7 +84,7 @@ done
 # The formatter keys off $TMUX_PANE; ours still points at the (untouched)
 # source pane, so override it to a pane in the new window.
 tmux select-pane -t "$first"
-TMUX_PANE="$first" bash ~/.config/tmux/tmux-3col-layout.sh
+TMUX_PANE="$first" bash ~/.config/tmux/scripts/tmux-3col-layout.sh
 
 # --- persist reverse-state (window-scoped; dies with the window) -------------
 tmux set -w -t "$new_win" @popout_src_pane  "$src_pane"

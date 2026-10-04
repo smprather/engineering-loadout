@@ -1,13 +1,50 @@
 # Current Handoff
 
-Last updated: 2026-09-29 (all conform.nvim formatters now resolve to real
-payload binaries — mdformat + prettier + yamlfmt; 9 commits unpushed). Prior
-release: `v2026.09.23` RELEASED + verified
+Last updated: 2026-10-04 (tmux env synced to the live golden tree with
+loadout1 as the shipped default; uncommitted). Prior release:
+`v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-10-04: tmux env synced to the live golden tree, loadout1 default (uncommitted)
+
+The live `~/.config/tmux` had diverged from what the installer manages (hyphen
+names live vs dotted names in repo; settings + theme layering lived only in
+the live tree). Per the user's call -- live is golden, except the shipped
+default theme is loadout1 -- the repo now mirrors the live tree byte-for-byte
+with one deliberate difference: both shipped settings layers select `loadout1`
+(live's global baseline already did; live's user layer says `loadout2`).
+
+Layout change (repo `envs/tmux/`): `tmux.global.conf` -> `tmux-global.conf`,
+`tmux.user.conf` -> `tmux-user.conf`, helpers into `scripts/` (including the
+bash *generator* `scripts/tmux-word-separators`, which replaces the old Python
+run-shell script), new `tmux-settings-global.conf` +
+`tmux-settings-user.conf` (seed), new `word-separators.conf` (committed
+generated output, 3812 chars), new `themes/tmux-theme-loadout{1,2}.conf`
+(hyphen names; byte-identical to live apart from two comment lines whose
+filenames were fixed to the new names). Dispatcher drops `-q` and the legacy
+`~/.tmux.local.conf` fallback (live policy: missing files fail loud; the file
+is no longer loaded). Installer: managed settings-global/themes/word-separators,
+seed-if-absent settings-user, dotted `tmux.user.conf` migrated forward,
+superseded top-level managed files pruned. `build/update tmux-plugins` follows
+the rename. `tests/install-env-tmux-nvim-layers` covers dispatcher order
+(settings-global -> settings-user -> global -> user -> TPM), the loadout1
+defaults, settings preservation, dotted migration, and pruning;
+`tests/install-linux-tmp-home` asserts the new tree.
+
+Verified: isolated-server smoke (`@theme` = loadout1, prefix, theme values,
+3812-char separators, reload OK, server killed by PID, live untouched);
+`install-env-tmux-nvim-layers` OK; `install-linux-tmp-home` OK;
+`run-all --fast` green; sizes (6362 artifacts) + manifest (4611 files)
+regenerated, README table OK.
+
+Two notes for the operator: (1) the live `tmux-settings-user.conf` still says
+`loadout2` and is preserved on reinstall, so the running session stays on
+loadout2 until that file is flipped by hand; (2) the next `env-tmux` install
+refreshes the live theme files' header comments to the fixed filenames.
 
 ## 2026-09-29: prettier 3.8.1 + yamlfmt 0.21.0 -- the last two formatters (unreleased)
 

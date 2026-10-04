@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # shell-state-export.sh
 #
 # Source this in ~/.bashrc to get the `shell_state_export` function:
-#     source ~/.config/tmux/shell-state-export.sh
+#     source ~/.config/tmux/scripts/shell-state-export.sh
 #
 # WHY: capturing a shell's functions, aliases, and non-exported vars is
 # impossible from outside the process (/proc exposes only exported env + cwd).
@@ -29,7 +29,8 @@ shell_state_export() {
         out="$snap_dir/snapshot.rc"
     fi
     # Remember the real expand_aliases setting; restored at the very end.
-    local _ea; _ea=$(shopt -p expand_aliases 2>/dev/null || echo 'shopt -s expand_aliases')
+    local _ea
+    _ea=$(shopt -p expand_aliases 2>/dev/null || echo 'shopt -s expand_aliases')
 
     {
         printf '# shell snapshot: pid %s  %s\n' "$$" "$(date -Is 2>/dev/null)"
@@ -118,7 +119,7 @@ shell_state_export() {
         # --- restore alias expansion -----------------------------------------
         # All definitions are parsed; safe to re-enable so the user gets aliases.
         printf '\n# restore alias expansion\n%s\n' "$_ea"
-    } > "$out"
+    } >"$out"
 
     printf '%s\n' "$out"
 }

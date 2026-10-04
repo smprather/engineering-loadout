@@ -419,12 +419,14 @@ Tmux and Vim plugins are vendored in-tree (no internet required):
 
 Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
 hook strips `.git` dirs on the next commit). Plugin discovery reads the
-declarations in `envs/tmux/tmux.global.conf`, not the dispatcher.
+declarations in `envs/tmux/tmux-global.conf`, not the dispatcher.
 
 The tmux dispatcher is `~/.config/tmux/tmux.conf` (linked from `~/.tmux.conf`):
-managed `tmux.global.conf` -> preserved `tmux.user.conf` -> TPM. The installer
-offers interactive migration from `~/.tmux.local.conf`; unattended or declined
-migrations use the legacy file only while the new user file is absent.
+managed `tmux-settings-global.conf` -> preserved `tmux-settings-user.conf` ->
+managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The installer
+seeds both user layers only when absent; it offers interactive migration from
+`~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
+migrations need a manual move of its contents into `tmux-user.conf`.
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
 When a loadout nvim binary and env-nvim config are both present, the installer

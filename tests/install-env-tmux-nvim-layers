@@ -29,18 +29,39 @@ tmux_dir="$fresh_home/.config/tmux"
 [ "$(readlink "$fresh_home/.tmux.conf")" = ".config/tmux/tmux.conf" ] \
     || fail "~/.tmux.conf does not target the XDG dispatcher"
 [ -f "$tmux_dir/tmux.conf" ] || fail "tmux dispatcher not installed"
-[ -f "$tmux_dir/tmux.global.conf" ] || fail "tmux global layer not installed"
-[ -f "$tmux_dir/tmux.user.conf" ] || fail "tmux user layer not seeded"
+[ -f "$tmux_dir/tmux-global.conf" ] || fail "tmux global layer not installed"
+[ -f "$tmux_dir/tmux-user.conf" ] || fail "tmux user layer not seeded"
+[ -f "$tmux_dir/tmux-settings-global.conf" ] || fail "tmux managed settings not installed"
+[ -f "$tmux_dir/tmux-settings-user.conf" ] || fail "tmux settings user layer not seeded"
+[ -f "$tmux_dir/word-separators.conf" ] || fail "tmux generated word separators not installed"
+for theme in tmux-theme-loadout1.conf tmux-theme-loadout2.conf; do
+    [ -f "$tmux_dir/themes/$theme" ] || fail "tmux theme $theme not installed"
+done
+for helper in shell-state-export.sh tmux-3col-layout.sh tmux-popin.sh tmux-popout.sh tmux-word-separators; do
+    [ -f "$tmux_dir/scripts/$helper" ] || fail "tmux helper scripts/$helper not installed"
+done
+# Requested default: loadout1 in both shipped settings layers.
+grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "managed tmux settings do not default to loadout1"
+grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer does not default to loadout1"
+# The theme file the default selects must be the one the global layer loads.
+grep -qF 'source-file -F "~/.config/tmux/themes/tmux-theme-#{@theme}.conf"' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer does not load the theme selected by @theme"
 
-global_line=$(grep -nF 'source-file -q ~/.config/tmux/tmux.global.conf' "$tmux_dir/tmux.conf" | cut -d: -f1)
-user_line=$(grep -nF 'tmux.user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
+settings_global_line=$(grep -nF 'tmux-settings-global.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
+settings_user_line=$(grep -nF 'tmux-settings-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
+global_line=$(grep -nF '~/.config/tmux/tmux-global.conf' "$tmux_dir/tmux.conf" | cut -d: -f1)
+user_line=$(grep -nF 'tmux-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
 tpm_line=$(grep -nF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf" | cut -d: -f1)
+[ -n "$settings_global_line" ] || fail "dispatcher does not source the managed settings"
+[ -n "$settings_user_line" ] || fail "dispatcher does not source the settings user layer"
 [ -n "$global_line" ] || fail "dispatcher does not source the global layer"
 [ -n "$user_line" ] || fail "dispatcher does not source the user layer"
 [ -n "$tpm_line" ] || fail "dispatcher does not initialize TPM"
-((global_line < user_line && user_line < tpm_line)) \
-    || fail "dispatcher order is not global -> user -> TPM"
-! grep -qF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.global.conf" \
+((settings_global_line < settings_user_line && settings_user_line < global_line && global_line < user_line && user_line < tpm_line)) \
+    || fail "dispatcher order is not settings-global -> settings-user -> global -> user -> TPM"
+! grep -qF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux-global.conf" \
     || fail "global layer initializes TPM before user plugin declarations"
 
 nvim_lua="$fresh_home/.config/nvim/lua"
@@ -54,16 +75,22 @@ grep -qF 'local LAYERS = { "global", "user" }' "$fresh_home/.config/nvim/init.lu
 
 # Reinstall refreshes managed files, preserves user files, and warns about
 # populated retired Neovim layers without deleting them.
-printf '%s\n' 'set -g status-left "USER-KEPT"' >> "$tmux_dir/tmux.user.conf"
-printf '%s\n' '# GLOBAL-STALE' >> "$tmux_dir/tmux.global.conf"
+printf '%s\n' 'set -g status-left "USER-KEPT"' >> "$tmux_dir/tmux-user.conf"
+printf '%s\n' '# GLOBAL-STALE' >> "$tmux_dir/tmux-global.conf"
+printf '%s\n' 'set -g @theme "loadout2"' >> "$tmux_dir/tmux-settings-user.conf"
+printf '%s\n' '# SETTINGS-GLOBAL-STALE' >> "$tmux_dir/tmux-settings-global.conf"
 printf '%s\n' 'vim.g.user_layer_kept = true' > "$nvim_lua/user/config.lua"
 mkdir -p "$nvim_lua/corp" "$nvim_lua/site"
 printf '%s\n' 'vim.g.retired_layer_must_not_load = true' > "$nvim_lua/corp/config.lua"
 
 HOME="$fresh_home" "$REPO/loadout" install -y env-tmux env-nvim --no-backup >"$TEST_ROOT/reinstall.log" 2>&1
 
-grep -qF 'USER-KEPT' "$tmux_dir/tmux.user.conf" || fail "reinstall overwrote the tmux user layer"
-! grep -qF 'GLOBAL-STALE' "$tmux_dir/tmux.global.conf" || fail "reinstall did not refresh the tmux global layer"
+grep -qF 'USER-KEPT' "$tmux_dir/tmux-user.conf" || fail "reinstall overwrote the tmux user layer"
+! grep -qF 'GLOBAL-STALE' "$tmux_dir/tmux-global.conf" || fail "reinstall did not refresh the tmux global layer"
+grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "reinstall overwrote the tmux settings user layer"
+! grep -qF 'SETTINGS-GLOBAL-STALE' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "reinstall did not refresh the managed tmux settings"
 grep -qF 'user_layer_kept' "$nvim_lua/user/config.lua" || fail "reinstall overwrote the Neovim user layer"
 grep -qF 'retired_layer_must_not_load' "$nvim_lua/corp/config.lua" \
     || fail "reinstall deleted a retired Neovim layer"
@@ -83,7 +110,7 @@ if command -v script >/dev/null 2>&1; then
         script -qec "$REPO/loadout install -y env-tmux --no-backup" /dev/null \
         >"$TEST_ROOT/migrate-yes.log" 2>&1
     [ ! -e "$migrate_yes/.tmux.local.conf" ] || fail "accepted migration left the legacy file behind"
-    grep -qF 'MIGRATED' "$migrate_yes/.config/tmux/tmux.user.conf" \
+    grep -qF 'MIGRATED' "$migrate_yes/.config/tmux/tmux-user.conf" \
         || fail "accepted migration did not preserve legacy content"
     grep -qF 'Move it now [Y/n]' "$TEST_ROOT/migrate-yes.log" \
         || fail "interactive migration offer was not shown"
@@ -95,10 +122,10 @@ if command -v script >/dev/null 2>&1; then
         script -qec "$REPO/loadout install -y env-tmux --no-backup" /dev/null \
         >"$TEST_ROOT/migrate-no.log" 2>&1
     [ -f "$migrate_no/.tmux.local.conf" ] || fail "declined migration removed the legacy file"
-    [ ! -e "$migrate_no/.config/tmux/tmux.user.conf" ] \
-        || fail "declined migration created a user layer that disables the fallback"
-    grep -qF 'will keep loading it' "$TEST_ROOT/migrate-no.log" \
-        || fail "declined migration did not explain the compatibility fallback"
+    [ ! -e "$migrate_no/.config/tmux/tmux-user.conf" ] \
+        || fail "declined migration created a user layer"
+    grep -qF 'is no longer loaded' "$TEST_ROOT/migrate-no.log" \
+        || fail "declined migration did not explain the legacy file is no longer loaded"
 else
     echo "SKIP: interactive tmux migration cases (no 'script' PTY helper)"
 fi
@@ -109,20 +136,20 @@ printf '%s\n' 'set -g status-left "UNATTENDED"' > "$migrate_unattended/.tmux.loc
 HOME="$migrate_unattended" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/migrate-unattended.log" 2>&1 </dev/null
 [ -f "$migrate_unattended/.tmux.local.conf" ] || fail "unattended install moved the legacy file"
-[ ! -e "$migrate_unattended/.config/tmux/tmux.user.conf" ] \
-    || fail "unattended install disabled the legacy fallback"
-grep -qF 'will keep loading it' "$TEST_ROOT/migrate-unattended.log" \
+[ ! -e "$migrate_unattended/.config/tmux/tmux-user.conf" ] \
+    || fail "unattended install created a user layer from nothing"
+grep -qF 'is no longer loaded' "$TEST_ROOT/migrate-unattended.log" \
     || fail "unattended migration warning missing"
 
 migrate_conflict="$TEST_ROOT/migrate-conflict"
 mkdir -p "$migrate_conflict/.config/tmux"
 printf '%s\n' 'set -g status-left "OLD"' > "$migrate_conflict/.tmux.local.conf"
-printf '%s\n' 'set -g status-left "NEW"' > "$migrate_conflict/.config/tmux/tmux.user.conf"
+printf '%s\n' 'set -g status-left "NEW"' > "$migrate_conflict/.config/tmux/tmux-user.conf"
 HOME="$migrate_conflict" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/migrate-conflict.log" 2>&1
 grep -qF 'OLD' "$migrate_conflict/.tmux.local.conf" || fail "conflict changed the legacy file"
-grep -qF 'NEW' "$migrate_conflict/.config/tmux/tmux.user.conf" || fail "conflict changed the user layer"
-grep -qF 'Both ~/.tmux.local.conf and ~/.config/tmux/tmux.user.conf exist' \
+grep -qF 'NEW' "$migrate_conflict/.config/tmux/tmux-user.conf" || fail "conflict changed the user layer"
+grep -qF 'Both ~/.tmux.local.conf and ~/.config/tmux/tmux-user.conf exist' \
     "$TEST_ROOT/migrate-conflict.log" || fail "tmux migration conflict warning missing"
 
 migrate_symlink="$TEST_ROOT/migrate-symlink"
@@ -132,8 +159,8 @@ ln -s "$migrate_symlink/linked.conf" "$migrate_symlink/.tmux.local.conf"
 HOME="$migrate_symlink" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/migrate-symlink.log" 2>&1
 [ -L "$migrate_symlink/.tmux.local.conf" ] || fail "legacy symlink was moved automatically"
-[ ! -e "$migrate_symlink/.config/tmux/tmux.user.conf" ] \
-    || fail "legacy symlink fallback was disabled"
+[ ! -e "$migrate_symlink/.config/tmux/tmux-user.conf" ] \
+    || fail "legacy symlink seeded a user layer"
 grep -qF 'is a symlink' "$TEST_ROOT/migrate-symlink.log" || fail "legacy symlink warning missing"
 
 migrate_nonfile="$TEST_ROOT/migrate-nonfile"
@@ -141,29 +168,57 @@ mkdir -p "$migrate_nonfile/.tmux.local.conf"
 HOME="$migrate_nonfile" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/migrate-nonfile.log" 2>&1
 [ -d "$migrate_nonfile/.tmux.local.conf" ] || fail "non-file legacy path was changed"
-[ ! -e "$migrate_nonfile/.config/tmux/tmux.user.conf" ] \
-    || fail "non-file legacy fallback was disabled"
+[ ! -e "$migrate_nonfile/.config/tmux/tmux-user.conf" ] \
+    || fail "non-file legacy seeded a user layer"
 grep -qF 'is not a regular file' "$TEST_ROOT/migrate-nonfile.log" \
     || fail "non-file legacy warning missing"
 
 canonical_nonfile="$TEST_ROOT/canonical-nonfile"
-mkdir -p "$canonical_nonfile/.config/tmux/tmux.user.conf"
+mkdir -p "$canonical_nonfile/.config/tmux/tmux-user.conf"
 HOME="$canonical_nonfile" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/canonical-nonfile.log" 2>&1 </dev/null
-[ -d "$canonical_nonfile/.config/tmux/tmux.user.conf" ] \
+[ -d "$canonical_nonfile/.config/tmux/tmux-user.conf" ] \
     || fail "non-file canonical user path was changed"
-grep -qF 'tmux.user.conf exists but is not a regular file tmux can load' \
+grep -qF 'tmux-user.conf exists but is not a regular file tmux can load' \
     "$TEST_ROOT/canonical-nonfile.log" || fail "non-file canonical user warning missing"
 
 canonical_dangling="$TEST_ROOT/canonical-dangling"
 mkdir -p "$canonical_dangling/.config/tmux"
-ln -s "$canonical_dangling/missing.conf" "$canonical_dangling/.config/tmux/tmux.user.conf"
+ln -s "$canonical_dangling/missing.conf" "$canonical_dangling/.config/tmux/tmux-user.conf"
 HOME="$canonical_dangling" "$REPO/loadout" install -y env-tmux --no-backup \
     >"$TEST_ROOT/canonical-dangling.log" 2>&1 </dev/null
-[ -L "$canonical_dangling/.config/tmux/tmux.user.conf" ] \
+[ -L "$canonical_dangling/.config/tmux/tmux-user.conf" ] \
     || fail "dangling canonical user symlink was changed"
-grep -qF 'tmux.user.conf exists but is not a regular file tmux can load' \
+grep -qF 'tmux-user.conf exists but is not a regular file tmux can load' \
     "$TEST_ROOT/canonical-dangling.log" || fail "dangling canonical user warning missing"
+
+# Pre-rename dotted user layer migrates forward so user content survives.
+dotted_home="$TEST_ROOT/dotted-user"
+mkdir -p "$dotted_home/.config/tmux"
+printf '%s\n' 'set -g status-left "DOTTED-KEPT"' > "$dotted_home/.config/tmux/tmux.user.conf"
+HOME="$dotted_home" "$REPO/loadout" install -y env-tmux --no-backup \
+    >"$TEST_ROOT/dotted-user.log" 2>&1 </dev/null
+[ ! -e "$dotted_home/.config/tmux/tmux.user.conf" ] \
+    || fail "pre-rename dotted user layer was left behind"
+grep -qF 'DOTTED-KEPT' "$dotted_home/.config/tmux/tmux-user.conf" \
+    || fail "pre-rename dotted user content did not migrate to tmux-user.conf"
+
+# Superseded pre-rename managed files are pruned from the config top level.
+stale_home="$TEST_ROOT/stale-managed"
+mkdir -p "$stale_home/.config/tmux"
+for stale in tmux.global.conf tmux-word-separators tmux-3col-layout.sh \
+    shell-state-export.sh tmux-popin.sh tmux-popout.sh; do
+    printf '%s\n' '# STALE' > "$stale_home/.config/tmux/$stale"
+done
+HOME="$stale_home" "$REPO/loadout" install -y env-tmux --no-backup \
+    >"$TEST_ROOT/stale-managed.log" 2>&1 </dev/null
+for stale in tmux.global.conf tmux-word-separators tmux-3col-layout.sh \
+    shell-state-export.sh tmux-popin.sh tmux-popout.sh; do
+    [ ! -e "$stale_home/.config/tmux/$stale" ] \
+        || fail "superseded managed file $stale was not pruned"
+done
+[ -f "$stale_home/.config/tmux/scripts/tmux-3col-layout.sh" ] \
+    || fail "pruning run did not install the scripts/ layout"
 
 # Normal backups must capture the legacy user file before migration logic runs.
 backup_home="$TEST_ROOT/backup"

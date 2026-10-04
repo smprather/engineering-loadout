@@ -4595,31 +4595,39 @@ def _install_env_vim(repo_dir, home):
 
 def _install_tmux_user_layer(repo_dir, home, tmux_config):
     """Seed the user layer or safely offer migration from the legacy name."""
-    tmux_user = os.path.join(tmux_config, "tmux.user.conf")
+    tmux_user = os.path.join(tmux_config, "tmux-user.conf")
     tmux_legacy = os.path.join(home, ".tmux.local.conf")
+    # Pre-rename managed name (dotted); moved forward so user content survives.
+    tmux_dotted = os.path.join(tmux_config, "tmux.user.conf")
     user_exists = os.path.lexists(tmux_user)
     legacy_exists = os.path.lexists(tmux_legacy)
 
+    if not user_exists and os.path.isfile(tmux_dotted) and not os.path.islink(tmux_dotted):
+        require_writable_parent(tmux_dotted, "previous tmux user layer")
+        require_writable_parent(tmux_user, "tmux user layer")
+        shutil.move(tmux_dotted, tmux_user)
+        print("  Moved ~/.config/tmux/tmux.user.conf -> ~/.config/tmux/tmux-user.conf")
+        user_exists = True
+
     if user_exists:
         if not os.path.isfile(tmux_user):
-            detail = "~/.config/tmux/tmux.user.conf exists but is not a regular file tmux can load; it was preserved."
-            if legacy_exists:
-                detail += " The legacy ~/.tmux.local.conf fallback remains active if it is loadable."
+            detail = "~/.config/tmux/tmux-user.conf exists but is not a regular file tmux can load; it was preserved."
             warn(detail)
             return
         if legacy_exists:
             warn(
-                "Both ~/.tmux.local.conf and ~/.config/tmux/tmux.user.conf exist; "
-                "neither was changed. Reconcile them manually; tmux.user.conf is active."
+                "Both ~/.tmux.local.conf and ~/.config/tmux/tmux-user.conf exist; "
+                "neither was changed. Reconcile them manually; tmux-user.conf is active."
             )
         return
 
     if not legacy_exists:
-        install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.user.conf"), tmux_user, False)
+        install_path(os.path.join(repo_dir, "envs", "tmux", "tmux-user.conf"), tmux_user, False)
         return
 
     fallback = (
-        "Legacy ~/.tmux.local.conf was preserved; tmux will keep loading it until ~/.config/tmux/tmux.user.conf exists."
+        "Legacy ~/.tmux.local.conf was preserved but is no longer loaded; move its "
+        "contents into ~/.config/tmux/tmux-user.conf manually."
     )
     if os.path.islink(tmux_legacy):
         warn("Legacy ~/.tmux.local.conf is a symlink, so it was not moved automatically. " + fallback)
@@ -4631,7 +4639,7 @@ def _install_tmux_user_layer(repo_dir, home, tmux_config):
         warn(fallback)
         return
 
-    print("Legacy tmux user config found at ~/.tmux.local.conf.\nThe new user layer is ~/.config/tmux/tmux.user.conf.")
+    print("Legacy tmux user config found at ~/.tmux.local.conf.\nThe new user layer is ~/.config/tmux/tmux-user.conf.")
     try:
         answer = input("Move it now [Y/n]: ").strip().lower()
     except EOFError:
@@ -4640,9 +4648,17 @@ def _install_tmux_user_layer(repo_dir, home, tmux_config):
         require_writable_parent(tmux_legacy, "legacy tmux user config")
         require_writable_parent(tmux_user, "tmux user layer")
         shutil.move(tmux_legacy, tmux_user)
-        print("  Moved ~/.tmux.local.conf -> ~/.config/tmux/tmux.user.conf")
+        print("  Moved ~/.tmux.local.conf -> ~/.config/tmux/tmux-user.conf")
     else:
         warn(fallback)
+
+
+def _seed_tmux_settings_user(repo_dir, tmux_config):
+    """Seed the settings user layer once; it holds the user's theme choice."""
+    dest = os.path.join(tmux_config, "tmux-settings-user.conf")
+    if os.path.lexists(dest):
+        return
+    install_path(os.path.join(repo_dir, "envs", "tmux", "tmux-settings-user.conf"), dest, False)
 
 
 def _install_env_tmux(repo_dir, home):
@@ -4659,27 +4675,52 @@ def _install_env_tmux(repo_dir, home):
     )
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
     install_path(
-        os.path.join(repo_dir, "envs", "tmux", "tmux.global.conf"),
-        os.path.join(tmux_config, "tmux.global.conf"),
+        os.path.join(repo_dir, "envs", "tmux", "tmux-global.conf"),
+        os.path.join(tmux_config, "tmux-global.conf"),
+        False,
+    )
+    install_path(
+        os.path.join(repo_dir, "envs", "tmux", "tmux-settings-global.conf"),
+        os.path.join(tmux_config, "tmux-settings-global.conf"),
         False,
     )
     _install_tmux_user_layer(repo_dir, home, tmux_config)
-    install_path(
-        os.path.join(repo_dir, "envs", "tmux", "tmux-3col-layout.sh"),
-        os.path.join(tmux_config, "tmux-3col-layout.sh"),
-        False,
-    )
-    install_path(
-        os.path.join(repo_dir, "envs", "tmux", "tmux-word-separators"),
-        os.path.join(tmux_config, "tmux-word-separators"),
-        False,
-    )
-    for helper in ("shell-state-export.sh", "tmux-popin.sh", "tmux-popout.sh"):
+    _seed_tmux_settings_user(repo_dir, tmux_config)
+    scripts_dir = os.path.join(tmux_config, "scripts")
+    ensure_dir(scripts_dir, "tmux scripts")
+    for helper in (
+        "shell-state-export.sh",
+        "tmux-3col-layout.sh",
+        "tmux-popin.sh",
+        "tmux-popout.sh",
+        "tmux-word-separators",
+    ):
         install_path(
-            os.path.join(repo_dir, "envs", "tmux", helper),
-            os.path.join(tmux_config, helper),
+            os.path.join(repo_dir, "envs", "tmux", "scripts", helper),
+            os.path.join(scripts_dir, helper),
             False,
         )
+    install_path(
+        os.path.join(repo_dir, "envs", "tmux", "word-separators.conf"),
+        os.path.join(tmux_config, "word-separators.conf"),
+        False,
+    )
+    for theme in ("tmux-theme-loadout1.conf", "tmux-theme-loadout2.conf"):
+        install_path(
+            os.path.join(repo_dir, "envs", "tmux", "themes", theme),
+            os.path.join(tmux_config, "themes", theme),
+            False,
+        )
+    # Prune superseded pre-rename managed files from the config top level.
+    for stale in (
+        "tmux.global.conf",
+        "tmux-word-separators",
+        "tmux-3col-layout.sh",
+        "shell-state-export.sh",
+        "tmux-popin.sh",
+        "tmux-popout.sh",
+    ):
+        remove_if_exists(os.path.join(tmux_config, stale))
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
     lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
 

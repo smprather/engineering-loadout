@@ -497,9 +497,14 @@ and layout per session on detach/exit, so your sessions come back after a
 reboot.
 
 `~/.tmux.conf` links to the XDG dispatcher at `~/.config/tmux/tmux.conf`.
-That dispatcher loads the managed `tmux.global.conf`, then the persistent
-`tmux.user.conf`, and finally initializes TPM. Put personal settings and plugin
-declarations in `~/.config/tmux/tmux.user.conf`; reinstalling `env-tmux` never
-overwrites it. When an older `~/.tmux.local.conf` is found, an interactive
-install offers to move it to the new user-layer path. Declined or unattended
-migrations keep loading the legacy file until `tmux.user.conf` exists.
+That dispatcher loads the managed settings (`tmux-settings-global.conf`),
+then your settings (`tmux-settings-user.conf`, which wins), then the managed
+`tmux-global.conf`, then the persistent `tmux-user.conf`, and finally
+initializes TPM. The settings layers hold user-facing knobs -- currently just
+the `@theme` choice, defaulting to `loadout1` -- and the global layer loads
+`themes/tmux-theme-#{@theme}.conf` plus the generated `word-separators.conf`.
+Put personal settings and plugin declarations in
+`~/.config/tmux/tmux-user.conf`; reinstalling `env-tmux` never overwrites the
+user layers. When an older `~/.tmux.local.conf` is found, an interactive
+install offers to move it to the new user-layer path. The legacy file is no
+longer loaded, so declined or unattended migrations need a manual move.

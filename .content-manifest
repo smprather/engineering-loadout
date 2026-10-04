@@ -317,6 +317,7 @@ sha256  116f9d1ce0086154aea4ddfaf540ebe17636ae51b2f4bc9d945bb5bfd93a78c9  payloa
 sha256  117cbafd9d58cf4a19bf06244ac12b27ae00595357839dc186f0236179a985a7  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/glimmer_javascript.lua
 sha256  119fb06e14eeb9ad6155eaf29451b093107bb2efe1f41c75e60326014ed2919e  payload/el8.x86_64.glibc2p28/runtime/gtkwave.tar.bz2
 sha256  11b1e0adac789acbedcbb25ecd6623c27d9362761320375abed1d56c02cc7bfb  envs/tmux/vendor/plugins/tmux-persist/tests/test_session_name_sanitization.sh
+sha256  11bbe58cf58fb7f7da8f3f6b3f197e264a81927dca9d22a9551b4a8ad63abbc8  payload/installed-sizes.json
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/djot/folds.scm
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/djot/folds.scm
 sha256  1200c9e3a7dfff71e864c4b975bb9a1af899a54c1bb7ddd4409fd423804dd772  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/issue-4525.c
@@ -887,6 +888,7 @@ sha256  3281e134c950260b0ef9cb5169e40dfe9cb24937490de3cbcedf5147ee8272ea  payloa
 sha256  32831a5ceacaf2529630eed2283de90152b036533033ca103b5ab6731b3e6068  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/tiger/identifiers.tig
 sha256  3284876f22f7c03a524a4b9d5f169de14cd26886b59a82b730870b0c5488d4d4  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/comment.so.bz2
 sha256  3284ad4b4ad24ae8da638734e15581968938dcd05630c3b1ef6fcc295972b126  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/luau.so.bz2
+sha256  329d0f8a186bd5038cf4ce795218798804472d2b76a82192d9f8d6420614814a  payload/packages.json
 sha256  32cb5ac43efad1dfa6869a4ba9fc041b32ce58aa52f7e02da15c3ca82d2398cd  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/cpp/concepts.cpp
 sha256  32cb5b2719fd0f50a76a63e92ed0d81f2770d4a260bcc1c096f7d8cec3dc0dc7  payload/el8.x86_64.glibc2p28/bin/stdbuf.bz2
 sha256  32f247f2addf4a2e35524dc06e9cd924dee72355a913df3f4ad302e5af4e577e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/javascript/injections.scm
@@ -3215,7 +3217,6 @@ sha256  b93aaf27df5fc5edabea28ccd1f77773b518f65d800ec39599c4bd4135712920  payloa
 sha256  b942edfcd018a9c05fc4037238b903bd677ff11733f09e0dce0444fdf448dd07  payload/treesitter/vendor/nvim-treesitter/tests/indent/dart/class_function_argument.dart
 sha256  b94eb1b286cb404b02e19914f8b4bea9897cadf26c4ca3877da88bd9312479a4  payload/el8.x86_64.glibc2p28/wheels/gw_dsl_parser-0.1.49.1-py3-none-any.whl
 sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
-sha256  b98bb241f8ef9ec2d402f11a503c6444673d2ece7a0e4eee9ea959c988ec96db  payload/installed-sizes.json
 sha256  b9a3449f932cc1fe39eddb9d67b10ffe46702be4fed8e8d7b6f67b9f38fc8475  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/xcompose.so.bz2
 sha256  b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c  payload/el8.x86_64.glibc2p28/wheels/fastapi-0.139.2-py3-none-any.whl
 sha256  b9bbd3bd4bf4a0ec4ad058346305902a25b7d83472eefdedcd167b40df0f07d3  payload/el8.x86_64.glibc2p28/lib64/liboctmex.so.1.bz2
@@ -4425,7 +4426,6 @@ sha256  f35ab878da3736633ea825390d3580c59424082ed160debebf8c263b5162c25b  payloa
 sha256  f3a15c2b14492147359ad9c9f033a287551cdfce3015511207be4f2f3046e147  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/roc/indents.scm
 sha256  f3a15c2b14492147359ad9c9f033a287551cdfce3015511207be4f2f3046e147  payload/treesitter/vendor/nvim-treesitter/runtime/queries/roc/indents.scm
 sha256  f3ae640b2f4dcb3f34c29626d541bbd61057e69a3fd237c6728e3bdffed5158c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/solidity.lua
-sha256  f3b2142c5938d3ac86d78a6dafb80d027b7a57b92481dba37fe1f7c8df40c96a  payload/packages.json
 sha256  f3b4c35c63b00c56ac298ce4d385172285bba7e30e7a17f5ac43b0300f095564  payload/el8.x86_64.glibc2p28/bin/delta.bz2
 sha256  f3b82f7f8b97633ad915c29912cc39c3197fed08832f54c4a694c273d84e6b92  payload/treesitter/vendor/nvim-treesitter/tests/indent/typst/if.typ
 sha256  f3be191de12d5f3ffb1293348830b28e067d181542f606e5efcbe5563ae106ca  envs/tmux/vendor/plugins/tmux-persist/.agents/skills/crafting-effective-readmes/README.md
