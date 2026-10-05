@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""config-toml-dest-dir -- the persistent dest_dir setting and its precedence.
+
+`--dest-dir` used to be CLI-only, so every install into a dedicated root had to
+repeat the flag. `~/.config/engineering-loadout/config.toml` now supplies a
+default, with an explicit flag still winning. This test pins both halves of
+that contract, because getting either wrong silently relocates a multi-gigabyte
+tree:
+
+  * no flag            -> the config value (with '~' expanded)
+  * explicit flag      -> the flag, even when a config default exists
+
+Every case runs against a throwaway HOME so the developer's real config is
+never read and never written.
+"""
+
+import importlib.util
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VENDOR = os.path.join(REPO, "installer_vendor")
+
+
+def load_module(home):
+    """Import loadout_main.py with HOME pointed at `home`."""
+    os.environ["HOME"] = home
+    for path in (REPO, VENDOR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    spec = importlib.util.spec_from_file_location("loadout_main_under_test", os.path.join(REPO, "loadout_main.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_config(home, body):
+    cfg_dir = os.path.join(home, ".config", "engineering-loadout")
+    os.makedirs(cfg_dir, exist_ok=True)
+    with open(os.path.join(cfg_dir, "config.toml"), "w", encoding="utf-8") as fh:
+        fh.write(body)
+
+
+def check(label, got, want):
+    if got != want:
+        print(f"  FAIL  {label}\n          got:  {got}\n          want: {want}")
+        return 1
+    print(f"  PASS  {label}")
+    return 0
+
+
+def main():
+    failures = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        # 1. No config file at all: default stays $HOME, flag still honoured.
+        home = os.path.join(tmp, "noconfig")
+        os.makedirs(home)
+        lm = load_module(home)
+        failures += check("no config -> _resolve_home(None) == HOME", lm._resolve_home(None), home)
+        failures += check("no config -> explicit flag honoured", lm._resolve_home("/tmp/x"), "/tmp/x")
+
+        # 2. Config supplies the default, with '~' expanded.
+        home = os.path.join(tmp, "withconfig")
+        os.makedirs(home)
+        write_config(home, 'dest_dir = "~/.loadout"\n')
+        lm = load_module(home)
+        failures += check("config '~' is expanded", lm._config_dest_dir(), os.path.join(home, ".loadout"))
+        failures += check("config supplies the default", lm._resolve_home(None), os.path.join(home, ".loadout"))
+
+        # 3. The flag beats the config -- the precedence that matters.
+        failures += check("explicit flag beats config", lm._resolve_home("/tmp/el-flagtest"), "/tmp/el-flagtest")
+
+        # 4. An empty flag value is falsy, so the config still applies.
+        failures += check("empty flag falls back to config", lm._resolve_home(""), os.path.join(home, ".loadout"))
+
+        # 5. Malformed TOML must not abort: it degrades to "no default".
+        home = os.path.join(tmp, "broken")
+        os.makedirs(home)
+        write_config(home, "dest_dir = [this is not valid toml\n")
+        lm = load_module(home)
+        failures += check("malformed config degrades to None", lm._config_dest_dir(), None)
+        failures += check("malformed config leaves default at HOME", lm._resolve_home(None), home)
+
+        # 6. A wrong-typed key is ignored rather than crashing on os.path.
+        home = os.path.join(tmp, "wrongtype")
+        os.makedirs(home)
+        write_config(home, "dest_dir = 42\n")
+        lm = load_module(home)
+        failures += check("non-string dest_dir ignored", lm._config_dest_dir(), None)
+
+        # 7. Absent file must not raise.
+        home = os.path.join(tmp, "absent")
+        os.makedirs(home)
+        lm = load_module(home)
+        failures += check("absent config -> None", lm._config_dest_dir(), None)
+
+    print(f"\n{'OK' if not failures else 'FAILED'}: config-toml-dest-dir")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

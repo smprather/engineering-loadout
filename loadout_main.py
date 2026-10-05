@@ -8,6 +8,7 @@ under any other interpreter is rejected.
 
 import os
 import sys
+import tomllib
 
 if sys.version_info < (3, 14):  # noqa: UP036 -- defensive: direct invocation under wrong interpreter
     version = ".".join(str(part) for part in sys.version_info[:3])
@@ -6596,18 +6597,55 @@ def _ctx_args(ctx, **extra):
     return types.SimpleNamespace(**extra)
 
 
+def _loadout_config():
+    """Read the persistent user config at ~/.config/engineering-loadout/config.toml.
+
+    Returns a dict; an absent or unreadable file is not an error, it just means
+    "no defaults". Only keys we know about are honoured, and a malformed file
+    falls back to empty rather than aborting an install.
+    """
+    path = os.path.join(os.path.expanduser("~"), ".config", "engineering-loadout", "config.toml")
+    try:
+        with open(path, "rb") as fh:
+            data = tomllib.load(fh)
+    except OSError, tomllib.TOMLDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _config_dest_dir():
+    """The configured install root, or None when unset.
+
+    Mirrors the --dest-dir spelling so the file key and the flag name stay in
+    lockstep. A leading '~' is expanded here so a config can say '~/.loadout'.
+    """
+    value = _loadout_config().get("dest_dir")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return os.path.expanduser(value.strip())
+
+
 def _resolve_home(dest_dir):
-    """Resolve the install root from a --dest-dir option value (or default $HOME)."""
-    return os.path.abspath(dest_dir) if dest_dir else os.path.expanduser("~")
+    """Resolve the install root: the --dest-dir value, else config.toml's
+    dest_dir, else the default $HOME.
+
+    Precedence is explicit flag > config file > $HOME, so a one-off
+    `--dest-dir /tmp/test-home` still works unchanged on a machine that pins a
+    persistent root.
+    """
+    chosen = dest_dir or _config_dest_dir()
+    return os.path.abspath(chosen) if chosen else os.path.expanduser("~")
 
 
 def _dest_dir_option(f):
     """Decorator: attach --dest-dir to verbs that act on the install destination."""
+    default = _config_dest_dir()
     return click.option(
         "--dest-dir",
         "dest_dir",
         metavar="DIR",
-        default=None,
+        default=default,
+        show_default=bool(default),
         help="Install root (default: $HOME).",
     )(f)
 

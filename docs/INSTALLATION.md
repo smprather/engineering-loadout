@@ -85,6 +85,36 @@ Simulate a completely fresh user environment:
 ./tests/install-linux-tmp-home
 ```
 
+### Persistent install root (`config.toml`)
+
+`--dest-dir` can be pinned once so installs stop repeating the flag. Create
+`~/.config/engineering-loadout/config.toml`:
+
+```toml
+dest_dir = "~/.loadout"
+```
+
+`dest_dir` mirrors the flag name exactly. Precedence is **explicit flag >
+config file > `$HOME`**, so a one-off `./loadout install octave --dest-dir
+/tmp/test-home` still behaves as written even when the file pins a root. A
+missing file is not an error, and a malformed one degrades to "no default"
+rather than aborting an install.
+
+This is the right setting when the loadout's binaries would otherwise land in
+`~/.local/bin` ahead of the distribution's own. The loadout ships its own
+coreutils, bash, node and python, and those builds are not always newer than
+the distro's -- an early PATH match silently downgrades the system toolchain.
+A dedicated root plus a `PATH` that puts the distribution directories first
+avoids that.
+
+Installing to a non-default root moves the whole tree, `local/` included, so
+RPATH-relative libraries still resolve. Afterwards, bake the runtime
+environment for per-user shells against the new root:
+
+```bash
+LOADOUT_CFG_SHARED_PREFIX="$HOME/.loadout/local" ./loadout install @envs
+```
+
 ### Shared / read-only deployments
 
 For a single install shared by many users, do not mutate the live tree in
