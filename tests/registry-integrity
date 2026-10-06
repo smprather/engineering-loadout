@@ -190,6 +190,31 @@ def main():
         ", ".join(bad_extras),
     )
 
+    # 7b. prefer declarations: an env package may name tool packages to prefer
+    # over system copies. Names must resolve to non-env, non-group packages.
+    bad_prefer = []
+    for name, entry in registry.items():
+        prefs = entry.get("prefer")
+        if prefs is None:
+            continue
+        if (
+            entry.get("kind") != "env"
+            or not isinstance(prefs, list)
+            or not prefs
+            or any(not isinstance(p, str) or not p for p in prefs)
+            or len(prefs) != len(set(prefs))
+        ):
+            bad_prefer.append(f"{name}: invalid prefer declaration")
+            continue
+        for pref in prefs:
+            target = registry.get(pref)
+            if target is None:
+                bad_prefer.append(f"{name}.prefer -> {pref} (missing)")
+            elif target.get("kind") in ("env", "group"):
+                bad_prefer.append(f"{name}.prefer -> {pref} (kind {target.get('kind')})")
+    check("prefer declarations are valid", not bad_prefer, "; ".join(bad_prefer))
+    check("env-tmux prefers the bundled tmux", registry.get("env-tmux", {}).get("prefer") == ["tmux"])
+
     # 8. farm-versions TOOLS <-> registry sync. A TOOLS name is valid when it
     # is a registry package, a bin stem some package claims, or a known alias.
     bin_owners = set()

@@ -9,7 +9,8 @@
     "recommends": "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
     "archive": "Path (relative to repo root, 'PLATFORM' placeholder allowed) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base', and archive-bundle 'bin' packages. Verified by 'loadout doctor'.",
     "archive_name": "Runtime-archive filename override for install_runtime_archives (default: '<pkg_name>.tar.bz2').",
-    "install_to": "Target install path. '~' expanded at install time; a leading '.local' maps to the un-dotted 'local' for --dest-dir trees. Together with 'sentinel' this opts a package into the generic runtime-archive installer.",
+    "install_to": "Target install path. '~' expanded at install time; a leading '.local' is kept for a HOME root and dropped for a prefix root (--dest-dir). Together with 'sentinel' this opts a package into the generic runtime-archive installer.",
+    "prefer": "For kind='env': tool package names to prefer over system copies when this env is installed. The installer maintains exec shims under <install_root>/prefer/ (prepended to PATH).",
     "sentinel": "Path (relative to install_to) that must exist after extraction; missing sentinel records a FAIL. Together with 'install_to' this opts a package into the generic runtime-archive installer.",
     "chmod_sentinel": "If true, chmod 0755 the sentinel file after extraction (launcher scripts).",
     "remove_before_extract": "Path or list of paths (relative to install_to) removed before extracting, so stale files from a previous bundle never survive an upgrade.",
@@ -3346,6 +3347,9 @@
       "kind": "env",
       "source": "envs/tmux/",
       "install_to": "~/.config/tmux",
+      "prefer": [
+        "tmux"
+      ],
       "extra_links": [
         {
           "from": "~/.config/tmux/tmux.conf",

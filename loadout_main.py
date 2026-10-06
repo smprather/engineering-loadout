@@ -5078,6 +5078,25 @@ def _validate_registry_gates(registry):
             bad_relocation.append(f"{pkg_name}: {root_err}")
     if bad_relocation:
         raise SystemExit("Invalid runtime relocation metadata: " + "; ".join(bad_relocation))
+    bad_prefer = []
+    for pkg_name, entry in registry.items():
+        prefs = entry.get("prefer")
+        if prefs is None:
+            continue
+        if entry.get("kind") != "env" or not isinstance(prefs, list) or not prefs:
+            bad_prefer.append(f"{pkg_name}: prefer requires kind='env' and a non-empty list")
+            continue
+        for pref in prefs:
+            if not isinstance(pref, str) or not pref:
+                bad_prefer.append(f"{pkg_name}: prefer entries must be non-empty strings")
+                continue
+            target = registry.get(pref)
+            if target is None:
+                bad_prefer.append(f"{pkg_name}: prefer -> {pref} is not in the registry")
+            elif target.get("kind") in ("env", "group"):
+                bad_prefer.append(f"{pkg_name}: prefer -> {pref} has kind '{target.get('kind')}'")
+    if bad_prefer:
+        raise SystemExit("Invalid prefer metadata: " + "; ".join(bad_prefer))
 
 
 def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
