@@ -17,7 +17,7 @@
     "relocate_token": "Distinctive ASCII build-path token in a runtime archive's text files. Generic runtime install replaces it with the deployed install root after extraction; must be paired with relocate_root.",
     "relocate_root": "Package-relative subtree of install_to scanned for relocate_token. Restricts token replacement to package-owned files; must be paired with relocate_token.",
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
-    "optional": "If true, the package is excluded from the 'all' / '@shared' / '@engineering-loadout' sweeps and installs only when named explicitly, via '@shared-all', or pulled by a group that lists it in members. This is the only gating field.",
+    "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the only gating field.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
     "extra_links": "List of {from, to} entries describing additional symlinks to create after the env is installed.",
     "supports_layers": "For kind='env': ordered layer names the environment supports (for example global/user or global/corp/site/team/project/user).",
@@ -3994,34 +3994,6 @@
         "env-cargo"
       ],
       "description": "Rust toolchain + offline crate store + cargo config"
-    },
-    "@engineering-loadout": {
-      "kind": "group",
-      "members": [
-        "@shared",
-        "env-bash",
-        "env-editorconfig",
-        "env-helix",
-        "env-nvim",
-        "env-pip",
-        "env-st",
-        "env-starship",
-        "env-tmux",
-        "env-vim",
-        "env-zsh",
-        "git-nvim",
-        "@editor-gui",
-        "@gui-suite",
-        "@scientific",
-        "@eda",
-        "@python-tools-extra",
-        "@fonts-all",
-        "@shells-optional",
-        "nodejs",
-        "modules",
-        "lua-language-server"
-      ],
-      "description": "Curated loadout — shared packages, per-user config bundles, and selected package groups"
     },
     "rust-analyzer": {
       "kind": "bin",

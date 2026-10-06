@@ -108,7 +108,7 @@ chmod +x "$test_hooks/hook1.sh" "$test_hooks/hook2.sh"
 install_args=(
     install
     -y
-    "@engineering-loadout"
+    "@shared-all"
     # @envs is intentionally Bash-only. Keep this full fresh-home smoke broad
     # enough to exercise the explicitly opt-in editor/shell config bundles.
     "@envs-all"
@@ -250,7 +250,7 @@ assert_exists "$prefix/share/nvim/tree-sitter-parsers/parser-info/python.lua"
 
 # Plugins are CLONED from the offline stash into lazy/ -- real git repos, so
 # :Lazy update/restore work with no network. That needs a git: the system one, or the
-# private git-nvim (lib/loadout-git/, never on PATH), which @engineering-loadout pulls.
+# private git-nvim (lib/loadout-git/, never on PATH), which @shared-all pulls.
 # Stock almalinux:8.10 ships no git at all, which is exactly why git-nvim exists.
 if [[ -f "$repo_dir/envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2" || -f "$repo_dir/envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2.part-000" ]]; then
     assert_exists "$prefix/share/nvim/loadout/vendor/plugin-stash"

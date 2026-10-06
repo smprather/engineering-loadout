@@ -307,6 +307,19 @@ _SYNTHETIC_GROUPS = {
     "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
 
+# Groups that were removed but are still likely to be typed. Expand them to a
+# loud pointer instead of the generic "unknown group" warning: a silent no-op
+# would resolve an empty set, and an empty selection is worse than an error.
+_RETIRED_GROUPS = {
+    "@engineering-loadout": (
+        "@engineering-loadout was retired: it mixed the shared tool tree with per-user\n"
+        "  shell configs, which dragged ~/.config into --dest-dir trees.\n"
+        "  Install the two halves explicitly:\n"
+        "    ./loadout install @shared-all    # bundled tools (shared tree)\n"
+        "    ./loadout install @envs-all      # per-user shell configs ($HOME)"
+    ),
+}
+
 
 def expand_groups(names, registry, _stack=None):
     """Expand @group references recursively into leaf package names.
@@ -320,9 +333,8 @@ def expand_groups(names, registry, _stack=None):
     optional packages back in.
 
     There is no bare `all`: it used to mean "every NON-optional package", which is
-    the opposite of what the -all suffix means everywhere else. Use
-    @engineering-loadout for the curated bundled set (including Bash setup), or
-    `@shared-all @envs-all` for truly everything.
+    the opposite of what the -all suffix means everywhere else. Use `@shared-all`
+    for the bundled tools and `@envs-all` for the per-user shell configs.
 
     The full sweeps are:
 
@@ -345,10 +357,9 @@ def expand_groups(names, registry, _stack=None):
                 "  (the old bare 'all' meant 'every NON-optional package', the opposite of\n"
                 "   what the -all suffix means elsewhere, so it was removed. '@all' now\n"
                 "   means literally everything.)\n"
-                "  curated loadout  : @engineering-loadout\n"
-                "  bash config      : @envs\n"
-                "  everything shared: @shared-all\n"
-                "  every env bundle : @envs-all\n"
+                "  bundled tools    : @shared-all\n"
+                "  shell configs    : @envs-all\n"
+                "  both shells      : @envs\n"
                 "  truly everything : @all"
             )
         if name == "@shared":
@@ -394,6 +405,8 @@ def expand_groups(names, registry, _stack=None):
             # online who wants newer plugins can still run `:Lazy update`.
             out |= expand_groups(["@shared-all", "@envs-all"], registry, _stack + (name,))
             continue
+        if name in _RETIRED_GROUPS:
+            raise ResolverError(_RETIRED_GROUPS[name])
         if name.startswith("@"):
             if name in _stack:
                 raise ResolverError("group cycle detected: {} -> {}".format(" -> ".join(_stack), name))
@@ -4044,8 +4057,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
                 "  Name it explicitly:\n"
                 "    ./loadout install nvim-plugin-stash\n"
                 "  or use a selection that already includes it:\n"
-                "    ./loadout install @engineering-loadout      # curated bundle\n"
-                "    ./loadout install @shared                   # shared/read-only tree\n"
+                "    ./loadout install @shared-all               # shared/read-only tree\n"
                 "  Do NOT re-run ./tools/fetch-stash -- the archive is already here."
             )
             record_result(
@@ -6557,8 +6569,7 @@ def cmd_install_v2(args, registry, repo_dir, home):
     if "@default" in pkgs:
         eprint(
             "Error: @default no longer exists. Use 'loadout install "
-            "@engineering-loadout' for the curated bundled set, or name "
-            "packages explicitly."
+            "@shared-all' plus 'loadout install @envs-all', or name packages explicitly."
         )
         return 1
     _adapt_install_args(args)
@@ -6997,8 +7008,8 @@ def cli(ctx, verbose):
 
     Installs bundled packages into the destination directory. Bare 'loadout' and
     bare 'loadout install' both print usage and exit non-zero (dnf parity); always
-    name packages or @groups explicitly. Use [bold]@engineering-loadout[/] for the
-    curated bundled set.
+    name packages or @groups explicitly. Use [bold]@shared-all[/] for the bundled
+    tools and [bold]@envs-all[/] for the per-user shell configs.
 
     `--dest-dir` lives on the verbs that act on the install destination
     (`install`, `reinstall`, `upgrade`, and the `snapshot` subcommands); read-only
@@ -7047,9 +7058,9 @@ def cli_install(
 
       loadout install @core-cli vim nvim
 
-      loadout install @engineering-loadout --skip @fonts-all
+      loadout install @shared-all --skip @fonts-all
 
-      loadout install @engineering-loadout --dest-dir /opt/loadout/2026.06.11
+      loadout install @shared-all --dest-dir /opt/loadout/2026.06.11
 
     Environment:
 

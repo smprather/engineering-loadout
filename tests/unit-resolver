@@ -96,7 +96,19 @@ def test_expand_groups(m):
         eg(["all"], REGISTRY)
         check("'all' is rejected", False)
     except m.ResolverError as exc:
-        check("'all' is rejected with a pointer to the replacements", "@engineering-loadout" in str(exc))
+        check(
+            "'all' is rejected with a pointer to the replacements",
+            "@shared-all" in str(exc) and "@envs-all" in str(exc),
+        )
+
+    try:
+        eg(["@engineering-loadout"], REGISTRY)
+        check("retired '@engineering-loadout' is rejected", False)
+    except m.ResolverError as exc:
+        check(
+            "'@engineering-loadout' points at the replacements",
+            "@shared-all" in str(exc) and "@envs-all" in str(exc),
+        )
 
     shared = eg(["@shared"], REGISTRY)
     check("@shared excludes env kind", shared == {"rg", "bat", "gvim", "gui_libs", "winonly"})
