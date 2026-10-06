@@ -97,7 +97,6 @@ sha256  05b1e453350930b253268edee093bf79cd7b9fe2ffab96043f9234722736652d  payloa
 sha256  05c876e9c6a8f3cab63c0bbd4210d0c72e9376ce00f29086f35176aff36064c0  payload/el8.x86_64.glibc2p28/bin/hx.bin.bz2
 sha256  05fe08292b6da57f385001c891a87f40d6aa7f46787b03e8ba326d20a3297c6e  payload/el8.x86_64.glibc2p28/wheels/pcpp-1.30-py2.py3-none-any.whl
 sha256  06073442a44d052aaf260eb7cfd190220a8575659bc355230294f28bc17e8ef8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/gomod.lua
-sha256  062a9afc4ef50fe0cffe86dac07debc4a2f8572585621c3fd23108599b09ca1e  payload/installed-sizes.json
 sha256  062b75860b196e49eae2301d9ec1cc6efce5c9f3bb397b2c996884adac11c056  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/hcl.lua
 sha256  0631577ba119c6b1f9fbabe70d70ad17ae81e4e7d8afb0e2309bd8acee0f5f76  payload/treesitter/vendor/nvim-treesitter/runtime/queries/tsx/folds.scm
 sha256  0631577ba119c6b1f9fbabe70d70ad17ae81e4e7d8afb0e2309bd8acee0f5f76  payload/treesitter/vendor/nvim-treesitter/runtime/queries/tsx/highlights.scm
@@ -1415,6 +1414,7 @@ sha256  51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670  payloa
 sha256  51bd6796b8e61616ad967d31a68f6b53fc4ba44ecdec4001ec7f83fbe5f2d763  payload/treesitter/vendor/nvim-treesitter/runtime/queries/html/highlights.scm
 sha256  51cffd5e99aacd3ac35a33b349f440024e1cacd542829e57719c5522281df6ed  envs/tmux/vendor/plugins/tmux-persist/tests/test_touch_days_ago.sh
 sha256  51d94433ef33a351222fba707f2a4ea6b1cdc29a5a20b8378606ed91d75ef16c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/po.lua
+sha256  51ea79d82dca60bbf5555d5182b83bd23be561f34b2966984502801c5d3f53d3  payload/installed-sizes.json
 sha256  520ced50dc5e6ad3fb2e4838918b51c9ddd52e2285324289be495c2ec20481cd  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/luap.lua
 sha256  5212021532da0582f60ffe57822bb1892d9a967c39a92baacce95fc6b11fdec0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sxhkdrc/folds.scm
 sha256  5212021532da0582f60ffe57822bb1892d9a967c39a92baacce95fc6b11fdec0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/sxhkdrc/folds.scm

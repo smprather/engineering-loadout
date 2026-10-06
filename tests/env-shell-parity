@@ -264,6 +264,50 @@ def main():
         "these are now exported by zsh; drop them from EXPECTED_MISSING_ZSH_EXPORTS: " + ", ".join(stale_exports),
     )
 
+    # ---- PATH semantics (all three shells) -----------------------------------
+    # The shared bin is APPENDED so a system copy keeps priority; the prefer/
+    # dir is PREPENDED as the explicit per-tool exception; the fallback prefix
+    # is the XDG root, not $HOME/.local.
+    bash_rc = read(BASH_BASHRC)
+    zsh_rc = read(ZSH_ZSHRC)
+    tcsh_rc = read(TCSH_TCSHRC)
+
+    for label, text in (("bash", bash_rc), ("zsh", zsh_rc), ("tcsh", tcsh_rc)):
+        check(
+            f"{label}: XDG-root fallback for the loadout prefix",
+            "$HOME/.local/share/loadout" in text,
+            f"{label} still falls back to $HOME/.local",
+        )
+    check(
+        "bash appends the shared bin",
+        'path_append_if_dir "$_loadout_prefix/bin"' in bash_rc
+        and "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" not in bash_rc,
+        "shared bin still prepended (or append missing) in bashrc",
+    )
+    check(
+        "bash prepends the prefer dir",
+        'path_prepend_if_dir "$_loadout_prefix/prefer"' in bash_rc,
+        "prefer dir not prepended in bashrc",
+    )
+    check(
+        "zsh appends the shared bin and prepends prefer",
+        'path_append_if_dir "$_loadout_prefix/bin"' in zsh_rc
+        and 'path_prepend_if_dir "$_loadout_prefix/prefer"' in zsh_rc
+        and "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" not in zsh_rc,
+        "zsh PATH block drifted from bash",
+    )
+    check(
+        "tcsh appends the shared bin and prepends prefer",
+        'set path = ( $path:q "$_loadout_dir" )' in tcsh_rc and "${_loadout_prefix}/prefer" in tcsh_rc,
+        "tcsh PATH block drifted from bash",
+    )
+    tcsh_prepend_line = re.search(r"foreach _loadout_dir \( /usr/local/bin[^\n]*\)", tcsh_rc)
+    check(
+        "tcsh prepend list no longer carries the shared bin",
+        bool(tcsh_prepend_line) and "${_loadout_prefix}/bin" not in tcsh_prepend_line.group(0),
+        tcsh_prepend_line.group(0) if tcsh_prepend_line else "foreach line not found",
+    )
+
     print()
     if FAILURES:
         print(f"{PASSED} passed, {len(FAILURES)} failed")

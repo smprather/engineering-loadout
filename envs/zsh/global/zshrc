@@ -41,10 +41,15 @@ for _bin_dir in \
     ~/.opencode/bin \
     ~/node_modules/.bin \
     ~/go/bin \
-    "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" \
     ~/.local/bin; do
     path_prepend_if_dir "$_bin_dir"
 done
+
+# EL's own tree: shared bin APPENDED (system copies keep priority), prefer/
+# PREPENDED last (the explicit per-tool exception, ahead of ~/.local/bin).
+_loadout_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}"
+path_prepend_if_dir "$_loadout_prefix/prefer"
+path_append_if_dir "$_loadout_prefix/bin"
 
 # --- terminfo -----------------------------------------------------------------
 # ncurses does not search ~/.local/share/terminfo by default, and a
@@ -56,12 +61,10 @@ done
 # loop; the shared function is fixed now, so the workaround is gone.
 typeset -gx TERMINFO_DIRS
 path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
-if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
-    path_prepend TERMINFO_DIRS "$LOADOUT_CFG_SHARED_PREFIX/share/terminfo"
-fi
+path_prepend TERMINFO_DIRS "$_loadout_prefix/share/terminfo"
 
 # --- GUI / runtime helpers (only when actually present) -----------------------
-_loadout_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+_loadout_local_prefix="${_loadout_prefix}"
 if [[ -f $_loadout_local_prefix/lib64/libqxcb.so ]]; then
     export QT_QPA_PLATFORM_PLUGIN_PATH=$_loadout_local_prefix/lib64
 fi

@@ -37,8 +37,8 @@ if ( $?LOADOUT_CFG_PREFERRED_TCSH && $?prompt ) then
     endif
 endif
 
-# ---- resolve the local root (shared tree if configured, else ~/.local) --------
-set _loadout_prefix = "$HOME/.local"
+# ---- resolve the local root (shared tree if configured, else the XDG root) ---
+set _loadout_prefix = "$HOME/.local/share/loadout"
 if ( $?LOADOUT_CFG_SHARED_PREFIX ) then
     if ( "$LOADOUT_CFG_SHARED_PREFIX" != "" ) then
         set _loadout_prefix = "$LOADOUT_CFG_SHARED_PREFIX"
@@ -49,13 +49,34 @@ endif
 # Same list and same order as envs/bash/global/bashrc. Reversed relative to that
 # file because each iteration prepends, and the bash loop prepends too -- so the
 # LAST entry here ends up first on PATH, matching bash's final ordering.
-foreach _loadout_dir ( /usr/local/bin "$HOME/node_modules/.bin" "$HOME/.opencode/bin" "$HOME/.venv/bin" "$HOME/go/bin" "$HOME/.cargo/bin" "${_loadout_prefix}/bin" "$HOME/.local/bin" )
+foreach _loadout_dir ( /usr/local/bin "$HOME/node_modules/.bin" "$HOME/.opencode/bin" "$HOME/.venv/bin" "$HOME/go/bin" "$HOME/.cargo/bin" "$HOME/.local/bin" )
     if ( -d "$_loadout_dir" ) then
         set _loadout_seen = 0
         foreach _loadout_p ( $path:q )
             if ( "$_loadout_p" == "$_loadout_dir" ) set _loadout_seen = 1
         end
         if ( $_loadout_seen == 0 ) set path = ( "$_loadout_dir" $path:q )
+        unset _loadout_seen
+        unset _loadout_p
+    endif
+end
+unset _loadout_dir
+
+# EL's own tree: prefer/ shims are PREPENDED (the explicit per-tool exception),
+# the shared bin is APPENDED so a system copy keeps priority.
+foreach _loadout_dir ( "${_loadout_prefix}/prefer" "${_loadout_prefix}/bin" )
+    if ( -d "$_loadout_dir" ) then
+        set _loadout_seen = 0
+        foreach _loadout_p ( $path:q )
+            if ( "$_loadout_p" == "$_loadout_dir" ) set _loadout_seen = 1
+        end
+        if ( $_loadout_seen == 0 ) then
+            if ( "$_loadout_dir" == "${_loadout_prefix}/prefer" ) then
+                set path = ( "$_loadout_dir" $path:q )
+            else
+                set path = ( $path:q "$_loadout_dir" )
+            endif
+        endif
         unset _loadout_seen
         unset _loadout_p
     endif

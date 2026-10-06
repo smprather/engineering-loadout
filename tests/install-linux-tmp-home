@@ -309,4 +309,24 @@ else
     echo "nvim not found; skipped Tree-sitter runtime smoke"
 fi
 
+# PATH order from the installed bashrc: prefer/ shims first (the explicit
+# per-tool exception), the shared bin appended behind system dirs.
+path_out=$(env -i HOME="$test_home" TERM=xterm /bin/bash -lc 'printf "%s" "$PATH"' 2>/dev/null)
+"$prefix/bin/python3.14" - "$path_out" "$prefix" <<'PY'
+import sys
+entries = [e for e in sys.argv[1].split(":") if e]
+prefix = sys.argv[2]
+prefer = f"{prefix}/prefer"
+bin_dir = f"{prefix}/bin"
+if prefer not in entries:
+    raise SystemExit(f"prefer dir not on PATH: {entries}")
+if bin_dir not in entries:
+    raise SystemExit(f"shared bin not on PATH: {entries}")
+if entries.index(prefer) > entries.index(bin_dir):
+    raise SystemExit(f"prefer must outrank the shared bin: {entries}")
+if "/usr/bin" in entries and entries.index(bin_dir) < entries.index("/usr/bin"):
+    raise SystemExit(f"shared bin must be appended behind system dirs: {entries}")
+print("PATH order OK")
+PY
+
 echo "Install temp-home smoke OK"

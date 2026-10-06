@@ -18,23 +18,27 @@ for potential_bin_dir in \
     ~/.opencode/bin \
     ~/node_modules/.bin \
     ~/go/bin \
-    "${LOADOUT_CFG_SHARED_PREFIX:+$LOADOUT_CFG_SHARED_PREFIX/bin}" \
     ~/.local/bin; do
     path_prepend_if_dir "$potential_bin_dir"
 done
 
+# EL's own tree: the shared bin is APPENDED so a system copy keeps priority,
+# and the prefer/ dir is PREPENDED last so it outranks ~/.local/bin and any
+# legacy EL copy. prefer/ shims are the explicit per-tool exception.
+_loadout_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}"
+path_prepend_if_dir "$_loadout_prefix/prefer"
+path_append_if_dir "$_loadout_prefix/bin"
+
 # ncurses does not search ~/.local/share/terminfo by default, and non-interactive
 # login shells return below before reaching the interactive terminfo block.
 path_prepend TERMINFO_DIRS "$HOME/.local/share/terminfo"
-# Shared installs can provide terminfo under the configured local-root.
-if [[ -n "${LOADOUT_CFG_SHARED_PREFIX:-}" ]]; then
-    path_prepend TERMINFO_DIRS "$LOADOUT_CFG_SHARED_PREFIX/share/terminfo"
-fi
+# The installed tree's terminfo is under the resolved loadout prefix.
+path_prepend TERMINFO_DIRS "$_loadout_prefix/share/terminfo"
 export TERMINFO_DIRS
 
 # GUI/runtime helpers live under the shared prefix for split deployments, or
 # under ~/.local for normal single-user installs.
-_loadout_local_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
+_loadout_local_prefix="${_loadout_prefix}"
 if [[ -f $_loadout_local_prefix/lib64/libqxcb.so ]]; then
     export QT_QPA_PLATFORM_PLUGIN_PATH=$_loadout_local_prefix/lib64
 fi
