@@ -60,6 +60,23 @@ Gates: T1+T2 `tests/run-all` 48/48; Tier 3
 runtimes OK). ClamAV DB current (1.5.4/28145, 2026-10-06) -- no
 `sudo freshclam` needed before the malware scan. Next: `./build/release`.
 
+Security refresh after the first gate run: `build/vuln-scan` flagged two
+unbaselined WHEELHOUSE advisories (urllib3 2.7.0, multidict 6.7.1 -- both
+pre-existing wheels, not from this sweep). Refreshed to urllib3 2.8.0 and
+multidict 6.9.1 (aiohttp requires multidict<7.0), pruned the superseded
+wheels, and proved preservation before/after with a per-tool offline `uv pip
+compile` (only the two intended version changes appeared; nothing regressed)
+plus end-to-end network-disabled installs of jupyterlab (jupyter-lab 4.6.4)
+and parity-plot. `build/vuln-scan` is now CLEAN with 0 baseline entries. The
+same proof surfaced PRE-EXISTING incomplete closures: cicwave (pyqt6-qt6
+absent), liberty-tools and pygwalker do not resolve offline against the
+wheelhouse -- unchanged by the refresh, recorded here as debt.
+
+Dev-host scratch: full T2 runs and the release gates now need disk-backed
+scratch (`TMPDIR=/var/tmp/...`). The 16 GB `/tmp` tmpfs filled during the
+aborted dry-run (the malware scan alone extracted ~12 GB) and produced seven
+false ENOSPC test failures; after cleaning, T2 + Tier 3 re-ran green.
+
 ## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..46ecdea, UNRELEASED)
 
 Behavioral re-architecture that stops the loadout silently shadowing system
