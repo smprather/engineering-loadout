@@ -48,3 +48,6 @@ envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2.part-*
 .content-manifest.fetched
 
 sbom.cdx.json
+
+# superpowers plan workspaces (local scratch)
+.superpowers/
