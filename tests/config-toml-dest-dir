@@ -7,7 +7,7 @@ default, with an explicit flag still winning. This test pins both halves of
 that contract, because getting either wrong silently relocates a multi-gigabyte
 tree:
 
-  * no flag            -> the config value (with '~' expanded)
+  * no flag            -> the config value (with '~' expanded), else $XDG_DATA_HOME/loadout
   * explicit flag      -> the flag, even when a config default exists
 
 Every case runs against a throwaway HOME so the developer's real config is
@@ -52,13 +52,33 @@ def check(label, got, want):
 
 def main():
     failures = 0
+    os.environ.pop("XDG_DATA_HOME", None)
     with tempfile.TemporaryDirectory() as tmp:
-        # 1. No config file at all: default stays $HOME, flag still honoured.
+        # 1. No config file at all: the default is the XDG data home, flag still honoured.
         home = os.path.join(tmp, "noconfig")
         os.makedirs(home)
         lm = load_module(home)
-        failures += check("no config -> _resolve_home(None) == HOME", lm._resolve_home(None), home)
+        xdg_default = os.path.join(home, ".local", "share", "loadout")
+        failures += check("no config -> XDG default", lm._resolve_home(None), xdg_default)
         failures += check("no config -> explicit flag honoured", lm._resolve_home("/tmp/x"), "/tmp/x")
+
+        # 1b. XDG_DATA_HOME, when absolute, replaces the fallback; relative is invalid.
+        os.environ["XDG_DATA_HOME"] = os.path.join(tmp, "xdgdata")
+        failures += check(
+            "absolute XDG_DATA_HOME honoured",
+            lm._resolve_home(None),
+            os.path.join(tmp, "xdgdata", "loadout"),
+        )
+        os.environ["XDG_DATA_HOME"] = "relative/data"
+        failures += check("relative XDG_DATA_HOME ignored", lm._resolve_home(None), xdg_default)
+        os.environ.pop("XDG_DATA_HOME", None)
+
+        # 1c. config dest_dir = "~" restores the legacy HOME layout.
+        home = os.path.join(tmp, "legacy")
+        os.makedirs(home)
+        write_config(home, 'dest_dir = "~"\n')
+        lm = load_module(home)
+        failures += check("config '~' -> legacy HOME root", lm._resolve_home(None), home)
 
         # 2. Config supplies the default, with '~' expanded.
         home = os.path.join(tmp, "withconfig")
@@ -80,7 +100,11 @@ def main():
         write_config(home, "dest_dir = [this is not valid toml\n")
         lm = load_module(home)
         failures += check("malformed config degrades to None", lm._config_dest_dir(), None)
-        failures += check("malformed config leaves default at HOME", lm._resolve_home(None), home)
+        failures += check(
+            "malformed config leaves default at XDG root",
+            lm._resolve_home(None),
+            os.path.join(home, ".local", "share", "loadout"),
+        )
 
         # 6. A wrong-typed key is ignored rather than crashing on os.path.
         home = os.path.join(tmp, "wrongtype")

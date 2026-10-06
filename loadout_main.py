@@ -6625,16 +6625,34 @@ def _config_dest_dir():
     return os.path.expanduser(value.strip())
 
 
+def _xdg_data_home():
+    """$XDG_DATA_HOME when it is set and absolute, else the XDG fallback.
+
+    The XDG spec says relative values are invalid; treating them as unset keeps
+    a bad environment from installing into a directory relative to $PWD.
+    """
+    val = os.environ.get("XDG_DATA_HOME", "").strip()
+    if val and os.path.isabs(val):
+        return val
+    return os.path.join(os.path.expanduser("~"), ".local", "share")
+
+
+def _default_install_root():
+    """Built-in install root: an installed tool tree is XDG data, not config."""
+    return os.path.join(_xdg_data_home(), "loadout")
+
+
 def _resolve_home(dest_dir):
     """Resolve the install root: the --dest-dir value, else config.toml's
-    dest_dir, else the default $HOME.
+    dest_dir, else the built-in XDG default ($XDG_DATA_HOME/loadout).
 
-    Precedence is explicit flag > config file > $HOME, so a one-off
+    Precedence is explicit flag > config file > XDG default, so a one-off
     `--dest-dir /tmp/test-home` still works unchanged on a machine that pins a
-    persistent root.
+    persistent root. `dest_dir = "~"` in config.toml restores the legacy
+    $HOME layout.
     """
     chosen = dest_dir or _config_dest_dir()
-    return os.path.abspath(chosen) if chosen else os.path.expanduser("~")
+    return os.path.abspath(chosen) if chosen else _default_install_root()
 
 
 def _dest_dir_option(f):
@@ -6646,7 +6664,7 @@ def _dest_dir_option(f):
         metavar="DIR",
         default=default,
         show_default=bool(default),
-        help="Install root (default: $HOME).",
+        help="Install root (default: $XDG_DATA_HOME/loadout).",
     )(f)
 
 
