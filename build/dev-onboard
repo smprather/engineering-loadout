@@ -3,8 +3,9 @@
 # development level.
 #
 # Prereqs: assumes the user has already cloned the repo and run a full
-# `./loadout install @engineering-loadout` so every bundled
-# tool is in ~/.local/bin and ~/.local/lib64. This script only installs
+# `./loadout install @shared-all` + `./loadout install @envs-all` so every
+# bundled tool is in ~/.local/share/loadout/bin (legacy HOME installs: ~/.local/bin)
+# with libraries alongside. This script only installs
 # what's needed *to build and release the loadout itself* -- system
 # packages (compilers, dev headers, scanning tools) and per-user
 # toolchains (rustup, nvm, gh auth) that the bundled tools can't ship.

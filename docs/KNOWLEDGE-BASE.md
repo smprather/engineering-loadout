@@ -6,7 +6,7 @@ unresolved-link creation over a plain directory of markdown files, in both
 bundled editors, offline, on a farm node.
 
 ```bash
-./loadout install markdown-oxide        # or it arrives with @engineering-loadout
+./loadout install markdown-oxide        # or it arrives with @shared-all
 ```
 
 ## What is and is not shipped

@@ -1414,7 +1414,6 @@ sha256  51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670  payloa
 sha256  51bd6796b8e61616ad967d31a68f6b53fc4ba44ecdec4001ec7f83fbe5f2d763  payload/treesitter/vendor/nvim-treesitter/runtime/queries/html/highlights.scm
 sha256  51cffd5e99aacd3ac35a33b349f440024e1cacd542829e57719c5522281df6ed  envs/tmux/vendor/plugins/tmux-persist/tests/test_touch_days_ago.sh
 sha256  51d94433ef33a351222fba707f2a4ea6b1cdc29a5a20b8378606ed91d75ef16c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/po.lua
-sha256  51ea79d82dca60bbf5555d5182b83bd23be561f34b2966984502801c5d3f53d3  payload/installed-sizes.json
 sha256  520ced50dc5e6ad3fb2e4838918b51c9ddd52e2285324289be495c2ec20481cd  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/luap.lua
 sha256  5212021532da0582f60ffe57822bb1892d9a967c39a92baacce95fc6b11fdec0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sxhkdrc/folds.scm
 sha256  5212021532da0582f60ffe57822bb1892d9a967c39a92baacce95fc6b11fdec0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/sxhkdrc/folds.scm
@@ -4523,6 +4522,7 @@ sha256  fab3f1a5d7e6504bc8f80b2e743be515f1aaaae22f26c5a7dc991b943cd9f51e  payloa
 sha256  fab9a617f07941895b18c2ef83a2b2b1bb2abb177066d1357c71e26df8da9d74  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/arduino/injections.scm
 sha256  fab9a617f07941895b18c2ef83a2b2b1bb2abb177066d1357c71e26df8da9d74  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/cuda/injections.scm
 sha256  fab9a617f07941895b18c2ef83a2b2b1bb2abb177066d1357c71e26df8da9d74  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hlsl/injections.scm
+sha256  fadeb8c9dda5e5362d1b2e16e9b6bc65dcb667b1d33b0180e4c7eaaf13e9298d  payload/installed-sizes.json
 sha256  fb233109c6bb0f6bb73bb8f2d00f8a322087c487e48c23c1fbc23814f3b2f80d  envs/tmux/vendor/plugins/tmux-persist/tests/test_restore_all_retry.sh
 sha256  fb23a8baa3a3166cccdb92e306233d15979f42d21fd6e6fac7840932692ab87a  envs/tmux/vendor/plugins/tmux-persist/.agents/skills/draw-io/SKILL.md
 sha256  fb26294231c6d993626f66636b11ca2a5f3ec7d97bc347bfd3182065215f5c18  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/cpon/locals.scm

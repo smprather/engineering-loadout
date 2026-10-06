@@ -20,8 +20,8 @@ cp /tmp/mybinary_tmp.bz2 payload/el8.x86_64.glibc2p28/bin/mybinary.bz2
 #    {"mybinary": {"kind": "bin", "bins": ["mybinary"], "version": "X.Y.Z",
 #                  "platforms": ["linux"], "tags": ["..."],
 #                  "description": "..."}}
-#    Add "mybinary" to the @engineering-loadout group's members list if it
-#    should ship in the curated bundled set.
+#    Add "mybinary" to a curated group's members list in packages.json if it
+#    should ship in that set. A non-env package is already part of @shared-all.
 
 # 4. Smoke-test and commit
 tests/prebuilt-binaries --keep   # or just ./build/release --dry-run
@@ -73,7 +73,7 @@ git commit
 ## Onboarding a new developer
 
 After extracting a release and running
-`./loadout install @engineering-loadout` to install the runtime, run
+`./loadout install @shared-all` to install the runtime, run
 `./build/dev-onboard` once to add the system-level packages, dev headers, and
 per-user toolchains required to rebuild any bundled tool from source. Six
 phases: dnf repos -> toolchains (gcc-toolset-14, llvm, go) -> dev headers
@@ -84,7 +84,7 @@ per-user (rustup, nvm, uv tool meson) -> sanity checks. Idempotent;
 ## Repo development
 
 The repo is the source of truth; editing a file there and re-running
-`./loadout install @engineering-loadout` is the canonical workflow. Most install steps are
+`./loadout install @shared-all @envs-all` is the canonical workflow. Most install steps are
 idempotent (recursive copy, atomic bz2 decompress, byte-compare skip) so a re-run
 finishes quickly.
 
@@ -139,6 +139,6 @@ dispatcher libs for GL GUI apps.
 
 Run `tests/install-split-shared-envs` for the main deployment model: `@shared`
 to a non-home temp tree, then `@envs` to a separate temp HOME with
-`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`. It verifies shell startup resolves
+`LOADOUT_CFG_SHARED_PREFIX=<shared>`. It verifies shell startup resolves
 shared PATH, terminfo, GUI runtime variables, WezTerm completions, and core tool
 startup without relying on the user's real `~/.local/bin`.

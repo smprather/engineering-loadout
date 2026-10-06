@@ -22,7 +22,7 @@ Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
 export LOADOUT_CFG_PREFERRED_VI=nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=1
 export LOADOUT_CFG_ENABLE_FZF=1
-export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/bin/bash
+export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/share/loadout/bin/bash   # an installed loadout bash
 ```
 
 ## Hook injection points

@@ -51,18 +51,18 @@ SHARED=/mnt/shared/loadout
 #    @shared-all = @shared + optionals. git-nvim is optional and lives here
 #    so nvim can clone plugins on boxes with no system git.
 #
-#    NOTE: --dest-dir takes the ROOT, not the 'local' subdir. The installer
-#    writes to <SHARED>/local/{bin,lib64,share,...}. Set
-#    LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local on the user side.
+#    NOTE: --dest-dir IS the install root. The installer writes
+#    <SHARED>/{bin,lib64,share,...} directly (no un-dotted 'local/' level).
+#    Set LOADOUT_CFG_SHARED_PREFIX=<SHARED> on the user side.
 ./loadout install @shared-all --dest-dir "$SHARED" --no-backup
 ```
 
 Verify the shared tree:
 
 ```bash
-ls "$SHARED"/local/bin/nvim "$SHARED"/local/bin/tmux "$SHARED"/local/bin/bash
-ls "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash   # the plugin stash
-ls "$SHARED"/local/lib/loadout-git/bin/git                  # private git for nvim
+ls "$SHARED"/bin/nvim "$SHARED"/bin/tmux "$SHARED"/bin/bash
+ls "$SHARED"/share/nvim/loadout/vendor/plugin-stash   # the plugin stash
+ls "$SHARED"/lib/loadout-git/bin/git                  # private git for nvim
 ```
 
 If the plugin stash is missing from the shared tree, the `nvim-plugin-stash`
@@ -77,12 +77,12 @@ only into their `$HOME` and points at the shared tree:
 
 ```bash
 # on the offline box, as the user
-export LOADOUT_CFG_SHARED_PREFIX=/mnt/shared/loadout/local
+export LOADOUT_CFG_SHARED_PREFIX=/mnt/shared/loadout
 ./loadout install @envs --no-backup
 exec bash
 ```
 
-`@envs` is the Bash-only per-user config layer (plus its Starship
+`@envs` is the Bash + tcsh per-user config layer (plus its Starship
 recommendation). Add any other config bundle explicitly, for example
 `./loadout install env-nvim env-tmux --no-backup`; use `@envs-all` only when
 every shell/editor config, including csh and zsh, is intentionally wanted. It
@@ -94,7 +94,7 @@ Verify per-user:
 
 ```bash
 bash -ic 'test -f ~/.config/bash/bashrc'
-command -v bash    # -> /mnt/shared/loadout/local/bin/bash
+command -v bash    # -> /mnt/shared/loadout/bin/bash
 ```
 
 ---
@@ -178,13 +178,13 @@ shared tree.
 ```bash
 # on the online box (R/W on the shared FS, github reachable)
 # Point it at the INSTALLED stash in the shared tree:
-./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash
+./tools/refresh-stash "$SHARED"/share/nvim/loadout/vendor/plugin-stash
 
 # dry-run first if you want to see what would change:
-./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --dry-run
+./tools/refresh-stash "$SHARED"/share/nvim/loadout/vendor/plugin-stash --dry-run
 
 # only mirror plugins that are missing (skip the in-place fetch of existing ones):
-./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash --add-only
+./tools/refresh-stash "$SHARED"/share/nvim/loadout/vendor/plugin-stash --add-only
 ```
 
 What it does:
@@ -348,12 +348,13 @@ still pin to `lazy-lock.json` until a release moves them.
 | what | where | command |
 |---|---|---|
 | first shared tree | online box | `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
-| per-user Bash config | offline box (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local ./loadout install @envs --no-backup` |
+| per-user Bash config | offline box (each user) | `LOADOUT_CFG_SHARED_PREFIX=<SHARED> ./loadout install @envs --no-backup` |
 | fetch stash (online) | online box | `./tools/fetch-stash` |
 | fetch stash (scp'd) | online box | `./tools/fetch-stash --from-file <f> --sums <sha256sums.txt>` |
 | fetch stash (blocked online box) | offsite box | download release assets, `sha256sum -c`, scp to the online box |
-| refresh plugins (no release) | online box | `./tools/refresh-stash "$SHARED"/local/share/nvim/loadout/vendor/plugin-stash` |
+| refresh plugins (no release) | online box | `./tools/refresh-stash "$SHARED"/share/nvim/loadout/vendor/plugin-stash` |
 | update loadout | online box | pull + `./tools/fetch-stash` + `./loadout install @shared-all --dest-dir "$SHARED" --no-backup` |
 
-`<SHARED>` = the root dir on the shared filesystem. The installer writes to
-`<SHARED>/local/...`. Users set `LOADOUT_CFG_SHARED_PREFIX=<SHARED>/local`.
+`<SHARED>` = the install root on the shared filesystem. The installer writes to
+`<SHARED>/...` (a plain prefix; no `local/` level). Users set
+`LOADOUT_CFG_SHARED_PREFIX=<SHARED>`.

@@ -1,13 +1,72 @@
 # Current Handoff
 
-Last updated: 2026-10-04 (tmux env synced to the live golden tree with
-loadout1 as the shipped default; uncommitted). Prior release:
+Last updated: 2026-10-05 (XDG default install root, `@engineering-loadout`
+retired, managed `prefer/` shims; committed `69af0a2` + `dabaadf..a6cb682`,
+unreleased). Prior release:
 `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..a6cb682, UNRELEASED)
+
+Behavioral re-architecture that stops the loadout silently shadowing system
+binaries, and lands the preconditions for a future uninstall. Spec
+`docs/superpowers/specs/2026-10-05-dest-default-and-group-removal-design.md`,
+plan `docs/superpowers/plans/2026-10-05-dest-default-and-group-removal.md`.
+
+What landed:
+
+- **Default install root** is `$XDG_DATA_HOME/loadout` (fallback
+  `~/.local/share/loadout`). Resolution: explicit `--dest-dir` > `config.toml`
+  `dest_dir` > XDG default; `dest_dir = "~"` restores the legacy `$HOME/.local`
+  layout. (`69af0a2`)
+- **Prefix layout + two-root routing**: the shared tree is a plain prefix for
+  any non-`$HOME` root (`_local_root`), so `<root>/local/` is gone; config,
+  cache and per-user nvim data always resolve under the real `$HOME`. A mixed
+  selection never drags config into a dest tree; env-only + explicit
+  `--dest-dir` stages a whole HOME (tests/previews); env-only + config
+  `dest_dir` ignores it with a printed note. Snapshot targets the real `$HOME`
+  unless `--dest-dir` was typed on the command line. (`dabaadf`)
+- **`prefer/` mechanism**: registry `prefer` field (env-tmux → tmux) +
+  `config.toml` `prefer`/`prefer_off`; `install_prefer_shims()` writes
+  marker-carrying exec shims under `<prefix>/prefer/<tool>`, prunes only its
+  own, warns on foreign files and missing targets. (`0e5bb2a`, `bf354c7`)
+- **`@engineering-loadout` retired**: `_RETIRED_GROUPS` raises a loud resolver
+  error naming `@shared-all` then `@envs-all` (superset, 177 vs 167 names);
+  completions regenerated. (`d74de05`)
+- **`doctor` layout audit**: read-only "Install layout" section -- root + mode,
+  legacy `~/.local/bin` EL-managed names, names ahead of system dirs on PATH,
+  prefer shims with missing targets; exit status unchanged. (`bc85bfb`)
+- **Shell PATH**: `<prefix>/bin` appended (system copies keep priority),
+  `<prefix>/prefer` prepended last, fallback
+  `${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}` in bash/zsh/tcsh;
+  `LOADOUT_CFG_SHARED_PREFIX` now baked unconditionally by split env installs
+  (`_local_root(install_root)`). (`a6cb682`)
+
+Tests: new gates `dest-layout-and-env-routing`, `env-routing-dest-dir`,
+`prefer-shims`, `doctor-shadow-audit` (plus updated `config-toml-dest-dir`,
+`registry-integrity`, `unit-resolver`, `check-installer`, `env-shell-parity`,
+`install-linux-tmp-home`, `install-split-shared-envs`, `install-nvim-deployments`).
+Run green so far: T1 + T2 partial.
+
+Pending:
+
+- Full `tests/run-all` (T2) sweep.
+- Tier 3 container gate: `tests/prebuilt-binaries-almalinux8 --full --network=none`
+  (release class **C** -- mandatory for an install-behavior change).
+- Class C release per `docs/RELEASE.md` (currency sweep, assurance re-pin,
+  post-payload chain, tag, publish, post-publish verification).
+- Docs synced in this change: README, `docs/INSTALLATION.md` (new migration
+  section), `docs/ARCHITECTURE.md`, AGENTS, copilot-instructions,
+  `envs/bash/global/README.md`, `envs/nvim/lua/global/paths.lua` comment.
+- **Uninstall remains a future spec** (this change lands its preconditions:
+  dedicated root, config separation, doctor footprint reporting).
+- Known gap: the GUI session `PATH` does not include the install root; systemd
+  `DefaultEnvironment` cannot override it, so session-wide changes need
+  `/etc/environment` via `pam_env`.
 
 ## 2026-10-04: tmux env synced to the live golden tree, loadout1 default (uncommitted)
 

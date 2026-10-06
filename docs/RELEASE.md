@@ -387,7 +387,7 @@ what now catches it — where nothing does, that is the open risk.
 
 | # | mistake | now caught by |
 |---|---|---|
-| 1 | `@engineering-loadout` silently lost 9 env bundles when `@envs` was redefined; curated install shipped ~580 MB of nvim data with no config to use it | group now lists members explicitly; **no automated check** — verify `./loadout resolve @engineering-loadout` after any group edit |
+| 1 | the retired curated mega-group silently lost 9 env bundles when `@envs` was redefined; the curated install shipped ~580 MB of nvim data with no config to use it | groups now list members explicitly and that mega-group is retired entirely (the resolver points at `@shared-all` + `@envs-all`); **no automated check** — verify `./loadout resolve @shared-all` after any group edit |
 | 2 | Six scripts had `python3` shebangs but 3.14-only syntax; dead on stock EL8, masked by the dev box's `~/.local/bin/python3` | `tests/run-all` py_compiles every first-party Python file |
 | 3 | `ruff.toml` excludes were pre-reboot paths matching nothing, and `select` replaced ruff's defaults, disabling pyflakes entirely | excludes corrected; `F,E4,E7,E9,B` enabled |
 | 4 | Lint gate ran on one file behind `if command -v ruff` — a silent skip | gate covers all first-party Python; missing ruff is a hard FAIL |

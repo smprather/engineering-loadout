@@ -143,7 +143,7 @@ cp /tmp/libfoo_tmp.bz2 "$LIB_DIR/libfoo.so.3.bz2"
 chmod 644 "$LIB_DIR/libfoo.so.3.bz2"
 ```
 
-The installer decompresses `bin/*.bz2` -> `~/.local/bin` and `lib64/*.bz2` -> `~/.local/lib64`.
+The installer decompresses `bin/*.bz2` -> `<prefix>/bin` and `lib64/*.bz2` -> `<prefix>/lib64`.
 RPATH is pre-baked into each binary in the repo (see above), so no post-install patchelf is needed.
 
 ### 5. Strip
@@ -193,8 +193,8 @@ Add an entry under `packages` in `payload/packages.json` (`schema_version: 3`):
 }
 ```
 
-If the tool should ship with the curated bundled set, also add `"mytool"` to
-the `@engineering-loadout` group's `members` list. There is no `default`
+If the tool should ship in a curated group, also add `"mytool"` to
+the relevant group's `members` list (e.g. `@core-cli`). There is no `default`
 field in schema 3 -- users always name packages or groups explicitly.
 
 Key rules:
@@ -205,8 +205,9 @@ Key rules:
 - `libs` -- **only** lib64 stems that are *exclusively* owned by this tool (not needed by any
   other bundled tool). Shared deps (libX11, libncurses, etc.) should be omitted -- they are
   always installed regardless of tool selection.
-- `optional: true` -- keep a large or niche tool out of `all` / `@shared` / the
-  full loadout sweep. Users then opt in with `./loadout install mytool`.
+- `optional: true` -- keep a large or niche tool out of `@shared` (the default
+  full-tools sweep). It is still reached by `@shared-all`, `@all`, or by name;
+  users opt in with `./loadout install mytool`.
 - `platforms` -- `'linux'` (sole value; windows/macos retired 2026-08-31). Resolver filters
   by current platform.
 - `tags` -- free-form labels (`search`, `editor`, `monitor`, ...) used by `list --tag T`.
@@ -228,12 +229,12 @@ For a tool with a single binary, no exclusive libs, and no deps:
 `"mytool": {"kind": "bin", "bins": ["mytool"], "version": "X.Y.Z", "platforms": ["linux"], "description": "..."}`.
 
 There is no `default` field -- the registry is pure opt-in (bare `install` errors). A
-plain non-`optional` package is swept into the synthetic `all` group, so it ships in the
-full `@engineering-loadout` bundle automatically. Add it to an `@group` `members` list
+plain non-`optional` package is swept into `@shared-all`, so it ships in a full shared
+install automatically. Add it to an `@group` `members` list
 elsewhere in `packages.json` (e.g. `@core-cli`, `@dev-tools`, `@editor-cli`) to make it
-discoverable by group selection. Set `"optional": true` to keep it OUT of `all` /
-`@shared` / `@engineering-loadout` so it installs only when named explicitly or pulled by
-a group that lists it (e.g. `surfer`, the `@rust` trio).
+discoverable by group selection. Set `"optional": true` to keep it OUT of `@shared`;
+it is then reached only via `@shared-all` / `@all`, by name, or by a group that
+lists it (e.g. `surfer`, the `@rust` trio).
 
 ### 8. Verify and commit
 
@@ -273,7 +274,7 @@ system. The resulting binary links only against glibc components -- no libs to b
 
 Binary: 33 MB unstripped (RelWithDebInfo) -> 5.9 MB stripped -> 2.6 MB compressed.
 Runtime archive (`nvim.tar.bz2`): 27 MB uncompressed -> 4.8 MB compressed.
-Installer extracts runtime to `~/.local/share/nvim/runtime/`.
+Installer extracts runtime to `<prefix>/share/nvim/runtime/`.
 See `build/build-nvim.sh` for the full rebuild recipe.
 
 ## Gnuplot build notes (6.0.5; first packaged 6.0.2 on 2026-05-10)
@@ -326,7 +327,7 @@ PLAT=el8.x86_64.glibc2p28
 STAGE=$(mktemp -d); DEST="$STAGE/libexec/gnuplot/6.0"; mkdir -p "$DEST"
 cp /tmp/gnuplot-install/libexec/gnuplot/6.0/gnuplot_x11 "$DEST/gnuplot_x11"
 /usr/bin/strip "$DEST/gnuplot_x11"
-# Helper installs to ~/.local/libexec/gnuplot/6.0/; sibling libs are in ~/.local/lib64
+# Helper installs to <prefix>/libexec/gnuplot/6.0/; sibling libs are in <prefix>/lib64
 # -> RPATH up three levels. Falls back to host /lib64 when gui_libs is absent.
 ~/.local/bin/patchelf --set-rpath '$ORIGIN/../../../lib64:$ORIGIN/../../../lib' "$DEST/gnuplot_x11"
 chmod 755 "$DEST/gnuplot_x11"
@@ -338,7 +339,8 @@ rm -rf "$STAGE"
 Wiring:
 - `packages.json` `gnuplot` entry gains `sentinel`/`install_to`/`archive_name`/`chmod_sentinel`/
   `remove_before_extract`, so the generic `install_runtime_archives` extracts it to
-  `~/.local/libexec/gnuplot/6.0/` (un-dotted `local/...` under `--dest-dir`).
+  `<prefix>/libexec/gnuplot/6.0/` (the install root is a plain prefix; the
+  un-dotted `local/` level is gone).
 - `bash/global/bashrc` exports `GNUPLOT_DRIVER_DIR=$_loadout_local_prefix/libexec/gnuplot/6.0`
   when the helper is present (shared-prefix aware).
 
@@ -540,7 +542,7 @@ See `build/build-nedit-ng.sh` for the full recipe.
 xkbcommon, Wayland client, and X11 client libs. All built from system packages on AlmaLinux 8.10.
 
 **All libs use RPATH `$ORIGIN`** (not `$ORIGIN/../lib64`) so they find each other when installed
-flat into `~/.local/lib64/`. This is different from binaries which use `$ORIGIN/../lib64:$ORIGIN/../lib`.
+flat into `<prefix>/lib64/`. This is different from binaries which use `$ORIGIN/../lib64:$ORIGIN/../lib`.
 
 **Qt5 platform plugins** (`libqxcb.so`, `libqwayland-generic.so`): stored flat in `lib64/`
 alongside the other Qt5 libs. `bash/global/bashrc` sets:
@@ -571,7 +573,7 @@ in `payload/packages.json` (removed 2026-08-30, along with
 history) and its membership in `@editor-gui`.
 
 Qt5 GUI frontend for Neovim. CMake build -- no Rust, no GPU renderer. No Docker needed.
-At runtime the binary resolves Qt5 from `~/.local/lib64` (gui_libs) via pre-baked RPATH,
+At runtime the binary resolves Qt5 from `<prefix>/lib64` (gui_libs) via pre-baked RPATH,
 so users don't need a system Qt5 install.
 
 **Prerequisites:**
@@ -905,8 +907,8 @@ works both in a normal home and in a split `@shared` + `@envs` deployment.
 ./loadout install modules
 ```
 
-Extracts the full native tree under `~/.local/lib/modules/` and relocates the
-build token to `~/.local`. Enable `LOADOUT_CFG_USE_LOADOUT_MODULES=1` in a
+Extracts the full native tree under `<prefix>/lib/modules/` and relocates the
+build token to the install root. Enable `LOADOUT_CFG_USE_LOADOUT_MODULES=1` in a
 user/site bash config; on next bash start (or `exec bash`) the `module`
 function becomes available via the sourced native init.
 
@@ -980,7 +982,7 @@ Built with gcc on EL8; max glibc symbol verified at GLIBC_2.17 or lower.
 ./loadout install tcl
 ```
 
-Installs tclsh to `~/.local/bin/`, `libtcl9.0.so` to `~/.local/lib64/`.
+Installs tclsh to `<prefix>/bin/`, `libtcl9.0.so` to `<prefix>/lib64/`.
 No separate standard library directory -- stdlib is embedded in libtcl9.0.so.
 
 ---
@@ -1070,7 +1072,7 @@ Max symbol: `GLIBC_2.14`. Max C++ ABI: `GLIBCXX_3.4` (GCC 3.4 era base ABI). Com
 ./loadout install ngspice
 ```
 
-Installs `ngspice` to `~/.local/bin/` and scripts to `~/.local/share/ngspice/scripts/`.
+Installs `ngspice` to `<prefix>/bin/` and scripts to `<prefix>/share/ngspice/scripts/`.
 
 ---
 
@@ -1120,7 +1122,7 @@ so they can be packaged uniformly. The compiled-in `LIBEXECDIR` macro (used by
 `less` to find `lessecho` for glob expansion and `less-osc8-open` for OSC8
 hyperlink clicks) then points at the temp build prefix, which is dead once
 deployed. That is acceptable:
-- `lessecho` is installed to `~/.local/bin/` (on PATH), and the `LESSECHO` env
+- `lessecho` is installed to `<prefix>/bin/` (on PATH), and the `LESSECHO` env
   var can override the compiled-in path if glob expansion is needed. When the
   dead path fails, `filename.c` falls back gracefully (returns the original
   filename) -- it does not crash.
@@ -1172,7 +1174,7 @@ print its banner and fail to page.
 ./loadout install less
 ```
 
-Installs `less`, `lessecho`, and `lesskey` to `~/.local/bin/`. No runtime
+Installs `less`, `lessecho`, and `lesskey` to `<prefix>/bin/`. No runtime
 archive; all three are self-contained binaries. Member of `@core-cli`.
 
 ---
@@ -1242,7 +1244,7 @@ Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
 ./loadout install p7zip
 ```
 
-Installs `7za` to `~/.local/bin/`. No runtime archive; binary is self-contained.
+Installs `7za` to `<prefix>/bin/`. No runtime archive; binary is self-contained.
 
 ---
 
@@ -1485,7 +1487,7 @@ Build script:
 3. Bundles `liblcms2.so.2` and `libopenjp2.so.7` from the EL8 build machine
 4. `strip` -> `patchelf --set-rpath '$ORIGIN/../lib64'` -> `bzip2 -kf` -> copy to `payload/el8.x86_64.glibc2p28/bin/pdftotext.bz2`
 5. Companion libs stripped -> `bzip2 -kf` -> copy to `payload/el8.x86_64.glibc2p28/lib64/`
-6. RPATH `$ORIGIN/../lib64` lets the binary find bundled liblcms2/libopenjp2 when installed at `~/.local/bin/`
+6. RPATH `$ORIGIN/../lib64` lets the binary find bundled liblcms2/libopenjp2 when installed at `<prefix>/bin/`
 
 ### Install
 
@@ -1493,7 +1495,7 @@ Build script:
 ./loadout install pdftotext
 ```
 
-Installs `pdftotext` to `~/.local/bin/`, `liblcms2.so.2` and `libopenjp2.so.7` to `~/.local/lib64/`.
+Installs `pdftotext` to `<prefix>/bin/`, `liblcms2.so.2` and `libopenjp2.so.7` to `<prefix>/lib64/`.
 
 ### Usage
 
@@ -1534,7 +1536,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/cloc.bz2
 - farm-versions: `strategy_flag(["--version"], r"([0-9]+\.[0-9]+)")` (cloc prints a
   bare two-part version). check-versions resolves latest from the GitHub homepage.
 
-Install: `./loadout install cloc` (also swept into the full `@engineering-loadout` bundle).
+Install: `./loadout install cloc` (also swept into the full `@shared-all` tree).
 
 ---
 
@@ -1585,7 +1587,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/tokei.bz2
 - farm-versions: `strategy_flag(["--version"], r"tokei ([0-9]+\.[0-9]+\.[0-9]+)")`.
 - When tokei resumes shipping prebuilts (>v14) or v14 gets binaries, a download is fine.
 
-Install both: `./loadout install scc,tokei` (both swept into the full `@engineering-loadout` bundle).
+Install both: `./loadout install scc,tokei` (both swept into the full `@shared-all` tree).
 
 ---
 
@@ -1845,7 +1847,7 @@ Smoke (dest-dir shape, `env -i`, on a NON-EL8 host -- this is the only
 way the masking gets caught):
 
 ```bash
-<dest>/local/bin/firefox --headless --profile /tmp/p \
+<dest>/bin/firefox --headless --profile /tmp/p \
   --screenshot /tmp/x.png https://example.com
 # must render; and no "Not Secure" interstitial for a well-known CA site
 ```
@@ -1873,7 +1875,7 @@ env -i PATH=/usr/bin:/bin LD_DEBUG=libs <stage>/bin/firefox --version 2>&1 \
 
 `libxul.so` NEEDEDs `libffi.so.6` and `libjpeg.so.62` (EL8 sonames the
 build links against). EL8 hosts provide both in `/lib64`, and
-`gui_libs` also ships copies to `~/.local/lib64` -- so the EL8 smoke
+`gui_libs` also ships copies to `<prefix>/lib64` -- so the EL8 smoke
 never failed. But hosts with newer userlands have **no such sonames at
 all** (Arch-family: libffi 3.4 = `.so.8` only, libjpeg-turbo 3 =
 `.so.8` only), and with the loader path inside the bundle there is
@@ -1898,15 +1900,15 @@ Verify with the dest-dir shape on a host that lacks the sonames --
 `env -i` so the dev shell's `LD_LIBRARY_PATH` can't mask a gap:
 
 ```bash
-<dest>/local/bin/firefox --version    # must print, not XPCOMGlueLoad
+<dest>/bin/firefox --version    # must print, not XPCOMGlueLoad
 ```
 
 and assert the host stack stayed authoritative:
 
 ```bash
-<dest>/local/bin/firefox --headless --screenshot /tmp/x.png data:text/html,ok
+<dest>/bin/firefox --headless --screenshot /tmp/x.png data:text/html,ok
 ldd-with-LD_LIBRARY_PATH=<bundle>/lib/firefox <bundle>/lib/firefox/libxul.so \
-  | grep libgtk-3   # must resolve to /usr/lib, not ~/.local/lib64
+  | grep libgtk-3   # must resolve to /usr/lib, not `<prefix>/lib64`
 ```
 
 ### Runtime libs still assumed present on EL8 (NOT bundled)
@@ -1937,7 +1939,7 @@ Wayland stack libxul.so dlopens at runtime.
 `kind: bin`, empty `bins` (launcher is inside the archive),
 `archive: payload/PLATFORM/runtime/firefox.tar.bz2`, `depends:
 ["gui_libs"]`. In both `@gui-suite` (explicit member) and
-`@engineering-loadout` (via the `all` synthetic group). Installer
+`@shared-all` (via the `@all` synthetic group). Installer
 function: `install_firefox_runtime()` in `loadout_main.py`. Needs
 `DISPLAY` or `WAYLAND_DISPLAY` for the GUI; `--headless` works too.
 
@@ -2047,8 +2049,8 @@ git commit -m 'feat(payload): fio 3.42 storage/filesystem benchmark'
 fio --name=test --ioengine=libaio --rw=randread --size=1g --filename=./tf
 ```
 
-`fio` is in `@engineering-loadout` automatically (the synthetic `all`
-expansion covers every non-group package).
+`fio` is in `@shared-all` automatically (`@shared-all`
+covers every non-group, non-env package).
 
 ---
 
@@ -2101,7 +2103,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/numr.bz2
 - The TUI opens when run with no FILE arg; `numr <file>` opens/persists a sheet.
 
 Install: `./loadout install numr` (also pulled by `@core-cli` and the full
-`@engineering-loadout` bundle).
+`@shared-all` tree).
 
 ---
 
@@ -2131,7 +2133,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/shellcheck.bz2
 - The `.tar.gz` and `.tar.xz` assets carry the same binary; `.tar.xz` is smaller.
 
 Install: `./loadout install shellcheck` (also pulled by `@dev-tools` and the full
-`@engineering-loadout` bundle).
+`@shared-all` tree).
 
 ---
 
@@ -2165,7 +2167,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/amux.bz2
   not bundled; amux works without them, just with fewer agent backends.
 
 Install: `./loadout install amux` (pulls `tmux`; also in `@dev-tools` and the
-full `@engineering-loadout` bundle).
+full `@shared-all` tree).
 
 ---
 
@@ -2198,7 +2200,7 @@ done
   `r"Yazi ([0-9]+\.[0-9]+\.[0-9]+)"` (capital Y).
 
 Install: `./loadout install yazi` (also in `@core-cli` and the full
-`@engineering-loadout` bundle).
+`@shared-all` tree).
 
 ---
 
@@ -2225,7 +2227,7 @@ chmod 644 payload/el8.x86_64.glibc2p28/bin/glow.bz2
   `r"glow version ([0-9]+\.[0-9]+\.[0-9]+)"`.
 
 Install: `./loadout install glow` (also in `@core-cli` and the full
-`@engineering-loadout` bundle).
+`@shared-all` tree).
 
 ---
 
@@ -2461,7 +2463,7 @@ Two builders write the same archive; the **superset** is what ships.
   against this store on a clean AlmaLinux 8.10 (`--network none`).
 
 - Package: `rust-crate-store` (kind data; `install_crate_store` extracts to
-  `~/.local/share/cargo/registry-store`).
+  `<prefix>/share/cargo/registry-store`).
 
 ### Wiring + config
 - `env-cargo` (custom `_install_env_cargo`) writes a STOCK `~/.cargo/config.toml`
@@ -2554,7 +2556,7 @@ digital hardware debugging, written in Rust on `eframe` with the **glow**
 (OpenGL) backend + winit (x11 + wayland). Upstream prebuilts target newer glibc,
 so we build the latest stable tag from source on EL8 -> native glibc-2.28
 binary. Packaged as a `bin`-package pair like gvim (wrapper + real ELF), `optional`
-so it stays out of the full `@engineering-loadout` bundle.
+so it stays out of `@shared` (reached only via `@shared-all` or by name).
 
 ```bash
 build/build-surfer.sh --tag v0.7.0
@@ -2724,7 +2726,7 @@ has no GL, so force the raster path with `CICSIM_USE_OPENGL=0`):
 
 ```bash
 ./loadout install cicwave --dest-dir /tmp/t --no-backup   # offline, rejoins + uv tool install
-QT_QPA_PLATFORM=offscreen /tmp/t/local/bin/cicwave --help
+QT_QPA_PLATFORM=offscreen /tmp/t/bin/cicwave --help
 # construct window + plot waves + matplotlib export (exercises pen-style/palette enums):
 QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 <tool-venv>/bin/python -c \
   "from cicwave.wave_pg import CmdWavePg; c=CmdWavePg('time'); c.openFile('s.csv'); \
@@ -2782,7 +2784,7 @@ it to the release string `10.4p1` for the registry version and a banner check
 - `build-box masking`: the maintainer's own signer came from this same build.
   The dev box only had a working `ssh-keygen -Y sign` after this package existed;
   before it, `./build/release` could not sign on EL8 at all. If you ever build on a
-  truly stock EL8 with only 8.0p1, `git tag -s` fails until `~/.local/bin/ssh-keygen`
+  truly stock EL8 with only 8.0p1, `git tag -s` fails until `<prefix>/bin/ssh-keygen`
   (this package) is on PATH ahead of `/usr/bin`.
 - **Passphrase-protected keys**: `ssh-keygen -Y sign` needs the private key
   unlocked. On a headless box with no `$DISPLAY`, it tries `gnome-ssh-askpass`
@@ -2917,8 +2919,8 @@ cp "$TI_DIR"/s/st* "$STAGING/share/terminfo/s/"
 ```
 
 This path is load-bearing on three counts: the registry sentinel is
-`share/terminfo/s/st-256color`, `install_to` is `~/.local` (so entries land at
-`~/.local/share/terminfo/s/`), and `envs/bash/global/bashrc` prepends
+`share/terminfo/s/st-256color`, `install_to` is `~/.local` (HOME mode lands at
+`~/.local/share/terminfo/s/`; prefix mode at `<prefix>/share/terminfo/s/`), and `envs/bash/global/bashrc` prepends
 `$HOME/.local/share/terminfo` to `TERMINFO_DIRS`. An earlier version of this
 script staged `./.terminfo/s/` and tarred `./.terminfo`, which disagreed with
 both the shipped archive and the sentinel -- the next tag bump would have
@@ -2957,8 +2959,8 @@ config layer files. Install both for the runtime-config feature.
 build/verify-binaries st
 DEST=$(mktemp -d /tmp/st-dest.XXXXXX)
 ./loadout install st env-st --dest-dir "$DEST" --no-backup
-file "$DEST/local/bin/st" "$DEST/local/bin/st.bin"   # POSIX script + ELF
-"$DEST/local/bin/st" -v                              # st 0.9.3
+file "$DEST/bin/st" "$DEST/bin/st.bin"   # POSIX script + ELF
+"$DEST/bin/st" -v                              # st 0.9.3
 tar -tjf payload/el8.x86_64.glibc2p28/runtime/st.tar.bz2 | head -1   # ./share/...
 tests/run-all                                         # st-wrapper, install-env-st, st font list in sync
 ```
@@ -3003,8 +3005,7 @@ technique as meld / mate-terminal / firefox. Deps are all EL8 BaseOS
 bundled, per AGENTS.md's never-bundle list. No patchelf/RPATH needed.
 
 **Package:** `git-nvim`, `kind: runtime`, `optional: true`. Reachable via
-`@shared-all` or by name; deliberately NOT in `@shared` or
-`@engineering-loadout`. Archive:
+`@shared-all` or by name; deliberately NOT in `@shared`. Archive:
 `payload/el8.x86_64.glibc2p28/runtime/git.tar.bz2` (registry sets
 `archive_name = "git.tar.bz2"` because the installer would otherwise
 derive `<pkg>.tar.bz2` from the package name). Installs to
@@ -3061,9 +3062,9 @@ inodes; a naive copy would balloon 14 MB into ~500 MB). `scalar` and
 
 ```bash
 ./loadout install git-nvim --dest-dir D
-D/local/lib/loadout-git/bin/git --version
-D/local/lib/loadout-git/bin/git clone <a local bare repo>   # proves libexec + argv[0] dispatch
-test ! -e D/local/bin/git                                   # proves corp git is safe (never linked)
+D/lib/loadout-git/bin/git --version
+D/lib/loadout-git/bin/git clone <a local bare repo>   # proves libexec + argv[0] dispatch
+test ! -e D/bin/git                                   # proves corp git is safe (never linked)
 ```
 
 ## espresso 1.1.1 -- Berkeley two-level logic minimizer (EDA)
@@ -3089,7 +3090,7 @@ last good CLI tag and builds clean on modern gcc with no patches.
 Nothing to bundle, no patchelf, no RPATH -- the simplest possible packaging.
 
 **Registry:** `espresso` (`kind: bin`), member of `@scientific` (so it rides in
-`@engineering-loadout`), tags `eda`/`logic`/`minimizer`. Functional smoke in
+`@shared-all`), tags `eda`/`logic`/`minimizer`. Functional smoke in
 `tests/prebuilt-binaries` asserts `.p 3` from the majority PLA -- a mis-built binary
 could still run and mis-reduce, so `--version` is not enough.
 
@@ -3187,7 +3188,7 @@ and must not be deleted.
 
 **Registry:** `gtkwave` (`kind: bin`, 16 `bins` + `archive`), `depends: [gui_libs]`,
 sentinel `share/gtkwave-gtk3/examples/des.fst`, member of the new **`@eda`** group
-which rides in `@engineering-loadout`. No `mesa3d_libs`: GTK3 renders through
+which rides in `@shared-all`. No `mesa3d_libs`: GTK3 renders through
 cairo/X11 here, same as meld and mate-terminal. Total payload cost ~1.4 MB.
 
 **Smoke: `--version` alone is NOT enough, and the generic probe is actively
@@ -3202,10 +3203,10 @@ round-trip against the staged tree before packaging.
 
 **Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
 ./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
-`./loadout install gtkwave --dest-dir <d>` and, with `<d>/local/bin` on `PATH`:
+`./loadout install gtkwave --dest-dir <d>` and, with `<d>/bin` on `PATH`:
 `gtkwave --version`, the FST round-trip, `twinwave` (must print usage, proving it
 finds gtkwave on `PATH`), `man -w gtkwave`, and -- on a box with a display --
-`gtkwave <d>/local/share/gtkwave-gtk3/examples/des.fst`, which must report
+`gtkwave <d>/share/gtkwave-gtk3/examples/des.fst`, which must report
 `FSTLOAD | Built 1287 signals and 145 aliases.` and open a window.
 
 ## klayout 0.30.10 -- GDSII/OASIS mask layout viewer + editor (EL8 SOURCE build, Qt5)
@@ -3233,7 +3234,7 @@ dnf install qt5-qtbase-devel qt5-qtsvg-devel qt5-qtxmlpatterns-devel \
 ./build.sh -qmake /usr/bin/qmake-qt5 -prefix /tmp/klayout-install-0.30.10 -release \
    -rbinc <rbtree>/usr/include -rbinc2 <rbtree>/usr/include \
    -rblib <rbtree>/usr/lib64/libruby.so.3.3.10 -rbvers 30310 \
-   -python ~/.local/bin/python3.14 -pyinc ~/.local/include/python3.14 \
+   -python <prefix>/bin/python3.14 -pyinc <prefix>/include/python3.14 \
    -pylib ~/.local/lib/libpython3.14.so \
    -without-qt-uitools -without-qt-designer -without-qt-multimedia -without-qt-sql \
    -nolibgit2 -jN
@@ -3379,7 +3380,7 @@ batch mode with no GUI, so all of it runs headless.
 ./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
 `./loadout install klayout --dest-dir <d>` (pulls gui_libs, mesa3d_libs, ruby,
 portable-python) and re-run the Ruby/Python/strm2oas trio through
-`<d>/local/bin/klayout` with **nothing** in the environment -- that is what proves the
+`<d>/bin/klayout` with **nothing** in the environment -- that is what proves the
 launcher's own `RUBYLIB` and `KLAYOUT_PYTHONHOME` derivation, which the build-time
 smoke has to supply by hand. On a box with a display, `klayout <file>.gds` should open
 the layout window.
@@ -3471,7 +3472,7 @@ resolution plus the whole SystemVerilog front end.
 **Verify after building:** `./build/strip-all-elf-binaries && build/gen-content-manifest &&
 ./loadout completion bash > envs/bash/global/completions/loadout.bash`, then
 `./loadout install verilator --dest-dir <d>` and check: `verilator.pc` contains the
-real prefix and zero `__LOADOUT_RELOC_ROOT__`; `PKG_CONFIG_PATH=<d>/local/share/pkgconfig
+real prefix and zero `__LOADOUT_RELOC_ROOT__`; `PKG_CONFIG_PATH=<d>/share/pkgconfig
 pkg-config --cflags verilator` resolves; and a full `-cc ... --exe ... --build` cycle
 runs and prints `CNT=10`.
 
@@ -3555,7 +3556,7 @@ resolve the wrong one.
 
 **Verify after building:** `python3.14 build/gen-content-manifest &&
 python3.14 build/gen-readme-table`, then `./loadout install tmux-path-store
---dest-dir <d>` and check `<d>/local/bin/tmux-path-store --version` reports the
+--dest-dir <d>` and check `<d>/bin/tmux-path-store --version` reports the
 tagged version and that no `tmux_path_store` launcher remains.
 
 ## liberty-filter 1.0.1 -- strip unneeded data from Liberty .lib files (EDA)
@@ -3719,8 +3720,8 @@ probe feeds a 6-node RC chain at `--tau 1e-6` and requires `Nodes: N -> M` with
 `M < N` plus a non-empty output netlist.
 
 **Group:** `@scientific` (beside `gnuplot`, `octave`, `ngspice`, `espresso`),
-which is itself a member of `@engineering-loadout`, so it ships in the curated
-set. Non-optional: 305 KB compressed, no dependencies.
+which is itself a member of `@shared-all`, so it ships in a full shared
+install. Non-optional: 305 KB compressed, no dependencies.
 
 **Usage:** `spice-subckt-rc-reduce in.subckt -o out.subckt -a ticer --tau 1e-12 -v`;
 `--pg-tau` sets a separate threshold for power/ground nets; `--power-ports` /
@@ -3796,7 +3797,7 @@ stdlib/default-gem modules, and **silent stderr** on a clean require.
 **Payload:** `bin/{ruby,ruby.bin,gem,irb,rdbg}.bz2`, `lib64/libruby.so.3.3.bz2`
 (RPATH `$ORIGIN`, so KLayout and anything else embedding Ruby links this exact
 copy), and `runtime/ruby.tar.bz2` (~3.9 MB: stdlib, gems, rubygems, libexec).
-Non-optional, so it is in `@shared` and therefore in `@engineering-loadout`.
+Non-optional, so it is in `@shared` and therefore in `@shared-all`.
 
 **Assumed present, not bundled:** `libcrypt.so.1` (libxcrypt, EL8 base -- same
 assumption as `libgnutls` for mate-terminal). `libgmp.so.10` and `libz.so.1` are
@@ -5215,7 +5216,7 @@ notebook kernels): an existing process retains the old mapped library. Verify
 with the installed interpreter, not the separate `sqlite3` CLI:
 
 ```bash
-~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+<prefix>/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
 ```
 
 ## Portable Python 3.14.7 -- `libpython` data symbols broken for embedders (FIXED, 2026-09-22)
@@ -5513,7 +5514,7 @@ The PyPI `pyright` wheel is a PYTHON WRAPPER around the same JS. It bundles
 the npm dist (no pyright download at runtime) but resolves NODE at runtime:
 (1) `nodejs-wheel-binaries` pkg (never shipped), (2) global `node` on PATH,
 (3) fallback `_ensure_node_env()` -> **nodeenv downloads a Node tarball from
-nodejs.org**. Air-gapped box + no `~/.local/bin/node` on PATH = dead, with a
+nodejs.org**. Air-gapped box + no `<prefix>/bin/node` on PATH = dead, with a
 confusing network error. Worse, the failure is masked on any box where the
 bashrc put bundled node on PATH -- build-box masking in env-var form.
 
@@ -5552,7 +5553,7 @@ Payload:
 Registry shape: `kind: bin`, `bins: [typescript-language-server]`,
 `archive runtime/typescript-language-server.tar.bz2`, `sentinel
 bin/typescript-language-server`, `install_to ~/.local`, hard `depends
-[nodejs]`. It is also a member of `@dev-tools`; `@engineering-loadout` reaches
+[nodejs]`. It is also a member of `@dev-tools`; `@shared-all` reaches
 it through the normal `@shared` sweep.
 
 Why a runtime archive: `typescript-language-server` is only the LSP shim. It
@@ -5598,7 +5599,7 @@ handling improvements that matter on modern Xeon/EPYC, plus six releases of
 bug fixes. Valgrind is **pure userspace** (NEEDED = glibc only), so there is
 no kernel-ABI coupling like `perf` has, and bundling is unambiguous.
 
-### Layout after install (prefix ~/.local)
+### Layout after install (paths relative to the install prefix)
 
 - `bin/valgrind` -- thin wrapper exporting `VALGRIND_LIB=<prefix>/libexec/valgrind`
   then exec'ing the real dispatcher.
@@ -5691,7 +5692,7 @@ therefore NOT needed for 3.14 (the stdlib `tomllib` covers it).
 ### Download (the manylinux tag matters)
 
 ```bash
-PIP_REQUIRE_VIRTUALENV=0 ~/.local/bin/python3.14 -m pip download tclint==0.9.0 \
+PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.14 -m pip download tclint==0.9.0 \
   --platform manylinux_2_28_x86_64 \
   --platform manylinux2010_x86_64 \
   --platform manylinux2014_x86_64 \
@@ -5770,9 +5771,9 @@ tclfmt /tmp/t.tcl > /tmp/fmt.tcl
 ./loadout install tclint
 ```
 
-Installs `tclint`, `tclfmt`, `tclsp` launchers to `~/.local/bin/` (via the
-isolated venv at `~/.local/share/uv/tools/tclint/`). Also pulled by
-`@dev-tools` and the full `@engineering-loadout` bundle.
+Installs `tclint`, `tclfmt`, `tclsp` launchers to `<prefix>/bin/` (via the
+isolated venv at `<prefix>/share/uv/tools/tclint/`). Also pulled by
+`@dev-tools` and the full `@shared-all` tree.
 
 ### Updating
 
@@ -5780,7 +5781,7 @@ isolated venv at `~/.local/share/uv/tools/tclint/`). Also pulled by
 # Bump version in packages.json, re-download the wheel closure, run the
 # post-payload chain (strip is a no-op for wheels -- pure Python -- but
 # sizes + manifest must regenerate because the wheelhouse changed):
-PIP_REQUIRE_VIRTUALENV=0 ~/.local/bin/python3.14 -m pip download tclint==<NEW> \
+PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.14 -m pip download tclint==<NEW> \
   --platform manylinux_2_28_x86_64 --platform manylinux2010_x86_64 \
   --platform manylinux2014_x86_64 --platform manylinux1_x86_64 --platform any \
   --python-version 3.14 --only-binary :all: \
@@ -5903,9 +5904,9 @@ openvaf integration_tests/CURRENT_SOURCE/current_source.va
 ./loadout install openvaf
 ```
 
-Installs `openvaf` to `~/.local/bin/`. Member of `@eda` (alongside openroad,
+Installs `openvaf` to `<prefix>/bin/`. Member of `@eda` (alongside openroad,
 iverilog, gtkwave, klayout, verilator, yosys). Also swept into the full
-`@engineering-loadout` bundle via the `all` synthetic group.
+`@shared-all` tree via the `@all` synthetic group.
 
 ### Updating
 
@@ -6043,7 +6044,7 @@ gen-content-manifest.
 
 - packages.json `kind: bin`, `tags: [diagram,mermaid,ascii]`, member of
   `@core-cli` next to glow; non-optional, so synthetic `@shared` (and
-  transitively `@engineering-loadout`) reaches it.
+  transitively `@shared-all`) reaches it.
 - **Not in build/verify-binaries:** the mirrored registry there covers only a
   subset of update-prebuilt tools -- glow itself has no entry either (absent
   tools report SKIP `not in verify-binaries registry`). No mirror added.
@@ -6056,7 +6057,7 @@ gen-content-manifest.
   (`--version`, `-V`, `-version`, `--help` in order) passes on `--help`.
 
 Install: `./loadout install mermaid-ascii` (also in `@core-cli` and the full
-`@engineering-loadout` bundle).
+`@shared-all` tree).
 
 ## netlistsvg 1.0.2 -- Yosys-netlist-to-SVG renderer (pure-Node runtime archive, added 2026-09-19)
 
@@ -6113,7 +6114,7 @@ exec "$PREFIX/bin/node" "$PREFIX/lib/node_modules/netlistsvg/bin/netlistsvg.js" 
 - packages.json `kind: bin`, `bins: [netlistsvg, netlistsvg-dumplayout]`,
   hard `depends: [nodejs]`, `tags: [eda, yosys, svg]`, member of `@eda`;
   non-optional, so synthetic `@shared` (and transitively
-  `@engineering-loadout`) reaches it -- verified via `./loadout resolve`.
+  `@shared-all`) reaches it -- verified via `./loadout resolve`.
 - **Not in farm-versions:** neither CLI exposes a version -- `--version` and
   `--help` both exit 1 under yargs 6 (the `demand(1)` input-file validation
   fires before help/version handling, printing `usage: ... input_json_file`
@@ -6127,7 +6128,7 @@ exec "$PREFIX/bin/node" "$PREFIX/lib/node_modules/netlistsvg/bin/netlistsvg.js" 
   (build script asserts this; the fixture text lives inline in the script).
 
 Install: `./loadout install netlistsvg` (pulls `nodejs`; also in `@eda` and
-the full `@engineering-loadout` bundle).
+the full `@shared-all` tree).
 
 ## librelane 3.0.6 -- LibreLane ASIC flow infrastructure (python-tool, added 2026-09-20)
 
@@ -6358,8 +6359,8 @@ failure modes that made them necessary.
    binary's path -- `/proc/self/exe` -> `<dir>/../share/btop/themes`, then
    `/usr/local/share/btop/themes`, then `/usr/share/btop/themes`
    (`src/btop.cpp`, v1.4.7). The payload installs the binary at
-   `<root>/local/bin/btop`, so the first candidate is
-   `<root>/local/share/btop/themes` -- which the payload never populated. On a
+   `<root>/bin/btop`, so the first candidate is
+   `<root>/share/btop/themes` -- which the payload never populated. On a
    farm node with no `/usr/share/btop`, btop's Options menu shows a two-entry
    list ("Default"/"TTY") and prints nothing: no error, no warning, no log
    line. `btop --version` stays green throughout.
@@ -6371,9 +6372,9 @@ failure modes that made them necessary.
 
 | Path | Owner | Notes |
 |---|---|---|
-| `<root>/local/bin/btop` | package | real ELF, no wrapper |
-| `<root>/local/bin/btop-theme-tour` | package | script, `bin/*.bz2` |
-| `<root>/local/share/btop/themes/*.theme` | package | 84 themes, from `runtime/btop-themes.tar.bz2` |
+| `<root>/bin/btop` | package | real ELF, no wrapper |
+| `<root>/bin/btop-theme-tour` | package | script, `bin/*.bz2` |
+| `<root>/share/btop/themes/*.theme` | package | 84 themes, from `runtime/btop-themes.tar.bz2` |
 | `~/.config/btop/btop.conf` | env-btop | managed config |
 | `~/.config/btop/themes/` | user | never touched -- hand-downloaded themes live here |
 
@@ -6388,7 +6389,7 @@ writes to when a theme is picked from its Options menu. And because
 buys nothing on any host where `/proc/self/exe` resolves. So `bin/btop` stays
 the real ELF. Verified with strace under a sized pty: with an empty
 `~/.config/btop/themes`, btop opens
-`<root>/local/share/btop/themes/default_black.theme` -- resolved by itself,
+`<root>/share/btop/themes/default_black.theme` -- resolved by itself,
 no flags.
 
 ### Build / repack

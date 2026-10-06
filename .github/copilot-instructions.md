@@ -17,7 +17,8 @@ driven by `payload/packages.json` (`schema_version: 3`).
 ```bash
 # Linux install (copies files -- no repo references remain)
 # Bare 'install' errors (dnf/apt style); always name packages or groups.
-./loadout install @engineering-loadout
+./loadout install @shared-all          # bundled tools (shared tree)
+./loadout install @envs-all            # per-user shell/editor configs
 
 # Subcommands (dnf/apt verbs)
 ./loadout list                                  # all packages
@@ -34,13 +35,13 @@ driven by `payload/packages.json` (`schema_version: 3`).
 ./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
 # Stage an install into a temp/test root
-./loadout install @engineering-loadout --dest-dir /tmp/loadout-home
+./loadout install @shared-all @envs-all --dest-dir /tmp/loadout-home
 
 # Selection (positional packages/@groups, plus --skip)
 ./loadout install octave                        # single package; deps auto-pulled
 ./loadout install @gui-suite                    # group; expands recursively
-./loadout install @engineering-loadout --skip @fonts-all   # curated set minus fonts
-./loadout install @engineering-loadout --skip tldr-data
+./loadout install @shared-all --skip @fonts-all   # all tools minus fonts
+./loadout install @shared-all --skip tldr-data
 ./loadout install @core-cli vim                 # exact set
 ./loadout install gvim --no-deps                # install verbatim, no dep walk
 ./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
@@ -87,7 +88,9 @@ non-optional package), `@shared-all` (same plus optionals), `@envs` (env-bash +
 env-tcsh plus env-bash's recommends), and `@envs-all` (every env config
 bundle). The bare
 keyword `all` is rejected; users always name packages or groups explicitly
-(dnf/apt style).
+(dnf/apt style). The former curated mega-group is retired: the resolver raises
+a loud error pointing at `@shared-all` (bundled tools) then `@envs-all`
+(per-user shell configs).
 
 `uv_extras` turns a Python tool requirement into `uv_tool[extra,...]`; bundle the
 full locked wheel closure for every extra. `parity-plot` is pinned to stable
@@ -193,9 +196,14 @@ Each layer can inject code into `global/bashrc` via numbered files in
 
 - **Named install**: `./loadout install <PKG...>` copies files; re-run the
   same command to pick up repo changes. Bare `./loadout install` errors.
-- **`--dest-dir <dir>`**: install into an alternate root instead of `$HOME`;
-  used by installer tests and staging. It belongs after install-like verbs,
-  e.g. `./loadout install @engineering-loadout --dest-dir /tmp/loadout-home`.
+- **`--dest-dir <dir>`**: install the shared tree into an alternate prefix
+  instead of the default `$XDG_DATA_HOME/loadout` (`~/.local/share/loadout`);
+  used by installer tests and staging. Config, caches and per-user data stay
+  under the real `$HOME` -- a mixed selection never drags config into the dest
+  tree. An env-only selection with an explicit `--dest-dir` stages the whole
+  HOME (tests/previews); a config `dest_dir` is ignored for env-only installs
+  with a printed note. The flag belongs after install-like verbs, e.g.
+  `./loadout install @shared-all @envs-all --dest-dir /tmp/loadout-home`.
 - **`--no-backup`**: skip backup creation (useful for clean reinstalls or
   automation).
 - **`--post-install-hook <script>`**: execute an explicit corp/site/user add-on
@@ -251,7 +259,7 @@ ELF under `lib/vcd-toggle-profiler/`. Build it with
 **Binary bundling order: strip -> patchelf -> bzip2.** Never strip after patchelf;
 it corrupts `.dynstr` and causes segfaults or "undefined symbol" at runtime.
 **Libs that must find each other** (e.g. the `gui_libs` group): patchelf with
-`$ORIGIN` (not `$ORIGIN/../lib64`) -- they install flat into `~/.local/lib64/`
+`$ORIGIN` (not `$ORIGIN/../lib64`) -- they install flat into `<prefix>/lib64/`
 alongside each other.
 
 **Never bundle**: glibc (`libc.so.6`, `libm.so.6`, etc.), OpenGL dispatcher
@@ -262,8 +270,8 @@ drivers, GLVND JSON, and `libLLVM-17`; wrappers must set `LD_LIBRARY_PATH`,
 `LIBGL_DRIVERS_PATH`, and `__EGL_VENDOR_LIBRARY_DIRS`.
 
 **Qt5 platform plugins** (`libqxcb.so`, `libqwayland-generic.so`) live flat in
-`~/.local/lib64/`; `QT_QPA_PLATFORM_PLUGIN_PATH=$HOME/.local/lib64` set in
-`envs/bash/global/bashrc` when present.
+`<prefix>/lib64/`; `QT_QPA_PLATFORM_PLUGIN_PATH` is set from the shared prefix
+in `envs/bash/global/bashrc` when present.
 
 **WSLg cursor fix**: `QT_QPA_PLATFORM=wayland` in user bashrc -- Qt5 XCB backend
 corrupts XWayland global cursor state for all X11 apps in the session; Wayland
@@ -287,12 +295,12 @@ deletes cached clean results. `tests/prebuilt-binaries` installs `@shared`
 into a persistent install tree (`~/.cache/engineering-loadout/smoke-install-v1`,
 reused when the payload fingerprint is unchanged -- the tree is NOT
 relocatable, so it lives at its install path and the probe scratch dir
-symlinks to it), probes every executable in `<dest>/local/bin` with
-`PATH=<dest>/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` in parallel (16
+symlinks to it), probes every executable in `<dest>/bin` with
+`PATH=<dest>/bin:/usr/bin:/bin:/usr/sbin:/sbin` in parallel (16
 workers, memory-scaled), checks editor runtime
 sentinels, and runs installed `nvim` headless against its installed runtime
 before any tag is created. Portable Python keeps generic `python3`/`pip3` links in
-`~/.local/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
+`<prefix>/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
 holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
 Python's private SQLite in `<prefix>/lib` must include built-in FTS5
@@ -301,7 +309,7 @@ Python's private SQLite in `<prefix>/lib` must include built-in FTS5
 verification results and current state are recorded in `docs/HANDOFF.md`.
 Run `tests/install-split-shared-envs` for the production deployment shape:
 `@shared` into a temp non-home tree, then `@envs` into a separate temp HOME with
-`LOADOUT_CFG_SHARED_PREFIX=<shared>/local`; it smokes Bash startup, shared
+`LOADOUT_CFG_SHARED_PREFIX=<shared>`; it smokes Bash startup, shared
 PATH, terminfo, WezTerm completions, and core tool startup.
 That smoke also protects the env-copy contract: `@envs` must copy config into
 the target HOME, replace old symlinked config subdirs that point back into the
@@ -340,9 +348,9 @@ first and shipped in the gtkwave/gvim/twinwave/rtlbrowse/mate-terminal wrappers
 until `tests/prebuilt-binaries` gained a composition + fused-line scan.
 
 The Helix runtime lives at `payload/<platform>/runtime/helix.tar.bz2`; the
-installer extracts it to `~/.local/share/helix/runtime`; `runtime/tutor` is the
+installer extracts it to `<prefix>/share/helix/runtime`; `runtime/tutor` is the
 sentinel file. The Vim runtime lives at `payload/<platform>/runtime/vim92.tar.bz2`;
-the installer extracts it to `~/.local/share/vim/vim92`; `filetype.vim` is the
+the installer extracts it to `<prefix>/share/vim/vim92`; `filetype.vim` is the
 sentinel file. Vim/GVim wrappers derive default runtime paths from installed
 `bin/..`, not `$HOME`, so `--dest-dir` installs work with fake `HOME`. Fish
 does same for `__fish_data_dir`, `__fish_bin_dir`, and `__fish_sysconf_dir`,
@@ -350,15 +358,15 @@ and must ensure `<prefix>/etc/fish` exists before execing `fish.bin`; fish
 only enters relocatable mode when both `<prefix>/share/fish` and
 `<prefix>/etc/fish` exist, otherwise it falls back to the baked
 `/tmp/fish-install-4.7.1` prefix. `st.tar.bz2` extracts to
-`~/.local/share/terminfo`; `envs/bash/global/bashrc` prepends that path to
+`<prefix>/share/terminfo`; `envs/bash/global/bashrc` prepends that path to
 `TERMINFO_DIRS` so ncurses resolves `st-256color` for normal and `--dest-dir`
 installs instead of relying on implicit `~/.terminfo`. The Neovim runtime lives at `payload/<platform>/runtime/nvim.tar.bz2`;
-the installer extracts it to `~/.local/share/nvim/runtime`; `filetype.lua` is
+the installer extracts it to `<prefix>/share/nvim/runtime`; `filetype.lua` is
 the sentinel file. `mesa3d_libs.tar.bz2` installs Mesa under
-`~/.local/lib64` / `~/.local/lib64/dri` and is chunked as `.part-000..002`.
+`<prefix>/lib64` / `<prefix>/lib64/dri` and is chunked as `.part-000..002`.
 `wezterm.tar.bz2.part-000..001` installs PATH wrappers for `wezterm`,
 `wezterm-gui`, and `wezterm-mux-server`; the real upstream sibling binaries live under
-`~/.local/lib/wezterm/` so `wezterm start` can exec `wezterm-gui` correctly.
+`<prefix>/lib/wezterm/` so `wezterm start` can exec `wezterm-gui` correctly.
 It also includes `strip-ansi-escapes`, `open-wezterm-here`, the app icon, and
 the Nautilus extension. WezTerm zsh completion is env-owned at
 `envs/zsh/site-functions/_wezterm`; bash completion is generated by
@@ -441,7 +449,7 @@ live under `payload/treesitter/prebuilt/<platform>/`, where platform is
 `$(uname -s lower)-$(uname -m)-<glibc|musl>`. Build or refresh the full parser
 set with `./build/treesitter/build_parsers`; it stores parsers as `parser/*.so.bz2`.
 The installer decompresses matching parser artifacts to installed `parser/*.so`
-and copies metadata directories to `~/.local/share/nvim/tree-sitter-parsers/`.
+and copies metadata directories to `<prefix>/share/nvim/tree-sitter-parsers/`.
 
 ## Key Conventions
 

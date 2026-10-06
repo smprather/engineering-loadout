@@ -7,14 +7,19 @@ End users install from the release tarball:
 ```bash
 tar xzf engineering-loadout-v*.tar.gz
 cd engineering-loadout-v*/
-./loadout install @engineering-loadout
+./loadout install @shared-all              # bundled tools, fonts, runtimes
+./loadout install @envs-all                # per-user shell/editor configs
 ```
 
-Repo developers can also `git clone` and run `./loadout` from a checkout --
-the script resolves the repo from its own path and works from any cwd.
+The shared tree installs to the **install root** -- by default
+`$XDG_DATA_HOME/loadout` (`~/.local/share/loadout`); per-user configuration,
+caches and Neovim data always stay under the real `$HOME`. Repo developers can
+also `git clone` and run `./loadout` from a checkout -- the script resolves the
+repo from its own path and works from any cwd.
 
 `./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
-interpreter (`~/.local/bin/python3.14` -> `<repo>/.loadout-bootstrap/bin/python3.14`
+interpreter (an installed `<prefix>/bin/python3.14` ->
+`<repo>/.loadout-bootstrap/bin/python3.14`
 -> cold-bootstrap from `payload/<platform>/portable-python-*.tar.bz2`) and
 execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 `tar` (always present on EL8/Suse/Debian) are the only host prerequisites.
@@ -23,7 +28,8 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 ### Subcommands & options
 
 ```bash
-./loadout install @engineering-loadout        # install the curated bundled set
+./loadout install @shared-all                 # install every bundled tool (shared tree)
+./loadout install @envs-all                   # install every per-user config bundle
 ./loadout list                                # show all packages
 ./loadout list --groups                       # show all @groups
 ./loadout list --tag editor                   # filter packages by tag
@@ -35,20 +41,41 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 ./loadout snapshot list
 ./loadout snapshot restore loadout_backups/backup.1.tar.bz2
 
-./loadout install @engineering-loadout --dest-dir /tmp/test-home
-./loadout install @engineering-loadout --no-backup
-./loadout install @engineering-loadout --post-install-hook ~/corp/install.sh
+./loadout install @shared-all @envs-all --dest-dir /tmp/test-home
+./loadout install @shared-all @envs-all --no-backup
+./loadout install @shared-all @envs-all --post-install-hook ~/corp/install.sh
 ./loadout install octave                      # single package; deps auto-pulled
 ./loadout install @gui-suite                  # group; expands recursively
-./loadout install @engineering-loadout --skip @fonts-all   # curated set minus fonts
-./loadout install @engineering-loadout --skip tldr-data
-./loadout install @engineering-loadout --skip gnuplot,micro
+./loadout install @shared-all --skip @fonts-all   # all tools minus fonts
+./loadout install @shared-all --skip tldr-data
+./loadout install @shared-all --skip gnuplot,micro
 ./loadout install vim nvim rg tmux            # install exactly this set
 ./loadout install gvim --no-deps              # install gvim verbatim, no dep walk
 ./loadout install gvim --dry-run              # resolve + print; no writes
 ```
 
 ### What gets installed
+
+The install root (`<prefix>`: default `$XDG_DATA_HOME/loadout`, or the
+`--dest-dir` / `config.toml` value) holds the shared payload. Per-user
+configuration and state always go under the real `$HOME`.
+
+Shared tree (`<prefix>`):
+
+| Destination | Source |
+|-------------|--------|
+| `<prefix>/bin/` | `payload/<platform>/bin/*.bz2` (decompressed) |
+| `<prefix>/lib64/` | `payload/<platform>/lib64/*.bz2` (decompressed) |
+| `<prefix>/bin/python3.14` | `payload/<platform>/portable-python-*.tar.bz2` |
+| `<prefix>/share/helix/runtime/` | `payload/<platform>/runtime/helix.tar.bz2` |
+| `<prefix>/share/vim/vim92/` | `payload/<platform>/runtime/vim92.tar.bz2` |
+| `<prefix>/share/nvim/runtime/` | `payload/<platform>/runtime/nvim.tar.bz2` |
+| `<prefix>/share/terminfo/` | `payload/<platform>/runtime/st.tar.bz2` |
+| `<prefix>/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
+| `<prefix>/share/nvim/loadout/vendor/plugin-stash/` | `nvim-plugin-stash` |
+| `<prefix>/share/tealdeer/cache/tldr-pages/` | `payload/tldr/tldr-pages.tar.bz2` |
+
+Per-user (`$HOME`):
 
 | Destination | Source |
 |-------------|--------|
@@ -60,16 +87,15 @@ execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 | `~/.tmux/` | `envs/tmux/vendor/plugins/` |
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |
 | `~/.config/nvim/` | `envs/nvim/` |
+| `~/.config/helix/` | `envs/helix/` |
 | `~/.config/starship/starship.toml` | `envs/starship/starship.linux.toml` + `envs/starship/config-schema.json` |
-| `~/.config/helix/runtime/` | `payload/<platform>/runtime/helix.tar.bz2` |
-| `~/.local/share/vim/vim92/` | `payload/<platform>/runtime/vim92.tar.bz2` |
-| `~/.local/share/nvim/runtime/` | `payload/<platform>/runtime/nvim.tar.bz2` |
-| `~/.local/bin/` | `payload/<platform>/bin/*.bz2` (decompressed) |
-| `~/.local/lib64/` | `payload/<platform>/lib64/*.bz2` (decompressed) |
-| `~/.local/bin/python3.14` | `payload/<platform>/portable-python-*.tar.bz2` |
 | `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives) |
-| `~/.local/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
-| `~/.local/share/tealdeer/cache/tldr-pages/` | `payload/tldr/tldr-pages.tar.bz2` |
+| `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
+| `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |
+
+With `dest_dir = "~"` (legacy HOME mode) the shared entries gain a `.local`
+level (`~/.local/bin/`, `~/.local/lib64/`, `~/.local/share/...`); the per-user
+entries are unchanged.
 
 After install, reload your shell:
 
@@ -85,35 +111,87 @@ Simulate a completely fresh user environment:
 ./tests/install-linux-tmp-home
 ```
 
-### Persistent install root (`config.toml`)
+### Install root, layout and `config.toml`
 
-`--dest-dir` can be pinned once so installs stop repeating the flag. Create
-`~/.config/engineering-loadout/config.toml`:
+The shared tree installs to the **install root**. Resolution order:
+
+1. an explicit `--dest-dir DIR` on the command line,
+2. `dest_dir` in `~/.config/engineering-loadout/config.toml`,
+3. the XDG default `$XDG_DATA_HOME/loadout` -- i.e. `~/.local/share/loadout`
+   unless `XDG_DATA_HOME` is set and absolute.
+
+The root is used as a plain prefix for everything that is not `$HOME`:
+`<root>/bin`, `<root>/lib64`, `<root>/share/...`. A root of exactly `$HOME`
+keeps the legacy dotted layout (`$HOME/.local/bin`, ...), so
+`dest_dir = "~"` restores the old behavior. The old un-dotted `<root>/local/`
+level no longer exists.
+
+Two roots are threaded through an install. The shared payload goes to the
+install root; per-user configuration, caches, fonts and Neovim data always
+resolve under the real `$HOME` (`~/.config`, `~/.cache`, `~/.local/share/nvim`,
+`~/.local/share/fonts`). A mixed selection -- one that names any non-`env`
+package -- writes its `env` config to `$HOME` even when `--dest-dir` was given.
+An **env-only** selection is the exception: with an explicit `--dest-dir D`,
+the whole HOME is staged under `D` (tests and previews rely on this); without
+the flag, config goes to `$HOME` and a configured `dest_dir` is ignored with a
+`note: env bundles always install under $HOME; ...` line.
+
+`config.toml` keys:
 
 ```toml
-dest_dir = "~/.loadout"
+dest_dir   = "~/.loadout"    # pin the install root (default: ~/.local/share/loadout)
+prefer     = ["firefox"]     # opt a tool ahead of the system copy (see PATH below)
+prefer_off = ["tmux"]        # opt out of a package's default preference
 ```
 
-`dest_dir` mirrors the flag name exactly. Precedence is **explicit flag >
-config file > `$HOME`**, so a one-off `./loadout install octave --dest-dir
-/tmp/test-home` still behaves as written even when the file pins a root. A
-missing file is not an error, and a malformed one degrades to "no default"
-rather than aborting an install.
+`dest_dir` mirrors the flag name exactly. A missing file is not an error, and
+a malformed file (or a key of the wrong type) degrades to "no default" rather
+than aborting an install.
 
-This is the right setting when the loadout's binaries would otherwise land in
-`~/.local/bin` ahead of the distribution's own. The loadout ships its own
-coreutils, bash, node and python, and those builds are not always newer than
-the distro's -- an early PATH match silently downgrades the system toolchain.
-A dedicated root plus a `PATH` that puts the distribution directories first
-avoids that.
+`--dest-dir` also stages non-default roots for tests and previews, e.g.
+`./loadout install octave --dest-dir /tmp/test-home`, and it still overrides a
+pinned `dest_dir` for that one run.
 
-Installing to a non-default root moves the whole tree, `local/` included, so
-RPATH-relative libraries still resolve. Afterwards, bake the runtime
-environment for per-user shells against the new root:
+### PATH and the `prefer` mechanism
+
+The loadout ships its own coreutils, bash, node and python, and those builds
+are not always newer than the distribution's -- an early `PATH` match would
+silently downgrade the system toolchain. So the shared `bin` is **appended**
+after the system directories; the distribution's copies keep priority.
+
+An explicitly preferred tool is the deliberate exception. The installer writes
+a small exec shim under `<prefix>/prefer/<tool>`, and that directory is
+**prepended** (after `~/.local/bin`, so it outranks any legacy copy):
+
+```sh
+#!/bin/sh
+# loadout prefer shim
+exec "<prefix>/bin/<tool>" "$@"
+```
+
+The active set is the registry defaults of every installed `env` package that
+declares `prefer`, plus `config.toml`'s `prefer`, minus `prefer_off`. The only
+default today is `env-tmux` -> `tmux`: installing the tmux config makes the
+bundled tmux win, because tmux client and server must agree on protocol version
+(opt out with `prefer_off = ["tmux"]`). Shims are pruned only when their
+content still carries the loadout marker; a foreign file with a colliding name
+is left alone with a warning, and a missing target warns instead of creating a
+dangling shim.
+
+When the install root is not the default, the shell has to be told. Split
+installs bake `LOADOUT_CFG_SHARED_PREFIX` into
+`~/.config/bash/global/config.sh` and `~/.config/tcsh/global/config.csh`; to
+re-point an existing env install at a different tree, re-run it with the
+variable set:
 
 ```bash
-LOADOUT_CFG_SHARED_PREFIX="$HOME/.loadout/local" ./loadout install @envs
+LOADOUT_CFG_SHARED_PREFIX="$HOME/.loadout" ./loadout install @envs-all
 ```
+
+All three shells derive the shared prefix, `TERMINFO_DIRS`, the Qt plugin path,
+`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH` and the gnuplot driver dir from the
+same variable, falling back to `$HOME/.local/share/loadout` when it is unset.
+(For a legacy `dest_dir = "~"` install the value is `$HOME/.local`.)
 
 ### Shared / read-only deployments
 
@@ -126,12 +204,17 @@ per-user `env` config bundles -- with the synthetic `@shared` group:
   --dest-dir /opt/engineering-loadout/releases/2026-06-04.2
 ```
 
+The destination is a prefix (`/opt/.../2026-06-04.2/bin`, `.../share`, ...) --
+there is no `local/` level. `LOADOUT_CFG_SHARED_PREFIX=/opt/.../2026-06-04.2`
+is therefore the value per-user env installs need (baked automatically by a
+split env install).
+
 `@shared` = all non-`env`, non-`optional` packages (binaries, libs,
 runtimes, fonts, data, python tools); `@shared-all` = the same with the
 `optional: true` packages folded back in (surfer, cicwave, rust,
-rust-crate-store) -- the full shared tree in one name. `@envs` = Bash
-configuration only (plus its normal recommends), installed into each user's
-`$HOME` with `./loadout install @envs`. Install other config bundles by
+rust-crate-store) -- the full shared tree in one name. `@envs` = the Bash and
+tcsh configuration, installed into each user's `$HOME` with
+`./loadout install @envs`. Install other config bundles by
 name, or use `@envs-all` when every shell and editor config is intentional.
 Tools and config bundles are fully decoupled (no cross-`recommends`), so
 `@shared` and `@envs` need no extra `--skip` / `--no-deps` flags. Preview
@@ -202,13 +285,93 @@ Backups/snapshots can restore displaced user files when backups are enabled.
 ### Corporate / site add-ons
 
 ```bash
-./loadout install @engineering-loadout \
+./loadout install @shared-all @envs-all \
   --post-install-hook ~/corp-dotfiles/install.sh \
   --post-install-hook ~/site-dotfiles/install.sh
 ```
 
 Hooks receive these environment variables: `LOADOUT_REPO`, `LOADOUT_HOME`,
 `LOADOUT_BACKUP_DIR`, `LOADOUT_DEST_DIR`, `LOADOUT_NO_BACKUP`.
+
+### Migrating an existing install
+
+An install made before the XDG default lives in `~/.local` (config in
+`~/.config`). The new default is `~/.local/share/loadout`, and `~/.local/bin`
+should end up holding nothing the loadout owns. `loadout doctor` reports what
+it finds -- the install root and layout mode, EL-managed names still sitting in
+`~/.local/bin`, and prefer shims whose targets are missing -- but it changes
+nothing. Migrate in this order:
+
+1. **Back up `~/.local/bin`** before touching it:
+
+   ```bash
+   cp -a ~/.local/bin ~/.local/bin.premigrate
+   ```
+
+2. **Install the shared tree at the new root.** For the default:
+
+   ```bash
+   ./loadout install @shared-all -y
+   ```
+
+   For a corp/site prefix, pass it explicitly:
+
+   ```bash
+   ./loadout install @shared-all --dest-dir /corp/prefix -y
+   ```
+
+3. **Re-point the env config bundles** so `config.sh` / `config.csh` bake the
+   new shared prefix:
+
+   ```bash
+   ./loadout install @envs-all -y
+   # split / custom tree:
+   LOADOUT_CFG_SHARED_PREFIX=/corp/prefix ./loadout install @envs-all -y
+   ```
+
+4. **Prune the legacy `~/.local/bin` copies by name.** They are EL builds from
+   the previous deployment -- same names, different hashes -- and they sit ahead
+   of the system directories, so they must go. `loadout doctor` lists the names.
+   Delete them by name with an **absolute** `/usr/bin/rm`: a relative `rm`
+   resolved through `~/.local/bin` disappears mid-loop, and the later iterations
+   then fail.
+
+   ```bash
+   /usr/bin/rm -f ~/.local/bin/nvim ~/.local/bin/rg ...   # names from `loadout doctor`
+   ```
+
+   Only the names `doctor` reports are the loadout's; anything else in
+   `~/.local/bin` is yours to keep.
+
+5. **Remove the legacy payload subtrees** under `~/.local` after inspecting
+   them -- `~/.local/lib64`, `~/.local/lib`, `~/.local/share/{helix,vim,tealdeer}`
+   and the shipped Neovim dirs
+   `~/.local/share/nvim/{runtime,tree-sitter-parsers,loadout}`. Keep
+   `~/.local/share/nvim/lazy` (your own plugin clones) and
+   `~/.local/share/fonts`. This matters: `paths.lua` prefers a per-user
+   directory over the shared tree, so a stale
+   `~/.local/share/nvim/tree-sitter-parsers` would shadow the new one.
+
+6. **Open new terminals.** Shells started before the migration carry the old
+   `PATH` and an old Starship binary path. A new terminal re-reads both. In a
+   shell you cannot replace, re-initialize Starship and clear its command
+   cache:
+
+   ```bash
+   eval "$(starship init bash)"; hash -r
+   ```
+
+   `hash -r` alone is not enough: `starship init` bakes an absolute binary path
+   into the `starship_precmd` function body, so the stale path lives in shell
+   state, not in the command hash.
+
+7. **GUI sessions.** The graphical session's `PATH` is built by the login
+   chain and does not include the install root. `prefer` shims only help when
+   their directory is on `PATH`, so a GUI-launched editor may not see the
+   preferred tool. There is no per-user fix: session-wide `PATH` needs
+   `/etc/environment` (via `pam_env`), and systemd's `DefaultEnvironment`
+   cannot override an already-populated environment block. Terminal work is
+   unaffected.
 
 ### Restore a backup
 
@@ -224,6 +387,10 @@ the backup dir is compressed to `loadout_backups/backup.N.tar.bz2` and
 the uncompressed dir is removed. `snapshot restore` accepts either the
 uncompressed dir or the `.tar.bz2` archive. Font files are excluded from
 snapshots (large and reproducible).
+
+Snapshots protect per-user config, so they operate on the real `$HOME`; a
+configured `dest_dir` deliberately does **not** move them. Only an explicit
+`--dest-dir` typed on the `snapshot` command line stages the snapshot elsewhere.
 
 ## Windows / macOS
 

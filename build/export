@@ -389,7 +389,7 @@ def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash
     info(f"    cd {dest} && ./loadout doctor --verify")
     print("")
     info("  Then install from it:")
-    info(f"    {dest}/loadout install @engineering-loadout")
+    info(f"    {dest}/loadout install @shared-all")
 
 
 if __name__ == "__main__":

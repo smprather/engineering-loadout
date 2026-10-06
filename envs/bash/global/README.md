@@ -3,6 +3,37 @@
 Canonical upstream bash config. Changes here should be upstreamed to the repo,
 not made locally -- use a layer override instead (`envs/bash/user/`, `envs/bash/corp/`, etc.).
 
+## PATH and the shared prefix
+
+The install root is the shared tool tree (default `$XDG_DATA_HOME/loadout`,
+i.e. `~/.local/share/loadout`; `~/.local` only in legacy `dest_dir = "~"` mode).
+`global/bashrc` derives it once:
+
+```bash
+_loadout_prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}"
+path_append_if_dir  "$_loadout_prefix/bin"     # system copies keep priority
+path_prepend_if_dir "$_loadout_prefix/prefer"  # managed shims win over system
+```
+
+The shared `bin` is **appended**, not prepended: the loadout ships its own
+coreutils/bash/node/python and those builds are not always newer than the
+distribution's, so the distribution's copies must keep priority. The one
+deliberate exception is `<prefix>/prefer`, a directory of small exec shims the
+installer writes for explicitly preferred tools (`env-tmux` -> `tmux`, plus
+`prefer`/`prefer_off` in `~/.config/engineering-loadout/config.toml`). It is
+prepended *after* `~/.local/bin`, so it outranks any stale legacy copy.
+
+`LOADOUT_CFG_SHARED_PREFIX` is baked by a split/shared env install; when it is
+unset the fallback is the XDG default. `TERMINFO_DIRS`, the Qt plugin path,
+`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH` and the gnuplot driver dir all hang
+off the same prefix, so a `--dest-dir` or shared install needs no extra
+environment.
+
+tealdeer's cache is read from `<prefix>/share/tealdeer/cache/tldr-pages`, and
+the tealdeer config the installer writes records that absolute path (the config
+format does not expand `~` or env vars), so a relocated prefix works without
+editing the config.
+
 ## GRC (Generic Colorizer)
 
 The `grc/` directory contains a patched GRC binary with hardcoded config paths

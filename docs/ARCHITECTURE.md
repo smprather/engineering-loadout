@@ -15,10 +15,10 @@ config bundle, font, data cache, Python tool.
 
 | Kind | Description |
 |------|-------------|
-| `bin` | Pre-built binary/binaries (`.bz2` -> `~/.local/bin`) |
-| `lib-bundle` | Group of shared libraries (`.bz2` -> `~/.local/lib64`) |
+| `bin` | Pre-built binary/binaries (`.bz2` -> `<prefix>/bin`) |
+| `lib-bundle` | Group of shared libraries (`.bz2` -> `<prefix>/lib64`) |
 | `runtime` | Runtime archive (`.tar.bz2` -> unpacked destination) |
-| `typelib` | GObject `.typelib` file -> `~/.local/lib/girepository-1.0/` |
+| `typelib` | GObject `.typelib` file -> `<prefix>/lib/girepository-1.0/` |
 | `python-base` | Portable Python archive, installed via bundled `install.sh` |
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
 | `env` | Per-user config bundle (shell rc, editor configs) |
@@ -42,12 +42,12 @@ There is no "default install" -- the user always names packages or groups explic
 Entries whose keys start with `@` carry a `members` list and expand recursively
 with cycle detection. Synthetic groups computed at runtime: `@shared` (every
 non-env, non-optional package), `@shared-all` (`@shared` plus the `optional:
-true` packages -- the full shared tree), `@envs` (Bash config only), and
+true` packages -- the full shared tree), `@envs` (Bash + tcsh config), and
 `@envs-all` (every env config bundle). There is no bare `all` keyword: it
 meant "every non-optional package", the opposite of the `-all` suffix used by
-`@shared-all` / `@envs-all` ("+ optionals"), so it was removed. Use
-`@engineering-loadout` for the curated bundled set, or `@shared-all
-@envs-all` for truly everything.
+`@shared-all` / `@envs-all` ("+ optionals"), so it was removed. The former
+curated mega-group is retired: the resolver raises a loud error naming
+`@shared-all` (bundled tools) followed by `@envs-all` (per-user shell configs).
 
 ### Dependencies
 
@@ -90,9 +90,10 @@ meant "every non-optional package", the opposite of the `-all` suffix used by
 # Selection (positional PKG args + --skip)
 ./loadout install octave                        # single package; deps auto-pulled
 ./loadout install @gui-suite                    # group; expands recursively
-./loadout install @engineering-loadout          # curated bundled set
-./loadout install @engineering-loadout --skip @fonts-all      # drop all font packages
-./loadout install @engineering-loadout --skip tldr-data       # skip tldr cache install
+./loadout install @shared-all                  # all bundled tools (shared tree)
+./loadout install @envs-all                    # all per-user config bundles
+./loadout install @shared-all --skip @fonts-all      # drop all font packages
+./loadout install @shared-all --skip tldr-data       # skip tldr cache install
 ./loadout install @core-cli vim                 # exact set (deps still walked)
 ./loadout install gvim --no-deps                # skip dep walking
 ./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
@@ -120,10 +121,16 @@ the repo is identical to setting it post-install. Avoids NFS lock issues on runn
 binaries.
 
 Platform directory: `payload/el8.x86_64.glibc2p28`
-- `bin/*.bz2` -> `~/.local/bin`
-- `lib64/*.bz2` -> `~/.local/lib64`
+- `bin/*.bz2` -> `<prefix>/bin`
+- `lib64/*.bz2` -> `<prefix>/lib64`
 - `runtime/*.tar.bz2` -> unpacked per runtime installer function
 - `wheels/` -> offline PyPI wheels for `uv tool install`
+
+Shared artifacts land under the install root `<prefix>` (default
+`$XDG_DATA_HOME/loadout`, i.e. `~/.local/share/loadout`; `~/.local` only in
+legacy `dest_dir = "~"` HOME mode). Per-user env config, caches, fonts and
+Neovim data always land under the real `$HOME`. See `docs/INSTALLATION.md`
+for the resolution order and the `prefer`/`PATH` contract.
 
 Never bundle: `libc.so.6`, `libm.so.6`, `libpthread.so.0`, `libdl.so.2` (glibc --
 must match system's `ld-linux.so.2`), `libGL.so.1`/`libGLX.so.0` (OpenGL dispatcher --
@@ -192,7 +199,7 @@ interactive installs offer to migrate it.
 `./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
 interpreter in this order:
 
-1. `~/.local/bin/python3.14` -- already installed via
+1. `<prefix>/bin/python3.14` -- already installed via
    `loadout install portable-python`.
 2. `<repo>/.loadout-bootstrap/bin/python3.14` -- warm bootstrap cache from a
    prior run.

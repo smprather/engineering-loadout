@@ -9,9 +9,9 @@ A self-contained, offline-first toolkit for **engineering work environments**.
 - All built on AlmaLinux 8.10 (RHEL 8 clone), glibc 2.28
   - Compatible with RHEL 9.x and beyond
 
-Drop the release tarball onto a locked-down workstation, run one command,
-and you have modern Linux tooling and sane configurations in your `$HOME` --
-no installer, no admin, no internet.
+Drop the release tarball onto a locked-down workstation, run two commands,
+and you have modern Linux tooling and sane configurations under your `$HOME`
+-- no installer, no admin, no internet.
 
 ---
 
@@ -28,13 +28,39 @@ binary, library, font, and config file ready to install:
 tar xzf engineering-loadout-v*.tar.gz
 cd engineering-loadout-v*/
 ./tools/fetch-stash                        # Neovim plugins -- see below
-./loadout install @engineering-loadout
+./loadout install @shared-all              # bundled tools, fonts, runtimes
+./loadout install @envs-all                # per-user shell/editor configs
 ```
 
-That installs the `@engineering-loadout` group -- a curated set of
-command-line tools, editors, fonts, and configuration files -- into
-`~/.local` and `~/.config`. Reload your shell with `exec bash` when it
-finishes.
+The first install puts the shared tree -- command-line tools, editors,
+runtimes, and data -- under `$XDG_DATA_HOME/loadout`
+(`~/.local/share/loadout`); the second writes the per-user shell and editor
+configuration under `$HOME/.config`. Reload your shell with `exec bash` when
+the second finishes. See [Installation](docs/INSTALLATION.md) for the layout,
+`PATH` rules, and how to move an existing install.
+
+### Where things go
+
+A default install keeps two trees separate. The shared payload (binaries,
+libraries, runtimes, data) lands under the install root --
+`$XDG_DATA_HOME/loadout`, i.e. `~/.local/share/loadout` -- while per-user
+configuration, caches, and Neovim state always stay under the real `$HOME`
+(`~/.config`, `~/.cache`, `~/.local/share/nvim`). Configuration never moves
+into the install root, even for a split or `--dest-dir` deployment.
+
+The root is chosen in this order: an explicit `--dest-dir DIR` on the command
+line, then `dest_dir` in `~/.config/engineering-loadout/config.toml`, then the
+XDG default. Setting `dest_dir = "~"` restores the legacy `$HOME/.local`
+layout. A root that is not `$HOME` is used verbatim as a prefix (`<root>/bin`,
+`<root>/share`); only a `$HOME` root keeps the dotted `.local` level.
+
+On `PATH`, the shared `bin` is **appended** so the distribution's own copies
+keep priority, and `<prefix>/prefer` is **prepended**: the installer writes a
+small exec shim there for each explicitly preferred tool. `env-tmux` prefers
+the bundled `tmux`; add `prefer = ["firefox"]` or `prefer_off = ["tmux"]` to
+`config.toml` to change that. See
+[Installation](docs/INSTALLATION.md#migrating-an-existing-install) if you are
+moving from an older `~/.local` install.
 
 ### The Neovim plugin stash is a second download
 
@@ -76,11 +102,12 @@ Unchanged files are skipped, so re-runs are quick.
 Name packages or groups the same way `dnf` or `apt` works:
 
 ```bash
-./loadout install @engineering-loadout                    # the curated set
+./loadout install @shared-all                             # all bundled tools (shared tree)
+./loadout install @envs-all                               # all per-user config bundles
 ./loadout install octave                                  # one package
 ./loadout install parity-plot                             # parity-plot CLI + local designer
 ./loadout install @gui-suite                              # a group
-./loadout install @engineering-loadout --skip @fonts-all  # curated set minus fonts
+./loadout install @shared-all --skip @fonts-all           # all tools minus fonts
 ./loadout list                                            # browse packages
 ./loadout list vim helix                                  # name matches either filter
 ./loadout list --tag editor                               # filter by tag
@@ -114,12 +141,15 @@ Name packages or groups the same way `dnf` or `apt` works:
 is fetched at install time. Ship it to an air-gapped workstation and it just
 works.
 
-**No root.** Everything lands in `$HOME` (or `--dest-dir`). No package
-manager, no `sudo`, no IT ticket.
+**No root.** Everything lands in a user-owned tree -- by default
+`~/.local/share/loadout` for the shared payload plus `$HOME/.config` for
+configuration, or a `--dest-dir` prefix. No package manager, no `sudo`, no IT
+ticket.
 
 Shared-tree installs stay relocatable: bundled runtime/data assets live under
-`~/.local/share` (or the staged prefix) and shell init exports the paths
-needed for discovery, including `TERMINFO_DIRS` for bundled `st` terminfo.
+the install root (`<prefix>/share`, or the staged prefix) and shell init
+exports the paths needed for discovery, including `TERMINFO_DIRS` for bundled
+`st` terminfo.
 
 **Multi-platform Linux.** RedHat 7 / 8 / 9, Suse, x86_64 / ARM / PowerPC.
 Windows and macOS are not supported (the platform vocabulary was retired
@@ -166,7 +196,7 @@ developer machine accumulates packages that mask missing-dependency bugs.
 For maximum Linux binary coverage, run the AlmaLinux 8.10 container smoke. It
 uses a clean base image, copies this checkout inside the container, installs
 `@shared` into a temp `--dest-dir`, and probes every installed executable with
-only the staged `local/bin` plus a basic system PATH. The container does not
+only the staged `<dest>/bin` plus a basic system PATH. The container does not
 install Python for the harness; it uses `./loadout` to bootstrap the bundled
 Python 3.14 first. The smoke reports deliberate host contracts as skips: `cloc`
 needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and OpenGL GUI apps need
@@ -187,12 +217,12 @@ tests/prebuilt-binaries-almalinux8 --full   # + doctor, resolvers, unit tests,
 
 For the shared-tree deployment model, run the split install smoke. It installs
 `@shared` into a temp non-home tree, installs `@envs` into a separate temp
-`HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>/local`, then checks Bash
-startup, shared `PATH`, terminfo, WezTerm completions, and core tool startup.
-`@envs` installs Bash configuration only (plus its Starship recommendation);
-install other config bundles explicitly or use `@envs-all` when every shell
-and editor config is intentional. Env installs copy config files into `~/.config`; old symlinked config
-subdirectories that point back into the repo are replaced with real
+`HOME` with `LOADOUT_CFG_SHARED_PREFIX=<shared>`, then checks Bash startup,
+shared `PATH`, terminfo, WezTerm completions, and core tool startup. `@envs`
+installs the Bash and tcsh configuration; install other config bundles
+explicitly or use `@envs-all` when every shell and editor config is
+intentional. Env installs copy config files into `~/.config`; old symlinked
+config subdirectories that point back into the repo are replaced with real
 directories so installs cannot mutate the checkout.
 
 ```bash
@@ -204,8 +234,10 @@ tests/install-split-shared-envs
 ## Bundled Packages
 
 Each row is a package you can install by name with
-`./loadout install <name>`. Groups (`@engineering-loadout`, `@gui-suite`,
-`@core-cli`, ...) bundle related packages so you can install many at once.
+`./loadout install <name>`. Groups (`@shared-all`, `@envs-all`, `@gui-suite`,
+`@core-cli`, ...) bundle related packages so you can install many at once. The
+older curated mega-group is retired; a resolver error points at `@shared-all`
+plus `@envs-all` if you type it.
 Run `./loadout list` to see every package and every group, or
 `./loadout list --groups` to see just the groups.
 Add one or more positional filters to match package or group names
@@ -382,8 +414,11 @@ Python processes, including notebook kernels; already-running processes retain
 the old mapped library. Verify with:
 
 ```bash
-~/.local/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+<prefix>/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
 ```
+
+(`<prefix>` is the install root: `~/.local/share/loadout` by default, or
+`~/.local` in legacy `dest_dir = "~"` mode.)
 
 ### Parity plots
 
@@ -408,7 +443,9 @@ GPU-accelerated apps such as WezTerm also pull `mesa3d_libs`, which installs
 Mesa's EGL vendor library, GBM, DRI drivers, and LLVM runtime without bundling
 host display-driver dispatchers like `libGL.so.1`. The WezTerm bundle keeps
 `wezterm`, `wezterm-gui`, and `wezterm-mux-server` as sibling real binaries
-under `~/.local/lib/wezterm/`, with PATH wrappers in `~/.local/bin`. Its zsh
+under `<prefix>/lib/wezterm/`, with PATH wrappers in `<prefix>/bin` (`<prefix>`
+defaults to `~/.local/share/loadout`; `~/.local` in legacy `dest_dir = "~"`
+mode). Its zsh
 completion is installed by `env-zsh`; bash completion can be generated with
 `wezterm shell-completion --shell bash`. WezTerm *shell integration* (semantic
 zones / OSC 7 cwd / user vars -- distinct from completion) is vendored at
@@ -422,15 +459,18 @@ escape sequences or stall in `wezterm set-working-directory`.
 ### Python
 
 [Python](https://www.python.org) **3.14.4** -- a portable Python build that
-installs to `~/.local`. Use `python3.14` and `pip3.14` to pin this build.
+installs under the install root (`<prefix>/bin/python3.14`, default
+`~/.local/share/loadout/bin`). Use `python3.14` and `pip3.14` to pin this build.
 
 ---
 
 ## Neovim -- 326 Offline Tree-sitter Parsers
 
 The full `nvim-treesitter` parser registry is bundled and installs offline
-to `~/.local/share/nvim/tree-sitter-parsers/`. All 326 languages work out
-of the box, no internet required. Default LSP integrations are command-guarded,
+into the shared tree at `<prefix>/share/nvim/tree-sitter-parsers/`; Neovim
+resolves it through `paths.lua`, which prefers a per-user copy under
+`~/.local/share/nvim/` when one exists. All 326 languages work out of the box,
+no internet required. Default LSP integrations are command-guarded,
 so installing only `env-nvim` does not produce errors for optional tools you did
 not install.
 

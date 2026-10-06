@@ -170,7 +170,7 @@ an explicit 10.x client is needed. Configure signing once:
 ```sh
 git config gpg.format ssh
 git config user.signingkey ~/.ssh/<key>.pub
-git config gpg.ssh.program ~/.local/bin/ssh-keygen   # the bundled 10.4p1, not stock 8.0p1
+git config gpg.ssh.program ~/.local/share/loadout/bin/ssh-keygen   # the bundled 10.4p1, not stock 8.0p1
 ```
 
 For one-off GitHub transport with the bundled client, use

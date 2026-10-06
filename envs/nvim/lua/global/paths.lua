@@ -1,10 +1,13 @@
 -- Resolve nvim data dirs across a split shared/per-user deployment.
 --
 -- The loadout can be deployed two ways:
---   * everything in $HOME              (a normal `install @engineering-loadout`)
+--   * a default install: the shared tree at the install root (default
+--     ~/.local/share/loadout) plus per-user config under $HOME
+--     (`install @shared-all` then `install @envs-all`)
 --   * a shared read-only tree + a per-user $HOME
 --     (`install @shared-all --dest-dir <tree>` then `install @envs` with
---      LOADOUT_CFG_SHARED_PREFIX=<tree>/local)
+--      LOADOUT_CFG_SHARED_PREFIX=<tree> -- the tree is a plain prefix, with no
+--      `local/` level)
 --
 -- nvim always resolves its data from stdpath("data") = $HOME/.local/share/nvim, so
 -- anything installed into the shared tree is invisible to it unless we look there
