@@ -50,7 +50,7 @@ def make_repo(tmp_dir):
 
 
 def user_fonts_dir(home):
-    return os.path.join(home, install._local_name(home), "share", "fonts")
+    return os.path.join(install._local_root(home), "share", "fonts")
 
 
 def test_split_zip_rejoin():

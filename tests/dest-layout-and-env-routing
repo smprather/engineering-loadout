@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""dest-layout-and-env-routing -- the two-root path model.
+
+`_local_root()` is the single place that decides where the shared tree lives:
+HOME-mode roots keep the dotted `.local`, every other root is a plain prefix
+and the `.local` component is dropped (not renamed to an un-dotted `local/`).
+`_resolve_install_to()` applies the same rule when anchoring registry
+`install_to` values.
+
+Task 3 extends this file with the install-selection routing cases (env-only vs
+mixed, explicit flag vs config).
+"""
+
+import importlib.util
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VENDOR = os.path.join(REPO, "installer_vendor")
+
+
+def load_module(home):
+    """Import loadout_main.py with HOME pointed at `home`."""
+    os.environ["HOME"] = home
+    for path in (REPO, VENDOR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    spec = importlib.util.spec_from_file_location("loadout_main_under_test", os.path.join(REPO, "loadout_main.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check(label, got, want):
+    if got != want:
+        print(f"  FAIL  {label}\n          got:  {got}\n          want: {want}")
+        return 1
+    print(f"  PASS  {label}")
+    return 0
+
+
+def main():
+    failures = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+        lm = load_module(home)
+        prefix = os.path.join(tmp, "prefix")
+
+        # HOME mode: the tree is $HOME/.local.
+        failures += check("HOME root -> .local tree", lm._local_root(home), os.path.join(home, ".local"))
+        failures += check(
+            "HOME root keeps .local in install_to",
+            lm._resolve_install_to("~/.local/share/helix", home),
+            os.path.join(home, ".local", "share", "helix"),
+        )
+        failures += check(
+            "HOME root, bare .local",
+            lm._resolve_install_to("~/.local", home),
+            os.path.join(home, ".local"),
+        )
+
+        # Prefix mode: the root IS the tree; .local is dropped.
+        failures += check("prefix root is the tree", lm._local_root(prefix), prefix)
+        failures += check(
+            "prefix drops .local component",
+            lm._resolve_install_to("~/.local/share/helix", prefix),
+            os.path.join(prefix, "share", "helix"),
+        )
+        failures += check("prefix, bare .local", lm._resolve_install_to("~/.local", prefix), prefix)
+        failures += check(
+            "prefix keeps non-.local components",
+            lm._resolve_install_to("~/.config/tmux", prefix),
+            os.path.join(prefix, ".config", "tmux"),
+        )
+
+        # Absolute values pass through untouched.
+        failures += check("absolute install_to passthrough", lm._resolve_install_to("/opt/abs", prefix), "/opt/abs")
+
+    print(f"\n{'OK' if not failures else 'FAILED'}: dest-layout-and-env-routing")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

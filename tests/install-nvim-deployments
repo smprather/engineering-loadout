@@ -62,6 +62,7 @@ nvim_offline() {
 
 # ---------------------------------------------------------------- shape 1: HOME
 H1="$TMP/home1"
+P1="$H1/.local/share/loadout"
 mkdir -p "$H1"
 # git-nvim is included on purpose: the stash needs git to clone from, and the Tier 3
 # container (stock almalinux:8.10) has NO system git. That makes the container the exact
@@ -71,16 +72,16 @@ HOME="$H1" "$REPO/loadout" install -y nvim env-nvim nvim-plugin-stash treesitter
     --no-backup >"$single_log" 2>&1
 assert_lazy_sync_ran "$single_log" "single-HOME"
 
-[ -e "$H1/.local/bin/git" ] \
+[ -e "$P1/bin/git" ] \
     && fail "single-HOME: git-nvim put a git on the user's PATH -- it would shadow the corp git"
 
 [ -d "$H1/.local/share/nvim/lazy/lazy.nvim" ] || fail "single-HOME: lazy.nvim not cloned into \$HOME"
-[ -d "$H1/.local/share/nvim/loadout/vendor/plugin-stash" ] \
+[ -d "$P1/share/nvim/loadout/vendor/plugin-stash" ] \
     || fail "single-HOME: plugin stash not installed (its install_to was a silent no-op once)"
 [ -d "$H1/.local/share/nvim/lazy/snacks.nvim/.git" ] \
     || fail "single-HOME: plugins are not real git repos -- :Lazy update would be a no-op"
 
-out=$(nvim_offline "$H1" "$H1/.local/bin" "")
+out=$(nvim_offline "$H1" "$P1/bin" "$P1")
 echo "$out" | grep -q "lazy.nvim unavailable" \
     && fail "single-HOME: nvim fell back to the git-clone bootstrap:
 $out"
@@ -101,21 +102,21 @@ mkdir -p "$SHARED" "$H2"
 "$REPO/loadout" install -y nvim nvim-plugin-stash treesitter-parsers git-nvim \
     --dest-dir "$SHARED" --no-backup >/dev/null 2>&1
 
-[ -e "$SHARED/local/bin/git" ] \
+[ -e "$SHARED/bin/git" ] \
     && fail "split: git-nvim put a git on the shared PATH -- it would shadow the corp git"
-[ -x "$SHARED/local/lib/loadout-git/bin/git" ] \
+[ -x "$SHARED/lib/loadout-git/bin/git" ] \
     || fail "split: git-nvim did not install its private git"
 
-[ -d "$SHARED/local/share/nvim/loadout/vendor/plugin-stash" ] \
+[ -d "$SHARED/share/nvim/loadout/vendor/plugin-stash" ] \
     || fail "split: plugin stash missing from the shared tree"
-[ -d "$SHARED/local/share/nvim/tree-sitter-parsers" ] \
+[ -d "$SHARED/share/nvim/tree-sitter-parsers" ] \
     || fail "split: parsers missing from the shared tree"
-[ -d "$SHARED/local/share/nvim/lazy" ] \
+[ -d "$SHARED/share/nvim/lazy" ] \
     && fail "split: lazy/ was seeded into the SHARED tree -- it is per-user state, and nvim never looks there"
 
 # The per-user run copies the plugins it needs out of the shared catalog into $HOME.
 split_env_log="$TMP/split-env-install.log"
-HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED" \
     "$REPO/loadout" install -y env-nvim --no-backup >"$split_env_log" 2>&1
 assert_lazy_sync_ran "$split_env_log" "split"
 
@@ -124,7 +125,7 @@ assert_lazy_sync_ran "$split_env_log" "split"
 [ -d "$H2/.local/share/nvim/tree-sitter-parsers" ] \
     && fail "split: 251 MB of parsers were copied per-user; they should stay shared"
 
-out=$(nvim_offline "$H2" "$SHARED/local/bin" "$SHARED/local")
+out=$(nvim_offline "$H2" "$SHARED/bin" "$SHARED")
 echo "$out" | grep -q "lazy.nvim unavailable" \
     && fail "split: nvim fell back to the git-clone bootstrap (the reported air-gapped failure):
 $out"
@@ -143,8 +144,8 @@ spice_deck="$H2/spice-guard.sp"
 printf '* smoke\n.end\n' > "$spice_deck"
 out=$(
     HOME="$H2" \
-    LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
-    PATH="$SHARED/local/bin" \
+    LOADOUT_CFG_SHARED_PREFIX="$SHARED" \
+    PATH="$SHARED/bin" \
     https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 \
     GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true \
     /usr/bin/timeout 120 nvim --headless -n "$spice_deck" -c 'lua vim.defer_fn(function()
@@ -164,8 +165,8 @@ ts_file="$H2/ts-guard.ts"
 printf 'const x: number = 1;\n' > "$ts_file"
 out=$(
     HOME="$H2" \
-    LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
-    PATH="$SHARED/local/bin" \
+    LOADOUT_CFG_SHARED_PREFIX="$SHARED" \
+    PATH="$SHARED/bin" \
     https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 \
     GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true \
     /usr/bin/timeout 120 nvim --headless -n "$ts_file" -c 'lua vim.defer_fn(function()
@@ -213,9 +214,9 @@ echo 'return { { "folke/flash.nvim", enabled = true, event = "VeryLazy" } }' \
 # shallow local mirror: it hangs forever. init.lua sets git.filter=false when a stash is
 # present. If that regresses, this step hangs -- so it is bounded by a timeout and the
 # failure is loud.
-HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED/local" \
+HOME="$H2" LOADOUT_CFG_SHARED_PREFIX="$SHARED" \
     https_proxy=http://127.0.0.1:9 http_proxy=http://127.0.0.1:9 GIT_TERMINAL_PROMPT=0 \
-    PATH="$SHARED/local/bin:/usr/bin:/bin" \
+    PATH="$SHARED/bin:/usr/bin:/bin" \
     timeout 180 nvim --headless "+Lazy! install" -c 'qa!' >/dev/null 2>&1 || true
 
 [ -d "$H2/.local/share/nvim/lazy/flash.nvim" ] \

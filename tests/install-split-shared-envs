@@ -45,7 +45,7 @@ tmp_root=${TMPDIR:-/tmp}
 seed=${LOADOUT_TEST_SHARED_SEED:-}
 if [[ -n "$seed" ]]; then
     shared_root=$seed
-    [[ -d "$shared_root/local/bin" ]] || { echo "ERROR: seeded shared tree missing @shared install: $shared_root" >&2; exit 1; }
+    [[ -d "$shared_root/bin" ]] || { echo "ERROR: seeded shared tree missing @shared install: $shared_root" >&2; exit 1; }
 else
     shared_root=$(mktemp -d "$tmp_root/loadout-shared-root.XXXXXX")
 fi
@@ -53,7 +53,7 @@ test_home=$(mktemp -d "$tmp_root/loadout-env-home.XXXXXX")
 test_cache=$(mktemp -d "$tmp_root/loadout-env-cache.XXXXXX")
 test_state=$(mktemp -d "$tmp_root/loadout-env-state.XXXXXX")
 test_run=$(mktemp -d "$tmp_root/loadout-split-run.XXXXXX")
-shared_prefix="$shared_root/local"
+shared_prefix="$shared_root"
 basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
 
 cleanup() {

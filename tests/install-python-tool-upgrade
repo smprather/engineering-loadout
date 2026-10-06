@@ -30,7 +30,7 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tmp_root=${TMPDIR:-/tmp}
 test_home=$(mktemp -d "$tmp_root/loadout-uvtool-home.XXXXXX")
 dest_dir=$(mktemp -d "$tmp_root/loadout-uvtool-dest.XXXXXX")
-local_prefix="$dest_dir/local"
+local_prefix="$dest_dir"
 
 cleanup() { rm -rf "$test_home" "$dest_dir"; }
 trap cleanup EXIT

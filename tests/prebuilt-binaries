@@ -2560,12 +2560,12 @@ def main(keep, no_cache):
         # The install tree is NOT relocatable: the installer bakes absolute
         # paths into some artifacts (taplo's schema catalog, tealdeer's cache
         # dir), so a copied tree breaks. Instead the tree lives permanently at
-        # install_cache/local and the probe scratch dir symlinks to it.
+        # install_cache and the probe scratch dir symlinks to it.
         tree = os.path.join(tmpdir, "local")
         cache_valid = (
             not no_cache
             and os.path.isfile(sidecar)
-            and os.path.isdir(os.path.join(install_cache, "local", "bin"))
+            and os.path.isdir(os.path.join(install_cache, "bin"))
             and subprocess.run(
                 [sys.executable, fp_script, "--fast", "--check", sidecar, "--roots", *fp_roots],
                 stdout=subprocess.DEVNULL,
@@ -2601,7 +2601,7 @@ def main(keep, no_cache):
                 print(f"Install failed (exit {proc.returncode}):\n{install_out}")
                 sys.exit(1)
 
-        os.symlink(os.path.join(install_cache, "local"), tree)
+        os.symlink(install_cache, tree)
 
         bin_dir = os.path.join(tree, "bin")
         if not os.path.isdir(bin_dir):

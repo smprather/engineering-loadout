@@ -37,7 +37,7 @@ fi
 tmp_root=${TMPDIR:-/tmp}
 test_home=$(mktemp -d "$tmp_root/loadout-xdesk-home.XXXXXX")
 dest_dir=$(mktemp -d "$tmp_root/loadout-xdesk-dest.XXXXXX")
-local_prefix="$dest_dir/local"
+local_prefix="$dest_dir"
 
 # State for the --keep regression test: populated when we bring up a server
 # we expect to outlive the launcher, and torn down by the EXIT trap so a

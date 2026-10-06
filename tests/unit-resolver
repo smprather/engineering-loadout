@@ -6,7 +6,7 @@ Covers expand_groups (incl. the @shared/@shared-all/@envs synthetics, the
 'all' keyword, optional gating, nesting, and cycle detection), walk_depends
 (forbidden/force), walk_recommends, filter_by_platform,
 resolve_tool_selection, _tool_bin_sets/_tool_lib_sets, _parse_namelist,
-_local_name, and _resolve_install_to.
+_local_root, and _resolve_install_to.
 
 Everything runs against small synthetic registries -- no filesystem payloads,
 no network. Must run under the bundled Python 3.14 (loadout_main.py uses
@@ -317,13 +317,13 @@ def test_get_version_release_stamp(m):
         )
 
 
-def test_local_name_and_install_to(m):
+def test_local_root_and_install_to(m):
     home = os.path.expanduser("~")
-    check("_local_name real HOME -> .local", m._local_name(home) == ".local")
-    check("_local_name dest-dir -> local", m._local_name("/srv/loadout/2026") == "local")
+    check("_local_root real HOME -> $HOME/.local", m._local_root(home) == os.path.join(home, ".local"))
+    check("_local_root dest-dir -> prefix itself", m._local_root("/srv/loadout/2026") == "/srv/loadout/2026")
 
     r = m._resolve_install_to("~/.local/share/helix", "/srv/root")
-    check("install_to maps .local -> local for dest-dir", r == "/srv/root/local/share/helix")
+    check("install_to drops .local for dest-dir", r == "/srv/root/share/helix")
     r = m._resolve_install_to("~/.local", home)
     check("install_to keeps .local for real HOME", r == os.path.join(home, ".local"))
     r = m._resolve_install_to("~/.config/tealdeer", "/srv/root")
@@ -378,7 +378,7 @@ def main():
         test_uv_tool_spec,
         test_list_name_filters,
         test_get_version_release_stamp,
-        test_local_name_and_install_to,
+        test_local_root_and_install_to,
         test_tmpdir_respected_for_global_temp_state,
     ):
         print(f"-- {fn.__name__}")

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# dest-dir routing: config/cache never enter the install root.
+#
+# Four shapes:
+#   1. env-only, default root        -> per-user configs under $HOME
+#   2. env-only, explicit --dest-dir -> staged HOME (tests/previews)
+#   3. mixed (env + binary), explicit --dest-dir
+#                                    -> configs under $HOME, binaries in the dest tree
+#   4. config.toml dest_dir + env-only
+#                                    -> ignored with one note, configs under $HOME
+#
+# The env package is env-editorconfig: one file plus one symlink, no payload
+# weight, so this runs in seconds.
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+work=$(mktemp -d "$tmp_root/loadout-env-routing.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
+
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+run_install() { # $1 = HOME, rest = install args
+    local home=$1
+    shift
+    env -i \
+        HOME="$home" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        "$repo_dir/loadout" install -y --no-backup "$@"
+}
+
+# 1. env-only, default root: configs under HOME, nothing config-shaped in the root.
+h1="$work/home1"
+mkdir -p "$h1"
+run_install "$h1" env-editorconfig >"$work/case1.log" 2>&1 || fail "case 1 install failed:
+$(cat "$work/case1.log")"
+[ -f "$h1/.config/editorconfig/editorconfig" ] || fail "case 1: config missing from HOME"
+[ -L "$h1/.editorconfig" ] || fail "case 1: entrypoint symlink missing from HOME"
+[ ! -e "$h1/.local/share/loadout/.config" ] || fail "case 1: config was written into the install root"
+
+# 2. env-only + explicit flag: staging, the whole HOME goes to the given root.
+h2="$work/home2"
+st2="$work/stage2"
+mkdir -p "$h2"
+run_install "$h2" env-editorconfig --dest-dir "$st2" >"$work/case2.log" 2>&1 || fail "case 2 install failed:
+$(cat "$work/case2.log")"
+[ -f "$st2/.config/editorconfig/editorconfig" ] || fail "case 2: staged config missing"
+[ -L "$st2/.editorconfig" ] || fail "case 2: staged entrypoint symlink missing"
+[ ! -e "$h2/.config/editorconfig" ] || fail "case 2: staging leaked config into HOME"
+
+# 3. mixed + explicit flag: binaries in the dest tree, configs in HOME.
+h3="$work/home3"
+st3="$work/stage3"
+mkdir -p "$h3"
+run_install "$h3" env-editorconfig rg --dest-dir "$st3" >"$work/case3.log" 2>&1 || fail "case 3 install failed:
+$(cat "$work/case3.log")"
+[ -x "$st3/bin/rg" ] || fail "case 3: binary missing from the dest tree (or nested under local/)"
+[ -f "$h3/.config/editorconfig/editorconfig" ] || fail "case 3: config should stay under HOME"
+[ ! -e "$st3/.config/editorconfig" ] || fail "case 3: config should not be staged for a mixed install"
+
+# 4. config.toml dest_dir + env-only: ignored, with one note.
+h4="$work/home4"
+ignored="$work/ignored-root"
+mkdir -p "$h4/.config/engineering-loadout"
+printf 'dest_dir = "%s"\n' "$ignored" >"$h4/.config/engineering-loadout/config.toml"
+run_install "$h4" env-editorconfig >"$work/case4.log" 2>&1 || fail "case 4 install failed:
+$(cat "$work/case4.log")"
+grep -q 'note: env bundles always install under \$HOME; ignoring dest_dir=' "$work/case4.log" \
+    || fail "case 4: missing the ignore note"
+[ -f "$h4/.config/editorconfig/editorconfig" ] || fail "case 4: config missing from HOME"
+[ ! -e "$ignored" ] || fail "case 4: the ignored config dest_dir was created"
+
+echo "env-routing-dest-dir: OK"

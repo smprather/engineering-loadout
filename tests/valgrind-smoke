@@ -29,7 +29,7 @@ tmp_root=${TMPDIR:-/tmp}
 test_home=$(mktemp -d "$tmp_root/loadout-valgrind-home.XXXXXX")
 test_cache=$(mktemp -d "$tmp_root/loadout-valgrind-cache.XXXXXX")
 test_state=$(mktemp -d "$tmp_root/loadout-valgrind-state.XXXXXX")
-local_prefix="$test_home/.local"
+local_prefix="$test_home/.local/share/loadout"
 
 cleanup() {
     rm -rf "$test_home" "$test_cache" "$test_state"

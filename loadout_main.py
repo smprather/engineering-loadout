@@ -686,6 +686,9 @@ class ContentVerificationError(Exception):
 
 _VERIFY_CONTENT = True  # set False by install/upgrade --no-verify
 _ALLOW_ONLINE_PLUGIN_SYNC = False  # set True by install/upgrade --allow-online-plugin-sync
+# Per-install roots, set by cmd_install: SimpleNamespace(user_home, install_root,
+# env_home, shared_prefix, staging). None outside an install (helper fallbacks).
+_INSTALL_PATHS = None
 _CONTENT_MANIFEST = None  # {repo-rel-path: sha256}; lazy-loaded
 _CONTENT_MANIFEST_REPO = None
 
@@ -884,29 +887,36 @@ class InstallRefused(Exception):
     pass
 
 
-def _local_name(home):
-    """Name of the per-user tree under the install root: '.local' when the
-    root is the real $HOME, 'local' otherwise (an explicit --dest-dir tree).
+def _is_home_root(home):
+    """True when `home` is the real user HOME (the legacy layout).
 
-    Dot-hiding a 'local' dir only makes sense inside a user's HOME; a staged or
-    shared deployment under --dest-dir is a normal filesystem location (like
-    /usr/local), so it uses an un-dotted 'local'. '.config'/'.cache' are left
-    dotted regardless -- they are only written for HOME installs.
+    A failed realpath means we cannot prove it is a prefix tree, so treat it as
+    HOME: keeping '.local' is the conservative choice (it never places files at
+    an unexpected depth).
     """
     try:
-        if os.path.realpath(home) == os.path.realpath(os.path.expanduser("~")):
-            return ".local"
+        return os.path.realpath(home) == os.path.realpath(os.path.expanduser("~"))
     except OSError:
-        return ".local"
-    return "local"
+        return True
+
+
+def _local_root(home):
+    """Tree holding bin/lib/share under an install root.
+
+    HOME keeps the dotted '.local' (where per-user installs have always lived).
+    Every other root is a plain prefix (like /usr/local), so the '.local'
+    component is dropped rather than renamed to an un-dotted 'local/'.
+    """
+    return os.path.join(home, ".local") if _is_home_root(home) else home
 
 
 def _resolve_install_to(raw, home):
     """Anchor a packages.json 'install_to' (e.g. '~/.local/share/helix') to the
-    install root, mapping a leading '.local' component to _local_name(home).
+    install root.
 
-    Replaces the old crude `raw.replace('~', home)` so --dest-dir trees land
-    under 'local/...'. Absolute install_to values pass through unchanged.
+    In HOME mode a leading '.local' component stays; for prefix roots it is
+    dropped, so '~/.local/x' resolves to '<prefix>/x'. Absolute values pass
+    through unchanged.
     """
     if raw.startswith("~"):
         rel = raw[1:].lstrip("/")
@@ -915,8 +925,8 @@ def _resolve_install_to(raw, home):
     else:
         rel = raw
     parts = [p for p in rel.split("/") if p]
-    if parts and parts[0] == ".local":
-        parts[0] = _local_name(home)
+    if parts and parts[0] == ".local" and not _is_home_root(home):
+        parts.pop(0)
     return os.path.join(home, *parts)
 
 
@@ -1907,8 +1917,8 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
 
 def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     root_dir = os.path.join(repo_dir, PAYLOAD_DIR)
-    dest_bin_dir = os.path.join(home, _local_name(home), "bin")
-    dest_lib64_dir = os.path.join(home, _local_name(home), "lib64")
+    dest_bin_dir = os.path.join(_local_root(home), "bin")
+    dest_lib64_dir = os.path.join(_local_root(home), "lib64")
 
     # Single-package selection (e.g. `loadout install ruff`): report this
     # phase's summary row under the package name instead of "pre-built
@@ -2122,7 +2132,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     if _bins_unchanged or _libs_unchanged:
         _unchanged_note = f" ({_bins_unchanged} binaries + {_libs_unchanged} libraries already current, skipped)"
     print(
-        f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {home}/{_local_name(home)}/{_unchanged_note}"
+        f"  Installed {_bin_count} binaries, {_lib_count} libraries from {src_dir} -> {_local_root(home)}/{_unchanged_note}"
     )
     blocked_all = blocked_deferred | set(blocked_failed.keys())
     if blocked_deferred:
@@ -2175,7 +2185,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
             record_result("portable Python", "FAIL", "no install.sh")
             return
 
-        prefix = os.path.join(home, _local_name(home))
+        prefix = _local_root(home)
         cmd = ["/bin/sh", installer, "--prefix", prefix, "--force", "--no-test"]
         print("  running: {}".format(" ".join(cmd)))
         proc = run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -2193,7 +2203,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         shutil.rmtree(tmp_dir)
 
     record_result("portable Python", "OK", "")
-    print(f"  Installed portable Python -> {home}/{_local_name(home)}/")
+    print(f"  Installed portable Python -> {_local_root(home)}/")
 
 
 def install_typelibs(repo_dir, home, selected_tools=None):
@@ -2220,7 +2230,7 @@ def install_typelibs(repo_dir, home, selected_tools=None):
         record_result("GObject typelibs", "SKIP", "no typelib files")
         return
 
-    dest_dir = os.path.join(home, _local_name(home), "lib", "girepository-1.0")
+    dest_dir = os.path.join(_local_root(home), "lib", "girepository-1.0")
     ensure_dir(dest_dir, "GObject typelibs")
 
     _p = _ItemProgress("GObject typelibs", typelib_files)
@@ -2591,8 +2601,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no wheels directory")
         return
 
-    uv_bin = os.path.join(home, _local_name(home), "bin", "uv")
-    python_bin = os.path.join(home, _local_name(home), "bin", "python3.14")
+    uv_bin = os.path.join(_local_root(home), "bin", "uv")
+    python_bin = os.path.join(_local_root(home), "bin", "python3.14")
     if not os.path.isfile(uv_bin):
         warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
@@ -2655,8 +2665,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 # uv tool uses HOME-derived XDG paths for the tools dir and launcher symlinks).
                 _env = os.environ.copy()
                 _env["HOME"] = home
-                _env["XDG_DATA_HOME"] = os.path.join(home, _local_name(home), "share")
-                _env["XDG_BIN_HOME"] = os.path.join(home, _local_name(home), "bin")
+                _env["XDG_DATA_HOME"] = os.path.join(_local_root(home), "share")
+                _env["XDG_BIN_HOME"] = os.path.join(_local_root(home), "bin")
                 _vprint("  running: {}".format(" ".join(cmd)))
                 proc = run(cmd, check=False, env=_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 out = proc.stdout.decode("utf-8", "replace")
@@ -2920,7 +2930,7 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
             if archive:
                 selected_zip_names.add(_logical_zip_name(archive))
     vendor_fonts_dir = os.path.join(repo_dir, PAYLOAD_DIR, "fonts")
-    user_fonts_dir = os.path.join(home, _local_name(home), "share", "fonts")
+    user_fonts_dir = os.path.join(_local_root(home), "share", "fonts")
 
     if not os.path.isdir(vendor_fonts_dir):
         print("Installing fonts...")
@@ -3568,7 +3578,7 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
         record_result("Vim runtime", "SKIP", "no bundled runtime archive")
         return
 
-    vim_share_dir = os.path.join(home, _local_name(home), "share", "vim")
+    vim_share_dir = os.path.join(_local_root(home), "share", "vim")
     runtime_dir = os.path.join(vim_share_dir, "runtime")
     vim92_dir = os.path.join(vim_share_dir, "vim92")
     ensure_dir(vim_share_dir, "Vim runtime")
@@ -3621,7 +3631,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None)
         record_result("mate-terminal runtime", "SKIP", "no bundled runtime archive")
         return
 
-    local_dir = os.path.join(home, _local_name(home))
+    local_dir = _local_root(home)
     ensure_dir(local_dir, "mate-terminal runtime")
 
     # Remove stale bundle paths before re-extracting.
@@ -3696,7 +3706,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
     # NVIM_QT_RUNTIME_PATH), then also copy the shim plugin directly into
     # ~/.local/share/nvim/site/plugin/ -- that dir is on nvim's default runtimepath
     # unconditionally, which is more reliable than the NVIM_QT_RUNTIME_PATH env var.
-    nvim_qt_share = os.path.join(home, _local_name(home), "share", "nvim-qt")
+    nvim_qt_share = os.path.join(_local_root(home), "share", "nvim-qt")
     ensure_dir(nvim_qt_share, "nvim-qt runtime")
     runtime_dir = os.path.join(nvim_qt_share, "runtime")
     remove_if_exists(runtime_dir)
@@ -3710,7 +3720,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
         return
 
     # Install shim into nvim site/plugin so it loads unconditionally in all nvim sessions.
-    site_plugin_dir = os.path.join(home, _local_name(home), "share", "nvim", "site", "plugin")
+    site_plugin_dir = os.path.join(_local_root(home), "share", "nvim", "site", "plugin")
     ensure_dir(site_plugin_dir, "nvim-qt runtime (site plugin)")
     shim_dest = os.path.join(site_plugin_dir, "nvim_gui_shim.vim")
     shutil.copy2(shim_src, shim_dest)
@@ -3725,7 +3735,7 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         return
     platform = treesitter_platform_id()
     src_dir = os.path.join(repo_dir, PAYLOAD_DIR, "treesitter", "prebuilt", platform)
-    dest_dir = os.path.join(home, _local_name(home), "share", "nvim", "tree-sitter-parsers")
+    dest_dir = os.path.join(_local_root(home), "share", "nvim", "tree-sitter-parsers")
 
     if not os.path.isdir(os.path.join(src_dir, "parser")):
         skipped(
@@ -3781,7 +3791,7 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
         record_result("nvim-treesitter vendor", "SKIP", "treesitter-parsers not in selected packages")
         return
     src_root = os.path.join(repo_dir, PAYLOAD_DIR, "treesitter", "vendor")
-    dest_root = os.path.join(home, _local_name(home), "share", "nvim", "loadout", "vendor")
+    dest_root = os.path.join(_local_root(home), "share", "nvim", "loadout", "vendor")
     if not (
         os.path.isdir(os.path.join(src_root, "nvim-treesitter"))
         and os.path.isdir(os.path.join(src_root, "treesitter-parser-registry"))
@@ -3810,16 +3820,23 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
 
 
 def _resolve_nvim_stash(home):
-    """Locate the offline plugin stash: this install root first, then the shared tree."""
+    """Locate the offline plugin stash: the install root first, then this home, then
+    the shared prefix. The stash is shared state, so with the two-root model it
+    lives under install_root even though lazy/ is per-user."""
     rel = os.path.join("share", "nvim", "loadout", "vendor", "plugin-stash")
-    local = os.path.join(home, _local_name(home), rel)
-    if os.path.isdir(local):
-        return local
+    roots = []
+    if _INSTALL_PATHS is not None:
+        roots.append(_local_root(_INSTALL_PATHS.install_root))
+    roots.append(_local_root(home))
     prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not prefix and _INSTALL_PATHS is not None:
+        prefix = _INSTALL_PATHS.shared_prefix
     if prefix:
-        shared = os.path.join(os.path.expanduser(prefix), rel)
-        if os.path.isdir(shared):
-            return shared
+        roots.append(os.path.expanduser(prefix))
+    for root in roots:
+        candidate = os.path.join(root, rel)
+        if os.path.isdir(candidate):
+            return candidate
     return ""
 
 
@@ -3829,8 +3846,13 @@ def _resolve_loadout_nvim_bin(home):
     Do not fall back to an arbitrary system `nvim`: the headless Lazy pass must validate
     the exact loadout runtime/config pairing the user just installed.
     """
-    roots = [os.path.join(home, _local_name(home))]
+    roots = []
+    if _INSTALL_PATHS is not None:
+        roots.append(_local_root(_INSTALL_PATHS.install_root))
+    roots.append(_local_root(home))
     prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not prefix and _INSTALL_PATHS is not None:
+        prefix = _INSTALL_PATHS.shared_prefix
     if prefix:
         roots.append(os.path.expanduser(prefix))
     for root in roots:
@@ -3852,18 +3874,18 @@ def _nvim_phase_relevant(selected_tools):
 
 def _nvim_headless_env(home):
     env = os.environ.copy()
-    local_prefix = os.path.join(home, _local_name(home))
+    local_prefix = _local_root(home)
     env["HOME"] = home
     env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
     env["XDG_DATA_HOME"] = os.path.join(local_prefix, "share")
     env["XDG_STATE_HOME"] = os.path.join(local_prefix, "state")
     env["XDG_CACHE_HOME"] = os.path.join(home, ".cache")
     if not env.get("LOADOUT_CFG_SHARED_PREFIX", "").strip():
-        # In --dest-dir installs the loadout prefix is <dest>/local, but nvim's
-        # helper discovers the private git-nvim binary through LOADOUT_CFG_SHARED_PREFIX.
-        # Supplying the staged prefix here keeps headless sync working on stock hosts
-        # with no system git, without changing the user's shell environment.
-        env["LOADOUT_CFG_SHARED_PREFIX"] = local_prefix
+        # nvim's helper discovers the private git-nvim binary and the shared stash
+        # through LOADOUT_CFG_SHARED_PREFIX. Supply the resolved shared prefix so
+        # headless sync works on stock hosts with no system git, without changing
+        # the user's shell environment.
+        env["LOADOUT_CFG_SHARED_PREFIX"] = _INSTALL_PATHS.shared_prefix if _INSTALL_PATHS is not None else local_prefix
     env["GIT_TERMINAL_PROMPT"] = "0"
     env.setdefault("GIT_ASKPASS", "/bin/true")
     return env
@@ -3900,10 +3922,17 @@ def _resolve_git(home):
     system = _find_tool("/usr/bin/git", "/bin/git", "/usr/local/bin/git") or shutil.which("git")
     if system:
         return system
-    for root in (os.path.join(home, _local_name(home)), os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()):
-        if not root:
-            continue
-        candidate = os.path.join(os.path.expanduser(root), "lib", "loadout-git", "bin", "git")
+    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not prefix and _INSTALL_PATHS is not None:
+        prefix = _INSTALL_PATHS.shared_prefix
+    roots = []
+    if _INSTALL_PATHS is not None:
+        roots.append(_local_root(_INSTALL_PATHS.install_root))
+    roots.append(_local_root(home))
+    if prefix:
+        roots.append(os.path.expanduser(prefix))
+    for root in roots:
+        candidate = os.path.join(root, "lib", "loadout-git", "bin", "git")
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
     return ""
@@ -3937,7 +3966,7 @@ def install_nvim_plugin_stash(repo_dir, home, selected_tools=None):
         record_result("nvim plugin stash", "SKIP", "no stash archive")
         return
 
-    dest = os.path.join(home, _local_name(home), "share", "nvim", "loadout", "vendor", "plugin-stash")
+    dest = os.path.join(_local_root(home), "share", "nvim", "loadout", "vendor", "plugin-stash")
     require_writable_parent(dest, "nvim plugin stash")
     ensure_dir(os.path.dirname(dest), "nvim plugin stash")
     staging = dest + ".new"
@@ -4060,7 +4089,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
         with open(lockfile) as f:
             lock = json.load(f)
 
-    nvim_share = os.path.join(home, _local_name(home), "share", "nvim")
+    nvim_share = os.path.join(_local_root(home), "share", "nvim")
     lazy_dir = os.path.join(nvim_share, "lazy")
     ensure_dir(lazy_dir, "nvim plugins")
 
@@ -4491,11 +4520,13 @@ def _mirror_shared_prefix(home, shells=("bash", "tcsh")):
     into the per-user bash/tcsh config defaults, where shells (PATH/TERMINFO_DIRS)
     can derive from it.
 
-    Only installed copies are stamped; repo sources keep empty defaults. Setting it
-    is install-time state: re-running @envs without the env var resets it to empty.
-    No-op when unset.
+    Only installed copies are stamped; repo sources keep empty defaults. When the
+    environment does not carry the prefix, the install's resolved shared prefix is
+    baked instead (the shells' fallback cannot know a configured or staged root).
     """
     val = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not val and _INSTALL_PATHS is not None:
+        val = _INSTALL_PATHS.shared_prefix
     if not val:
         return
     val = os.path.abspath(os.path.expanduser(val))
@@ -4527,6 +4558,8 @@ def install_tealdeer_config(repo_dir, home):
     cfg_dir = os.path.join(home, ".config", "tealdeer")
     ensure_dir(cfg_dir, "tealdeer config")
     prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
+    if not prefix and _INSTALL_PATHS is not None:
+        prefix = _INSTALL_PATHS.shared_prefix
     if prefix:
         cache_dir = os.path.join(prefix, "share", "tealdeer", "cache")
     else:
@@ -5128,7 +5161,7 @@ def install_copy_mode(repo_dir, home, selected_pkgs=None, registry=None):
             record_result(pkg_name, "OK", "")
 
 
-def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
+def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir, install_root=None):
     for hook in hooks:
         print(f"Running post-install hook: {hook}")
         env = os.environ.copy()
@@ -5138,7 +5171,7 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir):
                 "LOADOUT_HOME": home,
                 "LOADOUT_BACKUP_DIR": backup_dir,
                 "LOADOUT_NO_BACKUP": "1" if args.no_backup else "0",
-                "LOADOUT_DEST_DIR": home,
+                "LOADOUT_DEST_DIR": install_root or home,
             }
         )
         run([hook], env=env)
@@ -6159,6 +6192,27 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     if args.dest_dir:
         print(f"Destination: {home}")
 
+    # --- two-root routing -------------------------------------------------
+    # Config/cache never enter the install root. `home` stays the shared tree;
+    # env packages and per-user data resolve under the real user HOME, except
+    # for the env-only + explicit --dest-dir case, which stages a whole HOME
+    # (tests and previews depend on it).
+    user_home = os.path.expanduser("~")
+    kinds = {registry.get(name, {}).get("kind") for name in (selected_tools or ())}
+    env_only = bool(selected_tools) and kinds <= {"env"}
+    staging = bool(getattr(args, "dest_dir_explicit", False)) and env_only
+    env_home = home if staging else user_home
+    global _INSTALL_PATHS
+    _INSTALL_PATHS = types.SimpleNamespace(
+        user_home=user_home,
+        install_root=home,
+        env_home=env_home,
+        shared_prefix=_local_root(home),
+        staging=staging,
+    )
+    if env_only and not staging and getattr(args, "dest_dir", None):
+        print(f"note: env bundles always install under $HOME; ignoring dest_dir={home} for this install")
+
     hooks = []
     for hook in args.post_install_hook:
         if not os.path.isfile(hook) or not os.access(hook, os.X_OK):
@@ -6166,9 +6220,14 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
             return 1
         hooks.append(os.path.abspath(hook))
 
-    print(f"Changing directory to {home}")
-    ensure_dir(home, "install destination")
-    os.chdir(home)
+    if env_only and not staging:
+        # Nothing shared is selected: do not create a configured-but-ignored root.
+        work_root = user_home
+    else:
+        ensure_dir(home, "install destination")
+        work_root = home
+    print(f"Changing directory to {work_root}")
+    os.chdir(work_root)
 
     backup_dir = ""
     # Backups exist to protect user-owned config files in $HOME / $XDG_CONFIG_HOME
@@ -6184,14 +6243,14 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     elif args.no_backup:
         warn("no backup taken (--no-backup): existing files will be overwritten")
     else:
-        backup_dir = run_install_step("backup", backup_existing, home, repo_dir) or ""
+        backup_dir = run_install_step("backup", backup_existing, env_home, repo_dir) or ""
 
     _prebuilt_result = run_install_step("pre-built binaries", install_prebuilt_binaries, repo_dir, home, selected_tools)
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
-    run_install_step("config files", install_copy_mode, repo_dir, home, selected_tools, registry, silent=True)
-    run_install_step("fonts", install_fonts, repo_dir, home, selected_tools, registry, args.no_backup)
+    run_install_step("config files", install_copy_mode, repo_dir, env_home, selected_tools, registry, silent=True)
+    run_install_step("fonts", install_fonts, repo_dir, env_home, selected_tools, registry, args.no_backup)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("Rust crate store", install_crate_store, repo_dir, home, selected_tools, silent=True)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
@@ -6211,19 +6270,21 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     # Stash (shared bare mirrors) before the plugin phase: the per-user clones come
     # out of it.
     run_install_step("nvim plugin stash", install_nvim_plugin_stash, repo_dir, home, selected_tools, silent=True)
-    run_install_step("nvim plugin bundle", install_nvim_plugin_bundle, repo_dir, home, selected_tools, silent=True)
+    run_install_step("nvim plugin bundle", install_nvim_plugin_bundle, repo_dir, env_home, selected_tools, silent=True)
     run_install_step("Tree-sitter parsers", install_treesitter_parsers, repo_dir, home, selected_tools, silent=True)
-    run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, home, selected_tools)
+    run_install_step("Neovim Lazy sync", install_nvim_lazy_update, repo_dir, env_home, selected_tools)
 
     # Shared-library (ldd) check runs LAST, after every runtime archive has extracted.
     # Doing it in the binary phase warned falsely about libs a later runtime provides
     # (e.g. zsh's libzsh-5.9.so from the zsh runtime's lib/zsh/).
-    check_prebuilt_binary_dependencies(os.path.join(home, _local_name(home), "bin"))
+    check_prebuilt_binary_dependencies(os.path.join(_local_root(home), "bin"))
     if hooks:
-        run_install_step("post-install hooks", run_post_install_hooks, hooks, repo_dir, home, args, backup_dir)
+        run_install_step(
+            "post-install hooks", run_post_install_hooks, hooks, repo_dir, env_home, args, backup_dir, home
+        )
     else:
         record_result("post-install hooks", "SKIP", "none requested")
-    run_install_step("layer install scripts", run_layer_install_scripts, home)
+    run_install_step("layer install scripts", run_layer_install_scripts, env_home)
     if backup_dir:
         run_install_step("compress backup", compress_backup, backup_dir)
     print_final_notices()
@@ -6655,6 +6716,19 @@ def _resolve_home(dest_dir):
     return os.path.abspath(chosen) if chosen else _default_install_root()
 
 
+def _snapshot_target(ctx, dest_dir):
+    """Where snapshot create/list/restore operate.
+
+    Snapshots protect per-user config (the backup list is HOME-relative), so the
+    target is the real HOME unless --dest-dir was typed on the command line -- a
+    config dest_dir is a shared-tree setting and must not relocate the backup of
+    $HOME.
+    """
+    if ctx.get_parameter_source("dest_dir") == click.core.ParameterSource.COMMANDLINE:
+        return _resolve_home(dest_dir)
+    return os.path.expanduser("~")
+
+
 def _dest_dir_option(f):
     """Decorator: attach --dest-dir to verbs that act on the install destination."""
     default = _config_dest_dir()
@@ -6760,6 +6834,9 @@ def cli_install(
 
       LOADOUT_CFG_SHARED_PREFIX=/foo/bar/local loadout install @envs
     """
+    # A config-supplied dest_dir is a click default, not user intent: the
+    # env-only rule only stages under an explicitly typed --dest-dir.
+    dest_dir_explicit = ctx.get_parameter_source("dest_dir") == click.core.ParameterSource.COMMANDLINE
     args = _ctx_args(
         ctx,
         packages=list(packages),
@@ -6774,6 +6851,7 @@ def cli_install(
         post_install_hook=list(post_install_hook),
         assume_yes=assume_yes,
         dest_dir=dest_dir,
+        dest_dir_explicit=dest_dir_explicit,
     )
     ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(dest_dir)))
 
@@ -6936,7 +7014,7 @@ def cli_snapshot():
 def cli_snapshot_create(ctx, name, dest_dir):
     """Take a snapshot of the destination directory without performing an install."""
     args = _ctx_args(ctx, snapshot_cmd="create", name=name, dest_dir=dest_dir)
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _snapshot_target(ctx, dest_dir)))
 
 
 @cli_snapshot.command(name="restore", short_help="Restore a snapshot.")
@@ -6946,7 +7024,7 @@ def cli_snapshot_create(ctx, name, dest_dir):
 def cli_snapshot_restore(ctx, path, dest_dir):
     """Restore a snapshot from a directory or a .tar.bz2 archive."""
     args = _ctx_args(ctx, snapshot_cmd="restore", path=path, dest_dir=dest_dir)
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _snapshot_target(ctx, dest_dir)))
 
 
 @cli_snapshot.command(name="list", short_help="List existing snapshots.")
@@ -6955,7 +7033,7 @@ def cli_snapshot_restore(ctx, path, dest_dir):
 def cli_snapshot_list(ctx, dest_dir):
     """List existing snapshots under <dest>/loadout_backups, newest first."""
     args = _ctx_args(ctx, snapshot_cmd="list", dest_dir=dest_dir)
-    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _resolve_home(dest_dir)))
+    ctx.exit(cmd_snapshot(args, ctx.obj["repo_dir"], _snapshot_target(ctx, dest_dir)))
 
 
 @cli.command(name="clean", short_help="Remove stale loadout temp-root state.")

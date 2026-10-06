@@ -33,11 +33,11 @@ mkdir -p "$shared_root" "$home"
 #    prefix), then flip the tree to read-only.
 HOME="$home" "$REPO/loadout" install -y @shared --dest-dir "$shared_root" --no-backup \
     >"$TEST_ROOT/install.log" 2>&1
-HOME="$home" LOADOUT_CFG_SHARED_PREFIX="$shared_root/local" \
+HOME="$home" LOADOUT_CFG_SHARED_PREFIX="$shared_root" \
     "$REPO/loadout" install -y @envs --no-backup \
     >>"$TEST_ROOT/install.log" 2>&1
 
-prefix="$shared_root/local"
+prefix="$shared_root"
 chmod -R a-w "$prefix"
 trap 'chmod -R u+w "$TEST_ROOT" 2>/dev/null; rm -rf "$TEST_ROOT"' EXIT
 
