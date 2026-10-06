@@ -1,7 +1,7 @@
 # Current Handoff
 
-Last updated: 2026-10-06 (October currency sweep on top of the XDG
-re-architecture; unreleased). Prior release:
+Last updated: 2026-10-06 (**released 2026.10.1** -- October currency sweep on
+top of the XDG re-architecture). Prior release:
 `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
@@ -76,6 +76,14 @@ Dev-host scratch: full T2 runs and the release gates now need disk-backed
 scratch (`TMPDIR=/var/tmp/...`). The 16 GB `/tmp` tmpfs filled during the
 aborted dry-run (the malware scan alone extracted ~12 GB) and produced seven
 false ENOSPC test failures; after cleaning, T2 + Tier 3 re-ran green.
+
+**RELEASED 2026.10.1** (signed tag, commit 7b214fa, 2026-10-06). Gates green:
+T1+T2 48/48, Tier 3 `--full` (322 binaries / 23 skipped), and every release
+gate (malware scan, binary smoke, version table, checksums + SBOM, secret
+scan, vulnerability scan). §9 verified: `isDraft=false`, four assets
+(`sha256sums.txt`, `default.content-manifest`, `nvim-plugin-stash.tar.bz2`
+344,538,464 bytes matching local, `sbom.cdx.json`), `git tag -v` prints Good
+signature, and `origin/main` equals the tag commit.
 
 ## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..46ecdea, UNRELEASED)
 
