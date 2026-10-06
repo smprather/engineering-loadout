@@ -10,7 +10,7 @@ launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
 
-## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..a6cb682, UNRELEASED)
+## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..46ecdea, UNRELEASED)
 
 Behavioral re-architecture that stops the loadout silently shadowing system
 binaries, and lands the preconditions for a future uninstall. Spec
@@ -50,13 +50,15 @@ Tests: new gates `dest-layout-and-env-routing`, `env-routing-dest-dir`,
 `prefer-shims`, `doctor-shadow-audit` (plus updated `config-toml-dest-dir`,
 `registry-integrity`, `unit-resolver`, `check-installer`, `env-shell-parity`,
 `install-linux-tmp-home`, `install-split-shared-envs`, `install-nvim-deployments`).
-Run green so far: T1 + T2 partial.
+Run green: T1 + **full T2** (`tests/run-all`); **Tier 3**
+`tests/prebuilt-binaries-almalinux8 --full` (network disabled): 322 binaries OK,
+23 skipped, runtimes OK. Tier 3 caught one test-harness bug the host missed: the
+tmp-home hook2 resolved its python via a test-scope `$prefix` (undefined in the
+hook); CachyOS has `/bin/python3.14` so the host passed, EL8 does not. Fixed to
+use `LOADOUT_DEST_DIR` from the hook environment.
 
 Pending:
 
-- Full `tests/run-all` (T2) sweep.
-- Tier 3 container gate: `tests/prebuilt-binaries-almalinux8 --full --network=none`
-  (release class **C** -- mandatory for an install-behavior change).
 - Class C release per `docs/RELEASE.md` (currency sweep, assurance re-pin,
   post-payload chain, tag, publish, post-publish verification).
 - Docs synced in this change: README, `docs/INSTALLATION.md` (new migration

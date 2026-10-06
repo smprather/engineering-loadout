@@ -94,8 +94,9 @@ EOF
 # test that the installed interpreter actually runs.
 cat > "$test_hooks/hook2.sh" <<'EOF'
 #!/bin/sh
-# .local for a real-HOME install, un-dotted local for a --dest-dir tree.
-py="$prefix/bin/python3.14"
+# Hooks get LOADOUT_DEST_DIR = the resolved install root; portable-python is a
+# shared package, so its interpreter lives at <install_root>/bin/python3.14.
+py="$LOADOUT_DEST_DIR/bin/python3.14"
 exec "$py" -c '
 import os
 with open(os.path.join(os.environ["LOADOUT_HOME"], "post-install-hooks.log"), "a") as fh:
