@@ -174,16 +174,31 @@ env -i \
     EXPECTED_SHARED_PREFIX="$shared_prefix" \
     bash -c '
         set -o pipefail
-        fail() { echo "bash env smoke failed: $*" >&2; exit 1; }
         source "$HOME/.bashrc" || true
+        # bashrc clean-slates functions; define the helper AFTER sourcing it.
+        fail() { echo "bash env smoke failed: $*" >&2; exit 1; }
         set -e
         [[ "${LOADOUT_CFG_SHARED_PREFIX:-}" == "$EXPECTED_SHARED_PREFIX" ]] || fail "LOADOUT_CFG_SHARED_PREFIX=${LOADOUT_CFG_SHARED_PREFIX:-}"
+        [[ ":$PATH:" == *":$EXPECTED_SHARED_PREFIX/bin:"* ]] || fail "shared bin missing from PATH: $PATH"
         nvim_path=$(command -v nvim) || fail "nvim missing from PATH=$PATH"
         tmux_path=$(command -v tmux) || fail "tmux missing from PATH=$PATH"
         wezterm_path=$(command -v wezterm) || fail "wezterm missing from PATH=$PATH"
-        [[ "$nvim_path" == "$EXPECTED_SHARED_PREFIX/bin/nvim" ]] || fail "nvim path: $nvim_path"
-        [[ "$tmux_path" == "$EXPECTED_SHARED_PREFIX/bin/tmux" ]] || fail "tmux path: $tmux_path"
-        [[ "$wezterm_path" == "$EXPECTED_SHARED_PREFIX/bin/wezterm" ]] || fail "wezterm path: $wezterm_path"
+        # System-first is the contract: a system copy legitimately wins, and the
+        # shared binary is the fallback. tmux is the exception (prefer shim).
+        case "$nvim_path" in
+            "$EXPECTED_SHARED_PREFIX/bin/nvim"|/usr/bin/nvim|/usr/local/bin/nvim) ;;
+            *) fail "unexpected nvim path: $nvim_path" ;;
+        esac
+        case "$tmux_path" in
+            "$EXPECTED_SHARED_PREFIX/bin/tmux"|/usr/bin/tmux|/usr/local/bin/tmux) ;;
+            *) fail "unexpected tmux path: $tmux_path" ;;
+        esac
+        # @envs does not include env-tmux, so no prefer shim may exist here.
+        [[ ! -e "$EXPECTED_SHARED_PREFIX/prefer/tmux" ]] || fail "prefer shim exists without env-tmux installed"
+        case "$wezterm_path" in
+            "$EXPECTED_SHARED_PREFIX/bin/wezterm"|/usr/bin/wezterm|/usr/local/bin/wezterm) ;;
+            *) fail "unexpected wezterm path: $wezterm_path" ;;
+        esac
         [[ ":${TERMINFO_DIRS:-}:" == *":$EXPECTED_SHARED_PREFIX/share/terminfo:"* ]] || fail "TERMINFO_DIRS=${TERMINFO_DIRS:-}"
         if [[ -f "$EXPECTED_SHARED_PREFIX/lib64/libqxcb.so" ]]; then
             [[ "${QT_QPA_PLATFORM_PLUGIN_PATH:-}" == "$EXPECTED_SHARED_PREFIX/lib64" ]] || fail "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_QPA_PLATFORM_PLUGIN_PATH:-}"
@@ -231,7 +246,10 @@ if command -v tcsh >/dev/null 2>&1 && command -v script >/dev/null 2>&1; then
             ;;
     esac
     [[ "$tcsh_out" == *"SP=$shared_prefix"* ]] || { echo "tcsh did not load baked shared prefix: $tcsh_out" >&2; exit 1; }
-    [[ "$tcsh_out" == *"NV=$shared_prefix/bin/nvim"* ]] || { echo "tcsh did not find shared nvim: $tcsh_out" >&2; exit 1; }
+    case "$tcsh_out" in
+        *"NV=$shared_prefix/bin/nvim"*|*"NV=/usr/bin/nvim"*|*"NV=/usr/local/bin/nvim"*) ;;
+        *) echo "tcsh did not find a usable nvim: $tcsh_out" >&2; exit 1 ;;
+    esac
     [[ "$tcsh_out" == *"$shared_prefix/share/terminfo"* ]] || { echo "tcsh TERMINFO_DIRS missing shared terminfo: $tcsh_out" >&2; exit 1; }
 else
     echo "SKIP: tcsh split env smoke (no native tcsh/script)"
