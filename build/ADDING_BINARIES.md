@@ -411,7 +411,7 @@ repo. The former PowerShell 7.6.3 portable-ZIP packaging notes (bundle under
 README with source URL + SHA256) moved with it; do not reintroduce Windows
 payload content here.
 
-## vim + gvim build notes (vim 9.2.0782; originally added 2026-05-16 at 9.2.458)
+## vim + gvim build notes (vim 9.2.1169; originally added 2026-05-16 at 9.2.458)
 
 One vim source checkout produces all three artifacts: terminal `vim.bin`,
 GUI `gvim.bin`, and the `vim92.tar.bz2` runtime archive. Clone the stable
@@ -6537,18 +6537,22 @@ and `cap_sys_ptrace`. The README and registry description say so; the loader
 does not set capabilities (that is a site-policy decision, and file caps do not
 survive the bz2/atomic-rename install path anyway).
 
-## MarkText 0.19.1 -- markdown editor (Electron GUI shanghai repack, added 2026-09-23)
+## MarkText 0.20.0 -- markdown editor (Electron GUI shanghai repack, added 2026-09-23; 0.20.0 2026-10-06)
 
-`marktext/marktext`, official Linux release `marktext-linux-0.19.1.tar.gz`
-(127,322,569 bytes, sha256 `d1ecc7e47fe2cfdd6191330dd9360fdaae47508f458f179cc5f4948b7f3e6f1d`,
-verified against the release's `SHA256SUMS.txt`).
+`marktext/marktext`, official Linux release `marktext-linux-0.20.0.tar.gz`
+(148,821,600 bytes, sha256 `1eb1c4926c2e4c57ef5f91697d3be662f036ba6181e6a78210be4dda121278f5`,
+from the GitHub release asset digest via `gh release view v0.20.0 --json assets`).
+The script pins the tarball hash **per version** and refuses an unknown version
+instead of reusing a stale hash -- the first 0.20.0 attempt failed on exactly
+that stale-pin mistake.
 
-Stable-release policy selects **v0.19.1**: the newest upstream release is
-`v0.20.0-rc.5`, a prerelease.
+Stable-release policy selects **v0.20.0** (the current stable release; the
+earlier `v0.20.0-rc.5` prerelease was skipped).
 
 ### Why a repack and not a source build
 
-Measured floors of the official bundle:
+Measured floors of the official 0.19.1 bundle (the same two addons were again
+the only blockers in 0.20.0, rebuilt and stage-verified under EL8 Xvfb):
 
 | component | upstream requirement | EL8 has | verdict |
 |---|---|---|---|
@@ -6590,7 +6594,7 @@ Chromium build.
 ### Build
 
 ```bash
-./build/build-shell build/build-marktext.sh --tag v0.19.1
+./build/build-shell build/build-marktext.sh --tag v0.20.0
 ```
 
 Pinned inputs (all sha256-checked in-script):

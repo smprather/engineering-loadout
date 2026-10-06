@@ -166,6 +166,10 @@ RUN dnf install -y -q epel-release \
         # script node, so configure aborts without it) and a python3 for
         # host-driven build tooling:
         tcl-devel tk-devel python3 \
+        # Node-based stage smokes (typescript-language-server, pyright) run the
+        # bundled Node in-container; it NEEDs libatomic.so.1, a host contract
+        # supplied by EL8 BaseOS that stock almalinux images lack.
+        libatomic \
         # marktext (build-marktext.sh): the shanghai bundle co-locates an
         # NSS/NSPR + libsecret + libxkbfile + cups/avahi runtime closure, so
         # the EL8 runtime rpms must be present to copy from (the script reads

@@ -94,3 +94,15 @@
 2026-09-19T02:10:18Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.5.14/biome-linux-x64-musl	d15a39b256ca1294fe8f8817f9162f7c26229ca0cb8bd19d0369540c1a01d781
 2026-09-19T02:10:22Z	https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-unknown-linux-musl.tar.gz	cbf2cb5c9d6227e46fc4b29c03dc43b8632020dfc5cf269d263d6e29c399e044
 2026-09-24T03:42:31Z	https://github.com/YARAHQ/yara-forge/releases/download/20260920/yara-forge-rules-full.zip	24673112528aa93e13d5375312732cc2113bf4efdb8cd85f33aaeaebada35951
+2026-10-06T21:02:34Z	https://github.com/astral-sh/ruff/releases/download/0.16.10/ruff-x86_64-unknown-linux-gnu.tar.gz	9567ff1201e2fb3da31ff04c35587d768c66d6cb42dfa84de474e2bfe360b608
+2026-10-06T21:02:41Z	https://github.com/astral-sh/uv/releases/download/0.12.23/uv-x86_64-unknown-linux-gnu.tar.gz	9167d72b3319674b6303c4cbe071854bba13ebdf3d76b1a7cbdc175471fb66d6
+2026-10-06T21:02:44Z	https://github.com/astral-sh/ty/releases/download/0.0.84/ty-x86_64-unknown-linux-gnu.tar.gz	336bb36b7e917d844b8b16925d373b4614b326e452c881ff4ed6bc5904b65185
+2026-10-06T21:02:46Z	https://github.com/johnkerl/miller/releases/download/v6.22.0/miller-6.22.0-linux-amd64.tar.gz	0551f8696e8f42dae1c67c782bbe04e0589e718268722fa98561e2566e4623b8
+2026-10-06T21:02:47Z	https://github.com/jesseduffield/lazygit/releases/download/v0.66.0/lazygit_0.66.0_linux_x86_64.tar.gz	5b45541155d20bd32bf2cc5ab5b7e3d91c2eebf0fb1242281350edc27d59d2b7
+2026-10-06T21:02:49Z	https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64.tar.gz	e68a456f90c577af3fe4960184b3a3cf5c461e0348407c10f107da3a5fec8972
+2026-10-06T21:02:51Z	https://github.com/Canop/broot/releases/download/v1.61.0/broot_1.61.0.zip	6cafe8e993fb8e5684eb25549703a4fb9dec61ac6a8f1947cbed6566cb4e58e5
+2026-10-06T21:02:53Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.5.15/biome-linux-x64-musl	42b6fd3662fc1fc3075a370414478aa3ed82fd43d28430bbfb81ebd02cbde656
+2026-10-06T21:02:57Z	https://github.com/sinelaw/fresh/releases/download/v0.5.2/fresh-min-size-x86_64-unknown-linux-musl.tar.xz	4f1862ac37ade09ed4af20aa9fafec7e2ab55d49be64fb9e2a99c0b86eeffe59
+2026-10-06T21:02:59Z	https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-unknown-linux-musl.tar.gz	69dcb4043f55c29118f408c6efd30115e0a4e0a6709253343b8c8fa814ab4a31
+2026-10-06T21:03:08Z	https://github.com/sharkdp/hyperfine/releases/download/v1.21.0/hyperfine-v1.21.0-x86_64-unknown-linux-musl.tar.gz	2c64127c1a0fc3bc58e365060b4d8a09e4632082e4dea843b8e4afb6a7b09f36
+2026-10-06T21:19:11Z	https://github.com/YARAHQ/yara-forge/releases/download/20261004/yara-forge-rules-full.zip	809fe0c2e6c58dd9dc74afad0cdae21a1ed3bd5e68e539504d211dbf4d872f8d

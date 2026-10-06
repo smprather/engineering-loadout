@@ -1,14 +1,64 @@
 # Current Handoff
 
-Last updated: 2026-10-05 (XDG default install root, `@engineering-loadout`
-retired, managed `prefer/` shims; committed `69af0a2` + `dabaadf..a6cb682`,
-unreleased). Prior release:
+Last updated: 2026-10-06 (October currency sweep on top of the XDG
+re-architecture; unreleased). Prior release:
 `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
+
+## 2026-10-06: October currency sweep (UNRELEASED)
+
+Class C release prep on top of the XDG re-architecture. `build/check-versions`
+started at ~23 outdated; after the sweep:
+
+Bumped (16): nodejs 26.9.0 -> 26.10.0, vim + gvim 9.2.1119 -> 9.2.1169, rsync
+3.5.0 -> 3.5.1, fio 3.42 -> 3.43, typescript-language-server 6.0.0 -> 6.0.1,
+marktext 0.19.1 -> 0.20.0, librelane 3.0.14 -> 3.0.16, ruff 0.16.8 -> 0.16.10,
+miller 6.21.0 -> 6.22.0, lazygit 0.65.1 -> 0.66.0, yq 4.53.6 -> 4.54.1, broot
+1.60.1 -> 1.61.0, biome 2.5.14 -> 2.5.15, fresh 0.5.1 -> 0.5.2. Security data:
+yara-rules 20261004, tldr-data refreshed (1.0 MB archive). Pinned by design:
+less, pdftotext (pre-existing reasons).
+
+**Pinned in THIS sweep (4) -- crate-store coupling, not upstream choice:** uv,
+ty, delta, hyperfine carry `pin_reason`: the EL8 build image cannot rebuild the
+crate store because `cargo-local-registry` (latest and 0.2.7 both tried) fails
+to compile -- its dependency chain pulls a curl-sys that requires OpenSSL 3
+`OPENSSL_VERSION_STRING`, EL8 ships OpenSSL 1.1.1 headers. The image also could
+not be rebuilt during this sweep (ftp.gnu.org unreachable at the autoconf
+layer), so the follow-up is to bake EPEL `openssl3-devel` (3.5.5 available) plus
+a working cargo-local-registry (or move the sync off cargo). Until then,
+bumping any of the four flips `tests/run-all`'s crate-store policy red, by
+design.
+
+Build-tooling fixes riding along:
+
+- `build/Dockerfile`: `libatomic` baked (node stage-smokes run the bundled
+  Node; it NEEDs libatomic.so.1, a host contract EL8 BaseOS supplies).
+- `build/build-marktext.sh`: tarball sha256 pinned PER VERSION from the GitHub
+  release asset digest; an unknown version now fails instead of silently
+  reusing 0.19.1's hash (the first 0.20.0 attempt hit exactly that).
+- `build/build-simple-c.sh`: stamp the registry without a leading `v` (rsync
+  stamped `v3.5.1` against the registry's `3.5.1` convention).
+- `build/update-prebuilt`: delta + hyperfine musl entries added (ready for the
+  day the crate-store block lifts).
+- librelane 3.0.16: wheelhouse gained its wheel; the closure kept the LOCALLY
+  BUILT `lln_libparse-0.56.0-cp314` wheel -- upstream publishes no cp314 wheel
+  at all, so that artifact's provenance is a local EL8 build. Offline install
+  proved with `--network=none` plus launcher exec.
+
+False positives / incomplete lookups: lefdef-tools + time-plot `--outdated` is
+a format artifact -- the GitHub "latest" SHA IS the tag commit (`git describe`
+== registry version; the updater correctly skips). bash, octave and ncdu
+upstream lookups failed (unreachable / 503), so those results are incomplete,
+not a clean bill; none is known-outdated.
+
+Gates: T1+T2 `tests/run-all` 48/48; Tier 3
+`tests/prebuilt-binaries-almalinux8 --full` green (322 binaries, 23 skipped,
+runtimes OK). ClamAV DB current (1.5.4/28145, 2026-10-06) -- no
+`sudo freshclam` needed before the malware scan. Next: `./build/release`.
 
 ## 2026-10-05: XDG default root, group retirement, prefer shims (COMMITTED dabaadf..46ecdea, UNRELEASED)
 

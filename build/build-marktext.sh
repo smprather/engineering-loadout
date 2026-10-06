@@ -70,10 +70,19 @@ VERSION="${TAG#v}"
 # --- pinned upstream facts -------------------------------------------------
 # Release: https://github.com/marktext/marktext/releases/tag/v0.19.1
 TARBALL_URL="https://github.com/marktext/marktext/releases/download/${TAG}/marktext-linux-${VERSION}.tar.gz"
-# sha256 of marktext-linux-0.19.1.tar.gz as published in the release's
-# SHA256SUMS.txt (verified against the live asset during recon).  Override with
-# MARKTEXT_TARBALL_SHA256 only when deliberately re-pinning a new tag.
-TARBALL_SHA256="${MARKTEXT_TARBALL_SHA256:-d1ecc7e47fe2cfdd6191330dd9360fdaae47508f458f179cc5f4948b7f3e6f1d}"
+# sha256 of the release's Linux tarball, taken from the GitHub release asset
+# digest (`gh release view <tag> --json assets`).  Each new version is added
+# here deliberately: an unknown version fails rather than silently reusing a
+# stale hash.  MARKTEXT_TARBALL_SHA256 overrides for a one-off re-pin.
+case "$VERSION" in
+    0.19.1) TARBALL_SHA256="d1ecc7e47fe2cfdd6191330dd9360fdaae47508f458f179cc5f4948b7f3e6f1d" ;;
+    0.20.0) TARBALL_SHA256="1eb1c4926c2e4c57ef5f91697d3be662f036ba6181e6a78210be4dda121278f5" ;;
+    *)
+        echo "ERROR: no pinned tarball sha256 for marktext $VERSION -- verify the release asset digest and add it here" >&2
+        exit 1
+        ;;
+esac
+TARBALL_SHA256="${MARKTEXT_TARBALL_SHA256:-$TARBALL_SHA256}"
 # Electron ABI: the bundle IS Electron 42.1.0 => NODE_MODULE_VERSION 146
 ELECTRON_TARGET="42.1.0"
 NODE_MODULE_VERSION="146"

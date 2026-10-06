@@ -115,7 +115,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.5.14",
+      "version": "2.5.15",
       "platforms": [
         "linux"
       ],
@@ -131,7 +131,7 @@
       "bins": [
         "broot"
       ],
-      "version": "1.60.1",
+      "version": "1.61.0",
       "platforms": [
         "linux"
       ],
@@ -342,7 +342,7 @@
         "zstandard"
       ],
       "uv_tool": "librelane",
-      "version": "3.0.14",
+      "version": "3.0.16",
       "platforms": [
         "linux"
       ],
@@ -561,6 +561,7 @@
         "delta"
       ],
       "version": "0.19.2",
+      "pin_reason": "held with uv: the crate-store rebuild is blocked in the EL8 build image (see uv pin_reason).",
       "platforms": [
         "linux"
       ],
@@ -661,7 +662,7 @@
         "libaio.so.1",
         "libz.so.1"
       ],
-      "version": "3.42",
+      "version": "3.43",
       "platforms": [
         "linux"
       ],
@@ -828,6 +829,7 @@
         "hyperfine"
       ],
       "version": "1.20.0",
+      "pin_reason": "held with uv: the crate-store rebuild is blocked in the EL8 build image (see uv pin_reason).",
       "platforms": [
         "linux"
       ],
@@ -988,7 +990,7 @@
       "bins": [
         "lazygit"
       ],
-      "version": "0.65.1",
+      "version": "0.66.0",
       "platforms": [
         "linux"
       ],
@@ -1055,7 +1057,7 @@
       "bins": [
         "mlr"
       ],
-      "version": "6.21.0",
+      "version": "6.22.0",
       "platforms": [
         "linux"
       ],
@@ -1099,7 +1101,7 @@
       "bins": [
         "fresh"
       ],
-      "version": "0.5.1",
+      "version": "0.5.2",
       "platforms": [
         "linux"
       ],
@@ -1251,7 +1253,7 @@
       "libs": [
         "libxxhash.so.0"
       ],
-      "version": "3.5.0",
+      "version": "3.5.1",
       "platforms": [
         "linux"
       ],
@@ -1301,7 +1303,7 @@
       "bins": [
         "ruff"
       ],
-      "version": "0.16.8",
+      "version": "0.16.10",
       "platforms": [
         "linux"
       ],
@@ -1519,6 +1521,7 @@
         "ty"
       ],
       "version": "0.0.82",
+      "pin_reason": "held with uv: the crate-store rebuild is blocked in the EL8 build image (see uv pin_reason).",
       "platforms": [
         "linux"
       ],
@@ -1638,6 +1641,7 @@
         "uv"
       ],
       "version": "0.12.17",
+      "pin_reason": "crate-store rebuild is blocked in the EL8 build image: cargo-local-registry's dependency chain (curl-sys) requires OpenSSL 3 headers, EL8 ships 1.1.1. Unpin once the image bakes openssl3-devel + a working cargo-local-registry (or the sync moves off cargo).",
       "platforms": [
         "linux"
       ],
@@ -1653,7 +1657,7 @@
         "vim",
         "vim.bin"
       ],
-      "version": "9.2.1119",
+      "version": "9.2.1169",
       "platforms": [
         "linux"
       ],
@@ -1669,7 +1673,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2.1119",
+      "version": "9.2.1169",
       "platforms": [
         "linux"
       ],
@@ -2059,7 +2063,7 @@
       "bins": [
         "yq"
       ],
-      "version": "4.53.6",
+      "version": "4.54.1",
       "platforms": [
         "linux"
       ],
@@ -2257,7 +2261,7 @@
       "kind": "bin",
       "bins": [],
       "archive": "payload/PLATFORM/runtime/marktext.tar.bz2",
-      "version": "0.19.1",
+      "version": "0.20.0",
       "version_url": "https://github.com/marktext/marktext/tags",
       "platforms": [
         "linux"
@@ -2674,7 +2678,7 @@
       "libs": [
         "libatomic.so.1"
       ],
-      "version": "26.9.0",
+      "version": "26.10.0",
       "platforms": [
         "linux"
       ],
@@ -4283,7 +4287,7 @@
       "depends": [
         "nodejs"
       ],
-      "version": "6.0.0",
+      "version": "6.0.1",
       "platforms": [
         "linux"
       ],

@@ -121,6 +121,14 @@ TOOLS = {
         "https://github.com/zellij-org/zellij/releases/download/v{ver}/zellij-x86_64-unknown-linux-musl.tar.gz",
         "zellij",
     ),
+    "delta": (
+        "https://github.com/dandavison/delta/releases/download/{ver}/delta-{ver}-x86_64-unknown-linux-musl.tar.gz",
+        "delta",
+    ),
+    "hyperfine": (
+        "https://github.com/sharkdp/hyperfine/releases/download/v{ver}/hyperfine-v{ver}-x86_64-unknown-linux-musl.tar.gz",
+        "hyperfine",
+    ),
 }
 
 

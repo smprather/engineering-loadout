@@ -259,7 +259,7 @@ if [ "$TOOL" = "nethogs" ]; then
     echo "Staged: payload/el8.x86_64.glibc2p28/lib64/$PCAP_SO.bz2"
 fi
 
-python3 - "$REPO/payload/packages.json" "$TOOL" "$TAG" <<'PYEOF'
+python3 - "$REPO/payload/packages.json" "$TOOL" "${TAG#v}" <<'PYEOF'
 import re, sys
 path, pkg, version = sys.argv[1], sys.argv[2], sys.argv[3]
 raw = open(path).read()
