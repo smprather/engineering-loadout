@@ -5712,11 +5712,20 @@ def _ver_cmp(a, b):
 
 
 def _default_loadout_bin_dirs():
-    """Realpaths of bin dirs this installer manages (never system candidates)."""
+    """Realpaths of every dir this installer manages (never system candidates).
+
+    Covers the legacy HOME tree (~/.local/bin), the built-in XDG root
+    ($XDG_DATA_HOME/loadout), a configured/flag root, the shared prefix, and
+    each tree's prefer/ shim dir.
+    """
     dirs = {os.path.realpath(os.path.join(os.path.expanduser("~"), ".local", "bin"))}
     shared = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
-    if shared:
-        dirs.add(os.path.realpath(os.path.join(shared, "local", "bin")))
+    for root in (_resolve_home(None), os.path.expanduser(shared)):
+        if not root:
+            continue
+        local = _local_root(root)
+        dirs.add(os.path.realpath(os.path.join(local, "bin")))
+        dirs.add(os.path.realpath(os.path.join(local, "prefer")))
     return dirs
 
 
@@ -5799,15 +5808,102 @@ def _system_newer_rows(registry, path_str=None, loadout_dirs=None):
             if sys_ver is None or _ver_cmp(sys_ver, payload_ver) <= 0:
                 continue
             sys_dir = os.path.dirname(os.path.realpath(sys_path))
-            ldir = next((x for x in loadout_dirs if x in path_dirs), None)
-            if ldir is None:
+            # Earliest EL-managed dir on PATH decides the standing; set iteration
+            # order would otherwise pick an arbitrary one when several are known.
+            el_positions = [(i, d) for i, d in enumerate(path_dirs) if d in loadout_dirs]
+            if not el_positions:
                 standing = "off-path"
-            elif path_dirs.index(ldir) < path_dirs.index(sys_dir):
+            elif el_positions[0][0] < path_dirs.index(sys_dir):
                 standing = "payload-wins"
             else:
                 standing = "system-wins"
             rows.append((pkg, b, entry["version"], sys_path, ".".join(map(str, sys_ver)), standing))
     return rows
+
+
+def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
+    """Read-only report: install layout, legacy copies, prefer shims, PATH shadows.
+
+    Informational only -- findings never change doctor's exit status. Catches the
+    class of bug where EL binaries silently outrank system ones from a directory
+    the user forgot about.
+    """
+    findings = 0
+    prefix = _local_root(install_root)
+    if _is_home_root(install_root):
+        mode = "legacy HOME ($HOME/.local)"
+    elif _config_dest_dir():
+        mode = "configured (config.toml dest_dir)"
+    else:
+        mode = "XDG default ($XDG_DATA_HOME/loadout)"
+    print("Install layout:")
+    print(f"  root:         {install_root}")
+    print(f"  mode:         {mode}")
+    print(f"  shared tree:  {prefix}")
+    print(f"  user HOME:    {user_home}")
+
+    managed = set()
+    for entry in registry.values():
+        managed.update(entry.get("bins", []) or [])
+
+    prefer_dir = os.path.join(prefix, "prefer")
+    shims = []
+    if os.path.isdir(prefer_dir):
+        for name in sorted(os.listdir(prefer_dir)):
+            path = os.path.join(prefer_dir, name)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    if PREFER_SHIM_MARKER not in fh.read(256):
+                        continue
+            except OSError:
+                continue
+            target = os.path.join(prefix, "bin", name)
+            shims.append((name, target, os.path.isfile(target) and os.access(target, os.X_OK)))
+    if shims:
+        print(f"  prefer shims ({len(shims)}):")
+        for name, target, ok in shims:
+            suffix = "" if ok else "  [TARGET MISSING]"
+            print(f"    {name} -> {target}{suffix}")
+            if not ok:
+                findings += 1
+
+    legacy_bin = os.path.join(user_home, ".local", "bin")
+    current_bin = os.path.join(prefix, "bin")
+    legacy_copies = []
+    if os.path.realpath(legacy_bin) != os.path.realpath(current_bin) and os.path.isdir(legacy_bin):
+        legacy_copies = sorted(
+            n for n in os.listdir(legacy_bin) if n in managed and os.path.isfile(os.path.join(legacy_bin, n))
+        )
+    if legacy_copies:
+        shown = ", ".join(legacy_copies[:8])
+        if len(legacy_copies) > 8:
+            shown += f" ... (+{len(legacy_copies) - 8})"
+        print(f"  legacy EL copies in ~/.local/bin ({len(legacy_copies)}): {shown}")
+        print("    these win on PATH until pruned; see docs/INSTALLATION.md 'Migrating an existing install'")
+        findings += len(legacy_copies)
+
+    path_dirs = [os.path.realpath(d) for d in os.environ.get("PATH", "").split(os.pathsep) if d]
+    system_dirs = {os.path.realpath(p) for p in ("/usr/bin", "/bin", "/usr/local/bin")}
+    first_system = next((i for i, d in enumerate(path_dirs) if d in system_dirs), len(path_dirs))
+    el_bin_dirs = {os.path.realpath(current_bin), os.path.realpath(legacy_bin)}
+    shadowed = set()
+    for d in path_dirs[:first_system]:
+        if d == os.path.realpath(prefer_dir) or d not in el_bin_dirs or not os.path.isdir(d):
+            continue
+        for n in os.listdir(d):
+            if n in managed and n not in shadowed and os.path.isfile(os.path.join(d, n)):
+                shadowed.add(n)
+    if shadowed:
+        names = ", ".join(sorted(shadowed)[:8])
+        if len(shadowed) > 8:
+            names += f" ... (+{len(shadowed) - 8})"
+        print(f"  EL-managed names ahead of system dirs on this PATH ({len(shadowed)}): {names}")
+        print("    PATH order alone decides the winner; prefer/ shims are the intentional exception")
+        findings += len(shadowed)
+    print()
+    return findings
 
 
 def cmd_doctor(args, registry, repo_dir):
@@ -5974,6 +6070,8 @@ def cmd_doctor(args, registry, repo_dir):
     else:
         print("No system binary is newer than its payload counterpart.")
     print()
+
+    _doctor_layout_audit(repo_dir, registry, _resolve_home(None), os.path.expanduser("~"))
 
     # Optional content verification: hash every shipped payload file against
     # the committed .content-manifest.

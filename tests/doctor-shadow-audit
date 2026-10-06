@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# doctor layout audit: install root + mode, legacy ~/.local copies, prefer shims.
+#
+# Informational only -- doctor must still exit 0 with findings present.
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/loadout-doctor-layout.XXXXXX")
+trap 'chmod -R u+w "$tmp" 2>/dev/null || true; rm -rf "$tmp"' EXIT
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+home="$tmp/home"
+prefix="$home/.local/share/loadout"
+mkdir -p "$home/.local/bin" "$prefix/bin" "$prefix/prefer"
+cp /usr/bin/true "$home/.local/bin/rg"
+cp /usr/bin/true "$home/.local/bin/bash"
+printf '#!/bin/sh\necho el-tmux\n' >"$prefix/bin/tmux"
+chmod +x "$prefix/bin/tmux"
+printf '#!/bin/sh\n# loadout prefer shim\nexec "%s/bin/firefox" "$@"\n' "$prefix" >"$prefix/prefer/firefox"
+chmod +x "$prefix/prefer/firefox"
+
+# Findings present -> report them, still exit 0.
+out=$(env -i HOME="$home" PATH="$home/.local/bin:/usr/bin:/bin" TERM=xterm "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero with findings present:
+$out"
+case "$out" in *"Install layout:"*) : ;; *) fail "missing install layout section";; esac
+case "$out" in *"legacy EL copies"*) : ;; *) fail "missing legacy-copy report";; esac
+case "$out" in *bash*) : ;; *) fail "legacy-copy report should name bash";; esac
+case "$out" in *firefox*) : ;; *) fail "prefer shim not reported";; esac
+case "$out" in *"TARGET MISSING"*) : ;; *) fail "dangling prefer shim target not flagged";; esac
+
+# Negative control: clean HOME -> no legacy/shadow findings.
+clean="$tmp/clean"
+mkdir -p "$clean"
+out=$(env -i HOME="$clean" PATH="/usr/bin:/bin" TERM=xterm "$repo/loadout" doctor 2>&1) \
+    || fail "clean-HOME doctor exited nonzero"
+case "$out" in *"legacy EL copies"*) fail "clean HOME reported legacy copies";; esac
+
+echo "doctor-shadow-audit: OK"
