@@ -3405,7 +3405,7 @@ def _relocate_zsh_prefix(install_to):
         if data.startswith(b"\x7fELF"):
             patched = token_re.sub(_patch_elf_occurrence, data)
             assert len(patched) == len(data)
-            with open(path, "r+b") as fh:
+            with open(path, "rb+") as fh:
                 fh.write(patched)
         else:
             if b"\0" in data:
@@ -4549,6 +4549,115 @@ def _mirror_shared_prefix(home, shells=("bash", "tcsh")):
             "tcsh/global/config.csh",
             val,
         )
+
+
+PREFER_SHIM_MARKER = "# loadout prefer shim"
+
+
+def _prefer_config():
+    """prefer/prefer_off from config.toml; wrong types are ignored like dest_dir."""
+    cfg = _loadout_config()
+
+    def as_set(key):
+        value = cfg.get(key)
+        if not isinstance(value, list):
+            return set()
+        return {v.strip() for v in value if isinstance(v, str) and v.strip()}
+
+    return as_set("prefer"), as_set("prefer_off")
+
+
+def _prefer_shim_body(install_root, tool):
+    target = os.path.join(_local_root(install_root), "bin", tool)
+    return f'#!/bin/sh\n{PREFER_SHIM_MARKER}\nexec "{target}" "$@"\n'
+
+
+def _active_prefer_tools(registry, env_home, selected_tools=None):
+    """Registry defaults (env package selected now or installed in env_home),
+    plus config.toml `prefer`, minus `prefer_off`."""
+    adds, offs = _prefer_config()
+    defaults = set()
+    for name, entry in registry.items():
+        if entry.get("kind") != "env":
+            continue
+        tools = entry.get("prefer") or []
+        if not tools:
+            continue
+        installed = name in (selected_tools or ())
+        if not installed:
+            install_to = entry.get("install_to", "")
+            if install_to:
+                installed = os.path.lexists(_resolve_install_to(install_to, env_home))
+        if installed:
+            defaults.update(t for t in tools if isinstance(t, str))
+    return (defaults | adds) - offs
+
+
+def install_prefer_shims(install_root, env_home, registry, selected_tools=None):
+    """Reconcile <install_root>/prefer/ shims so opted-in tools win on PATH.
+
+    Defaults come from installed env packages that declare `prefer`; the user
+    adds/removes more via config.toml. Only shims carrying PREFER_SHIM_MARKER are
+    pruned or overwritten -- a foreign file with a colliding name is reported and
+    left alone. A read-only root warns and returns instead of failing the install.
+    """
+    prefix = _local_root(install_root)
+    bin_dir = os.path.join(prefix, "bin")
+    if not os.path.isdir(bin_dir):
+        return
+    prefer_dir = os.path.join(prefix, "prefer")
+    active = _active_prefer_tools(registry, env_home, selected_tools)
+
+    existing = {}
+    if os.path.isdir(prefer_dir):
+        for name in os.listdir(prefer_dir):
+            path = os.path.join(prefer_dir, name)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    head = fh.read(256)
+            except OSError:
+                continue
+            if PREFER_SHIM_MARKER in head:
+                existing[name] = path
+            else:
+                warn(f"prefer: leaving foreign file in place: {path}")
+
+    try:
+        if active:
+            ensure_dir(prefer_dir, "prefer shims")
+        applied = set()
+        for tool in sorted(active):
+            target = os.path.join(bin_dir, tool)
+            if not os.path.isfile(target) or not os.access(target, os.X_OK):
+                warn(f"prefer: '{tool}' is not installed in {bin_dir}; preference not applied")
+                continue
+            path = os.path.join(prefer_dir, tool)
+            if os.path.exists(path) and tool not in existing:
+                warn(f"prefer: {path} exists and is not a loadout shim; leaving it alone")
+                continue
+            fd, tmp = tempfile.mkstemp(prefix=".loadout-prefer.", dir=prefer_dir)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(_prefer_shim_body(install_root, tool))
+                os.chmod(tmp, 0o755)
+                os.replace(tmp, path)
+            except BaseException:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(tmp)
+                raise
+            applied.add(tool)
+        for tool, path in existing.items():
+            if tool not in active:
+                os.unlink(path)
+        if os.path.isdir(prefer_dir) and not os.listdir(prefer_dir):
+            os.rmdir(prefer_dir)
+    except (OSError, InstallRefused) as exc:
+        warn(f"prefer: could not update {prefer_dir}: {exc}")
+        return
+    if applied:
+        print(f"  prefer shims: {', '.join(sorted(applied))}")
 
 
 def install_tealdeer_config(repo_dir, home):
@@ -6269,6 +6378,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
     run_install_step("config files", install_copy_mode, repo_dir, env_home, selected_tools, registry, silent=True)
+    run_install_step("prefer shims", install_prefer_shims, home, env_home, registry, selected_tools, silent=True)
     run_install_step("fonts", install_fonts, repo_dir, env_home, selected_tools, registry, args.no_backup)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("Rust crate store", install_crate_store, repo_dir, home, selected_tools, silent=True)

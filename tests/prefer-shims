@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""prefer-shims -- managed <install_root>/prefer/<tool> shims.
+
+The installer maintains exec shims for registry-declared defaults (env-tmux ->
+tmux) plus config.toml `prefer`, minus `prefer_off`. Only EL-owned shims
+(marker line) are pruned; foreign files are reported and never overwritten.
+A read-only root warns instead of failing the install.
+"""
+
+import importlib.util
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VENDOR = os.path.join(REPO, "installer_vendor")
+
+
+def load_module(home):
+    os.environ["HOME"] = home
+    for path in (REPO, VENDOR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    spec = importlib.util.spec_from_file_location("loadout_main_under_test", os.path.join(REPO, "loadout_main.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_config(home, body):
+    cfg_dir = os.path.join(home, ".config", "engineering-loadout")
+    os.makedirs(cfg_dir, exist_ok=True)
+    with open(os.path.join(cfg_dir, "config.toml"), "w", encoding="utf-8") as fh:
+        fh.write(body)
+
+
+def check(label, got, want=True):
+    if got != want:
+        print(f"  FAIL  {label}\n          got:  {got}\n          want: {want}")
+        return 1
+    print(f"  PASS  {label}")
+    return 0
+
+
+def main():
+    failures = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        home = os.path.join(tmp, "home")
+        root = os.path.join(tmp, "root")
+        os.makedirs(home)
+        os.makedirs(os.path.join(root, "bin"))
+        tmux = os.path.join(root, "bin", "tmux")
+        with open(tmux, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\necho el-tmux\n")
+        os.chmod(tmux, 0o755)
+        lm = load_module(home)
+        registry = {
+            "env-tmux": {"kind": "env", "install_to": "~/.config/tmux", "prefer": ["tmux"]},
+            "tmux": {"kind": "bin", "bins": ["tmux"]},
+            "firefox": {"kind": "bin", "bins": []},
+        }
+        env_tmux_dir = os.path.join(home, ".config", "tmux")
+        os.makedirs(env_tmux_dir)
+        shim = os.path.join(root, "prefer", "tmux")
+
+        # Default active while env-tmux is installed.
+        lm.install_prefer_shims(root, home, registry, None)
+        failures += check("shim created", os.path.isfile(shim))
+        failures += check("shim mode is 0755", stat.S_IMODE(os.stat(shim).st_mode), 0o755)
+        body = open(shim, encoding="utf-8").read()
+        failures += check("shim carries the marker", lm.PREFER_SHIM_MARKER in body)
+        failures += check("shim execs the EL tool by absolute path", f'exec "{tmux}" "$@"' in body)
+        out = subprocess.run([shim], capture_output=True, text=True, check=False).stdout.strip()
+        failures += check("shim runs the EL tool", out, "el-tmux")
+
+        # Default inactive once the env package is gone -> pruned.
+        os.rmdir(env_tmux_dir)
+        lm.install_prefer_shims(root, home, registry, None)
+        failures += check("inactive default pruned", os.path.exists(shim), False)
+
+        # prefer_off overrides the default.
+        os.makedirs(env_tmux_dir)
+        write_config(home, 'prefer_off = ["tmux"]\n')
+        lm.install_prefer_shims(root, home, registry, None)
+        failures += check("prefer_off removes the default", os.path.exists(shim), False)
+
+        # Config opt-in with a missing target: warn, create nothing.
+        write_config(home, 'prefer = ["firefox"]\n')
+        lm.install_prefer_shims(root, home, registry, None)
+        failures += check(
+            "missing target creates no shim", os.path.exists(os.path.join(root, "prefer", "firefox")), False
+        )
+
+        # Foreign file with the same name is never overwritten.
+        write_config(home, "")
+        os.makedirs(os.path.join(root, "prefer"), exist_ok=True)
+        foreign = os.path.join(root, "prefer", "tmux")
+        with open(foreign, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\necho foreign\n")
+        lm.install_prefer_shims(root, home, registry, None)
+        failures += check("foreign file preserved", open(foreign, encoding="utf-8").read().endswith("echo foreign\n"))
+
+        # Read-only root: warn and continue, never raise.
+        shutil.rmtree(os.path.join(root, "prefer"))
+        os.chmod(root, 0o555)
+        try:
+            lm.install_prefer_shims(root, home, registry, None)
+            failures += check("read-only root does not raise", True)
+        except Exception as exc:  # noqa: BLE001 - the assertion is the point
+            failures += check("read-only root does not raise", False, repr(exc))
+        finally:
+            os.chmod(root, 0o755)
+
+    print(f"\n{'OK' if not failures else 'FAILED'}: prefer-shims")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
