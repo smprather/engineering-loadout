@@ -347,7 +347,7 @@ removed (Chromium needs unprivileged user namespaces; hosts that block
 CLONE_NEWUSER skip the probe, like firefox). Its launcher composes
 `build/gui-wrapper-env.sh` + `build/gtk3-launcher-env.sh`; every fragment must
 end in a newline — a missing one fuses the last line into the next fragment's
-first and shipped in the gtkwave/gvim/twinwave/rtlbrowse/mate-terminal wrappers
+first and shipped in the gtkwave/gvim/twinwave/rtlbrowse/mate-terminal/xfce4-terminal wrappers
 until `tests/prebuilt-binaries` gained a composition + fused-line scan.
 
 The Helix runtime lives at `payload/<platform>/runtime/helix.tar.bz2`; the
@@ -387,6 +387,13 @@ The mate-terminal shanghai bundle must include both
 `build/mate-terminal/org.mate.interface.gschema.xml`; without
 it, `mate-terminal.bin` aborts with `Settings schema 'org.mate.interface' is not
 installed` before opening.
+
+The xfce4-terminal shanghai bundle (1.0.4 EPEL8) is the same shape but has no
+schema requirement: it starts and maps a window with no session bus at all
+(preferences are simply not persisted without a host xfconf), so nothing
+D-Bus-related is bundled for it. It bundles libxfce4util/libxfce4ui/libxfconf
+plus libstartup-notification-1 (a NEEDED of our bundled libxfce4ui that stock
+almalinux:8.10 lacks), and shares the libvte-2.91 stem with mate-terminal.
 
 **Prompt block in `envs/bash/global/bashrc` is clobber-sensitive -- do not "simplify"
 it.** The loadout does not own `PROMPT_COMMAND` and Starship does not always hook

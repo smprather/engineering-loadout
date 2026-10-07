@@ -625,6 +625,14 @@ TOOLS = [
         "https://github.com/astrand/xclip",
         strategy_flag(["-version"], r"xclip version ([0-9]+\.[0-9]+)"),
     ),
+    (
+        "xfce4-terminal",
+        "xfce4-terminal",
+        "https://docs.xfce.org/apps/xfce4-terminal/start",
+        # xfce4-terminal --version -> "xfce4-terminal 1.0.4 (Xfce 4.16)"
+        # (the wrapper execs the sibling .bin, so it answers too)
+        strategy_flag(["--version"], r"xfce4-terminal ([0-9]+\.[0-9]+\.[0-9]+)"),
+    ),
     ("yank", "yank", "https://github.com/mptre/yank", strategy_flag(["-v"], r"yank ([0-9]+\.[0-9]+\.[0-9]+)")),
     ("yq", "yq", "https://github.com/mikefarah/yq", strategy_flag(["--version"], r"version v([0-9]+\.[0-9]+\.[0-9]+)")),
     (

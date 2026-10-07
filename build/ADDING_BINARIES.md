@@ -6979,3 +6979,105 @@ requires every named formatter to resolve to a payload bin, a python-tool
 console script, or an LSP provider -- RED/GREEN proven on the original `rumdl`
 bug. With prettier and yamlfmt shipped, its `KNOWN_EXTERNAL` table is now
 EMPTY: every filetype conform maps has a real, installed formatter.
+
+## uv 0.12.17 + uvx -- launcher + pinned interpreter (added 2026-10-06)
+
+`uv` ships as **three payload files** from one package (the
+expect/gvim/firefox wrapper pattern):
+
+- `bin/uv` -- launcher (`build/uv-launcher.sh`)
+- `bin/uv.bin` -- the real upstream binary (strip -> patchelf -> bzip2)
+- `bin/uvx` -- launcher (`build/uvx-launcher.sh`) -> `bin/uv tool run`
+
+The launcher pins `UV_PYTHON` to `<prefix>/bin/python3` (the loadout
+interpreter) unless the caller set `UV_PYTHON`, so `uv venv`, `uv tool install`
+and `uv run` build against EL's Python instead of the host's system `python3`
+(EL8: 3.6) -- that is what makes uv usable offline on a farm node.  An
+explicit `--python` always wins.
+
+**The pin is deliberately NOT applied to `uv pip`, nor to `uv run` under an
+active virtualenv** -- measured on uv 0.12.17: `UV_PYTHON` outranks
+`VIRTUAL_ENV`, so a pinned `uv pip install` inside an activated venv installs
+into the loadout's managed Python instead of the venv, and a pinned `uv run`
+ignores the active venv.  Dropping the pin for `uv pip` also means a bare
+`uv pip install` is refused by uv itself ("No virtual environment found") --
+the managed interpreter can never become an accidental pip target, and
+`VIRTUAL_ENV` / `--python` / `--system` installs go exactly where the caller
+asked.  Upstream `uv tool run` rejects `--version`, so `uvx --version` answers
+from uv itself.
+
+Regeneration: `./build/update-prebuilt uv=<version>` downloads the upstream
+tarball, writes `bin/uv.bin.bz2`, and re-composes both launcher bz2s from
+`build/*-launcher.sh` (the `LAUNCHERS` table there).  Registry `bins` must list
+all three stems or the unregistered ones install with every selection;
+`build/verify-binaries`'s uv entry carries `"bundled": "uv.bin"` so the
+artifact hash check compares the real binary, not the launcher.
+
+`tests/uv-launchers` (T2, offline) pins the behavior: version through both
+launchers, the interpreter pin, explicit `--python` override, active-venv
+precedence, native pip refusal with no contamination of the managed Python,
+wheelhouse installs into both the tree interpreter and a venv, and the uvx
+delegation.
+
+## xfce4-terminal 1.0.4 -- GTK3/VTE terminal (EL8 EPEL shanghai repack, added 2026-10-06)
+
+Upstream publishes source tarballs only, and a source build would mean building
+the whole Xfce stack; EPEL8 carries `xfce4-terminal-1.0.4-1.el8` built against
+EL8's GTK3/VTE, so this is an RPM repack (same technique as mate-terminal /
+Xephyr / firefox).
+
+**Build:** `build/build-xfce4-terminal.sh --tag 1.0.4` in the EL8 container.
+The script `dnf download`s the pinned NVR plus every consumed lib-provider RPM
+(no root, no system install), extracts with `rpm2cpio | cpio`, then
+strip -> patchelf -> bzip2. `EPEL_RELEASE=1.el8` is pinned at the top -- bump it
+deliberately. Lib-provider NVRs are recorded but not pinned (same as Xephyr).
+
+**Payload:** `bin/xfce4-terminal` (prefix-deriving launcher composed from
+`build/gui-wrapper-env.sh` + `build/gtk3-launcher-env.sh`, like mate-terminal) +
+`bin/xfce4-terminal.bin` (EL8-built binary, RPATH
+`$ORIGIN/../lib64:$ORIGIN/../lib`) + bundled libs in `lib64/`:
+`libxfce4ui-2.so.0`, `libxfce4util.so.7`, `libxfconf-0.so.3` (RPATH `$ORIGIN`)
+and `libstartup-notification-1.so.0`. `libvte-2.91.so.0` is declared in BOTH
+this entry and mate-terminal's `libs` (two owners of one payload path is the
+accepted pattern, cf. `libz.so.1`); `gui_libs` covers the GTK3/X11/pango/cairo
+closure. Member of `@gui-suite`.
+
+**Why `libstartup-notification-1.so.0` is bundled although it is not a direct
+NEEDED:** it is a NEEDED of our own bundled `libxfce4ui-2.so.0`, no other
+loadout package owns it, and stock `almalinux:8.10` does not have it (measured:
+file absent, package not installed; EL8 AppStream/EPEL). That is the same class
+as Xephyr's `libfontenc`, which shipped broken through a green smoke because
+the closure check walked only the entry binary -- so the build script's closure
+guard walks every shipped ELF and hard-fails on anything not covered by the
+bundle, the declared libs, `gui_libs`, or the glibc base.
+
+**Still assumed present (NOT bundled):** a GLVND `libGL` (nothing here needs GL
+directly; `gui-wrapper-env.sh` gates the Mesa exports on the host), and
+`/usr/share/xfce4/terminal/colorschemes` -- the app starts and runs without it
+(measured under Xvfb with the directory absent); only the extra colour schemes
+are unavailable. The absent `xfce4-terminal.desktop` costs a one-line
+`libxfce4ui` warning on GUI start.
+
+**Session bus / xfconf (measured, not assumed):** the terminal starts, maps
+its window and opens Preferences with NO D-Bus session bus at all and no
+`xfconfd`; preferences are simply not persisted (nothing written under
+`~/.config/xfce4`). `xfconfd` is therefore not bundled -- there is no hard
+failure to fix, and bundling a D-Bus-activatable service for one optional
+feature is not worth the surface. On a desktop host with a session bus, the
+host's xfconf provides persistence.
+
+**Stage-verify:** the script builds a fake HOME, starts Xvfb, launches the
+staged wrapper with a payload-lib64-only closure, asserts `--version`
+(`xfce4-terminal 1.0.4 (Xfce 4.16)`) and a mapped window
+(`0x200003 "Terminal": ("xfce4-terminal.bin" ...) 815x483+0+0`), and hard-fails
+if the staged tree still embeds the build prefix. Re-ran 3x: byte-reproducible
+(`sha256sum -c` OK).
+
+**Verification wiring:** `build/verify-binaries` carries a `_SKIP_REASONS`
+entry (EPEL RPM repack; the pipeline only extracts tar/zip/gz, no RPM support);
+`build/farm-versions` probes the installed `xfce4-terminal --version`
+(`ok 1.0.4`). `tests/prebuilt-binaries` probes both the wrapper and the binary
+via the default `--version` probe (no `PROBE_FLAGS` needed).
+
+**Debt:** extra colour schemes are not shipped; `WM_CLASS` is
+`Xfce4-terminal.bin` (cosmetic, same as mate-terminal).

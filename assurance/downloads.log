@@ -106,3 +106,5 @@
 2026-10-06T21:02:59Z	https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-unknown-linux-musl.tar.gz	69dcb4043f55c29118f408c6efd30115e0a4e0a6709253343b8c8fa814ab4a31
 2026-10-06T21:03:08Z	https://github.com/sharkdp/hyperfine/releases/download/v1.21.0/hyperfine-v1.21.0-x86_64-unknown-linux-musl.tar.gz	2c64127c1a0fc3bc58e365060b4d8a09e4632082e4dea843b8e4afb6a7b09f36
 2026-10-06T21:19:11Z	https://github.com/YARAHQ/yara-forge/releases/download/20261004/yara-forge-rules-full.zip	809fe0c2e6c58dd9dc74afad0cdae21a1ed3bd5e68e539504d211dbf4d872f8d
+2026-10-07T04:56:35Z	https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-unknown-linux-gnu.tar.gz	fa82fd8dde8e8eefdecada6aa0889666556cfceb690d06e0c3bca49eb3070a63
+2026-10-07T05:00:57Z	https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-unknown-linux-gnu.tar.gz	fa82fd8dde8e8eefdecada6aa0889666556cfceb690d06e0c3bca49eb3070a63

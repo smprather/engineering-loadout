@@ -1,0 +1,30 @@
+# Written by build/build-xfce4-terminal.sh on 2026-10-07T05:29:08Z.
+# Do not edit by hand; the script overwrites this on each build.
+
+Source:       EL8 EPEL RPMs (x86_64 only), pinned by --tag + EPEL_RELEASE
+Platform:     el8.x86_64.glibc2p28
+Version:      1.0.4
+Built:        2026-10-07
+
+Consumed RPM NVRs:
+  xfce4-terminal-1.0.4-1.el8.x86_64
+  libxfce4ui-4.16.0-2.el8.x86_64
+  libxfce4util-4.16.0-4.el8.x86_64
+  xfconf-4.16.0-1.el8.x86_64
+  startup-notification-0.12-15.el8.x86_64
+
+Bundled libs (taken from the RPMs above, never from /usr/lib64 on the
+build box):
+  libxfce4ui-2.so.0
+  libxfce4util.so.7
+  libxfconf-0.so.3
+  libstartup-notification-1.so.0
+
+libstartup-notification-1.so.0 is a NEEDED of the bundled
+libxfce4ui-2.so.0, is owned by no other loadout package, and is absent
+from a stock EL8 install -- hence bundled rather than assumed.
+
+libvte-2.91.so.0 is NOT repackaged here: it is an existing payload stem
+declared by both this package and mate-terminal in packages.json.
+
+payload/packages.json records "version": "1.0.4" for xfce4-terminal.

@@ -242,7 +242,9 @@ sha256  09d61b68fb8597049029917a8d830cc293345e74e45eeceb61c3cdca9b09db55  payloa
 sha256  01f538712899e05b3c3bf25f09d0848161c6824e96cfd594410176a1871ab972  payload/el8.x86_64.glibc2p28/bin/urxvt.bz2
 sha256  8de3586781738c9ec80e47a719a29c8c4cf90508d0facfb4910cff19cc68e7a8  payload/el8.x86_64.glibc2p28/bin/urxvtc.bz2
 sha256  43240868200c6eed5fbf5673e7991a17d3ca5e1eb9ef8d1b9819e4045d93b595  payload/el8.x86_64.glibc2p28/bin/urxvtd.bz2
-sha256  d3a2d25b679b3d346da08458d23e9bfed60235333932a396d0b2e3cc5491b050  payload/el8.x86_64.glibc2p28/bin/uv.bz2
+sha256  d3a2d25b679b3d346da08458d23e9bfed60235333932a396d0b2e3cc5491b050  payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2
+sha256  c0ee36aa0e6f95465134a1ae6e78eaf0abb65c290c4d73d9b32e5cc8b609c646  payload/el8.x86_64.glibc2p28/bin/uv.bz2
+sha256  f7e64492d793fc10db6189f6d1492d6af62064ded02b48ae647e492c7c46874d  payload/el8.x86_64.glibc2p28/bin/uvx.bz2
 sha256  75900122798e7e52c60349c474ca4e88fb304f8b85d72b7f32e5c8abfaf613b4  payload/el8.x86_64.glibc2p28/bin/vcd2fst.bz2
 sha256  803841fa66baadba4b52d1e0f04668e97c9d0603e4dd88dbb80c3dc551aceda4  payload/el8.x86_64.glibc2p28/bin/vcd2lxt.bz2
 sha256  b03121f1946f7829e58ae27c317a1b24b3c9885c449efecb83794e5f4072b75c  payload/el8.x86_64.glibc2p28/bin/vcd2lxt2.bz2
@@ -263,6 +265,8 @@ sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payloa
 sha256  16fb1705b4d8bd15e5bb5a920e658d63156b3e0c792553f7d9834a6aa1ef1640  payload/el8.x86_64.glibc2p28/bin/wish.bz2
 sha256  2d9baf49e8333edf159fc33dd47dc90c3784c5255a3526d959592934993e136d  payload/el8.x86_64.glibc2p28/bin/xclip.bz2
 sha256  f9bccfa45b9e18b0a83e6a9e926280a05250ab2cba67e0833c8ccb51dd5163e4  payload/el8.x86_64.glibc2p28/bin/xdesk.bz2
+sha256  104460dc05e612840a6bcc4ec8cb4ee0feafb459ab59d22af5616320a0253a12  payload/el8.x86_64.glibc2p28/bin/xfce4-terminal.bin.bz2
+sha256  834775ca80dcb582b8f956988cb7f9328db261d877abc68ee46b569a790c23e6  payload/el8.x86_64.glibc2p28/bin/xfce4-terminal.bz2
 sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
 sha256  d57b7cc82eeabc40b4fc40332ad8d77dbe05cb1d5574ff96b148cc17044eee5f  payload/el8.x86_64.glibc2p28/bin/xschem.bz2
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
@@ -422,6 +426,7 @@ sha256  d47819830416f5f81007ecabcb29ca652bc542ad32a9efb3f278a156b2c6fa8b  payloa
 sha256  c5d15f3afbad4ea61f29a2a4d83e5e7b006e527558777a556bac133276fd3538  payload/el8.x86_64.glibc2p28/lib64/libspqr.so.2.bz2
 sha256  0ddf996a3d1c711dbb92da8f96ffc8ab36676e514e693764a4d5c6ee2de0550a  payload/el8.x86_64.glibc2p28/lib64/libsqlite3.so.0.bz2
 sha256  e2d8c76bb49610565adda51b0cf5f57673ead9188d0ff4f060dc14a2e811e2fc  payload/el8.x86_64.glibc2p28/lib64/libssl.so.1.1.bz2
+sha256  db4e77a31eeb5a72238748f91a39a0660897f642c878a2bec0d8df46df1ec781  payload/el8.x86_64.glibc2p28/lib64/libstartup-notification-1.so.0.bz2
 sha256  ebaa74c68f7b9baaf4c7546477cfd52c2c889a9b2e3f6bf100a9af478483c1d3  payload/el8.x86_64.glibc2p28/lib64/libsuitesparseconfig.so.4.bz2
 sha256  9ed021dd73fd1639e1d777898a9c92700b606956f7055a9317b537ad1a4492d0  payload/el8.x86_64.glibc2p28/lib64/libsz.so.2.bz2
 sha256  5843e40f9553208fc7c3602b4ade7c361acaf3c255e9f8b0d5722ba52b48c82a  payload/el8.x86_64.glibc2p28/lib64/libtbb.so.2.bz2
@@ -458,6 +463,9 @@ sha256  5a56d84714b5bfc0e7c3080d31667749d0df4bad5ab0baf6b45147b5c1531358  payloa
 sha256  92b2c2507b189505f8326900ba46a0949ed4149534a24fa30848bd61108b1c1d  payload/el8.x86_64.glibc2p28/lib64/libxcb-xkb.so.1.bz2
 sha256  b63ee8ebeb96def62f2bb2fdb7ce0bde2751064691de73a31fb740014d9039ff  payload/el8.x86_64.glibc2p28/lib64/libxcb-xv.so.0.bz2
 sha256  138988e752aa29f358e4de3565eb995bcccdec3bcc0808bc2319bc37fd4da1c6  payload/el8.x86_64.glibc2p28/lib64/libxcb.so.1.bz2
+sha256  c91e53ef75d55a48e7c696f76b2434077bdb98a272fb1ca82927a9d0707b483d  payload/el8.x86_64.glibc2p28/lib64/libxfce4ui-2.so.0.bz2
+sha256  b19ed4917950c2cbbe30bbaec98914ce7e02545e52aa886887295cda1f772a1f  payload/el8.x86_64.glibc2p28/lib64/libxfce4util.so.7.bz2
+sha256  d42b42710a23a105dbefdcd808853d9f29f9e4369b6b90e360721d6217b95b02  payload/el8.x86_64.glibc2p28/lib64/libxfconf-0.so.3.bz2
 sha256  85bd2183970e7184f9c56ea68f014cbc07a1db8f44ac0590b95ae4569ebe3a88  payload/el8.x86_64.glibc2p28/lib64/libxkbcommon-x11.so.0.bz2
 sha256  762794ca28d4da4d557bdf6593eb44f1bf1cfb637fd1de9873af58a6b1b0e831  payload/el8.x86_64.glibc2p28/lib64/libxkbcommon.so.0.bz2
 sha256  022675e5cd18eb6846750d80c5aadf0d863caea88a4d431a8e494bc816dc8368  payload/el8.x86_64.glibc2p28/lib64/libxml2.so.2.bz2

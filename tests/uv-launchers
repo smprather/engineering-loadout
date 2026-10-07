@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# uv/uvx launchers: interpreter pin, caller overrides, pip guard, uvx path.
+#
+# The payload ships bin/uv (launcher), bin/uv.bin (the real upstream binary)
+# and bin/uvx (launcher -> uv tool run). These checks run against a real
+# install with no network: the wheelhouse is the local payload one.
+set -euo pipefail
+
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+tree=$(mktemp -d "$tmp_root/loadout-uv-tree.XXXXXX")
+work=$(mktemp -d "$tmp_root/loadout-uv-work.XXXXXX")
+trap 'rm -rf "$tree" "$work"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+wheels=$(ls -d "$REPO"/payload/*/wheels 2>/dev/null | head -1)
+[ -n "$wheels" ] || fail "no payload wheelhouse found"
+
+mkdir -p "$work/home"
+env -i HOME="$work/home" PATH="/usr/bin:/bin" TMPDIR="$tmp_root" TERM=xterm \
+    "$REPO/loadout" install -y portable-python uv --dest-dir "$tree" --no-backup >"$work/install.log" 2>&1 \
+    || { tail -20 "$work/install.log"; fail "install failed"; }
+
+UV="$tree/bin/uv"
+UVX="$tree/bin/uvx"
+python_bin="$tree/bin/python3.14"
+[ -x "$UV" ] || fail "uv launcher missing"
+[ -x "$UVX" ] || fail "uvx launcher missing"
+[ -x "$tree/bin/uv.bin" ] || fail "uv.bin missing"
+[ -x "$python_bin" ] || fail "loadout python missing"
+
+# 1. version through both launchers
+"$UV" --version | grep -q '^uv ' || fail "uv --version through the launcher"
+"$UVX" --version | grep -q '^uv ' || fail "uvx --version should report uv's version"
+
+# 2. interpreter pin: uv run resolves the loadout python (the launcher pins
+# $prefix/bin/python3, so that symlink path is what uv reports)
+got=$(cd "$work" && "$UV" run --no-project python -c 'import sys; print(sys.executable)')
+case "$got" in
+    "$tree"/bin/python3 | "$tree"/bin/python3.14) ;;
+    *) fail "uv run used '$got', expected the loadout python" ;;
+esac
+
+# 3. caller override: an explicit --python wins over the pin. Use a clean venv
+# made from the system python -- uv reads interpreter metadata, and a distro
+# package in the host's system site-packages can be malformed (CachyOS ships a
+# netgen_mesher egg-info with no version); the test must not depend on that.
+sys_py=$(command -v python3) || fail "no system python3"
+"$sys_py" -m venv --without-pip "$work/sysvenv" || fail "system venv creation failed"
+got=$(cd "$work" && "$UV" run --no-project --python "$work/sysvenv/bin/python" python -c 'import sys; print(sys.executable)')
+[ "$got" = "$work/sysvenv/bin/python" ] || fail "explicit --python did not win (got '$got')"
+
+# 3b. an active virtualenv wins over the pin for `uv run` (UV_PYTHON outranks
+# VIRTUAL_ENV, so the launcher steps aside for this case)
+got=$(cd "$work" && VIRTUAL_ENV="$work/sysvenv" "$UV" run --no-project python -c 'import sys; print(sys.executable)')
+[ "$got" = "$work/sysvenv/bin/python" ] || fail "active venv lost to the pin (got '$got')"
+
+# 4. pip target safety: with no target uv itself refuses the mutation (its
+# UV_PYTHON pin is deliberately not applied to `uv pip`), so the managed
+# Python can never become an accidental pip target.
+if (cd "$work" && "$UV" pip install --no-index --find-links "$wheels" mdformat) >"$work/guard.log" 2>&1; then
+    fail "bare uv pip install unexpectedly succeeded"
+fi
+grep -qF "No virtual environment found" "$work/guard.log" \
+    || fail "bare uv pip install did not fail with uv's no-venv error: $(tail -2 "$work/guard.log")"
+[ ! -e "$tree/bin/mdformat" ] || fail "bare uv pip install contaminated the managed Python"
+
+# 5. explicit target: install from the local wheelhouse into the loadout python
+(cd "$work" && "$UV" pip install --python "$python_bin" --no-index --find-links "$wheels" mdformat) \
+    >"$work/sys.log" 2>&1 || { tail -5 "$work/sys.log"; fail "uv pip install --python failed"; }
+"$tree/bin/mdformat" --version >/dev/null || fail "mdformat not installed into the loadout python"
+
+# 6. venv workflow: the guard passes and the install lands in the venv
+(cd "$work" && "$UV" venv -q "$work/venv" \
+    && VIRTUAL_ENV="$work/venv" "$UV" pip install --no-index --find-links "$wheels" mdformat) \
+    >"$work/venv.log" 2>&1 || { tail -5 "$work/venv.log"; fail "venv pip install failed"; }
+[ -x "$work/venv/bin/mdformat" ] || fail "mdformat missing from the venv"
+
+# 7. uvx path: delegates to `uv tool run`
+"$UVX" --help 2>&1 | grep -qi 'tool' || fail "uvx --help does not look like tool run"
+
+echo "uv-launchers: OK"

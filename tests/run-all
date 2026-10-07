@@ -287,6 +287,7 @@ run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
 run_test "optional-packages" --deps auto tests/optional-packages
 run_test "install-parity-plot" --deps auto tests/install-parity-plot
 run_test "install-python-tool-upgrade" --deps auto tests/install-python-tool-upgrade
+run_test "uv-launchers" --deps auto tests/uv-launchers
 run_test "install-typescript-language-server" --deps auto tests/install-typescript-language-server
 run_test "install-linux-tmp-home" --deps auto tests/install-linux-tmp-home
 run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs

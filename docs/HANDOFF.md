@@ -1,5 +1,47 @@
 # Current Handoff
 
+## 2026-10-07: uv/uvx launchers + xfce4-terminal (release 2026.10.2)
+
+**uv/uvx.** `uv` was already a package but bare upstream: no `uvx`, and
+`uv venv` / `uv tool install` / `uv run` created environments with whatever
+interpreter uv discovered. Now `bin/uv` (POSIX-sh launcher) + `bin/uv.bin`
+(official 0.12.17 release binary) + `bin/uvx` (-> `uv tool run`), built by
+`./build/update-prebuilt uv=0.12.17` from `build/uv-launcher.sh` /
+`build/uvx-launcher.sh` (LAUNCHERS table, output stem `uv.bin`), so a bump is
+one command. Pin semantics are measured, not assumed: `UV_PYTHON` is set to
+`<prefix>/bin/python3` for `uv venv` / `uv tool install` / `uv run`, but NOT
+for `uv pip` -- on 0.12.17 `UV_PYTHON` outranks `VIRTUAL_ENV`, so a pinned
+`uv pip install` inside an activated venv would install into the managed
+Python instead of the venv. Without the pin, uv's native target discovery
+refuses a bare install and honors the venv / `--python` / `--system`; an
+explicit `--python` or caller-set `UV_PYTHON` always wins. `tests/uv-launchers`
+(T2, network blackholed) gates all of it. `uvx --version` is special-cased to
+uv's version (`uv tool run --version` errors upstream). `uv self update` may
+replace `uv.bin` in place -- accepted (an explicit user action; the wrapper
+keeps working).
+
+**xfce4-terminal 1.0.4** (EPEL8 shanghai repack, `build/build-xfce4-terminal.sh`):
+`bin/xfce4-terminal` launcher (gui + gtk3 shared blocks) +
+`bin/xfce4-terminal.bin`, four bundled lib stems (`libxfce4ui-2.so.0`,
+`libxfce4util.so.7`, `libxfconf-0.so.3`, `libstartup-notification-1.so.0`) plus
+the `libvte-2.91.so.0` stem shared with mate-terminal (declared in both
+entries). `libstartup-notification-1` is a NEEDED of our bundled libxfce4ui and
+is absent from stock almalinux:8.10 -> bundled (the Xephyr/libfontenc class;
+the build's closure guard walks every shipped ELF for this reason). Measured:
+starts, maps a window and opens Preferences with NO session bus and no xfconfd;
+preferences simply do not persist, so xfconfd is deliberately not bundled.
+Member of @gui-suite; build notes in build/ADDING_BINARIES.md.
+
+**Gates:** T1+T2 `tests/run-all` green; Tier 3
+`tests/prebuilt-binaries-almalinux8 --full` (--network=none) green -- 326
+binaries OK, runtimes OK. Dev-host gotcha, recorded because it bit this
+session: a shell started before the XDG migration still had the OLD
+`~/.loadout/local/bin` on PATH (now deleted), so `ruff`/`tmux` lookups failed
+and `tests/run-all` reported three false failures. Prefix
+`~/.local/share/loadout/bin` to PATH on a migrated box -- a fresh login shell
+gets it via appended PATH; a long-lived tool session predating the migration
+does not.
+
 ## 2026-10-06 (post-2026.10.1): tmux focus-follows-mouse preference
 
 `focus-follows-mouse` is now a layered tmux preference: the managed baseline
@@ -9,16 +51,17 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-06 (**released 2026.10.1** -- October currency sweep on
-top of the XDG re-architecture). Prior release:
-`v2026.09.23` RELEASED + verified
+Last updated: 2026-10-07 (**release 2026.10.2 cut in this session**: uv/uvx
+launchers + xfce4-terminal; post-publish verification stamped in the follow-up
+commit). Prior releases: 2026.10.1 (October currency sweep on top of the XDG
+re-architecture), `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
 launcher fix + gate fixes), the three 2026-09-24 gates (versioning scheme,
 scanner de-productification, security pipeline), the 2026-09-25 security wheel
 refresh, and the 2026-09-27 xschem onboarding.
 
-## 2026-10-06: October currency sweep (UNRELEASED)
+## 2026-10-06: October currency sweep (released as 2026.10.1)
 
 Class C release prep on top of the XDG re-architecture. `build/check-versions`
 started at ~23 outdated; after the sweep:

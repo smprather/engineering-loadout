@@ -38,7 +38,12 @@ PATCHELF = os.path.expanduser("~/.local/bin/patchelf")
 # passed on the command line must match the tool's own `--version` output.
 TOOLS = {
     "ruff": ("https://github.com/astral-sh/ruff/releases/download/{ver}/ruff-x86_64-unknown-linux-gnu.tar.gz", "ruff"),
-    "uv": ("https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz", "uv"),
+    "uv": (
+        "https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz",
+        "uv",
+        "",
+        "uv.bin",
+    ),
     "ty": ("https://github.com/astral-sh/ty/releases/download/{ver}/ty-x86_64-unknown-linux-gnu.tar.gz", "ty"),
     "starship": (
         "https://github.com/starship/starship/releases/download/v{ver}/starship-x86_64-unknown-linux-gnu.tar.gz",
@@ -129,6 +134,16 @@ TOOLS = {
         "https://github.com/sharkdp/hyperfine/releases/download/v{ver}/hyperfine-v{ver}-x86_64-unknown-linux-musl.tar.gz",
         "hyperfine",
     ),
+}
+
+
+# Tools that ship a launcher (text) in front of the real binary, following the
+# uv -> uv.bin pattern: tool -> [(installed name, launcher source in build/), ...].
+# The launcher is prefix-derived and version-independent, so it is rewritten on
+# every update; the binary itself lands under the output stem from TOOLS (uv.bin
+# for uv), and the registry lists every stem in that package's "bins".
+LAUNCHERS = {
+    "uv": [("uv", "uv-launcher.sh"), ("uvx", "uvx-launcher.sh")],
 }
 
 
@@ -267,6 +282,14 @@ def main():
             with open(out, "wb") as f:
                 f.write(bz2.compress(data, 9))
             print(f"   wrote {out} ({os.path.getsize(out)} bytes)")
+            for installed, launcher in LAUNCHERS.get(tool, ()):
+                src = os.path.join(REPO, "build", launcher)
+                with open(src, "rb") as f:
+                    launcher_data = f.read()
+                launcher_out = os.path.join(BIN_DIR, installed + ".bz2")
+                with open(launcher_out, "wb") as f:
+                    f.write(bz2.compress(launcher_data, 9))
+                print(f"   wrote {launcher_out} ({os.path.getsize(launcher_out)} bytes)")
             stamp(reg_path, tool, ver)
 
 

@@ -123,6 +123,7 @@ _REGISTRY = {
     "uv": {
         "url": "https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-gnu.tar.gz",
         "bin": "uv",
+        "bundled": "uv.bin",
     },
     "zoxide": {
         "url": "https://github.com/ajeetdsouza/zoxide/releases/download/v{ver}/zoxide-{ver}-x86_64-unknown-linux-gnu.tar.gz",
@@ -161,6 +162,11 @@ _SKIP_REASONS = {
     "fd": "NEEDED libs differ from official release -- EL8 source build",
     "zoxide": "GNU ABI; zoxide ships musl-only for Linux -- EL8 source build (cargo, Rust 1.96)",
     "tmux": "built from source (long upstream release cycle; intentionally kept as latest stable source build)",
+    # EL8 RPM repacks -- no upstream binary release to download and hash. The
+    # build script pins the source RPM NVR and guards the NEEDED closure; there
+    # is nothing for the download+strip+compare pipeline to do (it extracts
+    # tar/zip/gz archives, not RPMs).
+    "xfce4-terminal": "EL8 EPEL RPM repack (xfce4-terminal-1.0.4-1.el8); pinned by the build script, no upstream binary release",
     # EL8 source builds -- old Rust toolchain links libpthread.so.0/libdl.so.2 separately;
     # official releases use newer Rust (>=1.62) where these are folded into glibc.
     "broot": "EL8 source build (cargo, Rust 1.96); official release is static",
@@ -349,9 +355,13 @@ def _verify_one(name, entry, version, tmpdir, verbose):
     if _is_dynamic_elf(extracted):
         _patchelf_rpath(extracted, verbose)
 
-    # Compare
+    # Compare.  Some tools ship a launcher plus a real binary under a different
+    # stem (uv -> bin/uv wrapper + bin/uv.bin): entry["bundled"] names the
+    # payload artifact when it differs from the upstream archive member.
     upstream_hash = _sha256_file(extracted)
-    bundled_data = _bundled_bytes(want)
+    bundled_data = _bundled_bytes(entry.get("bundled", want))
+    if bundled_data is None:
+        bundled_data = _bundled_bytes(want)
     if bundled_data is None:
         # Try the tool name as stem too (e.g. miller->mlr)
         bundled_data = _bundled_bytes(name)
