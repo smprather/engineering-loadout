@@ -1,5 +1,8 @@
 # Copilot Instructions
 
+Terminology: **EL8 / EL9** = RHEL 8 / RHEL 9 (and rebuilds); a bare **EL**
+means this project, Engineering Loadout.
+
 After a context clear, read `docs/HANDOFF.md` first for current branch state,
 verification gates, and user-home follow-up that cannot be inferred from Git
 alone.

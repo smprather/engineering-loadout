@@ -4,6 +4,14 @@ Merged agent+architecture reference (formerly `AGENTS.md` + `CLAUDE.md`). Scope:
 
 After any context clear, start with `docs/HANDOFF.md` (branch state, verification gates, follow-ups not inferable from git).
 
+## Terminology
+
+- **EL8 / EL9** — RHEL 8 / RHEL 9 and their rebuilds (AlmaLinux, Rocky,
+  Oracle Linux). Never write a bare "EL" for these.
+- **EL** (bare) — this project, **E**ngineering **L**oadout: the installer, the
+  registry, or the installed tree, depending on context. A bare "EL" always
+  means the loadout, never a Red Hat release.
+
 ## Commit Rule
 
 Before every commit, sync every project Markdown doc that helps agents or users cold-start. Do not commit known doc drift. Check/update:
