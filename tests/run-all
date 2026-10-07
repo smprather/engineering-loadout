@@ -68,7 +68,11 @@ CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
 # --container runs write CACHE_SIDECAR_CONTAINER.
 CACHE_SIDECAR_CONTAINER="$CACHE_DIR/fingerprint-container.json"
 FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
-FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests")
+# The manifest tooling is part of the cache key even though it lives outside
+# payload/envs: the shipped-set regression test exercises both scripts, and a
+# script edit must not leave a cached PASS standing on the old behavior.
+FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests" \
+    "$REPO_DIR/build/gen-content-manifest" "$REPO_DIR/build/verify-manifest-export")
 
 # CI runtime log (see build/ci-runtimes): every test and the suite total is
 # timed and appended, so slowdowns are visible instead of anecdotal. CACHED
@@ -239,6 +243,8 @@ run_test "registry-integrity" "$PY" tests/registry-integrity
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
+run_test "content-manifest matches export" "$PY" build/verify-manifest-export
+run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
 run_test "installed-sizes in sync" "$PY" build/gen-installed-sizes --check
 run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" "$PY" build/gen-st-font-comments --check

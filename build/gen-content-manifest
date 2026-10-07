@@ -11,10 +11,24 @@ chunks are hashed as-stored, install-time verification hashes exactly the
 bytes it reads with no rejoin cost.
 
 Coverage: everything under payload/ (all platform dirs, packages.json, fonts,
-tldr, typelibs, wheels, crate-store, treesitter prebuilt, windows) plus
-envs/*/vendor/ (the nvim + tmux plugin bundles). Run after any payload change
+tldr, typelibs, wheels, crate-store, treesitter prebuilt) plus envs/*/vendor/
+(the nvim + tmux plugin bundles). Run after any payload change
 (strip-all-elf-binaries calls it); the result is committed and covered by the
 signed release tag.
+
+THE MANIFEST COVERS THE *SHIPPED* CONTENT SET -- what `git archive HEAD` puts
+in a release tarball -- not whatever happens to be sitting in the release
+host's working directory. Files git will not ship (untracked AND ignored:
+.gitignore, .git/info/exclude, core.excludesFile) are skipped, because hashing
+one commits a path that cannot exist in a clean clone or export: `--check`
+passes on the host that generated it and fails everywhere else, and
+build/export refuses. A vendored plugin tree is exactly where this happens
+(tmux-persist arrived with gitignored .agents/, .codex/ and .claude/
+directories that the top-level .gitignore matches at any depth). Tracked-but-
+ignored files ARE shipped and stay covered; untracked files that are not
+ignored stay covered too, because the documented payload chain (build -> copy
+into payload/ -> gen-* -> git add) regenerates the manifest before `git add`
+makes the file shipped.
 
 Usage: build/gen-content-manifest [--check]
   (no args)  regenerate .content-manifest
@@ -23,6 +37,7 @@ Usage: build/gen-content-manifest [--check]
 
 import hashlib
 import os
+import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +49,10 @@ ROOTS = [
     os.path.join("envs", "nvim", "vendor"),
     os.path.join("envs", "tmux", "vendor"),
 ]
+
+
+class ManifestError(Exception):
+    """A condition that must abort the run (not drift in the manifest itself)."""
 
 
 def sha256_of(path):
@@ -62,7 +81,50 @@ def _excluded(rel):
     return rel.startswith(os.path.join("envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2."))
 
 
+def _git(args):
+    """Run git in REPO; return the CompletedProcess, or None when there is no git tree.
+
+    None means "this is not a git checkout" (no .git): an extracted release
+    tarball or an exported install directory, which by construction contains
+    only shipped files. REPO must be the repository ROOT (it is by
+    construction); the explicit .git probe also stops git from discovering a
+    PARENT repository when an export happens to sit inside one. A tree WITH
+    .git that cannot be queried is a hard error -- silently treating it as
+    git-less would skip the ignored-file filter and re-open the export blocker.
+
+    `-c safe.directory=REPO` keeps the filter working when the repo is a
+    foreign-owned bind mount (the EL8 build container), where git would
+    otherwise refuse with "dubious ownership".
+    """
+    if not os.path.exists(os.path.join(REPO, ".git")):
+        return None
+    try:
+        return subprocess.run(["git", "-c", f"safe.directory={REPO}", "-C", REPO, *args], capture_output=True)
+    except OSError as exc:
+        raise ManifestError(
+            f"git is unavailable in a git checkout ({exc}); cannot determine the shipped content set"
+        ) from exc
+
+
+def untracked_ignored():
+    """Repo-relative files git will NOT ship: untracked AND ignored.
+
+    This is the filter that keeps unshipped files out of the manifest. It
+    covers every standard ignore source (per-directory .gitignore,
+    .git/info/exclude, core.excludesFile), so a host-specific global ignore
+    cannot leak a path into the committed manifest either. Tracked-but-ignored
+    files (git add -f) are NOT in this set: they ship and must stay covered.
+    """
+    proc = _git(["ls-files", "-z", "-o", "-i", "--exclude-standard", "--", *ROOTS])
+    if proc is None:
+        return set()
+    if proc.returncode != 0:
+        raise ManifestError("git ls-files failed in a git checkout: " + proc.stderr.decode("utf-8", "replace").strip())
+    return {p.decode("utf-8", "surrogateescape") for p in proc.stdout.split(b"\0") if p}
+
+
 def iter_files():
+    ignored = untracked_ignored()
     for root in ROOTS:
         base = os.path.join(REPO, root)
         if not os.path.isdir(base):
@@ -74,9 +136,21 @@ def iter_files():
                 if os.path.islink(full) or not os.path.isfile(full):
                     continue
                 rel = os.path.relpath(full, REPO)
-                if _excluded(rel):
+                if _excluded(rel) or rel in ignored:
                     continue
                 yield rel, full
+
+
+def parse_manifest(text):
+    entries = {}
+    for line in text.splitlines():
+        line = line.rstrip("\n")
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 2)
+        if len(parts) == 3 and parts[0] == "sha256":
+            entries[parts[2]] = parts[1]
+    return entries
 
 
 def generate():
@@ -93,17 +167,10 @@ def generate():
 
 
 def load_manifest():
-    entries = {}
     if not os.path.isfile(MANIFEST):
-        return entries
-    for line in open(MANIFEST):
-        line = line.rstrip("\n")
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(None, 2)
-        if len(parts) == 3 and parts[0] == "sha256":
-            entries[parts[2]] = parts[1]
-    return entries
+        return {}
+    with open(MANIFEST) as fh:
+        return parse_manifest(fh.read())
 
 
 def check():
@@ -111,15 +178,21 @@ def check():
     if not manifest:
         print("ERROR: .content-manifest missing or empty; run build/gen-content-manifest", file=sys.stderr)
         return 1
-    on_disk = dict(iter_files())
+    shipped = dict(iter_files())
     problems = []
     for rel, digest in manifest.items():
         full = os.path.join(REPO, rel)
-        if not os.path.isfile(full):
+        if rel in shipped:
+            if sha256_of(full) != digest:
+                problems.append(f"MISMATCH {rel}")
+        elif os.path.lexists(full):
+            # Present on this host but not part of the shipped set (ignored and
+            # untracked). A manifest entry here verifies on this host and is
+            # MISSING in every clean clone or export -- the 2026-10-07 blocker.
+            problems.append(f"NOT-SHIPPED {rel}")
+        else:
             problems.append(f"MISSING  {rel}")
-        elif sha256_of(full) != digest:
-            problems.append(f"MISMATCH {rel}")
-    for rel in on_disk:
+    for rel in shipped:
         if rel not in manifest:
             problems.append(f"UNLISTED {rel}")
     if problems:
@@ -132,10 +205,14 @@ def check():
 
 
 def main(argv):
-    if "--check" in argv:
-        return check()
-    generate()
-    return 0
+    try:
+        if "--check" in argv:
+            return check()
+        generate()
+        return 0
+    except ManifestError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

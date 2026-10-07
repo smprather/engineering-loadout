@@ -489,6 +489,19 @@ use `./build/release --dry-run`, not the pre-commit hook. The scan must prune
 `./.git/*`; sandbox/worktree internals such as `./.git/.git` are not vendored
 plugins.
 
+### Content manifest covers the SHIPPED set
+
+`.content-manifest` pins what `git archive HEAD` ships, not the release host's
+working directory. `gen-content-manifest` skips untracked+ignored files
+(`git ls-files -o -i --exclude-standard`; tracked-but-ignored files added with
+`git add -f` stay covered, as do untracked-not-ignored files in the middle of
+the payload build chain), `--check` reports a present-but-unshipped entry as
+`NOT-SHIPPED`, and `build/verify-manifest-export` proves
+`HEAD:.content-manifest` against `git archive HEAD` (Tier 1, the `build/export`
+preflight, and release Step 3b). A gitignored file under a vendored plugin must
+never enter the manifest: it verifies on the generating host and is MISSING in
+every clean clone or export.
+
 ### Bash Alias Parsing Trap
 
 Interactive bash expands aliases while parsing sourced files. Before defining a

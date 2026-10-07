@@ -1,0 +1,238 @@
+#!/usr/bin/env python3.14
+"""content-manifest-shipped-set -- pin the manifest to the SHIPPED content set.
+
+Regression test for the 2026-10-07 export blocker: `envs/tmux/vendor/plugins/
+tmux-persist` carried gitignored `.agents/`, `.codex/` and `.claude/`
+directories on the release host. gen-content-manifest walked the filesystem,
+so their 158 files were hashed into the COMMITTED manifest -- which a clean
+clone or `git archive` export cannot contain. `--check` passed on that host
+and failed with 158 MISSING entries everywhere else; build/export refused.
+
+Runs against a synthetic git repo (no payload, no network) and pins:
+
+  1. generation covers tracked files, skips ignored+untracked files under a
+     vendored payload directory, keeps ignored-but-TRACKED files (git add -f),
+     and keeps untracked-not-ignored files (the payload build chain regenerates
+     the manifest before `git add`);
+  2. `--check` passes on the host tree and in a clean `git archive` export
+     (git-less tree -> disk fallback, which is exact there because an export
+     contains only shipped files);
+  3. RED: a manifest carrying an ignored file fails on the host as
+     NOT-SHIPPED, and fails in the clean export as MISSING -- the exact
+     reported failure;
+  4. the verify-manifest-export gate passes on the fixed repo and refuses a
+     committed manifest that lists an ignored path, or one whose bytes match a
+     dirty tree instead of HEAD.
+"""
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GEN = os.path.join(REPO, "build", "gen-content-manifest")
+GATE = os.path.join(REPO, "build", "verify-manifest-export")
+
+FAILURES = []
+
+
+def check(label, cond, detail=""):
+    if cond:
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append(label)
+
+
+def write(root, rel, text):
+    path = os.path.join(root, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        fh.write(text)
+    return path
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def git(repo, home, *args):
+    env = {
+        **os.environ,
+        "HOME": home,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "loadout-test",
+        "GIT_AUTHOR_EMAIL": "test@example.invalid",
+        "GIT_COMMITTER_NAME": "loadout-test",
+        "GIT_COMMITTER_EMAIL": "test@example.invalid",
+    }
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, env=env)
+
+
+def run_script(script, cwd, *args):
+    return subprocess.run([sys.executable, script, *args], capture_output=True, text=True, cwd=cwd)
+
+
+def manifest_paths(path):
+    with open(path) as fh:
+        return {ln.rstrip("\n").split(None, 2)[2] for ln in fh if ln.strip() and not ln.startswith("#")}
+
+
+def append_entry(manifest, rel, source_path):
+    with open(manifest, "a") as fh:
+        fh.write(f"sha256  {digest(source_path)}  {rel}\n")
+
+
+def main():
+    with tempfile.TemporaryDirectory(prefix="loadout-manifest-shipped-set-") as tmp:
+        home = os.path.join(tmp, "home")
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(home)
+        os.makedirs(os.path.join(repo, "payload"))
+        os.makedirs(os.path.join(repo, "envs", "tmux", "vendor", "plugins", "demo", ".agents", "skills"))
+        os.makedirs(os.path.join(repo, "envs", "tmux", "vendor", "plugins", "demo", ".codex"))
+        os.makedirs(os.path.join(repo, "build"))
+
+        ignored_a = "envs/tmux/vendor/plugins/demo/.agents/skills/SKILL.md"
+        ignored_b = "envs/tmux/vendor/plugins/demo/.codex/state.json"
+        # Patterns match at any depth, exactly like the repo's own .gitignore.
+        write(repo, ".gitignore", ".agents/\n.codex/\nkeep-ignored.bz2\n")
+        write(repo, "payload/tool.bz2", "tracked payload\n")
+        write(repo, "payload/keep-ignored.bz2", "force-added despite .gitignore\n")
+        write(repo, "envs/tmux/vendor/plugins/demo/plugin.tmux", "tracked plugin\n")
+        write(repo, ignored_a, "IGNORED: lives on the host, never ships\n")
+        write(repo, ignored_b, "IGNORED: lives on the host, never ships\n")
+        shutil.copy2(GEN, os.path.join(repo, "build", "gen-content-manifest"))
+        shutil.copy2(GATE, os.path.join(repo, "build", "verify-manifest-export"))
+
+        git(repo, home, "init", "-q")
+        git(repo, home, "add", ".gitignore", "payload/tool.bz2", "envs/tmux/vendor/plugins/demo/plugin.tmux", "build")
+        git(repo, home, "add", "-f", "payload/keep-ignored.bz2")
+        rc = git(repo, home, "commit", "-q", "-m", "base tree")
+        check("synthetic repo committed", rc.returncode == 0, rc.stderr)
+
+        # The documented payload chain's pre-commit state: a freshly built,
+        # untracked file that is NOT ignored must still be covered.
+        write(repo, "payload/new-built.bz2", "built but not yet git-added\n")
+
+        repo_gen = os.path.join(repo, "build", "gen-content-manifest")
+        repo_manifest = os.path.join(repo, ".content-manifest")
+        rc = run_script(repo_gen, repo)
+        check("generation succeeds", rc.returncode == 0, rc.stdout + rc.stderr)
+        paths = manifest_paths(repo_manifest)
+        check("tracked payload file covered", "payload/tool.bz2" in paths)
+        check("tracked vendored plugin file covered", "envs/tmux/vendor/plugins/demo/plugin.tmux" in paths)
+        check("ignored+untracked .agents file skipped", ignored_a not in paths)
+        check("ignored+untracked .codex file skipped", ignored_b not in paths)
+        check("ignored-but-tracked file stays covered", "payload/keep-ignored.bz2" in paths)
+        check("untracked-not-ignored file stays covered", "payload/new-built.bz2" in paths)
+
+        rc = run_script(repo_gen, repo, "--check")
+        check("--check passes on the host tree", rc.returncode == 0, rc.stdout + rc.stderr)
+
+        # RED: the historical manifest (ignored file baked in) must now fail on
+        # the host as NOT-SHIPPED instead of verifying.
+        append_entry(repo_manifest, ignored_a, os.path.join(repo, ignored_a))
+        rc = run_script(repo_gen, repo, "--check")
+        out = rc.stdout + rc.stderr
+        check(
+            "RED host: baked-in ignored file fails as NOT-SHIPPED",
+            rc.returncode == 1 and "NOT-SHIPPED" in out and ignored_a in out,
+            out,
+        )
+
+        rc = run_script(repo_gen, repo)
+        check("regeneration restores a clean manifest", rc.returncode == 0, rc.stdout + rc.stderr)
+        rc = run_script(repo_gen, repo, "--check")
+        check("--check green again", rc.returncode == 0, rc.stdout + rc.stderr)
+
+        git(repo, home, "add", "payload/new-built.bz2", ".content-manifest")
+        rc = git(repo, home, "commit", "-q", "-m", "manifest")
+        check("manifest committed", rc.returncode == 0, rc.stderr)
+
+        # Clean export: exactly what `git archive HEAD` ships, no .git.
+        export = os.path.join(tmp, "export")
+        os.makedirs(export)
+        proc = subprocess.Popen(["git", "-C", repo, "archive", "--format=tar", "HEAD"], stdout=subprocess.PIPE)
+        with tarfile.open(fileobj=proc.stdout, mode="r|") as tf:
+            tf.extractall(export, filter="data")
+        proc.wait()
+        check("export committed", proc.returncode == 0)
+        check("export lacks the ignored vendored file", not os.path.exists(os.path.join(export, ignored_a)))
+        check(
+            "export contains the tracked vendored file",
+            os.path.isfile(os.path.join(export, "envs/tmux/vendor/plugins/demo/plugin.tmux")),
+        )
+
+        export_gen = os.path.join(export, "build", "gen-content-manifest")
+        export_manifest = os.path.join(export, ".content-manifest")
+        rc = run_script(export_gen, export, "--check")
+        check("--check passes in the clean export (git-less fallback)", rc.returncode == 0, rc.stdout + rc.stderr)
+
+        # RED: the reported failure -- a manifest carrying the ignored file
+        # fails MISSING in the export, where the file cannot exist.
+        append_entry(export_manifest, ignored_a, os.path.join(repo, ignored_a))
+        rc = run_script(export_gen, export, "--check")
+        out = rc.stdout + rc.stderr
+        check(
+            "RED export: baked-in ignored file fails as MISSING",
+            rc.returncode == 1 and "MISSING" in out and ignored_a in out,
+            out,
+        )
+
+        # The gate: HEAD's manifest vs HEAD's archive.
+        repo_gate = os.path.join(repo, "build", "verify-manifest-export")
+        rc = run_script(repo_gate, repo)
+        check(
+            "verify-manifest-export passes on the committed repo",
+            rc.returncode == 0 and "OK" in rc.stdout,
+            rc.stdout + rc.stderr,
+        )
+
+        # RED: commit a manifest that carries the ignored file; the gate must
+        # refuse. This is the exact state the 2026.10.2 release shipped.
+        append_entry(repo_manifest, ignored_a, os.path.join(repo, ignored_a))
+        git(repo, home, "add", ".content-manifest")
+        rc = git(repo, home, "commit", "-q", "-m", "bad manifest")
+        check("bad manifest committed", rc.returncode == 0, rc.stderr)
+        rc = run_script(repo_gate, repo)
+        out = rc.stdout + rc.stderr
+        check(
+            "RED gate: committed manifest with an ignored file is refused",
+            rc.returncode == 1 and "MISSING-FROM-EXPORT" in out and ignored_a in out,
+            out,
+        )
+
+        # RED: a manifest regenerated against a DIRTY payload file (bytes not in
+        # HEAD) must fail the byte comparison, not just the path set.
+        write(repo, "payload/tool.bz2", "modified after regeneration\n")
+        run_script(repo_gen, repo)
+        git(repo, home, "add", ".content-manifest")
+        rc = git(repo, home, "commit", "-q", "-m", "manifest from dirty tree")
+        check("dirty-tree manifest committed", rc.returncode == 0, rc.stderr)
+        rc = run_script(repo_gate, repo)
+        out = rc.stdout + rc.stderr
+        check(
+            "RED gate: manifest hash that matches a dirty tree is refused",
+            rc.returncode == 1 and "MISMATCH payload/tool.bz2" in out,
+            out,
+        )
+
+    print()
+    if FAILURES:
+        print(f"content-manifest-shipped-set: {len(FAILURES)} FAILED")
+        return 1
+    print("content-manifest-shipped-set: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -69,6 +69,7 @@ STEP_SCAN_TITLE = "Step 0: Scanning bundled binaries for malware (YARA-Forge)"
 STEP_SMOKE_TITLE = "Step 1: Smoke-testing pre-built binaries"
 STEP_VERSIONS_TITLE = "Step 2: Generating version table"
 STEP_CHECKSUMS_TITLE = f"Step 3: Generating {SHA256SUMS_NAME} + SBOM + checksum table"
+STEP_MANIFEST_TITLE = "Step 3b: Verifying .content-manifest against the git export"
 STEP_SECRET_TITLE = "Step 4: Scanning for committed secrets (gitleaks)"
 STEP_VULN_TITLE = "Step 5: Scanning the closure for known vulnerabilities (osv-scanner)"
 
@@ -391,6 +392,18 @@ def _vuln_scan_step(script_dir):
     return _command_step("vulnerability scan", STEP_VULN_TITLE, [os.path.join(script_dir, "build", "vuln-scan")])
 
 
+def _manifest_export_step(script_dir):
+    """Prove HEAD:.content-manifest covers exactly what `git archive HEAD` ships.
+
+    `gen-content-manifest --check` verifies the WORKING TREE against the manifest,
+    so a manifest that lists a gitignored file -- present on this host, absent
+    from the commit -- passes there and fails in every clean clone. That is the
+    2026-10-07 release that published 158 entries no checkout could satisfy.
+    """
+    gate = os.path.join(script_dir, "build", "verify-manifest-export")
+    return _command_step("manifest export", STEP_MANIFEST_TITLE, [sys.executable, gate])
+
+
 def _checksum_step(script_dir):
     # The SBOM is generated here (not a separate gate) so its hash lands in
     # sha256sums.txt and the signed tag binds it.
@@ -674,6 +687,7 @@ def _run_parallel_pre_release_steps(
             ),
             ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
             ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
+            ("manifest export", STEP_MANIFEST_TITLE, lambda: _manifest_export_step(script_dir)),
             ("secret scan", STEP_SECRET_TITLE, lambda: _secret_scan_step(script_dir)),
             ("vulnerability scan", STEP_VULN_TITLE, lambda: _vuln_scan_step(script_dir)),
         ):
@@ -724,6 +738,9 @@ def _run_parallel_pre_release_steps(
 
         future = submit(_checksum_step, script_dir)
         futures[future] = ("checksums", STEP_CHECKSUMS_TITLE)
+
+        future = submit(_manifest_export_step, script_dir)
+        futures[future] = ("manifest export", STEP_MANIFEST_TITLE)
 
         future = submit(_secret_scan_step, script_dir)
         futures[future] = ("secret scan", STEP_SECRET_TITLE)
@@ -1189,6 +1206,13 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     checksum_result = results["checksums"]
     if checksum_result.returncode != 0:
         print("\nRelease blocked: checksum/SBOM generation failed.", file=sys.stderr)
+        sys.exit(1)
+
+    manifest_result = results["manifest export"]
+    if manifest_result.returncode != 0:
+        print("\nRelease blocked: .content-manifest does not match the git export.", file=sys.stderr)
+        print("The tag would publish a manifest that cannot be verified from a clean", file=sys.stderr)
+        print("checkout. Regenerate it with build/gen-content-manifest and commit.", file=sys.stderr)
         sys.exit(1)
 
     secret_result = results["secret scan"]

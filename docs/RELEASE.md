@@ -201,6 +201,19 @@ manual build script does **not** — you run them.
 reject another. So settle any unrelated payload drift in the tree *before*
 regenerating, or you will silently bake it in.
 
+**The export gate.** `build/verify-manifest-export` proves the COMMITTED
+`.content-manifest` against `git archive HEAD`; it runs in Tier 1, in the
+`build/export` preflight, and as release Step 3b. Before it existed, `--check`
+compared the working directory only, so a manifest generated on a host that
+carried gitignored files under a vendored plugin (`tmux-persist/.agents/`,
+`.codex/`, `.claude/`) verified there and failed with 158 MISSING entries in
+every clean clone and export. Generation now skips untracked+ignored files
+(`git ls-files -o -i --exclude-standard`) and `--check` reports such an entry
+as NOT-SHIPPED; the gate is what proves the COMMITTED manifest, which a
+dirty-tree `--check` cannot. The nvim stash exception is untouched: it is a
+release asset, absent from both the export and the manifest, and verified
+through `sha256sums.txt` -> `.content-manifest.fetched`.
+
 **Assurance ledger re-pin** — required when you bumped `nvim`, `rust`,
 `rust-crate-store`, `treesitter`, `git-nvim`, or `crate-store`. Update the
 package's `assurance/records/<pkg>.toml` (version, ref, artifact hashes) and
@@ -346,7 +359,9 @@ findings must be baselined in `assurance/vuln-baseline.json` with a written
 reason; crate-store findings are advisory), and `build/sbom` (inside the
 checksum step, so `sbom.cdx.json` is covered by `sha256sums.txt` and attached
 as a fourth asset). None of the three is cached; together they cost about a
-minute. See `docs/SECURITY.md` section 8.
+minute. Step 3b is uncached too: it verifies `HEAD:.content-manifest` against
+`git archive HEAD`, so a manifest that covers files the commit does not contain
+blocks the release instead of shipping. See `docs/SECURITY.md` section 8.
 
 ---
 
@@ -402,6 +417,7 @@ what now catches it — where nothing does, that is the open risk.
 | 13 | v2026.08.09 published with its commit on **no remote branch** — `./build/release` pushed the tag only, so `origin/main` still held the previous release while §9's checks all passed | `_push_release_branch()` runs first in the tag step (Step 6): refuses a detached HEAD, pushes the branch, re-reads `git ls-remote` to confirm |
 | 14 | `ty` was in `rust-tool-locks.txt` but absent from **every crate store ever built** — `astral-sh/ty` is a thin repo whose Rust source is a `ruff` submodule, so it had no root `Cargo.lock`, the builder WARNed and skipped it, and exited 0. `surfer` was missing the same way (submodule *path deps*, so its sync failed even though it has a lock). `--check-policy` printed OK throughout, because it compared **refs** to `packages.json` and never store **contents** | builder records per-tool crate counts to `assurance/crate-store-tools.tsv`; `verify-crate-store` gained `check_coverage()`, called from `check_policy()`, which fails on any pinned tool with 0 crates. Submodules are now initialised unconditionally after every clone |
 | 15 | `tests/rust-offline-almalinux8` cloned a **hardcoded ripgrep 15.1.0** while the locks and registry moved to 15.2.0 (`552fb4e`, 2026-08-04), so the offline rebuild could not resolve `globset`'s deps. Broken for 13 days: **nothing in `tests/run-all` ever invoked this test**, at any tier | version now read from `payload/packages.json` and passed as a `--build-arg` (same fix as entry 10); the test is wired into Tier 3, so `--container` runs it |
+| 16 | 2026.10.2 shipped a `.content-manifest` with 158 entries for gitignored `.agents/`, `.codex/` and `.claude/` files under the vendored tmux-persist tree. `gen-content-manifest --check` passed on the release host (the files were right there) and failed MISSING in every clean clone or `git archive` export; `build/export` refused. A signed tag cannot catch this -- it signs the commit, and the commit's manifest listed files the commit does not contain | generation now excludes untracked+ignored files (`git ls-files -o -i --exclude-standard`); `--check` reports a present-but-unshipped entry as NOT-SHIPPED; `build/verify-manifest-export` verifies `HEAD:.content-manifest` against `git archive HEAD` in Tier 1, `build/export` and release Step 3b; `tests/content-manifest-shipped-set` pins the ignored-vendored-file cases |
 
 ### Open defect: release-notes version table (entry 9)
 

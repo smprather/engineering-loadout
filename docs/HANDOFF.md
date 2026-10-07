@@ -1,5 +1,74 @@
 # Current Handoff
 
+## 2026-10-07 (2): .content-manifest shipped-set fix -- the export blocker (UNRELEASED)
+
+**The defect.** The committed `.content-manifest` in 2026.10.2 listed 158 files
+under `envs/tmux/vendor/plugins/tmux-persist/{.agents,.codex,.claude}`. Those
+files existed on this host (the vendored tree was cloned here) but are
+gitignored and untracked, so they are not in the commit. `gen-content-manifest`
+walked the filesystem; `--check` therefore passed here and every clean clone or
+`git archive` export failed with 158 MISSING entries, and PSG's
+`deploy-loadout` wrapper (`./build/export ...`) refused to publish. A signed tag
+does not catch this: the tag signs the commit, and the commit's manifest named
+files the commit does not contain. (The `.content-manifest` asset itself was
+also wrong -- it is the same file `sha256sums.txt` pins.)
+
+**One shipped-set rule, three layers.**
+
+- `build/gen-content-manifest` now skips untracked+ignored files
+  (`git ls-files -o -i --exclude-standard`: any-depth `.gitignore`,
+  `.git/info/exclude`, `core.excludesFile`). Tracked-but-ignored files
+  (`git add -f`) and untracked-not-ignored files stay covered, because both are
+  part of the documented payload chain (build -> copy -> gen -> `git add`);
+  symlinks are still skipped. `--check` now reports a manifest entry that is
+  present on the host but not shipped as `NOT-SHIPPED`, so the generating host
+  can no longer false-green. A git checkout that cannot be queried is a hard
+  error, not a silent fallback to the unfiltered walk; the git call carries
+  `-c safe.directory=REPO`, so a foreign-owned bind mount (the EL8 build
+  container running as root) still filters in stead of failing.
+- `build/verify-manifest-export` (NEW) reads `HEAD:.content-manifest` and
+  streams `git archive HEAD` through a tar reader, requiring every manifest
+  entry to be an exported regular file with a matching sha256, and every
+  exported regular file under the manifest roots to be listed. Symlinks are
+  skipped. The stash exception is untouched: the stash is untracked, so it is
+  on neither side, and its `sha256sums.txt` -> `.content-manifest.fetched`
+  chain is unchanged.
+- Wiring: Tier 1 `content-manifest matches export` (uncached -- `test_script`
+  resolves to nothing, so no cache can stand on stale HEAD), `build/export`
+  preflight (prints `manifest : ...`, refuses with the drift list),
+  `build/release` Step 3b (uncached, mandatory). `tests/run-all`'s
+  `FP_ROOTS` now includes both scripts so the cached shipped-set regression
+  test cannot stand on stale tooling. `tests/content-manifest-shipped-set`
+  (NEW, T1) pins the ignored-vendored-file class in a synthetic repo with RED
+  controls: host NOT-SHIPPED, clean-export MISSING, gate MISSING-FROM-EXPORT,
+  and a manifest whose hash matches a dirty tree rather than HEAD.
+
+**Manifest regenerated wholesale: 4620 -> 4462 entries, exactly the 158
+ignored-untracked deletions** (no other line changed; the 29 ignored-untracked
+`.claude/skills/*` symlinks were never in the manifest).
+
+**Verified.** RED before the fix: new `--check` = 158 `NOT-SHIPPED`; the gate =
+158 `MISSING-FROM-EXPORT`; `build/export`'s new preflight returns False with
+that list (tested in-process -- the real command refuses at `check_clean_tree`
+while the fix is uncommitted). GREEN after regeneration + commit: `--check` OK
+(4462); gate OK; synthetic regression test all PASS; `tests/run-all --fast`
+green. Full T1+T2 green except `install-linux-tmp-home`, which fails only
+because this session inherited the stale pre-XDG
+`LOADOUT_CFG_SHARED_PREFIX=/home/mylesp/.loadout/local` (test-harness env leak:
+the test overrides HOME/XDG but inherits the rest) and passes under
+`env -u LOADOUT_CFG_SHARED_PREFIX` -- same stale-session class as the PATH note
+above.
+
+**End-to-end export proof (the blocked PSG path).** `./build/export <dir>` now
+runs clean: `manifest : verify-manifest-export: OK (4462 files match
+.content-manifest at HEAD)`, `payload : content-manifest verified: 4463 files`,
+stash copied + re-verified. `./loadout doctor --verify` inside the exported
+git-less tree: `content-manifest verified: 4463 files match`, rc=0. Container
+path exercised too: as root on the foreign-owned bind mount, plain git fails
+"dubious ownership" while the fixed generator reports OK (4462). Class A change
+(no payload bytes -- manifest metadata + export-ignored tooling), so Tier 3 was
+not required.
+
 ## 2026-10-07: uv/uvx launchers + xfce4-terminal (release 2026.10.2)
 
 **uv/uvx.** `uv` was already a package but bare upstream: no `uvx`, and
@@ -59,6 +128,8 @@ defaults and a real-server override (managed off -> user layer on).
 
 Last updated: 2026-10-07 (**released 2026.10.2** -- uv/uvx launchers +
 xfce4-terminal; section-9 verified: signed tag, 4 assets, origin/main == tag).
+An UNRELEASED fix follows the release: the `.content-manifest` shipped-set
+correction + clean-export gate (top section).
 Prior releases: 2026.10.1 (October currency sweep on top of the XDG
 re-architecture), `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane

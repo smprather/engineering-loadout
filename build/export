@@ -150,6 +150,33 @@ def check_signed_tag():
     info(f"  signed tag    : {tag} did not verify (advisory) -- {blob.strip().splitlines()[0][:70]}")
 
 
+def check_manifest_export():
+    """The committed manifest must cover exactly what `git archive HEAD` ships.
+
+    check_payload() verifies the WORKING TREE against `.content-manifest`, and
+    that is not enough: a manifest listing a gitignored file -- one that exists
+    on this host but not in the commit -- passes here and fails in every clean
+    clone, which is the 2026-10-07 export blocker (158 entries under a vendored
+    plugin's ignored .agents/.codex/.claude trees). This reads HEAD's manifest
+    and HEAD's actual archive, so the content set is verified, not the release
+    host's directory. The nvim stash is a release asset and is absent from both
+    sides; its separate verification chain is untouched.
+    """
+    gate = os.path.join(REPO, "build", "verify-manifest-export")
+    proc = subprocess.run([sys.executable, gate], capture_output=True, text=True)
+    out = (proc.stdout + proc.stderr).strip()
+    if proc.returncode != 0:
+        eprint("\nRefusing to export: .content-manifest does not match the git export.")
+        for line in out.splitlines():
+            eprint("    " + line)
+        eprint("\nRegenerate it with `python3.14 build/gen-content-manifest`, commit, and")
+        eprint("push (see docs/RELEASE.md section 4). --allow-dirty does NOT help here:")
+        eprint("the archive is HEAD, not the working tree.")
+        return False
+    info("  manifest      : " + (out.splitlines()[-1] if out else "OK"))
+    return True
+
+
 def check_payload(skip_verify):
     """Re-hash every payload file against .content-manifest before exporting.
 
@@ -360,6 +387,8 @@ def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash
     if not check_clean_tree(allow_dirty):
         raise SystemExit(1)
     check_signed_tag()
+    if not check_manifest_export():
+        raise SystemExit(1)
     if not check_payload(skip_verify):
         raise SystemExit(1)
     # Checked here, before the archive and any 327 MB stash download: a
