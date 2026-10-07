@@ -1,6 +1,6 @@
 # Current Handoff
 
-## 2026-10-07 (2): .content-manifest shipped-set fix -- the export blocker (UNRELEASED)
+## 2026-10-07 (2): .content-manifest shipped-set fix -- the export blocker (RELEASED as 2026.10.3)
 
 **The defect.** The committed `.content-manifest` in 2026.10.2 listed 158 files
 under `envs/tmux/vendor/plugins/tmux-persist/{.agents,.codex,.claude}`. Those
@@ -25,7 +25,7 @@ also wrong -- it is the same file `sha256sums.txt` pins.)
   can no longer false-green. A git checkout that cannot be queried is a hard
   error, not a silent fallback to the unfiltered walk; the git call carries
   `-c safe.directory=REPO`, so a foreign-owned bind mount (the EL8 build
-  container running as root) still filters in stead of failing.
+  container running as root) still filters instead of failing.
 - `build/verify-manifest-export` (NEW) reads `HEAD:.content-manifest` and
   streams `git archive HEAD` through a tar reader, requiring every manifest
   entry to be an exported regular file with a matching sha256, and every
@@ -68,6 +68,19 @@ path exercised too: as root on the foreign-owned bind mount, plain git fails
 "dubious ownership" while the fixed generator reports OK (4462). Class A change
 (no payload bytes -- manifest metadata + export-ignored tooling), so Tier 3 was
 not required.
+
+**RELEASED 2026.10.3 (class A).** Bumped rather than overwriting 2026.10.2:
+that release was section-9-verified and trusted, and an overwritten tag is
+invisible to offline consumers (`-V` unchanged) -- policy in docs/RELEASE.md
+section 8. `./build/release` ran the standard gates plus the new Step 3b
+(`verify-manifest-export: OK (4462 files match .content-manifest at HEAD)`),
+pushed `main` (5cad458 -> 00dd80b), signed the tag, and published. Section 9
+verified: `isDraft=false`; four assets present (`sha256sums.txt`,
+`default.content-manifest` 649,128 B, `nvim-plugin-stash.tar.bz2` 344,538,464 B
+-- bytes unchanged, `sbom.cdx.json`); the downloaded
+`default.content-manifest` asset is byte-identical to the working-tree file
+(fe8e55ae...); `git tag -v` prints a Good ED25519 signature; `origin/main` ==
+`2026.10.3^{commit}` (`00dd80b`).
 
 ## 2026-10-07: uv/uvx launchers + xfce4-terminal (release 2026.10.2)
 
@@ -126,10 +139,10 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-07 (**released 2026.10.2** -- uv/uvx launchers +
-xfce4-terminal; section-9 verified: signed tag, 4 assets, origin/main == tag).
-An UNRELEASED fix follows the release: the `.content-manifest` shipped-set
-correction + clean-export gate (top section).
+Last updated: 2026-10-07 (**released 2026.10.3** -- the `.content-manifest`
+shipped-set fix + clean-export gate, class A; section-9 verified: signed tag,
+4 assets, published manifest byte-identical to local, origin/main == tag).
+Previous: 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).
 Prior releases: 2026.10.1 (October currency sweep on top of the XDG
 re-architecture), `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
