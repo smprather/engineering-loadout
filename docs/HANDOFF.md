@@ -42,6 +42,12 @@ and `tests/run-all` reported three false failures. Prefix
 gets it via appended PATH; a long-lived tool session predating the migration
 does not.
 
+**Released 2026-10-07 as `2026.10.2`** -- branch pushed before tag, ED25519
+signed tag verified, all four assets present (sha256sums.txt,
+default.content-manifest 674914 B matching local, nvim-plugin-stash.tar.bz2
+344538464 B matching local, sbom.cdx.json), `git ls-remote origin
+refs/heads/main` == `git rev-parse 2026.10.2^{commit}`.
+
 ## 2026-10-06 (post-2026.10.1): tmux focus-follows-mouse preference
 
 `focus-follows-mouse` is now a layered tmux preference: the managed baseline
@@ -51,9 +57,9 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-07 (**release 2026.10.2 cut in this session**: uv/uvx
-launchers + xfce4-terminal; post-publish verification stamped in the follow-up
-commit). Prior releases: 2026.10.1 (October currency sweep on top of the XDG
+Last updated: 2026-10-07 (**released 2026.10.2** -- uv/uvx launchers +
+xfce4-terminal; section-9 verified: signed tag, 4 assets, origin/main == tag).
+Prior releases: 2026.10.1 (October currency sweep on top of the XDG
 re-architecture), `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane
 end-to-end, btop themes, nethogs, xclip), `032c1d0` (marktext + fused-line
