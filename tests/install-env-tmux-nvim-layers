@@ -16,7 +16,12 @@ fi
 [ -n "$PY" ] || { echo "ERROR: python3.14 not found" >&2; exit 1; }
 tmp_root=${TMPDIR:-/tmp}
 TEST_ROOT=$(mktemp -d "$tmp_root/loadout-env-two-layers.XXXXXX")
-trap 'rm -rf "$TEST_ROOT"' EXIT
+TEST_TMUX_SOCK="loadout-ffm-test-$$"
+cleanup() {
+    tmux -L "$TEST_TMUX_SOCK" kill-server 2>/dev/null || true
+    rm -rf "$TEST_ROOT"
+}
+trap cleanup EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -48,6 +53,12 @@ grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
 # The theme file the default selects must be the one the global layer loads.
 grep -qF 'source-file -F "~/.config/tmux/themes/tmux-theme-#{@theme}.conf"' "$tmux_dir/tmux-global.conf" \
     || fail "global layer does not load the theme selected by @theme"
+grep -qF 'set -g focus-follows-mouse off' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "managed tmux settings do not default focus-follows-mouse off"
+grep -qF '# set -g focus-follows-mouse on' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer lacks the FFM opt-in hint"
+! grep -qE '^[[:space:]]*set -g focus-follows-mouse on' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer enables FFM by default"
 
 settings_global_line=$(grep -nF 'tmux-settings-global.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
 settings_user_line=$(grep -nF 'tmux-settings-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
@@ -63,6 +74,31 @@ tpm_line=$(grep -nF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf" | cut 
     || fail "dispatcher order is not settings-global -> settings-user -> global -> user -> TPM"
 ! grep -qF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux-global.conf" \
     || fail "global layer initializes TPM before user plugin declarations"
+
+# FFM layering on a real server: the managed baseline leaves it off and the
+# user layer (sourced after it) overrides to on.  Skipped where tmux is absent
+# or predates the option (added in tmux 3.7).
+tmux_bin=$(command -v tmux || true)
+tmux_ver=$("$tmux_bin" -V 2>/dev/null | awk '{print $2}')
+case "$tmux_ver" in
+    3.7* | 3.8* | 3.9* | 3.[1-9][0-9]* | [4-9]*) ;;
+    *) tmux_bin="" ;;
+esac
+if [ -n "$tmux_bin" ]; then
+    tm() { TERM=xterm "$tmux_bin" -L "$TEST_TMUX_SOCK" "$@"; }
+    tm -f /dev/null new-session -d 'sleep 30'
+    tm source-file "$tmux_dir/tmux-settings-global.conf"
+    got=$(tm show-options -g focus-follows-mouse)
+    [ "$got" = "focus-follows-mouse off" ] \
+        || fail "managed baseline did not leave focus-follows-mouse off (got: $got)"
+    printf '%s\n' 'set -g focus-follows-mouse on' >> "$tmux_dir/tmux-settings-user.conf"
+    tm source-file "$tmux_dir/tmux-settings-user.conf"
+    got=$(tm show-options -g focus-follows-mouse)
+    [ "$got" = "focus-follows-mouse on" ] \
+        || fail "user layer did not override focus-follows-mouse (got: $got)"
+else
+    echo "SKIP: focus-follows-mouse server check (no tmux >= 3.7)"
+fi
 
 nvim_lua="$fresh_home/.config/nvim/lua"
 [ -d "$nvim_lua/global" ] || fail "Neovim global layer not installed"

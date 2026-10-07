@@ -34,11 +34,25 @@ are migrated on first load and unset `@persist-*` options fall back to the old
 `tmux-settings-global.conf`, then the preserved `tmux-settings-user.conf`
 (which wins), then the managed `tmux-global.conf`, then the preserved
 `tmux-user.conf`, and initializes TPM last so the user layer can declare
-plugins. The settings layers hold user-facing knobs -- currently just the
-`@theme` choice, defaulting to `loadout1` -- and the global layer loads the
+plugins. The settings layers hold user-facing knobs -- the
+`@theme` choice (defaulting to `loadout1`) and the `focus-follows-mouse`
+default (off) -- and the global layer loads the
 selected `themes/tmux-theme-<name>.conf` plus the generated
 `word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
 Helper scripts live in `scripts/`.
+
+## Focus follows mouse (FFM)
+
+`focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.7c) focuses the
+pane under the mouse pointer on hover, no click needed. The managed baseline
+sets it **off**; opt in per user in `tmux-settings-user.conf`, which is
+sourced after the baseline and therefore wins:
+
+```tmux
+set -g focus-follows-mouse on
+```
+
+It needs mouse mode, which `tmux-global.conf` already turns on.
 
 On a fresh install, loadout seeds `tmux-user.conf` and
 `tmux-settings-user.conf` only when absent. If

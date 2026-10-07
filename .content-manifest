@@ -3724,7 +3724,6 @@ sha256  d86db0aff6b1abd1209a7b4cd2c3ef469a4e67cd3ca514839a2ab23a97305a91  payloa
 sha256  d88d349f3ba678434c1e3ce2fd1962e6a18df436a816e4454cf818cb494229e0  envs/tmux/vendor/plugins/tpm/docs/changing_plugins_install_dir.md
 sha256  d8ab525a20bc56a497eb485de93a97d8aaf5b592bfbf3cbc14c89be524968730  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/cylc.so.bz2
 sha256  d8bb9b8287843e30a2f24504e4142760bc1cff37601d80566c51f326f681ca38  envs/tmux/vendor/plugins/tmux-persist/tests/test_legacy_compat.sh
-sha256  d8c2e3b53e6a4b1c56616ae232b12f0f5d9b5b1c1685a02af7715541d4cdb55f  payload/installed-sizes.json
 sha256  d8d45e4fee0e675a695d1628639e44584b0104337c8ef161596de610fd21cb31  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/java.lua
 sha256  d8e5297eee2b05c36016c9a3a42ba182f48ac4ab652b545eb4b84c30e115f8a4  payload/treesitter/vendor/nvim-treesitter/runtime/queries/glimmer_typescript/highlights.scm
 sha256  d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad  payload/el8.x86_64.glibc2p28/wheels/httpx-0.28.1-py3-none-any.whl
@@ -3911,6 +3910,7 @@ sha256  e4f0eb6b263161190a502184425fdd3ab046d09112da8089ddb767e7de198583  payloa
 sha256  e51b2cf5ec89a8b8470177641ed62a3ba22d74e1e898e06ad53aa77972487208  payload/el8.x86_64.glibc2p28/wheels/yarl-1.24.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
 sha256  e5423659a5d0bf378ac89d09e404d8545d47e0ca957d7565066fb21282b2b1a9  payload/treesitter/vendor/nvim-treesitter/tests/indent/wgsl_spec.lua
 sha256  e54b402c443b55c0e33d4ceb4c811f53ebb2eb6f9b66777b53ca99212521296b  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/t32/var.cmm
+sha256  e54d370aedbbf0d1a66c386b90ad84a5325c817bbd99ff99f3d963cad724dd17  payload/installed-sizes.json
 sha256  e55d8f3c24d82fa3b26c7ed3895e6d1987aa13dc0a5b84a74f1f03ba2d05fa79  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sway/folds.scm
 sha256  e55d8f3c24d82fa3b26c7ed3895e6d1987aa13dc0a5b84a74f1f03ba2d05fa79  payload/treesitter/vendor/nvim-treesitter/runtime/queries/sway/folds.scm
 sha256  e56a1028a347ea53ad0b5a1c94270bd814f22c31c3478d175074f96917a42156  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/xresources/highlights.scm

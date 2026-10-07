@@ -1,5 +1,14 @@
 # Current Handoff
 
+## 2026-10-06 (post-2026.10.1): tmux focus-follows-mouse preference
+
+`focus-follows-mouse` is now a layered tmux preference: the managed baseline
+sets it **off** (guarded with `%if "#{>=:#{version},3.7}"` -- the option landed
+in tmux 3.7, the bundle is 3.7c), the seeded `tmux-settings-user.conf` carries
+a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
+defaults and a real-server override (managed off -> user layer on).
+`docs/TMUX.md` documents it. The operator's live user layer enables it.
+
 Last updated: 2026-10-06 (**released 2026.10.1** -- October currency sweep on
 top of the XDG re-architecture). Prior release:
 `v2026.09.23` RELEASED + verified
