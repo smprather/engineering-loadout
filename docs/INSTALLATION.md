@@ -82,7 +82,7 @@ Per-user (`$HOME`):
 
 | Destination | Source |
 |-------------|--------|
-| `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | -> `envs/bash/bashrc` |
+| `~/.bashrc`, `~/.bash_profile` | -> `envs/bash/bashrc` |
 | `~/.config/bash/` | Layered bash config |
 | `~/.config/vim/{vimrc,pack,after}/` | `envs/vim/` -- read natively by vim >= 9.0 (XDG); no `~/.vimrc`/`~/.vim` symlinks |
 | `~/.config/tmux/tmux.conf` | managed dispatcher, read natively by tmux >= 3.1 (settings-global -> settings-user -> `tmux-global.conf` then preserved `tmux-user.conf`; no `~/.tmux.conf` symlink) |
@@ -94,6 +94,12 @@ Per-user (`$HOME`):
 | `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives; a shared tree outside `$HOME` installs them once to `<prefix>/share/fonts` instead, with a generated `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
 | `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |
+
+`.bash_login`/`.profile` (bash) and `.cshrc` (tcsh) are **retired entrypoints**: they
+were never read (bash takes the first existing of `.bash_profile`/`.bash_login`/`.profile`
+and `.bash_profile` is always created; only plain csh reads `.cshrc`). A pre-2026-10-08
+install's links are pruned on the next `@envs` run and stay in the backup list for one
+release.
 
 With `dest_dir = "~"` (legacy HOME mode) the shared entries gain a `.local`
 level (`~/.local/bin/`, `~/.local/lib64/`, `~/.local/share/...`); the per-user

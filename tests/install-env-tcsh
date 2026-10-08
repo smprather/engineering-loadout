@@ -93,10 +93,15 @@ $_text" ;;
     done
 }
 
+# W3: a pre-W3 install left a ~/.cshrc link behind; the install must prune it.
+ln -s .config/tcsh/tcshrc "$TMPHOME/.cshrc"
+
 HOME="$TMPHOME" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
 
 [ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked"
-[ -e "$TMPHOME/.cshrc" ] || fail ".cshrc not linked"
+if [ -e "$TMPHOME/.cshrc" ] || [ -L "$TMPHOME/.cshrc" ]; then
+    fail ".cshrc is retired (plain csh is unsupported) and must be pruned, not linked"
+fi
 [ -f "$TMPHOME/.config/tcsh/global/tcshrc" ] || fail "global layer not installed"
 [ -x "$TMPHOME/.config/tcsh/global/git-branch.sh" ] || fail "git-branch.sh not executable"
 

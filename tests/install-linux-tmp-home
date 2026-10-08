@@ -126,6 +126,13 @@ if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tl
 fi
 
 echo "Temp HOME: $test_home"
+
+# W3 legacy sweep: entrypoints a pre-W3 install created. The install must prune
+# them -- and back them up first (they are in the backup list), so a user file
+# caught by the sweep is recoverable from loadout_backups/backup.N.tar.bz2.
+ln -s .config/bash/bashrc "$test_home/.bash_login"
+ln -s .config/bash/bashrc "$test_home/.profile"
+ln -s .config/tcsh/tcshrc "$test_home/.cshrc"
 (
     cd "$tmp_root"
     HOME="$test_home" \
@@ -163,8 +170,16 @@ fi
 
 assert_symlink "$test_home/.bashrc"
 assert_symlink "$test_home/.bash_profile"
-assert_symlink "$test_home/.bash_login"
-assert_symlink "$test_home/.profile"
+assert_symlink "$test_home/.tcshrc"
+# W3: the dead entrypoints are neither created nor left behind from a legacy
+# layout (.bash_login/.profile were never read once .bash_profile exists;
+# .cshrc is only read by plain csh, which is unsupported).
+for dead in .bash_login .profile .cshrc; do
+    if [[ -e "$test_home/$dead" || -L "$test_home/$dead" ]]; then
+        echo "Retired entrypoint $dead still present after install" >&2
+        exit 1
+    fi
+done
 assert_exists "$test_home/.config/vim/vimrc"
 assert_exists "$test_home/.config/vim/pack/vendor/start/nerdtree"
 assert_exists "$test_home/.config/vim/after/ftplugin/markdown.vim"

@@ -47,8 +47,8 @@ is now the floor rather than the goal.
 
 ## The layer chain
 
-Same shape as bash. `~/.tcshrc` and `~/.cshrc` both link to
-`~/.config/tcsh/tcshrc`, which sources, lowest first:
+Same shape as bash. `~/.tcshrc` links to `~/.config/tcsh/tcshrc` (the retired
+`~/.cshrc` is pruned on install — only plain csh reads it), which sources, lowest first:
 
 ```
 global -> corp -> site -> team -> project -> user

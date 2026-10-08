@@ -275,21 +275,26 @@ docs.
 **Acceptance:** `rg extra_links` finds only HANDOFF history; T1
 (`gen-installed-sizes --check`, `registry-integrity`, `check-installer`) green.
 
-### W3 — Trim shell entrypoints (D3)
+### W3 — Trim shell entrypoints (D3) — LANDED
 
 **Files:** `loadout_main.py`, `payload/packages.json` (if env-bash's
 `extra_links` interacts — W2 handles the field), tests, docs.
 
-- [ ] `BASH_ENTRYPOINTS` → `(".bashrc", ".bash_profile")`.
-- [ ] `_install_env_bash`: prune `.bash_login` and `.profile` if present
+- [x] `BASH_ENTRYPOINTS` → `(".bashrc", ".bash_profile")` (+ explicit
+      `BASH_ENTRYPOINTS_RETIRED` / `TCSH_ENTRYPOINTS(_RETIRED)` constants).
+- [x] `_install_env_bash`: prune `.bash_login` and `.profile` if present
       (legacy sweep), keep the backup list entries for one release.
-- [ ] `_install_env_tcsh`: loop becomes `(".tcshrc",)`; prune `.cshrc`.
-      Keep `.cshrc` in the backup list for one release.
-- [ ] Tests: `tests/install-linux-tmp-home` (assert the two are absent, the
+- [x] `_install_env_tcsh`: loop becomes `(".tcshrc",)`; prune `.cshrc`.
+      `.cshrc` stays in the backup list for one release — and the tcsh
+      entrypoints had never been in the backup list at all; now they are.
+- [x] Tests: `tests/install-linux-tmp-home` (assert the two are absent, the
       two kept ones are present), `tests/install-env-tcsh` (assert `.cshrc`
-      absent, `.tcshrc` present and functional).
-- [ ] Docs: INSTALLATION per-user table, AGENTS entrypoint list + symlink map,
-      `envs/tcsh/README.md`, `envs/tcsh/tcshrc` header comment.
+      absent, `.tcshrc` present and functional); both pre-seed the legacy
+      links so the prune itself is asserted.
+- [x] Docs: INSTALLATION per-user table + retirement note, AGENTS entrypoint
+      list + symlink map, `.github/copilot-instructions.md` layer sections,
+      `envs/bash/README.md` file map, `envs/tcsh/README.md`,
+      `envs/tcsh/tcshrc` header comment.
 
 **Acceptance:** a temp-HOME install creates exactly `.bashrc`/`.bash_profile`
 for bash and `.tcshrc` for tcsh; reinstall over a legacy layout prunes the

@@ -4,9 +4,9 @@
 
 ```
 bash/
-  bashrc          - Entry point (-> ~/.bashrc, ~/.bash_profile,
-                    ~/.bash_login, ~/.profile). Loads functions.sh,
-                    then sources config.sh and bashrc per layer.
+  bashrc          - Entry point (-> ~/.bashrc, ~/.bash_profile). Loads
+                    functions.sh, then sources config.sh and bashrc per layer.
+                    ~/.bash_login / ~/.profile are retired (pruned on install).
   functions.sh    - Shared utilities loaded before any layer config
                     (path_*, is_truthy, fpcmp, array_slice, source_if_exists,
                     loadout_add_precmd, loadout_find_wezterm_shell_integration, etc.)

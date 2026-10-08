@@ -1,5 +1,41 @@
 # Current Handoff
 
+## 2026-10-08 (8): envs cleanup W3 -- trim dead shell entrypoints (UNRELEASED)
+
+Per spec D3/F3 (`docs/superpowers/specs/2026-10-08-envs-xdg-and-dead-code-trim-design.md`;
+W3 marked LANDED): `.bash_login`/`.profile` were never read -- bash takes the first
+existing of `.bash_profile`/`.bash_login`/`.profile` and `.bash_profile` is always
+created, and `.profile` additionally linked a bash-only bashrc into POSIX login
+shells. `.cshrc` is only read by plain csh, which this project does not support.
+
+- `BASH_ENTRYPOINTS` -> `(".bashrc", ".bash_profile")`; new
+  `BASH_ENTRYPOINTS_RETIRED` / `TCSH_ENTRYPOINTS` / `TCSH_ENTRYPOINTS_RETIRED`
+  constants make the retired set explicit at every consumer.
+- `_install_env_bash` sweeps live + retired entrypoints (install_bash recreates only
+  the live two); `_install_env_tcsh` creates `~/.tcshrc` and prunes `~/.cshrc`.
+- Safety net: the retired names stay in `backup_existing` for one release (P4; the
+  numbered backup runs before the prune). Bug found while wiring it: the tcsh
+  entrypoints had never been in the backup list at all -- `~/.tcshrc` was replaced by
+  `lns()` with no backup -- so `.tcshrc`/`.cshrc` were added.
+- `_restore_backup_dir`: a retired entrypoint is removed before a restore only when
+  the snapshot actually contains it (the `.tmux.local.conf` rule) -- a user-owned
+  `~/.profile` must not be deleted by a snapshot that never had one.
+- Tests: `tests/install-linux-tmp-home` pre-creates the three legacy links and asserts
+  all three are gone, and that `.bashrc`/`.bash_profile`/`.tcshrc` are present;
+  `tests/install-env-tcsh` pre-creates a legacy `.cshrc` and asserts it is pruned while
+  `.tcshrc` still drives a clean interactive shell.
+- Docs: INSTALLATION per-user table + retirement note, AGENTS entrypoint list + symlink
+  map, copilot layer sections, `envs/bash/README.md`, `envs/tcsh/README.md`,
+  `envs/tcsh/tcshrc` header.
+- Regen chain: the `envs/*` edits feed `gen-installed-sizes`, so
+  `payload/installed-sizes.json` then `.content-manifest` were regenerated in order.
+
+Gates: T1 `tests/run-all --fast` green; `install-linux-tmp-home`, `install-env-tcsh`,
+`install-split-shared-envs` green.
+
+**Next:** W4 (`supports_layers`), W5 (`tmux-yank` opt-in note), then W6 (docs sync +
+class C release).
+
 ## 2026-10-08 (7): PEP 758 guardrails -- the bare `except A, B:` form is canonical here (UNRELEASED)
 
 Operator report: AI agents keep "fixing" the 3.14 `except` syntax -- adding

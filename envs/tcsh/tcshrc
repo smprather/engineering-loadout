@@ -1,4 +1,4 @@
-# Loadout tcsh entry point.  ~/.tcshrc and ~/.cshrc link here.
+# Loadout tcsh entry point.  ~/.tcshrc links here (the retired ~/.cshrc is pruned).
 #
 # This environment TRACKS envs/bash/ (and envs/zsh/). A bash-env change is not
 # finished until the tcsh form lands -- see envs/tcsh/README.md.

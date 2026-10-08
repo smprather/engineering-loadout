@@ -153,8 +153,9 @@ Resolver helpers: `expand_groups`, `walk_depends`, `walk_recommends`,
 
 ### Bash Layer System
 
-`envs/bash/bashrc` is the single entry point (symlinked to `~/.bashrc`,
-`~/.bash_profile`, `~/.bash_login`, and `~/.profile`). It sources files in layer
+`envs/bash/bashrc` is the single entry point (symlinked to `~/.bashrc` and
+`~/.bash_profile`; `.bash_login`/`.profile` are retired and pruned on install).
+It sources files in layer
 order across six layers: `global -> corp -> site -> team -> project -> user`. Each layer
 directory lives under `~/.config/bash/` after install.
 
@@ -173,8 +174,9 @@ to this repo.
 
 ### tcsh Layer System
 
-`envs/tcsh/tcshrc` is the single entry point (symlinked to `~/.tcshrc` and
-`~/.cshrc`). tcsh is first-class for this project: bash leads, and tcsh mirrors
+`envs/tcsh/tcshrc` is the single entry point (symlinked to `~/.tcshrc`; the
+retired `~/.cshrc` is pruned -- only plain csh reads it). tcsh is first-class
+for this project: bash leads, and tcsh mirrors
 bash changes unless upstream offers no tcsh integration target. Use aliases for
 one-line wrappers and POSIX-sh helpers under `envs/tcsh/global/helpers/` for
 loops, locals, or shell-code emission.

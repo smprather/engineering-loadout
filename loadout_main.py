@@ -199,7 +199,16 @@ FONT_EXCLUDES = (
 )
 
 BASH_LAYERS = ("corp", "site", "team", "project", "user")
-BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
+BASH_ENTRYPOINTS = (".bashrc", ".bash_profile")
+# Retired entrypoints (2026-10-08, W3). bash reads only the first existing of
+# .bash_profile/.bash_login/.profile, and .bash_profile is always created, so the
+# other two were never read; .profile additionally linked a bashrc whose header
+# says bash-only into POSIX login shells. tcsh prefers .tcshrc, and plain csh (the
+# only reader of .cshrc) is not a supported shell here. They are pruned on install
+# and stay in the backup/restore lists for one release (P4).
+BASH_ENTRYPOINTS_RETIRED = (".bash_login", ".profile")
+TCSH_ENTRYPOINTS = (".tcshrc",)
+TCSH_ENTRYPOINTS_RETIRED = (".cshrc",)
 NVIM_LAYERS = ("user",)
 
 # Repo-relative payload home: platform dirs, packages.json, fonts, tldr,
@@ -4338,6 +4347,13 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
     if os.path.lexists(os.path.join(backup_dir, ".tmux.local.conf")):
         restore_targets.append(".tmux.local.conf")
 
+    # Retired entrypoints (W3): remove the current file only when this snapshot can
+    # actually restore it -- a user-owned ~/.profile must not be deleted by a
+    # restore whose backup never contained one.
+    for rel in BASH_ENTRYPOINTS_RETIRED + TCSH_ENTRYPOINTS_RETIRED:
+        if os.path.lexists(os.path.join(backup_dir, rel)):
+            restore_targets.append(rel)
+
     for rel in restore_targets:
         path = os.path.join(home, rel)
         if os.path.exists(path) or os.path.islink(path):
@@ -4414,7 +4430,10 @@ def backup_existing(home, repo_dir):
     _ACTIVE_BACKUP_DIR = backup_dir
     try:
         print(f"Making backups in: {backup_dir}")
-        for rel in list(BASH_ENTRYPOINTS) + [
+        # Retired entrypoints stay in this list for one release (W3/P4): the prune
+        # runs later, so the numbered backup is the safety net for files the install
+        # is about to delete. The tcsh entrypoints were never listed at all.
+        for rel in list(BASH_ENTRYPOINTS + BASH_ENTRYPOINTS_RETIRED + TCSH_ENTRYPOINTS + TCSH_ENTRYPOINTS_RETIRED) + [
             ".vimrc",
             ".vim",
             ".tmux",
@@ -4739,7 +4758,9 @@ def install_tealdeer_config(repo_dir, home):
 
 
 def _install_env_bash(repo_dir, home):
-    for entrypoint in BASH_ENTRYPOINTS:
+    # The retired entrypoints are swept here too: install_bash() only recreates the
+    # live ones, so a legacy ~/.bash_login / ~/.profile link would otherwise survive.
+    for entrypoint in BASH_ENTRYPOINTS + BASH_ENTRYPOINTS_RETIRED:
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
     _mirror_shared_prefix(home, ("bash",))
@@ -5076,11 +5097,12 @@ def _install_env_st(repo_dir, home):
 
 
 def _install_env_tcsh(repo_dir, home):
-    """Install the tcsh config layers and point ~/.tcshrc / ~/.cshrc at them.
+    """Install the tcsh config layers and point ~/.tcshrc at them.
 
     global/ is loadout-owned and synced with delete semantics; the five override
     layers are user-created and must survive a reinstall, so this cannot use the
     generic directory handler (install_path() on a dir syncs with delete=True).
+    The retired ~/.cshrc link is pruned (W3): only plain csh reads it.
     """
     src = os.path.join(repo_dir, "envs", "tcsh")
     if not os.path.isdir(src):
@@ -5094,10 +5116,12 @@ def _install_env_tcsh(repo_dir, home):
     _mirror_shared_prefix(home, ("tcsh",))
     for layer in ("corp", "site", "team", "project", "user"):
         ensure_dir(os.path.join(tcsh_dir, layer), "tcsh config layer")
-    for entrypoint in (".tcshrc", ".cshrc"):
+    for entrypoint in TCSH_ENTRYPOINTS:
         dest = os.path.join(home, entrypoint)
         remove_if_exists(dest)
         lns(os.path.join(tcsh_dir, "tcshrc"), dest, verbose=True)
+    for entrypoint in TCSH_ENTRYPOINTS_RETIRED:
+        remove_if_exists(os.path.join(home, entrypoint))
 
 
 def _install_env_zsh(repo_dir, home):

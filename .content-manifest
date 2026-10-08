@@ -779,7 +779,6 @@ sha256  2d9baf49e8333edf159fc33dd47dc90c3784c5255a3526d959592934993e136d  payloa
 sha256  2db123a067545c79dae7c13264b583e565b0e19c93f86a097b8c83b7c7124cf8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/dart.lua
 sha256  2dbdf37ad3bee9391ddf45e80b7b7f9c7ec028a10f566e2b157728f60cc8a971  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/sway.so.bz2
 sha256  2ddbed899ec50551a26647e46655adc89859fe748524f6a1ea8518484c742c22  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/tablegen.lua
-sha256  2de547a9a5e48f35313a1aee451c1a884472c02cf9b30b0aca6f38672eb89801  payload/installed-sizes.json
 sha256  2deae810933c81a19019cec73e700e04754a4ebc32f3faadbcf86002b708d1ef  envs/tmux/vendor/plugins/tmux-yank/video/README.md
 sha256  2df347fe93e07af3c31b0df6a87012ef165ac10fdc6bd831ae31fcd54afc4541  payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry/http.lua
 sha256  2df6bc1ff79995bdfe8fdf2c22b2840478cc4e669a99642f23f745a9cb29819f  envs/tmux/vendor/plugins/tmux-better-mouse-mode/scripts/helpers.sh
@@ -2087,6 +2086,7 @@ sha256  7b03584eb02886621d8441d12c05845fd10db3154aee08bf334ef9f776b05d3c  payloa
 sha256  7b0f3481051832d02d40c933a95cdb0c8281dfe2a9d37af781df3bf38ec9c882  payload/treesitter/vendor/nvim-treesitter/runtime/queries/terraform/highlights.scm
 sha256  7b42cd34e5e0d7b64d985324426ddc7f22831fdde71c189402a4f6ee106397d0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/readline/highlights.scm
 sha256  7b42cd34e5e0d7b64d985324426ddc7f22831fdde71c189402a4f6ee106397d0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/readline/highlights.scm
+sha256  7b4c5d59cc3ce51808a24ae0cacbbc2e9cc1152a23c2b168cf857616932b9c70  payload/installed-sizes.json
 sha256  7b6787b3745281c7a0eea68f33c5e623e0e83122bec2aca05daeeba497d26727  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/gotmpl/folds.scm
 sha256  7b6787b3745281c7a0eea68f33c5e623e0e83122bec2aca05daeeba497d26727  payload/treesitter/vendor/nvim-treesitter/runtime/queries/gotmpl/folds.scm
 sha256  7b71d4994cf3968e16d033ac59d28bb034427dd41be6a057b7a2985e2dfbe5b8  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/markdown/highlights.scm
