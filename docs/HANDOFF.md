@@ -1,6 +1,6 @@
 # Current Handoff
 
-## 2026-10-08 (3): tmux XDG cleanup -- plugin tree + config symlink off legacy paths (UNRELEASED)
+## 2026-10-08 (3): tmux XDG cleanup -- plugin tree + config symlink off legacy paths (RELEASED as 2026.10.5)
 
 Operator call: the extra `~/.config/tmux/tmux/` level and the `~/.tmux` symlink
 are legacy compat not worth keeping. The plugin tree now lives at TPM's own XDG
@@ -46,6 +46,18 @@ now sources the XDG dispatcher. Trade recorded: tmux < 3.1 (EL8's system 2.7,
 if invoked directly instead of the bundled/preferred 3.7c) would no longer see
 the loadout config. Docs synced in the same change (TMUX.md, INSTALLATION,
 README, ARCHITECTURE, copilot, AGENTS symlink map).
+
+**RELEASED 2026.10.5 (class C).** Gates: full `tests/run-all --container` green
+(T1 + T2 + T3 `--full` + `--dynamic`) -- the first run caught the missed
+`~/.tmux.conf` assertion in `tests/install-linux-tmp-home` (the T3 smoke runs
+that test inside the container too), fixed as `94d732b` before the second,
+green run. `./build/release` passed every gate and published. Section 9
+verified: `isDraft=false`; four assets (`sha256sums.txt` 525 B,
+`default.content-manifest` 647,898 B, `nvim-plugin-stash.tar.bz2`
+344,538,464 B matching local, `sbom.cdx.json` 1,340,180 B); the downloaded
+`default.content-manifest` is byte-identical to the local file (e9283b3b...);
+`git tag -v` prints a Good ED25519 signature; `origin/main` ==
+`2026.10.5^{commit}` (`94d732b`).
 
 ## 2026-10-08 (2): class C release prep -- currency + security sweep (RELEASED as 2026.10.4)
 
@@ -290,11 +302,11 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-08 (**released 2026.10.4** -- class C: offline-Rust
-subsystem retired, uv 0.12.23 + ty 0.0.85 + delta 0.20.1 + hyperfine 2.0.0 +
-vim/gvim 9.2.1172 + nodejs 26.11.1, tldr refresh; T3 harness + vuln-scan fixes;
-section-9 verified). After the release: tmux plugin tree moved off the legacy
-`~/.tmux` redirect to `~/.config/tmux/plugins/` (UNRELEASED).
+Last updated: 2026-10-08 (**released 2026.10.5** -- class C: tmux XDG cleanup,
+plugin tree at `~/.config/tmux/plugins/` with no `~/.tmux` or `~/.tmux.conf`
+redirects; section-9 verified).
+Previous: 2026.10.4 (offline-Rust retirement, uv/ty/delta/hyperfine/vim/gvim/
+nodejs sweep, T3 harness + vuln-scan fixes; section-9 verified).
 Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
 class A; section-9 verified: signed tag, 4 assets, origin/main == tag).
 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).
