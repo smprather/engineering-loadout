@@ -23,7 +23,10 @@ interpreter (an installed `<prefix>/bin/python3.14` ->
 -> cold-bootstrap from `payload/<platform>/portable-python-*.tar.bz2`) and
 execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 `tar` (always present on EL8/Suse/Debian) are the only host prerequisites.
-`loadout_main.py` enforces Python >= 3.14 via a `sys.version_info` gate.
+`loadout_main.py` enforces Python >= 3.14 via a `sys.version_info` gate, and the
+source uses PEP 758 syntax (`except A, B:` without parentheses; `except (A, B) as e:`
+still when binding) -- a pre-3.14 interpreter cannot parse the file at all, so always
+run it under the bundled interpreter or another 3.14+ build.
 
 ### Subcommands & options
 

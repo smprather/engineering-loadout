@@ -13,7 +13,12 @@ x86_64/ARM/PowerPC), six-layer shell configuration
 (global -> corp -> site -> team -> project -> user), and two-layer Neovim/tmux
 configuration (global -> user).
 `./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
-driven by `payload/packages.json` (`schema_version: 3`).
+driven by `payload/packages.json` (`schema_version: 3`). The source uses **PEP 758**
+syntax (`except A, B:` without parentheses, still `except (A, B) as e:` when binding),
+so only a 3.14+ interpreter can parse it -- never run an older Python or analyzer over
+`loadout_main.py`, and never "fix" the bare form back (it is valid on 3.14 and
+identical to the parenthesized one; `ruff format`, `target-version = "py314"`, strips
+the parentheses).
 
 ## Key Commands
 

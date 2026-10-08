@@ -1,5 +1,40 @@
 # Current Handoff
 
+## 2026-10-08 (7): PEP 758 guardrails -- the bare `except A, B:` form is canonical here (UNRELEASED)
+
+Operator report: AI agents keep "fixing" the 3.14 `except` syntax -- adding
+parentheses, or rewriting the handler around them. Verified semantics (bundled
+3.14 + PEP 758 + ruff 0.16.10): `except A, B:` is valid and identical to
+`except (A, B):` (Py2's catch-A-bind-B semantics were NOT reintroduced);
+parentheses are REQUIRED with `as` (`except (A, B) as e:`; the bare form is
+`SyntaxError: multiple exception types must be parenthesized when using 'as'`);
+`except A, B if flag else C:` parses as `Tuple([A, IfExp(...)])`;
+`ruff format` with `target-version = "py314"` strips the parens and leaves the
+`as` form alone.
+
+- `AGENTS.md`: the Cold Start note is now the full contract -- valid forms, the
+  `as` rule, "re-adding parentheses is churn", and "a pre-3.14 interpreter or
+  analyzer rejects the whole file with the stale message -- never rewrite a
+  handler over it". The Gates line names the format gate; copilot-instructions
+  and INSTALLATION carry short echoes.
+- `tests/run-all`: new T1 `ruff format check` (`ruff format --check
+  --force-exclude`, same first-party file set as `ruff check`), so a skipped
+  pre-commit format step (ruff off PATH -- what happened in f4ebda9) can no
+  longer let non-canonical formatting land. Tree was already clean: 60/60.
+- pi-lens ast-grep rule: written, then DROPPED by operator decision. Two
+  findings worth keeping: (1) the invalid bare-with-`as` form is not
+  structurally matchable -- tree-sitter error-nodes it (pattern
+  `except $A, $B as $E:` matches nothing under the napi engine), and
+  ruff/pyright/mypy already report it with the exact message; (2) a project
+  rule added mid-session is not picked up by the running lens daemon (a fresh
+  session is needed to validate firing), and `ast_grep_search`'s rule/nodeKind
+  modes shell out to an offline `npx ast-grep`, so they cannot validate a rule
+  here. Do not re-litigate without a way to prove firing.
+- No payload/shipped-data change: no `installed-sizes.json` / `.content-manifest`
+  regen.
+
+Gates: T1 `tests/run-all --fast` green, including the new `ruff format check`.
+
 ## 2026-10-08 (6): shared fonts -- install once per tree, never per home (UNRELEASED)
 
 Reported from an Anvil `/vols/...` shared-tree install: `@shared --dest-dir`
