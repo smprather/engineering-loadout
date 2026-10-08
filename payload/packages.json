@@ -1655,6 +1655,10 @@
         "vim",
         "vim.bin"
       ],
+      "libs": [
+        "libselinux.so.1",
+        "libpixman-1.so.0"
+      ],
       "version": "9.2.1172",
       "platforms": [
         "linux"
@@ -3352,15 +3356,8 @@
       "kind": "env",
       "source": "envs/vim/",
       "install_to": "~/.config/vim",
-      "extra_links": [
-        {
-          "from": "~/.config/vim/vimrc",
-          "to": "~/.vimrc"
-        },
-        {
-          "from": "~/.config/vim/vim",
-          "to": "~/.vim"
-        }
+      "prefer": [
+        "vim"
       ],
       "platforms": [
         "linux"

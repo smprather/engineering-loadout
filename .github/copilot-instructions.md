@@ -431,8 +431,11 @@ Tmux and Vim plugins are vendored in-tree (no internet required):
 
 - `envs/tmux/` -- global/user tmux dispatcher, word-boundary helper, pop-in/pop-out shell helpers,
   and vendored plugins: tpm, tmux-persist, better-mouse-mode
-- `envs/vim/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
-- `envs/vim/vim/pack/vendor/opt/` -- optional plugins
+- `envs/vim/pack/vendor/start/` -- nerdtree, SimpylFold, vim-liberty (auto-loaded)
+- `envs/vim/pack/vendor/opt/` -- optional plugins
+
+Vim's config and packs are read natively from `~/.config/vim/` (vim >= 9.0,
+XDG); there are no `~/.vimrc`/`~/.vim` symlinks.
 
 Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-commit
 hook strips `.git` dirs on the next commit). Plugin discovery reads the
@@ -515,7 +518,7 @@ pass.
 
 ### Adding a Bundled Plugin
 
-1. Copy the plugin directory into `envs/vim/vim/pack/vendor/start/` or
+1. Copy the plugin directory into `envs/vim/pack/vendor/start/` or
    `envs/tmux/vendor/plugins/`.
 2. The pre-commit hook strips `.git` dirs automatically on next commit.
 3. The relevant env handler (`_install_env_vim` / `_install_env_tmux`) already

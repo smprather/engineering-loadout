@@ -165,7 +165,13 @@ assert_symlink "$test_home/.bashrc"
 assert_symlink "$test_home/.bash_profile"
 assert_symlink "$test_home/.bash_login"
 assert_symlink "$test_home/.profile"
-assert_symlink "$test_home/.vimrc"
+assert_exists "$test_home/.config/vim/vimrc"
+assert_exists "$test_home/.config/vim/pack/vendor/start/nerdtree"
+assert_exists "$test_home/.config/vim/after/ftplugin/markdown.vim"
+if [ -e "$test_home/.vimrc" ] || [ -e "$test_home/.vim" ]; then
+    echo "Legacy ~/.vimrc/~/.vim must not be created (vim >= 9.0 reads XDG natively)" >&2
+    exit 1
+fi
 assert_exists "$test_home/.config/tmux/tmux.conf"
 if [ -e "$test_home/.tmux.conf" ]; then
     echo "Legacy ~/.tmux.conf must not be created (tmux >= 3.1 reads XDG natively)" >&2

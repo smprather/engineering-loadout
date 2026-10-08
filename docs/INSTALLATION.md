@@ -81,8 +81,7 @@ Per-user (`$HOME`):
 |-------------|--------|
 | `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.profile` | -> `envs/bash/bashrc` |
 | `~/.config/bash/` | Layered bash config |
-| `~/.vimrc` | `envs/vim/vimrc` |
-| `~/.vim/` | `envs/vim/vim/` |
+| `~/.config/vim/{vimrc,pack,after}/` | `envs/vim/` -- read natively by vim >= 9.0 (XDG); no `~/.vimrc`/`~/.vim` symlinks |
 | `~/.config/tmux/tmux.conf` | managed dispatcher, read natively by tmux >= 3.1 (settings-global -> settings-user -> `tmux-global.conf` then preserved `tmux-user.conf`; no `~/.tmux.conf` symlink) |
 | `~/.config/tmux/plugins/` | `envs/tmux/vendor/plugins/` (TPM's XDG path; no `~/.tmux` symlink) |
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |

@@ -233,6 +233,9 @@ if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
         gen_stamp "$CACHE_DIR/split-shared/fingerprint.json"
     fi
 
+    echo "== full: vim XDG config + plugins"
+    tests/install-env-vim-xdg
+
     echo "== full: Environment Modules fresh-home smoke"
     tests/install-modules
 fi

@@ -1,0 +1,82 @@
+#!/bin/sh
+# install-env-vim-xdg -- vim config and plugins load from the XDG tree.
+#
+# Pre-2026-10-08 the installer linked ~/.vimrc -> ~/.config/vim/vimrc and relied
+# on ~/.vim (which it removed but never recreated). Vim only uses its XDG vimrc
+# and packpath when NO ~/.vimrc and NO ~/.vim/vimrc exist (see
+# $VIMRUNTIME/doc/starting.txt, *xdg-vimrc*), so it stayed in legacy mode with an
+# empty packpath: the bundled plugins never loaded. This pins the fixed layout
+# end to end with the bundled vim:
+#   - $MYVIMRC and &packpath resolve under ~/.config/vim
+#   - globpath(&packpath,'pack/*/start/*') finds the shipped plugins
+#   - the shipped after/ftplugin/markdown.vim is installed
+#   - no ~/.vimrc, ~/.vim, or legacy nested ~/.config/vim/vim exist
+#   - control: a stray ~/.vimrc flips the same probe back to legacy mode, so the
+#     assertions above are proven able to fail.
+#
+# Uses a PTY: vim does not read its vimrc in Ex mode (-es), so a non-PTY probe
+# would pass while proving nothing.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+[ -x "$REPO/loadout" ] || { echo "FAIL: $REPO/loadout missing" >&2; exit 1; }
+command -v script >/dev/null 2>&1 || { echo "SKIP: no 'script' for a PTY"; exit 0; }
+
+tmp_root=${TMPDIR:-/tmp}
+TMPHOME="$(mktemp -d "$tmp_root/loadout-env-vim.XXXXXX")"
+CTRL="$(mktemp -d "$tmp_root/loadout-env-vim-ctrl.XXXXXX")"
+trap 'rm -rf "$TMPHOME" "$CTRL"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+echo "== install vim + env-vim into a temp HOME"
+# Unset the XDG/dev-shell vars that would move the install root or the vim
+# config dir; the test asserts the documented HOME defaults.
+env -u LOADOUT_CFG_SHARED_PREFIX -u XDG_DATA_HOME -u XDG_CONFIG_HOME \
+    HOME="$TMPHOME" "$REPO/loadout" install -y vim env-vim --no-backup \
+    > "$TMPHOME/install.log" 2>&1 || {
+    tail -5 "$TMPHOME/install.log" >&2
+    fail "install failed"
+}
+VIM="$TMPHOME/.local/share/loadout/bin/vim"
+[ -x "$VIM" ] || fail "installed vim not found at $VIM"
+
+probe() { # probe HOME OUTFILE
+    _home="$1"
+    _out="$2"
+    cat > "$_home/probe.vim" <<'VIMEOF'
+call writefile(["MYVIMRC=" . get(environ(), "MYVIMRC", "UNSET"), "PACKPATH=" . &packpath] + map(globpath(&packpath, 'pack/*/start/*', 0, 1), '"PLUGIN=" . v:val') + ["OPTS=" . printf("ts=%d et=%d", &ts, &expandtab)], expand("$PROBE_OUT"))
+qa!
+VIMEOF
+    PROBE_OUT="$_out" HOME="$_home" env -u XDG_CONFIG_HOME -u XDG_DATA_HOME \
+        script -qec "'$VIM' -S '$_home/probe.vim'" /dev/null > "$_home/pty.log" 2>&1 \
+        || fail "vim probe failed: $(grep -iE 'error|E[0-9]+:' "$_home/pty.log" | head -1)"
+    [ -f "$_out" ] || fail "vim probe wrote no output"
+}
+
+echo "== XDG probe"
+probe "$TMPHOME" "$TMPHOME/probe.out"
+grep -qxF "MYVIMRC=$TMPHOME/.config/vim/vimrc" "$TMPHOME/probe.out" \
+    || fail "MYVIMRC is not the XDG vimrc"
+grep -qF "PACKPATH=$TMPHOME/.config/vim," "$TMPHOME/probe.out" \
+    || fail "packpath does not start with the XDG config dir"
+for plugin in nerdtree SimpylFold vim-liberty; do
+    grep -qxF "PLUGIN=$TMPHOME/.config/vim/pack/vendor/start/$plugin" "$TMPHOME/probe.out" \
+        || fail "plugin $plugin not on packpath"
+done
+grep -qxF "OPTS=ts=4 et=1" "$TMPHOME/probe.out" || fail "vimrc settings not applied"
+[ -f "$TMPHOME/.config/vim/after/ftplugin/markdown.vim" ] || fail "shipped after/ftplugin/markdown.vim not installed"
+[ ! -e "$TMPHOME/.vimrc" ] || fail "legacy ~/.vimrc created"
+[ ! -e "$TMPHOME/.vim" ] || fail "legacy ~/.vim created"
+[ ! -e "$TMPHOME/.config/vim/vim" ] || fail "legacy nested ~/.config/vim/vim created"
+
+echo "== control: a stray ~/.vimrc must flip vim back to legacy mode"
+mkdir -p "$CTRL/.config/vim"
+cp "$TMPHOME/.config/vim/vimrc" "$CTRL/.config/vim/vimrc"
+printf 'let g:legacy_control = 1\n' > "$CTRL/.vimrc"
+probe "$CTRL" "$CTRL/probe.out"
+grep -qxF "MYVIMRC=$CTRL/.vimrc" "$CTRL/probe.out" || fail "control: stray ~/.vimrc was not sourced"
+if grep -qF "PACKPATH=$CTRL/.config/vim," "$CTRL/probe.out"; then
+    fail "control: packpath used the XDG dir while ~/.vimrc existed"
+fi
+
+echo "install-env-vim-xdg: OK"

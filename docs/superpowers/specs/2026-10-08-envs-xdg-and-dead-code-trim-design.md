@@ -1,7 +1,8 @@
 # envs XDG migration and dead-code trim — design
 
 Date: 2026-10-08
-Status: draft for review
+Status: approved 2026-10-08 (operator: prefer-vim = yes, drop plain csh = yes,
+XDG hook sibling = yes); W1 landed and gated, W2-W5 pending
 Evidence base: 2026-10-08 audit session (live probes + code references inline)
 Scope: `envs/*` configuration packages, their installer handlers, and the registry
 fields that drive them. Out of scope: payload tool behavior, the nvim plugin
@@ -151,8 +152,10 @@ Chosen design:
   (tmux precedent: `env-tmux` declares `prefer: ["tmux"]`). Trade, recorded:
   `/usr/bin/vim` (EL8 8.0) no longer sees the loadout config or plugins; vim
   8.0 cannot read XDG config, so this is inherent to the migration.
-- `~/.vimrc_hook.bottom` keeps being sourced (users' existing hooks survive);
-  do not add an XDG sibling unless someone asks.
+- `~/.vimrc_hook.bottom` keeps being sourced, and
+  `~/.config/vim/vimrc_hook.bottom` is read first when present (the legacy path
+  is read otherwise, so existing hooks keep working without double-sourcing;
+  operator decision 2026-10-08).
 - `after/` is user-adjacent (users add their own ftplugins there), so the
   installer ships the tracked files **per file** — extend the tuple when a new
   shipped `after/` file is added (the env-helix "silently never installed"
@@ -205,40 +208,49 @@ offline. Note that `build/update tmux-plugins` discovers declarations in
 Each workstream is a candidate for its own commit. Steps are checkbox items;
 tick them in this file as they land.
 
-### W1 — Vim XDG migration (D1)
+### W1 — Vim XDG migration (D1) — LANDED
 
 **Files:** `envs/vim/` (layout move), `loadout_main.py`
-(`_install_env_vim`), `payload/packages.json` (`env-vim`), new
-`tests/install-env-vim-xdg`, `tests/install-linux-tmp-home`, docs
-(INSTALLATION, AGENTS, copilot, `envs/vim` comments).
+(`_install_env_vim`), `payload/packages.json` (`env-vim`, `vim`),
+`tests/install-env-vim-xdg` (new), `tests/install-linux-tmp-home`, docs.
 
-- [ ] `git mv envs/vim/vim/pack envs/vim/pack` and
-      `git mv envs/vim/vim/after envs/vim/after`; delete the now-empty
-      `envs/vim/vim/`.
-- [ ] `_install_env_vim`: prune `~/.vimrc`, `~/.vim`, and the legacy nested
-      `~/.config/vim/vim`; install `vimrc` to `~/.config/vim/vimrc`; sync
-      `envs/vim/pack/vendor/{start,opt}` to `~/.config/vim/pack/vendor/...`
-      (`delete=True`); install each tracked `after/` file individually.
-- [ ] Registry `env-vim`: add `prefer: ["vim"]`; drop `extra_links`
-      (also handled by W2).
-- [ ] New T2 test `tests/install-env-vim-xdg` (wire into `tests/run-all`
-      T2): install `env-vim` into a temp HOME and run the **bundled** vim
-      (absolute `<prefix>/bin/vim` or restricted-PATH) with `-es`:
-      assert `$MYVIMRC == <home>/.config/vim/vimrc`,
-      `~/.config/vim` is in `&packpath`,
-      `globpath(&packpath,'pack/*/start/*')` lists `nerdtree`, and
-      `~/.config/vim/after/ftplugin/markdown.vim` exists.
-      Negative controls: `~/.vimrc` and `~/.vim` are absent; the legacy
-      `~/.config/vim/vim` tree is pruned.
-- [ ] `tests/install-linux-tmp-home`: replace the `.vimrc` symlink assertion
-      with "XDG vimrc exists, `~/.vimrc`/`~/.vim` absent".
-- [ ] Docs: INSTALLATION install table (`~/.config/vim/{vimrc,pack,after}`),
-      AGENTS symlink map + Vim mentions, copilot, and a comment in
-      `envs/vim/vimrc` about the XDG mode + `vimrc_hook.bottom` path.
+- [x] `git mv envs/vim/vim/pack envs/vim/pack` and
+      `git mv envs/vim/vim/after envs/vim/after`; the empty `envs/vim/vim/`
+      removed.
+- [x] `_install_env_vim`: prunes `~/.vimrc`, `~/.vim`, and the legacy nested
+      `~/.config/vim/vim`; installs `vimrc` to `~/.config/vim/vimrc`; syncs
+      `envs/vim/pack/vendor/{start,opt}` (`delete=True`); installs each tracked
+      `after/` file individually (tuple `after/ftplugin/markdown.vim`).
+- [x] Registry `env-vim`: `prefer: ["vim"]` added; `extra_links` dropped
+      (the field itself is W2's).
+- [x] New T2 test `tests/install-env-vim-xdg`, wired into `tests/run-all` T2
+      **and** the Tier 3 smoke entrypoint. Installs `vim` + `env-vim` into a
+      temp HOME, then probes the bundled vim **through a PTY**: the first draft
+      used `vim -es`, which does NOT read the vimrc, so it passed while proving
+      nothing. Asserts `$MYVIMRC`, XDG-first `&packpath`, the shipped plugins
+      and `after/ftplugin/markdown.vim`, and the absence of the legacy paths.
+      Control: a stray `~/.vimrc` flips the same probe back to legacy mode, so
+      the assertions are proven able to fail.
+- [x] `tests/install-linux-tmp-home`: asserts the XDG vimrc/pack/after files
+      exist and `~/.vimrc`/`~/.vim` do not.
+- [x] Docs: INSTALLATION table, AGENTS repo map + symlink map + test list,
+      copilot plugin paths, and the `envs/vim/vimrc` XDG comment with the hook
+      sibling.
+- [x] **Found by the test: `install vim` alone shipped a broken binary.**
+      `vim.bin` NEEDs `libselinux.so.1` — a payload stem claimed by `gui_libs`
+      only, so a vim-only selection skipped it (dead on hosts without a system
+      libselinux, e.g. Arch/CachyOS; masked on EL8 BaseOS) — plus a spurious
+      `libpixman-1.so.0` NEEDED (`vim --version` reports `-X11`, so it is a
+      link-time artifact the loader still requires). Both are now declared in
+      the `vim` entry's `libs`. Build-hygiene follow-up: a vim rebuild could
+      drop the pixman link and the declaration.
+- [x] Gates: `install-env-vim-xdg` + `install-linux-tmp-home` + T1 green; full
+      `tests/run-all --container` green, with the new test also running in the
+      Tier 3 smoke (`install-env-vim-xdg: OK` inside the container).
 
-**Acceptance:** the new T2 test passes on the dev host and in the Tier 3
-container; `vim` started by a plain (post-install) login shell loads the
-loadout vimrc and nerdtree; no `~/.vimrc`/`~/.vim` are created.
+**Acceptance:** met — the new test passes on the dev host and inside the Tier 3
+container; a fresh install creates no `~/.vimrc`/`~/.vim`, and the bundled vim
+loads its vimrc, packpath and after/ftplugin from `~/.config/vim`.
 
 ### W2 — Remove `extra_links` (D2)
 
@@ -333,10 +345,10 @@ unchanged except the missing field; T1 green.
 | starship schema under-counted in sizes | W2 explicitly verifies `installed-sizes --check` after the `source` change |
 | test cache churn from `tests/` edits | expected; container sidecar is keyed on `tests/` (`FP_ROOTS_CONTAINER`) |
 
-## 7. Open questions
+## 7. Decisions closed (operator, 2026-10-08)
 
-1. Is plain `csh` support required anywhere? D3 assumes no.
-2. Is `prefer: ["vim"]` acceptable (it shadows system vim on PATH, as the tmux
-   shim already does)? D1 assumes yes.
-3. Should `~/.vimrc_hook.bottom` gain an XDG sibling
-   (`~/.config/vim/vimrc_hook.bottom`)? D1 keeps the legacy path only.
+1. Plain `csh` support is NOT required — D3 drops `.cshrc`.
+2. `prefer: ["vim"]` approved — the bundled vim shadows system vim on PATH,
+   as the tmux shim already does.
+3. The XDG hook sibling is approved — D1 reads
+   `~/.config/vim/vimrc_hook.bottom` first, the legacy path second.

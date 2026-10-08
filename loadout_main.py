@@ -4692,21 +4692,35 @@ def _install_env_nvim(repo_dir, home):
 
 
 def _install_env_vim(repo_dir, home):
+    # Vim uses its XDG vimrc and packpath ONLY when no ~/.vimrc and no
+    # ~/.vim/vimrc exist (see $VIMRUNTIME/doc/starting.txt, *xdg-vimrc*), so the
+    # pre-XDG layout (~/.vimrc -> .config/vim/vimrc plus a ~/.vim symlink) is
+    # retired: config and plugins live under ~/.config/vim and vim finds them
+    # natively. The legacy paths are still pruned here and stay in the backup
+    # list for one release.
     remove_if_exists(os.path.join(home, ".vimrc"))
     remove_if_exists(os.path.join(home, ".vim"))
     vim_config = os.path.join(home, ".config", "vim")
     if os.path.islink(vim_config):
         os.unlink(vim_config)
-    ensure_dir(os.path.join(vim_config, "vim", "pack", "vendor", "start"), "Vim config")
-    ensure_dir(os.path.join(vim_config, "vim", "pack", "vendor", "opt"), "Vim config")
+    # Retired nested tree: ~/.config/vim/vim/{pack,after} -> ~/.config/vim/.
+    remove_if_exists(os.path.join(vim_config, "vim"))
+    ensure_dir(os.path.join(vim_config, "pack", "vendor", "start"), "Vim config")
+    ensure_dir(os.path.join(vim_config, "pack", "vendor", "opt"), "Vim config")
     for start_or_opt in ("start", "opt"):
         sync_dir(
-            os.path.join(repo_dir, "envs", "vim", "vim", "pack", "vendor", start_or_opt),
-            os.path.join(vim_config, "vim", "pack", "vendor", start_or_opt),
+            os.path.join(repo_dir, "envs", "vim", "pack", "vendor", start_or_opt),
+            os.path.join(vim_config, "pack", "vendor", start_or_opt),
             delete=True,
         )
     install_path(os.path.join(repo_dir, "envs", "vim", "vimrc"), os.path.join(vim_config, "vimrc"), False)
-    lns(".config/vim/vimrc", os.path.join(home, ".vimrc"), verbose=True)
+    # after/ is user-adjacent (users add their own ftplugins there), so the
+    # shipped files go in individually -- never sync_dir(delete=True). Add any
+    # new shipped after/ file to this tuple or it is silently never installed.
+    for rel in ("after/ftplugin/markdown.vim",):
+        dest = os.path.join(vim_config, rel)
+        ensure_dir(os.path.dirname(dest), "Vim after directory")
+        install_path(os.path.join(repo_dir, "envs", "vim", rel), dest, False)
 
 
 def _install_tmux_user_layer(repo_dir, home, tmux_config):

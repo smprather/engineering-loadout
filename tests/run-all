@@ -297,6 +297,7 @@ run_test "install-env-st" --deps auto tests/install-env-st
 run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh
 run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
+run_test "install-env-vim-xdg" --deps auto tests/install-env-vim-xdg
 run_test "install-readonly-source" --deps auto "$PY" tests/install-readonly-source
 run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
 run_test "optional-packages" --deps auto tests/optional-packages

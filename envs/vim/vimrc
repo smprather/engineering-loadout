@@ -256,6 +256,11 @@ nnoremap ; :
 nnoremap ;; ;
 
 
-if filereadable(expand("~/.vimrc_hook.bottom"))
+" User hook, sourced last. The XDG location is canonical; the legacy
+" ~/.vimrc_hook.bottom is still read when no XDG hook exists, so existing
+" hooks keep working without being sourced twice.
+if filereadable(expand("~/.config/vim/vimrc_hook.bottom"))
+    source ~/.config/vim/vimrc_hook.bottom
+elseif filereadable(expand("~/.vimrc_hook.bottom"))
     source ~/.vimrc_hook.bottom
 endif

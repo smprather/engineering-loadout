@@ -1,5 +1,48 @@
 # Current Handoff
 
+## 2026-10-08 (4): envs cleanup -- spec + W1 vim XDG migration (UNRELEASED)
+
+Spec of record: `docs/superpowers/specs/2026-10-08-envs-xdg-and-dead-code-trim-design.md`
+(findings F1-F6 from the envs audit, decisions D1-D5, workstreams W1-W6). The
+operator closed the three open questions: prefer-vim = yes, drop plain csh =
+yes, XDG hook sibling = yes. **W2-W5 are the remaining workstreams; the spec's
+checklists are the source of truth.**
+
+**W1 landed and gated.** Vim is XDG-native now:
+
+- `envs/vim/vim/{pack,after}` -> `envs/vim/{pack,after}`; installed to
+  `~/.config/vim/{vimrc,pack/vendor,after}`; `~/.vimrc`/`~/.vim` are no longer
+  created (pruned on install, kept in the backup list for one release).
+- `env-vim` gains `prefer: ["vim"]` (the bundled 9.2 wins on PATH; trade:
+  `/usr/bin/vim` 8.0 never sees the config -- inherent to XDG, recorded in the
+  spec) and drops its `extra_links` entries (the mechanism itself is W2).
+- `envs/vim/vimrc` sources `~/.config/vim/vimrc_hook.bottom` first, the legacy
+  `~/.vimrc_hook.bottom` second.
+- **The change exposed a pre-existing packaging bug: `install vim` alone
+  shipped a broken binary.** `vim.bin` NEEDs `libselinux.so.1`, a payload stem
+  claimed only by `gui_libs`, so a vim-only selection skipped it -- dead on
+  hosts without a system libselinux (Arch/CachyOS), masked on EL8 BaseOS. It
+  also carries a spurious `libpixman-1.so.0` NEEDED (`vim --version` reports
+  `-X11`; the loader still requires the soname). Both are now declared in the
+  `vim` entry's `libs`. Build-hygiene follow-up: a vim rebuild could drop the
+  pixman link and its declaration.
+- New T2 test `tests/install-env-vim-xdg`, wired into `tests/run-all` T2 **and**
+  the Tier 3 smoke entrypoint: installs `vim` + `env-vim` into a temp HOME and
+  probes the bundled vim **through a PTY** (`vim -es` does not read the vimrc --
+  a non-PTY probe would pass while proving nothing), asserting `$MYVIMRC`,
+  XDG-first `&packpath`, the shipped plugins and after/ftplugin; a stray
+  `~/.vimrc` control flips the probe back to legacy mode so the assertions are
+  proven able to fail. `tests/install-linux-tmp-home` asserts the XDG layout and
+  the absence of the legacy symlinks.
+- Gates: focused tests + T1 green; full `tests/run-all --container` green, with
+  `install-env-vim-xdg: OK` running inside the Tier 3 container smoke.
+
+**Next:** W2 (delete `extra_links`: 3 remaining declarers + generic loop +
+validation + sizes branch; `env-starship` `source` -> `envs/starship/`), then
+W3 (dead entrypoints `.bash_login`/`.profile`/`.cshrc`), W4 (`supports_layers`),
+W5 (`tmux-yank` opt-in note). Each lands as its own commit; class C at the next
+release.
+
 ## 2026-10-08 (3): tmux XDG cleanup -- plugin tree + config symlink off legacy paths (RELEASED as 2026.10.5)
 
 Operator call: the extra `~/.config/tmux/tmux/` level and the `~/.tmux` symlink
@@ -302,9 +345,9 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-08 (**released 2026.10.5** -- class C: tmux XDG cleanup,
-plugin tree at `~/.config/tmux/plugins/` with no `~/.tmux` or `~/.tmux.conf`
-redirects; section-9 verified).
+Last updated: 2026-10-08 (**released 2026.10.5**; in flight: the envs cleanup
+spec + W1 vim XDG migration -- W2-W5 pending, spec is the checklist).
+Previous: 2026.10.5 (class C: tmux XDG cleanup; section-9 verified).
 Previous: 2026.10.4 (offline-Rust retirement, uv/ty/delta/hyperfine/vim/gvim/
 nodejs sweep, T3 harness + vuln-scan fixes; section-9 verified).
 Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
