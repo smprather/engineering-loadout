@@ -339,8 +339,8 @@ OpenSSH for those.
 | ty | bin | 0.0.85 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.23 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.1169 | Vi IMproved text editor |
-| gvim | bin | 9.2.1169 | GTK3 GUI Vim with clipboard and font rendering |
+| vim | bin | 9.2.1172 | Vi IMproved text editor |
+| gvim | bin | 9.2.1172 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |

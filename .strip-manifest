@@ -72,7 +72,7 @@ sha256  3781a8a289d746884eaff301db71e1d54d1374da67d54d4fffb5110df6de946e  payloa
 sha256  67d71b797514a0fed5c0ba031a8abd2ec69540ea186cddecb7bd62e4dd9baf7c  payload/el8.x86_64.glibc2p28/bin/groups.bz2
 sha256  a546e160cd55c973206eeba619137b8441a914d6e50b0fa25caed3c87975c445  payload/el8.x86_64.glibc2p28/bin/gtkwave.bin.bz2
 sha256  3e2ce6b478c994608d346d67ba85c3422b06fcf89e7cd48e189839943699e481  payload/el8.x86_64.glibc2p28/bin/gtkwave.bz2
-sha256  45a05aac10ad7c7b0a506c694a92168ab7cd91bdef5cae714e96746e9f7cbe12  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
+sha256  31835cc587ec9d1db833b2b54c31f3efaa22d748c7afaf37c0a6f2d431a9cd88  payload/el8.x86_64.glibc2p28/bin/gvim.bin.bz2
 sha256  ab1ac1e3f76b56165e8aebf785ac76ccebec6ba8e205cdaadec75fcd096ef599  payload/el8.x86_64.glibc2p28/bin/gvim.bz2
 sha256  b6a7e6a469d9dc39825377f4881c6ee748d91866c144c6590cd2b44d11a5bdaa  payload/el8.x86_64.glibc2p28/bin/head.bz2
 sha256  b6d3e27839f4f7d17d30978e89b855331b632ab2bec6ca2607690ba492770d7f  payload/el8.x86_64.glibc2p28/bin/htop.bz2
@@ -255,7 +255,7 @@ sha256  1a52c0ba1a8227fb63aa5c82f613665028026ab63fd3111712fd879e6f62c076  payloa
 sha256  4dd10e701277294d4618bf1bb31c7c357c0ee060f09ad78d134216b6742e3bbb  payload/el8.x86_64.glibc2p28/bin/verilator_coverage_bin_dbg.bz2
 sha256  bb72d0ee86242126a207c9645efa5e498a642068255fc4acea1f0673b12ab787  payload/el8.x86_64.glibc2p28/bin/verilator_gantt.bz2
 sha256  5b0cc5a02a8b6f165f2b3ecb31b127a94577819ace37995a55d1e692ff05bee4  payload/el8.x86_64.glibc2p28/bin/verilator_profcfunc.bz2
-sha256  e89e4c8d0a03d16ef76e63d23f0e9d1fe725ec60ce5c6119d68429dc9b894fed  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
+sha256  0ef2ab54541f2ca62f0d4c4b52d412ff031cd0bb534a529f55e7249722a63ea4  payload/el8.x86_64.glibc2p28/bin/vim.bin.bz2
 sha256  762311b6b64c4df680a817bffc690309555df9d777dc4b8796d4bebac93f7893  payload/el8.x86_64.glibc2p28/bin/vim.bz2
 sha256  9d05d1ba86a1b3d78285f9c7585cacfeb852cbd2a7f957a7602425b850a7f140  payload/el8.x86_64.glibc2p28/bin/vvp.bz2
 sha256  161570b306b30c4a5b87bc089b31bfeeeeb4e6458cf70c327193843630b64208  payload/el8.x86_64.glibc2p28/bin/vzt2vcd.bz2
@@ -503,7 +503,7 @@ tar-meta  3669135  1791321369  payload/el8.x86_64.glibc2p28/runtime/typescript-l
 tar-meta  28387403  1787471355  payload/el8.x86_64.glibc2p28/runtime/valgrind.tar.bz2
 tar-meta  250754  1784306302  payload/el8.x86_64.glibc2p28/runtime/vcd-toggle-profiler.tar.bz2
 tar-meta  284862  1789353499  payload/el8.x86_64.glibc2p28/runtime/verilator.tar.bz2
-tar-meta  8231106  1791321372  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
+tar-meta  8231106  1791428823  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  3922221  1790482906  payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2
 tar-meta  14850054  1790108766  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2

@@ -30,7 +30,10 @@ registry -- bring your own dependency source (network, `cargo vendor`, mirror).
 **Bumped/unpinned:** uv 0.12.17 -> 0.12.23, then the rest of the pinned quartet --
 ty 0.0.82 -> 0.0.85, delta 0.19.2 -> 0.20.1, hyperfine 1.20.0 -> 2.0.0 (commit
 `2c7e672`); all via in-container `build/update-prebuilt`. No Rust tool remains
-outdated (`check-versions`). `build/update-prebuilt` now resolves patchelf via
+outdated (`check-versions`). Also bumped vim + gvim 9.2.1169 -> 9.2.1172
+(`build/build-vim.sh --tag v9.2.1172`, in-container; the vim92 runtime archive
+came out byte-identical -- nothing in the runtime changed between patches -- so
+only the two bins changed). `build/update-prebuilt` now resolves patchelf via
 `LOADOUT_PATCHELF` -> PATH -> legacy `~/.local/bin` (the XDG migration moved it)
 and fails clearly when missing.
 
