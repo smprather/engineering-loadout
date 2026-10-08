@@ -1,6 +1,6 @@
 # Current Handoff
 
-## 2026-10-08 (2): class C release prep -- currency + security sweep (UNRELEASED)
+## 2026-10-08 (2): class C release prep -- currency + security sweep (RELEASED as 2026.10.4)
 
 Preparing the release on top of the offline-Rust retirement (payload ~3.0 GB,
 manifest 4452).
@@ -43,7 +43,17 @@ Gates: full `tests/run-all --container` green afterwards -- T1 + T2 + T3
 re-pin is NOT owed (none of nvim/rust/treesitter/git-nvim was bumped). Next:
 `./build/release` -> 2026.10.4.
 
-## 2026-10-08: offline-Rust subsystem retired -- uv unpinned and bumped (UNRELEASED)
+**RELEASED 2026.10.4 (class C).** Gates: fresh `tests/run-all --container`
+green (T1 + T2 + T3 `--full` + `--dynamic`), then a release dry-run that first
+caught the two T3-harness issues and the vuln-scan resolver problem above -- all
+fixed before publishing. Section 9 verified: `isDraft=false`; four assets
+(`sha256sums.txt` 525 B, `default.content-manifest` 647,898 B,
+`nvim-plugin-stash.tar.bz2` 344,538,464 B matching local, `sbom.cdx.json`
+1,340,125 B); the downloaded `default.content-manifest` is byte-identical to
+the local file (a5601d5d...); `git tag -v` prints a Good ED25519 signature;
+`origin/main` == `2026.10.4^{commit}` (`46246f9`).
+
+## 2026-10-08: offline-Rust subsystem retired -- uv unpinned and bumped (in 2026.10.4)
 
 **Decision (operator):** offline `cargo build` on farm nodes was aspirational.
 The crate store + its wiring are gone; the shipped Rust **toolchain** (`rust`
@@ -233,9 +243,10 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-08 (**UNRELEASED**: class C release prep -- offline-Rust
-subsystem retired, uv 0.12.23 + ty/delta/hyperfine + vim/gvim + nodejs 26.11.1;
-full --container gates pending).
+Last updated: 2026-10-08 (**released 2026.10.4** -- class C: offline-Rust
+subsystem retired, uv 0.12.23 + ty 0.0.85 + delta 0.20.1 + hyperfine 2.0.0 +
+vim/gvim 9.2.1172 + nodejs 26.11.1, tldr refresh; T3 harness + vuln-scan fixes;
+section-9 verified).
 Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
 class A; section-9 verified: signed tag, 4 assets, origin/main == tag).
 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).
