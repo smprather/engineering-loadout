@@ -44,6 +44,31 @@ selected `themes/tmux-theme-<name>.conf` plus the generated
 `word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
 Helper scripts live in `scripts/`.
 
+## Optional plugins (`tmux-yank`)
+
+[tmux-yank](https://github.com/tmux-plugins/tmux-yank) copies selections to the
+system clipboard (and yanks paths/URLs out of the pane). It is **off by
+default**: it needs a clipboard tool on the host (`xclip`/`xsel` for X11,
+`wl-copy` for Wayland) and a session that actually reaches a clipboard, which
+headless farm nodes do not have; it also takes over the default copy behaviour.
+
+The plugin ships **vendored** at `envs/tmux/vendor/plugins/tmux-yank` (installed
+to `~/.config/tmux/plugins/tmux-yank`), so enabling it works offline -- TPM sees
+the directory already present and skips cloning. Enable it in the preserved user
+layer:
+
+```tmux
+# ~/.config/tmux/tmux-user.conf
+set -g @plugin 'tmux-plugins/tmux-yank'
+```
+
+then reload (`Prefix+r` -- TPM runs on every config load) or restart tmux.
+
+One caveat: `build/update tmux-plugins` discovers `set -g @plugin` declarations
+in the managed `tmux-global.conf` only, so a user-layer declaration is **not**
+refreshed by the updater. The vendored copy stays at the version in the repo
+until the global layer declares it (or you update it yourself).
+
 ## Focus follows mouse (FFM)
 
 `focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.7c) focuses the

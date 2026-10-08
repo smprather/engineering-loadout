@@ -324,12 +324,15 @@ X-session env hook, exporting PATH/TERMINFO_DIRS into a startx/X11 session. Only
 **Acceptance:** `rg supports_layers` empty; `loadout info env-tmux` output
 unchanged except the missing field; T1 green.
 
-### W5 — Document the `tmux-yank` opt-in (D5)
+### W5 — Document the `tmux-yank` opt-in (D5) — LANDED
 
 **Files:** `docs/TMUX.md`, `envs/tmux/tmux-global.conf` (comment).
 
-- [ ] Document the opt-in in the user layer and the offline rationale.
-- [ ] Note the `build/update tmux-plugins` scope (global layer only).
+- [x] Document the opt-in in the user layer (`envs/tmux/tmux-user.conf` block +
+      `docs/TMUX.md` section) and the offline rationale (the vendored copy makes
+      TPM skip the clone; needs xclip/xsel or wl-copy).
+- [x] Note the `build/update tmux-plugins` scope (global layer only) in both the
+      `tmux-global.conf` comment and `docs/TMUX.md`; AGENTS carries the one-liner.
 
 **Acceptance:** docs only; no code change.
 

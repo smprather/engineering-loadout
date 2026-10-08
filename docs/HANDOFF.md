@@ -1,5 +1,27 @@
 # Current Handoff
 
+## 2026-10-08 (11): envs cleanup W5 -- tmux-yank opt-in documented (UNRELEASED)
+
+Per spec D5/F5. The plugin was already vendored and its `@plugin` line already
+commented in the managed global layer; the gap was documentation, not dead weight.
+
+- `envs/tmux/tmux-global.conf`: the commented line is now a documented catalog block
+  (off-by-default rationale: needs xclip/xsel or wl-copy and a clipboard; offline
+  because the copy is vendored; updater-scope note).
+- `envs/tmux/tmux-user.conf`: the concrete opt-in block (uncomment one line, reload
+  or restart) -- the user layer is the documented place to enable it.
+- `docs/TMUX.md`: new "Optional plugins (tmux-yank)" section: what it does, why it is
+  off, the offline vendored copy, the enable snippet, and the
+  `build/update tmux-plugins` caveat (it discovers declarations in the global layer
+  only).
+- AGENTS tmux paragraph carries the same one-liner.
+- Regen chain: the `envs/tmux` edits feed `gen-installed-sizes`, so
+  installed-sizes.json then .content-manifest were regenerated in order.
+
+Gates: `install-env-tmux-nvim-layers` green; the class C suite runs in W6.
+
+**Next:** W6 -- docs sync + class C release.
+
 ## 2026-10-08 (10): W3 correction -- ~/.profile is the X-session hook, not dead weight (UNRELEASED)
 
 Operator challenged W3 ("I added them for a reason"). They were right about `~/.profile`:
