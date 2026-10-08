@@ -18,9 +18,21 @@ manifest 4452).
   `pdftotext` (deliberately pinned) and `ncdu`, whose upstream lookup still
   503s -- an INCOMPLETE report, not a clean bill. No Rust tool is outdated.
 
-Gates before the release: full `tests/run-all --container` (class C requires
-Tier 3); assurance re-pin is NOT owed (none of nvim/rust/treesitter/git-nvim was
-bumped). Then `./build/release` -> 2026.10.4.
+- **Tier 3 harness fixes found by the full `--container` run** (the `--full`
+  smoke never exercises these paths):
+  - `build/docker/almalinux8.10-smoke-entrypoint` hardcoded the dynamic smoke's
+    `--bindir /work/dyn/local/bin`; since the 2026-10-05 XDG re-architecture a
+    non-`$HOME` `--dest-dir` is a plain prefix, so nvim lands at `/work/dyn/bin`.
+    Fixed (`3f1796b`) and verified standalone (`--dynamic`: 10 passed, 0 failed).
+  - `tests/run-all`'s container cache key did not include the smoke harness
+    (`build/docker/*`), so a stale pre-XDG `.pass` blessed the broken test as
+    CACHED PASS right after it had failed. Container tests now use
+    `FP_ROOTS_CONTAINER` (`578ffc7`); all-mode caching is unchanged.
+
+Gates: full `tests/run-all --container` green afterwards -- T1 + T2 + T3
+`--full` + `--dynamic`, 22m52s fresh, both T3 tests genuinely re-run. Assurance
+re-pin is NOT owed (none of nvim/rust/treesitter/git-nvim was bumped). Next:
+`./build/release` -> 2026.10.4.
 
 ## 2026-10-08: offline-Rust subsystem retired -- uv unpinned and bumped (UNRELEASED)
 
