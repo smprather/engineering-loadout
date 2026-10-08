@@ -166,7 +166,11 @@ assert_symlink "$test_home/.bash_profile"
 assert_symlink "$test_home/.bash_login"
 assert_symlink "$test_home/.profile"
 assert_symlink "$test_home/.vimrc"
-assert_symlink "$test_home/.tmux.conf"
+assert_exists "$test_home/.config/tmux/tmux.conf"
+if [ -e "$test_home/.tmux.conf" ]; then
+    echo "Legacy ~/.tmux.conf must not be created (tmux >= 3.1 reads XDG natively)" >&2
+    exit 1
+fi
 assert_symlink "$test_home/.editorconfig"
 
 assert_exists "$test_home/post-install-hooks.log"
