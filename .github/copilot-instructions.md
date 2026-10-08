@@ -440,7 +440,10 @@ declarations in `envs/tmux/tmux-global.conf`, not the dispatcher.
 
 The tmux dispatcher is `~/.config/tmux/tmux.conf` (linked from `~/.tmux.conf`):
 managed `tmux-settings-global.conf` -> preserved `tmux-settings-user.conf` ->
-managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The installer
+managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The plugin tree
+is `~/.config/tmux/plugins/` (TPM's XDG path); the legacy `~/.tmux` symlink and
+nested `.config/tmux/tmux/` level are retired, and tmux-persist snapshots live
+under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. The installer
 seeds both user layers only when absent; it offers interactive migration from
 `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
 migrations need a manual move of its contents into `tmux-user.conf`.

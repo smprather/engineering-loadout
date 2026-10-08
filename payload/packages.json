@@ -3382,10 +3382,6 @@
         {
           "from": "~/.config/tmux/tmux.conf",
           "to": "~/.tmux.conf"
-        },
-        {
-          "from": "~/.config/tmux/tmux",
-          "to": "~/.tmux"
         }
       ],
       "supports_layers": [

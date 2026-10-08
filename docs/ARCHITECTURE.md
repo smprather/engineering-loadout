@@ -188,7 +188,9 @@ install but are no longer loaded. The installer warns when any contains files.
 `~/.tmux.conf` links to `~/.config/tmux/tmux.conf`, a managed dispatcher. It
 sources `tmux-settings-global.conf`, then `tmux-settings-user.conf` (which wins),
 then `tmux-global.conf`, then `tmux-user.conf`, then starts TPM so user plugin
-declarations are visible. The installer refreshes the managed files and preserves
+declarations are visible. The plugin tree is `~/.config/tmux/plugins/`; the
+legacy `~/.tmux` symlink and the nested `.config/tmux/tmux/` level were retired
+2026-10-08. The installer refreshes the managed files and preserves
 the user files. A legacy `~/.tmux.local.conf` is no longer loaded;
 interactive installs offer to migrate it.
 

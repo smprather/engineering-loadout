@@ -84,7 +84,7 @@ Per-user (`$HOME`):
 | `~/.vimrc` | `envs/vim/vimrc` |
 | `~/.vim/` | `envs/vim/vim/` |
 | `~/.tmux.conf` | -> XDG dispatcher (settings-global -> settings-user -> `tmux-global.conf` then preserved `tmux-user.conf`) |
-| `~/.tmux/` | `envs/tmux/vendor/plugins/` |
+| `~/.config/tmux/plugins/` | `envs/tmux/vendor/plugins/` (TPM's XDG path; no `~/.tmux` symlink) |
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |
 | `~/.config/nvim/` | `envs/nvim/` |
 | `~/.config/helix/` | `envs/helix/` |

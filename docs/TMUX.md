@@ -21,8 +21,8 @@ tmux-persist ([hyoretsu/tmux-persist](https://github.com/hyoretsu/tmux-persist),
 the maintained fork of the abandoned tmux-resurrect) auto-saves pane contents
 and layout per session on detach/exit/start, and restores a session when one of
 the same name is created -- so this replaces both tmux-resurrect and
-tmux-continuum. Snapshots live in `~/.tmux/persist` (override with
-`set -g @persist-dir '<path>'`) and older than 7 days are pruned
+tmux-continuum. Snapshots live under `${XDG_DATA_HOME:-~/.local/share}/tmux/`
+(override with `set -g @persist-dir '<path>'`) and older than 7 days are pruned
 (`@persist-delete-backup-after`). Coming from resurrect, existing snapshots
 are migrated on first load and unset `@persist-*` options fall back to the old
 `@resurrect-*` names.
@@ -34,7 +34,9 @@ are migrated on first load and unset `@persist-*` options fall back to the old
 `tmux-settings-global.conf`, then the preserved `tmux-settings-user.conf`
 (which wins), then the managed `tmux-global.conf`, then the preserved
 `tmux-user.conf`, and initializes TPM last so the user layer can declare
-plugins. The settings layers hold user-facing knobs -- the
+plugins. Plugins live at `~/.config/tmux/plugins/` -- TPM's own XDG location;
+the dispatcher's `run` line and the `TMUX_PLUGIN_MANAGER_PATH` pin in
+`tmux-global.conf` both point there, and there is no `~/.tmux` symlink. The settings layers hold user-facing knobs -- the
 `@theme` choice (defaulting to `loadout1`) and the `focus-follows-mouse`
 default (off) -- and the global layer loads the
 selected `themes/tmux-theme-<name>.conf` plus the generated

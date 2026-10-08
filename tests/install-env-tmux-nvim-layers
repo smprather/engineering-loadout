@@ -33,6 +33,9 @@ tmux_dir="$fresh_home/.config/tmux"
 [ -L "$fresh_home/.tmux.conf" ] || fail "~/.tmux.conf is not a symlink"
 [ "$(readlink "$fresh_home/.tmux.conf")" = ".config/tmux/tmux.conf" ] \
     || fail "~/.tmux.conf does not target the XDG dispatcher"
+[ ! -e "$fresh_home/.tmux" ] || fail "legacy ~/.tmux must not be created"
+[ ! -e "$tmux_dir/tmux" ] || fail "legacy nested ~/.config/tmux/tmux must not be created"
+[ -x "$tmux_dir/plugins/tpm/tpm" ] || fail "TPM not installed at the XDG plugin path"
 [ -f "$tmux_dir/tmux.conf" ] || fail "tmux dispatcher not installed"
 [ -f "$tmux_dir/tmux-global.conf" ] || fail "tmux global layer not installed"
 [ -f "$tmux_dir/tmux-user.conf" ] || fail "tmux user layer not seeded"
@@ -64,7 +67,7 @@ settings_global_line=$(grep -nF 'tmux-settings-global.conf' "$tmux_dir/tmux.conf
 settings_user_line=$(grep -nF 'tmux-settings-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
 global_line=$(grep -nF '~/.config/tmux/tmux-global.conf' "$tmux_dir/tmux.conf" | cut -d: -f1)
 user_line=$(grep -nF 'tmux-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
-tpm_line=$(grep -nF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf" | cut -d: -f1)
+tpm_line=$(grep -nF "run '~/.config/tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf" | cut -d: -f1)
 [ -n "$settings_global_line" ] || fail "dispatcher does not source the managed settings"
 [ -n "$settings_user_line" ] || fail "dispatcher does not source the settings user layer"
 [ -n "$global_line" ] || fail "dispatcher does not source the global layer"
@@ -72,8 +75,10 @@ tpm_line=$(grep -nF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf" | cut 
 [ -n "$tpm_line" ] || fail "dispatcher does not initialize TPM"
 ((settings_global_line < settings_user_line && settings_user_line < global_line && global_line < user_line && user_line < tpm_line)) \
     || fail "dispatcher order is not settings-global -> settings-user -> global -> user -> TPM"
-! grep -qF "run '~/.tmux/plugins/tpm/tpm'" "$tmux_dir/tmux-global.conf" \
+! grep -qF "run '~/.config/tmux/plugins/tpm/tpm'" "$tmux_dir/tmux-global.conf" \
     || fail "global layer initializes TPM before user plugin declarations"
+grep -qF 'set-environment -g TMUX_PLUGIN_MANAGER_PATH "~/.config/tmux/plugins/"' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer does not pin the XDG plugin path"
 
 # FFM layering on a real server: the managed baseline leaves it off and the
 # user layer (sourced after it) overrides to on.  Skipped where tmux is absent

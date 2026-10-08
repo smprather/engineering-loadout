@@ -1,5 +1,29 @@
 # Current Handoff
 
+## 2026-10-08 (3): tmux plugin tree off the legacy ~/.tmux redirect (UNRELEASED)
+
+Operator call: the extra `~/.config/tmux/tmux/` level and the `~/.tmux` symlink
+are legacy compat not worth keeping. The plugin tree now lives at TPM's own XDG
+path, `~/.config/tmux/plugins/`; the dispatcher's `run` line and the
+`TMUX_PLUGIN_MANAGER_PATH` pin in `tmux-global.conf` both point there (the pin
+no longer has to defeat TPM's auto-detection). The installer prunes the nested
+`~/.config/tmux/tmux/` tree and stops creating `~/.tmux`; `.tmux` stays in the
+BACKUP list so a first reinstall preserves an old tree, and env-tmux's
+`extra_links` drops the `.tmux` entry.
+
+Personal box migrated first: the flat `~/.config/tmux/plugins/` tree was
+byte-identical to the nested one, so the nested copy + symlink were removed. An
+isolated-server probe with the new config confirms
+`TMUX_PLUGIN_MANAGER_PATH=/home/mylesp/.config/tmux/plugins/` and
+`@persist-initialized 1`. Snapshots were already XDG data
+(`~/.local/share/tmux/resurrect` -- the plugin's fallback, since no
+`~/.tmux/persist` existed); docs now say XDG data instead of `~/.tmux/persist`.
+The running session keeps the old paths until `Prefix+r` or a server restart.
+
+Tests: `tests/install-env-tmux-nvim-layers` asserts no `~/.tmux`, no nested tree,
+TPM at `~/.config/tmux/plugins/tpm/tpm`, and the new pin. Docs synced: AGENTS,
+TMUX.md, INSTALLATION, README, copilot-instructions, ARCHITECTURE.
+
 ## 2026-10-08 (2): class C release prep -- currency + security sweep (RELEASED as 2026.10.4)
 
 Preparing the release on top of the offline-Rust retirement (payload ~3.0 GB,
@@ -246,7 +270,8 @@ defaults and a real-server override (managed off -> user layer on).
 Last updated: 2026-10-08 (**released 2026.10.4** -- class C: offline-Rust
 subsystem retired, uv 0.12.23 + ty 0.0.85 + delta 0.20.1 + hyperfine 2.0.0 +
 vim/gvim 9.2.1172 + nodejs 26.11.1, tldr refresh; T3 harness + vuln-scan fixes;
-section-9 verified).
+section-9 verified). After the release: tmux plugin tree moved off the legacy
+`~/.tmux` redirect to `~/.config/tmux/plugins/` (UNRELEASED).
 Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
 class A; section-9 verified: signed tag, 4 assets, origin/main == tag).
 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).

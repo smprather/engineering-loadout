@@ -4779,14 +4779,20 @@ def _seed_tmux_settings_user(repo_dir, tmux_config):
 
 def _install_env_tmux(repo_dir, home):
     remove_if_exists(os.path.join(home, ".tmux.conf"))
+    # Legacy pre-XDG layout, retired 2026-10-08: ~/.tmux was a symlink to
+    # .config/tmux/tmux and the plugin tree lived one level deeper. The backup
+    # phase (which still lists .tmux) preserves an old tree on first reinstall;
+    # nothing creates either path again.
     remove_if_exists(os.path.join(home, ".tmux"))
     tmux_config = os.path.join(home, ".config", "tmux")
     if os.path.islink(tmux_config):
         os.unlink(tmux_config)
-    ensure_dir(os.path.join(tmux_config, "tmux", "plugins"), "tmux config")
+    # Retired nested tree: ~/.config/tmux/tmux/plugins -> ~/.config/tmux/plugins.
+    remove_if_exists(os.path.join(tmux_config, "tmux"))
+    ensure_dir(os.path.join(tmux_config, "plugins"), "tmux config")
     sync_dir(
         os.path.join(repo_dir, "envs", "tmux", "vendor", "plugins"),
-        os.path.join(tmux_config, "tmux", "plugins"),
+        os.path.join(tmux_config, "plugins"),
         delete=True,
     )
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
@@ -4838,7 +4844,6 @@ def _install_env_tmux(repo_dir, home):
     ):
         remove_if_exists(os.path.join(tmux_config, stale))
     lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
-    lns(".config/tmux/tmux", os.path.join(home, ".tmux"), verbose=True)
 
 
 def _install_env_editorconfig(repo_dir, home):

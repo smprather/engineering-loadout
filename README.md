@@ -540,7 +540,8 @@ reboot.
 That dispatcher loads the managed settings (`tmux-settings-global.conf`),
 then your settings (`tmux-settings-user.conf`, which wins), then the managed
 `tmux-global.conf`, then the persistent `tmux-user.conf`, and finally
-initializes TPM. The settings layers hold user-facing knobs -- currently just
+initializes TPM. Plugins live at `~/.config/tmux/plugins/`, and tmux-persist
+snapshots live under `~/.local/share/tmux/` (XDG data). The settings layers hold user-facing knobs -- currently just
 the `@theme` choice, defaulting to `loadout1` -- and the global layer loads
 `themes/tmux-theme-#{@theme}.conf` plus the generated `word-separators.conf`.
 Put personal settings and plugin declarations in
