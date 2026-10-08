@@ -5196,26 +5196,6 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
         return False
     print(f"  Installing env: {pkg_name} ({source} -> {install_to})")
     install_path(src, dest, links_mode=False)
-    # Honor declared extra_links (e.g. ~/.zshrc -> ~/.config/zsh/zshrc). The
-    # dedicated handlers (env-bash/vim/tmux) hardcode their lns() calls; doing
-    # it here lets a simple env package wire its entrypoint symlinks purely from
-    # packages.json. Target is home-relative (matches the dedicated handlers, so
-    # the link survives a relocated tree); link path is anchored to the install
-    # root the same way dest is above (--dest-dir aware).
-    for link in pkg_entry.get("extra_links", []):
-        link_from = link.get("from", "")
-        link_to = link.get("to", "")
-        if not link_from or not link_to:
-            continue
-        target = link_from[2:] if link_from.startswith("~/") else link_from
-        link_path = os.path.expanduser(link_to)
-        if link_path.startswith("~"):
-            link_path = os.path.join(home, link_to.lstrip("~/"))
-        elif not os.path.isabs(link_path):
-            link_path = os.path.join(home, link_to)
-        if link_path.startswith(expanded_home + os.sep) and home_real != os.path.realpath(expanded_home):
-            link_path = home_real + link_path[len(expanded_home) :]
-        lns(target, link_path, verbose=True)
     return True
 
 
@@ -5583,7 +5563,6 @@ def cmd_describe(args, registry):
         "relocate_token",
         "relocate_root",
         "missing_hint",
-        "extra_links",
         "supports_layers",
     ):
         if fkey in entry:
@@ -6133,27 +6112,9 @@ def _artifact_paths(entry, repo_dir, platform_dir):
                 for f in files:
                     out.add(os.path.join(root, f))
         elif os.path.lexists(abs_src):
-            # File source (env-starship/wezterm/editorconfig/pip): os.walk on a
-            # file yields nothing, so the package sized as 0 B. Add it directly.
+            # File source (wezterm/editorconfig/pip): os.walk on a file yields
+            # nothing, so the package sized as 0 B. Add it directly.
             out.add(abs_src)
-
-    for link in entry.get("extra_links", []):
-        # Non-~/ targets name repo files the install also ships (env-starship's
-        # "starship/config-schema.json" = envs/starship/config-schema.json).
-        # ~/-targets point into the install root and are already covered by the
-        # source walk above, so only these need resolving here.
-        frm = (link.get("from", "") or "").strip()
-        if not frm or frm.startswith("~/"):
-            continue
-        for cand in (os.path.join(repo_dir, frm), os.path.join(repo_dir, "envs", frm)):
-            if os.path.isdir(cand) and not os.path.islink(cand):
-                for root, _dirs, files in os.walk(cand):
-                    for f in files:
-                        out.add(os.path.join(root, f))
-                break
-            if os.path.lexists(cand):
-                out.add(cand)
-                break
     return out
 
 

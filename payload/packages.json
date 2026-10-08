@@ -19,7 +19,6 @@
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
     "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the only gating field.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
-    "extra_links": "List of {from, to} entries describing additional symlinks to create after the env is installed.",
     "supports_layers": "For kind='env': ordered layer names the environment supports (for example global/user or global/corp/site/team/project/user).",
     "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
     "bins": "List of bin/*.bz2 stems (without .bz2) owned by this package.",
@@ -3226,24 +3225,6 @@
       "kind": "env",
       "source": "envs/bash/",
       "install_to": "~/.config/bash",
-      "extra_links": [
-        {
-          "from": "~/.config/bash/bashrc",
-          "to": "~/.bashrc"
-        },
-        {
-          "from": "~/.config/bash/bashrc",
-          "to": "~/.bash_profile"
-        },
-        {
-          "from": "~/.config/bash/bashrc",
-          "to": "~/.bash_login"
-        },
-        {
-          "from": "~/.config/bash/bashrc",
-          "to": "~/.profile"
-        }
-      ],
       "supports_layers": [
         "corp",
         "site",
@@ -3266,20 +3247,6 @@
       "kind": "env",
       "source": "envs/zsh/",
       "install_to": "~/.config/zsh",
-      "extra_links": [
-        {
-          "from": "~/.config/zsh/zshrc",
-          "to": "~/.zshenv"
-        },
-        {
-          "from": "~/.config/zsh/zshrc",
-          "to": "~/.zshrc"
-        },
-        {
-          "from": "~/.config/zsh/zshrc",
-          "to": "~/.zprofile"
-        }
-      ],
       "supports_layers": [
         "global",
         "corp",
@@ -3416,14 +3383,8 @@
     },
     "env-starship": {
       "kind": "env",
-      "source": "envs/starship/starship.linux.toml",
+      "source": "envs/starship/",
       "install_to": "~/.config/starship/starship.toml",
-      "extra_links": [
-        {
-          "from": "starship/config-schema.json",
-          "to": "~/.config/starship/config-schema.json"
-        }
-      ],
       "platforms": [
         "linux"
       ],

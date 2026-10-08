@@ -670,6 +670,7 @@ sha256  26d7d8fd7b5da7604fe2aced09f5f465c65eab76b774f7078eb9eeeeef9492c6  payloa
 sha256  26d7d8fd7b5da7604fe2aced09f5f465c65eab76b774f7078eb9eeeeef9492c6  payload/treesitter/vendor/nvim-treesitter/runtime/queries/thrift/highlights.scm
 sha256  26f6b37dcbf96f3b8adb47665cc457275beb36cb79c138fb9e5c8f9e694eb37c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/glimmer_javascript/locals.scm
 sha256  26f6b37dcbf96f3b8adb47665cc457275beb36cb79c138fb9e5c8f9e694eb37c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/qmljs/injections.scm
+sha256  26f7369a8effbfefae8bcf552e12b3602e258c6f9a74431547ac73a41e5ec198  payload/packages.json
 sha256  2702043a2e2a07071bca75b32c0086f303381c1f732a8a24a7b7af992e54b4b8  payload/treesitter/vendor/nvim-treesitter/lua/nvim-treesitter/util.lua
 sha256  2733dd000be3373e98691528a54307d9baa16cdb749d649a503b2ddb0ef7ea75  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/wxml/folds.scm
 sha256  2733dd000be3373e98691528a54307d9baa16cdb749d649a503b2ddb0ef7ea75  payload/treesitter/vendor/nvim-treesitter/runtime/queries/wxml/folds.scm
@@ -1189,6 +1190,7 @@ sha256  47f4f74602588c1623778196f1fa3afe1cc5c8384a0a62a964ce4974c5c247d1  payloa
 sha256  48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad  payload/el8.x86_64.glibc2p28/wheels/uvicorn-0.48.0-py3-none-any.whl
 sha256  481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8  payload/el8.x86_64.glibc2p28/wheels/typing_extensions-4.16.0-py3-none-any.whl
 sha256  482be17c6991b8c19c5429a1e995d9b0efdbb63172824c41f99965dc0ade8ec2  payload/el8.x86_64.glibc2p28/wheels/click-8.4.1-py3-none-any.whl
+sha256  483129eff66127d03e6c22ab3abb947bbf4408c49a4ba62468805ffebc1f5c50  payload/installed-sizes.json
 sha256  4833380f024ac9e17d440a07c1558a9ef58ba5cc1b6e2769da345648d7e957af  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/cooklang/highlights.scm
 sha256  4833380f024ac9e17d440a07c1558a9ef58ba5cc1b6e2769da345648d7e957af  payload/treesitter/vendor/nvim-treesitter/runtime/queries/cooklang/highlights.scm
 sha256  4833f34910238b4367fd73ec69587982597854dadf12ea60b8d38de8cd909c3f  payload/el8.x86_64.glibc2p28/bin/ssh10.bin.bz2
@@ -2219,7 +2221,6 @@ sha256  81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176  payloa
 sha256  81c5720b805adc7b2b5088c0c181e42d7f673bd8338e3eccba6e3bf930f4035e  payload/el8.x86_64.glibc2p28/bin/rg.bz2
 sha256  81c81e536a8d4a895f72c5d4c58862944cfbb3c73aa4c8df0ad2e85d6e949b82  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/html.lua
 sha256  81d374732aa037725bf04aa58fa0d8c49aea6bb30df21e5518f41291297d389f  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/foam.so.bz2
-sha256  81d3faa731dd396a7c93d8a4449147313ecd046c3179ba34ecd61bee4fddf38c  payload/packages.json
 sha256  81e2633b92118e5af86d0ecb98d32545686957c45d9ad2bb1ad848c1f1efa9fa  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hlsl/highlights.scm
 sha256  821408ca868ee253090217b2f041f79c2ba1850abd3645b0d230456a165a0671  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/djot.so.bz2
 sha256  822163d2c748e0b1c982083f19c1a16866ea8345925a4788d9f51b3de73b0b86  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/gren/highlights.scm
@@ -3082,7 +3083,6 @@ sha256  b783c830573ab0ca987b68df86faa3d595fac7070a0068170973101eefb084ce  payloa
 sha256  b7b1012d3a683c0953bd5a74c99054fdf4bd42ce70821f1e65500c3b20b4dbeb  payload/el8.x86_64.glibc2p28/runtime/marktext.tar.bz2.part-000
 sha256  b7bb44fa0d6f43b63fafdedf52b3b945b55ca89054950e81e748486f8dc82989  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/perl/highlights.scm
 sha256  b7bb44fa0d6f43b63fafdedf52b3b945b55ca89054950e81e748486f8dc82989  payload/treesitter/vendor/nvim-treesitter/runtime/queries/perl/highlights.scm
-sha256  b7d71b37aa5dab58a524bd30f45e4d5d0e56af1bf3831d5a607c2b32b0d9d4aa  payload/installed-sizes.json
 sha256  b7db0e44c277942d304b4bb3274a64eb44ef9802a52ed3926869c21aff9618a2  payload/treesitter/vendor/nvim-treesitter/scripts/templates/query-bump.yml
 sha256  b7e88d14a062d34a43baf8a19c359c4db4b88a56361c282f69341e6b94b920cf  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/enforce/locals.scm
 sha256  b7e88d14a062d34a43baf8a19c359c4db4b88a56361c282f69341e6b94b920cf  payload/treesitter/vendor/nvim-treesitter/runtime/queries/enforce/locals.scm

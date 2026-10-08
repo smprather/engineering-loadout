@@ -1,5 +1,35 @@
 # Current Handoff
 
+## 2026-10-08 (5): envs cleanup -- W2 extra_links removal (UNRELEASED)
+
+Spec: same as (4). **W2 landed** per D2. `extra_links` was inert registry data:
+its only consumer was `_install_env_generic`, and every declarer
+(`env-bash`/`env-vim`/`env-zsh`/`env-starship`) has a dedicated handler that
+hardcodes its links. It also hid W1's dead `~/.vim` link.
+
+- Registry: the field is gone from `env-bash`, `env-zsh`, `env-starship`
+  (`env-vim`'s was dropped in W1) and from `_schema`; `tests/registry-integrity`
+  enforces `_schema` == fields in use.
+- Installer: `_install_env_generic`'s link loop, `cmd_describe`'s field list,
+  and `_artifact_paths`' extra_links resolver are deleted. The dedicated
+  handlers still create every link they did before -- no behavior change.
+- Sizing (D2's consequence): `env-starship`'s `source` is now the directory
+  `envs/starship/`, so the directory walk counts `config-schema.json` beside
+  `starship.linux.toml`; `_artifact_paths('env-starship')` verified to return
+  both files. `gen-installed-sizes` regenerated (map unchanged, 6368
+  artifacts), then `.content-manifest`.
+- Docs: AGENTS sizing note rewritten (directory sources count their tree),
+  copilot field list trimmed.
+- Advisory-noise note: pi-lens' pyright runner reports 26 pre-existing
+  diagnostics on `loadout_main.py` (rich/rich_click live in `installer_vendor/`,
+  which the runner is not configured with; `ty.toml` documents the same class).
+  Proven identical at HEAD and dispositioned as false-positives -- no config or
+  code suppression added, per repo policy.
+
+**Next:** W3 (dead entrypoints `.bash_login`/`.profile`/`.cshrc`), W4
+(`supports_layers`), W5 (`tmux-yank` opt-in note). Each its own commit; class C
+at the next release.
+
 ## 2026-10-08 (4): envs cleanup -- spec + W1 vim XDG migration (UNRELEASED)
 
 Spec of record: `docs/superpowers/specs/2026-10-08-envs-xdg-and-dead-code-trim-design.md`

@@ -2,7 +2,7 @@
 
 Date: 2026-10-08
 Status: approved 2026-10-08 (operator: prefer-vim = yes, drop plain csh = yes,
-XDG hook sibling = yes); W1 landed and gated, W2-W5 pending
+XDG hook sibling = yes); W1-W2 landed and gated, W3-W5 pending
 Evidence base: 2026-10-08 audit session (live probes + code references inline)
 Scope: `envs/*` configuration packages, their installer handlers, and the registry
 fields that drive them. Out of scope: payload tool behavior, the nvim plugin
@@ -252,22 +252,25 @@ tick them in this file as they land.
 container; a fresh install creates no `~/.vimrc`/`~/.vim`, and the bundled vim
 loads its vimrc, packpath and after/ftplugin from `~/.config/vim`.
 
-### W2 — Remove `extra_links` (D2)
+### W2 — Remove `extra_links` (D2) — LANDED
 
 **Files:** `payload/packages.json`, `loadout_main.py`, `build/gen-installed-sizes`,
 docs.
 
-- [ ] Delete the `extra_links` blocks from `env-bash`, `env-vim`, `env-zsh`,
-      `env-starship`.
-- [ ] Delete the link loop from `_install_env_generic` and its docstring
+- [x] Delete the `extra_links` blocks from `env-bash`, `env-vim`, `env-zsh`,
+      `env-starship` (`env-vim`'s was already dropped in W1; the `_schema`
+      description went with them).
+- [x] Delete the link loop from `_install_env_generic` and its docstring
       mention.
-- [ ] Remove `extra_links` from the validation field tuple.
-- [ ] Remove the `extra_links` branch from the installed-size accounting;
+- [x] Remove `extra_links` from the field lists (`cmd_describe`, `_schema`,
+      copilot docs).
+- [x] Remove the `extra_links` branch from the installed-size accounting;
       change `env-starship`'s `source` to `envs/starship/` and regenerate
-      `payload/installed-sizes.json` + `.content-manifest`; confirm the
-      schema file is still counted.
-- [ ] Docs: AGENTS sizing note, copilot registry-field list, any
-      INSTALLATION mention.
+      `payload/installed-sizes.json` + `.content-manifest`; confirmed the
+      schema file is still counted (`_artifact_paths(env-starship)` =
+      toml + schema).
+- [x] Docs: AGENTS sizing note, copilot registry-field list, any
+      INSTALLATION mention (none existed).
 
 **Acceptance:** `rg extra_links` finds only HANDOFF history; T1
 (`gen-installed-sizes --check`, `registry-integrity`, `check-installer`) green.

@@ -83,7 +83,7 @@ smoke-tests offline Tree-sitter with headless Neovim. It explicitly selects
 - `recommends` -- soft-dependency package names. Auto-pulled when available, silently
   dropped when skipped or unknown.
 - Per-kind artifact fields: `bins`, `libs`, `wheels`, `uv_tool`, `uv_extras`, `typelibs`,
-  `archive`, `install_to`, `source`, `extra_links`, `supports_layers`, `members`.
+  `archive`, `install_to`, `source`, `supports_layers`, `members`.
 
 Groups (`@`-prefixed keys) have a `members` list and expand recursively with
 cycle detection. Synthetic runtime groups: `@shared` (every non-env,
