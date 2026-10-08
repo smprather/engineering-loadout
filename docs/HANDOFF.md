@@ -27,9 +27,10 @@ fish/tokei/numr/models/surfer + first-party maturin wheels was never the store.
 Rust tools. `./loadout install rust` now installs a toolchain with no bundled
 registry -- bring your own dependency source (network, `cargo vendor`, mirror).
 
-**Bumped/unpinned:** uv 0.12.17 -> 0.12.23 (`build/update-prebuilt uv=0.12.23`,
-in-container); ty/delta/hyperfine lost `pin_reason` and ride the next currency
-sweep. `build/update-prebuilt` now resolves patchelf via
+**Bumped/unpinned:** uv 0.12.17 -> 0.12.23, then the rest of the pinned quartet --
+ty 0.0.82 -> 0.0.85, delta 0.19.2 -> 0.20.1, hyperfine 1.20.0 -> 2.0.0 (commit
+`2c7e672`); all via in-container `build/update-prebuilt`. No Rust tool remains
+outdated (`check-versions`). `build/update-prebuilt` now resolves patchelf via
 `LOADOUT_PATCHELF` -> PATH -> legacy `~/.local/bin` (the XDG migration moved it)
 and fails clearly when missing.
 
@@ -37,10 +38,12 @@ and fails clearly when missing.
 README row removed by hand -- the generator only warns); `content-manifest` OK
 (4620 -> 4452 across both changes), `installed-sizes` OK (6368), README table OK,
 strip pass clean. T1 focused: registry-integrity, security-pipeline,
-assurance-check, content-verify, update-cadence, check-installer PASS. T2:
-`install-linux-tmp-home` (@shared-all @envs-all; with the stale
-`LOADOUT_CFG_SHARED_PREFIX` unset) and `uv-launchers` PASS. `ty` advisory
-unchanged (7 diagnostics before/after; the stale "11" note in ty.toml corrected).
+assurance-check, content-verify, update-cadence, check-installer PASS; full
+`tests/run-all` T1+T2 green. T2 focused: `install-linux-tmp-home` (@shared-all
+@envs-all; with the stale `LOADOUT_CFG_SHARED_PREFIX` unset) and `uv-launchers`
+PASS. `tests/prebuilt-binaries` on the bumped payload: All 348 binaries OK
+(1 skipped), runtimes OK. `ty` advisory unchanged (7 diagnostics before/after;
+the stale "11" note in ty.toml corrected).
 
 **Release implication:** registry + installer change => the next release is
 class C (Tier 3 + currency sweep required).
