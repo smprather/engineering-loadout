@@ -1,5 +1,27 @@
 # Current Handoff
 
+## 2026-10-08 (2): class C release prep -- currency + security sweep (UNRELEASED)
+
+Preparing the release on top of the offline-Rust retirement (payload ~3.0 GB,
+manifest 4452).
+
+- **nodejs 26.10.0 -> 26.11.1**: `build/import-nodejs /tmp/node-v26.11.1-linux-x64`,
+  in-container, from the official tarball sha256-verified against nodejs.org's
+  `SHASUMS256.txt`; the importer's GLIBC_2.28 audit passed. nvm is NOT needed for
+  a targeted bump -- the importer takes a prefix dir -- but a bare
+  `./build/update nodejs` still wants nvm (dev tool, not installed here).
+- **tldr-data refreshed** (984,862 -> 985,198 B canonical; 7569 members).
+- **yara-rules** already current (20261004, digest verified); **ClamAV** DB
+  2026-10-07 (`freshclam` is log-locked by the running daemon -- benign, seen
+  before).
+- `check-versions`: the only remaining outdated entries are `less` and
+  `pdftotext` (deliberately pinned) and `ncdu`, whose upstream lookup still
+  503s -- an INCOMPLETE report, not a clean bill. No Rust tool is outdated.
+
+Gates before the release: full `tests/run-all --container` (class C requires
+Tier 3); assurance re-pin is NOT owed (none of nvim/rust/treesitter/git-nvim was
+bumped). Then `./build/release` -> 2026.10.4.
+
 ## 2026-10-08: offline-Rust subsystem retired -- uv unpinned and bumped (UNRELEASED)
 
 **Decision (operator):** offline `cargo build` on farm nodes was aspirational.
@@ -190,9 +212,9 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-08 (**UNRELEASED**: offline-Rust subsystem retired -- crate
-store + env-cargo + cargo wrappers gone, `rust` toolchain kept, uv bumped to
-0.12.23; next release is class C).
+Last updated: 2026-10-08 (**UNRELEASED**: class C release prep -- offline-Rust
+subsystem retired, uv 0.12.23 + ty/delta/hyperfine + vim/gvim + nodejs 26.11.1;
+full --container gates pending).
 Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
 class A; section-9 verified: signed tag, 4 assets, origin/main == tag).
 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).

@@ -489,7 +489,7 @@ tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  2314970  1789782049  payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
-tar-meta  39352098  1791321367  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
+tar-meta  39503825  1791429829  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  4858261  1787539454  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
@@ -508,7 +508,7 @@ tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar
 tar-meta  3922221  1790482906  payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2
 tar-meta  14850054  1790108766  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2037945  1788989391  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
-tar-meta  984862  1791321568  payload/tldr/tldr-pages.tar.bz2
+tar-meta  985198  1791429832  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2
 sha256  dd4de208187c47636fe5ac53fdbb31347902ba5372e2d19b3959acb6c91b2526  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/angular.so.bz2
