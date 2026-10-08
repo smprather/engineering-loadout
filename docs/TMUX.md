@@ -29,8 +29,9 @@ are migrated on first load and unset `@persist-*` options fall back to the old
 
 ## Configuration layers
 
-`~/.tmux.conf` links to the XDG dispatcher at
-`~/.config/tmux/tmux.conf`. It sources the loadout-managed
+tmux reads the dispatcher natively from
+`~/.config/tmux/tmux.conf` (tmux >= 3.1; no `~/.tmux.conf` symlink). It sources
+the loadout-managed
 `tmux-settings-global.conf`, then the preserved `tmux-settings-user.conf`
 (which wins), then the managed `tmux-global.conf`, then the preserved
 `tmux-user.conf`, and initializes TPM last so the user layer can declare

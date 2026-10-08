@@ -479,7 +479,7 @@ zhead() {
     zcat "${@[-1]}" | head "${@[1,-2]}"
 }
 
-# If this terminal supports extended keys, set the var ~/.tmux.conf queries.
+# If this terminal supports extended keys, set the var the tmux config queries.
 if check_extended_keys; then
     export EXTENDED_KEYS_SUPPORTED=1
 else

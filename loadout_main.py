@@ -4780,9 +4780,11 @@ def _seed_tmux_settings_user(repo_dir, tmux_config):
 def _install_env_tmux(repo_dir, home):
     remove_if_exists(os.path.join(home, ".tmux.conf"))
     # Legacy pre-XDG layout, retired 2026-10-08: ~/.tmux was a symlink to
-    # .config/tmux/tmux and the plugin tree lived one level deeper. The backup
-    # phase (which still lists .tmux) preserves an old tree on first reinstall;
-    # nothing creates either path again.
+    # .config/tmux/tmux, the plugin tree lived one level deeper, and
+    # ~/.tmux.conf pointed at the XDG dispatcher. tmux >= 3.1 reads
+    # ~/.config/tmux/tmux.conf natively, so nothing creates those paths again;
+    # the backup phase still lists them to preserve an old tree on first
+    # reinstall.
     remove_if_exists(os.path.join(home, ".tmux"))
     tmux_config = os.path.join(home, ".config", "tmux")
     if os.path.islink(tmux_config):
@@ -4843,7 +4845,6 @@ def _install_env_tmux(repo_dir, home):
         "tmux-popout.sh",
     ):
         remove_if_exists(os.path.join(tmux_config, stale))
-    lns(".config/tmux/tmux.conf", os.path.join(home, ".tmux.conf"), verbose=True)
 
 
 def _install_env_editorconfig(repo_dir, home):

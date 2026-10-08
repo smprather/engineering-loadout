@@ -536,8 +536,8 @@ maintained fork of the abandoned tmux-resurrect) -- it auto-saves pane contents
 and layout per session on detach/exit, so your sessions come back after a
 reboot.
 
-`~/.tmux.conf` links to the XDG dispatcher at `~/.config/tmux/tmux.conf`.
-That dispatcher loads the managed settings (`tmux-settings-global.conf`),
+tmux reads the dispatcher natively from `~/.config/tmux/tmux.conf` (tmux >=
+3.1; no `~/.tmux.conf` symlink). That dispatcher loads the managed settings (`tmux-settings-global.conf`),
 then your settings (`tmux-settings-user.conf`, which wins), then the managed
 `tmux-global.conf`, then the persistent `tmux-user.conf`, and finally
 initializes TPM. Plugins live at `~/.config/tmux/plugins/`, and tmux-persist

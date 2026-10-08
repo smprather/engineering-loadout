@@ -438,7 +438,8 @@ Run `./build/update tmux-plugins` to re-clone all tmux plugins from GitHub (pre-
 hook strips `.git` dirs on the next commit). Plugin discovery reads the
 declarations in `envs/tmux/tmux-global.conf`, not the dispatcher.
 
-The tmux dispatcher is `~/.config/tmux/tmux.conf` (linked from `~/.tmux.conf`):
+The tmux dispatcher is `~/.config/tmux/tmux.conf` (read natively by tmux >= 3.1;
+no `~/.tmux.conf` symlink):
 managed `tmux-settings-global.conf` -> preserved `tmux-settings-user.conf` ->
 managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The plugin tree
 is `~/.config/tmux/plugins/` (TPM's XDG path); the legacy `~/.tmux` symlink and

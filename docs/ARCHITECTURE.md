@@ -185,7 +185,8 @@ install but are no longer loaded. The installer warns when any contains files.
 
 ### Tmux
 
-`~/.tmux.conf` links to `~/.config/tmux/tmux.conf`, a managed dispatcher. It
+tmux reads the managed dispatcher at `~/.config/tmux/tmux.conf` natively (tmux
+>= 3.1; no `~/.tmux.conf` symlink). It
 sources `tmux-settings-global.conf`, then `tmux-settings-user.conf` (which wins),
 then `tmux-global.conf`, then `tmux-user.conf`, then starts TPM so user plugin
 declarations are visible. The plugin tree is `~/.config/tmux/plugins/`; the

@@ -30,9 +30,9 @@ mkdir -p "$fresh_home"
 HOME="$fresh_home" "$REPO/loadout" install -y env-tmux env-nvim --no-backup >"$TEST_ROOT/fresh.log" 2>&1
 
 tmux_dir="$fresh_home/.config/tmux"
-[ -L "$fresh_home/.tmux.conf" ] || fail "~/.tmux.conf is not a symlink"
-[ "$(readlink "$fresh_home/.tmux.conf")" = ".config/tmux/tmux.conf" ] \
-    || fail "~/.tmux.conf does not target the XDG dispatcher"
+[ ! -e "$fresh_home/.tmux.conf" ] || fail "legacy ~/.tmux.conf must not be created"
+grep -qF 'source-file ~/.config/tmux/tmux.conf' "$tmux_dir/tmux-global.conf" \
+    || fail "Prefix+r does not source the XDG dispatcher"
 [ ! -e "$fresh_home/.tmux" ] || fail "legacy ~/.tmux must not be created"
 [ ! -e "$tmux_dir/tmux" ] || fail "legacy nested ~/.config/tmux/tmux must not be created"
 [ -x "$tmux_dir/plugins/tpm/tpm" ] || fail "TPM not installed at the XDG plugin path"

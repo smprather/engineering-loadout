@@ -528,7 +528,7 @@ zhead() {
 # paste a directory to the cmd line w/o a cd first.
 trap 'last_cmd=$BASH_COMMAND; [[ -r $last_cmd && -d $last_cmd ]] && cd $last_cmd || ( [[ -r $last_cmd && ! -x $last_cmd ]] && cd $(/bin/dirname $last_cmd) )' ERR
 
-# If this terminal supports extended keys, then set this var for ~/.tmux.conf to query
+# If this terminal supports extended keys, then set this var for the tmux config to query
 if check_extended_keys; then
     export EXTENDED_KEYS_SUPPORTED=1
     # Put your advanced keybinds or application tweaks here:

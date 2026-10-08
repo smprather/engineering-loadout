@@ -1,15 +1,15 @@
 # Current Handoff
 
-## 2026-10-08 (3): tmux plugin tree off the legacy ~/.tmux redirect (UNRELEASED)
+## 2026-10-08 (3): tmux XDG cleanup -- plugin tree + config symlink off legacy paths (UNRELEASED)
 
 Operator call: the extra `~/.config/tmux/tmux/` level and the `~/.tmux` symlink
 are legacy compat not worth keeping. The plugin tree now lives at TPM's own XDG
 path, `~/.config/tmux/plugins/`; the dispatcher's `run` line and the
 `TMUX_PLUGIN_MANAGER_PATH` pin in `tmux-global.conf` both point there (the pin
 no longer has to defeat TPM's auto-detection). The installer prunes the nested
-`~/.config/tmux/tmux/` tree and stops creating `~/.tmux`; `.tmux` stays in the
-BACKUP list so a first reinstall preserves an old tree, and env-tmux's
-`extra_links` drops the `.tmux` entry.
+`~/.config/tmux/tmux/` tree and stops creating `~/.tmux` and `~/.tmux.conf`;
+`.tmux`/`.tmux.conf` stay in the BACKUP list so a first reinstall preserves an
+old tree, and env-tmux's `extra_links` key is gone entirely (both entries).
 
 Personal box migrated first: the flat `~/.config/tmux/plugins/` tree was
 byte-identical to the nested one, so the nested copy + symlink were removed. An
@@ -38,6 +38,14 @@ repointed at the new plugin tree, and a save round-trip wrote a fresh snapshot
 to `~/.local/share/tmux/resurrect`. Diagnostic one-liner:
 `tmux run-shell 'command -v tmux'`. A server started from a post-migration
 login shell never has this; long-lived panes may still need `exec bash`.
+
+**Also retired: the `~/.tmux.conf` symlink.** tmux >= 3.1 reads
+`~/.config/tmux/tmux.conf` natively (probed on 3.7c, including a non-default
+`XDG_CONFIG_HOME`), so the installer no longer creates the link and Prefix+r
+now sources the XDG dispatcher. Trade recorded: tmux < 3.1 (EL8's system 2.7,
+if invoked directly instead of the bundled/preferred 3.7c) would no longer see
+the loadout config. Docs synced in the same change (TMUX.md, INSTALLATION,
+README, ARCHITECTURE, copilot, AGENTS symlink map).
 
 ## 2026-10-08 (2): class C release prep -- currency + security sweep (RELEASED as 2026.10.4)
 
