@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-10-08 (12): envs cleanup W6 -- class C release 2026.10.6 (W1-W5 + W3 correction) (RELEASE PREP)
+
+Class C per RELEASE.md §0 (installer + registry touched). Sequence followed from §0:
+
+- §1 auth at kickoff: `gh auth` OK; the fixed socket `~/.ssh/loadout-agent.sock` holds
+  the ED25519 key, so the signing preflight passed (throwaway tag, no tty).
+- §2 currency sweep: `check-versions --outdated-only` + `update --list-outdated` +
+  `update --currency`. **Nothing due** -- every cadenced artifact is held (last updates
+  1-45 days ago). Behind upstream but NOT due (recorded, not bumped): marktext
+  0.20.0 -> 0.21.1, tree-sitter 0.27.0 -> 0.27.1, tmux 3.7c -> 3.8 (re-check the FFM
+  >=3.7 guard on any bump), plus the two pinned rows (less 704, pdftotext 26.04.0).
+  `ncdu` failed with an upstream 503 twice -- the report is INCOMPLETE for that row.
+  `yara-rules` already at 20261004; ClamAV daily.cld is from today.
+  tldr-data not re-fetched: 1 day old, cadence-held, and payload repacking belongs in
+  the EL8 container per the build mandate.
+- §4 post-payload chain: `strip-all-elf-binaries` no-op (0 processed, 830 manifest
+  hits); completion untouched (no verb/flag/package-name change); gen-installed-sizes
+  then gen-content-manifest regenerated **in that order** and both `--check` prove out.
+- §5 docs sync: README table `--check` green; AGENTS/copilot/INSTALLATION/TMUX/HANDOFF
+  carry the W1-W5 changes and the W3 correction.
+- §6 gates: `tests/run-all --container` green (T1 + T2 + both Tier 3 tests). One real
+  finding: `tests/install-linux-tmp-home` inherited a caller's exported
+  `LOADOUT_CFG_SHARED_PREFIX`, so a dev shell with a stale value failed its tealdeer
+  assertion for the wrong reason -- the test now unsets it (the W3-era follow-up item).
+- §7/§8: release prep committed; `build/release --dry-run` green (malware scan CACHED
+  CLEAN, vuln-scan CLEAN, secret scan tree+history CLEAN, manifest-export OK, binary
+  smoke 348 OK / 1 skipped), derived tag **2026.10.6**.
+
+W1-W5 recap: vim XDG-native (W1), dead `extra_links` deleted (W2), dead shell
+entrypoints trimmed with `~/.profile` restored as the POSIX X-session shim (W3 +
+correction), cosmetic `supports_layers` deleted (W4), `tmux-yank` opt-in documented (W5).
+
+**Next:** §9 verification results land in the entry above once published (draft=false,
+four assets, good signature, released commit on `origin/main`). The new
+`tests/env-bash-profile-shim` dash half runs wherever dash exists -- the Tier 3 image
+has it, so the class C run covered it.
+
 ## 2026-10-08 (11): envs cleanup W5 -- tmux-yank opt-in documented (UNRELEASED)
 
 Per spec D5/F5. The plugin was already vendored and its `@plugin` line already

@@ -39,6 +39,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# A caller's exported LOADOUT_CFG_SHARED_PREFIX wins over this temp HOME in the
+# installer (tealdeer cache_dir, the baked shell prefix), so a dev shell with a
+# stale value fails this test for the wrong reason. The test measures a
+# self-contained temp install -- clear it. See HANDOFF 2026-10-08 (6) follow-up.
+unset LOADOUT_CFG_SHARED_PREFIX
+
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd "$script_dir/.." && pwd)
 tmp_root=${TMPDIR:-/tmp}

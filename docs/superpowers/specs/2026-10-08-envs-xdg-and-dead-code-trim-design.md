@@ -336,11 +336,17 @@ unchanged except the missing field; T1 green.
 
 **Acceptance:** docs only; no code change.
 
-### W6 — Docs sync + release (all)
+### W6 — Docs sync + release (all) — LANDED
 
-- [ ] Update HANDOFF with one dated entry per landed workstream.
-- [ ] Full `tests/run-all --container` (class C) before the next release.
-- [ ] Follow `docs/RELEASE.md` from §0.
+- [x] HANDOFF carries one dated entry per workstream (W1-W5), the W3 correction, and
+      the W6/release-prep entry.
+- [x] Full `tests/run-all --container` (class C) green, including both Tier 3 tests;
+      one pre-existing test-harness env leak found and fixed
+      (`install-linux-tmp-home` inherited a caller's `LOADOUT_CFG_SHARED_PREFIX`).
+- [x] `docs/RELEASE.md` followed from §0: class C; auth + signing verified at kickoff;
+      currency sweep (nothing due; marktext/tree-sitter/tmux behind but not due; ncdu
+      lookup 503); §4 chain proven; §5 docs sync; §6 gates green; §7 release prep
+      committed; §8 tagged/published as **2026.10.6**; §9 re-read after publishing.
 
 ---
 
