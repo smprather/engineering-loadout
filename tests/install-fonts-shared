@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Shared-tree fonts: with a --dest-dir outside $HOME the ~2 GB of fonts are
+# installed ONCE into the tree, a fontconfig snippet is generated, and the shell
+# layer exports FONTCONFIG_FILE for it -- instead of writing fonts into every
+# user's $HOME (which is what a disk-quota'd cluster account cannot afford).
+#
+# Four cases:
+#   1. font-only install into a shared tree -> <tree>/share/fonts + snippet, HOME empty
+#   2. @envs install against that tree      -> a real shell startup exports FONTCONFIG_FILE
+#   3. default install (HOME-mode root)     -> fonts stay per-user, no snippet
+#
+# font-inconsolata is the smallest font archive, so this runs in seconds.
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+work=$(mktemp -d "$tmp_root/loadout-fonts-shared.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
+
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+run_loadout() { # $1 = HOME, rest = loadout args
+    local h=$1
+    shift
+    env -i \
+        HOME="$h" \
+        PATH="$basic_path" \
+        LANG="${LANG:-C.UTF-8}" \
+        TERM="xterm-256color" \
+        "$repo_dir/loadout" "$@"
+}
+
+# ---- 1. font-only install into a shared tree ---------------------------------
+home="$work/home"
+tree="$work/tree"
+mkdir -p "$home"
+run_loadout "$home" install -y --no-backup font-inconsolata --dest-dir "$tree" >"$work/fonts.log" 2>&1 ||
+    fail "font install failed:
+$(cat "$work/fonts.log")"
+
+fonts_dir="$tree/share/fonts"
+[ -d "$fonts_dir" ] || fail "fonts not installed into the shared tree: $fonts_dir missing"
+find "$fonts_dir" -maxdepth 1 -name '*.ttf' | grep -q . || fail "no .ttf files in $fonts_dir"
+
+conf="$tree/etc/fonts/loadout-fonts.conf"
+[ -f "$conf" ] || fail "fontconfig snippet missing: $conf"
+grep -qF "<dir>$fonts_dir</dir>" "$conf" || fail "snippet does not point at the shared fonts dir:
+$(cat "$conf")"
+grep -qF "/etc/fonts/fonts.conf" "$conf" || fail "snippet does not re-include the system config"
+
+if [ -e "$home/.local" ]; then
+    fail "shared font install wrote into HOME:
+$(find "$home/.local" -maxdepth 4 | head -20)"
+fi
+
+# ---- 2. per-user env install against the shared tree -------------------------
+# This is the documented split deployment: @envs with LOADOUT_CFG_SHARED_PREFIX
+# baked into the installed shell config.
+env -i \
+    HOME="$home" \
+    PATH="$basic_path" \
+    LANG="${LANG:-C.UTF-8}" \
+    TERM="xterm-256color" \
+    LOADOUT_CFG_SHARED_PREFIX="$tree" \
+    "$repo_dir/loadout" install -y --no-backup @envs >"$work/envs.log" 2>&1 ||
+    fail "@envs install failed:
+$(cat "$work/envs.log")"
+
+grep -qF "$tree" "$home/.config/bash/global/config.sh" || fail "shared prefix was not baked into config.sh"
+
+# A real (non-interactive) shell startup must export FONTCONFIG_FILE. `env` is read
+# through sed so any startup chatter cannot be mistaken for the value.
+got=$(
+    env -i HOME="$home" PATH="$basic_path" LANG="${LANG:-C.UTF-8}" TERM="dumb" \
+        bash --noprofile --norc -c 'source "$HOME/.config/bash/bashrc"; env' |
+        sed -n 's/^FONTCONFIG_FILE=//p' | head -n 1
+)
+[ "$got" = "$conf" ] || fail "shell startup exported FONTCONFIG_FILE='$got', want '$conf'"
+
+# ---- 3. default (HOME-mode) install stays per-user ---------------------------
+h4="$work/home4"
+mkdir -p "$h4"
+run_loadout "$h4" install -y --no-backup font-inconsolata >"$work/home-fonts.log" 2>&1 ||
+    fail "HOME-mode font install failed:
+$(cat "$work/home-fonts.log")"
+[ -d "$h4/.local/share/fonts" ] || fail "HOME-mode install did not put fonts in ~/.local/share/fonts"
+[ ! -e "$h4/.local/share/loadout/etc/fonts/loadout-fonts.conf" ] ||
+    fail "HOME-mode install generated a shared-tree fontconfig snippet"
+
+echo "PASS: shared-tree fonts + fontconfig snippet + shell export (HOME untouched)"

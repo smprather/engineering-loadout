@@ -119,6 +119,16 @@ endif
 if ( -d "${_loadout_prefix}/share/nvim-qt/runtime" ) then
     setenv NVIM_QT_RUNTIME_PATH "${_loadout_prefix}/share/nvim-qt/runtime"
 endif
+
+# ---- shared fonts: the tree may carry a generated fontconfig config -----------
+# Written when the fonts were installed once with the tools instead of into every
+# user's $HOME. It re-includes /etc/fonts/fonts.conf, so the system dirs and the
+# user's own ~/.config/fontconfig/fonts.conf keep working. Caller-set var wins.
+if ( ! $?FONTCONFIG_FILE ) then
+    if ( -f "${_loadout_prefix}/etc/fonts/loadout-fonts.conf" ) then
+        setenv FONTCONFIG_FILE "${_loadout_prefix}/etc/fonts/loadout-fonts.conf"
+    endif
+endif
 # gnuplot's x11 terminal spawns a separate gnuplot_x11 helper; point gnuplot at
 # the bundled one so it does not look for the build-time libexec path.
 if ( -x "${_loadout_prefix}/libexec/gnuplot/6.0/gnuplot_x11" ) then

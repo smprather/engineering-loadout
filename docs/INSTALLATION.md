@@ -88,7 +88,7 @@ Per-user (`$HOME`):
 | `~/.config/nvim/` | `envs/nvim/` |
 | `~/.config/helix/` | `envs/helix/` |
 | `~/.config/starship/starship.toml` | `envs/starship/starship.linux.toml` + `envs/starship/config-schema.json` |
-| `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives) |
+| `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives; a shared tree outside `$HOME` installs them once to `<prefix>/share/fonts` instead, with a generated `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
 | `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |
 
@@ -126,9 +126,14 @@ keeps the legacy dotted layout (`$HOME/.local/bin`, ...), so
 level no longer exists.
 
 Two roots are threaded through an install. The shared payload goes to the
-install root; per-user configuration, caches, fonts and Neovim data always
-resolve under the real `$HOME` (`~/.config`, `~/.cache`, `~/.local/share/nvim`,
-`~/.local/share/fonts`). A mixed selection -- one that names any non-`env`
+install root; per-user configuration, caches and Neovim data always resolve
+under the real `$HOME` (`~/.config`, `~/.cache`, `~/.local/share/nvim`). Fonts
+are the one exception that follows the tree: a root of `$HOME` (or one inside
+it, e.g. the default `~/.local/share/loadout`) keeps them per-user in
+`~/.local/share/fonts`, while a root outside `$HOME` gets them once in
+`<prefix>/share/fonts` plus a generated `<prefix>/etc/fonts/loadout-fonts.conf`
+-- a shared tree must not put ~2 GB into every user's home. A mixed selection
+-- one that names any non-`env`
 package -- writes its `env` config to `$HOME` even when `--dest-dir` was given.
 An **env-only** selection is the exception: with an explicit `--dest-dir D`,
 the whole HOME is staged under `D` (tests and previews rely on this); without
@@ -188,7 +193,8 @@ LOADOUT_CFG_SHARED_PREFIX="$HOME/.loadout" ./loadout install @envs-all
 ```
 
 All three shells derive the shared prefix, `TERMINFO_DIRS`, the Qt plugin path,
-`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH` and the gnuplot driver dir from the
+`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH`, `FONTCONFIG_FILE` (only when the tree
+carries `etc/fonts/loadout-fonts.conf`) and the gnuplot driver dir from the
 same variable, falling back to `$HOME/.local/share/loadout` when it is unset.
 (For a legacy `dest_dir = "~"` install the value is `$HOME/.local`.)
 
@@ -207,6 +213,14 @@ The destination is a prefix (`/opt/.../2026-06-04.2/bin`, `.../share`, ...) --
 there is no `local/` level. `LOADOUT_CFG_SHARED_PREFIX=/opt/.../2026-06-04.2`
 is therefore the value per-user env installs need (baked automatically by a
 split env install).
+
+The shared tree carries the fonts too: `@shared` installs them once into
+`<dest>/share/fonts` and writes `<dest>/etc/fonts/loadout-fonts.conf`, which
+re-includes `/etc/fonts/fonts.conf` (the system dirs and any user fontconfig
+file keep working) and adds that one `<dir>`. The shell layer exports
+`FONTCONFIG_FILE` for it, so a per-user `@envs` install with
+`LOADOUT_CFG_SHARED_PREFIX=<dest>` is all a user needs -- their `$HOME` gets no
+font files and no per-user `~/.local/share/fonts`.
 
 `@shared` = all non-`env`, non-`optional` packages (binaries, libs,
 runtimes, fonts, data, python tools); `@shared-all` = the same with the
@@ -278,6 +292,11 @@ differently:
   directories. This is deliberate: stale links such as
   `~/.config/nvim/lsp -> ~/dotfiles/nvim/lsp` must not let delete-style config
   sync mutate the repository checkout.
+- The fonts directory is deliberately different from both: a symlink at the
+  fonts path is left alone (only a dangling link or one that resolves into the
+  repository checkout is replaced). Pointing `~/.local/share/fonts` at a shared
+  font directory is a supported way to share one font set between users, and
+  replacing it would silently duplicate ~2 GB into each home.
 
 Backups/snapshots can restore displaced user files when backups are enabled.
 
@@ -347,7 +366,10 @@ nothing. Migrate in this order:
    and the shipped Neovim dirs
    `~/.local/share/nvim/{runtime,tree-sitter-parsers,loadout}`. Keep
    `~/.local/share/nvim/lazy` (your own plugin clones) and
-   `~/.local/share/fonts`. This matters: `paths.lua` prefers a per-user
+   `~/.local/share/fonts`. If the fonts live in a shared tree, that path may
+   instead be a symlink to it -- keeping the symlink is supported, and a
+   `@shared` install leaves the fonts in the tree rather than copying them into
+   each home. This matters: `paths.lua` prefers a per-user
    directory over the shared tree, so a stale
    `~/.local/share/nvim/tree-sitter-parsers` would shadow the new one.
 

@@ -71,7 +71,8 @@ touches them.
 For split installs, `loadout install @envs` bakes
 `LOADOUT_CFG_SHARED_PREFIX=<shared>/local` into both bash and tcsh global config
 defaults. A direct tcsh login then finds shared `bin/`, `TERMINFO_DIRS`, typelibs,
-and GUI helper paths without relying on the parent process to export the prefix.
+GUI helper paths, and any shared fonts (`FONTCONFIG_FILE`) without relying on the
+parent process to export the prefix.
 
 ## What you get
 
@@ -96,7 +97,8 @@ Behaviour:
 - **Environment** — `EDITOR`/`VISUAL`/`GIT_EDITOR`, `PAGER`, `MANPAGER`, the
   `LESS_TERMCAP_*` colours, `PIP_REQUIRE_VIRTUALENV`, `PYTHONPYCACHEPREFIX`,
   `COLORTERM`, `EGL_LOG_LEVEL`, `TERMINFO_DIRS`, `GI_TYPELIB_PATH`,
-  `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`, `GNUPLOT_DRIVER_DIR` —
+  `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`, `FONTCONFIG_FILE` (only
+  when the tree carries `etc/fonts/loadout-fonts.conf`), `GNUPLOT_DRIVER_DIR` —
   the same values the bash env exports.
 - **Aliases** — the bash alias set: navigation (`b`…`bbbbbbbbbb`, `cdd`…`cdddddd`,
   `p`/`cdp`, `latest`), listing (`ls`/`ll`/`la`/`lh`/`lg`/`lah`/`tree`), editing

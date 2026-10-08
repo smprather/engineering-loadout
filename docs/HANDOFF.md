@@ -1,5 +1,56 @@
 # Current Handoff
 
+## 2026-10-08 (6): shared fonts -- install once per tree, never per home (UNRELEASED)
+
+Reported from an Anvil `/vols/...` shared-tree install: `@shared --dest-dir`
+wrote all 12 Nerd Font families (~2 GB installed; IosevkaTerm alone 1.09 GB)
+into the invoking user's `~/.local/share/fonts` and died with `[Errno 122]
+Disk quota exceeded` -- after deleting a symlink the user had pointed at a
+shared font directory. Fonts are identical for every user of a tree; the
+per-user copy was pure duplication and, on a quota'd account, impossible.
+
+- Routing: `install_fonts(..., shared_root=...)`; the call site passes the
+  install root when it lives OUTSIDE the real `$HOME` (the `--dest-dir` /
+  multi-user case). Fonts then install once into `<prefix>/share/fonts`, and
+  `<prefix>/etc/fonts/loadout-fonts.conf` is generated (re-includes
+  `/etc/fonts/fonts.conf`, adds the one `<dir>`). `envs/bash/global/bashrc`,
+  `envs/zsh/global/zshrc` and `envs/tcsh/global/tcshrc` export
+  `FONTCONFIG_FILE` when that file exists; a caller-set value wins. A root of
+  `$HOME` or inside it (default `~/.local/share/loadout`, `dest_dir = "~"`)
+  keeps the old per-user behavior.
+- Symlink policy: a symlink at the fonts path is RESPECTED (`SKIP` + message)
+  unless it is dangling or resolves into the repo checkout. The old
+  unconditional `unlink()` is what destroyed the user's sharing mechanism and
+  then filled their home.
+- `fc-cache` runs on the shared dir at install time (while it is writable), so
+  the valid cache lives in the tree and clients never build a per-user cache
+  there. A foreign file at the snippet path is warned about and left alone
+  (prefer-shim policy).
+- Tests: `tests/install-fonts-rejoin` (fast unit test, no payload needed) now
+  covers both symlink paths and the shared tree + snippet (9 cases); new T2
+  `tests/install-fonts-shared`
+  drives the CLI (`font-inconsolata --dest-dir <tree>`), asserts `$HOME` stays
+  empty, sources the installed shell entry to prove the `FONTCONFIG_FILE`
+  export, and pins that a default HOME-mode install still lands in
+  `~/.local/share/fonts`. The new T2 is wired into `tests/run-all` and the
+  Tier 3 full smoke entrypoint.
+- Regen chain: the `envs/*` rc/README edits feed `gen-installed-sizes`
+  (directory sources count their whole tree), so `payload/installed-sizes.json`
+  and then `.content-manifest` were regenerated in order.
+- Gates: T1 `tests/run-all --fast` PASS; T2 `install-fonts-rejoin`,
+  `install-fonts-shared`, `env-routing-dest-dir`, `install-env-tcsh`,
+  `install-env-zsh`, `install-split-shared-envs`, `install-linux-tmp-home`
+  PASS; Tier 3 `tests/prebuilt-binaries-almalinux8 --full` PASS (326 binaries,
+  23 host-contract skips) and it ran the new test inside stock el8.
+- Follow-up (pre-existing, not touched): `tests/install-linux-tmp-home`
+  inherits a caller's `LOADOUT_CFG_SHARED_PREFIX` (it overrides HOME/XDG but
+  not that), so a dev shell whose baked prefix is stale fails its tealdeer
+  assertion. It passes with the variable unset and in the container. Harden
+  with `env -u` next time that test is touched.
+- Explicitly NOT done: `--fonts-dir` / `LOADOUT_FONTS_DIR`. The routing covers
+  the reported case and a second destination surface needs a lifecycle
+  decision; `--skip font-*` plus a symlink remains the manual escape hatch.
+
 ## 2026-10-08 (5): envs cleanup -- W2 extra_links removal (UNRELEASED)
 
 Spec: same as (4). **W2 landed** per D2. `extra_links` was inert registry data:

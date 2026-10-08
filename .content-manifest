@@ -779,6 +779,7 @@ sha256  2d9baf49e8333edf159fc33dd47dc90c3784c5255a3526d959592934993e136d  payloa
 sha256  2db123a067545c79dae7c13264b583e565b0e19c93f86a097b8c83b7c7124cf8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/dart.lua
 sha256  2dbdf37ad3bee9391ddf45e80b7b7f9c7ec028a10f566e2b157728f60cc8a971  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/sway.so.bz2
 sha256  2ddbed899ec50551a26647e46655adc89859fe748524f6a1ea8518484c742c22  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/tablegen.lua
+sha256  2de547a9a5e48f35313a1aee451c1a884472c02cf9b30b0aca6f38672eb89801  payload/installed-sizes.json
 sha256  2deae810933c81a19019cec73e700e04754a4ebc32f3faadbcf86002b708d1ef  envs/tmux/vendor/plugins/tmux-yank/video/README.md
 sha256  2df347fe93e07af3c31b0df6a87012ef165ac10fdc6bd831ae31fcd54afc4541  payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry/http.lua
 sha256  2df6bc1ff79995bdfe8fdf2c22b2840478cc4e669a99642f23f745a9cb29819f  envs/tmux/vendor/plugins/tmux-better-mouse-mode/scripts/helpers.sh
@@ -1190,7 +1191,6 @@ sha256  47f4f74602588c1623778196f1fa3afe1cc5c8384a0a62a964ce4974c5c247d1  payloa
 sha256  48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad  payload/el8.x86_64.glibc2p28/wheels/uvicorn-0.48.0-py3-none-any.whl
 sha256  481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8  payload/el8.x86_64.glibc2p28/wheels/typing_extensions-4.16.0-py3-none-any.whl
 sha256  482be17c6991b8c19c5429a1e995d9b0efdbb63172824c41f99965dc0ade8ec2  payload/el8.x86_64.glibc2p28/wheels/click-8.4.1-py3-none-any.whl
-sha256  483129eff66127d03e6c22ab3abb947bbf4408c49a4ba62468805ffebc1f5c50  payload/installed-sizes.json
 sha256  4833380f024ac9e17d440a07c1558a9ef58ba5cc1b6e2769da345648d7e957af  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/cooklang/highlights.scm
 sha256  4833380f024ac9e17d440a07c1558a9ef58ba5cc1b6e2769da345648d7e957af  payload/treesitter/vendor/nvim-treesitter/runtime/queries/cooklang/highlights.scm
 sha256  4833f34910238b4367fd73ec69587982597854dadf12ea60b8d38de8cd909c3f  payload/el8.x86_64.glibc2p28/bin/ssh10.bin.bz2

@@ -291,6 +291,7 @@ fi
 # Installer-driven tests use --deps auto (per-test payload deps). The
 # completion check keeps the global `all` cache.
 run_test "install-fonts-rejoin" --deps auto "$PY" tests/install-fonts-rejoin
+run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
 run_test "install-modules" --deps auto tests/install-modules
 run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
 run_test "install-env-st" --deps auto tests/install-env-st

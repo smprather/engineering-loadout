@@ -222,10 +222,16 @@ both `backup.N/` and `backup.N.tar.bz2` when picking the next N. Post-install ho
 `LOADOUT_BACKUP_DIR` still resolves during hook execution. `./loadout snapshot restore <path>` accepts either the uncompressed dir or
 the `.tar.bz2` archive. Backups intentionally exclude font files because vendored Nerd Font archives are large
 and reproducible. The fonts phase has its own safety move: normal installs move
-an existing `~/.local/share/fonts` to `fonts.bak*` before extraction, but
-`--no-backup` reuses that directory in place and creates no font backup. Font
-extraction counts real font members and renders a Rich progress bar like other
-bulk phases.
+an existing `~/.local/share/fonts` directory to `fonts.bak*` before extraction,
+but `--no-backup` reuses that directory in place and creates no font backup. A
+`~/.local/share/fonts` **symlink** is preserved instead (only a dangling or
+repo-pointing link is replaced), because pointing it at a shared font set is a
+supported way to share fonts between users. On a shared tree -- an install root
+outside `$HOME` -- the fonts install once into `<prefix>/share/fonts` and a
+generated `<prefix>/etc/fonts/loadout-fonts.conf` is exported as
+`FONTCONFIG_FILE` by the shell layer, so no user pays the ~2 GB in their home.
+Font extraction counts real font members and renders a Rich progress bar like
+other bulk phases.
 
 Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
 `install_tldr_cache`, `install_typelibs`, `install_portable_python`,

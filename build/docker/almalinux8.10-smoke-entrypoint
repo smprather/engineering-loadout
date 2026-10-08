@@ -236,6 +236,9 @@ if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
     echo "== full: vim XDG config + plugins"
     tests/install-env-vim-xdg
 
+    echo "== full: shared-tree fonts + fontconfig snippet"
+    tests/install-fonts-shared
+
     echo "== full: Environment Modules fresh-home smoke"
     tests/install-modules
 fi

@@ -502,6 +502,16 @@ vendored fonts are extracted. With `--no-backup`, the installer reuses the
 existing fonts directory in place and overwrites only matching font files. Font
 extraction uses the same progress bar style as other bulk install phases.
 
+On a **shared tree** -- any install root outside `$HOME`, typically a
+`--dest-dir` deployment -- the fonts install **once** into
+`<prefix>/share/fonts` (the twelve families are ~2 GB installed, so this is one
+copy instead of one per user). The installer also writes
+`<prefix>/etc/fonts/loadout-fonts.conf`, and the shell layer exports
+`FONTCONFIG_FILE` for it once the per-user config bakes the shared prefix, so
+every user of the tree sees the fonts with no per-user copy. An existing
+`~/.local/share/fonts` **symlink** is left in place rather than replaced --
+pointing it at that shared directory is a supported way to share one font set.
+
 ---
 
 ## Bash and tcsh Configuration

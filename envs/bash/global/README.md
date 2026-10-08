@@ -25,9 +25,11 @@ prepended *after* `~/.local/bin`, so it outranks any stale legacy copy.
 
 `LOADOUT_CFG_SHARED_PREFIX` is baked by a split/shared env install; when it is
 unset the fallback is the XDG default. `TERMINFO_DIRS`, the Qt plugin path,
-`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH` and the gnuplot driver dir all hang
+`GI_TYPELIB_PATH`, `NVIM_QT_RUNTIME_PATH`, `FONTCONFIG_FILE` (only when
+`<prefix>/etc/fonts/loadout-fonts.conf` exists, which a shared tree's font
+install writes) and the gnuplot driver dir all hang
 off the same prefix, so a `--dest-dir` or shared install needs no extra
-environment.
+environment. A caller-set `FONTCONFIG_FILE` wins.
 
 tealdeer's cache is read from `<prefix>/share/tealdeer/cache/tldr-pages`, and
 the tealdeer config the installer writes records that absolute path (the config

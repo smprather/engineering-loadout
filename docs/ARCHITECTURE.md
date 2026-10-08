@@ -22,7 +22,7 @@ config bundle, font, data cache, Python tool.
 | `python-base` | Portable Python archive, installed via bundled `install.sh` |
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
 | `env` | Per-user config bundle (shell rc, editor configs) |
-| `font` | Font archive -> `~/.local/share/fonts/` |
+| `font` | Font archive -> `~/.local/share/fonts/` (shared tree: once to `<prefix>/share/fonts/` + `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `data` | Data archive (tldr pages, etc.) |
 | `group` | Virtual group -- no artifacts; just a `members` list |
 

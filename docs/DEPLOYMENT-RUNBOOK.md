@@ -63,7 +63,13 @@ Verify the shared tree:
 ls "$SHARED"/bin/nvim "$SHARED"/bin/tmux "$SHARED"/bin/bash
 ls "$SHARED"/share/nvim/loadout/vendor/plugin-stash   # the plugin stash
 ls "$SHARED"/lib/loadout-git/bin/git                  # private git for nvim
+ls "$SHARED"/share/fonts                              # Nerd Fonts, installed once
+ls "$SHARED"/etc/fonts/loadout-fonts.conf             # shells export FONTCONFIG_FILE for it
 ```
+
+The fonts are installed **once** here, not into each user's home: the per-user
+shells export `FONTCONFIG_FILE` for that snippet, so every user of the tree sees
+them (~2 GB installed) without a per-user copy or a per-user `~/.local/share/fonts`.
 
 If the plugin stash is missing from the shared tree, the `nvim-plugin-stash`
 install phase was skipped. That happens when the stash archive is not in the

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Unit tests for install font installation.
 
-Covers split-zip rejoining and fonts-dir preparation (symlink removal,
-directory backup/no-backup behavior) without requiring the real vendored font
-archives.
+Covers split-zip rejoining, fonts-dir preparation (symlink policy, directory
+backup/no-backup behavior) and the shared-tree destination (fonts + generated
+fontconfig snippet) without requiring the real vendored font archives.
 """
 
 import importlib.machinery
@@ -70,7 +70,9 @@ def test_split_zip_rejoin():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_symlink_replaced():
+def test_foreign_symlink_preserved():
+    """A user-made fonts symlink (e.g. -> a shared tree) is the intended way to
+    share fonts; the installer must not delete the link or write its target."""
     tmp = tempfile.mkdtemp(prefix="test-fonts.")
     try:
         repo_dir = make_repo(tmp)
@@ -78,18 +80,106 @@ def test_symlink_replaced():
         ufd = user_fonts_dir(home)
         os.makedirs(os.path.dirname(ufd))
 
-        # Pre-place a symlink at the fonts dir location
-        link_target = os.path.join(tmp, "old-fonts-link-target")
+        link_target = os.path.join(tmp, "shared-fonts")
         os.makedirs(link_target)
+        open(os.path.join(link_target, "shared.ttf"), "w").close()
         os.symlink(link_target, ufd)
-        assert os.path.islink(ufd)
 
         install.install_fonts(repo_dir, home)
 
-        assert not os.path.islink(ufd), "Symlink should have been removed"
-        assert os.path.isdir(ufd), "fonts dir should now be a real directory"
+        assert os.path.islink(ufd), "foreign fonts symlink must be preserved"
+        assert os.path.realpath(ufd) == link_target
+        assert os.listdir(link_target) == ["shared.ttf"], "symlink target must not be written"
+        print("PASS: foreign fonts symlink preserved, target untouched")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_repo_pointing_symlink_replaced():
+    """A symlink that resolves into the repo is stale/unsafe (extraction would
+    write into the source tree); it is removed and replaced with a real dir."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(os.path.dirname(ufd))
+
+        os.symlink(os.path.join(repo_dir, "payload", "fonts"), ufd)
+
+        install.install_fonts(repo_dir, home)
+
+        assert not os.path.islink(ufd), "repo-pointing symlink should have been removed"
         assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
-        print("PASS: symlink at fonts dir replaced with real directory")
+        print("PASS: repo-pointing symlink replaced with real directory")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_dangling_symlink_replaced():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        ufd = user_fonts_dir(home)
+        os.makedirs(os.path.dirname(ufd))
+
+        os.symlink(os.path.join(tmp, "gone"), ufd)
+
+        install.install_fonts(repo_dir, home)
+
+        assert not os.path.islink(ufd), "dangling symlink should have been removed"
+        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
+        print("PASS: dangling symlink replaced with real directory")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_shared_tree_fonts_and_snippet():
+    """shared_root installs fonts once into the tree and writes the fontconfig
+    snippet the shell layer points FONTCONFIG_FILE at -- the user home stays empty."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        shared = os.path.join(tmp, "shared-tree")
+        os.makedirs(shared)
+
+        install.install_fonts(repo_dir, home, shared_root=shared)
+
+        shared_fonts = os.path.join(shared, "share", "fonts")
+        assert "dummy.ttf" in os.listdir(shared_fonts), f"fonts should land in {shared_fonts}"
+        conf = os.path.join(shared, "etc", "fonts", "loadout-fonts.conf")
+        text = open(conf).read()
+        assert f"<dir>{shared_fonts}</dir>" in text, text
+        assert "/etc/fonts/fonts.conf" in text, "snippet must re-include the system config"
+        assert not os.path.exists(home), "shared install must not write the user home"
+        print("PASS: shared tree got fonts + fontconfig snippet, home untouched")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_shared_tree_symlink_skips_snippet():
+    """When the shared fonts path is a foreign symlink (fonts already managed
+    elsewhere) nothing is written and no snippet advertises an unpopulated dir."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        shared = os.path.join(tmp, "shared-tree")
+        shared_fonts = os.path.join(shared, "share", "fonts")
+        os.makedirs(os.path.dirname(shared_fonts))
+
+        link_target = os.path.join(tmp, "big-scratch-fonts")
+        os.makedirs(link_target)
+        os.symlink(link_target, shared_fonts)
+
+        install.install_fonts(repo_dir, home, shared_root=shared)
+
+        assert os.path.islink(shared_fonts), "foreign symlink must be preserved"
+        assert os.listdir(link_target) == [], "symlink target must not be written"
+        assert not os.path.exists(os.path.join(shared, "etc", "fonts", "loadout-fonts.conf"))
+        print("PASS: shared-tree symlink preserved, no snippet written")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -159,7 +249,11 @@ def test_existing_dir_no_backup_reused():
 
 if __name__ == "__main__":
     test_split_zip_rejoin()
-    test_symlink_replaced()
+    test_foreign_symlink_preserved()
+    test_repo_pointing_symlink_replaced()
+    test_dangling_symlink_replaced()
+    test_shared_tree_fonts_and_snippet()
+    test_shared_tree_symlink_skips_snippet()
     test_existing_dir_backed_up()
     test_existing_dir_backup_numbering()
     test_existing_dir_no_backup_reused()
