@@ -1,5 +1,40 @@
 # Current Handoff
 
+## 2026-10-08 (13): 2026.10.6 RELEASED and verified (envs cleanup W1-W5)
+
+Class C release cut from `da81ee4` via `docs/RELEASE.md` §0-§9. Signed tag
+**2026.10.6** (SSH/ED25519), release published 2026-10-08T20:35Z, four assets:
+
+| asset | size (bytes) |
+|---|---|
+| `sha256sums.txt` | 525 |
+| `default.content-manifest` | 647898 |
+| `nvim-plugin-stash.tar.bz2` | 344538464 (= local file) |
+| `sbom.cdx.json` | 1340166 |
+
+§9 re-read: `isDraft=false`; `git tag -v` prints `Good "git" signature for
+smprather@gmail.com` (ED25519); `origin/main` == `git rev-parse 2026.10.6^{commit}` ==
+`da81ee4`; the stash asset's byte size matches the local file.
+
+Shipped (all class C gates green, `tests/run-all --container` included, and
+`build/release` pre-release gates green): vim XDG-native config + plugins (W1);
+deleted `extra_links` (W2); dead shell entrypoints trimmed with `~/.profile`
+restored as the POSIX X-session shim (W3 + correction); deleted the cosmetic
+`supports_layers` (W4); documented the `tmux-yank` opt-in (W5). Also in this
+release: the agent-facing PEP 758 guardrails and the T1 `ruff format check`.
+
+Carried debt, recorded (outdated but NOT due by cadence): marktext 0.20.0 ->
+0.21.1, tree-sitter 0.27.0 -> 0.27.1, tmux 3.7c -> 3.8 (re-check the tmux >= 3.7
+FFM guard on any bump), plus the two pinned rows (`less` 704, `pdftotext`
+26.04.0). `ncdu`'s version lookup was an upstream 503 during the sweep, so that
+row is INCOMPLETE, not clean. ClamAV daily and the YARA ruleset were current.
+
+**Next:** W6 is done and the envs-cleanup spec is fully landed (W1-W6). Open
+follow-ups not part of it: the release-notes version table defect (RELEASE.md
+failure catalogue entry 9, sourced from `farm-versions` instead of
+`packages.json`); the `--fonts-dir`/`LOADOUT_FONTS_DIR` decision; the
+`ncdu`-style scrape sources needing a 503 retry path in `check-versions`.
+
 ## 2026-10-08 (12): envs cleanup W6 -- class C release 2026.10.6 (W1-W5 + W3 correction) (RELEASE PREP)
 
 Class C per RELEASE.md §0 (installer + registry touched). Sequence followed from §0:
