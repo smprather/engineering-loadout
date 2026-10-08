@@ -24,6 +24,21 @@ Tests: `tests/install-env-tmux-nvim-layers` asserts no `~/.tmux`, no nested tree
 TPM at `~/.config/tmux/plugins/tpm/tpm`, and the new pin. Docs synced: AGENTS,
 TMUX.md, INSTALLATION, README, copilot-instructions, ARCHITECTURE.
 
+**Stale-PATH trap found while verifying (not caused by the migration).** The
+operator's long-running server (started 2026-10-06, PATH ending in the deleted
+legacy `~/.loadout/local/bin`) had no `tmux` on the PATH it hands to `run-shell`
+children. Every TPM/plugin script shells out to `tmux`, so reload failed with
+`'~/.config/tmux/plugins/tpm/tpm' returned 1`. Most plugin scripts mask the
+failure (persist ends `return 0`; better-mouse-mode's version check skips its
+binds); `tmux-yank` is the one that does not, which is how the missing binary
+was confirmed. Fix on the live server:
+`tmux set-environment -g PATH "<prefix>/prefer:<prefix>/bin:<old minus legacy>"`
+then `Prefix+r`. Verified: TPM rc=0, the `@resurrect-*-script-path` options
+repointed at the new plugin tree, and a save round-trip wrote a fresh snapshot
+to `~/.local/share/tmux/resurrect`. Diagnostic one-liner:
+`tmux run-shell 'command -v tmux'`. A server started from a post-migration
+login shell never has this; long-lived panes may still need `exec bash`.
+
 ## 2026-10-08 (2): class C release prep -- currency + security sweep (RELEASED as 2026.10.4)
 
 Preparing the release on top of the offline-Rust retirement (payload ~3.0 GB,
