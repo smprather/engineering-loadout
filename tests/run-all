@@ -73,6 +73,13 @@ FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
 # script edit must not leave a cached PASS standing on the old behavior.
 FP_ROOTS=("$REPO_DIR/payload" "$REPO_DIR/loadout" "$REPO_DIR/loadout_main.py" "$REPO_DIR/envs" "$REPO_DIR/tests" \
     "$REPO_DIR/build/gen-content-manifest" "$REPO_DIR/build/verify-manifest-export")
+# Container tests additionally depend on the smoke harness baked into their
+# image. Without it in the key, editing the entrypoint leaves a stale .pass
+# blessing the old behavior (2026-10-08: a pre-XDG bindir bug in the dynamic
+# smoke kept a cached PASS while the test itself was failing).
+FP_ROOTS_CONTAINER=("${FP_ROOTS[@]}" \
+    "$REPO_DIR/build/docker/almalinux8.10-smoke.Dockerfile" \
+    "$REPO_DIR/build/docker/almalinux8.10-smoke-entrypoint")
 
 # CI runtime log (see build/ci-runtimes): every test and the suite total is
 # timed and appended, so slowdowns are visible instead of anecdotal. CACHED
@@ -151,10 +158,13 @@ run_test() {
             _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
             return 0
         fi
-        local sidecar="$CACHE_SIDECAR"
-        [ "$deps_mode" = container ] && sidecar="$CACHE_SIDECAR_CONTAINER"
+        local sidecar="$CACHE_SIDECAR" fp_roots=("${FP_ROOTS[@]}")
+        if [ "$deps_mode" = container ]; then
+            sidecar="$CACHE_SIDECAR_CONTAINER"
+            fp_roots=("${FP_ROOTS_CONTAINER[@]}")
+        fi
         if { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -f "$sidecar" ] \
-            && "$PY" "$FP_SCRIPT" --fast --check "$sidecar" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1 \
+            && "$PY" "$FP_SCRIPT" --fast --check "$sidecar" --roots "${fp_roots[@]}" >/dev/null 2>&1 \
             && [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
             && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
             echo "=== $name: CACHED PASS (inputs unchanged)"
@@ -318,7 +328,7 @@ if [ "$CACHE_ACTIVE" -eq 1 ]; then
     mkdir -p "$CACHE_DIR"
     "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
     if [ "$CONTAINER" -eq 1 ]; then
-        "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR_CONTAINER" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
+        "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR_CONTAINER" --roots "${FP_ROOTS_CONTAINER[@]}" >/dev/null 2>&1
     fi
 fi
 if [ "$FAILURES" -eq 0 ]; then
