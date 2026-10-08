@@ -1,5 +1,30 @@
 # Current Handoff
 
+## 2026-10-08 (9): envs cleanup W4 -- delete supports_layers (UNRELEASED)
+
+Per spec D4/F4. The field was cosmetic: its only consumers were a comment in
+`_install_env_zsh`, one `cmd_describe` field-list entry, registry validation and one
+test block -- and its values had already drifted (env-bash omitted global/team, env-tcsh
+had none). Layer support is a property of each handler, not registry metadata.
+
+- `payload/packages.json`: the field and its `_schema` description are gone from
+  env-bash / env-zsh / env-nvim / env-tmux.
+- `loadout_main.py`: dropped from `cmd_describe`'s field tuple and from the
+  `_install_env_zsh` docstring.
+- `tests/install-env-tmux-nvim-layers`: the registry assertion block is replaced with a
+  comment pointing at the dispatcher-order assertions (tmux dispatcher order at
+  settings-global -> settings-user -> global -> user -> TPM, plus the nvim layer
+  layout), which is the behavior that actually matters.
+- Docs: copilot registry field list, AGENTS zsh/shell notes.
+- Regen chain: packages.json is manifest-covered, so installed-sizes then
+  .content-manifest were regenerated in order.
+
+Gates: T1 `tests/run-all --fast` green; registry-integrity 16/16;
+`loadout info env-tmux` no longer prints the field; `install-env-tmux-nvim-layers` and
+`install-split-shared-envs` green.
+
+**Next:** W5 (`tmux-yank` opt-in note), then W6 (docs sync + class C release).
+
 ## 2026-10-08 (8): envs cleanup W3 -- trim dead shell entrypoints (UNRELEASED)
 
 Per spec D3/F3 (`docs/superpowers/specs/2026-10-08-envs-xdg-and-dead-code-trim-design.md`;

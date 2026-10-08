@@ -19,7 +19,6 @@
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
     "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the only gating field.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
-    "supports_layers": "For kind='env': ordered layer names the environment supports (for example global/user or global/corp/site/team/project/user).",
     "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
     "bins": "List of bin/*.bz2 stems (without .bz2) owned by this package.",
     "libs": "List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools — those are always installed.",
@@ -3225,12 +3224,6 @@
       "kind": "env",
       "source": "envs/bash/",
       "install_to": "~/.config/bash",
-      "supports_layers": [
-        "corp",
-        "site",
-        "project",
-        "user"
-      ],
       "platforms": [
         "linux"
       ],
@@ -3247,14 +3240,6 @@
       "kind": "env",
       "source": "envs/zsh/",
       "install_to": "~/.config/zsh",
-      "supports_layers": [
-        "global",
-        "corp",
-        "site",
-        "team",
-        "project",
-        "user"
-      ],
       "platforms": [
         "linux"
       ],
@@ -3274,10 +3259,6 @@
       "kind": "env",
       "source": "envs/nvim/",
       "install_to": "~/.config/nvim",
-      "supports_layers": [
-        "global",
-        "user"
-      ],
       "platforms": [
         "linux"
       ],
@@ -3341,10 +3322,6 @@
       "install_to": "~/.config/tmux",
       "prefer": [
         "tmux"
-      ],
-      "supports_layers": [
-        "global",
-        "user"
       ],
       "platforms": [
         "linux"

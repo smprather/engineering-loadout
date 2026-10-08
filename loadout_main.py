@@ -5134,9 +5134,6 @@ def _install_env_zsh(repo_dir, home):
     -- that DELETED ~/.config/zsh/{corp,site,team,project,user} on every
     reinstall while the shipped zshrc went on sourcing them. Same failure the
     env-st and env-tcsh handlers exist to prevent.
-
-    The registry entry's "supports_layers" field does not prevent this: it is
-    only ever read by `loadout info` for display.
     """
     src = os.path.join(repo_dir, "envs", "zsh")
     if not os.path.isdir(src):
@@ -5664,7 +5661,6 @@ def cmd_describe(args, registry):
         "relocate_token",
         "relocate_root",
         "missing_hint",
-        "supports_layers",
     ):
         if fkey in entry:
             v = entry[fkey]

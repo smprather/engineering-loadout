@@ -294,17 +294,10 @@ HOME="$restore_home" "$REPO/loadout" snapshot restore "$TEST_ROOT/backup.new.tar
 grep -qF 'SNAPSHOT-LEGACY' "$restore_home/.tmux.local.conf" \
     || fail "restoring a new snapshot did not restore legacy tmux config"
 
-"$PY" - "$REPO/payload/packages.json" <<'PY' || fail "registry layer metadata is not global/user"
-import json
-import sys
-
-with open(sys.argv[1]) as stream:
-    packages = json.load(stream)["packages"]
-for name in ("env-tmux", "env-nvim"):
-    actual = packages[name].get("supports_layers")
-    if actual != ["global", "user"]:
-        raise SystemExit(f"{name}: expected global/user layers, got {actual!r}")
-PY
+# Layer support is not registry metadata: that field was deleted in W4 (it was
+# cosmetic and had already drifted -- env-bash was missing global/team).
+# The behavior that matters is the dispatcher sourcing global before user, which
+# is asserted above (tmux dispatcher order, nvim layer layout).
 
 tmux_update_dry=$("$PY" "$REPO/build/update" tmux-plugins --dry-run)
 printf '%s\n' "$tmux_update_dry" | grep -qF 'tmux-plugins/tpm' \

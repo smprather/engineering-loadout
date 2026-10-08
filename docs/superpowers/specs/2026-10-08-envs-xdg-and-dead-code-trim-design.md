@@ -300,17 +300,18 @@ docs.
 for bash and `.tcshrc` for tcsh; reinstall over a legacy layout prunes the
 removed links.
 
-### W4 — Delete `supports_layers` (D4)
+### W4 — Delete `supports_layers` (D4) — LANDED
 
 **Files:** `payload/packages.json`, `loadout_main.py`,
 `tests/install-env-tmux-nvim-layers`, docs.
 
-- [ ] Remove the field from every `kind: env` entry.
-- [ ] Remove it from the validation tuple and from the `_install_env_zsh`
-      comment.
-- [ ] Replace the test block's field assertion with a comment referencing the
-      existing dispatcher-order assertions (or drop the block).
-- [ ] Docs: copilot field list, AGENTS "supports_layers is cosmetic" note.
+- [x] Remove the field from every `kind: env` entry (+ its `_schema` entry).
+- [x] Remove it from the validation tuple (`cmd_describe` field list) and from
+      the `_install_env_zsh` comment.
+- [x] Replace the test block's field assertion with a comment referencing the
+      existing dispatcher-order assertions (tmux dispatcher order + nvim layer
+      layout).
+- [x] Docs: copilot field list, AGENTS "supports_layers is cosmetic" note.
 
 **Acceptance:** `rg supports_layers` empty; `loadout info env-tmux` output
 unchanged except the missing field; T1 green.
