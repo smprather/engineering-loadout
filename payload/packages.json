@@ -560,7 +560,7 @@
       "bins": [
         "delta"
       ],
-      "version": "0.19.2",
+      "version": "0.20.1",
       "platforms": [
         "linux"
       ],
@@ -827,7 +827,7 @@
       "bins": [
         "hyperfine"
       ],
-      "version": "1.20.0",
+      "version": "2.0.0",
       "platforms": [
         "linux"
       ],
@@ -1518,7 +1518,7 @@
       "bins": [
         "ty"
       ],
-      "version": "0.0.82",
+      "version": "0.0.85",
       "platforms": [
         "linux"
       ],

@@ -109,3 +109,6 @@
 2026-10-07T04:56:35Z	https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-unknown-linux-gnu.tar.gz	fa82fd8dde8e8eefdecada6aa0889666556cfceb690d06e0c3bca49eb3070a63
 2026-10-07T05:00:57Z	https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-unknown-linux-gnu.tar.gz	fa82fd8dde8e8eefdecada6aa0889666556cfceb690d06e0c3bca49eb3070a63
 2026-10-08T02:20:26Z	https://github.com/astral-sh/uv/releases/download/0.12.23/uv-x86_64-unknown-linux-gnu.tar.gz	9167d72b3319674b6303c4cbe071854bba13ebdf3d76b1a7cbdc175471fb66d6
+2026-10-08T02:50:32Z	https://github.com/astral-sh/ty/releases/download/0.0.85/ty-x86_64-unknown-linux-gnu.tar.gz	0c3564f13296c42f96e576a06276f7f0b67cbdf030888ff99c697259946162f0
+2026-10-08T02:50:34Z	https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-unknown-linux-musl.tar.gz	69dcb4043f55c29118f408c6efd30115e0a4e0a6709253343b8c8fa814ab4a31
+2026-10-08T02:50:35Z	https://github.com/sharkdp/hyperfine/releases/download/v2.0.0/hyperfine-v2.0.0-x86_64-unknown-linux-musl.tar.gz	38e59087bd65520930a13cf513d8a493b7043741e8ad62349a8a9929eb61bc5c

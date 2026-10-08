@@ -281,7 +281,7 @@ OpenSSH for those.
 | scc | bin | 4.1.0 | Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
 | tokei | bin | 15.0.0 | Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28 |
 | dasel | bin | 3.11.2 | Query and modify YAML/JSON/TOML/XML/CSV data |
-| delta | bin | 0.19.2 | Git diff pager with syntax highlighting |
+| delta | bin | 0.20.1 | Git diff pager with syntax highlighting |
 | duf | bin | 0.9.1 | df replacement with colored usage table |
 | dust | bin | 1.2.6 | du replacement with visual bar chart |
 | expect | bin | 5.45.4 | Tcl-based tool for automating interactive CLI programs |
@@ -296,7 +296,7 @@ OpenSSH for those.
 | gping | bin | 1.21.0 | Ping with live graph visualization |
 | htop | bin | 3.5.3 | Interactive process viewer and manager |
 | hx | bin | 25.07-984-g079a789e | Modern modal text editor with tree-sitter and LSP |
-| hyperfine | bin | 1.20.0 | Command-line benchmarking tool |
+| hyperfine | bin | 2.0.0 | Command-line benchmarking tool |
 | ncdu | bin | 2.9.2 | NCurses disk usage — interactive disk space analyzer (Zig v2) |
 | nethogs | bin | 0.9.0 | Per-process network bandwidth monitor (a `top` for network traffic). Ships its own libpcap.so.1 — built from source with rdma/bluetooth/dbus disabled so it needs nothing but libc (the EL8 rpm hard-links libibverbs). Needs root or cap_net_admin/cap_net_raw/cap_dac_read_search/cap_sys_ptrace to capture. |
 | openssh | bin | 10.4p1 | OpenSSH 10.4p1 signer tools plus explicit ssh10 client (ssh10/ssh10.bin/ssh-keygen/ssh-add/ssh-agent/ssh-keyscan), EL8 source build linking system libcrypto/zlib; provides `ssh-keygen -Y sign` for git commit/tag signing that stock EL8 8.0p1 lacks. Optional — opt in with `./loadout install openssh`; does not install bare ssh/scp/sftp, so normal ssh stays host-integrated. |
@@ -336,7 +336,7 @@ OpenSSH for those.
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7c | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
-| ty | bin | 0.0.82 | Fast Python type checker (Astral) |
+| ty | bin | 0.0.85 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.12.23 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.1169 | Vi IMproved text editor |
