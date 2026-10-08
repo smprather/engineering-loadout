@@ -1,5 +1,36 @@
 # Current Handoff
 
+## 2026-10-08 (10): W3 correction -- ~/.profile is the X-session hook, not dead weight (UNRELEASED)
+
+Operator challenged W3 ("I added them for a reason"). They were right about `~/.profile`:
+
+- EL8 `/etc/X11/xinit/Xsession` is `#!/bin/bash` and line 31 sources
+  `/etc/X11/xinit/xinitrc-common`; line 20 there is
+  `[ -r $HOME/.profile ] && . $HOME/.profile`. A startx/X11 session therefore sources
+  `~/.profile`, and the old `~/.profile -> .config/bash/bashrc` symlink exported the
+  loadout PATH/TERMINFO_DIRS/plugin paths into the whole GUI session. EL8 `/bin/sh` is
+  bash, so the bash-only target was fine there; it is Debian (dash) where the old link
+  died (`Syntax error: "(" unexpected`, rc=2, aborts the caller) -- and Debian's
+  Xsession does not source `.profile`, so there it was merely dead.
+- `.bash_login` stays retired: bash reads only the first existing of
+  .bash_profile/.bash_login/.profile and .bash_profile is always created.
+
+Fix: new `envs/bash/profile`, a POSIX shim that sources the bashrc only when
+`$BASH_VERSION` is set and ends with `:` so a guard miss can never fail an `&&` or
+`set -e` caller. `install_bash` installs it to `.config/bash/profile` and links
+`~/.profile` at it; `_install_env_bash` sweeps live+profile+retired so a legacy
+`~/.profile -> bashrc` link is healed; backup/restore lists carry `.profile` again
+(live) plus the retired `.bash_login`/`.cshrc`.
+
+- Tests: new T1 `tests/env-bash-profile-shim` (bash applies the env; dash is a clean
+  no-op, with a negative control proving the bashrc itself still fails under dash);
+  `tests/install-linux-tmp-home` asserts the healed symlink target and that
+  `.bash_login`/`.cshrc` are pruned.
+- Docs: AGENTS entrypoint list + symlink map, INSTALLATION retirement note, copilot
+  layer section, `envs/bash/README.md` file map, spec W3 correction note.
+
+**Next:** W5 (`tmux-yank` opt-in note), then W6 (docs sync + class C release).
+
 ## 2026-10-08 (9): envs cleanup W4 -- delete supports_layers (UNRELEASED)
 
 Per spec D4/F4. The field was cosmetic: its only consumers were a comment in

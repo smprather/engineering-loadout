@@ -6,7 +6,11 @@
 bash/
   bashrc          - Entry point (-> ~/.bashrc, ~/.bash_profile). Loads
                     functions.sh, then sources config.sh and bashrc per layer.
-                    ~/.bash_login / ~/.profile are retired (pruned on install).
+                    ~/.bash_login is retired (pruned on install).
+  profile         - POSIX shim installed as ~/.profile: sources the bash env
+                    only under bash. RHEL X sessions source ~/.profile (via
+                    xinitrc-common); dash login shells read it too and must not
+                    see bash-only syntax. Never link ~/.profile at bashrc.
   functions.sh    - Shared utilities loaded before any layer config
                     (path_*, is_truthy, fpcmp, array_slice, source_if_exists,
                     loadout_add_precmd, loadout_find_wezterm_shell_integration, etc.)

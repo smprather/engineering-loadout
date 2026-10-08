@@ -300,6 +300,14 @@ docs.
 for bash and `.tcshrc` for tcsh; reinstall over a legacy layout prunes the
 removed links.
 
+**Correction (2026-10-08, entry 10):** `.profile` is NOT pruned. It was restored
+with a POSIX-valid target (`envs/bash/profile`) after finding that RHEL's X session
+wrapper (`/etc/X11/xinit/xinitrc-common`, sourced by the `#!/bin/bash` `Xsession`)
+reads `~/.profile` -- the old `~/.profile -> bashrc` link worked on EL8 and is the
+X-session env hook, exporting PATH/TERMINFO_DIRS into a startx/X11 session. Only
+`.bash_login` (and tcsh's `.cshrc`) stay retired; D3's carve-out ("do not re-add
+`.profile` ... unless a POSIX-valid target exists") is what this implements.
+
 ### W4 — Delete `supports_layers` (D4) — LANDED
 
 **Files:** `payload/packages.json`, `loadout_main.py`,

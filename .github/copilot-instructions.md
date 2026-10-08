@@ -154,7 +154,9 @@ Resolver helpers: `expand_groups`, `walk_depends`, `walk_recommends`,
 ### Bash Layer System
 
 `envs/bash/bashrc` is the single entry point (symlinked to `~/.bashrc` and
-`~/.bash_profile`; `.bash_login`/`.profile` are retired and pruned on install).
+`~/.bash_profile`; `~/.profile` gets `envs/bash/profile`, a POSIX shim that sources the
+bashrc only under bash because RHEL X sessions read `~/.profile` while dash would die
+on bash syntax; `.bash_login` is retired and pruned on install).
 It sources files in layer
 order across six layers: `global -> corp -> site -> team -> project -> user`. Each layer
 directory lives under `~/.config/bash/` after install.

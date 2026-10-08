@@ -1,0 +1,87 @@
+#!/usr/bin/env python3.14
+"""env-bash-profile-shim: envs/bash/profile must be a POSIX-safe login profile.
+
+Why this file exists: RHEL-family X sessions read ~/.profile
+(/etc/X11/xinit/Xsession is #!/bin/bash and sources xinitrc-common, which runs
+`[ -r $HOME/.profile ] && . $HOME/.profile`), so the loadout needs a target
+there. POSIX login shells (dash) read ~/.profile too, and sourcing the bash-only
+bashrc under dash is a syntax error that aborts the calling shell. The shim must
+therefore apply the bash environment under bash and be a clean no-op elsewhere.
+
+The install-side wiring (the symlink target) is asserted in
+tests/install-linux-tmp-home.
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SHIM = os.path.join(REPO, "envs", "bash", "profile")
+
+failures = 0
+
+
+def check(label, ok, detail=""):
+    global failures
+    if ok:
+        print(f"  PASS  {label}")
+    else:
+        failures += 1
+        print(f"  FAIL  {label}" + (f"\n        {detail}" if detail else ""))
+
+
+def run(shell, script, home):
+    return subprocess.run(
+        [shell, "-c", script],
+        env={"HOME": home, "PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def main():
+    tmp = tempfile.mkdtemp(prefix="test-profile-shim.")
+    try:
+        bashrc = os.path.join(tmp, ".config", "bash", "bashrc")
+        os.makedirs(os.path.dirname(bashrc))
+        with open(bashrc, "w") as fh:
+            fh.write("LOADOUT_PROFILE_PROBE=applied\nexport LOADOUT_PROFILE_PROBE\n")
+
+        r = run("bash", f'. "{SHIM}"; printf %s "${{LOADOUT_PROFILE_PROBE:-}}"', tmp)
+        check("bash: shim applies the bash env", r.stdout == "applied", f"stdout={r.stdout!r} stderr={r.stderr!r}")
+
+        r = run("bash", f'. "{SHIM}"; echo "rc=$?"', tmp)
+        check("bash: shim exits 0", r.stdout.strip() == "rc=0", f"stdout={r.stdout!r}")
+
+        if not shutil.which("dash"):
+            print("  SKIP  dash not installed (POSIX no-op + negative control)")
+            return failures
+
+        r = run("dash", f'. "{SHIM}"; echo "rc=$?"', tmp)
+        check(
+            "dash: shim is a clean no-op",
+            r.stdout.strip() == "rc=0" and r.stderr == "",
+            f"stdout={r.stdout!r} stderr={r.stderr!r}",
+        )
+
+        # Negative control: sourcing the bash-only bashrc under dash must fail.
+        # If this ever passes, the shim is unnecessary and the test needs rewriting.
+        r = run("dash", f'. "{bashrc}"; echo SURVIVED', tmp)
+        check(
+            "dash: bashrc direct source still fails (why the shim exists)",
+            r.returncode != 0 or "SURVIVED" not in r.stdout,
+            f"rc={r.returncode} stdout={r.stdout!r}",
+        )
+        return failures
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    rc = main()
+    if rc:
+        print(f"env-bash-profile-shim: {rc} failure(s)")
+        raise SystemExit(1)
+    print("env-bash-profile-shim: OK")

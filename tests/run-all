@@ -273,6 +273,7 @@ run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" "$PY" build/gen-readme-table --check
 run_test "assurance-check" "$PY" tests/assurance-check
 run_test "env-shell-parity" "$PY" tests/env-shell-parity
+run_test "env-bash-profile-shim" "$PY" tests/env-bash-profile-shim
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches

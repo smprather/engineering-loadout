@@ -95,11 +95,16 @@ Per-user (`$HOME`):
 | `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
 | `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |
 
-`.bash_login`/`.profile` (bash) and `.cshrc` (tcsh) are **retired entrypoints**: they
-were never read (bash takes the first existing of `.bash_profile`/`.bash_login`/`.profile`
-and `.bash_profile` is always created; only plain csh reads `.cshrc`). A pre-2026-10-08
-install's links are pruned on the next `@envs` run and stay in the backup list for one
-release.
+`~/.profile` is **not** the bashrc: it is a POSIX shim (`~/.config/bash/profile`) that
+sources the bash environment only under bash. RHEL-family X sessions read `~/.profile`
+(`/etc/X11/xinit/Xsession` → `xinitrc-common`: `[ -r $HOME/.profile ] && . $HOME/.profile`),
+which is how a `startx`/X11 session gets the loadout PATH and terminfo; POSIX login
+shells (dash) read it too, where sourcing the bash-only bashrc would be a syntax error
+that aborts the caller. `.bash_login` (bash) and `.cshrc` (tcsh) are **retired
+entrypoints**: `.bash_login` is unreachable while `.bash_profile` exists, and only plain
+csh reads `.cshrc`. A pre-2026-10-08 install's links are pruned on the next `@envs` run
+(and stay in the backup list for one release); a legacy `~/.profile` → `bashrc` link is
+healed to the shim.
 
 With `dest_dir = "~"` (legacy HOME mode) the shared entries gain a `.local`
 level (`~/.local/bin/`, `~/.local/lib64/`, `~/.local/share/...`); the per-user

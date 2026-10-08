@@ -1,0 +1,17 @@
+# Loadout POSIX profile, installed as ~/.profile.
+#
+# Why this file exists instead of linking ~/.profile at the bash-only bashrc:
+# RHEL-family X sessions read ~/.profile -- /etc/X11/xinit/Xsession (#!/bin/bash)
+# sources /etc/X11/xinit/xinitrc-common, which runs
+# `[ -r $HOME/.profile ] && . $HOME/.profile` -- so it is how a startx/X11
+# session gets the loadout PATH, TERMINFO_DIRS and plugin/typelib paths. POSIX
+# login shells (dash) read ~/.profile too, and sourcing the bashrc there is a
+# syntax error that aborts the calling shell (`Syntax error: "(" unexpected`).
+# Hence: source the bash env only under bash, stay a clean no-op elsewhere.
+if [ -n "${BASH_VERSION:-}" ] && [ -r "$HOME/.config/bash/bashrc" ]; then
+    . "$HOME/.config/bash/bashrc"
+fi
+
+# Never fail the caller: xinitrc-common chains this with &&, and some distros
+# run their session script under set -e.
+:

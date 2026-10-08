@@ -127,9 +127,11 @@ fi
 
 echo "Temp HOME: $test_home"
 
-# W3 legacy sweep: entrypoints a pre-W3 install created. The install must prune
-# them -- and back them up first (they are in the backup list), so a user file
-# caught by the sweep is recoverable from loadout_backups/backup.N.tar.bz2.
+# A pre-W3 install linked all four names at the bashrc. The install must heal
+# ~/.profile to the POSIX shim, prune the unreachable ~/.bash_login and the
+# plain-csh ~/.cshrc -- and back them up first (they are in the backup list), so
+# a user file caught by the sweep is recoverable from
+# loadout_backups/backup.N.tar.bz2.
 ln -s .config/bash/bashrc "$test_home/.bash_login"
 ln -s .config/bash/bashrc "$test_home/.profile"
 ln -s .config/tcsh/tcshrc "$test_home/.cshrc"
@@ -171,10 +173,15 @@ fi
 assert_symlink "$test_home/.bashrc"
 assert_symlink "$test_home/.bash_profile"
 assert_symlink "$test_home/.tcshrc"
-# W3: the dead entrypoints are neither created nor left behind from a legacy
-# layout (.bash_login/.profile were never read once .bash_profile exists;
-# .cshrc is only read by plain csh, which is unsupported).
-for dead in .bash_login .profile .cshrc; do
+# ~/.profile is the POSIX shim (not the bash-only bashrc): the legacy-target
+# fixture above must be healed. RHEL X sessions source this path, dash must
+# survive it -- see tests/env-bash-profile-shim.
+if [ "$(readlink "$test_home/.profile")" != ".config/bash/profile" ]; then
+    echo "~/.profile must point at .config/bash/profile, got: $(readlink "$test_home/.profile")" >&2
+    exit 1
+fi
+# .bash_login is unreachable while .bash_profile exists; .cshrc is plain-csh only.
+for dead in .bash_login .cshrc; do
     if [[ -e "$test_home/$dead" || -L "$test_home/$dead" ]]; then
         echo "Retired entrypoint $dead still present after install" >&2
         exit 1

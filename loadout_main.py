@@ -200,13 +200,19 @@ FONT_EXCLUDES = (
 
 BASH_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile")
-# Retired entrypoints (2026-10-08, W3). bash reads only the first existing of
-# .bash_profile/.bash_login/.profile, and .bash_profile is always created, so the
-# other two were never read; .profile additionally linked a bashrc whose header
-# says bash-only into POSIX login shells. tcsh prefers .tcshrc, and plain csh (the
-# only reader of .cshrc) is not a supported shell here. They are pruned on install
-# and stay in the backup/restore lists for one release (P4).
-BASH_ENTRYPOINTS_RETIRED = (".bash_login", ".profile")
+# ~/.profile is NOT a link to the bash-only bashrc. RHEL-family X sessions read it
+# -- /etc/X11/xinit/Xsession (#!/bin/bash) sources xinitrc-common, which runs
+# `[ -r $HOME/.profile ] && . $HOME/.profile` -- while POSIX login shells (dash)
+# read it too and die on bash syntax (`Syntax error: "(" unexpected`). It gets
+# its own POSIX shim (envs/bash/profile), which sources the bash env only under
+# bash.
+BASH_PROFILE_ENTRYPOINT = ".profile"
+# Retired (2026-10-08, W3): bash reads only the first existing of
+# .bash_profile/.bash_login/.profile and .bash_profile is always created, so
+# .bash_login is unreachable. tcsh prefers .tcshrc, and plain csh (the only reader
+# of .cshrc) is not a supported shell here. Pruned on install; both stay in the
+# backup/restore lists for one release (P4).
+BASH_ENTRYPOINTS_RETIRED = (".bash_login",)
 TCSH_ENTRYPOINTS = (".tcshrc",)
 TCSH_ENTRYPOINTS_RETIRED = (".cshrc",)
 NVIM_LAYERS = ("user",)
@@ -4326,10 +4332,10 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         os.unlink(bash_config)
     elif os.path.isdir(bash_config):
         remove_if_exists(os.path.join(bash_config, "global"))
-        for name in ("functions.sh", "README.md", "bashrc"):
+        for name in ("functions.sh", "README.md", "bashrc", "profile"):
             remove_if_exists(os.path.join(bash_config, name))
 
-    restore_targets = list(BASH_ENTRYPOINTS) + [
+    restore_targets = list(BASH_ENTRYPOINTS + (BASH_PROFILE_ENTRYPOINT,)) + [
         ".vimrc",
         ".tmux.conf",
         ".editorconfig",
@@ -4348,7 +4354,7 @@ def _restore_backup_dir(backup_dir, home, source_display=None):
         restore_targets.append(".tmux.local.conf")
 
     # Retired entrypoints (W3): remove the current file only when this snapshot can
-    # actually restore it -- a user-owned ~/.profile must not be deleted by a
+    # actually restore it -- a user-owned ~/.bash_login must not be deleted by a
     # restore whose backup never contained one.
     for rel in BASH_ENTRYPOINTS_RETIRED + TCSH_ENTRYPOINTS_RETIRED:
         if os.path.lexists(os.path.join(backup_dir, rel)):
@@ -4418,8 +4424,10 @@ def install_bash(repo_dir, home, links_mode):
         os.path.join(repo_dir, "envs", "bash", "README.md"), os.path.join(bash_config, "README.md"), links_mode
     )
     install_path(os.path.join(repo_dir, "envs", "bash", "bashrc"), os.path.join(bash_config, "bashrc"), links_mode)
+    install_path(os.path.join(repo_dir, "envs", "bash", "profile"), os.path.join(bash_config, "profile"), links_mode)
     for entrypoint in BASH_ENTRYPOINTS:
         lns(".config/bash/bashrc", os.path.join(home, entrypoint), verbose=True)
+    lns(".config/bash/profile", os.path.join(home, BASH_PROFILE_ENTRYPOINT), verbose=True)
 
 
 def backup_existing(home, repo_dir):
@@ -4433,7 +4441,13 @@ def backup_existing(home, repo_dir):
         # Retired entrypoints stay in this list for one release (W3/P4): the prune
         # runs later, so the numbered backup is the safety net for files the install
         # is about to delete. The tcsh entrypoints were never listed at all.
-        for rel in list(BASH_ENTRYPOINTS + BASH_ENTRYPOINTS_RETIRED + TCSH_ENTRYPOINTS + TCSH_ENTRYPOINTS_RETIRED) + [
+        for rel in list(
+            BASH_ENTRYPOINTS
+            + (BASH_PROFILE_ENTRYPOINT,)
+            + BASH_ENTRYPOINTS_RETIRED
+            + TCSH_ENTRYPOINTS
+            + TCSH_ENTRYPOINTS_RETIRED
+        ) + [
             ".vimrc",
             ".vim",
             ".tmux",
@@ -4758,9 +4772,10 @@ def install_tealdeer_config(repo_dir, home):
 
 
 def _install_env_bash(repo_dir, home):
-    # The retired entrypoints are swept here too: install_bash() only recreates the
-    # live ones, so a legacy ~/.bash_login / ~/.profile link would otherwise survive.
-    for entrypoint in BASH_ENTRYPOINTS + BASH_ENTRYPOINTS_RETIRED:
+    # Sweep live and retired entrypoints (install_bash() recreates only the live
+    # ones): this heals a legacy ~/.profile -> bashrc link to the POSIX shim and
+    # drops the unreachable ~/.bash_login.
+    for entrypoint in BASH_ENTRYPOINTS + (BASH_PROFILE_ENTRYPOINT,) + BASH_ENTRYPOINTS_RETIRED:
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
     _mirror_shared_prefix(home, ("bash",))
