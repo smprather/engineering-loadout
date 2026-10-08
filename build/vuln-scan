@@ -91,7 +91,23 @@ def scan_lockfiles(tmp_dir):
     """Run osv-scanner over tmp_dir; return {(name, version): {advisories, fixed}}."""
     osv = security_tools.tool_path("osv-scanner")
     out_path = os.path.join(tmp_dir, "osv.json")
-    cmd = [osv, "scan", "source", "-r", tmp_dir, "--format", "json", "--output-file", out_path]
+    # --no-resolve: the wheelhouse listing IS the complete closure (offline
+    # installs resolve every dependency from it), so transitive resolution adds
+    # nothing -- and it hard-fails on first-party wheels that are not on PyPI
+    # (osv-scanner 2.6.0: 'package ... lefdef-tools: not found', exit 127).
+    # Match exactly the shipped set.
+    cmd = [
+        osv,
+        "scan",
+        "source",
+        "-r",
+        tmp_dir,
+        "--format",
+        "json",
+        "--output-file",
+        out_path,
+        "--no-resolve",
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode not in (0, 1):
         print(proc.stderr, file=sys.stderr)

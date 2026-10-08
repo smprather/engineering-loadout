@@ -29,6 +29,15 @@ manifest 4452).
     CACHED PASS right after it had failed. Container tests now use
     `FP_ROOTS_CONTAINER` (`578ffc7`); all-mode caching is unchanged.
 
+- **vuln-scan `--no-resolve` (release-blocking find).** The first dry-run
+  aborted at Step 5: osv-scanner 2.6.0's transitive resolver hard-fails on
+  `lefdef-tools` ("package System(7):lefdef-tools: not found", exit 127) -- a
+  first-party wheel that will never be on PyPI. The same scanner and wheelhouse
+  passed earlier runs, so the resolver's external lookups make that path
+  non-deterministic; the wheelhouse listing is already the complete dependency
+  closure, so transitive resolution adds nothing and is now disabled. CLEAN:
+  215 wheels, 0 advisories.
+
 Gates: full `tests/run-all --container` green afterwards -- T1 + T2 + T3
 `--full` + `--dynamic`, 22m52s fresh, both T3 tests genuinely re-run. Assurance
 re-pin is NOT owed (none of nvim/rust/treesitter/git-nvim was bumped). Next:
