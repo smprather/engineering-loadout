@@ -1,24 +1,19 @@
 #!/usr/bin/env python3.14
-"""vuln-scan -- known-vulnerability scan of the pinned closure via osv-scanner.
+"""vuln-scan -- known-vulnerability scan of the pinned wheelhouse via osv-scanner.
 
 Scope: the Python wheelhouse (newest version per package -- what a fresh uv
-resolve selects) and the Rust crate lock (assurance/crate-store.lock, converted
-to Cargo.lock shape for the scanner). Distro-provided libraries (glibc, openssl,
-Qt, ...) are not represented in OSV ecosystems and stay out of scope; the
-malware scan covers the shipped bytes.
+resolve selects). Distro-provided libraries (glibc, openssl, Qt, ...) are not
+represented in OSV ecosystems and stay out of scope; the malware scan covers
+the shipped bytes.
 
-Policy: a Python wheelhouse finding fails the run unless
-assurance/vuln-baseline.json accepts that exact package@version AND advisory id
-with a written reason. The Rust crate store is a source-only offline registry
-(crates are build inputs, not shipped executables, and the consumer's own
-Cargo.lock decides what is built), so its findings are printed as ADVISORY and
-do not block; --strict-rust makes them blocking too. Stale baseline entries
-(advisory no longer reported) are printed so the baseline cannot rot.
---update-baseline regenerates it; review every auto-generated reason.
+Policy: a finding fails the run unless assurance/vuln-baseline.json accepts
+that exact package@version AND advisory id with a written reason. Stale
+baseline entries (advisory no longer reported) are printed so the baseline
+cannot rot. --update-baseline regenerates it; review every auto-generated
+reason.
 
-    ./build/vuln-scan                  # gate: fail on unbaselined wheel findings
+    ./build/vuln-scan                  # gate: fail on unbaselined findings
     ./build/vuln-scan --all-versions   # also older wheelhouse versions
-    ./build/vuln-scan --strict-rust    # treat crate-store advisories as blocking
     ./build/vuln-scan --update-baseline
     ./build/vuln-scan --report /tmp/findings.json
 """
@@ -35,7 +30,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import security_tools  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUST_LOCK = os.path.join(REPO, "assurance", "crate-store.lock")
 BASELINE = os.path.join(REPO, "assurance", "vuln-baseline.json")
 
 
@@ -83,29 +77,6 @@ def all_wheels(wheels_dir):
     return out
 
 
-def read_rust_lock(path=RUST_LOCK):
-    """[(name, version)] from the loadout crate lock (name version sha256)."""
-    packages = []
-    if not os.path.isfile(path):
-        return packages
-    with open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) >= 2:
-                packages.append((parts[0], parts[1]))
-    return packages
-
-
-def cargo_lock_text(packages):
-    blocks = []
-    for name, version in packages:
-        blocks.append(f'[[package]]\nname = "{name}"\nversion = "{version}"\n')
-    return "\n".join(blocks)
-
-
 def _fixed_versions(vuln):
     fixed = set()
     for affected in vuln.get("affected", []):
@@ -134,15 +105,13 @@ def scan_lockfiles(tmp_dir):
         doc = json.load(fh)
     findings = {}
     for result in doc.get("results", []):
-        source = result.get("source", {}).get("path", "")
-        ecosystem = "rust" if source.endswith("Cargo.lock") else "wheel"
         for pkg in result.get("packages", []):
             p = pkg["package"]
             advisories = pkg.get("vulnerabilities", [])
             if not advisories:
                 continue
             key = (p["name"], p["version"])
-            entry = findings.setdefault(key, {"advisories": set(), "fixed": set(), "ecosystem": ecosystem})
+            entry = findings.setdefault(key, {"advisories": set(), "fixed": set()})
             for vuln in advisories:
                 entry["advisories"].add(vuln["id"])
                 entry["fixed"].update(_fixed_versions(vuln))
@@ -150,7 +119,6 @@ def scan_lockfiles(tmp_dir):
         key: {
             "advisories": sorted(value["advisories"]),
             "fixed": sorted(value["fixed"], key=_version_key),
-            "ecosystem": value["ecosystem"],
         }
         for key, value in findings.items()
     }
@@ -168,18 +136,15 @@ def load_baseline(path=BASELINE):
 
 
 def classify(findings, baseline):
-    """(blocking, advisory, stale): unbaselined wheel findings, unbaselined
-    rust findings, stale baseline (key, advisory) pairs."""
+    """(blocking, stale): unbaselined findings and stale baseline pairs."""
     accepted = baseline.get("accepted", {})
     blocking = {}
-    advisory = {}
     for (name, version), data in sorted(findings.items()):
         key = f"{name}@{version}"
         accepted_ids = set(accepted.get(key, {}).get("advisories", []))
         missing = [a for a in data["advisories"] if a not in accepted_ids]
         if missing:
-            target = blocking if data["ecosystem"] == "wheel" else advisory
-            target[key] = {"missing": missing, "fixed": data["fixed"]}
+            blocking[key] = {"missing": missing, "fixed": data["fixed"]}
     stale = []
     for key, entry in sorted(accepted.items()):
         if key not in {f"{n}@{v}" for n, v in findings}:
@@ -190,15 +155,13 @@ def classify(findings, baseline):
         gone = [a for a in entry.get("advisories", []) if a not in current]
         if gone:
             stale.append((key, gone))
-    return blocking, advisory, stale
+    return blocking, stale
 
 
-def write_baseline(findings, old_baseline, path=BASELINE, include_rust=False):
+def write_baseline(findings, old_baseline, path=BASELINE):
     accepted = {}
     old = old_baseline.get("accepted", {})
     for (name, version), data in sorted(findings.items()):
-        if data.get("ecosystem") == "rust" and not include_rust:
-            continue
         key = f"{name}@{version}"
         reason = old.get(key, {}).get("reason")
         if not reason:
@@ -221,7 +184,6 @@ def write_baseline(findings, old_baseline, path=BASELINE, include_rust=False):
 def main(argv):
     all_versions = "--all-versions" in argv
     update = "--update-baseline" in argv
-    strict_rust = "--strict-rust" in argv
     baseline_path = BASELINE
     report_path = None
     if "--baseline" in argv:
@@ -232,17 +194,12 @@ def main(argv):
     platform_dir = security_tools.payload_platform_dir()
     wheels_dir = os.path.join(platform_dir, "wheels")
     wheels = all_wheels(wheels_dir) if all_versions else newest_wheels(wheels_dir)
-    rust = read_rust_lock()
-    print(
-        f"vuln-scan: {len(wheels)} wheel package(s){' (all versions)' if all_versions else ' (newest per package)'}, {len(rust)} rust crate(s)"
-    )
+    print(f"vuln-scan: {len(wheels)} wheel package(s){' (all versions)' if all_versions else ' (newest per package)'}")
 
     with tempfile.TemporaryDirectory(prefix=".loadout-vuln-scan-") as tmp:
         with open(os.path.join(tmp, "requirements.txt"), "w") as fh:
             for name, version in wheels:
                 fh.write(f"{name}=={version}\n")
-        with open(os.path.join(tmp, "Cargo.lock"), "w") as fh:
-            fh.write(cargo_lock_text(rust))
         findings = scan_lockfiles(tmp)
 
     if report_path:
@@ -251,28 +208,22 @@ def main(argv):
             fh.write("\n")
 
     baseline = load_baseline(baseline_path)
-    blocking, advisory, stale = classify(findings, baseline)
+    blocking, stale = classify(findings, baseline)
 
     print(f"  {len(findings)} package(s) with advisories; {len(baseline.get('accepted', {}))} baseline entr(y/ies)")
     for key, data in sorted(blocking.items()):
         fixed = ", ".join(data["fixed"]) if data["fixed"] else "no fixed version published"
         print(f"  UNBASELINED  {key}: {', '.join(data['missing'])} (fixed: {fixed})")
-    for key, data in sorted(advisory.items()):
-        fixed = ", ".join(data["fixed"][:4]) if data["fixed"] else "no fixed version published"
-        print(f"  ADVISORY     {key}: {len(data['missing'])} advisory(ies) (fixed: {fixed})")
-    if advisory and not strict_rust:
-        print("  -> crate-store advisories are non-blocking (source-only registry; --strict-rust to enforce)")
     for key, ids in stale:
         print(f"  STALE BASELINE  {key}: {', '.join(ids)} no longer reported")
     if stale:
         print("  -> refresh the baseline with --update-baseline after reviewing")
 
     if update:
-        write_baseline(findings, baseline, baseline_path, include_rust=strict_rust)
-        scope = "wheels + rust" if strict_rust else "wheels"
-        print(f"  baseline written: {baseline_path} ({scope}; review every reason)")
+        write_baseline(findings, baseline, baseline_path)
+        print(f"  baseline written: {baseline_path} (review every reason)")
         return 0
-    if blocking or (strict_rust and advisory):
+    if blocking:
         print("\nvuln-scan: FAIL -- unbaselined advisories (see above).", file=sys.stderr)
         return 1
     print("vuln-scan: CLEAN -- every blocking advisory is baselined")

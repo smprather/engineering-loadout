@@ -26,7 +26,10 @@ from urllib.request import Request, urlopen
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28", "bin")
 RPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
-PATCHELF = os.path.expanduser("~/.local/bin/patchelf")
+# patchelf moved with the tree after the XDG migration (it now ships in the
+# loadout prefix); LOADOUT_PATCHELF is what build/build-shell exports in the
+# EL8 container. Resolve it rather than hardcoding the pre-migration path.
+PATCHELF = os.environ.get("LOADOUT_PATCHELF") or shutil.which("patchelf") or os.path.expanduser("~/.local/bin/patchelf")
 
 # URL templates copied from build/verify-binaries TOOLS (keep in sync).
 #
@@ -263,6 +266,8 @@ def main():
                 binpath = extract(archive, member, tmp)
             subprocess.run(["/usr/bin/strip", binpath], capture_output=True)
             if is_dynamic(binpath):
+                if not os.path.exists(PATCHELF):
+                    sys.exit(f"patchelf not found ({PATCHELF}); set LOADOUT_PATCHELF or install patchelf")
                 r = subprocess.run([PATCHELF, "--set-rpath", RPATH, binpath], capture_output=True)
                 if r.returncode != 0:
                     sys.exit(f"patchelf failed for {tool}: {r.stderr.decode()}")

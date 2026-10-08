@@ -28,4 +28,4 @@ result = "clean"
 "payload/el8.x86_64.glibc2p28/runtime/rust.tar.bz2.part-004" = "sha256:57a613fe709e75d99c60f8726dcc3d4b4b7a29a850e386cc10c7275c7e444454"
 
 [dynamic]
-result = "n/a"  # rustc/cargo are compilers; the ransomware-canary model does not apply. The offline toolchain + crate store are exercised end-to-end by tests/rust-offline-almalinux8 (cargo build --offline in the clean container).
+result = "n/a"  # rustc/cargo are compilers; the ransomware-canary model does not apply. The toolchain is a build-time prerequisite for source-built Rust tools; the shipped tools themselves are exercised by tests/prebuilt-binaries.

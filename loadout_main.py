@@ -203,7 +203,7 @@ BASH_ENTRYPOINTS = (".bashrc", ".bash_profile", ".bash_login", ".profile")
 NVIM_LAYERS = ("user",)
 
 # Repo-relative payload home: platform dirs, packages.json, fonts, tldr,
-# crate-store, treesitter prebuilt/vendor, pending-daemon. Renamed from the
+# treesitter prebuilt/vendor, pending-daemon. Renamed from the
 # historical "pre_built" in the 2026-07 reorg.
 PAYLOAD_DIR = "payload"
 
@@ -301,9 +301,9 @@ def _parse_namelist(raw):
 # `list --groups` and `describe`.
 _SYNTHETIC_GROUPS = {
     "@shared": "Every non-env, non-optional package -- install set for a shared/read-only tree.",
-    "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, rust, ...).",
+    "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, openssh, ...).",
     "@envs": "Bash + tcsh configuration (env-bash, env-tcsh); install other per-user config bundles explicitly.",
-    "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh, env-cargo).",
+    "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh).",
     "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
 
@@ -329,7 +329,7 @@ def expand_groups(names, registry, _stack=None):
     installs the two majority shells' config (env-bash + env-tcsh). Other env
     packages are installed by name or via @envs-all for the complete set. @shared skips packages flagged "optional": true; those
     install only when named explicitly or pulled in by a group that lists them
-    (e.g. surfer, the @rust trio, env-tcsh). @shared-all and @envs-all fold
+    (e.g. surfer, env-tcsh). @shared-all and @envs-all fold
     optional packages back in.
 
     There is no bare `all`: it used to mean "every NON-optional package", which is
@@ -393,16 +393,16 @@ def expand_groups(names, registry, _stack=None):
             # answer to "what is everything?" that drifts from those two.
             #
             # There is deliberately NO "@all minus the offline caches" variant.
-            # The caches (nvim-plugin-stash, treesitter-parsers,
-            # rust-crate-store, tldr-data) are ~23% of the payload and it is
-            # tempting to treat them as an optimisation for connected machines.
-            # They are not: this project ships a KNOWN-WORKING configuration of
-            # tools and their external dependencies, the way a distribution
-            # does. The pinned plugin set and the pinned crate set ARE the
-            # product. Dropping them does not yield a lighter loadout, it yields
-            # a different one that drifts against whatever upstream serves that
-            # day -- which is the problem this repo exists to solve. Someone
-            # online who wants newer plugins can still run `:Lazy update`.
+            # The caches (nvim-plugin-stash, treesitter-parsers, tldr-data) are
+            # a large share of the payload and it is tempting to treat them as
+            # an optimisation for connected machines. They are not: this project
+            # ships a KNOWN-WORKING configuration of tools and their external
+            # dependencies, the way a distribution does. The pinned plugin set
+            # and the pinned parser set ARE the product. Dropping them does not
+            # yield a lighter loadout, it yields a different one that drifts
+            # against whatever upstream serves that day -- which is the problem
+            # this repo exists to solve. Someone online who wants newer plugins
+            # can still run `:Lazy update`.
             out |= expand_groups(["@shared-all", "@envs-all"], registry, _stack + (name,))
             continue
         if name in _RETIRED_GROUPS:
@@ -3063,45 +3063,6 @@ def install_tldr_cache(repo_dir, home, selected_tools=None):
     print(f"  tldr page cache installed to {dest_dir}")
 
 
-def install_crate_store(repo_dir, home, selected_tools=None):
-    """Extract the bundled offline Cargo local-registry (rust-crate-store).
-
-    Archive lives at payload/crate-store/crate-store.tar.bz2 (arch-independent crate
-    sources) and is auto-chunked into .part-NNN by build-crate-store.sh, so it
-    is resolved through _bz2.resolve like the runtime archives. The store
-    (index/ + *.crate) is consumed offline via ~/.cargo/config.toml written by
-    the env-cargo package.
-    """
-    if selected_tools is not None and "rust-crate-store" not in selected_tools:
-        skipped("Rust crate store (rust-crate-store not selected)", "")
-        record_result("Rust crate store", "SKIP", "rust-crate-store not in selected packages")
-        return
-    archive = _bz2.resolve(os.path.join(repo_dir, PAYLOAD_DIR, "crate-store", "crate-store.tar.bz2"))
-    if archive is None:
-        skipped(
-            "payload/crate-store/crate-store.tar.bz2 not found in repo",
-            "run build scripts' build-crate-store.sh on a connected machine",
-        )
-        record_result("Rust crate store", "SKIP", "no bundled crate store archive")
-        return
-
-    store_dir = _resolve_install_to("~/.local/share/cargo/registry-store", home)
-    ensure_dir(os.path.dirname(store_dir), "Rust crate store")
-    if os.path.lexists(store_dir):
-        require_writable_parent(store_dir, "Rust crate store")
-        if os.path.isdir(store_dir) and not os.path.islink(store_dir):
-            require_writable_dir(store_dir, "Rust crate store")
-            shutil.rmtree(store_dir)
-        else:
-            os.unlink(store_dir)
-    ensure_dir(store_dir, "Rust crate store")
-
-    pv_extract_tar(archive, store_dir)
-    ncrate = len(glob_paths_glob(os.path.join(store_dir, "*.crate")))
-    record_result("Rust crate store", "OK", f"{archive} -> {store_dir}")
-    print(f"  Rust crate store installed to {store_dir} ({ncrate} crates)")
-
-
 def _validate_tar_members(members, dest_real):
     """Shared safety check for tar extraction.
 
@@ -5079,37 +5040,6 @@ def _install_env_zsh(repo_dir, home):
         lns(os.path.join(zsh_dir, "zshrc"), dest, verbose=True)
 
 
-def _install_env_cargo(repo_dir, home):
-    """Write a STOCK ~/.cargo/config.toml (no source replacement).
-
-    Online-first policy: cargo talks to crates.io normally. The offline
-    fallback is handled at shell level -- the loadout `cargo` function in
-    envs/bash/functions.sh (and tcsh helpers/cargo-wrap) probes crates.io
-    reachability per invocation and, only when unreachable AND the bundled
-    local-registry (rust-crate-store) exists, injects the replacement via
-    `cargo --config` CLI args. Upstream cargo has no source failover
-    (rust-lang/cargo#3066), so an unconditional replace-with here would make
-    the mirror total instead of a fallback and block any crate absent from
-    the store while online.
-    """
-    cargo_dir = os.path.join(home, ".cargo")
-    ensure_dir(cargo_dir, "cargo config")
-    text = (
-        "# Managed by loadout (env-cargo). Stock crates.io access -- online-first.\n"
-        "# When crates.io is unreachable, loadout's shell `cargo` wrapper\n"
-        "# automatically injects the bundled offline local-registry\n"
-        "# (rust-crate-store) as a source replacement for that command.\n"
-        "# Delete this file to manage cargo configuration yourself.\n"
-    )
-    dest = os.path.join(cargo_dir, "config.toml")
-    require_writable_parent(dest, "cargo config")
-    if os.path.exists(dest) or os.path.islink(dest):
-        require_writable_dir(dest, "cargo config")
-    with open(dest, "w") as f:
-        f.write(text)
-    print(f"  cargo stock config -> {dest} (offline fallback via shell cargo wrapper)")
-
-
 ENV_HANDLERS = {
     "env-bash": _install_env_bash,
     "env-nvim": _install_env_nvim,
@@ -5122,7 +5052,6 @@ ENV_HANDLERS = {
     "env-st": _install_env_st,
     "env-tcsh": _install_env_tcsh,
     "env-zsh": _install_env_zsh,
-    "env-cargo": _install_env_cargo,
 }
 
 
@@ -5139,7 +5068,6 @@ ENV_INSTALL_ORDER = (
     "env-st",
     "env-tcsh",
     "env-zsh",
-    "env-cargo",
 )
 
 # Package names hardcoded as phase gates elsewhere in this file (per-phase
@@ -5151,7 +5079,6 @@ _HARDCODED_GATE_PKGS = frozenset(
         "portable-python",
         "gobject-typelibs",
         "tldr-data",
-        "rust-crate-store",
         "vim",
         "gvim",
         "mate-terminal",
@@ -6491,7 +6418,6 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("prefer shims", install_prefer_shims, home, env_home, registry, selected_tools, silent=True)
     run_install_step("fonts", install_fonts, repo_dir, env_home, selected_tools, registry, args.no_backup)
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
-    run_install_step("Rust crate store", install_crate_store, repo_dir, home, selected_tools, silent=True)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)

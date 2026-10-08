@@ -12,13 +12,10 @@
 # node, which is exactly the build-box masking the floor check exists to catch.
 # Do not "simplify" this into a download.
 #
-# OFFLINE-REBUILDABLE. tree-sitter is listed in build/rust-tool-locks.txt, so its
-# Cargo.lock closure (295 crates) is folded into the shipped crate store and a
-# farm node can rebuild it with `cargo build --offline`. It was ABSENT from that
-# file until 2026-08-09 -- the tool was bundled but could never have been rebuilt
-# offline. If you bump the version here, re-pin it there and rebuild the store
-# (build/build-tool-crate-store.sh), or tests/run-all's crate-store policy check
-# will fail on the drift.
+# BUILD FROM SOURCE. Upstream publishes no EL8-safe prebuilt (the floor check
+# above explains why a download is not an option), so this needs a Rust
+# toolchain on the build host. That is a release-time prerequisite only: the
+# shipped binary is a normal payload bin and users never need cargo.
 #
 # Usage (run from any directory):
 #   /path/to/build-tree-sitter.sh --tag v0.26.12
@@ -83,29 +80,18 @@ git clone --quiet --depth 1 --branch "$tag" "$CLONE_URL" "$src" 2>/dev/null || {
 
 cargo_args="--release --locked"
 if [ "$offline" -eq 1 ]; then
-    # Proves the shipped store really can rebuild this tool with no network,
-    # which is the entire justification for carrying its closure. Uses the
-    # INSTALLED store via the user's ~/.cargo/config.toml, on purpose.
+    # Generic cargo --offline: build against whatever the caller's own cargo
+    # cache/config provides (a vendored tree, a local mirror, a warm cache).
     cargo_args="$cargo_args --offline"
-    echo "  building OFFLINE against the installed local-registry store"
+    echo "  building OFFLINE (cargo --offline; caller's cargo cache/config)"
 else
-    # ISOLATE CARGO_HOME for the online build.
-    #
-    # env-cargo writes a ~/.cargo/config.toml that replaces crates-io with the
-    # loadout's offline local-registry, so a plain `cargo build` on a machine
-    # with the loadout installed resolves against the INSTALLED store -- which is
-    # whatever was last deployed, not what we are about to ship. That store is
-    # missing anything newer, and the build dies with a misleading
-    #   failed to select a version for the requirement `anyhow = "^1.0.100"`
-    #   (locked to 1.0.103) ... perhaps a crate was updated and forgotten to be
-    #   re-vendored?
-    # which reads as a store-integrity problem rather than "you are pointed at
-    # the wrong store". Both crate-store builders isolate CARGO_HOME for exactly
-    # this reason (see HANDOFF 2026-08-04), and ADDING_BINARIES records the same
-    # bypass for surfer.
+    # ISOLATE CARGO_HOME for the online build: a caller's ~/.cargo/config.toml
+    # may point crates-io at a private mirror or a stale replace-with target, so
+    # the release build resolves against real crates.io in its own home. The
+    # same bypass is recorded for surfer in ADDING_BINARIES.
     CARGO_HOME="$workdir/cargo"
     export CARGO_HOME
-    echo "  building ONLINE with an isolated CARGO_HOME (bypasses the offline store)"
+    echo "  building ONLINE with an isolated CARGO_HOME (ignores the caller's cargo config)"
 fi
 
 echo "Building (cargo $cargo_args) ..."
@@ -170,5 +156,4 @@ echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
 echo "  python3.14 build/gen-content-manifest"
 echo "  python3.14 build/gen-readme-table"
-echo "  build/verify-crate-store --check-policy   # refs must match the registry"
 echo "  tests/prebuilt-binaries"

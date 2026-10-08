@@ -78,11 +78,9 @@ fi
 echo "Building surfer $tag from $src"
 
 # Fresh CARGO_HOME: keep the build isolated from any loadout-influenced cargo
-# resolution. Historically env-cargo's config redirected crates-io to the
-# offline registry-store (curated subset only); since 2026-08-22 the config is
-# stock but the shell wrapper injects that same replacement when crates.io is
-# unreachable. Surfer's pinned deps need real crates.io, so isolate the
-# registry/config here either way.
+# resolution. A caller's config may point crates-io at a private mirror or a
+# stale replace-with target; surfer's pinned deps need real crates.io, so
+# isolate the registry/config here either way.
 export CARGO_HOME="$workdir/cargo-home"
 mkdir -p "$CARGO_HOME"
 

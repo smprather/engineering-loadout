@@ -41,13 +41,12 @@ Two engines; the scan fails if **either** detects:
 `./build/release` runs it as a mandatory Step 0 in parallel with the other
 pre-release gates. The final tag/release step waits and aborts on detection.
 
-Coverage is the whole shipped tree -- **~69,000 files**: `bin`/`lib64`, runtime
-archives, wheels, typelibs, treesitter parsers, fonts, the tldr cache, the
-crate store, portable-python, and the Neovim + tmux plugin
-bundles. (Historically only `bin`/`lib64`/runtime were effectively scanned; the
-crate store scanned a dead path and portable-python was skipped entirely --
-both fixed. The Windows payload left coverage when the platform was retired
-2026-08-31.)
+Coverage is the whole shipped tree: `bin`/`lib64`, runtime
+archives, wheels, typelibs, treesitter parsers, fonts, the tldr cache,
+portable-python, and the Neovim + tmux plugin
+bundles. (Historically only `bin`/`lib64`/runtime were effectively scanned;
+portable-python was skipped entirely -- fixed. The Windows payload left
+coverage when the platform was retired 2026-08-31.)
 
 ```bash
 ./build/scan-for-malware              # full scan (YARA + ClamAV)
@@ -195,11 +194,6 @@ artifact SHA-256s, scan result, dynamic-analysis result, and package-specific
 pins:
 
 - **nvim** -- per-plugin commit pins (`envs/nvim/lazy-lock.json`).
-- **rust-crate-store** -- the full `name version cksum` closure in
-  `assurance/crate-store.lock`. `build/verify-crate-store` re-hashes every one of
-  the 2272 `.crate` files against the crates.io SHA-256 embedded in the store's
-  own registry index (run in Tier 2 as `--check-lock`), so a tampered crate
-  fails against both the store index and the signed-tag'd lock.
 - **treesitter-parsers** -- per-grammar `url + revision + shipped-.so sha256` for
   318 grammars in `assurance/treesitter-parser-locks.json`
   (`build/gen-parser-locks`, checked in Tier 1). Grammars are already
@@ -208,7 +202,7 @@ pins:
 
 `tests/assurance-check` re-hashes each record's artifacts against disk and
 validates these pins, so a record cannot silently drift from reality. `nvim`,
-`rust`, `rust-crate-store`, and `treesitter-parsers` are `status = verified`;
+`rust`, and `treesitter-parsers` are `status = verified`;
 coverage rolls out package-by-package.
 
 ## 8. Secret scan, vulnerability scan, SBOM (added 2026-09-24)
@@ -224,15 +218,12 @@ Three pipeline gates run on every release, alongside the malware scan:
   word lists). A real finding is a rotation event: an old-commit secret cannot
   be fixed by editing. `tests/security-pipeline` runs the tree scan in Tier 1.
 - **Vulnerability scan** (`build/vuln-scan`): osv-scanner over the wheelhouse
-  (newest version per package -- what a fresh uv resolve selects) and the crate
-  store, converted to Cargo.lock shape. Python findings must be accepted in
-  `assurance/vuln-baseline.json` by exact `package@version` + advisory id with a
-  written reason; stale entries are reported. Crate-store findings are
-  ADVISORY (source-only offline registry, not shipped executables) unless
-  `--strict-rust`. Distro libraries (glibc/openssl/Qt) are outside OSV
-  ecosystems and out of scope.
+  (newest version per package -- what a fresh uv resolve selects). Findings must
+  be accepted in `assurance/vuln-baseline.json` by exact `package@version` +
+  advisory id with a written reason; stale entries are reported. Distro
+  libraries (glibc/openssl/Qt) are outside OSV ecosystems and out of scope.
 - **SBOM** (`build/sbom`): a CycloneDX document for the release: Python wheels
-  via syft, the Rust crate store, and every registry package. Generated inside
+  via syft and every registry package. Generated inside
   the checksum step, so its sha256 is in `sha256sums.txt` and the signed tag
   binds it; attached to the release as `sbom.cdx.json`.
 

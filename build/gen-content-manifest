@@ -11,7 +11,7 @@ chunks are hashed as-stored, install-time verification hashes exactly the
 bytes it reads with no rejoin cost.
 
 Coverage: everything under payload/ (all platform dirs, packages.json, fonts,
-tldr, typelibs, wheels, crate-store, treesitter prebuilt) plus envs/*/vendor/
+tldr, typelibs, wheels, treesitter prebuilt) plus envs/*/vendor/
 (the nvim + tmux plugin bundles). Run after any payload change
 (strip-all-elf-binaries calls it); the result is committed and covered by the
 signed release tag.

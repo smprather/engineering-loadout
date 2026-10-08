@@ -211,8 +211,8 @@ split env install).
 
 `@shared` = all non-`env`, non-`optional` packages (binaries, libs,
 runtimes, fonts, data, python tools); `@shared-all` = the same with the
-`optional: true` packages folded back in (surfer, cicwave, rust,
-rust-crate-store) -- the full shared tree in one name. `@envs` = the Bash and
+`optional: true` packages folded back in (surfer, cicwave, rust)
+-- the full shared tree in one name. `@envs` = the Bash and
 tcsh configuration, installed into each user's `$HOME` with
 `./loadout install @envs`. Install other config bundles by
 name, or use `@envs-all` when every shell and editor config is intentional.

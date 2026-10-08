@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Smoke the optional packages no other gate ever probes: openssh, surfer,
 # cicwave, strace-ui. @shared excludes optional packages, so
-# tests/prebuilt-binaries and the Tier 3 container never see them (the rust
-# trio has its own tests/rust-offline-almalinux8).
+# tests/prebuilt-binaries and the Tier 3 container never see them.
 
 set -euo pipefail
 

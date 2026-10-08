@@ -14,7 +14,7 @@
 # shipped binary's own strings (which named /tmp/liberty-rebuild-*/liberty-filter).
 # Do not let that happen again -- every tool needs a note, see ADDING_BINARIES.md.
 #
-# OFFLINE BUILD, no crate-store needed. Unlike spice-subckt-rc-reduce (which has
+# OFFLINE BUILD (upstream-vendored closure). Unlike spice-subckt-rc-reduce (which has
 # zero dependencies) this crate depends on flate2 + regex, but upstream VENDORS
 # the whole closure: `vendor/` is committed (466 files) together with a
 # `.cargo/config.toml` that sets `replace-with = "vendored-sources"`. The build
@@ -161,7 +161,7 @@ echo "  executable: $bin_stem"
 [ -d vendor ] || { echo "ERROR: no vendor/ tree; upstream stopped vendoring its crates." >&2; exit 1; }
 grep -q 'replace-with[[:space:]]*=[[:space:]]*"vendored-sources"' .cargo/config.toml 2>/dev/null || {
     echo "ERROR: .cargo/config.toml does not redirect crates-io to vendored-sources." >&2
-    echo "  The offline build assumption is broken; this needs a crate-store path." >&2
+    echo "  The offline build assumption is broken; the vendored closure is incomplete." >&2
     exit 1
 }
 

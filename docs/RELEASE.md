@@ -128,8 +128,8 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
 - **build** — needs `build/build-<tool>.sh --tag vX.Y.Z` on this EL8 box.
 - **download** / **import-script** — `./build/update <name>` prints the exact recipe.
 
-Bumping any of `nvim`, `rust`, `rust-crate-store`, `treesitter`, `git-nvim`,
-`crate-store` **also requires an assurance re-pin** — see §4.
+Bumping any of `nvim`, `rust`, `treesitter`, or `git-nvim`
+**also requires an assurance re-pin** — see §4.
 
 ### 2b. Security data must be current, not merely present
 
@@ -215,7 +215,7 @@ release asset, absent from both the export and the manifest, and verified
 through `sha256sums.txt` -> `.content-manifest.fetched`.
 
 **Assurance ledger re-pin** — required when you bumped `nvim`, `rust`,
-`rust-crate-store`, `treesitter`, `git-nvim`, or `crate-store`. Update the
+`treesitter`, or `git-nvim`. Update the
 package's `assurance/records/<pkg>.toml` (version, ref, artifact hashes) and
 honestly re-run the scan and the dynamic detonation:
 
@@ -356,7 +356,7 @@ here blocks the release rather than half-publishing one.
 **Secret scan, vulnerability scan, SBOM.** Every release also runs
 `build/secret-scan` (tree + full history), `build/vuln-scan` (wheelhouse
 findings must be baselined in `assurance/vuln-baseline.json` with a written
-reason; crate-store findings are advisory), and `build/sbom` (inside the
+reason), and `build/sbom` (inside the
 checksum step, so `sbom.cdx.json` is covered by `sha256sums.txt` and attached
 as a fourth asset). None of the three is cached; together they cost about a
 minute. Step 3b is uncached too: it verifies `HEAD:.content-manifest` against
@@ -415,8 +415,8 @@ what now catches it — where nothing does, that is the open risk.
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |
 | 12 | `./build/update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
 | 13 | v2026.08.09 published with its commit on **no remote branch** — `./build/release` pushed the tag only, so `origin/main` still held the previous release while §9's checks all passed | `_push_release_branch()` runs first in the tag step (Step 6): refuses a detached HEAD, pushes the branch, re-reads `git ls-remote` to confirm |
-| 14 | `ty` was in `rust-tool-locks.txt` but absent from **every crate store ever built** — `astral-sh/ty` is a thin repo whose Rust source is a `ruff` submodule, so it had no root `Cargo.lock`, the builder WARNed and skipped it, and exited 0. `surfer` was missing the same way (submodule *path deps*, so its sync failed even though it has a lock). `--check-policy` printed OK throughout, because it compared **refs** to `packages.json` and never store **contents** | builder records per-tool crate counts to `assurance/crate-store-tools.tsv`; `verify-crate-store` gained `check_coverage()`, called from `check_policy()`, which fails on any pinned tool with 0 crates. Submodules are now initialised unconditionally after every clone |
-| 15 | `tests/rust-offline-almalinux8` cloned a **hardcoded ripgrep 15.1.0** while the locks and registry moved to 15.2.0 (`552fb4e`, 2026-08-04), so the offline rebuild could not resolve `globset`'s deps. Broken for 13 days: **nothing in `tests/run-all` ever invoked this test**, at any tier | version now read from `payload/packages.json` and passed as a `--build-arg` (same fix as entry 10); the test is wired into Tier 3, so `--container` runs it |
+| 14 | `ty` was in `rust-tool-locks.txt` but absent from **every crate store ever built** — `astral-sh/ty` is a thin repo whose Rust source is a `ruff` submodule, so it had no root `Cargo.lock`, the builder WARNed and skipped it, and exited 0. `surfer` was missing the same way (submodule *path deps*, so its sync failed even though it has a lock). `--check-policy` printed OK throughout, because it compared **refs** to `packages.json` and never store **contents** | builder records per-tool crate counts to `assurance/crate-store-tools.tsv`; `verify-crate-store` gained `check_coverage()`, called from `check_policy()`, which fails on any pinned tool with 0 crates. Submodules are now initialised unconditionally after every clone. **Retired 2026-10-08 with the crate store** -- the pins, coverage TSV and policy gate no longer exist; the lesson (a gate comparing refs, not contents, can false-green) stands |
+| 15 | `tests/rust-offline-almalinux8` cloned a **hardcoded ripgrep 15.1.0** while the locks and registry moved to 15.2.0 (`552fb4e`, 2026-08-04), so the offline rebuild could not resolve `globset`'s deps. Broken for 13 days: **nothing in `tests/run-all` ever invoked this test**, at any tier | version now read from `payload/packages.json` and passed as a `--build-arg` (same fix as entry 10); the test is wired into Tier 3, so `--container` runs it. **Retired 2026-10-08 with the crate store and its Tier 3 test.** |
 | 16 | 2026.10.2 shipped a `.content-manifest` with 158 entries for gitignored `.agents/`, `.codex/` and `.claude/` files under the vendored tmux-persist tree. `gen-content-manifest --check` passed on the release host (the files were right there) and failed MISSING in every clean clone or `git archive` export; `build/export` refused. A signed tag cannot catch this -- it signs the commit, and the commit's manifest listed files the commit does not contain | generation now excludes untracked+ignored files (`git ls-files -o -i --exclude-standard`); `--check` reports a present-but-unshipped entry as NOT-SHIPPED; `build/verify-manifest-export` verifies `HEAD:.content-manifest` against `git archive HEAD` in Tier 1, `build/export` and release Step 3b; `tests/content-manifest-shipped-set` pins the ignored-vendored-file cases |
 
 ### Open defect: release-notes version table (entry 9)

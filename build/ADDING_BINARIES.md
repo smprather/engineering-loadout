@@ -2407,12 +2407,12 @@ Other build details:
   sides. Stage-verify proves the round trip on a relocated copy (negative
   control on the staged tree first): module_path, zle+pcre load, fpath.
 
-## rust 1.96.0 -- Rust toolchain + offline crate store (repacked rustup stable)
+## rust 1.96.0 -- Rust toolchain (repacked rustup stable)
 
-Two coupled artifacts, built by `build/build-rust.sh` and
-`build/build-crate-store.sh`. Both are arch/source archives,
-NOT stripped/patchelf'd: `rust.tar.bz2` is in `strip-all-elf-binaries`'
-`NOSTRIP_ARCHIVE_PREFIXES` (stripping rustc_driver/LLVM corrupts the compiler).
+`build-rust.sh` repacks the rustup-installed **stable** toolchain. It is an
+arch/source archive, NOT stripped/patchelf'd: `rust.tar.bz2` is in
+`strip-all-elf-binaries`' `NOSTRIP_ARCHIVE_PREFIXES` (stripping
+rustc_driver/LLVM corrupts the compiler).
 
 ### Toolchain runtime (`payload/<platform>/runtime/rust.tar.bz2`, chunked)
 - Source: the rustup-installed **stable** toolchain (`rustup default 1.96.0`).
@@ -2430,56 +2430,16 @@ NOT stripped/patchelf'd: `rust.tar.bz2` is in `strip-all-elf-binaries`'
   5 `.part-NNN` chunks (build-rust.sh pre-splits at 40 MiB since NOSTRIP archives
   are not chunked by the strip pass; installer rejoins via `_bz2.resolve`).
 - Host prerequisite at compile time: a C toolchain (`gcc`/`cc` + `ld`) -- rustc
-  shells out to `cc` for the final link. The only thing the offline store can't
+  shells out to `cc` for the final link. The one thing a package manager can't
   remove; the AlmaLinux test image installs `gcc glibc-devel`.
 - Package: `rust` (kind runtime, sentinel `bin/cargo`, install_to `~/.local`).
+  Install with `./loadout install rust`. There is NO bundled registry: bring your
+  own dependency source (network, `cargo vendor`, or a private mirror).
 
-### Offline crate store (`rust/crate-store.tar.bz2`, chunked)
-Two builders write the same archive; the **superset** is what ships.
-
-- **Lean user store** -- `build-crate-store.sh` reads
-  `build/rust-crate-list.txt` (curated top crates, offline-first:
-  online/TLS/wasm crates removed -- see that file's REMOVED block), builds a seed
-  manifest, `cargo generate-lockfile` for the full transitive closure, then
-  `cargo local-registry --sync`. Ban guardrail (`aws-lc-sys aws-lc-rs`) FAILS the
-  build if a forbidden crate re-enters (with the `cargo tree -i` path). 219 seeds
-  -> 733 crates, ~106 MB bz2 / 3 chunks. Use this for a lean user-only store.
-
-- **Superset store (SHIPPED)** -- `build-tool-crate-store.sh` unions the curated
-  seed closure with **every loadout rust tool's `Cargo.lock`**
-  (`build/rust-tool-locks.txt`), so a farm node can rebuild the loadout's
-  own rust binaries offline. Mechanism: `cargo local-registry --sync` only
-  downloads what ONE manifest+lock resolves to and prunes the rest, so it syncs
-  each tool's clone into a per-tool store (exact pinned versions an offline tool
-  build needs), then **unions the per-tool stores** -- copy each `.crate` once and
-  union the per-crate index lines (the local-registry index is one JSON line per
-  version, so this is a clean merge; re-resolving to latest would drift off the
-  tools' pins). Here the ban is a WARNING, not a failure: a tool may legitimately
-  pin aws-lc (uv does). **19 stores -> 2272 crates, ~320 MB bz2 / 8 chunks.**
-  Covered: seeds + bat eza fd just ripgrep zoxide starship delta hyperfine stylua
-  uv fish numr models liberty-tools lefdef-tools. NOT covered (lock-gen failed at
-  build, fix later): `ty`, `time-plot`, `text-serdes` (uv's closure overlaps most
-  of ty). Verified: `models` and `ripgrep 15.1.0` both `cargo build --offline`
-  against this store on a clean AlmaLinux 8.10 (`--network none`).
-
-- Package: `rust-crate-store` (kind data; `install_crate_store` extracts to
-  `<prefix>/share/cargo/registry-store`).
-
-### Wiring + config
-- `env-cargo` (custom `_install_env_cargo`) writes a STOCK `~/.cargo/config.toml`
-  (no source replacement -- online-first). The offline fallback is shell-level:
-  the `cargo()` wrapper in envs/bash/functions.sh (tcsh: helpers/cargo-wrap)
-  injects a `replace-with` pointing at the installed store via `--config` CLI
-  args, only when crates.io is unreachable AND the store exists. Store path
-  honors `LOADOUT_CFG_SHARED_PREFIX` and the HOME/`--dest-dir` layouts. No
-  manual edits.
-- Group `@rust` = `rust` + `rust-crate-store` + `env-cargo`. Install offline:
-  `./loadout install @rust`.
-- Test offline on clean AlmaLinux 8.10:
-  `tests/rust-offline-almalinux8` (runs `--network none`).
-  Installs to `$HOME` then `--dest-dir /tmp/loadout-alt`, `cargo build --offline`s
-  a crate using anyhow/serde/serde_json/ratatui in each, then rebuilds
-  `ripgrep 15.1.0` from a build-time-baked source against the bundled store.
+(The offline crate store, `env-cargo`, the shell `cargo()` wrapper and the
+`@rust` group were retired 2026-10-08: offline Rust development on farm nodes was
+aspirational, and the subsystem cost 364 MB of payload plus a per-tool rebuild/
+pin treadmill. The toolchain itself is independent and stays.)
 
 ## vcd-toggle-profiler 891a391 -- VCD signal toggle profiler (C++17, EL8 SOURCE build)
 
@@ -2571,10 +2531,10 @@ build/build-surfer.sh --tag v0.7.0
 - **Submodules:** the **v0.7.0 tag** vendors `f128` and `instruction-decoder` as
   git submodules (path deps); `main` later switched them to `git =` deps. Clone
   with `--recurse-submodules` or the workspace fails to resolve `f128`.
-- **Offline crate-store trap:** the loadout's own `~/.cargo/config.toml`
-  (env-cargo) replaces crates-io with the offline `registry-store`, which only
-  holds the curated crate subset and lacks surfer's pins (e.g. `camino 1.2.1`).
-  The script sets a fresh `CARGO_HOME` so the build hits real crates.io.
+- **Cargo-config trap:** a caller's `~/.cargo/config.toml` may replace crates-io
+  with a private mirror or a stale `replace-with` target that lacks surfer's
+  pins (e.g. `camino 1.2.1`). The script sets a fresh `CARGO_HOME` so the build
+  hits real crates.io.
 - **Build:** `cargo build --release -p surfer`; release profile is `opt-level=3
   lto=true` with **no** `-march/target-cpu=native`, so the ~47 MB binary is
   farm-portable. Pulls extism/wasmtime + reqwest/rustls (plugin + online
@@ -3586,13 +3546,13 @@ for.
 **Prerequisites:** `rustc` + `cargo` (tested 1.96.0, `edition = "2021"`),
 `patchelf` at `~/.local/bin/patchelf`. No dev packages.
 
-### Offline build with no crate-store
+### Offline build with a vendored closure
 
 Unlike spice-subckt-rc-reduce (zero dependencies), this crate depends on `flate2`
 and `regex` -- but upstream **vendors the whole closure**: `vendor/` is committed
 (466 files) alongside a `.cargo/config.toml` with
 `replace-with = "vendored-sources"`. So the build runs `cargo build --release
---locked --offline` and needs neither the network nor `rust-crate-store`. The script
+--locked --offline` and needs neither the network nor a local registry. The script
 **asserts** both inputs before building, so a future upstream change that drops the
 vendor tree fails loudly here rather than silently reaching for the network on a
 build box that happens to have it.
@@ -3669,8 +3629,8 @@ upstream's README asks for 1.96+), `patchelf` at `~/.local/bin/patchelf`.
 Packaging is the standard strip -> patchelf -> bzip2 via `loadout_package_bin`.
 
 **Why this one is unusually easy:** `Cargo.lock` resolves to exactly ONE package
--- itself. Zero external crates. So the build needs no network and no offline
-crate-store (unlike `surfer` or the `@rust` trio), and there is nothing to
+-- itself. Zero external crates. So the build needs no network and no dependency
+source (unlike `surfer`), and there is nothing to
 vendor. The build script asserts this invariant (`grep -c '^\[\[package\]\]'
 Cargo.lock` must be 1) and fails loudly if upstream ever takes a dependency,
 rather than silently reaching for the network on some future build box.
@@ -4094,16 +4054,10 @@ pass even if the wrapper's relative path were wrong.
 **Build:** `build/build-prebuilt-bin.sh --tool ty --tag 0.0.70`
 and `build/build-prebuilt-bin.sh --tool mlr --tag v6.21.0`.
 
-> **`ty` is currently held at 0.0.69, and the script is not the reason.** `ty` is
-> a Rust tool, so bumping the registry without re-pinning
-> `build/rust-tool-locks.txt` makes `verify-crate-store --check-policy` fail:
-> the shipped crate store is built from those refs, so a stale one means the
-> store can no longer rebuild that tool **offline**. Re-pinning the locks alone
-> would silence the gate while leaving the store genuinely missing the new
-> dependency closure — do not do that. A real bump means
-> `build/build-tool-crate-store.sh` (320 MB of payload churn) **and** a
-> `crate-store` assurance re-pin, since that package has a record. `mlr` is Go
-> and is not in the crate store, so it bumps freely.
+> **`ty` bumps freely now.** It is a Rust tool, but the crate store and its
+> `rust-tool-locks.txt` / `verify-crate-store --check-policy` coupling were
+> retired 2026-10-08 (offline Rust development on farm nodes was aspirational).
+> `mlr` is Go and was never in the store. Both are plain prebuilt downloads.
 
 **This note exists because both packages had none.** `ty` and `mlr` were each
 bundled with no build script and no entry here, so nothing recorded where their
@@ -4648,9 +4602,8 @@ archive. It is the cheapest package shape in the repo, a lone `kind: bin`.
 The script **asserts** both properties rather than assuming them. A future
 release built against a newer toolchain would install cleanly on the dev box and
 be dead on a stock farm node -- how `tree-sitter` and `bottom` got rejected. If
-the glibc assertion ever fires, this becomes an EL8 Rust source build and needs a
-`build/rust-tool-locks.txt` pin so the offline crate store covers it (it has no
-pin today, correctly, because nothing is built from source).
+the glibc assertion ever fires, this becomes an EL8 Rust source build (cargo on
+the build host, like the other source-built Rust tools), not a download.
 
 ### Smoke: `--version` is not enough
 
@@ -4681,7 +4634,6 @@ for 0.26.11 during the 2026-08-04 sweep with no build script and no entry here,
 so the procedure existed nowhere at all.
 
 **Build:** `build/build-tree-sitter.sh --tag v0.26.12`
-(add `--offline` to prove the shipped crate store can rebuild it with no network)
 
 **Tag carries a leading `v`** -- upstream's convention. The script rejects a bare
 version rather than failing obscurely on the clone.
@@ -4693,14 +4645,10 @@ on a stock farm node. That is the build-box masking the floor check exists to
 catch, and it is why this must never be "simplified" into a download. The script
 re-asserts the floor on every build rather than trusting the toolchain.
 
-**Offline-rebuildable -- and it was NOT, until 2026-08-09.** `tree-sitter` was
-absent from `build/rust-tool-locks.txt` entirely, so its Cargo.lock closure was
-never folded into the shipped crate store: the tool was bundled but could not
-have been rebuilt offline by anyone. It is now pinned there (295 crates in the
-store). **If you bump the version here, re-pin it there and rebuild the store**
-with `build/build-tool-crate-store.sh`, or `tests/run-all`'s crate-store policy
-check fails on the drift -- which is exactly how the stale `uv`/`ty` pins from
-v2026.08.07 were caught.
+**Build host needs cargo, nothing else.** The tool is a normal payload bin: the
+`--offline` flag builds against whatever the caller's cargo cache/config
+provides. (The rust-tool-locks/crate-store machinery that used to pin this
+closure was retired 2026-10-08.)
 
 **Nothing bundled.** Rust static-links its own runtime, so the binary NEEDs only
 glibc components plus `libgcc_s.so.1`. The script fails on anything else.
@@ -4902,10 +4850,10 @@ cargo --version   # 1.96.0 used for this build
 
 What it does, and the three things that are load-bearing:
 
-1. **Fresh `CARGO_HOME`.** The loadout's own `~/.cargo/config.toml` (installed
-   by `env-cargo`) replaces crates.io with the offline local-registry store,
-   which cannot resolve helix's dependency graph. The script exports a private
-   `CARGO_HOME` under its work dir, so the user's offline config is neither used
+1. **Fresh `CARGO_HOME`.** A caller's `~/.cargo/config.toml` may replace
+   crates.io with a private mirror or a stale `replace-with` target, which
+   cannot resolve helix's dependency graph. The script exports a private
+   `CARGO_HOME` under its work dir, so the user's cargo config is neither used
    nor modified. Same workaround as `build-surfer.sh`.
 2. **Full clone, never `--depth 1`.** `git describe --tags` supplies the version
    string; a shallow clone has no tags and the script hard-fails rather than

@@ -1,5 +1,50 @@
 # Current Handoff
 
+## 2026-10-08: offline-Rust subsystem retired -- uv unpinned and bumped (UNRELEASED)
+
+**Decision (operator):** offline `cargo build` on farm nodes was aspirational.
+The crate store + its wiring are gone; the shipped Rust **toolchain** (`rust`
+runtime) and every prebuilt Rust **tool** stay, and build-host cargo for
+fish/tokei/numr/models/surfer + first-party maturin wheels was never the store.
+
+**Removed** (payload 3.3 GB -> 3.0 GB):
+- `payload/crate-store/` (10 parts, 364 MB), registry `rust-crate-store` +
+  `env-cargo` + `@rust`, and the installer's crate-store phase / env-cargo
+  handler / hardcoded gate.
+- Shell: bash `cargo()` wrapper + `loadout_net_probe` +
+  `LOADOUT_CFG_CARGO_PROBE_HOSTS`/`LOADOUT_NET_PROBE_TTL`; tcsh `helpers/cargo-wrap`
+  + alias/config wiring.
+- Build: `build-crate-store.sh`, `build-tool-crate-store.sh`,
+  `verify-crate-store`, `rust-crate-list.txt`, `rust-tool-locks.txt`,
+  `docker/almalinux8.10-rust.{Dockerfile,entrypoint}`; the crate-store inputs in
+  `sbom` / `vuln-scan` (which lost `--strict-rust`) / `scan-for-malware`;
+  `enhancement-request-cargo-offline-fallback.md`.
+- Tests: `cargo-offline-fallback` + `rust-offline-almalinux8` (T1/T3 entries);
+  the rust-lock cases in `security-pipeline`; `crate-store.lock`,
+  `crate-store-tools.tsv`, `records/crate-store.toml`. Kept: `records/rust.toml`.
+
+**Kept:** `rust` 1.96.0 runtime (5 chunks, NOSTRIP), `build/build-rust.sh`, all
+Rust tools. `./loadout install rust` now installs a toolchain with no bundled
+registry -- bring your own dependency source (network, `cargo vendor`, mirror).
+
+**Bumped/unpinned:** uv 0.12.17 -> 0.12.23 (`build/update-prebuilt uv=0.12.23`,
+in-container); ty/delta/hyperfine lost `pin_reason` and ride the next currency
+sweep. `build/update-prebuilt` now resolves patchelf via
+`LOADOUT_PATCHELF` -> PATH -> legacy `~/.local/bin` (the XDG migration moved it)
+and fails clearly when missing.
+
+**Verified:** registry/completion/README regenerated (stale `rust-crate-store`
+README row removed by hand -- the generator only warns); `content-manifest` OK
+(4620 -> 4452 across both changes), `installed-sizes` OK (6368), README table OK,
+strip pass clean. T1 focused: registry-integrity, security-pipeline,
+assurance-check, content-verify, update-cadence, check-installer PASS. T2:
+`install-linux-tmp-home` (@shared-all @envs-all; with the stale
+`LOADOUT_CFG_SHARED_PREFIX` unset) and `uv-launchers` PASS. `ty` advisory
+unchanged (7 diagnostics before/after; the stale "11" note in ty.toml corrected).
+
+**Release implication:** registry + installer change => the next release is
+class C (Tier 3 + currency sweep required).
+
 ## 2026-10-07 (2): .content-manifest shipped-set fix -- the export blocker (RELEASED as 2026.10.3)
 
 **The defect.** The committed `.content-manifest` in 2026.10.2 listed 158 files
@@ -139,10 +184,12 @@ a commented opt-in, and `tests/install-env-tmux-nvim-layers` asserts both the
 defaults and a real-server override (managed off -> user layer on).
 `docs/TMUX.md` documents it. The operator's live user layer enables it.
 
-Last updated: 2026-10-07 (**released 2026.10.3** -- the `.content-manifest`
-shipped-set fix + clean-export gate, class A; section-9 verified: signed tag,
-4 assets, published manifest byte-identical to local, origin/main == tag).
-Previous: 2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).
+Last updated: 2026-10-08 (**UNRELEASED**: offline-Rust subsystem retired -- crate
+store + env-cargo + cargo wrappers gone, `rust` toolchain kept, uv bumped to
+0.12.23; next release is class C).
+Previous: 2026.10.3 (`.content-manifest` shipped-set fix + clean-export gate,
+class A; section-9 verified: signed tag, 4 assets, origin/main == tag).
+2026.10.2 (uv/uvx launchers + xfce4-terminal; verified 2026-10-07).
 Prior releases: 2026.10.1 (October currency sweep on top of the XDG
 re-architecture), `v2026.09.23` RELEASED + verified
 (release commit `032c1d0`). Committed since v2026.09.18: `b6e769a` (librelane

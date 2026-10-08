@@ -79,16 +79,6 @@ def check_record(path):
             f"{plugins.get('count')} != {len(lock)}",
         )
 
-    # crate store: the committed closure lock must exist and match the count
-    cs = rec.get("crate_store")
-    if cs:
-        lock_path = os.path.join(REPO, cs["lock"])
-        if os.path.isfile(lock_path):
-            n = sum(1 for line in open(lock_path, encoding="utf-8") if line.strip())
-            check(f"{pkg}: crate count matches {cs['lock']}", cs.get("count") == n, f"{cs.get('count')} != {n}")
-        else:
-            check(f"{pkg}: crate-store lock present", False, cs["lock"])
-
     # treesitter: the committed parser-locks must exist and match the count
     ps = rec.get("parsers")
     if ps:

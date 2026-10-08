@@ -101,7 +101,7 @@ case "${MAX_GLIBC:-GLIBC_2.0}" in
     *)
         echo "ERROR: needs $MAX_GLIBC; EL8 has glibc 2.28." >&2
         echo "       The upstream prebuilt is no longer usable -- this tool would" >&2
-        echo "       have to become an EL8 source build (Rust, see the crate store)." >&2
+        echo "       have to become an EL8 source build (Rust, cargo on the build host)." >&2
         exit 1
         ;;
 esac

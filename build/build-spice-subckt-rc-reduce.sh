@@ -4,9 +4,8 @@
 #
 # First-party project (github.com/smprather). Pure Rust, and unusually clean to
 # package: Cargo.lock resolves to exactly ONE package -- itself. There are no
-# external crates at all, so the build needs no network and no offline
-# crate-store, unlike surfer or the @rust trio. Do not add a rust-crate-store
-# dependency for it.
+# external crates at all, so the build needs no network (and no vendored or
+# local-registry dependency source).
 #
 # The binary NEEDs only glibc and libgcc_s, both of which are on every EL8
 # target and both of which the loadout must NEVER bundle (see AGENTS.md ->
@@ -97,13 +96,13 @@ echo "  executable: $BIN_STEM"
 
 # Guard the no-dependency invariant this script's packaging relies on. If
 # upstream ever takes a crate dependency, the offline build assumption breaks
-# and this needs the crate-store treatment -- fail loudly rather than silently
-# reaching for the network on some future build box.
+# and the build needs a real dependency source (network or vendor) -- fail
+# loudly rather than silently reaching for the network on some future build box.
 dep_count=$(grep -c '^\[\[package\]\]' Cargo.lock || true)
 if [ "$dep_count" -ne 1 ]; then
     echo "ERROR: Cargo.lock now resolves $dep_count packages (expected exactly 1: itself)." >&2
     echo "  Upstream took a crate dependency. This build is no longer dependency-free," >&2
-    echo "  so it needs an offline crate-store path before it can be bundled." >&2
+    echo "  so it needs a vendored or local-registry dependency source before it can be bundled." >&2
     exit 1
 fi
 

@@ -286,8 +286,7 @@ backend avoids this.
 parallel: `scan-for-malware`, `tests/prebuilt-binaries`,
 `build/farm-versions --format tsv`, `sha256sums.txt` + SBOM generation,
 `build/secret-scan` (tree + history), and `build/vuln-scan` (osv-scanner;
-wheelhouse findings must be baselined in `assurance/vuln-baseline.json`,
-crate-store findings are advisory). Final tag/release work waits for those
+wheelhouse findings must be baselined in `assurance/vuln-baseline.json`). Final tag/release work waits for those
 gates; malware scan, binary smoke, secret scan, vulnerability scan, and
 checksum/SBOM generation are mandatory. `scan-for-malware` caches only clean results
 under `${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/malware-scan-v1/`; its

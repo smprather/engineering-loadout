@@ -3,9 +3,7 @@
 
 syft (pinned in build/security_tools.py) catalogs the Python wheelhouse; wheels
 are zip archives, so they are extracted to a temp tree first (syft's python
-cataloger reads the *.dist-info/METADATA inside). syft does not understand
-assurance/crate-store.lock (it is a loadout lock, not a Cargo.lock), so the
-Rust crate components are appended from that lock, and the registry's own
+cataloger reads the *.dist-info/METADATA inside). The registry's own
 binaries/runtimes are appended from payload/packages.json. Composition is
 recorded in the document's metadata.properties.
 
@@ -29,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import security_tools  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUST_LOCK = os.path.join(REPO, "assurance", "crate-store.lock")
 REGISTRY = os.path.join(REPO, "payload", "packages.json")
 
 
@@ -41,22 +38,6 @@ def _safe_extract_wheel(wheel_path, dest):
             if name.startswith(("/", "\\")) or ".." in name.replace("\\", "/").split("/"):
                 continue
             zf.extract(member, dest)
-
-
-def _rust_components():
-    """[(name, version)] from the loadout crate lock (name version sha256)."""
-    packages = []
-    if not os.path.isfile(RUST_LOCK):
-        return packages
-    with open(RUST_LOCK) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) >= 2:
-                packages.append((parts[0], parts[1]))
-    return packages
 
 
 def _registry_components():
@@ -104,7 +85,7 @@ def main(argv):
         # Directory scans include syft's file cataloger by default, which emits
         # one component per extracted file (~28k of them). The SBOM's purpose is
         # the dependency inventory, so restrict to the python cataloger; the
-        # crate lock and registry components are appended below.
+        # registry components are appended below.
         proc = subprocess.run(
             [syft, f"dir:{tree}", "-o", "cyclonedx-json", "-q", "--override-default-catalogers", "python"],
             capture_output=True,
@@ -132,13 +113,7 @@ def main(argv):
             dep["dependsOn"] = [r for r in dep.get("dependsOn", []) if r not in file_refs]
         doc["dependencies"] = [d for d in doc.get("dependencies", []) if d.get("ref") not in file_refs]
     seen = {(c.get("name"), c.get("version"), c.get("purl")) for c in components}
-    added_rust = added_registry = 0
-    for name, version in _rust_components():
-        key = (name, version, f"pkg:cargo/{name}@{version}")
-        if key not in seen:
-            components.append(_component(name, version, "library", key[2]))
-            seen.add(key)
-            added_rust += 1
+    added_registry = 0
     for name, version, kind in _registry_components():
         key = (name, version, f"pkg:generic/{name}@{version}")
         if key not in seen:
@@ -156,9 +131,8 @@ def main(argv):
 
     meta = doc.setdefault("metadata", {})
     props = meta.setdefault("properties", [])
-    props.append({"name": "loadout:source", "value": "syft (wheels) + crate-store.lock + packages.json"})
+    props.append({"name": "loadout:source", "value": "syft (wheels) + packages.json"})
     props.append({"name": "loadout:wheels", "value": str(len(wheels))})
-    props.append({"name": "loadout:rust-added", "value": str(added_rust)})
     props.append({"name": "loadout:registry-added", "value": str(added_registry)})
 
     with open(output, "w") as fh:

@@ -338,7 +338,7 @@ OpenSSH for those.
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
 | ty | bin | 0.0.82 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
-| uv | bin | 0.12.17 | Extremely fast Python package and project manager |
+| uv | bin | 0.12.23 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.1169 | Vi IMproved text editor |
 | gvim | bin | 9.2.1169 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
@@ -388,7 +388,6 @@ OpenSSH for those.
 | models | bin | 0.14.1 | TUI/CLI to browse AI models + benchmarks from models.dev (needs network for live data) |
 | modules | runtime | 5.6.1 | Environment Modules — module load/unload for shell environment management (HPC-style) |
 | rust | runtime | 1.96.0 | Rust toolchain — rustc + cargo + std libraries (offline source build target) |
-| rust-crate-store | data |  | Offline Cargo local-registry (top crates.io crates + full dependency closure) |
 | espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |

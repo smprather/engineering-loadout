@@ -136,10 +136,10 @@ DESCRIBE=$(git -C "$SRC" describe --tags 2> /dev/null || echo "")
 echo "  commit:   $SHA"
 echo "  describe: $DESCRIBE"
 
-# The loadout's own ~/.cargo/config.toml (installed by env-cargo) replaces
-# crates.io with the offline local-registry store, which cannot resolve helix's
-# dependency graph. Build under a private CARGO_HOME so the user's offline
-# config is neither used nor modified. Same workaround as build-surfer.sh.
+# A caller's ~/.cargo/config.toml may point crates-io at a private mirror or a
+# stale replace-with target, which cannot resolve helix's dependency graph.
+# Build under a private CARGO_HOME so the user's cargo config is neither used nor
+# modified. Same workaround as build-surfer.sh.
 export CARGO_HOME="$WORK/cargo-home"
 
 echo "==> Building release binary ..."

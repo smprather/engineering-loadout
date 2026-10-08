@@ -251,7 +251,6 @@ run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" "$PY" build/gen-readme-table --check
 run_test "assurance-check" "$PY" tests/assurance-check
 run_test "env-shell-parity" "$PY" tests/env-shell-parity
-run_test "cargo-offline-fallback" "$PY" tests/cargo-offline-fallback
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
@@ -279,8 +278,8 @@ if [ "$FAST" -eq 1 ]; then
 fi
 
 # --- Tier 2: integration installs into temp roots --------------------------
-# Installer-driven tests use --deps auto (per-test payload deps). The two
-# non-installer checks (completion, crate-store) keep the global `all` cache.
+# Installer-driven tests use --deps auto (per-test payload deps). The
+# completion check keeps the global `all` cache.
 run_test "install-fonts-rejoin" --deps auto "$PY" tests/install-fonts-rejoin
 run_test "install-modules" --deps auto tests/install-modules
 run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
@@ -300,8 +299,6 @@ run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
 run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
 run_test "install-xdesk" --deps auto tests/install-xdesk
 run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
-run_test "crate-store integrity" "$PY" build/verify-crate-store --check-lock
-run_test "crate-store policy" "$PY" build/verify-crate-store --check-policy
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------
 if [ "$CONTAINER" -eq 1 ]; then
@@ -309,14 +306,6 @@ if [ "$CONTAINER" -eq 1 ]; then
         tests/prebuilt-binaries-almalinux8 --full
     run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" --deps container \
         tests/prebuilt-binaries-almalinux8 --no-build --dynamic
-    # The crate store's whole reason to exist is `cargo build --offline` on a
-    # farm node, and NOTHING in this suite exercised it -- so when the tool
-    # locks moved ripgrep to 15.2.0 on 2026-08-04 and the container kept
-    # cloning 15.1.0, the offline rebuild broke and stayed broken for 13 days.
-    # verify-crate-store checks hashes and coverage; only this proves the
-    # closure actually resolves.
-    run_test "rust offline rebuild from the crate store (network isolated)" --deps container \
-        tests/rust-offline-almalinux8
 fi
 
 echo

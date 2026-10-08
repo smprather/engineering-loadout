@@ -277,7 +277,7 @@ def _sbom_section_md():
             "## SBOM",
             "",
             "`sbom.cdx.json` (CycloneDX) inventories the shipped closure: every Python wheel",
-            "(syft), the offline Rust crate store, and every registry package. Its SHA-256 is",
+            "(syft) and every registry package. Its SHA-256 is",
             "in the checksums table above, so the signed tag binds it like any other asset.",
         ]
     )
