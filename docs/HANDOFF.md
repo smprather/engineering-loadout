@@ -1,5 +1,30 @@
 # Current Handoff
 
+## 2026-10-08 (14): housekeeping -- stale `codex/…` branch pruned, `--fonts-dir` closed
+
+Small post-release sweep of the loose ends named in entry (13).
+
+- **Git**: `codex/tmux-nvim-two-layer` (`48fecae`, fully merged into
+  `origin/main`) and its prunable `/tmp/engineering-loadout-tmux-nvim-layers`
+  worktree registration are gone (`git worktree prune` + `git branch -d`).
+  `/var/tmp/mk-baseline` (detached `b6e769a`) is left alone as the baseline.
+- **`--fonts-dir` / `LOADOUT_FONTS_DIR`: closed, no flag.** The routing covers
+  the reported shared-tree case, and a CLI flag is the wrong shape for a
+  deployment-wide location -- repeating it per install invites two roots to
+  disagree about where the generated `loadout-fonts.conf` lives and which
+  `<dir>` it advertises. Manual escape hatch stays `--skip font-*` + a symlink
+  (or a caller-set `FONTCONFIG_FILE`). Reopen only on a real
+  destination-lifecycle need.
+- **`tests/install-linux-tmp-home` stale-prefix follow-up (entry (6)): fixed in
+  W6** -- the test unsets a caller's `LOADOUT_CFG_SHARED_PREFIX`, and entry (6)
+  now says so.
+
+Still open, unchanged: the release-notes version table defect (RELEASE.md
+failure catalogue entry 9, `farm-versions` instead of `packages.json`); a 503
+retry path for scrape-style version sources in `check-versions` (`ncdu`); vim
+rebuild hygiene -- drop the spurious `libpixman-1.so.0` NEEDED and its registry
+declaration (entry (4)).
+
 ## 2026-10-08 (13): 2026.10.6 RELEASED and verified (envs cleanup W1-W5)
 
 Class C release cut from `da81ee4` via `docs/RELEASE.md` §0-§9. Signed tag
@@ -266,8 +291,9 @@ per-user copy was pure duplication and, on a quota'd account, impossible.
 - Follow-up (pre-existing, not touched): `tests/install-linux-tmp-home`
   inherits a caller's `LOADOUT_CFG_SHARED_PREFIX` (it overrides HOME/XDG but
   not that), so a dev shell whose baked prefix is stale fails its tealdeer
-  assertion. It passes with the variable unset and in the container. Harden
-  with `env -u` next time that test is touched.
+  assertion. It passes with the variable unset and in the container. **FIXED
+  in W6** (the class C run hit it; the test now unsets the variable -- entry
+  (12)).
 - Explicitly NOT done: `--fonts-dir` / `LOADOUT_FONTS_DIR`. The routing covers
   the reported case and a second destination surface needs a lifecycle
   decision; `--skip font-*` plus a symlink remains the manual escape hatch.
