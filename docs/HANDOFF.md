@@ -1,5 +1,36 @@
 # Current Handoff
 
+## 2026-10-09 (1): `loadout search` GROUPS column -- direct + synthetic membership (UNRELEASED)
+
+Operator request: see which groups contain each search hit. Bounded change
+(approved in-session, option b: direct + synthetic).
+
+- `loadout_main.py`: `cmd_search` gains a GROUPS column between VERSION and
+  DESCRIPTION, rendered by the same `_list_table` two-elastic-column optimiser
+  `list` already uses (GROUPS wraps at commas). Each hit lists the registry
+  @groups that name it directly (nested groups included, matching `info`'s
+  `groups:` line) plus the synthetic sweeps it belongs to (@shared /
+  @shared-all / @envs / @envs-all / @all). Group hits show their parent
+  groups; synthetic groups hold leaf packages only, so they never add
+  group-on-group entries. `cmd_list`'s inline direct reverse map is factored
+  out as `_direct_pkg_groups()`; new `_synthetic_pkg_groups()` expands each
+  synthetic group once per invocation.
+- New T1 `tests/search-groups` (read-only, no install): pins the GROUPS
+  header, vim -> @editor-cli + @shared/@shared-all/@all, env-tmux NOT in
+  @shared but in @envs-all, env-bash in @envs, `@editor-cli` -> parent
+  `@editor-suite`, a `list` direct-only regression guard, and the unchanged
+  no-match path (message + rc 1). Wired into `tests/run-all` T1.
+- Docs synced: AGENTS CLI verb + test list, README/INSTALLATION/ARCHITECTURE/
+  copilot `search` one-liners, `search` short_help/docstring. Completion
+  regenerated-checked: unchanged (no verb/flag change).
+- Release class: next release is class C (`loadout_main.py` touched).
+  Payload/manifest untouched -- `.content-manifest` roots do not include
+  `loadout_main.py`/docs/tests; a regen ran as a no-op and installed-sizes is
+  in sync.
+
+Gates: `tests/run-all --fast` green (including the new `search-groups`);
+manual `search`/`list`/`--tag` probes; py_compile + ruff check/format.
+
 ## 2026-10-08 (14): housekeeping -- stale `codex/…` branch pruned, `--fonts-dir` closed
 
 Small post-release sweep of the loose ends named in entry (13).

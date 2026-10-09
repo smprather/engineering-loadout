@@ -111,7 +111,7 @@ Name packages or groups the same way `dnf` or `apt` works:
 ./loadout list                                            # browse packages
 ./loadout list vim helix                                  # name matches either filter
 ./loadout list --tag editor                               # filter by tag
-./loadout search vim                                      # substring search
+./loadout search vim                                      # substring search (shows @groups)
 ./loadout info gvim                                       # details for one package
 ./loadout install octave --dry-run                        # preview only
 ```

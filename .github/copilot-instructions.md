@@ -33,7 +33,7 @@ the parentheses).
 ./loadout list vim helix                        # names matching either filter
 ./loadout list --groups                         # all @-groups
 ./loadout list --tag editor                     # filter by tag
-./loadout search vim                            # name/desc/tag substring search
+./loadout search vim                            # name/desc/tag search, GROUPS col
 ./loadout info gvim                             # metadata + reverse-deps
 ./loadout info @core-cli                        # group members
 ./loadout resolve gvim                          # dry-run resolver

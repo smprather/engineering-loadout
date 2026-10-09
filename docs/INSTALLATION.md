@@ -36,7 +36,7 @@ run it under the bundled interpreter or another 3.14+ build.
 ./loadout list                                # show all packages
 ./loadout list --groups                       # show all @groups
 ./loadout list --tag editor                   # filter packages by tag
-./loadout search vim                          # case-insensitive substring search
+./loadout search vim                          # substring search; shows @groups
 ./loadout info gvim                           # full package metadata + reverse-deps
 ./loadout info @core-cli                      # group membership
 ./loadout resolve gvim                        # dry-run resolver, prints set by kind

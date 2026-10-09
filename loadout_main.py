@@ -5553,6 +5553,34 @@ def _matches_name_filters(name, patterns):
     return not patterns or any(pattern.lower() in lowered_name for pattern in patterns)
 
 
+def _direct_pkg_groups(registry):
+    """Map member name -> sorted registry @groups that name it directly.
+
+    Direct membership only, matching cmd_describe's 'groups:' line. Groups may
+    themselves be members of other groups (e.g. @editor-cli in @editor-suite).
+    """
+    pkg_groups = {}
+    for gname, gentry in registry.items():
+        if gentry.get("kind") != "group":
+            continue
+        for m in gentry.get("members", []):
+            pkg_groups.setdefault(m, []).append(gname)
+    return pkg_groups
+
+
+def _synthetic_pkg_groups(registry):
+    """Map package name -> sorted synthetic @groups (@shared, @all, ...) holding it.
+
+    The synthetic groups expand at runtime; each is expanded once per call.
+    Their members are leaf packages only, so group entries never appear here.
+    """
+    syn_groups = {}
+    for gname in _SYNTHETIC_GROUPS:
+        for member in expand_groups([gname], registry):
+            syn_groups.setdefault(member, []).append(gname)
+    return syn_groups
+
+
 def cmd_list(args, registry):
     """Print package or group table, optionally filtered by name."""
     patterns = getattr(args, "patterns", ())
@@ -5581,14 +5609,9 @@ def cmd_list(args, registry):
         )
         return 0
     tag = args.tag
-    # Build reverse map: pkg name -> sorted list of @groups that directly
-    # name it in their members list (matches cmd_describe's 'groups:' line).
-    pkg_groups = {}
-    for gname, gentry in registry.items():
-        if gentry.get("kind") != "group":
-            continue
-        for m in gentry.get("members", []):
-            pkg_groups.setdefault(m, []).append(gname)
+    # Reverse map: pkg name -> sorted list of @groups that directly name it
+    # (matches cmd_describe's 'groups:' line).
+    pkg_groups = _direct_pkg_groups(registry)
     rows = []
     for n in sorted(registry):
         entry = registry[n]
@@ -6648,9 +6671,13 @@ def cmd_search(args, registry):
     """Case-insensitive substring search over package name, description, tags.
 
     Name hits ranked above description/tag hits (dnf-style). Groups included.
+    The GROUPS column shows each hit's membership: direct registry groups plus
+    the synthetic sweeps (@shared, @shared-all, @envs, @envs-all, @all).
     """
     pat = args.pattern.lower()
     tag = getattr(args, "tag", None)
+    pkg_groups = _direct_pkg_groups(registry)
+    syn_groups = _synthetic_pkg_groups(registry)
     name_hits = []
     desc_hits = []
     for name in sorted(registry):
@@ -6669,11 +6696,13 @@ def cmd_search(args, registry):
             desc_hits.append((name, entry))
     rows = []
     for name, entry in name_hits + desc_hits:
+        groups = sorted(set(pkg_groups.get(name, [])) | set(syn_groups.get(name, [])))
         rows.append(
             (
                 name,
                 entry.get("kind", ""),
                 entry.get("version", ""),
+                ", ".join(groups),
                 entry.get("description", ""),
             )
         )
@@ -6686,6 +6715,7 @@ def cmd_search(args, registry):
             {"name": "PACKAGE", "style": "bold cyan"},
             {"name": "KIND"},
             {"name": "VERSION"},
+            {"name": "GROUPS", "wrap": "comma"},
             {"name": "DESCRIPTION", "wrap": "word", "min_width": 30},
         ],
     )
@@ -7229,12 +7259,16 @@ def cli_list(ctx, patterns, list_groups, tag, installed):
     ctx.exit(cmd_list(args, ctx.obj["registry"]))
 
 
-@cli.command(name="search", short_help="Search packages by name, description, tags.")
+@cli.command(name="search", short_help="Search packages by name, description, tags (shows groups).")
 @click.argument("pattern")
 @click.option("--tag", default=None, help="Filter results by tag.")
 @click.pass_context
 def cli_search(ctx, pattern, tag):
-    """Case-insensitive substring search across package name, description, and tags."""
+    """Case-insensitive substring search across package name, description, and tags.
+
+    Each hit's GROUPS column lists the @groups that contain it -- direct
+    registry groups plus the synthetic sweeps (@shared, @envs, ...).
+    """
     args = _ctx_args(ctx, pattern=pattern, tag=tag)
     ctx.exit(cmd_search(args, ctx.obj["registry"]))
 

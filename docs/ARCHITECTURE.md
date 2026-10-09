@@ -81,7 +81,7 @@ curated mega-group is retired: the resolver raises a loud error naming
 ./loadout list --groups                         # all @-groups + member counts
 ./loadout list --groups editor cli              # group names matching either filter
 ./loadout list --tag editor                     # filter by tag
-./loadout search vim                            # case-insensitive substring search
+./loadout search vim                            # substring search; shows @groups
 ./loadout info gvim                             # metadata + reverse-deps + group memberships
 ./loadout info @core-cli                        # group members
 ./loadout resolve gvim                          # dry-run; prints resolved set by kind

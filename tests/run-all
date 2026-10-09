@@ -262,6 +262,7 @@ run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
 run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
 run_test "registry-integrity" "$PY" tests/registry-integrity
+run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
