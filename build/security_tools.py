@@ -96,6 +96,8 @@ def _fetch(name, pin):
                 if not member.isfile():
                     raise RuntimeError("{} in {} is not a regular file".format(pin["member"], pin["url"]))
                 src = tf.extractfile(member)
+                if src is None:  # unreachable after isfile(), but keep the invariant explicit
+                    raise RuntimeError("{} in {} is not extractable".format(pin["member"], pin["url"]))
                 with open(dest, "wb") as fh:
                     shutil.copyfileobj(src, fh)
         else:
@@ -130,8 +132,10 @@ def check_pins():
             digest = pin.get(key, "")
             if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
                 problems.append(f"{name}: {key} is not a lowercase sha256")
-        if pin.get("version") not in pin.get("url", ""):
-            problems.append("{}: version {} does not appear in the url".format(name, pin["version"]))
+        version = pin.get("version") or ""
+        url = pin.get("url") or ""
+        if version and version not in url:
+            problems.append(f"{name}: version {version} does not appear in the url")
     return problems
 
 
