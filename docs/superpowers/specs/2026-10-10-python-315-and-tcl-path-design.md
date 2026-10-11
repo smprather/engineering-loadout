@@ -153,6 +153,25 @@ tcl9 switch (#10094); OpenSTA carries partial Tcl 9 conditionals.
 
 ## Execution log
 
-- 2026-10-10: branch `python-315` created; spec committed. Spike A launched
-  in container `ppy315-build` (detached) with the JIT patch and
+- 2026-10-10: branch `python-315` created; spec committed (`bc9474c`). Spike A
+  launched in container `ppy315-build` (detached) with the JIT patch and
   `--enable-experimental-jit=yes-off`; log at `~/build-work/ppy315/build.log`.
+- 2026-10-11: **first attempt failed at `.jit-stamp`** (rc=2 after ~2 min):
+  CPython's JIT generator runs the *bootstrap* Python
+  (`python3.14 ./Tools/jit/build.py ...`), which resolved to the
+  loadout-installed interpreter mounted at `/hostllvm/bin` — but the mount
+  carried only binaries, not `libpython3.14.so.1.0`, so it died with
+  `error while loading shared libraries ... Error 127`. Root cause: the XDG
+  migration split the old `~/.local` toolchain root (bin in the loadout tree,
+  `lib/clang/23` + `libbolt_rt_instr.a` left in `~/.local/lib`).
+  Fix: hardlink-merge the loadout `lib/` into the combined toolchain root
+  (`ppy315/hostllvm`). `python3.14 -VV` and the clang profile-runtime lookup
+  both pass in-container now.
+- 2026-10-11: **supervised run** — `supervise.sh` drives build → pipeline →
+  repair → audit with narrow auto-recovery (JIT-stencil failure → retry once
+  with JIT off; memory-pressure failure → retry once at `-j8`), writes
+  `/work/STATE` + timestamped `/work/supervisor.log`, and a terminal
+  `/work/RESULT` (`OK …`/`FAILED …`). Host helpers: `status.sh` (one-shot) and
+  `wait.sh` (blocks until terminal). An async subagent watcher (delegate) is
+  attached to `wait.sh`, so build completion/failure wakes the working
+  session without human polling.
