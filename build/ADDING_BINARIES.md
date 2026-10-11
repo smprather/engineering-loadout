@@ -6342,7 +6342,7 @@ no flags.
 
 ### Build / repack
 
-`build/build-btop.sh --tag 1.4.7` builds both artifacts:
+`build/build-btop.py --tag 1.4.7` builds both artifacts:
 
 - `payload/<platform>/runtime/btop-themes.tar.bz2` -- the theme tree staged as
   `share/btop/themes/*`, deterministic bytes (sorted entries, zeroed mtime,
@@ -6352,7 +6352,7 @@ no flags.
 - `payload/<platform>/bin/btop-theme-tour.bz2` -- `build/btop/btop-theme-tour`
   verbatim (plain script: no strip, no patchelf).
 
-`build/build-btop.sh --tag 1.4.7 --check` verifies: the archive exists and
+`build/build-btop.py --tag 1.4.7 --check` verifies: the archive exists and
 holds exactly the shipped themes, every theme byte-matches
 `envs/btop/themes/`, the tour bz2 matches its source, `env-btop`'s
 `color_theme` exists in the shipped set, and the registry points at the
@@ -6360,7 +6360,7 @@ archive/sentinel/bins this script writes.
 
 Themes are added by dropping a `.theme` file into `envs/btop/themes/` and
 re-running the chain (repack -> strip-all -> sizes -> manifest ->
-`build-btop.sh --check`). Provenance of the 84 files (41 upstream + the
+`build-btop.py --check`). Provenance of the 84 files (41 upstream + the
 btop/bpytop collections + third-party sets with attribution) is recorded in
 `envs/btop/README.md`.
 
@@ -6379,7 +6379,7 @@ btop/bpytop collections + third-party sets with attribution) is recorded in
 ### Updating
 
 Binary bumps go through `build/update-prebuilt` as before. A theme-set change
-only needs `build/build-btop.sh --tag <ver>` plus the standard post-payload
+only needs `build/build-btop.py --tag <ver>` plus the standard post-payload
 chain. The tour script is hand-owned (`build/btop/btop-theme-tour`); keep it
 tab-free and shellcheck-clean.
 
