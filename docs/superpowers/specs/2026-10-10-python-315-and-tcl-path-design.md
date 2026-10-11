@@ -174,4 +174,21 @@ tcl9 switch (#10094); OpenSTA carries partial Tcl 9 conditionals.
   `/work/RESULT` (`OK …`/`FAILED …`). Host helpers: `status.sh` (one-shot) and
   `wait.sh` (blocks until terminal). An async subagent watcher (delegate) is
   attached to `wait.sh`, so build completion/failure wakes the working
-  session without human polling.
+  session without human polling. (The first watcher used a blocking wait and
+  could not be `yield`ed — command controls are unavailable for this child
+  type — so it was replaced with a short-poll watcher: 150 s sleeps stay under
+  the 240 s attention threshold.)
+- 2026-10-11: **JIT toolchain gaps closed.** With the JIT enabled, the
+  build failed at `.jit-stamp` with `RuntimeError: Can't find
+  llvm-dwarfdump-23!` — the LLVM 23 toolchain ships every tool except
+  `llvm-dwarfdump`, which `Tools/jit/_dwarf.py` needs to generate
+  `jit_unwind_info`. Built it from the LLVM 23 source tree
+  (`ppy315/build-dwarfdump.sh`: cmake + ninja, target `llvm-dwarfdump`,
+  ~2 min at -j24, CMake 4.4.3 + `CMAKE_POLICY_VERSION_MINIMUM=3.5`,
+  clang-23). That exposed a second gap: the trimmed `llvm-project` checkout
+  has no `third-party/` at all, and `lib/Support/SipHash.cpp` includes
+  `siphash/SipHash.h`; upstream `third-party/siphash` is a plain directory
+  (not a submodule), fetched from upstream (`main`) into a hardlinked merged
+  source root (`ppy315/llvm-src`, mounted at `/llvm-src`). Prep installs to
+  `/work/llvm-tools/bin`; `build.sh` PATH prefers it. **Supervised JIT build
+  relaunched 2026-10-11T01:34Z** with `--enable-experimental-jit=yes-off`.
