@@ -52,6 +52,15 @@ pass with per-tool closure proofs -- deferred to the **3.15.1 checkpoint
 `pyosys` (needs a yosys bump; `build/build-yosys.sh` hardcodes `cp314`),
 `klayout` (heavy pymod wheel), `duckdb` (pygwalker-only, opt-in).
 
+**W4 (interpreter half) done:** A/B on the bundled 3.15 (`PYTHON_JIT` toggle
+verified): startup 8-10 ms and stdlib imports ~230 ms are identical across
+modes; a 4e6-iteration pure-Python loop runs ~7% faster with JIT on
+(237 vs 254-264 ms); RSS identical (15.7 MB). Decision: **no wrapper sets
+`PYTHON_JIT=1` yet** -- the app-level benchmarks (LibreLane smoke, jupyterlab)
+need the complete cp315 wheelhouse and run at the checkpoint; a win there
+would make it a per-tool wrapper, never a global default. Full table in the
+spec.
+
 **Operational note:** after the version sweep, repo scripts with python
 shebangs (`build/security_tools.py`, `tests/security-pipeline`, ...) need
 python3.15 on PATH. The dev tree still has 3.14 until

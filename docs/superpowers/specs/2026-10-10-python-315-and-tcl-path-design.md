@@ -110,6 +110,26 @@ Benchmark `PYTHON_JIT=0/1` on: interpreter startup, LibreLane
 `--smoke-test` timing, jupyterlab startup, RSS. Decide whether any wrapper
 gets `PYTHON_JIT=1`; record the numbers in this spec/HANDOFF either way.
 
+**Interpreter-level results (2026-10-11; `python3.15` from the smoke tree; A/B
+with the toggle verified per mode; min/median of 20 (startup) / 12 (imports)
+runs):**
+
+| mode | startup ms | stdlib imports ms | compute ms (in-process) | maxRSS |
+|---|---|---|---|---|
+| default (off) | 8.2 / 9.7 | 227.7 / 234.3 | 263.6 | 15.71 MB |
+| `PYTHON_JIT=0` | 8.5 / 9.7 | 228.0 / 231.1 | 254.3 | 15.71 MB |
+| `PYTHON_JIT=1` | 8.2 / 9.4 | 229.2 / 232.8 | **236.9** | 15.71 MB |
+
+Compute = 4e6-iteration pure-Python loop: JIT ≈ **7% faster**, matching
+upstream's 7-8% x86-64 figure. Startup and stdlib-import cost are identical
+within noise; RSS is identical at this granularity.
+
+**Decision:** keep the JIT off everywhere for now -- no wrapper sets
+`PYTHON_JIT=1`. The remaining benchmarks (LibreLane `--smoke-test`, jupyterlab
+startup) need the complete cp315 wheelhouse, so they run at the 3.15.1
+checkpoint; if they show a win, the opt-in point is a per-tool wrapper (e.g.
+librelane), never a global default.
+
 ### W5 — Tcl path (independent of W1–W4)
 
 Time-boxed spike: build OpenROAD 26Q3 against Tcl 9.0.3 + SWIG 4.3 in the
