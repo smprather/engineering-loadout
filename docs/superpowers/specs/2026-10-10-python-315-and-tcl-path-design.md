@@ -192,3 +192,35 @@ tcl9 switch (#10094); OpenSTA carries partial Tcl 9 conditionals.
   source root (`ppy315/llvm-src`, mounted at `/llvm-src`). Prep installs to
   `/work/llvm-tools/bin`; `build.sh` PATH prefers it. **Supervised JIT build
   relaunched 2026-10-11T01:34Z** with `--enable-experimental-jit=yes-off`.
+- 2026-10-11 (late): **Spike A complete — JIT-enabled 3.15.0 staged and imported.**
+  Build finished in ~11 min (deps → configure → PGO/LTO/BOLT+JIT → install).
+  Supervisor pipeline + repair ran; audit failed on two real staging bugs and
+  one flake, all fixed:
+  1. **Placeholder length bug (mine).** The 3.15 repair placeholder for
+     `/work/deps/build` was one byte short (16 → 15), shifting bytes and
+     corrupting `libzstd.so.1.5.7` ("ELF load command past end of file").
+     Both pipeline and repair now use exact-length placeholders
+     (`/work/deps/prefix`→`/opt/cpython3150p`, `/work/deps/build`→
+     `/opt/cpython315b`; `/tmp` variants padded too), and repair.sh ends with
+     a **strict ELF validation** (`readelf -lW` scan for
+     `out of range|extends past end|Error:`) instead of the weaker
+     `readelf -d` check that had passed a corrupt file.
+  2. **pip missing** from the staged tree (`make install` did not run
+     ensurepip this time). Fixed with `python3.15 -m ensurepip --upgrade`
+     (ensurepip + bundled pip-26.2.1 were present).
+  3. **Flaky SIGPIPE** in audit.sh: `find … | head` under `pipefail` killed
+     the script (141) depending on timing; `|| true` added to both `| head`
+     pipes.
+  Re-run: audit-exit=0, `SMOKES-DONE` (python 3.15.0, OpenSSL 3.5.6, SQLite
+  3.53.1, Expat 2.8.0, Tk 8.6, pip 26.2.1). The lone `LEAK: termios…` line is
+  a **false positive** of the audit in runs without `/etc/passwd` mounted:
+  `id -un` yields `1000`, so the pattern degrades to `…|1000|/work` and
+  matches the literal "1000" in the binary.
+- JIT acceptance met: `sys._jit.is_available() == True`,
+  `is_enabled() == False`, `PYTHON_JIT=1` → `is_enabled() == True`.
+- **Imported**: `payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2`
+  (26.1 MB). The import's dynsym gate reproduced the BOLT bug and repaired
+  `libpython3.15.so`: 2001 entries (`text 1808 / data 181 / rodata 12`),
+  re-check clean.
+- Open in W2: registry version/archive, remove the 3.14.7 archive,
+  `./loadout` shim + installer/tests/docs sweep, regen chain.
