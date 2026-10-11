@@ -247,3 +247,10 @@ Still local/ours at checkpoint time: `lefdef_tools` + `liberty_tools`
 yosys bump -- `build/build-yosys.sh` downloads the upstream wheel and hardcodes
 `cp314`), `klayout` (heavy pymod wheel; upstream has no cp315), `duckdb`
 (pygwalker-only, opt-in).
+- Local rebuilds (2026-10-11): `liberty_tools` and `lefdef_tools` are cp315 now
+  (`build/update --rebuild` in-container with `UV_PYTHON=<bootstrap py3.15>` and
+  the real `uv` binary; `lefdef_tools` additionally needs
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` -- its pinned PyO3 0.27.2 caps at
+  3.14). Old cp314 wheels pruned, registry versions re-stamped, sizes +
+  manifest regenerated. Remaining local: `lln_libparse` (documented sdist +
+  retag recipe), `pyosys` (needs a yosys bump), `klayout`, `duckdb`.
