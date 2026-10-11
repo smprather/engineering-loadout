@@ -23,7 +23,7 @@ env -i HOME="$work/home" PATH="/usr/bin:/bin" TMPDIR="$tmp_root" TERM=xterm \
 
 UV="$tree/bin/uv"
 UVX="$tree/bin/uvx"
-python_bin="$tree/bin/python3.14"
+python_bin="$tree/bin/python3.15"
 [ -x "$UV" ] || fail "uv launcher missing"
 [ -x "$UVX" ] || fail "uvx launcher missing"
 [ -x "$tree/bin/uv.bin" ] || fail "uv.bin missing"
@@ -37,7 +37,7 @@ python_bin="$tree/bin/python3.14"
 # $prefix/bin/python3, so that symlink path is what uv reports)
 got=$(cd "$work" && "$UV" run --no-project python -c 'import sys; print(sys.executable)')
 case "$got" in
-    "$tree"/bin/python3 | "$tree"/bin/python3.14) ;;
+    "$tree"/bin/python3 | "$tree"/bin/python3.15) ;;
     *) fail "uv run used '$got', expected the loadout python" ;;
 esac
 

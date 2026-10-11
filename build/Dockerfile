@@ -44,7 +44,7 @@
 # runs). Image builds and dnf INSIDE this container may use the network.
 #
 # What's NOT baked in, deliberately:
-#   - python3.14: loadout self-hosts it. `./loadout` (bind-mounted at /repo)
+#   - python3.15: loadout self-hosts it. `./loadout` (bind-mounted at /repo)
 #     bootstraps its own interpreter from payload/<platform>/portable-python-*
 #     .tar.bz2 on first run -- offline, no dnf package needed. `./loadout
 #     install patchelf` gets you a payload-identical patchelf the same way if

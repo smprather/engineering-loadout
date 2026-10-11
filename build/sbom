@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """sbom -- CycloneDX SBOM of the pinned closure, for the release assets.
 
 syft (pinned in build/security_tools.py) catalogs the Python wheelhouse; wheels

@@ -40,10 +40,10 @@ else
 fi
 # loadout_main.py is the python body; the shim picks the right interpreter
 # at run time. For source-check we try the bootstrap-cache or installed
-# python3.14, falling back to system python3 (which may reject 3.14 syntax
+# python3.15, falling back to system python3 (which may reject 3.14 syntax
 # -- accept that as a soft fail).
 PY314=""
-for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14"; do
+for cand in "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15"; do
     if [[ -x "$cand" ]]; then PY314="$cand"; break; fi
 done
 if [[ -n "$PY314" ]]; then
@@ -54,7 +54,7 @@ if [[ -n "$PY314" ]]; then
         "$PY314" -m py_compile "$INSTALLER_MAIN" 2>&1 | head -5 >&2
     fi
 else
-    echo "skip: no python3.14 found (run ./loadout once to bootstrap)"
+    echo "skip: no python3.15 found (run ./loadout once to bootstrap)"
 fi
 
 # ---------------------------------------------------------------------------

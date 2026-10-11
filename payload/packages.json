@@ -903,7 +903,7 @@
         "place-and-route",
         "timing"
       ],
-      "description": "OpenROAD — RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.14 and the matching Tcl 8.6.17 script library — mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
+      "description": "OpenROAD — RTL-to-GDS place & route: floorplanning, placement, CTS, routing and parasitic extraction, scriptable from Tcl and Python. Ships `sta` (standalone OpenSTA timing) alongside. Built on EL8 with -static-libstdc++ so it needs no GLIBCXX above stock 3.4.25, and with OR-Tools' vendored deps forced static (upstream hardcodes shared, which would need 111 libraries EL8 lacks). depends on portable-python for BOTH libpython3.15 and the matching Tcl 8.6.17 script library — mixing it with EL8's Tcl 8.6.8 fails an exact-version check, so this is load-bearing, not incidental. Build with build/build-openroad.sh --tag 26Q3",
       "missing_hint": "openroad will not run: it needs the bundled COIN-OR/SCIP solver libs in lib64"
     },
     "openvaf": {
@@ -2350,7 +2350,7 @@
         "bin/strmxor"
       ],
       "missing_hint": "KLayout will NOT be installed",
-      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.14; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
+      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.15; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
     },
     "verilator": {
       "kind": "bin",
@@ -2983,7 +2983,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave"
+      "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.15 wheel). Opt-in: ./loadout install cicwave"
     },
     "mdformat": {
       "kind": "python-tool",
@@ -3156,7 +3156,7 @@
       "kind": "python-base",
       "archive": "payload/PLATFORM/portable-python-*.tar.bz2",
       "install_to": "~/.local",
-      "version": "3.14.7",
+      "version": "3.15.0",
       "platforms": [
         "linux"
       ],

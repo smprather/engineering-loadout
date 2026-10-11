@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 Pack the btop theme set and the theme-tour helper into the payload.
 

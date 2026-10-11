@@ -106,7 +106,7 @@ cp "$CFG_SRC" "$TMP/cfg/helix/config.toml"
 # Not style policing: this is the single most consequential line in the config
 # and it is deliberately the insecure choice (see the comment block in
 # config.toml). If someone reverts it, that should be a visible decision.
-PY="${PY:-python3.14}"
+PY="${PY:-python3.15}"
 command -v "$PY" > /dev/null 2>&1 || PY=python3
 "$PY" - "$CFG_SRC" "$LANG_SRC" <<'PYEOF' || exit 1
 import sys

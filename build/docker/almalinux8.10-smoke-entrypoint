@@ -57,7 +57,7 @@ sh -n loadout
 # from the tar copy above).
 ./loadout --help >/dev/null
 
-py=.loadout-bootstrap/bin/python3.14
+py=.loadout-bootstrap/bin/python3.15
 if [ ! -x "$py" ]; then
     echo "ERROR: portable Python bootstrap not found: $py" >&2
     exit 1

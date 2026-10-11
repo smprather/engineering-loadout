@@ -58,8 +58,8 @@ fi
 # KLAYOUT_PYTHONHOME / KLAYOUT_PYTHONPATH. Setting PYTHONHOME here would be
 # silently discarded and the embedded interpreter would abort with
 #   Fatal Python error: Failed to import encodings module
-# because libpython3.14 cannot derive its prefix from argv[0] (= klayout).
-if [ -z "${KLAYOUT_PYTHONHOME:-}" ] && [ -d "$prefix/lib/python3.14" ]; then
+# because libpython3.15 cannot derive its prefix from argv[0] (= klayout).
+if [ -z "${KLAYOUT_PYTHONHOME:-}" ] && [ -d "$prefix/lib/python3.15" ]; then
     export KLAYOUT_PYTHONHOME="$prefix"
 fi
 

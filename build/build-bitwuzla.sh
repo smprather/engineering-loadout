@@ -320,8 +320,8 @@ Done.
 
 Next, as for every payload change:
   ./build/strip-all-elf-binaries
-  python3.14 build/gen-installed-sizes
-  python3.14 build/gen-content-manifest
+  python3.15 build/gen-installed-sizes
+  python3.15 build/gen-content-manifest
   ./loadout completion bash > envs/bash/global/completions/loadout.bash
-  python3.14 build/gen-readme-table
+  python3.15 build/gen-readme-table
 EOF

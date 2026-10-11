@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 gen-content-manifest -- write .content-manifest: a sha256 of every shipped
 payload file, as stored on disk (per .part-NNN chunk, not the rejoined whole).

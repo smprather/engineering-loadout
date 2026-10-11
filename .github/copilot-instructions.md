@@ -12,7 +12,7 @@ engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), six-layer shell configuration
 (global -> corp -> site -> team -> project -> user), and two-layer Neovim/tmux
 configuration (global -> user).
-`./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
+`./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.15`),
 driven by `payload/packages.json` (`schema_version: 3`). The source uses **PEP 758**
 syntax (`except A, B:` without parentheses, still `except (A, B) as e:` when binding),
 so only a 3.14+ interpreter can parse it -- never run an older Python or analyzer over
@@ -317,7 +317,7 @@ symlinks to it), probes every executable in `<dest>/bin` with
 workers, memory-scaled), checks editor runtime
 sentinels, and runs installed `nvim` headless against its installed runtime
 before any tag is created. Portable Python keeps generic `python3`/`pip3` links in
-`<prefix>/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
+`<prefix>/bin` so `python3` on PATH resolves to 3.15; the only hard py3.6
 holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
 Python's private SQLite in `<prefix>/lib` must include built-in FTS5
@@ -430,7 +430,7 @@ guard each server with `vim.fn.executable`, and keep missing tools in
 `vim.g.loadout_missing_lsp_servers` instead of enabling a server that will fail
 when its filetype opens.
 
-Use `./build/strip-all-elf-binaries` (Python 3.14) after adding vendored
+Use `./build/strip-all-elf-binaries` (Python 3.15) after adding vendored
 binaries, libraries, parser grammars, or tar archives. It walks the repo
 outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs

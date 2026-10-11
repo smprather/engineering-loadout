@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 verify-manifest-export -- prove the COMMITTED .content-manifest covers exactly
 what `git archive HEAD` ships.
@@ -130,7 +130,7 @@ def main():
             "The committed manifest lists files the export does not contain (or misses files it does).", file=sys.stderr
         )
         print("Regenerate it from the shipped tree and commit:", file=sys.stderr)
-        print("  python3.14 build/gen-content-manifest && git add .content-manifest", file=sys.stderr)
+        print("  python3.15 build/gen-content-manifest && git add .content-manifest", file=sys.stderr)
         return 1
     print(f"verify-manifest-export: OK ({len(files)} files match {MANIFEST_REL} at HEAD)")
     return 0

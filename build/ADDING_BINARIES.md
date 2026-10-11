@@ -396,7 +396,7 @@ Home directory quotas on shared compute systems are typically small (~4-10 GB). 
 | Cairo+pango chain        | (subset of gui_libs)             | ~15 MB                    |
 | gvim (optional)          | GTK3 GUI vim 9.2                 | ~5 MB                     |
 | nedit-ng (optional)      | Qt5 NEdit rewrite                | ~8 MB                     |
-| Portable Python          | python3.14                       | ~40 MB                    |
+| Portable Python          | python3.15                       | ~40 MB                    |
 | Treesitter parsers       | all platforms                    | ~20 MB                    |
 | Octave (optional)        | octave 11.3.0                    | ~163 MB                   |
 
@@ -3184,7 +3184,7 @@ KLayout itself had never been built. That intent lived only in a build note, nev
 ```
 dnf install qt5-qtbase-devel qt5-qtsvg-devel qt5-qtxmlpatterns-devel \
             gcc-c++ make curl cpio rpm-build
-./loadout install portable-python     # headers + libpython3.14.so
+./loadout install portable-python     # headers + libpython3.15.so
 ```
 `qt5-qtxmlpatterns-devel` is the easy miss: without it qmake stops with
 `Project ERROR: Unknown module(s) in QT: xmlpatterns` after reading ~40 .pro files.
@@ -3194,8 +3194,8 @@ dnf install qt5-qtbase-devel qt5-qtsvg-devel qt5-qtxmlpatterns-devel \
 ./build.sh -qmake /usr/bin/qmake-qt5 -prefix /tmp/klayout-install-0.30.10 -release \
    -rbinc <rbtree>/usr/include -rbinc2 <rbtree>/usr/include \
    -rblib <rbtree>/usr/lib64/libruby.so.3.3.10 -rbvers 30310 \
-   -python <prefix>/bin/python3.14 -pyinc <prefix>/include/python3.14 \
-   -pylib ~/.local/lib/libpython3.14.so \
+   -python <prefix>/bin/python3.15 -pyinc <prefix>/include/python3.15 \
+   -pylib ~/.local/lib/libpython3.15.so \
    -without-qt-uitools -without-qt-designer -without-qt-multimedia -without-qt-sql \
    -nolibgit2 -jN
 ```
@@ -3219,7 +3219,7 @@ Probing that interpreter needs **`--disable-gems`**, or it loads the SYSTEM
 **2. `LD_LIBRARY_PATH` is load-bearing at BUILD time.** libpython lives in
 `~/.local/lib`, which is not on `ld`'s search path. `libklayout_pya.so` links fine
 (shared objects tolerate undefined symbols) but when the `strm*` "buddy" executables
-link `-lklayout_pya`, `ld` must resolve its `DT_NEEDED libpython3.14.so.1.0`
+link `-lklayout_pya`, `ld` must resolve its `DT_NEEDED libpython3.15.so.1.0`
 transitively, cannot find it, and the build dies with ~200
 ``undefined reference to `PyList_GetItem'`` **after twenty minutes of compiling**.
 Exporting `LD_LIBRARY_PATH=~/.local/lib` fixes it. This is purely a link-time path;
@@ -3234,7 +3234,7 @@ and the embedded interpreter aborts with
 Could not find platform independent libraries <prefix>
 Fatal Python error: Failed to import encodings module
 ```
-because libpython3.14 cannot derive its prefix from `argv[0]` (= `klayout`).
+because libpython3.15 cannot derive its prefix from `argv[0]` (= `klayout`).
 
 **4. `RUBYLIB` must include `share/rubygems`.** KLayout embeds the loadout's
 `libruby.so.3.3`, and EL8's ruby is not built `--enable-load-relative`, so its
@@ -3271,7 +3271,7 @@ with no repository dependency; the shared adaptation logic is not duplicated.
 
 RPATHs are per-depth, because the tree is flat and each level needs its own hop count
 back to `<prefix>/lib64` (bundled Qt5/ruby/X11) and `<prefix>/lib` (portable-python's
-`libpython3.14.so.1.0`):
+`libpython3.15.so.1.0`):
 
 | location | RPATH |
 |---|---|
@@ -3487,7 +3487,7 @@ all three shells now wire it up: `--bash`, `--zsh`, and `--csh` for tcsh. The cs
 emitter escapes its argument marker as `\!*` so csh stores a literal `!` rather
 than expanding history -- do not re-quote that at the call site.
 
-**Prerequisites:** `git`, `uv`, `python3.14`. No compiler, no dev packages.
+**Prerequisites:** `git`, `uv`, `python3.15`. No compiler, no dev packages.
 
 **NOT `rolling_git`.** `./build/update`'s rolling path builds from source HEAD and
 stamps a `git describe` version, which is right for the first-party tools upstream
@@ -3514,8 +3514,8 @@ It also prunes the previous `tmux_path_store-*.whl` before copying the new one: 
 stale sibling leaves two versions of the same dist in `--find-links` and lets `uv`
 resolve the wrong one.
 
-**Verify after building:** `python3.14 build/gen-content-manifest &&
-python3.14 build/gen-readme-table`, then `./loadout install tmux-path-store
+**Verify after building:** `python3.15 build/gen-content-manifest &&
+python3.15 build/gen-readme-table`, then `./loadout install tmux-path-store
 --dest-dir <d>` and check `<d>/bin/tmux-path-store --version` reports the
 tagged version and that no `tmux_path_store` launcher remains.
 
@@ -3604,8 +3604,8 @@ ships and asserts the output shrank (1308 -> 149 cells), that every surviving ce
 is a `nand`, and that the `library()` group is intact -- a pass-through or a
 truncating write would both sail past `--version`.
 
-**Verify after building:** `python3.14 build/gen-content-manifest &&
-python3.14 build/gen-readme-table`, then `./loadout install liberty-filter
+**Verify after building:** `python3.15 build/gen-content-manifest &&
+python3.15 build/gen-readme-table`, then `./loadout install liberty-filter
 --dest-dir <d>` and run the filter above from the installed tree.
 
 ## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
@@ -3997,7 +3997,7 @@ sha256 `ca5b8804e3c910a66423a882d79bf3c9450b875ac8528791fb60ec9de667f758`).
 Note `--version`/`-V`/`--help` are read as input FILENAMEs by xclip and exit 1;
 `-version` is the real flag, so `tests/prebuilt-binaries` pins
 `PROBE_FLAGS["xclip"] = [["-version"]]`. The build stamps the registry version
-through the same `python3.14 -` block as the other five -- run it with
+through the same `python3.15 -` block as the other five -- run it with
 `/repo/.loadout-bootstrap/bin` on PATH inside the container (the EL8 image has
 no system 3.14). Member of `@gui-suite` next to xsel, `farm-versions` entry uses
 `-version`.
@@ -4290,11 +4290,11 @@ So the tree now ships a wrapper, the same arrangement as wezterm/expect/octave:
 | `lib/yosys-pyosys/pyosys/{__init__.py,libyosys.so}` | upstream `pyosys` wheel's import surface |
 | `lib/yosys-pyosys/click/` | vendored click (the pyosys scripts are click CLIs) |
 
-On `-y SCRIPT` the wrapper execs `<prefix>/bin/python3.14 SCRIPT "$@"` with
+On `-y SCRIPT` the wrapper execs `<prefix>/bin/python3.15 SCRIPT "$@"` with
 `PYTHONPATH=<prefix>/lib/yosys-pyosys` **prepended** -- prepended because
 LibreLane sets `PYTHONPATH` to its own `scripts/pyosys` dir and those sibling
 imports must keep resolving. `/proc/self/exe` then points at the prefix's
-`python3.14`, so `libyosys` finds the ALREADY-INSTALLED `share/yosys` and
+`python3.15`, so `libyosys` finds the ALREADY-INSTALLED `share/yosys` and
 `yosys-abc` -- which is why the wheel's own ~32 MB duplicate data tree and
 second `yosys-abc` are dropped and only `__init__.py` + `libyosys.so`
 (~49 MB) ship.
@@ -4339,7 +4339,7 @@ there, not on a user's box.
 no Linux build needed). Install replicates `make install` seds with a
 relocatable layout: all sources in `share/sby/` (runtime/sby.tar.bz2),
 `bin/sby` sh wrapper deriving prefix from `$0` and exec'ing
-`<prefix>/bin/python3.14` (hard dep on portable-python, PATH fallback).
+`<prefix>/bin/python3.15` (hard dep on portable-python, PATH fallback).
 `##yosys-sys-path##` becomes a no-op (siblings are already on sys.path[0]);
 `##yosys-release-version##` records the pin.
 
@@ -4379,7 +4379,7 @@ Build gotchas hit while packaging (do not reintroduce):
 - `rm -rf` the directory the shell is sitting in, then `tar -C` fails with
   `Cannot getcwd` -- `cd /` before cleanup.
 - `export PATH=...` REPLACING instead of prepending drops the bootstrap
-  python3.14; the sby wrapper then falls back to system python3.6, which dies
+  python3.15; the sby wrapper then falls back to system python3.6, which dies
   on `from __future__ import annotations` (3.7+). Always prepend.
 - `tar` the runtime archive from `$STAGE`, not from a deleted CWD (same bug).
 
@@ -4976,7 +4976,7 @@ and cannot start anywhere else.
 
 ### TRAP 2 -- the Tcl collision (this is the `expect` hazard, same shape)
 
-`openroad` resolves **both** `libpython3.14.so.1.0` and `libtcl8.6.so` out of
+`openroad` resolves **both** `libpython3.15.so.1.0` and `libtcl8.6.so` out of
 portable-python's lib dir. portable-python owns `<prefix>/lib/tcl8.6` at Tcl
 **8.6.17**, and its `init.tcl` does `package require -exact Tcl 8.6.17`. EL8's
 system Tcl is **8.6.8**. The two therefore cannot be mixed in either direction:
@@ -5089,9 +5089,9 @@ ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
 OpenROAD-flow-scripts (ORFS) is a scripts + PDK layer **on top of** this binary;
 it changes nothing here and only decides whether the PDK data also ships.
 
-## Portable Python 3.14.7 -- private SQLite FTS5 fix (2026-09-16)
+## Portable Python 3.15.0 -- private SQLite FTS5 fix (2026-09-16)
 
-Artifact: `payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2`.
+Artifact: `payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2`.
 The old archive's `sqlite3` module imported successfully, but its private
 SQLite **3.53.1 lacked FTS5**. The separate SQLite **3.53.4 CLI/library in
 lib64/** already had FTS5; rebuilding or reinstalling that package cannot fix
@@ -5107,10 +5107,10 @@ make, zlib headers, strip, patchelf, tar/bzip2, and Python/importer dependencies
 No CPython rebuild and no dynamic dependency installs were needed.
 
 1. Bind-mount the repo at `/repo` and the cached source read-only from
-   `/home/mylesp/build-work/ppy147/Python-3.14.7/deps/src/sqlite-autoconf-3530100.tar.gz`.
+   `/home/mylesp/build-work/ppy147/Python-3.15.0/deps/src/sqlite-autoconf-3530100.tar.gz`.
    Use fresh, disk-backed scratch mounted at `/work`; unpack the source afresh
    rather than reusing configured objects. Extract the existing payload archive
-   separately, retaining its `portable-python-3.14.7-el8-clang23` directory name,
+   separately, retaining its `portable-python-3.15.0-el8-clang23` directory name,
    metadata, and symlinks. Set `PORTABLE_DIR` to that extracted directory.
 2. From the freshly unpacked SQLite source directory, run exactly:
 
@@ -5134,8 +5134,8 @@ No CPython rebuild and no dynamic dependency installs were needed.
    ```bash
    ./build/import-portable-python "$PORTABLE_DIR" --platform el8.x86_64.glibc2p28
    ./build/strip-all-elf-binaries
-   python3.14 build/gen-installed-sizes
-   python3.14 build/gen-content-manifest
+   python3.15 build/gen-installed-sizes
+   python3.15 build/gen-content-manifest
    ```
 
 ### Evidence and rollout
@@ -5164,13 +5164,13 @@ notebook kernels): an existing process retains the old mapped library. Verify
 with the installed interpreter, not the separate `sqlite3` CLI:
 
 ```bash
-<prefix>/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+<prefix>/bin/python3.15 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
 ```
 
-## Portable Python 3.14.7 -- `libpython` data symbols broken for embedders (FIXED, 2026-09-22)
+## Portable Python 3.15.0 -- `libpython` data symbols broken for embedders (FIXED, 2026-09-22)
 
 **This is a payload DEFECT that breaks every program embedding this
-`libpython3.14.so.1.0`.** Found while fixing OpenROAD's `-python` mode (see the
+`libpython3.15.so.1.0`.** Found while fixing OpenROAD's `-python` mode (see the
 OpenROAD note); it is independent of OpenROAD and will hit anything that links
 libpython and takes the ADDRESS of a CPython data object.
 
@@ -5181,8 +5181,8 @@ A PIE/C program that references `PyExc_TypeError` (or any `Py*_Type`,
 a pointer that is **NULL at runtime**, then SIGSEGVs on first dereference --
 e.g. inside `Py_InitializeFromConfig -> pycore_interp_init -> type_ready ->
 PyErr_Format`. Programs that never take such an address are unaffected, which
-is why the interpreter itself, every `python3.14` invocation, and all 4000+
-existing consumers still work: `bin/python3.14` takes zero of these addresses
+is why the interpreter itself, every `python3.15` invocation, and all 4000+
+existing consumers still work: `bin/python3.15` takes zero of these addresses
 (0 `A`-class Py symbols) and embeds fine.
 
 ### Minimal reproducer (4 lines, no OpenROAD)
@@ -5210,8 +5210,8 @@ against the distro's:
 
 | link target | result |
 |---|---|
-| `~/.local/lib/libpython3.14.so.1.0` (payload) | **SIGSEGV** (prints nothing) |
-| `/usr/lib/libpython3.14.so.1.0` (system, 3.14.7) | `address = 0x7f017d3f7180` |
+| `~/.local/lib/libpython3.15.so.1.0` (payload) | **SIGSEGV** (prints nothing) |
+| `/usr/lib/libpython3.15.so.1.0` (system, 3.15.0) | `address = 0x7f017d3f7180` |
 
 Same source, same flags, only the library differs. Note the link emits
 `warning: creating DT_TEXTREL in a PIE` for BOTH -- that warning is not the
@@ -5267,7 +5267,7 @@ both tables), and to anything that never links against the library.
 
 The suspect is the BOLT pass in the upstream portable-python recipe
 (`--enable-bolt` with `llvm-bolt` + `merge-fdata`, BUILD.md "LLVM and BOLT
-requirements"). BOLT's rewrite of `libpython3.14.so.1.0` is what rewrote the
+requirements"). BOLT's rewrite of `libpython3.15.so.1.0` is what rewrote the
 section indices; the EL8 system python (3.6, no BOLT) and the Arch system
 python (3.14, no BOLT) both have correct `.dynsym` section indices. BOLT is also
 why this archive is in `NOSTRIP_ARCHIVE_PREFIXES`.
@@ -5310,7 +5310,7 @@ OBJECT-only repair -> 6 `A` symbols, core dump; full repair -> 0 `A`, runs.
 container** (payload bytes must come from the EL8 userland -- the CachyOS host
 bzip2 1.0.8 does not round-trip EL8's 1.0.6, see the Build Machine Mandate) and
 repacks the archive. Verified result: **byte-identical member list (4076
-entries), exactly one file changed** (`local/lib/libpython3.14.so.1.0`).
+entries), exactly one file changed** (`local/lib/libpython3.15.so.1.0`).
 
 ### End-state proof on the SHIPPED bytes (2026-09-22)
 
@@ -5318,7 +5318,7 @@ Run against the archive as committed, not a working copy:
 
 ```text
 sha256 08cc56011a751b37dd68f0cac10ac80862d911434e9fa0ad9ab1cd3256ff00e4
-  (portable-python-3.14.7-el8-clang23.tar.bz2; matches .content-manifest)
+  (portable-python-3.15.0-el8-clang23.tar.bz2; matches .content-manifest)
 repair-libpython-dynsym --check  ->  .dynsym OK   (rc=0)
 
 data-object consumer (PyExc_TypeError):
@@ -5349,11 +5349,11 @@ packaging, so a defective interpreter cannot reach the payload again.
 ### Verification for any future archive
 
 A rebuild is only correct if a program that takes `&PyExc_TypeError` still works.
-Add this to the portable-python import/verify path -- a plain `python3.14 -c
+Add this to the portable-python import/verify path -- a plain `python3.15 -c
 'print(1)'` CANNOT catch it:
 
 ```bash
-./build/repair-libpython-dynsym --check <prefix>/lib/libpython3.14.so.1.0   # rc must be 0
+./build/repair-libpython-dynsym --check <prefix>/lib/libpython3.15.so.1.0   # rc must be 0
 ```
 
 And for the CONSUMER side, the discriminator is NOT the symbol class -- it is
@@ -5640,7 +5640,7 @@ therefore NOT needed for 3.14 (the stdlib `tomllib` covers it).
 ### Download (the manylinux tag matters)
 
 ```bash
-PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.14 -m pip download tclint==0.9.0 \
+PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.15 -m pip download tclint==0.9.0 \
   --platform manylinux_2_28_x86_64 \
   --platform manylinux2010_x86_64 \
   --platform manylinux2014_x86_64 \
@@ -5729,7 +5729,7 @@ isolated venv at `<prefix>/share/uv/tools/tclint/`). Also pulled by
 # Bump version in packages.json, re-download the wheel closure, run the
 # post-payload chain (strip is a no-op for wheels -- pure Python -- but
 # sizes + manifest must regenerate because the wheelhouse changed):
-PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.14 -m pip download tclint==<NEW> \
+PIP_REQUIRE_VIRTUALENV=0 <prefix>/bin/python3.15 -m pip download tclint==<NEW> \
   --platform manylinux_2_28_x86_64 --platform manylinux2010_x86_64 \
   --platform manylinux2014_x86_64 --platform manylinux1_x86_64 --platform any \
   --python-version 3.14 --only-binary :all: \
@@ -5863,8 +5863,8 @@ iverilog, gtkwave, klayout, verilator, yosys). Also swept into the full
 # The script re-fetches the prebuilt LLVM 15 if /tmp/llvm-15.0.7-openvaf is gone.
 # Run the post-payload chain after:
 ./build/strip-all-elf-binaries
-python3.14 build/gen-installed-sizes
-python3.14 build/gen-content-manifest
+python3.15 build/gen-installed-sizes
+python3.15 build/gen-content-manifest
 ```
 
 If a future OpenVAF release drops the legacy pass manager (migrating to the
@@ -5981,7 +5981,7 @@ container (the image ships only python3.6, so drive the updater with the warm
 bootstrap interpreter):
 
 ```bash
-build/build-shell /repo/.loadout-bootstrap/bin/python3.14 ./build/update-prebuilt mermaid-ascii=1.6.1
+build/build-shell /repo/.loadout-bootstrap/bin/python3.15 ./build/update-prebuilt mermaid-ascii=1.6.1
 # download -> extract mermaid-ascii -> strip -> static, no patchelf -> bzip2
 # payload/el8.x86_64.glibc2p28/bin/mermaid-ascii.bz2 (13.5 MB installed)
 ```
@@ -6135,7 +6135,7 @@ resolution. (Two false-positive gaps in a naive METADATA scan:
 Download pattern (all acceptable platform tags, per the wheel-download rule):
 
 ```bash
-PIP_REQUIRE_VIRTUALENV=0 python3.14 -m pip download "librelane==3.0.6" \
+PIP_REQUIRE_VIRTUALENV=0 python3.15 -m pip download "librelane==3.0.6" \
   --platform manylinux_2_28_x86_64 --platform manylinux2010_x86_64 \
   --platform manylinux2014_x86_64 --platform manylinux1_x86_64 \
   --platform any --python-version 3.14 --only-binary :all: \
@@ -6152,7 +6152,7 @@ this repo. Upstream's
 is bundled as-is (byte-identical to the previously verified trial download).
 Floor evidence: the `manylinux_2_27` tag implies glibc <= 2.27 < 2.28 floor,
 and the extension `.so` files are self-contained (RPATH-resolved, no host
-beyond glibc/libstdc++). Live proof under our python3.14: `import klayout`
+beyond glibc/libstdc++). Live proof under our python3.15: `import klayout`
 plus `from klayout.rdb import ReportDatabase; ReportDatabase(...)`
 constructs. The source-built tree's `lib/klayout/pymod` serves the bundled
 runtime's embedded interpreter and is NOT wired into the uv venv.
@@ -6168,7 +6168,7 @@ sdist: https://files.pythonhosted.org/packages/17/28/70011f1ad509af0d481c581c072
 ```
 
 Recipe (base gcc 8.5.0 is sufficient; do NOT enable gcc-toolset-14):
-venv from the bootstrap python3.14, `pip install "pybind11==2.13.6"
+venv from the bootstrap python3.15, `pip install "pybind11==2.13.6"
 setuptools wheel` (pybind11 3.x needs CMake; 2.13.6 is setuptools-only),
 then `setup.py bdist_wheel` with `CC=gcc CXX=g++`. Two container traps,
 both from the bootstrap python baking the portable-python build flags into
@@ -6235,7 +6235,7 @@ Fixed in `build/yosys/yosys-wrapper`; the build smoke now runs a script shaped
 like the real `scripts/pyosys/json_header.py` and asserts
 `sys.argv == [script, --config-in, cfg]`.
 
-**2. The `libpython3.14.so.1.0` `.dynsym` defect.** See the portable-python
+**2. The `libpython3.15.so.1.0` `.dynsym` defect.** See the portable-python
 section elsewhere in this file -- invalid `st_shndx` on 1822 entries (205 OBJECT
 and 1617 FUNC) made `openroad -python` SIGSEGV at stage 16.
 
@@ -6524,7 +6524,7 @@ Chromium build.
 - **gcc-toolset-14** (`/opt/rh/gcc-toolset-14/enable`) -- both addons'
   `binding.gyp` request `-std=gnu++20`, which base gcc 8.5 rejects
   (`unrecognized command line option '-std=gnu++20'`).
-- **python3.14 for node-gyp** -- node-gyp 10's bundled gyp uses PEP 572
+- **python3.15 for node-gyp** -- node-gyp 10's bundled gyp uses PEP 572
   (walrus) syntax that EL8's Python 3.6 cannot even *parse*; `configure` dies
   with `SyntaxError: invalid syntax` inside `gyp/pylib/gyp/common.py`. The
   build script points `npm_config_python` at the loadout payload's
@@ -6637,8 +6637,8 @@ escape hatch, rather than a bogus configuration complaint.
 ### Post-build (mandatory, in order)
 
 ```bash
-./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.14 build/gen-installed-sizes"'
-./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.14 build/gen-content-manifest"'
+./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.15 build/gen-installed-sizes"'
+./build/build-shell 'bash -c "PATH=/repo/.loadout-bootstrap/bin:\$PATH python3.15 build/gen-content-manifest"'
 ```
 
 (`strip-all-elf-binaries` runs inside the build script; it auto-chunks the

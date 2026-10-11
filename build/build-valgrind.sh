@@ -30,8 +30,8 @@
 #   ./build/build-valgrind.sh --tag 3.27.1
 #
 # After this script:
-#   ./build/strip-all-elf-binaries && python3.14 build/gen-installed-sizes \
-#     && python3.14 build/gen-content-manifest
+#   ./build/strip-all-elf-binaries && python3.15 build/gen-installed-sizes \
+#     && python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -295,8 +295,8 @@ echo "Produced: $VALGRIND_TAR"
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-installed-sizes"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-installed-sizes"
+echo "  python3.15 build/gen-content-manifest"
 echo "  git add payload/el8.x86_64.glibc2p28/runtime/valgrind.tar.bz2 \\"
 echo "          payload/packages.json .strip-manifest .content-manifest \\"
 echo "          payload/installed-sizes.json build/ADDING_BINARIES.md \\"

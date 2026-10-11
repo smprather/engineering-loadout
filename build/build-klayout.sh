@@ -19,7 +19,7 @@
 #   Ruby   from the loadout `ruby` package (libruby.so.3.3, RPATH $ORIGIN).
 #          Required, not optional: KLayout's DRC and LVS runsets ARE Ruby, so
 #          -noruby would remove the main reason to ship KLayout in an EDA flow.
-#   Python from `portable-python` (libpython3.14.so.1.0 in <prefix>/lib).
+#   Python from `portable-python` (libpython3.15.so.1.0 in <prefix>/lib).
 #
 # HOW THE RUBY HEADERS ARE OBTAINED -- do NOT switch the build box's dnf module
 # stream. EL8's default ruby stream is 2.5 and the loadout ships 3.3, so
@@ -38,7 +38,7 @@
 # lives in ~/.local/lib, which is not on ld's search path. libklayout_pya.so
 # itself links fine (shared objects tolerate undefined symbols), but when the
 # strm* "buddy" executables link -lklayout_pya, ld must resolve its DT_NEEDED
-# libpython3.14.so.1.0 transitively, cannot find it, and the build dies with
+# libpython3.15.so.1.0 transitively, cannot find it, and the build dies with
 # ~200 "undefined reference to `PyList_GetItem'" errors after ~20 minutes of
 # compiling. Exporting LD_LIBRARY_PATH=<portable-python lib> fixes it. This is
 # NOT a runtime path -- the deployed RPATHs below are what resolve libpython on
@@ -61,7 +61,7 @@
 # Prerequisites on the build machine (EL8):
 #   dnf install qt5-qtbase-devel qt5-qtsvg-devel qt5-qtxmlpatterns-devel \
 #               gcc-c++ make which curl rpm-build cpio
-#   plus `loadout install portable-python` (headers + libpython3.14.so).
+#   plus `loadout install portable-python` (headers + libpython3.15.so).
 #   NOTE: qt5-qtxmlpatterns-devel is easy to miss -- without it qmake stops with
 #   "Project ERROR: Unknown module(s) in QT: xmlpatterns".
 #
@@ -177,13 +177,13 @@ pkg-config --exists Qt5XmlPatterns || {
 # bootstrap Python, which carries the same headers, then ~/.local.
 if [ -n "${LOADOUT_PY_PREFIX:-}" ]; then
     PY_PREFIX="$LOADOUT_PY_PREFIX"
-elif [ -f "$HOME/.local/include/python3.14/Python.h" ]; then
+elif [ -f "$HOME/.local/include/python3.15/Python.h" ]; then
     PY_PREFIX="$HOME/.local"
 else
     PY_PREFIX="$REPO/.loadout-bootstrap"
 fi
-PY_INC="$PY_PREFIX/include/python3.14"
-PY_LIB="$PY_PREFIX/lib/libpython3.14.so"
+PY_INC="$PY_PREFIX/include/python3.15"
+PY_LIB="$PY_PREFIX/lib/libpython3.15.so"
 [ -f "$PY_INC/Python.h" ] || {
     echo "ERROR: $PY_INC/Python.h not found." >&2
     echo "  Run: ./loadout install portable-python" >&2
@@ -306,7 +306,7 @@ export LD_LIBRARY_PATH="$PY_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     -prefix "$INST_DIR" \
     -release \
     -rbinc "$RB_INC" -rbinc2 "$RB_INC" -rblib "$RB_LIB" -rbvers "$RB_VERS" \
-    -python "$PY_PREFIX/bin/python3.14" -pyinc "$PY_INC" -pylib "$PY_LIB" \
+    -python "$PY_PREFIX/bin/python3.15" -pyinc "$PY_INC" -pylib "$PY_LIB" \
     -without-qt-uitools -without-qt-designer -without-qt-multimedia -without-qt-sql \
     -nolibgit2 \
     -j"$(nproc 2>/dev/null || echo 2)" >"$WORK_DIR/build.log" 2>&1 || {
@@ -389,7 +389,7 @@ cp -a "$INST_DIR" "$STAGE/lib/klayout"
 echo "==> Stripping + setting RPATHs ..."
 # KLayout's tree is flat at <prefix>/lib/klayout, so each depth needs its own
 # hop count back to <prefix>/lib64 (bundled Qt5/ruby/X11) and <prefix>/lib
-# (portable-python's libpython3.14.so.1.0).
+# (portable-python's libpython3.15.so.1.0).
 set_rpaths() {
     _dir=$1
     _rpath=$2
@@ -475,7 +475,7 @@ for f in $(find "$STAGE/lib/klayout" -type f ! -type l -name '*.so*'; \
             # GLVND dispatchers: must come from the host display stack.
             libGL.so.1|libGLX.so.0|libGLdispatch.so.0) continue ;;
             # portable-python (installed to <prefix>/lib, reached by RPATH).
-            libpython3.14.so.1.0) continue ;;
+            libpython3.15.so.1.0) continue ;;
             # EL8 base, transitively required by the bundled glib/Qt stack.
             liblzma.so.5|liblz4.so.1|libsystemd.so.0|libselinux.so.1) continue ;;
             libblkid.so.1|libmount.so.1|libcap.so.2|libffi.so.6) continue ;;

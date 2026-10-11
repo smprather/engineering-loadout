@@ -18,7 +18,7 @@
 #   ./build/build-simple-c.sh --tool yara --tag 4.5.8 --src /path/to/yara.tar.gz
 #
 # Then, as for every payload change:
-#   ./build/strip-all-elf-binaries && python3.14 build/gen-content-manifest
+#   ./build/strip-all-elf-binaries && python3.15 build/gen-content-manifest
 #
 # yara is the exception: it is the engine for build/scan-for-malware -- dev
 # tooling, not a shipped package. Its output lands in build/yara/ (export-

@@ -72,8 +72,8 @@
 #
 # Then, as for every payload change:
 #   ./build/strip-all-elf-binaries
-#   python3.14 build/gen-installed-sizes
-#   python3.14 build/gen-content-manifest
+#   python3.15 build/gen-installed-sizes
+#   python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -543,5 +543,5 @@ echo "Provenance: $PROV"
 echo ""
 echo "Next (order matters -- sizes must be regenerated before the manifest):"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-installed-sizes"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-installed-sizes"
+echo "  python3.15 build/gen-content-manifest"

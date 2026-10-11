@@ -181,10 +181,10 @@ step leaves Tier 1 red, and `./build/update --commit` will happily commit the dr
 ```bash
 ./build/strip-all-elf-binaries                    # 1. strip/normalize/chunk; updates .strip-manifest
 ./loadout completion bash > envs/bash/global/completions/loadout.bash   # 2. only if verbs/flags/package names changed
-python3.14 build/gen-installed-sizes        # 3. re-pin every artifact's UNCOMPRESSED size
-python3.14 build/gen-content-manifest       # 4. re-pin every payload sha256
-python3.14 build/gen-installed-sizes --check    # 5. prove it
-python3.14 build/gen-content-manifest --check   # 6. prove it
+python3.15 build/gen-installed-sizes        # 3. re-pin every artifact's UNCOMPRESSED size
+python3.15 build/gen-content-manifest       # 4. re-pin every payload sha256
+python3.15 build/gen-installed-sizes --check    # 5. prove it
+python3.15 build/gen-content-manifest --check   # 6. prove it
 ```
 
 **Step 3 comes before step 4 and the order is not cosmetic.**
@@ -221,7 +221,7 @@ honestly re-run the scan and the dynamic detonation:
 
 ```bash
 tests/prebuilt-binaries-almalinux8 --no-build --dynamic   # network-isolated
-python3.14 tests/assurance-check
+python3.15 tests/assurance-check
 ```
 
 `assurance-check` detects drift; it does not fix it. The re-pin is manual and

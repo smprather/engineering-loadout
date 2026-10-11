@@ -20,7 +20,7 @@
 # sha256 (like OX_REPO_COMMIT in build-strace-ui.sh).
 #
 # Layout (relocatable, no absolute paths):
-#   bin/sby              sh wrapper -> <prefix>/bin/python3.14 <prefix>/share/sby/sby.py
+#   bin/sby              sh wrapper -> <prefix>/bin/python3.15 <prefix>/share/sby/sby.py
 #   share/sby/sby*.py    sby sources (runtime/sby.tar.bz2)
 #   bin/z3               SMT solver ELF (bin/z3.bz2)
 # sby finds yosys + z3 on PATH (both are loadout bins). The upstream Makefile
@@ -142,11 +142,11 @@ cp -r "/tmp/sby-click-$$/click" "$STAGE/share/sby/click"
 cp -r "/tmp/sby-click-$$"/click-*.dist-info "$STAGE/share/sby/"
 chmod -R a+rX "$STAGE/share/sby/click" "$STAGE"/share/sby/click-*.dist-info
 rm -rf "/tmp/sby-click-$$"
-python3.14 -c "import sys; sys.path.insert(0, '$STAGE/share/sby'); import click; from importlib.metadata import version; print('  vendored click OK:', version('click'))"
+python3.15 -c "import sys; sys.path.insert(0, '$STAGE/share/sby'); import click; from importlib.metadata import version; print('  vendored click OK:', version('click'))"
 
 # --- bin/sby wrapper ----------------------------------------------------------
 # Derives prefix from its own path (never $HOME -- dest-dir installs must work),
-# runs the prefix python3.14 (portable-python, a hard dep), falls back to PATH.
+# runs the prefix python3.15 (portable-python, a hard dep), falls back to PATH.
 cat > "$STAGE/bin/sby" <<'WRAPPER'
 #!/bin/sh
 # sby launcher -- SymbiYosys formal verification front-end.
@@ -156,9 +156,9 @@ case "$0" in
     *) script=$(command -v "$0") || exit 127 ;;
 esac
 prefix=$(CDPATH= cd -- "$(dirname -- "$script")/.." && pwd) || exit 1
-py="$prefix/bin/python3.14"
+py="$prefix/bin/python3.15"
 if [ ! -x "$py" ]; then
-    py=$(command -v python3.14) || py=$(command -v python3) || {
+    py=$(command -v python3.15) || py=$(command -v python3) || {
         echo "sby: no python3 found (need portable-python or system python3)" >&2
         exit 127
     }

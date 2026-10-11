@@ -58,7 +58,7 @@
 # (the trap build-octave.sh hit with a fixed /tmp/octave-install).
 #
 # Then, as for every payload change:
-#   ./build/strip-all-elf-binaries && python3.14 build/gen-content-manifest
+#   ./build/strip-all-elf-binaries && python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -309,5 +309,5 @@ echo "note there to $TAG."
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-content-manifest"
 echo "  git add payload/el8.x86_64.glibc2p28/lib64/${SONAME}.bz2 .strip-manifest .content-manifest"

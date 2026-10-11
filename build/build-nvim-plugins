@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 build-nvim-plugins -- rebuild the offline Neovim plugin bundle from the
 commit-pinned lockfile, in a clean staging directory, and scan it before

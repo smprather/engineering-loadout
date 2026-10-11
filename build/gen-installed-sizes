@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """gen-installed-sizes -- record the UNCOMPRESSED size of every payload artifact.
 
 `loadout install` shows a dnf-style transaction summary, and the number a user
@@ -22,8 +22,8 @@ granularity lets the installer union the file sets first and size the union
 once.
 
 Usage:
-    python3.14 build/gen-installed-sizes            # write the map
-    python3.14 build/gen-installed-sizes --check    # fail if stale (Tier 1)
+    python3.15 build/gen-installed-sizes            # write the map
+    python3.15 build/gen-installed-sizes --check    # fail if stale (Tier 1)
 """
 
 import bz2
@@ -225,7 +225,7 @@ def main(argv):
             with open(OUT) as fh:
                 have = fh.read()
         except FileNotFoundError:
-            print("installed-sizes.json is missing. Run: python3.14 build/gen-installed-sizes")
+            print("installed-sizes.json is missing. Run: python3.15 build/gen-installed-sizes")
             return 1
         if have != text:
             old = json.loads(have).get("sizes", {})
@@ -235,7 +235,7 @@ def main(argv):
                 print(f"  {k}: {old.get(k)} -> {sizes.get(k)}")
             if len(drift) > 10:
                 print(f"  ... and {len(drift) - 10} more")
-            print("Run: python3.14 build/gen-installed-sizes")
+            print("Run: python3.15 build/gen-installed-sizes")
             return 1
         print(f"installed-sizes.json OK ({len(sizes)} artifacts)")
         return 0

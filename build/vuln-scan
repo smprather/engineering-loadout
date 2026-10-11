@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """vuln-scan -- known-vulnerability scan of the pinned wheelhouse via osv-scanner.
 
 Scope: the Python wheelhouse (newest version per package -- what a fresh uv

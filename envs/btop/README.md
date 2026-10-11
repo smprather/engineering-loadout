@@ -93,7 +93,7 @@ Adding or replacing themes: drop the `.theme` file into `envs/btop/themes/` and
 run the payload chain:
 
 ```
-python3.14 build/build-btop.sh --tag 1.4.7   # repack themes + tour
+python3.15 build/build-btop.sh --tag 1.4.7   # repack themes + tour
 ./build/strip-all-elf-binaries               # normalizes the archive; regen sizes+manifest
-python3.14 build/build-btop.sh --tag 1.4.7 --check
+python3.15 build/build-btop.sh --tag 1.4.7 --check
 ```

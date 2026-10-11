@@ -47,7 +47,7 @@
 #    PACKAGED binary's did not. The smoke below now runs on the packaged
 #    artifacts for that reason.
 #
-#    So: `depends: [portable-python]` (it supplies libpython3.14, libtcl8.6 AND
+#    So: `depends: [portable-python]` (it supplies libpython3.15, libtcl8.6 AND
 #    the matching script tree) + lib-first RPATH. Verified with no wrapper and
 #    no TCL_LIBRARY export, so the repo's standing rule against exporting it
 #    survives. DO NOT "fix" a future Tcl failure by adding either -- fix the
@@ -111,7 +111,7 @@ GTEST_TAG=v1.17.0
 
 # The solver libs OR-Tools leaves shared even in a static build. These are the
 # only things this package has to bundle; everything else in the closure is EL8
-# base or already a loadout package (portable-python supplies libpython3.14 and
+# base or already a loadout package (portable-python supplies libpython3.15 and
 # libtcl8.6).
 SOLVER_LIBS="libCbcSolver.so.2 libOsiCbc.so.2 libCbc.so.2 libCgl.so.0 \
 libClpSolver.so.1 libOsiClp.so.1 libClp.so.1 libOsi.so.0 libCoinUtils.so.2 \
@@ -356,11 +356,11 @@ build_openroad() {
     # OpenROAD embeds CPython (src/CMakeLists.txt:138,
     # `find_package(Python3 COMPONENTS Development REQUIRED)`), so the build
     # needs a Python 3.14 development prefix -- headers AND libpython, matching
-    # the runtime the binary will embed. The build image has no python3.14; the
+    # the runtime the binary will embed. The build image has no python3.15; the
     # interpreter is loadout's own portable-python, so extract it from the
     # payload exactly as the build smoke and the installer do. CMake finds it
     # through CMAKE_PREFIX_PATH (below), and because the tree is the SAME one
-    # that ships, the embedded libpython3.14.so.1.0 is the one the deployed
+    # that ships, the embedded libpython3.15.so.1.0 is the one the deployed
     # binary links -- not the build box's system python.
     #
     # NOTE the archive layout: the tarball's root directory contains BUILD.md,
@@ -371,7 +371,7 @@ build_openroad() {
     # local/local/include and the Development check fails). Extract whole and
     # install out of the extracted tree.
     #
-    # This is why the binary's NEEDED list carries libpython3.14.so.1.0 and
+    # This is why the binary's NEEDED list carries libpython3.15.so.1.0 and
     # portable-python is a hard `depends` of this package.
     PP_TAR=$(ls "$REPO"/payload/*/portable-python-*.tar.bz2 2> /dev/null | head -1)
     [ -n "$PP_TAR" ] || { echo "ERROR: no portable-python archive in payload/." >&2; exit 1; }
@@ -387,17 +387,17 @@ build_openroad() {
         tail -20 "$WORK/pp.log" >&2
         exit 1
     }
-    [ -f "$PY_PREFIX/include/python3.14/Python.h" ] || {
+    [ -f "$PY_PREFIX/include/python3.15/Python.h" ] || {
         echo "ERROR: no Python.h under $PY_PREFIX -- the Development component is missing." >&2
         exit 1
     }
-    [ -f "$PY_PREFIX/lib/libpython3.14.so" ] || {
-        echo "ERROR: no libpython3.14.so under $PY_PREFIX -- embed will fail." >&2
+    [ -f "$PY_PREFIX/lib/libpython3.15.so" ] || {
+        echo "ERROR: no libpython3.15.so under $PY_PREFIX -- embed will fail." >&2
         exit 1
     }
     echo "    python dev prefix: $PY_PREFIX ($(python3 -c 'print("ok")' 2>/dev/null || echo ok))"
 
-    # libpython's own SONAME is libpython3.14.so.1.0 and nothing in
+    # libpython's own SONAME is libpython3.15.so.1.0 and nothing in
     # PY_PREFIX/lib carries that name, so record the lib dir for the link.
     # -static-libstdc++/-static-libgcc: gcc-toolset-14 is mandatory for C++20,
     # and without these the binary floors above stock EL8's GLIBCXX_3.4.25 --
@@ -493,7 +493,7 @@ echo "==> Checking the binary is PIE and embeds CPython correctly ..."
 #   libpython. A consumer that references them needs the loader to COPY them
 #   into its own image, which the linker emits as an R_X86_64_COPY relocation
 #   ONLY IF libpython's .dynsym entry for the symbol names a REAL section
-#   (valid st_shndx). The portable-python 3.14.7 archive shipped a library whose
+#   (valid st_shndx). The portable-python 3.15.0 archive shipped a library whose
 #   data-object entries pointed at RELOCATION sections instead, so the linker
 #   silently emitted a PC-relative reference to a zero-filled .bss slot and
 #   Py_InitializeFromConfig segfaulted in type_ready. Fixed by
@@ -567,7 +567,7 @@ for so in $(readelf -d "$BIN" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p'); do
         libc.so.6 | libm.so.6 | libdl.so.2 | libpthread.so.0 | librt.so.1 | ld-linux-x86-64.so.2) ;;
         libgomp.so.1 | libz.so.1 | libbz2.so.1 | liblzma.so.5 | libzstd.so.1) ;;
         libicudata.so.60 | libicui18n.so.60 | libicuuc.so.60) ;;
-        libtcl8.6.so | libpython3.14.so.1.0) ;;  # portable-python (a hard depend)
+        libtcl8.6.so | libpython3.15.so.1.0) ;;  # portable-python (a hard depend)
         *)
             found=0
             for want in $SOLVER_LIBS; do [ "$so" = "$want" ] && found=1; done
@@ -628,7 +628,7 @@ for so in $SOLVER_LIBS; do
     bzip2 -dc "$LIB_DIR/$so.bz2" > "$SMOKE/lib64/$so"
 done
 # portable-python supplies BOTH libtcl8.6.so (with its 8.6.17 script tree) and
-# libpython3.14.so.1.0; a real install has it as a hard depend. Extract it from
+# libpython3.15.so.1.0; a real install has it as a hard depend. Extract it from
 # the payload into the smoke tree rather than borrowing the build box's
 # $HOME/.local: the container build has no $HOME/.local at all, and a smoke that
 # depends on the box it runs on is exactly the masking class this script keeps
@@ -645,8 +645,8 @@ tar xjf "$PP_TAR" -C "$WORK/pp" --strip-components=1
     tail -20 "$WORK/pp-install.log" >&2
     exit 1
 }
-[ -x "$SMOKE/pp/bin/python3.14" ] || {
-    echo "ERROR: smoke tree has no python3.14 after install." >&2
+[ -x "$SMOKE/pp/bin/python3.15" ] || {
+    echo "ERROR: smoke tree has no python3.15 after install." >&2
     exit 1
 }
 ln -s "$SMOKE/pp/lib" "$SMOKE/lib"
@@ -692,7 +692,7 @@ for so in openroad $SOLVER_LIBS; do
             # Supplied by portable-python, which is a hard `depends` of this
             # package (and is staged into $SMOKE/pp above, so it also shows up
             # in the tree on a real install: <prefix>/lib/).
-            libpython3.14.so.1.0|libtcl8.6.so)
+            libpython3.15.so.1.0|libtcl8.6.so)
                 continue ;;
         esac
         # Anything else must be a lib this package DECLARES -- either one it
@@ -754,7 +754,7 @@ echo "  packaged binary read LEF+DEF: 12 instances / 24 nets via the Tcl API"
 # relocation bug (see build_openroad) leaves Tcl perfectly healthy. This runs
 # the same packaged binary with -python and requires it to actually initialise
 # CPython and evaluate code. portable-python's lib dir is already on the staged
-# RPATH (../lib), which is where libpython3.14.so.1.0 lives.
+# RPATH (../lib), which is where libpython3.15.so.1.0 lives.
 pyout=$("$SMOKE/bin/openroad" -python -c 'print("SMOKE_PY_OK", 6*7)' 2>&1) || {
     echo "$pyout" >&2
     echo "ERROR: openroad -python failed -- the embedded interpreter is broken." >&2
@@ -778,7 +778,7 @@ Done. OpenROAD $tag
 
 Next, as for every payload change:
   ./build/strip-all-elf-binaries
-  python3.14 build/gen-installed-sizes   # before the manifest: it hashes this file
-  python3.14 build/gen-content-manifest
-  python3.14 build/gen-readme-table
+  python3.15 build/gen-installed-sizes   # before the manifest: it hashes this file
+  python3.15 build/gen-content-manifest
+  python3.15 build/gen-readme-table
 EOF

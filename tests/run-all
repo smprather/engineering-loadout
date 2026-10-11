@@ -49,13 +49,13 @@ for arg in "$@"; do
 done
 
 PY=""
-for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14" python3.14; do
+for cand in "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
     if command -v "$cand" > /dev/null 2>&1; then
         PY=$cand
         break
     fi
 done
-[ -n "$PY" ] || { echo "ERROR: python3.14 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
+[ -n "$PY" ] || { echo "ERROR: python3.15 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
 
 FAILURES=0
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/test-cache-v1"

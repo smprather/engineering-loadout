@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """Pinned pipeline security tools: syft + osv-scanner (fetch and verify).
 
 gitleaks is committed under build/gitleaks/ because the T1 secret scan must

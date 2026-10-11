@@ -1524,8 +1524,8 @@ def main(
             )
         _set_pkg_interval(pkg, spec)
         print(f"{pkg}: auto_update_interval -> {spec}")
-        print("Remember to re-run: python3.14 build/gen-installed-sizes,")
-        print("then python3.14 build/gen-content-manifest (sizes first -- the manifest hashes them).")
+        print("Remember to re-run: python3.15 build/gen-installed-sizes,")
+        print("then python3.15 build/gen-content-manifest (sizes first -- the manifest hashes them).")
         return
 
     if show_currency:

@@ -68,7 +68,7 @@ FARM_ALIASES = {
     "tealdeer": "tldr",
     "vd": "visidata",
     "jupyter-lab": "jupyterlab",
-    "python3.14": "portable-python",
+    "python3.15": "portable-python",
 }
 
 PASSED = 0

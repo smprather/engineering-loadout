@@ -1,8 +1,8 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """loadout -- package-manager installer body.
 
 Invoked via the POSIX-sh shim `loadout`, which resolves the bundled
-portable Python 3.14 and execs this module under it. Direct execution
+portable Python 3.15 and execs this module under it. Direct execution
 under any other interpreter is rejected.
 """
 
@@ -2355,7 +2355,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
         "launcher": "librelane",
         # Relative to the tool venv root (<tools>/<dist>): every wheel's top
         # level lands here.
-        "site_packages": "lib/python3.14/site-packages",
+        "site_packages": "lib/python3.15/site-packages",
     },
 }
 
@@ -2398,7 +2398,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
 # different layers in two separate blocks. Patching only the V branch leaves
 # half the pins mis-placed -- measured GPL HPWL 6.0e5 instead of 1.8e3, still
 # far off the reference. Both branches must be normalized.
-_LIBRELANE_IO_PLACE_REL = "lib/python3.14/site-packages/librelane/scripts/odbpy/io_place.py"
+_LIBRELANE_IO_PLACE_REL = "lib/python3.15/site-packages/librelane/scripts/odbpy/io_place.py"
 
 IO_PLACE_H_OLD = """\
     else:
@@ -2640,14 +2640,14 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         return
 
     uv_bin = os.path.join(_local_root(home), "bin", "uv")
-    python_bin = os.path.join(_local_root(home), "bin", "python3.14")
+    python_bin = os.path.join(_local_root(home), "bin", "python3.15")
     if not os.path.isfile(uv_bin):
         warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
         return
     if not os.path.isfile(python_bin):
-        warn(f"python3.14 not found at {python_bin} -- Python tools will NOT be installed")
-        record_result("Python tools", "FAIL", "python3.14 not installed")
+        warn(f"python3.15 not found at {python_bin} -- Python tools will NOT be installed")
+        record_result("Python tools", "FAIL", "python3.15 not installed")
         return
 
     # Rejoin any chunked wheels into a temp dir so uv can find whole files.
@@ -6421,7 +6421,7 @@ def render_transaction(requested, selected, registry, repo_dir):
     if not _INSTALLED_SIZES_OK:
         print("WARNING: payload/installed-sizes.json missing or unreadable --")
         print("         sizes above are COMPRESSED payload bytes, not installed size.")
-        print("         Regenerate with: python3.14 build/gen-installed-sizes")
+        print("         Regenerate with: python3.15 build/gen-installed-sizes")
     return len(selected), total
 
 

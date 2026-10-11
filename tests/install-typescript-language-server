@@ -19,13 +19,13 @@ fail() {
 }
 
 py=""
-for cand in "$HOME/.local/bin/python3.14" "$repo_dir/.loadout-bootstrap/bin/python3.14" python3.14; do
+for cand in "$HOME/.local/bin/python3.15" "$repo_dir/.loadout-bootstrap/bin/python3.15" python3.15; do
     if command -v "$cand" >/dev/null 2>&1; then
         py=$cand
         break
     fi
 done
-[[ -n $py ]] || fail "python3.14 not found"
+[[ -n $py ]] || fail "python3.15 not found"
 
 echo "Installing typescript-language-server into: $dest_dir"
 env -i \

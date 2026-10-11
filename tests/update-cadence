@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """update-cadence -- unit tests for ./build/update's auto-update throttle.
 
 The cadence layer decides whether the no-argument `./build/update` sweep

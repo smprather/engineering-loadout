@@ -59,7 +59,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 loadout_require_tag "$tag" "$0" "$RELEASES_URL" "v1.0.1"
-loadout_require_cmds git uv python3.14
+loadout_require_cmds git uv python3.15
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/build-${PKG}.XXXXXX")
 trap 'rm -rf "$workdir"' EXIT
@@ -95,7 +95,7 @@ echo "  $(basename "$wheel")"
 
 # The console-script name and the dependency closure both come from the wheel
 # itself, so check the artifact rather than the repo files.
-python3.14 - "$wheel" "$EXPECT_SCRIPT" "$WHEELS_DIR" <<'PYEOF'
+python3.15 - "$wheel" "$EXPECT_SCRIPT" "$WHEELS_DIR" <<'PYEOF'
 import sys, zipfile, glob, os, re
 
 wheel, expect_script, wheels_dir = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -160,8 +160,8 @@ loadout_stamp_version "$PKG" "$version"
 
 echo ""
 echo "Next:"
-echo "  python3.14 build/gen-content-manifest"
-echo "  python3.14 build/gen-readme-table"
+echo "  python3.15 build/gen-content-manifest"
+echo "  python3.15 build/gen-readme-table"
 echo "  ./loadout completion bash > envs/bash/global/completions/loadout.bash"
 echo "  tests/prebuilt-binaries"
 echo "  git add payload/ .content-manifest build/build-${PKG}.sh \\"

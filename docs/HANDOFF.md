@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-10-11 (1): Python 3.15.0 lands in the payload (W2, UNRELEASED)
+
+`portable-python` is now **3.15.0**, built in the EL8 container exactly like
+3.14.7 (clang-23, PGO + full LTO + BOLT) **plus**
+`--enable-experimental-jit=yes-off`: the JIT is compiled in, off by default,
+enabled per process with `PYTHON_JIT=1` (verified: `sys._jit.is_available()
+== True`, `is_enabled() == False`, env toggle True). The import's dynsym gate
+reproduced the BOLT bug on the new `libpython3.15.so.1.0` and repaired **2001
+entries** (text 1808 / data 181 / rodata 12), re-check clean.
+
+- Payload: `portable-python-3.15.0-el8-clang23.tar.bz2` (26.1 MiB) replaces
+the 3.14.7 archive; registry `portable-python` version -> 3.15.0; the removed
+archive's installed-sizes entry is gone (6369 artifacts).
+- Sweep: every bundled-interpreter reference `python3.14` -> `python3.15`
+across 95 files (shim, installer, build/, tests, hooks, current docs). The
+`>= 3.14` floor and PEP 758 notes are unchanged: 3.14 stays the minimum, the
+bundled interpreter is a runtime choice.
+- Sync chain regenerated and green: installed-sizes, README table (version
+cells; two hand-owned description rows updated), content-manifest.
+- T1 `tests/run-all --fast` green; bootstrap verified (`./loadout -V`
+cold-extracts 3.15 into `.loadout-bootstrap/`; the bundled python reports
+3.15.0 with JIT available/off).
+- Build-side lessons (full record:
+`docs/superpowers/specs/2026-10-10-python-315-and-tcl-path-design.md`): the
+JIT's unwind-info generator needs `llvm-dwarfdump`, absent from the LLVM 23
+toolchain -- built from the LLVM 23 source tree -- and upstream's
+`third-party/siphash` header, missing from the trimmed checkout. Staging
+placeholder replacements must be EXACT-length: a 16->15 placeholder
+corrupted `libzstd.so.1.5.7` ("ELF load command past end of file") and the
+old `readelf -d` validation missed it; `repair.sh` now ends with strict
+`readelf -lW` validation. `audit.sh`'s `| head` pipes needed `|| true` under
+`pipefail` (flaky SIGPIPE 141).
+
+**Next (W3):** wheelhouse refresh cp314 -> cp315 -- the 46 compiled wheels
+plus the 3 first-party maturin wheels (`lefdef_tools`, `liberty_tools`,
+`lln_libparse`); then T2/T3 and the class C release.
+
 ## 2026-10-09 (1): `loadout search` GROUPS column -- direct + synthetic membership (UNRELEASED)
 
 Operator request: see which groups contain each search hit. Bounded change

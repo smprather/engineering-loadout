@@ -49,10 +49,10 @@ if [ -z "$TAG" ]; then
 fi
 
 PY=
-for cand in "$HOME/.local/bin/python3.14" "$(command -v python3.14 || true)" "$(command -v python3 || true)"; do
+for cand in "$HOME/.local/bin/python3.15" "$(command -v python3.15 || true)" "$(command -v python3 || true)"; do
     if [ -n "$cand" ] && [ -x "$cand" ]; then PY="$cand"; break; fi
 done
-[ -n "$PY" ] || { echo "ERROR: no python3.14/python3 found" >&2; exit 1; }
+[ -n "$PY" ] || { echo "ERROR: no python3.15/python3 found" >&2; exit 1; }
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {
@@ -215,5 +215,5 @@ echo "Done."
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-installed-sizes"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-installed-sizes"
+echo "  python3.15 build/gen-content-manifest"

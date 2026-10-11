@@ -198,7 +198,7 @@ uses a clean base image, copies this checkout inside the container, installs
 `@shared` into a temp `--dest-dir`, and probes every installed executable with
 only the staged `<dest>/bin` plus a basic system PATH. The container does not
 install Python for the harness; it uses `./loadout` to bootstrap the bundled
-Python 3.14 first. The smoke reports deliberate host contracts as skips: `cloc`
+Python 3.15 first. The smoke reports deliberate host contracts as skips: `cloc`
 needs host Perl, `meld` needs EL8 `/usr/bin/python3.6`, and OpenGL GUI apps need
 host GLVND dispatchers such as `libGL.so.1`.
 
@@ -262,7 +262,7 @@ OpenSSH for those.
 | broot | bin | 1.61.0 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.17.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
-| klayout | bin | 0.30.12 | KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5); embeds the loadout Ruby 3.3 and portable Python 3.14 |
+| klayout | bin | 0.30.12 | KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5); embeds the loadout Ruby 3.3 and portable Python 3.15 |
 | verilator | bin | 5.052 | Verilator — Verilog/SystemVerilog to C++ simulator (lint, coverage, cycle-accurate regression models); needs host perl and the user’s own g++ |
 | yazi | bin | 26.9.1 | Blazing-fast terminal file manager (static-pie musl build, no glibc dep); ships the `ya` CLI companion |
 | btm | bin | 0.14.9 | Cross-platform system resource monitor (TUI) |
@@ -376,10 +376,10 @@ OpenSSH for those.
 | jupyterlab | python-tool | 4.6.4 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | v2026.9.15 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
-| cicwave | python-tool | 0.7.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.14 wheel). Opt-in: ./loadout install cicwave |
+| cicwave | python-tool | 0.7.2 | cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.15 wheel). Opt-in: ./loadout install cicwave |
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
-| portable-python | python-base | 3.14.7 | BOLT-optimized portable CPython build with bundled install.sh |
+| portable-python | python-base | 3.15.0 | BOLT-optimized portable CPython build with bundled install.sh |
 | gobject-typelibs | typelib |  | GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo) |
 | tldr-data | data |  | Bundled tldr-pages cache for offline tealdeer use |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
@@ -414,7 +414,7 @@ Python processes, including notebook kernels; already-running processes retain
 the old mapped library. Verify with:
 
 ```bash
-<prefix>/bin/python3.14 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
+<prefix>/bin/python3.15 -c 'import sqlite3; c = sqlite3.connect(":memory:"); c.execute("CREATE VIRTUAL TABLE probe USING fts5(body)"); print("FTS5 OK")'
 ```
 
 (`<prefix>` is the install root: `~/.local/share/loadout` by default, or
@@ -458,9 +458,9 @@ escape sequences or stall in `wezterm set-working-directory`.
 
 ### Python
 
-[Python](https://www.python.org) **3.14.4** -- a portable Python build that
-installs under the install root (`<prefix>/bin/python3.14`, default
-`~/.local/share/loadout/bin`). Use `python3.14` and `pip3.14` to pin this build.
+[Python](https://www.python.org) **3.15.0** -- a portable Python build that
+installs under the install root (`<prefix>/bin/python3.15`, default
+`~/.local/share/loadout/bin`). Use `python3.15` and `pip3.14` to pin this build.
 
 ---
 

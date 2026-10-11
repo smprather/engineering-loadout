@@ -71,7 +71,7 @@ done
 loadout_require_tag "$tag" "$0" \
     "https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ (dnf module info ruby:3.3)" \
     "3.3.10-7"
-loadout_require_cmds curl rpm2cpio cpio python3.14 tar bzip2
+loadout_require_cmds curl rpm2cpio cpio python3.15 tar bzip2
 
 version="${tag%%-*}"                 # 3.3.10-7 -> 3.3.10
 series="$(echo "$version" | cut -d. -f1,2)"   # -> 3.3
@@ -121,7 +121,7 @@ echo "Extracting ..."
 [ -x "$tree/usr/bin/ruby" ] || { echo "ERROR: no usr/bin/ruby after extract" >&2; exit 1; }
 
 echo "Fixup 1/5: materializing absolute /usr symlinks ..."
-python3.14 - "$tree/usr" << 'PYEOF'
+python3.15 - "$tree/usr" << 'PYEOF'
 import os
 import shutil
 import sys
@@ -382,5 +382,5 @@ loadout_stamp_version ruby "$version"
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-content-manifest"
 echo "  tests/prebuilt-binaries --keep"

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 export: publish a verified, git-less copy of this checkout to an install directory.
 
@@ -169,7 +169,7 @@ def check_manifest_export():
         eprint("\nRefusing to export: .content-manifest does not match the git export.")
         for line in out.splitlines():
             eprint("    " + line)
-        eprint("\nRegenerate it with `python3.14 build/gen-content-manifest`, commit, and")
+        eprint("\nRegenerate it with `python3.15 build/gen-content-manifest`, commit, and")
         eprint("push (see docs/RELEASE.md section 4). --allow-dirty does NOT help here:")
         eprint("the archive is HEAD, not the working tree.")
         return False
@@ -207,7 +207,7 @@ def check_payload(skip_verify):
         for line in out.splitlines():
             if any(k in line.lower() for k in ("mismatch", "drift", "verif", "error")):
                 eprint("    " + line.strip())
-        eprint("\nRegenerate it with `python3.14 build/gen-content-manifest` if the payload")
+        eprint("\nRegenerate it with `python3.15 build/gen-content-manifest` if the payload")
         eprint("changed on purpose (see docs/RELEASE.md section 4).")
         return False
     info("  payload       : " + verified_line)
