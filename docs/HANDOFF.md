@@ -33,9 +33,30 @@ old `readelf -d` validation missed it; `repair.sh` now ends with strict
 `readelf -lW` validation. `audit.sh`'s `| head` pipes needed `|| true` under
 `pipefail` (flaky SIGPIPE 141).
 
-**Next (W3):** wheelhouse refresh cp314 -> cp315 -- the 46 compiled wheels
-plus the 3 first-party maturin wheels (`lefdef_tools`, `liberty_tools`,
-`lln_libparse`); then T2/T3 and the class C release.
+**W3 status (2026-10-11):** the deterministic burn-down is **DONE**.
+
+- 14 same-version cp315 wheels fetched in-container (tag-verified; cp314
+  predecessors pruned) -- commit `93446a9`.
+- `liberty_tools` + `lefdef_tools` rebuilt as cp315 via
+  `build/update --rebuild` (`95eb09f`); `lefdef_tools` needs
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` (its pinned PyO3 0.27.2 caps at 3.14).
+- `lln_libparse` 0.56.0 rebuilt from sdist + manylinux retag (`ed1b933`).
+- `build/security_tools.py`: explicit guards so a malformed pin table is
+  reported instead of crashing the validator (`fec5087`).
+
+Wheelhouse is now **cp314=29 / cp315=17** (238 total). The 29 remaining
+pinned cp314 versions have NO cp315 upstream at the pinned version (upstream
+released cp315 only in newer versions), so their refresh is a version-bump
+pass with per-tool closure proofs -- deferred to the **3.15.1 checkpoint
+(PEP 790: bugfixes every 2 months, ~2026-12-08)**. Also deferred:
+`pyosys` (needs a yosys bump; `build/build-yosys.sh` hardcodes `cp314`),
+`klayout` (heavy pymod wheel), `duckdb` (pygwalker-only, opt-in).
+
+**Operational note:** after the version sweep, repo scripts with python
+shebangs (`build/security_tools.py`, `tests/security-pipeline`, ...) need
+python3.15 on PATH. The dev tree still has 3.14 until
+`./loadout reinstall portable-python -y` (or prefix
+`.loadout-bootstrap/bin`, which T1/`tests/run-all` already does).
 
 ## 2026-10-09 (1): `loadout search` GROUPS column -- direct + synthetic membership (UNRELEASED)
 
