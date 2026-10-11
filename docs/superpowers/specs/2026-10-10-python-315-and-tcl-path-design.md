@@ -224,3 +224,26 @@ tcl9 switch (#10094); OpenSTA carries partial Tcl 9 conditionals.
   re-check clean.
 - Open in W2: registry version/archive, remove the 3.14.7 archive,
   `./loadout` shim + installer/tests/docs sweep, regen chain.
+- W2 closed: commit `817d636` (sweep + regen + T1 green); end-to-end install
+  smoke green (`portable-python uv --dest-dir` → python 3.15.0, JIT
+  available/off, uv 0.12.3).
+
+### W3 progress (2026-10-11, partial)
+
+Per-**version** cp315 probe of the 46 pinned cp314 wheels corrected the
+earlier picture: only **14** have cp315 at the pinned version, and all 14 are
+done — downloaded in-container, tag-verified (cp315 + manylinux/linux),
+installed, and their cp314 predecessors pruned (wheelhouse 238 wheels:
+cp314 32 / cp315 14).
+
+The other **30** pinned versions released cp315 only in NEWER versions (numpy,
+pandas, lxml, pillow, matplotlib, pydantic-core, aiohttp, ...), so their
+refresh is a version-bump exercise with per-tool closure proofs -- exactly the
+work the 3.15.1 checkpoint (PEP 790: bugfixes every 2 months, so ~2026-12-08)
+is meant to absorb once upstream coverage is wider.
+
+Still local/ours at checkpoint time: `lefdef_tools` + `liberty_tools`
+(rolling-git rebuilds), `lln_libparse` (local build), `pyosys` (coupled to a
+yosys bump -- `build/build-yosys.sh` downloads the upstream wheel and hardcodes
+`cp314`), `klayout` (heavy pymod wheel; upstream has no cp315), `duckdb`
+(pygwalker-only, opt-in).
