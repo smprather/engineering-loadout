@@ -1,5 +1,64 @@
 # Current Handoff
 
+## 2026-10-12 (1): xfce4-terminal 1.2.0 evaluated -- GUI toolkits are the one inherited distro dependency (knowledge recorded, not pursued)
+
+Follow-up to the RMB-paste question: **1.0.4 already has it** --
+`MiscRightClickAction` = `TERMINAL_RIGHT_CLICK_ACTION_CONTEXT_MENU` (default) |
+`..._PASTE_CLIPBOARD` | `..._PASTE_SELECTION`, set via Preferences -> Advanced
+or `~/.config/xfce4/terminal/terminalrc` (1.1.0+ moved settings to xfconf:
+channel `xfce4-terminal`, property `/misc-right-click-action`).
+
+**Can we ship upstream 1.2.0 (tag `xfce4-terminal-1.2.0`, 2026-03-08)? No --
+not on the EL8 floor.** Verified against upstream `meson.build` and
+libxfce4ui's `configure.ac.in`:
+
+| dep | 1.2.0 needs | EL8 has |
+|---|---|---|
+| glib | >= 2.44 | 2.56.4 ok |
+| gtk+-3.0 | >= 3.22 | 3.22.30 ok |
+| vte-2.91 | >= 0.51.3 | 0.52.x (bundled stem) ok |
+| libxfce4util | >= 4.16 | 4.16.0 ok |
+| libxfconf-0 | >= 4.16 | 4.16.0 ok |
+| **libxfce4ui-2** | **>= 4.17.5** | **4.16.0 -- BLOCKED** |
+
+The 4.18 line (what >= 4.17.5 points at; 4.17.5 is its dev snapshot) requires
+**GTK >= 3.24, GLib >= 2.66, libxfce4util >= 4.17.2**, and 1.2.0 links
+`libxfce4kbd-private-3` (shared shortcuts-editor API added in that cycle) -- so
+relaxing version checks cannot work either. EPEL8 cannot ship 4.18 (its GTK is
+3.22), so there is no RPM to wait for. 1.2.0 is also bugfix-only (tab-title CPU,
+DnD URI escaping), and its xfconf-only settings would not persist without
+xfconfd (deliberately unbundled). **Decision: stay on 1.0.4.**
+
+**Generalized gap worth keeping:** binaries are source-built for the EL8 floor
+(no lag), but **GUI toolkits are inherited**: `gui_libs` is an EL8-era
+GTK 3.22/Qt5 5.15 stack, so any app needing GTK > 3.22 is blocked until a
+private newer stack exists.
+
+**Escape-hatch shape (design only, not scheduled):**
+1. *Host-first probe*, following the existing GL/fontconfig wrapper blocks:
+   wrappers export bundled paths only when the host cannot supply them. For
+   GTK, probe the host's `libgtk-3.so.0` for the symbols the newer build needs
+   (`readelf --dyn-syms`; GTK symbols are unversioned, so symbol presence is
+   the reliable test), run bare when adequate, else point the loader at the
+   bundled stack. Same `LOADOUT_GUI_HOST_*` knob shape.
+2. *Private newer stack* when needed: per-app co-located (precedent: xschem's
+   private Tcl/Tk, marktext's Chromium closure, firefox's NSS/FFmpeg) for one
+   app; a shared `gtk324` lib-bundle (GTK 3.24 + GLib 2.66 + libxfce4util 4.17
+   + libxfce4ui 4.18) built from source in the EL8 container once several apps
+   need it (glibc 2.28 does not care that GTK is new).
+3. *Hard rule*: NEVER a second `libgtk-3.so.0` on `<prefix>/lib64` or any
+   default loader path -- the modern stack is wrapper-selected or privately
+   co-located, like xschem's Tcl.
+
+Trigger: the first must-have GUI app that needs GTK > 3.22.
+Already-unblocked precedent: **wezterm** (own GL window stack, not GTK) is the
+modern terminal for EL8 nodes today.
+
+**EL9 note (operator):** RHEL EOL pressure moves the fleet onward regardless of
+corporate lag; EL9's stack (GTK 3.24 / GLib 2.68) dissolves this specific
+class, so a private-EL8-stack project should be judged against the fleet's EL9
+timeline -- it may never be worth building for EL8 alone.
+
 ## 2026-10-11 (1): Python 3.15.0 lands in the payload (W2, UNRELEASED)
 
 `portable-python` is now **3.15.0**, built in the EL8 container exactly like

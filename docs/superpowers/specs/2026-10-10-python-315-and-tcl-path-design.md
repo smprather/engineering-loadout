@@ -170,6 +170,10 @@ tcl9 switch (#10094); OpenSTA carries partial Tcl 9 conditionals.
 - The Astral switch itself (scoped as its own future landing once W5's
   decision gate is met).
 - Opportunistic tool bumps beyond the wheelhouse ABI refresh.
+- GUI toolkit lag: xfce4-terminal 1.2.0 evaluated 2026-10-12 and blocked on the
+  EL8 floor (`libxfce4ui >= 4.17.5` -> GTK 3.24/GLib 2.66); the host-probe ->
+  private-stack shape and the EL9 note are recorded in HANDOFF 2026-10-12 (1).
+  Not part of this workstream.
 
 ## Execution log
 
