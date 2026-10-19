@@ -1,0 +1,45 @@
+#!/bin/sh
+# env-bash: a fresh install creates the five override layer directories, and a
+# reinstall preserves what the user put in them.
+#
+# The shipped bashrc sources corp/site/team/project/user unconditionally via
+# source_if_exists, and downstream tooling (e.g. psg-env) locks ~/.config/bash
+# read-only and re-opens only ~/.config/bash/user. If install_bash leaves that
+# directory absent, the user cannot create it afterwards because the parent is
+# already read-only. env-tcsh and env-zsh create the same five layers; env-bash
+# must match.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+TMPHOME="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-bash.XXXXXX")"
+trap 'rm -rf "$TMPHOME"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+HOME="$TMPHOME" "$REPO/loadout" install -y env-bash --no-backup >/dev/null
+
+for layer in corp site team project user; do
+    [ -d "$TMPHOME/.config/bash/$layer" ] || fail "fresh install did not create ~/.config/bash/$layer"
+done
+
+# Downstream hardening (psg-env) locks ~/.config/bash read-only and re-opens
+# only the user layer. That must leave a writable place for overrides.
+chmod -R a-w "$TMPHOME/.config/bash"
+chmod -R u+w "$TMPHOME/.config/bash/user" 2>/dev/null \
+    || fail "~/.config/bash/user is not re-openable after the tree is locked read-only"
+: >"$TMPHOME/.config/bash/user/overlay.conf" \
+    || fail "user cannot write an override after the tree is locked read-only"
+chmod -R u+w "$TMPHOME/.config/bash" # let the EXIT trap remove the tree
+
+# A reinstall must not delete a user-created layer (the same regression the
+# env-st/env-tcsh/env-zsh handlers exist to prevent).
+printf '%s\n' 'export LOADOUT_TEST_KEEPME=1' >"$TMPHOME/.config/bash/user/bashrc"
+HOME="$TMPHOME" "$REPO/loadout" install -y env-bash --no-backup >/dev/null
+
+[ -f "$TMPHOME/.config/bash/user/bashrc" ] || fail "reinstall deleted the user layer"
+for layer in corp site team project user; do
+    [ -d "$TMPHOME/.config/bash/$layer" ] || fail "reinstall deleted ~/.config/bash/$layer"
+done
+
+echo "install-env-bash: OK"

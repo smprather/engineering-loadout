@@ -1,5 +1,21 @@
 # Current Handoff
 
+## 2026-10-19 (1): issue #4 -- env-bash now creates its five override layers
+
+`install_bash()` installed `global/` plus the entrypoint files but never created
+`~/.config/bash/{corp,site,team,project,user}`, while `_install_env_tcsh` and
+`_install_env_zsh` both did. The shipped `envs/bash/bashrc` sources all five via
+`source_if_exists`, and a post-install hardening step (psg-env) makes
+`~/.config/bash` read-only and re-opens only `~/.config/bash/user` -- on a fresh
+HOME that path did not exist and could no longer be created.
+
+Fix: `install_bash()` loops `BASH_LAYERS` with `ensure_dir` after installing the
+managed files, so a fresh install creates the directories and a reinstall leaves
+user contents untouched (only `global/` is synced with delete semantics).
+Regression proof: new `tests/install-env-bash` (registered in `tests/run-all`
+Tier 2) asserts all five directories after a fresh install and after a reinstall
+that must preserve a user `bashrc`.
+
 ## 2026-10-12 (4): the operator's personal tmux user layer merged into the managed global layer -- and the installed-tree drift ported
 
 **Goal (operator):** everything running on this host is the loadout out-of-box

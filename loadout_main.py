@@ -4425,6 +4425,13 @@ def install_bash(repo_dir, home, links_mode):
     )
     install_path(os.path.join(repo_dir, "envs", "bash", "bashrc"), os.path.join(bash_config, "bashrc"), links_mode)
     install_path(os.path.join(repo_dir, "envs", "bash", "profile"), os.path.join(bash_config, "profile"), links_mode)
+    # The five override layers are user-created and survive a reinstall (only
+    # global/ is synced with delete semantics). Create them on a fresh HOME:
+    # the shipped bashrc sources them unconditionally, and a post-install
+    # hardening step (psg-env) makes ~/.config/bash read-only, after which the
+    # user can no longer create ~/.config/bash/user for their overrides.
+    for layer in BASH_LAYERS:
+        ensure_dir(os.path.join(bash_config, layer), "bash config layer")
     for entrypoint in BASH_ENTRYPOINTS:
         lns(".config/bash/bashrc", os.path.join(home, entrypoint), verbose=True)
     lns(".config/bash/profile", os.path.join(home, BASH_PROFILE_ENTRYPOINT), verbose=True)
