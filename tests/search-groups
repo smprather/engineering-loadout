@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# `loadout search` GROUPS column: direct registry groups + synthetic sweeps.
+#
+# Search is read-only, so no install is needed. COLUMNS is pinned wide so each
+# hit renders on one line -- the table's width optimiser otherwise wraps GROUPS
+# at commas, and row-anchored assertions are cleaner without that.
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+out=$(COLUMNS=1000 "$repo/loadout" search vim 2>&1) || fail "search vim exited nonzero"
+grep -q '^PACKAGE[[:space:]].*[[:space:]]GROUPS[[:space:]].*DESCRIPTION' <<<"$out" \
+    || fail "GROUPS column header missing"
+vim_row=$(grep -E '^vim[[:space:]]' <<<"$out") || fail "no vim row"
+for g in @editor-cli @shared @shared-all @all; do
+    grep -q -- "$g" <<<"$vim_row" || fail "vim row missing $g"
+done
+
+# Synthetic semantics: env bundles live in the per-user tree, never @shared;
+# env-bash is one of the two shells @envs covers.
+env_row=$(COLUMNS=1000 "$repo/loadout" search env-tmux 2>&1 | grep -E '^env-tmux[[:space:]]') \
+    || fail "no env-tmux row"
+grep -q '@envs-all' <<<"$env_row" || fail "env-tmux missing @envs-all"
+if grep -q '@shared' <<<"$env_row"; then
+    fail "env-tmux must not be in @shared (per-user env bundle)"
+fi
+bash_row=$(COLUMNS=1000 "$repo/loadout" search env-bash 2>&1 | grep -E '^env-bash[[:space:]]') \
+    || fail "no env-bash row"
+grep -q '@envs' <<<"$bash_row" || fail "env-bash missing @envs"
+
+# Registry groups can nest; a group hit shows its parent group.
+grp_row=$(COLUMNS=1000 "$repo/loadout" search '@editor-cli' 2>&1 | grep -E '^@editor-cli[[:space:]]') \
+    || fail "no @editor-cli row"
+grep -q '@editor-suite' <<<"$grp_row" || fail "@editor-cli missing parent @editor-suite"
+
+# `list` GROUPS still renders direct registry groups only (refactor guard).
+lst_row=$(COLUMNS=1000 "$repo/loadout" list vim 2>&1 | grep -E '^vim[[:space:]]') \
+    || fail "no vim row in list"
+grep -q '@editor-cli' <<<"$lst_row" || fail "list vim lost @editor-cli"
+if grep -q '@shared' <<<"$lst_row"; then
+    fail "list must stay direct-only (no synthetic @shared)"
+fi
+
+# No-match path unchanged (message + exit 1).
+set +e
+out=$(COLUMNS=1000 "$repo/loadout" search zzznomatchzzz 2>&1)
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "no-match exit code $rc (want 1)"
+grep -q "No matches for 'zzznomatchzzz'" <<<"$out" || fail "no-match message changed"
+
+echo "search-groups: OK"

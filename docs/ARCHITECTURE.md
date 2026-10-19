@@ -81,7 +81,7 @@ curated mega-group is retired: the resolver raises a loud error naming
 ./loadout list --groups                         # all @-groups + member counts
 ./loadout list --groups editor cli              # group names matching either filter
 ./loadout list --tag editor                     # filter by tag
-./loadout search vim                            # case-insensitive substring search
+./loadout search vim                            # substring search; shows @groups
 ./loadout info gvim                             # metadata + reverse-deps + group memberships
 ./loadout info @core-cli                        # group members
 ./loadout resolve gvim                          # dry-run; prints resolved set by kind
@@ -199,12 +199,12 @@ interactive installs offer to migrate it.
 
 ## Installer Internals
 
-`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
+`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.15
 interpreter in this order:
 
-1. `<prefix>/bin/python3.14` -- already installed via
+1. `<prefix>/bin/python3.15` -- already installed via
    `loadout install portable-python`.
-2. `<repo>/.loadout-bootstrap/bin/python3.14` -- warm bootstrap cache from a
+2. `<repo>/.loadout-bootstrap/bin/python3.15` -- warm bootstrap cache from a
    prior run.
 3. Cold bootstrap: decompresses
    `payload/<platform>/portable-python-*.tar.bz2` into
@@ -212,7 +212,7 @@ interpreter in this order:
    `PATH` only -- both ship with every supported base system.
 
 Once an interpreter is found, the shim execs `loadout_main.py` under it
-(shebang `#!/usr/bin/env python3.14`). `loadout_main.py` enforces
+(shebang `#!/usr/bin/env python3.15`). `loadout_main.py` enforces
 Python >= 3.14 via a `sys.version_info` gate. The bootstrap cache is
 per-clone (alongside the script, not in `$HOME`), so the boot path never
 depends on `~/.local` existing yet. `.loadout-bootstrap/` is gitignored.

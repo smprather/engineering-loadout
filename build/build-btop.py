@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 Pack the btop theme set and the theme-tour helper into the payload.
 
@@ -35,8 +35,8 @@ the btop registry entry):
     <root>/local/bin/btop-theme-tour          script wrapper (bin/*.bz2)
 
 Usage (run from any directory -- nothing here is platform-dependent):
-    ./build/build-btop.sh --tag 1.4.7           # (re)pack theme archive + tour
-    ./build/build-btop.sh --tag 1.4.7 --check   # verify packed bytes match source
+    ./build/build-btop.py --tag 1.4.7           # (re)pack theme archive + tour
+    ./build/build-btop.py --tag 1.4.7 --check   # verify packed bytes match source
 
 The archive is built with tar's own bzip2 filter. It is NOT passed through
 strip-all-elf-binaries' tar rewrite path: there are no ELF files in it, and the
@@ -280,7 +280,7 @@ def main(argv):
     print()
     print("Next steps:")
     print("  ./build/strip-all-elf-binaries    # regenerates sizes + content manifest")
-    print(f"  ./build/build-btop.sh --tag {tag} --check")
+    print(f"  ./build/build-btop.py --tag {tag} --check")
     return 0
 
 

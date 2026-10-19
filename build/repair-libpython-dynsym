@@ -4,8 +4,8 @@ repair-libpython-dynsym: fix invalid st_shndx values in a shared object's
 .dynsym, in place.
 
 WHY THIS EXISTS
-    The portable-python 3.14.7 payload archive (built with --enable-bolt) ships
-    a libpython3.14.so.1.0 whose .dynsym entries point at RELOCATION sections
+    The portable-python 3.15.0 payload archive (built with --enable-bolt) ships
+    a libpython3.15.so.1.0 whose .dynsym entries point at RELOCATION sections
     (.rela.data.rel.ro, .rela.init_array, .rela.rodata, ...) instead of the
     sections that actually hold the symbols (.data, .bss, .rodata, .text).
 

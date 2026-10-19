@@ -41,7 +41,7 @@
 # each other -- the same convention build-octave.sh / build-freetype.sh use.
 #
 # Then, as for every payload change:
-#   ./build/strip-all-elf-binaries && python3.14 build/gen-content-manifest
+#   ./build/strip-all-elf-binaries && python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -288,7 +288,7 @@ for b in $BINS; do echo "  $BIN_DIR/${b}.bz2"; done
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-content-manifest"
 echo "  git add payload/el8.x86_64.glibc2p28/bin/{less,lessecho,lesskey}.bz2 \\"
 echo "          .strip-manifest .content-manifest payload/packages.json \\"
 echo "          build/build-less.sh build/farm-versions tests/prebuilt-binaries"

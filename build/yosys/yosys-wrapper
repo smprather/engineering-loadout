@@ -17,7 +17,7 @@
 # WHAT IT DOES
 #   - No `-y` on the command line: `exec`s the real `yosys.bin` unchanged, so
 #     ordinary synthesis and every other consumer behave exactly as before.
-#   - `-y <script.py>`: runs the script under the prefix's own python3.14 with
+#   - `-y <script.py>`: runs the script under the prefix's own python3.15 with
 #     the pyosys package on sys.path, mirroring what the real `-y`
 #     implementation does (kernel/driver.cc, the scriptfile_python branch):
 #     sys.argv = [script] + special_args, script's directory first on sys.path.
@@ -49,7 +49,7 @@
 #   LOADOUT_YOSYS_BIN     path to the real binary (default <prefix>/bin/yosys.bin)
 #   LOADOUT_PYOSYS_DIR    dir containing the pyosys package
 #                         (default <prefix>/lib/yosys-pyosys)
-#   LOADOUT_PYOSYS_PYTHON interpreter (default <prefix>/bin/python3.14)
+#   LOADOUT_PYOSYS_PYTHON interpreter (default <prefix>/bin/python3.15)
 
 set -eu
 
@@ -59,7 +59,7 @@ PREFIX=$(cd "$HERE/.." && pwd)
 
 YOSYS_BIN=${LOADOUT_YOSYS_BIN:-$PREFIX/bin/yosys.bin}
 PYOSYS_DIR=${LOADOUT_PYOSYS_DIR:-$PREFIX/lib/yosys-pyosys}
-PYTHON=${LOADOUT_PYOSYS_PYTHON:-$PREFIX/bin/python3.14}
+PYTHON=${LOADOUT_PYOSYS_PYTHON:-$PREFIX/bin/python3.15}
 
 # Locate the script path for `-y`, mirroring kernel/driver.cc: options before
 # `--` are yosys's, everything after belongs to the script. Value-taking options

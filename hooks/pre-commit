@@ -85,10 +85,10 @@ done <<< "$_staged_all"
 
 if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
     # Python 3.14 syntax check -- the installer body and all post-install
-    # scripts run under bundled python3.14 (via the POSIX-sh loadout shim
-    # or ~/.local/bin/python3.14 after install).
+    # scripts run under bundled python3.15 (via the POSIX-sh loadout shim
+    # or ~/.local/bin/python3.15 after install).
     _py314=""
-    for _cand in "$HOME/.local/bin/python3.14" "$script_dir/.loadout-bootstrap/bin/python3.14"; do
+    for _cand in "$HOME/.local/bin/python3.15" "$script_dir/.loadout-bootstrap/bin/python3.15"; do
         if [[ -x "$_cand" ]]; then _py314="$_cand"; break; fi
     done
     if [[ -n "$_py314" ]]; then
@@ -108,7 +108,7 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
             exit 1
         fi
     else
-        echo "Pre-commit: skipping py3.14 syntax check (no python3.14 found)"
+        echo "Pre-commit: skipping py3.15 syntax check (no python3.15 found)"
     fi
 
     echo "Pre-commit: Formatting Python files with ruff..."

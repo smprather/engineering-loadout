@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """Sync the README package table's version column with payload/packages.json.
 
 docs/RELEASE.md 5 says the table must be regenerated from the registry and

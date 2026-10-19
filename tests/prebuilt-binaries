@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """
 prebuilt-binaries: smoke-test installed binary and runtime payloads.
 
@@ -104,8 +104,8 @@ HOST_REQUIRED_CAPABILITIES = {
     ),
     # IDLE imports Tkinter at module scope, before it parses arguments, so it
     # cannot reach exit 0 without a loadable Tk -- not even for -h.
-    "idle3": (["python3.14", "-c", "import tkinter"], "a loadable Tk for IDLE"),
-    "idle3.14": (["python3.14", "-c", "import tkinter"], "a loadable Tk for IDLE"),
+    "idle3": (["python3.15", "-c", "import tkinter"], "a loadable Tk for IDLE"),
+    "idle3.14": (["python3.15", "-c", "import tkinter"], "a loadable Tk for IDLE"),
 }
 
 HOST_REQUIRED_SOS = {
@@ -179,7 +179,7 @@ PROBE_FLAGS = {
     "idle3.14": [["-h"]],
     "pygwalker": [["--help"]],
     "python3-config": [["--help"]],
-    "python3.14-config": [["--help"]],
+    "python3.15-config": [["--help"]],
     "spice-subckt-rc-reduce": [["--help"]],
     "st-reload": [["--help"]],
     # btop-theme-tour takes no version flag -- `--version` is an unknown option
@@ -587,7 +587,7 @@ def smoke_klayout_wrappers(tmpdir):
             "lib64/dri",
             "share/glvnd/egl_vendor.d",
             "share/ruby",
-            "lib/python3.14",
+            "lib/python3.15",
             "probe",
         ):
             os.makedirs(os.path.join(prefix, path))
@@ -1020,7 +1020,7 @@ def smoke_runtime_layout(tmpdir, env):
     if has_bin("openroad"):
         # `openroad -version` prints "26Q3" from a binary that cannot load Tcl at
         # all -- and that is the failure most likely to ship, because openroad
-        # resolves BOTH libpython3.14 and libtcl8.6 out of portable-python's lib
+        # resolves BOTH libpython3.15 and libtcl8.6 out of portable-python's lib
         # dir. portable-python owns lib/tcl8.6 at Tcl 8.6.17 and its init.tcl
         # does `package require -exact Tcl 8.6.17`, while EL8's system Tcl is
         # 8.6.8, so the two cannot be mixed in either direction. If the
@@ -2266,7 +2266,7 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (lsp):          spice-netlist-ls  rc={proc.returncode} {detail}")
                 failures.append(("spice-netlist-ls", detail))
 
-    if has_bin("python3.14"):
+    if has_bin("python3.15"):
         # Display-free Tcl interp smoke: the bundle's sitecustomize must point
         # TCL_LIBRARY at the shipped lib/tcl8.6 tree (a stale/clobbered tree
         # fails init.tcl's `package require -exact`). Needs host X client libs
@@ -2275,7 +2275,7 @@ def smoke_runtime_layout(tmpdir, env):
         try:
             proc = subprocess.run(
                 [
-                    os.path.join(bin_dir, "python3.14"),
+                    os.path.join(bin_dir, "python3.15"),
                     "-c",
                     "import tkinter; print('TKINTER_OK', tkinter.Tcl().eval('info patchlevel'))",
                 ],
@@ -2299,7 +2299,7 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (tkinter):      python tkinter  {detail}")
                 failures.append(("python tkinter", detail))
 
-        py = os.path.join(bin_dir, "python3.14")
+        py = os.path.join(bin_dir, "python3.15")
         needle = "loadout_fts5_needle_xyzzy"
         script = "\n".join(
             [
@@ -2335,15 +2335,15 @@ def smoke_runtime_layout(tmpdir, env):
                 failures.append(("python sqlite fts5", detail))
 
         # libpython .dynsym integrity. The shipped archive once carried a
-        # libpython3.14.so.1.0 whose DATA-OBJECT .dynsym entries pointed at
+        # libpython3.15.so.1.0 whose DATA-OBJECT .dynsym entries pointed at
         # RELOCATION sections (a BOLT artifact), so any consumer that EMBEDS
         # libpython and takes the address of PyExc_*/Py*_Type got a zero-filled
         # .bss slot and segfaulted in Py_InitializeFromConfig -- `openroad
         # -python`, i.e. every LibreLane flow above stage 15. The interpreter
-        # itself is unaffected, which is why a `python3.14 -c pass` smoke cannot
+        # itself is unaffected, which is why a `python3.15 -c pass` smoke cannot
         # catch it. build/repair-libpython-dynsym fixes it; this asserts the
         # INSTALLED library is clean. Pure readelf-level check, no execution.
-        libpy = os.path.join(tmpdir, "local", "lib", "libpython3.14.so.1.0")
+        libpy = os.path.join(tmpdir, "local", "lib", "libpython3.15.so.1.0")
         if os.path.exists(libpy):
             repair = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

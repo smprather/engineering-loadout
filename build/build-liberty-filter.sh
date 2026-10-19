@@ -234,8 +234,8 @@ readelf -d "$BIN" 2>/dev/null | grep NEEDED || true
 
 echo ""
 echo "Next:"
-echo "  python3.14 build/gen-content-manifest"
-echo "  python3.14 build/gen-readme-table"
+echo "  python3.15 build/gen-content-manifest"
+echo "  python3.15 build/gen-readme-table"
 echo "  ./loadout completion bash > envs/bash/global/completions/loadout.bash"
 echo "  tests/prebuilt-binaries --keep"
 echo "  git add payload/ .strip-manifest .content-manifest build/build-${PKG}.sh \\"

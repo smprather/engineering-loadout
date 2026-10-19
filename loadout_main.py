@@ -1,8 +1,8 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """loadout -- package-manager installer body.
 
 Invoked via the POSIX-sh shim `loadout`, which resolves the bundled
-portable Python 3.14 and execs this module under it. Direct execution
+portable Python 3.15 and execs this module under it. Direct execution
 under any other interpreter is rejected.
 """
 
@@ -2355,7 +2355,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
         "launcher": "librelane",
         # Relative to the tool venv root (<tools>/<dist>): every wheel's top
         # level lands here.
-        "site_packages": "lib/python3.14/site-packages",
+        "site_packages": "lib/python3.15/site-packages",
     },
 }
 
@@ -2398,7 +2398,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
 # different layers in two separate blocks. Patching only the V branch leaves
 # half the pins mis-placed -- measured GPL HPWL 6.0e5 instead of 1.8e3, still
 # far off the reference. Both branches must be normalized.
-_LIBRELANE_IO_PLACE_REL = "lib/python3.14/site-packages/librelane/scripts/odbpy/io_place.py"
+_LIBRELANE_IO_PLACE_REL = "lib/python3.15/site-packages/librelane/scripts/odbpy/io_place.py"
 
 IO_PLACE_H_OLD = """\
     else:
@@ -2640,14 +2640,14 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         return
 
     uv_bin = os.path.join(_local_root(home), "bin", "uv")
-    python_bin = os.path.join(_local_root(home), "bin", "python3.14")
+    python_bin = os.path.join(_local_root(home), "bin", "python3.15")
     if not os.path.isfile(uv_bin):
         warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
         return
     if not os.path.isfile(python_bin):
-        warn(f"python3.14 not found at {python_bin} -- Python tools will NOT be installed")
-        record_result("Python tools", "FAIL", "python3.14 not installed")
+        warn(f"python3.15 not found at {python_bin} -- Python tools will NOT be installed")
+        record_result("Python tools", "FAIL", "python3.15 not installed")
         return
 
     # Rejoin any chunked wheels into a temp dir so uv can find whole files.
@@ -4425,6 +4425,13 @@ def install_bash(repo_dir, home, links_mode):
     )
     install_path(os.path.join(repo_dir, "envs", "bash", "bashrc"), os.path.join(bash_config, "bashrc"), links_mode)
     install_path(os.path.join(repo_dir, "envs", "bash", "profile"), os.path.join(bash_config, "profile"), links_mode)
+    # The five override layers are user-created and survive a reinstall (only
+    # global/ is synced with delete semantics). Create them on a fresh HOME:
+    # the shipped bashrc sources them unconditionally, and a post-install
+    # hardening step (psg-env) makes ~/.config/bash read-only, after which the
+    # user can no longer create ~/.config/bash/user for their overrides.
+    for layer in BASH_LAYERS:
+        ensure_dir(os.path.join(bash_config, layer), "bash config layer")
     for entrypoint in BASH_ENTRYPOINTS:
         lns(".config/bash/bashrc", os.path.join(home, entrypoint), verbose=True)
     lns(".config/bash/profile", os.path.join(home, BASH_PROFILE_ENTRYPOINT), verbose=True)
@@ -5553,6 +5560,34 @@ def _matches_name_filters(name, patterns):
     return not patterns or any(pattern.lower() in lowered_name for pattern in patterns)
 
 
+def _direct_pkg_groups(registry):
+    """Map member name -> sorted registry @groups that name it directly.
+
+    Direct membership only, matching cmd_describe's 'groups:' line. Groups may
+    themselves be members of other groups (e.g. @editor-cli in @editor-suite).
+    """
+    pkg_groups = {}
+    for gname, gentry in registry.items():
+        if gentry.get("kind") != "group":
+            continue
+        for m in gentry.get("members", []):
+            pkg_groups.setdefault(m, []).append(gname)
+    return pkg_groups
+
+
+def _synthetic_pkg_groups(registry):
+    """Map package name -> sorted synthetic @groups (@shared, @all, ...) holding it.
+
+    The synthetic groups expand at runtime; each is expanded once per call.
+    Their members are leaf packages only, so group entries never appear here.
+    """
+    syn_groups = {}
+    for gname in _SYNTHETIC_GROUPS:
+        for member in expand_groups([gname], registry):
+            syn_groups.setdefault(member, []).append(gname)
+    return syn_groups
+
+
 def cmd_list(args, registry):
     """Print package or group table, optionally filtered by name."""
     patterns = getattr(args, "patterns", ())
@@ -5581,14 +5616,9 @@ def cmd_list(args, registry):
         )
         return 0
     tag = args.tag
-    # Build reverse map: pkg name -> sorted list of @groups that directly
-    # name it in their members list (matches cmd_describe's 'groups:' line).
-    pkg_groups = {}
-    for gname, gentry in registry.items():
-        if gentry.get("kind") != "group":
-            continue
-        for m in gentry.get("members", []):
-            pkg_groups.setdefault(m, []).append(gname)
+    # Reverse map: pkg name -> sorted list of @groups that directly name it
+    # (matches cmd_describe's 'groups:' line).
+    pkg_groups = _direct_pkg_groups(registry)
     rows = []
     for n in sorted(registry):
         entry = registry[n]
@@ -6398,7 +6428,7 @@ def render_transaction(requested, selected, registry, repo_dir):
     if not _INSTALLED_SIZES_OK:
         print("WARNING: payload/installed-sizes.json missing or unreadable --")
         print("         sizes above are COMPRESSED payload bytes, not installed size.")
-        print("         Regenerate with: python3.14 build/gen-installed-sizes")
+        print("         Regenerate with: python3.15 build/gen-installed-sizes")
     return len(selected), total
 
 
@@ -6648,9 +6678,13 @@ def cmd_search(args, registry):
     """Case-insensitive substring search over package name, description, tags.
 
     Name hits ranked above description/tag hits (dnf-style). Groups included.
+    The GROUPS column shows each hit's membership: direct registry groups plus
+    the synthetic sweeps (@shared, @shared-all, @envs, @envs-all, @all).
     """
     pat = args.pattern.lower()
     tag = getattr(args, "tag", None)
+    pkg_groups = _direct_pkg_groups(registry)
+    syn_groups = _synthetic_pkg_groups(registry)
     name_hits = []
     desc_hits = []
     for name in sorted(registry):
@@ -6669,11 +6703,13 @@ def cmd_search(args, registry):
             desc_hits.append((name, entry))
     rows = []
     for name, entry in name_hits + desc_hits:
+        groups = sorted(set(pkg_groups.get(name, [])) | set(syn_groups.get(name, [])))
         rows.append(
             (
                 name,
                 entry.get("kind", ""),
                 entry.get("version", ""),
+                ", ".join(groups),
                 entry.get("description", ""),
             )
         )
@@ -6686,6 +6722,7 @@ def cmd_search(args, registry):
             {"name": "PACKAGE", "style": "bold cyan"},
             {"name": "KIND"},
             {"name": "VERSION"},
+            {"name": "GROUPS", "wrap": "comma"},
             {"name": "DESCRIPTION", "wrap": "word", "min_width": 30},
         ],
     )
@@ -7229,12 +7266,16 @@ def cli_list(ctx, patterns, list_groups, tag, installed):
     ctx.exit(cmd_list(args, ctx.obj["registry"]))
 
 
-@cli.command(name="search", short_help="Search packages by name, description, tags.")
+@cli.command(name="search", short_help="Search packages by name, description, tags (shows groups).")
 @click.argument("pattern")
 @click.option("--tag", default=None, help="Filter results by tag.")
 @click.pass_context
 def cli_search(ctx, pattern, tag):
-    """Case-insensitive substring search across package name, description, and tags."""
+    """Case-insensitive substring search across package name, description, and tags.
+
+    Each hit's GROUPS column lists the @groups that contain it -- direct
+    registry groups plus the synthetic sweeps (@shared, @envs, ...).
+    """
     args = _ctx_args(ctx, pattern=pattern, tag=tag)
     ctx.exit(cmd_search(args, ctx.obj["registry"]))
 

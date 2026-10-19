@@ -224,7 +224,7 @@ cat <<'EOF' | tee -a "$LOG"
 
   Sourced LD/PATH from the loadout's bashrc layer? Confirm by opening a
   new shell and running:
-    which python3.14 patchelf uv ruff
+    which python3.15 patchelf uv ruff
     starship --version
     nvim --version | head -1
 

@@ -1,5 +1,372 @@
 # Current Handoff
 
+## 2026-10-19 (1): issue #4 -- env-bash now creates its five override layers
+
+`install_bash()` installed `global/` plus the entrypoint files but never created
+`~/.config/bash/{corp,site,team,project,user}`, while `_install_env_tcsh` and
+`_install_env_zsh` both did. The shipped `envs/bash/bashrc` sources all five via
+`source_if_exists`, and a post-install hardening step (psg-env) makes
+`~/.config/bash` read-only and re-opens only `~/.config/bash/user` -- on a fresh
+HOME that path did not exist and could no longer be created.
+
+Fix: `install_bash()` loops `BASH_LAYERS` with `ensure_dir` after installing the
+managed files, so a fresh install creates the directories and a reinstall leaves
+user contents untouched (only `global/` is synced with delete semantics).
+Regression proof: new `tests/install-env-bash` (registered in `tests/run-all`
+Tier 2) asserts all five directories after a fresh install and after a reinstall
+that must preserve a user `bashrc`.
+
+## 2026-10-12 (4): the operator's personal tmux user layer merged into the managed global layer -- and the installed-tree drift ported
+
+**Goal (operator):** everything running on this host is the loadout out-of-box
+experience. So `tmux-user.conf` + `tmux-settings-user.conf` (the two personal
+layers) move into the managed global layers, and the installed-tree drift found
+by the earlier inventory gets ported at the same time.
+
+**Merged into `envs/tmux/tmux-global.conf`** (order-preserving: inserted after
+every active binding the user layer used to override, before the commented-out
+legacy mouse graveyard):
+
+- `set -g -w cursor-style block` -- **scope FIXED.** The user-layer original was
+  `set -s cursor-style block`, but `cursor-style` is a WINDOW option
+  (`options-table.c`: scope `OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE`), so `-s`
+  wrote a phantom server entry and the window option stayed `default` (verified
+  on the live server and on a fresh scratch server). The block cursor the
+  operator saw was alacritty's own default, not tmux's. Visually identical on
+  this host; the difference appears only where an application uses DECSCUSR.
+- Copy-mode entry with `-e` (`Prefix+[` / `PgUp` / `PgDn`), the 3-line wheel-notch
+  and root-wheel binds, the `j` / `Down` / `G` bottom-exit handling.
+- FFM and the theme were already in the settings layers with identical values,
+  so nothing was duplicated.
+
+**Discovery: the user layer's wheel block has been dead code since it was
+written.** `nhdaly/tmux-better-mouse-mode` is still declared in
+`tmux-global.conf`, and TPM sources plugins after the user layer, so the
+plugin's generated bindings win at runtime. Evidence: the live root
+`WheelUpPane` binding's innermost else is `copy-mode -e -t= ; send-keys -M x3`
+(the plugin's script-built shape, odd whitespace included), not the user file's
+`-X -N 3 scroll-up`. The user file's comment claiming the plugin was "removed
+from tmux-global.conf" was simply wrong. **Decision: keep the declaration** --
+the instruction was "exactly what I have right now", and today's behaviour is the
+plugin's -- and ship the block with an explicit SHADOWED comment naming the
+one-line activation (drop the `@plugin` line), which restores the documented
+first-wheel-up fix. **Open question for the operator: drop it or keep it.**
+
+Related semantic check, recorded because it is easy to get wrong: `set -g
+@plugin X` **replaces**, it does not accumulate (`show-options -g @plugin` after
+two sets shows only the last value, in both `-g` and `-gA` list form). Three
+declarations still work in practice because TPM sources plugin *directories*;
+the declaration list is not the source of truth for what gets sourced.
+
+**Ported from the installed tree** (the drift the 2026-10-12 inventory found):
+`bind-key 7` -> `tmux-3col-layout.sh --left-last`, and the newer
+`scripts/tmux-3col-layout.sh` (154 lines: `move_to_index`,
+`pane_last`-based left-last mode, 35/35/30 widths) replacing the older
+classic-only 73-line version. Nothing was lost -- the repo-only lines in the
+diff were the old implementation of the same classic path.
+
+**Equivalence proof** (two scratch servers, full `show-options -gA` /
+`-g -w -A` / `-s -A` + `list-keys` dumps):
+A = today's layering (installed managed files + personal user files);
+B = post-merge (repo managed files + shipped user templates = a fresh install);
+B' = B with the user's verbatim `-s` cursor line.
+
+- A vs B': **identical** -- the merge is behaviour-preserving.
+- A vs B: **one line** -- `cursor-style default -> block`, the intended fix.
+
+**Gates/docs.** `tests/install-env-tmux-nvim-layers` gained a merged-defaults
+block (key 7 + `--left-last` support, the cursor pin, the wheel binds, the
+copy-mode-vi exit binds), so a future refactor cannot silently drop them.
+README, `docs/TMUX.md` (new "Mouse wheel and cursor" section + `Prefix+7` row)
+and AGENTS.md synced. Env sources changed -> `gen-installed-sizes` then
+`gen-content-manifest` regenerated in that order.
+
+**Deploy note for the operator's own test:** the merged `tmux-global.conf` was
+copied into `~/.config/tmux/` (the 3col script there already matched). The
+dispatcher sources both user files unconditionally, so *removing* them makes the
+next reload print a `source-file` error; leave empty files, or re-run
+`loadout install env-tmux -y` after moving them aside (it re-seeds the templates
+only when absent).
+
+## 2026-10-12 (3): shipped tmux defaults flipped -- @theme=loadout2 and focus-follows-mouse ON
+
+Both user-facing defaults in the managed tmux settings layers changed. The
+mechanism is unchanged; only the shipped values are.
+
+- `tmux-settings-global.conf` and the seeded `tmux-settings-user.conf`:
+  `@theme "loadout1"` -> `"loadout2"`. loadout2 is the fully-pinned,
+  terminal-independent theme from entry (2); loadout1 is now purely the
+  pre-2026-10-01 rollback. This also removes the hazard the baseline used to
+  document about itself -- a missing or broken user layer fell back to
+  loadout1's 1.19:1 active window under catppuccin mocha. The baseline is now
+  the safe one.
+- `focus-follows-mouse`: OFF -> ON in the managed baseline (still `%if`-guarded
+  on tmux >= 3.7). The 2026-10-06 trial entry below concluded positively, and
+  hovering only means anything with mouse mode, which `tmux-global.conf`
+  enables. The seeded user layer now carries the commented OPT-OUT
+  (`set -g focus-follows-mouse off`) where it used to carry the opt-in.
+
+Preservation semantics are unchanged: user layers are seeded only when absent,
+so existing installs keep whatever their `tmux-settings-user.conf` already says
+-- only fresh installs (and new users on a shared tree) pick up the new
+defaults. On this dev host nothing visibly changes: the preserved user layer
+already selected loadout2 and FFM on.
+
+`tests/install-env-tmux-nvim-layers` updated to pin the new defaults (theme in
+both layers; baseline FFM on plus the user opt-out hint) and to prove the
+layering in the other direction on a real server (baseline on, user override to
+off). The reinstall-preservation case now appends `loadout1` to the user layer
+and asserts it survives -- i.e. a user choice that contradicts the new default
+is not reset. README, `docs/TMUX.md`, AGENTS.md and the Copilot instructions
+were synced; `docs/TMUX.md` was added to the AGENTS.md doc-sync list, since it
+had drifted unnoticed (it documented both old defaults).
+
+## 2026-10-12 (2): tmux loadout2 theme made terminal-independent -- window-style pinned (the pane-fill cue used to invert on non-black terminals)
+
+**Symptom.** On this host the active pane is a slightly raised dark-gray over
+black inactive panes; a friend on Windows Terminal saw it *backwards* --
+near-black active over dark-gray inactive -- on the same tmux version (3.7c).
+
+**Cause (proved).** loadout2 painted only the ACTIVE pane. `window-active-style
+"bg=#090909"` was set; `window-style` was set nowhere, so it stayed at tmux's
+`default`. tmux's own options table defines `window-style` as *"Default style of
+panes that are not the active pane"*, and `default` there means **paint
+nothing**: `tty.c` fills `cached_gc` from `window-style` and `cached_active_gc`
+from `window-active-style`, and a default marker leaves the cell to the
+terminal. So the inactive fill was whatever the terminal paints -- pure black
+here (alacritty pins `background = "0x000000"`), a lighter gray on Windows
+Terminal. The two fills are only 1.055:1 apart, so a background lighter than
+#090909 flips which one reads as raised; the theme's own comment had already
+predicted "the active pane reads as a sunken hole instead of a raised block".
+Nothing version-dependent -- each machine rendered exactly what its terminal
+supplied.
+
+**Fix -- the theme no longer delegates any colour to the terminal**
+(`envs/tmux/themes/tmux-theme-loadout2.conf`):
+
+- `window-style "fg=#cdd6f4 bg=#000000"` (the regression) and
+  `window-active-style "fg=#cdd6f4 bg=#090909"`. Both pane classes are now
+  painted, and `fg` is pinned too, so default-coloured application text is
+  theme-coloured instead of terminal-coloured.
+- Every previously ANSI-named tmux default, pinned: `mode-style`,
+  `copy-mode-{match,current-match,mark,line-number,current-line-number}-style`,
+  `message-style` / `message-command-style` (with `fill=`),
+  `clock-mode-colour` + `clock-mode-style 24`, `display-panes-colour` /
+  `-active-colour`, `menu-{style,selected-style,border-style}`,
+  `popup-{style,border-style}`, `pane-scrollbars-style` (geometry kept:
+  `width=1,pad=0`), `cursor-colour`. WCAG ratio beside each pair.
+- `default` is retained only where it means *inherit a pinned base* (not
+  "terminal decides"): `status-right-style`, `window-status-last-style`,
+  `copy-mode-selection-style`/`-position-style` (`#{E:mode-style}`),
+  `pane-status-*`/`session-status-*` (unused pane/session status formats).
+  Reasoning recorded at the bottom of the theme file.
+- loadout1 is NOT touched: it is the pre-2026-10-01 rollback theme, deliberately
+  ANSI/stock, with no pane fill of its own.
+
+**Verification.** 21 candidate options probed on a scratch socket against the
+bundled tmux 3.7c: zero parse errors (all values resolved to the intended hex).
+NOTE for future config work: starting a server with `-f FILE` does NOT report
+config errors -- `tmux source-file FILE` does. Negative control (`fg=#zzz`,
+bogus option) => `invalid style` / `invalid option`, rc=1; the theme => silent,
+rc=0. A pty capture of a real tmux client running the theme emitted exactly two
+background codes for the whole session, `48;2;0;0;0` and `48;2;9;9;9` -- both
+fills painted, no terminal default anywhere. `tests/install-env-tmux-nvim-layers`
+extended with (a) a 27-option file-level pin list (value must be a literal hex)
+and (b) live-server checks of both fill values; both were confirmed to fail when
+the pin is deleted (deleted-line negative control).
+
+**Deploy note.** On this host the theme was copied into
+`~/.config/tmux/themes/` directly; a full `install env-tmux` would also sync it
+but would clobber the local `tmux-global.conf` drift (an added
+`bind-key 7 ... tmux-3col-layout.sh --left-last` line plus a newer
+`tmux-3col-layout.sh` that exists only in the installed tree). That drift is
+still un-reconciled.
+
+**Resolved in (3):** the shipped default is now `loadout2`, so the pinning above
+is what a fresh install gets; loadout1 is opt-in rollback only.
+
+## 2026-10-12 (1): xfce4-terminal 1.2.0 evaluated -- GUI toolkits are the one inherited distro dependency (knowledge recorded, not pursued)
+
+Follow-up to the RMB-paste question: **1.0.4 already has it** --
+`MiscRightClickAction` = `TERMINAL_RIGHT_CLICK_ACTION_CONTEXT_MENU` (default) |
+`..._PASTE_CLIPBOARD` | `..._PASTE_SELECTION`, set via Preferences -> Advanced
+or `~/.config/xfce4/terminal/terminalrc` (1.1.0+ moved settings to xfconf:
+channel `xfce4-terminal`, property `/misc-right-click-action`).
+
+**Can we ship upstream 1.2.0 (tag `xfce4-terminal-1.2.0`, 2026-03-08)? No --
+not on the EL8 floor.** Verified against upstream `meson.build` and
+libxfce4ui's `configure.ac.in`:
+
+| dep | 1.2.0 needs | EL8 has |
+|---|---|---|
+| glib | >= 2.44 | 2.56.4 ok |
+| gtk+-3.0 | >= 3.22 | 3.22.30 ok |
+| vte-2.91 | >= 0.51.3 | 0.52.x (bundled stem) ok |
+| libxfce4util | >= 4.16 | 4.16.0 ok |
+| libxfconf-0 | >= 4.16 | 4.16.0 ok |
+| **libxfce4ui-2** | **>= 4.17.5** | **4.16.0 -- BLOCKED** |
+
+The 4.18 line (what >= 4.17.5 points at; 4.17.5 is its dev snapshot) requires
+**GTK >= 3.24, GLib >= 2.66, libxfce4util >= 4.17.2**, and 1.2.0 links
+`libxfce4kbd-private-3` (shared shortcuts-editor API added in that cycle) -- so
+relaxing version checks cannot work either. EPEL8 cannot ship 4.18 (its GTK is
+3.22), so there is no RPM to wait for. 1.2.0 is also bugfix-only (tab-title CPU,
+DnD URI escaping), and its xfconf-only settings would not persist without
+xfconfd (deliberately unbundled). **Decision: stay on 1.0.4.**
+
+**Generalized gap worth keeping:** binaries are source-built for the EL8 floor
+(no lag), but **GUI toolkits are inherited**: `gui_libs` is an EL8-era
+GTK 3.22/Qt5 5.15 stack, so any app needing GTK > 3.22 is blocked until a
+private newer stack exists.
+
+**Escape-hatch shape (design only, not scheduled):**
+1. *Host-first probe*, following the existing GL/fontconfig wrapper blocks:
+   wrappers export bundled paths only when the host cannot supply them. For
+   GTK, probe the host's `libgtk-3.so.0` for the symbols the newer build needs
+   (`readelf --dyn-syms`; GTK symbols are unversioned, so symbol presence is
+   the reliable test), run bare when adequate, else point the loader at the
+   bundled stack. Same `LOADOUT_GUI_HOST_*` knob shape.
+2. *Private newer stack* when needed: per-app co-located (precedent: xschem's
+   private Tcl/Tk, marktext's Chromium closure, firefox's NSS/FFmpeg) for one
+   app; a shared `gtk324` lib-bundle (GTK 3.24 + GLib 2.66 + libxfce4util 4.17
+   + libxfce4ui 4.18) built from source in the EL8 container once several apps
+   need it (glibc 2.28 does not care that GTK is new).
+3. *Hard rule*: NEVER a second `libgtk-3.so.0` on `<prefix>/lib64` or any
+   default loader path -- the modern stack is wrapper-selected or privately
+   co-located, like xschem's Tcl.
+
+Trigger: the first must-have GUI app that needs GTK > 3.22.
+Already-unblocked precedent: **wezterm** (own GL window stack, not GTK) is the
+modern terminal for EL8 nodes today.
+
+**EL9 note (operator):** RHEL EOL pressure moves the fleet onward regardless of
+corporate lag; EL9's stack (GTK 3.24 / GLib 2.68) dissolves this specific
+class, so a private-EL8-stack project should be judged against the fleet's EL9
+timeline -- it may never be worth building for EL8 alone.
+
+## 2026-10-11 (1): Python 3.15.0 lands in the payload (W2, UNRELEASED)
+
+`portable-python` is now **3.15.0**, built in the EL8 container exactly like
+3.14.7 (clang-23, PGO + full LTO + BOLT) **plus**
+`--enable-experimental-jit=yes-off`: the JIT is compiled in, off by default,
+enabled per process with `PYTHON_JIT=1` (verified: `sys._jit.is_available()
+== True`, `is_enabled() == False`, env toggle True). The import's dynsym gate
+reproduced the BOLT bug on the new `libpython3.15.so.1.0` and repaired **2001
+entries** (text 1808 / data 181 / rodata 12), re-check clean.
+
+- Payload: `portable-python-3.15.0-el8-clang23.tar.bz2` (26.1 MiB) replaces
+the 3.14.7 archive; registry `portable-python` version -> 3.15.0; the removed
+archive's installed-sizes entry is gone (6369 artifacts).
+- Sweep: every bundled-interpreter reference `python3.14` -> `python3.15`
+across 95 files (shim, installer, build/, tests, hooks, current docs). The
+`>= 3.14` floor and PEP 758 notes are unchanged: 3.14 stays the minimum, the
+bundled interpreter is a runtime choice.
+- Sync chain regenerated and green: installed-sizes, README table (version
+cells; two hand-owned description rows updated), content-manifest.
+- T1 `tests/run-all --fast` green; bootstrap verified (`./loadout -V`
+cold-extracts 3.15 into `.loadout-bootstrap/`; the bundled python reports
+3.15.0 with JIT available/off).
+- Build-side lessons (full record:
+`docs/superpowers/specs/2026-10-10-python-315-and-tcl-path-design.md`): the
+JIT's unwind-info generator needs `llvm-dwarfdump`, absent from the LLVM 23
+toolchain -- built from the LLVM 23 source tree -- and upstream's
+`third-party/siphash` header, missing from the trimmed checkout. Staging
+placeholder replacements must be EXACT-length: a 16->15 placeholder
+corrupted `libzstd.so.1.5.7` ("ELF load command past end of file") and the
+old `readelf -d` validation missed it; `repair.sh` now ends with strict
+`readelf -lW` validation. `audit.sh`'s `| head` pipes needed `|| true` under
+`pipefail` (flaky SIGPIPE 141).
+
+**W3 status (2026-10-11):** the deterministic burn-down is **DONE**.
+
+- 14 same-version cp315 wheels fetched in-container (tag-verified; cp314
+  predecessors pruned) -- commit `93446a9`.
+- `liberty_tools` + `lefdef_tools` rebuilt as cp315 via
+  `build/update --rebuild` (`95eb09f`); `lefdef_tools` needs
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` (its pinned PyO3 0.27.2 caps at 3.14).
+- `lln_libparse` 0.56.0 rebuilt from sdist + manylinux retag (`ed1b933`).
+- `build/security_tools.py`: explicit guards so a malformed pin table is
+  reported instead of crashing the validator (`fec5087`).
+
+Wheelhouse is now **cp314=29 / cp315=17** (238 total). The 29 remaining
+pinned cp314 versions have NO cp315 upstream at the pinned version (upstream
+released cp315 only in newer versions), so their refresh is a version-bump
+pass with per-tool closure proofs -- deferred to the **3.15.1 checkpoint
+(PEP 790: bugfixes every 2 months, ~2026-12-08)**. Also deferred:
+`pyosys` (needs a yosys bump; `build/build-yosys.sh` hardcodes `cp314`),
+`klayout` (heavy pymod wheel), `duckdb` (pygwalker-only, opt-in).
+
+**W4 (interpreter half) done:** A/B on the bundled 3.15 (`PYTHON_JIT` toggle
+verified): startup 8-10 ms and stdlib imports ~230 ms are identical across
+modes; a 4e6-iteration pure-Python loop runs ~7% faster with JIT on
+(237 vs 254-264 ms); RSS identical (15.7 MB). Decision: **no wrapper sets
+`PYTHON_JIT=1` yet** -- the app-level benchmarks (LibreLane smoke, jupyterlab)
+need the complete cp315 wheelhouse and run at the checkpoint; a win there
+would make it a per-tool wrapper, never a global default. Full table in the
+spec.
+
+**Operational note:** after the version sweep, repo scripts with python
+shebangs (`build/security_tools.py`, `tests/security-pipeline`, ...) need
+python3.15 on PATH. The dev tree still has 3.14 until
+`./loadout reinstall portable-python -y` (or prefix
+`.loadout-bootstrap/bin`, which T1/`tests/run-all` already does).
+
+## 2026-10-09 (1): `loadout search` GROUPS column -- direct + synthetic membership (UNRELEASED)
+
+Operator request: see which groups contain each search hit. Bounded change
+(approved in-session, option b: direct + synthetic).
+
+- `loadout_main.py`: `cmd_search` gains a GROUPS column between VERSION and
+  DESCRIPTION, rendered by the same `_list_table` two-elastic-column optimiser
+  `list` already uses (GROUPS wraps at commas). Each hit lists the registry
+  @groups that name it directly (nested groups included, matching `info`'s
+  `groups:` line) plus the synthetic sweeps it belongs to (@shared /
+  @shared-all / @envs / @envs-all / @all). Group hits show their parent
+  groups; synthetic groups hold leaf packages only, so they never add
+  group-on-group entries. `cmd_list`'s inline direct reverse map is factored
+  out as `_direct_pkg_groups()`; new `_synthetic_pkg_groups()` expands each
+  synthetic group once per invocation.
+- New T1 `tests/search-groups` (read-only, no install): pins the GROUPS
+  header, vim -> @editor-cli + @shared/@shared-all/@all, env-tmux NOT in
+  @shared but in @envs-all, env-bash in @envs, `@editor-cli` -> parent
+  `@editor-suite`, a `list` direct-only regression guard, and the unchanged
+  no-match path (message + rc 1). Wired into `tests/run-all` T1.
+- Docs synced: AGENTS CLI verb + test list, README/INSTALLATION/ARCHITECTURE/
+  copilot `search` one-liners, `search` short_help/docstring. Completion
+  regenerated-checked: unchanged (no verb/flag change).
+- Release class: next release is class C (`loadout_main.py` touched).
+  Payload/manifest untouched -- `.content-manifest` roots do not include
+  `loadout_main.py`/docs/tests; a regen ran as a no-op and installed-sizes is
+  in sync.
+
+Gates: `tests/run-all --fast` green (including the new `search-groups`);
+manual `search`/`list`/`--tag` probes; py_compile + ruff check/format.
+
+## 2026-10-08 (14): housekeeping -- stale `codex/…` branch pruned, `--fonts-dir` closed
+
+Small post-release sweep of the loose ends named in entry (13).
+
+- **Git**: `codex/tmux-nvim-two-layer` (`48fecae`, fully merged into
+  `origin/main`) and its prunable `/tmp/engineering-loadout-tmux-nvim-layers`
+  worktree registration are gone (`git worktree prune` + `git branch -d`).
+  `/var/tmp/mk-baseline` (detached `b6e769a`) is left alone as the baseline.
+- **`--fonts-dir` / `LOADOUT_FONTS_DIR`: closed, no flag.** The routing covers
+  the reported shared-tree case, and a CLI flag is the wrong shape for a
+  deployment-wide location -- repeating it per install invites two roots to
+  disagree about where the generated `loadout-fonts.conf` lives and which
+  `<dir>` it advertises. Manual escape hatch stays `--skip font-*` + a symlink
+  (or a caller-set `FONTCONFIG_FILE`). Reopen only on a real
+  destination-lifecycle need.
+- **`tests/install-linux-tmp-home` stale-prefix follow-up (entry (6)): fixed in
+  W6** -- the test unsets a caller's `LOADOUT_CFG_SHARED_PREFIX`, and entry (6)
+  now says so.
+
+Still open, unchanged: the release-notes version table defect (RELEASE.md
+failure catalogue entry 9, `farm-versions` instead of `packages.json`); a 503
+retry path for scrape-style version sources in `check-versions` (`ncdu`); vim
+rebuild hygiene -- drop the spurious `libpixman-1.so.0` NEEDED and its registry
+declaration (entry (4)).
+
 ## 2026-10-08 (13): 2026.10.6 RELEASED and verified (envs cleanup W1-W5)
 
 Class C release cut from `da81ee4` via `docs/RELEASE.md` §0-§9. Signed tag
@@ -266,8 +633,9 @@ per-user copy was pure duplication and, on a quota'd account, impossible.
 - Follow-up (pre-existing, not touched): `tests/install-linux-tmp-home`
   inherits a caller's `LOADOUT_CFG_SHARED_PREFIX` (it overrides HOME/XDG but
   not that), so a dev shell whose baked prefix is stale fails its tealdeer
-  assertion. It passes with the variable unset and in the container. Harden
-  with `env -u` next time that test is touched.
+  assertion. It passes with the variable unset and in the container. **FIXED
+  in W6** (the class C run hit it; the test now unsets the variable -- entry
+  (12)).
 - Explicitly NOT done: `--fonts-dir` / `LOADOUT_FONTS_DIR`. The routing covers
   the reported case and a second destination surface needs a lifecycle
   decision; `--skip font-*` plus a symlink remains the manual escape hatch.

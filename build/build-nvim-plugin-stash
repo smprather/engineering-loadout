@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """build-nvim-plugin-stash -- build the offline git stash of nvim plugins.
 
 Ships one FULL bare mirror (`git clone --mirror`: all refs, all tags) per plugin,

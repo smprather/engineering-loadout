@@ -252,7 +252,7 @@ fi
 #
 # The wheel's other ~32MB (a duplicate share/ tree and a second yosys-abc) is not
 # needed:
-#   - python3.14 in the same prefix is the interpreter, so libyosys resolves its
+#   - python3.15 in the same prefix is the interpreter, so libyosys resolves its
 #     data tree through the readlink("/proc/self/exe") path this repo's yosys
 #     already installs (share/yosys) and finds the sibling yosys-abc.
 #     VERIFIED: `synth` (which reads the techlib tree and shells out to ABC)
@@ -354,7 +354,7 @@ tar xjf "$PP_TAR" -C "$WORK/pp" --strip-components=1
     tail -20 "$WORK/pp-install.log" >&2
     exit 1
 }
-[ -x "$STAGE/bin/python3.14" ] || { echo "ERROR: stage has no python3.14 -- -y cannot be tested." >&2; exit 1; }
+[ -x "$STAGE/bin/python3.15" ] || { echo "ERROR: stage has no python3.15 -- -y cannot be tested." >&2; exit 1; }
 
 # Move the original away so a build-prefix fallback cannot masquerade as success.
 mv "$INST" "${INST}.hidden"
@@ -504,7 +504,7 @@ Done.
 
 Next, as for every payload change:
   ./build/strip-all-elf-binaries
-  python3.14 build/gen-content-manifest
+  python3.15 build/gen-content-manifest
   ./loadout completion bash > envs/bash/global/completions/loadout.bash
-  python3.14 build/gen-readme-table
+  python3.15 build/gen-readme-table
 EOF

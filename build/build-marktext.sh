@@ -235,14 +235,14 @@ NPM_CLI=$(find "$WORK/node" -maxdepth 6 -path '*npm/bin/npm-cli.js' | head -1)
 export LD_LIBRARY_PATH="$PLIBS"
 echo "    node: $("$NODE_BIN" --version)"
 
-PY314="$REPO/.loadout-bootstrap/bin/python3.14"
+PY314="$REPO/.loadout-bootstrap/bin/python3.15"
 if [ ! -x "$PY314" ]; then
     mkdir -p "$REPO/.loadout-bootstrap"
     tar xjf "$PLATFORM_DIR"/portable-python-*.tar.bz2 -C "$REPO/.loadout-bootstrap" 2>/dev/null || true
-    PY314=$(find "$REPO/.loadout-bootstrap" -maxdepth 4 -name 'python3.14' -type f | head -1)
+    PY314=$(find "$REPO/.loadout-bootstrap" -maxdepth 4 -name 'python3.15' -type f | head -1)
 fi
 if [ ! -x "$PY314" ]; then
-    echo "ERROR: python3.14 not available (node-gyp cannot run under EL8's 3.6)" >&2
+    echo "ERROR: python3.15 not available (node-gyp cannot run under EL8's 3.6)" >&2
     exit 1
 fi
 export npm_config_python="$PY314"
@@ -699,8 +699,8 @@ with open(path, "w") as f:
 PY
 
 echo "==> Running strip-all-elf-binaries (auto-chunks the archive) ..."
-# strip-all-elf-binaries carries a `#!/usr/bin/env python3.14` shebang, and the
-# build image deliberately does NOT bake python3.14 (see build/Dockerfile's
+# strip-all-elf-binaries carries a `#!/usr/bin/env python3.15` shebang, and the
+# build image deliberately does NOT bake python3.15 (see build/Dockerfile's
 # "What's NOT baked in" note -- loadout self-hosts it).  So put the
 # cold-bootstrapped interpreter on PATH for the call.  $PY314 is the real file
 # under $REPO/.loadout-bootstrap/..., so its bin dir is the PATH entry.
@@ -708,5 +708,5 @@ PATH="$(dirname "$PY314"):$PATH" "$REPO/build/strip-all-elf-binaries"
 
 echo
 echo "==> Done."
-echo "    Next: ./build/build-shell 'PATH=\$(dirname $PY314):\$PATH python3.14 build/gen-installed-sizes'"
+echo "    Next: ./build/build-shell 'PATH=\$(dirname $PY314):\$PATH python3.15 build/gen-installed-sizes'"
 echo "    then: ... build/gen-content-manifest, git add payload/ ... && commit"

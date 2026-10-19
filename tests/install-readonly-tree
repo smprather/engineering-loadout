@@ -9,14 +9,14 @@ set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PY=${LOADOUT_TEST_PY:-}
 if [ -z "$PY" ]; then
-    for cand in "$HOME/.local/bin/python3.14" "$REPO/.loadout-bootstrap/bin/python3.14" python3.14; do
+    for cand in "$HOME/.local/bin/python3.15" "$REPO/.loadout-bootstrap/bin/python3.15" python3.15; do
         if command -v "$cand" >/dev/null 2>&1; then
             PY=$cand
             break
         fi
     done
 fi
-[ -n "$PY" ] || { echo "ERROR: python3.14 not found" >&2; exit 1; }
+[ -n "$PY" ] || { echo "ERROR: python3.15 not found" >&2; exit 1; }
 
 tmp_root=${TMPDIR:-/tmp}
 TEST_ROOT=$(mktemp -d "$tmp_root/loadout-ro-tree.XXXXXX")
@@ -112,7 +112,7 @@ probe_bin fd --version
 probe_bin bat --version
 probe_bin tldr --quiet tar
 probe_bin uv --version
-probe_bin python3.14 -c 'import sys; print(sys.version)'
+probe_bin python3.15 -c 'import sys; print(sys.version)'
 probe_bin sqlite3 --version
 probe_bin strace --version
 probe_bin valgrind --version
@@ -157,7 +157,7 @@ echo "  OK: tealdeer reads cached pages on RO tree"
 #    even attempt a .pyc write (the strace scan catches the attempt).
 mkdir -p "$home/scriptdir"
 printf 'print("ro-ok")\n' > "$home/scriptdir/rotest.py"
-py_out=$("${probe_env[@]}" python3.14 "$home/scriptdir/rotest.py" 2>&1) \
+py_out=$("${probe_env[@]}" python3.15 "$home/scriptdir/rotest.py" 2>&1) \
     || fail "python failed on RO tree: $py_out"
 [[ "$py_out" == ro-ok ]] || fail "python output unexpected: $py_out"
 echo "  OK: python bytecode redirected from RO tree"

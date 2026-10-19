@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """release-tag-scheme -- pin the YYYY.M.N tag policy in ./build/release.
 
 The release tag is derived, not typed, so the derivation gets pinned without a

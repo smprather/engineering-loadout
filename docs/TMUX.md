@@ -10,6 +10,7 @@ Prefix: **`Ctrl-\`** (not `Ctrl-b` -- your fingers will thank you)
 | `Ctrl+Shift+<-/->` | Reorder windows |
 | `Prefix+1-5` | Layout presets |
 | `Prefix+6` | Reapply the 3-column layout |
+| `Prefix+7` | Reapply the 3-column layout with the previous pane pinned left |
 | `Prefix+o` | New seven-pane 3-column work window |
 | `Prefix+v` | Capture pane buffer -> nvim |
 | `Prefix+r` | Reload config |
@@ -38,8 +39,9 @@ the loadout-managed
 plugins. Plugins live at `~/.config/tmux/plugins/` -- TPM's own XDG location;
 the dispatcher's `run` line and the `TMUX_PLUGIN_MANAGER_PATH` pin in
 `tmux-global.conf` both point there, and there is no `~/.tmux` symlink. The settings layers hold user-facing knobs -- the
-`@theme` choice (defaulting to `loadout1`) and the `focus-follows-mouse`
-default (off) -- and the global layer loads the
+`@theme` choice (defaulting to `loadout2`, the fully pinned
+terminal-independent theme; `loadout1` is the pre-2026-10-01 rollback) and the
+`focus-follows-mouse` default (on) -- and the global layer loads the
 selected `themes/tmux-theme-<name>.conf` plus the generated
 `word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
 Helper scripts live in `scripts/`.
@@ -69,15 +71,37 @@ in the managed `tmux-global.conf` only, so a user-layer declaration is **not**
 refreshed by the updater. The vendored copy stays at the version in the repo
 until the global layer declares it (or you update it yourself).
 
+## Mouse wheel and cursor
+
+The cursor is pinned to a steady block (`set -g -w cursor-style block`):
+alacritty only applies its `[cursor] style.shape` when a terminal is created,
+and an application can override it with DECSCUSR -- while tmux's cursor-style is
+enforced on every draw.
+
+Wheel scrolling moves **three lines per notch** (stock tmux uses five) and
+leaves copy-mode when the bottom is reached (`copy-mode -e`, set on
+`Prefix+[` / `PgUp` / `PgDn`). `j`, `Down` and `G` leave copy-mode only when the
+move actually brings the view back to the live bottom, so a first press while
+already at the bottom (e.g. straight after `Prefix+[`) does not bounce the
+cursor off the visible screen.
+
+One caveat: the bundled `better-mouse-mode` plugin is still declared, and TPM
+sources plugins **after** the user layer, so its root `WheelUpPane` /
+`WheelDownPane` bindings currently win over the ones in `tmux-global.conf`.
+Dropping the `set -g @plugin 'nhdaly/tmux-better-mouse-mode'` line activates the
+global layer's own root-wheel handling (which fixes a first-wheel-up case the
+plugin gets wrong); the copy-mode binds and `j`/`Down`/`G` are unaffected either
+way.
+
 ## Focus follows mouse (FFM)
 
 `focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.7c) focuses the
 pane under the mouse pointer on hover, no click needed. The managed baseline
-sets it **off**; opt in per user in `tmux-settings-user.conf`, which is
+sets it **on**; opt out per user in `tmux-settings-user.conf`, which is
 sourced after the baseline and therefore wins:
 
 ```tmux
-set -g focus-follows-mouse on
+set -g focus-follows-mouse off
 ```
 
 It needs mouse mode, which `tmux-global.conf` already turns on.

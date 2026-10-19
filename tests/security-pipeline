@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """security-pipeline -- pin the security gates' inputs and policy.
 
 1. build/security_tools.py PINS are well-formed (https URL, lowercase sha256,

@@ -31,8 +31,8 @@ set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
-PY=".loadout-bootstrap/bin/python3.14"
-[ -x "$REPO/$PY" ] || PY="$(command -v python3.14 || command -v python3)"
+PY=".loadout-bootstrap/bin/python3.15"
+[ -x "$REPO/$PY" ] || PY="$(command -v python3.15 || command -v python3)"
 
 # Pinned sha512 dist.integrity per version, as published by the npm registry.
 case "$1" in

@@ -38,8 +38,8 @@
 # us the year-scoped relative URL and the SHA3-256 for verification.
 #
 # Then, as for every payload change:
-#   ./build/strip-all-elf-binaries && python3.14 build/gen-installed-sizes \
-#     && python3.14 build/gen-content-manifest
+#   ./build/strip-all-elf-binaries && python3.15 build/gen-installed-sizes \
+#     && python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -362,8 +362,8 @@ echo "  $LIB_DIR/libsqlite3.so.0.bz2"
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-installed-sizes"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-installed-sizes"
+echo "  python3.15 build/gen-content-manifest"
 echo "  git add payload/el8.x86_64.glibc2p28/bin/sqlite3.bz2 \\"
 echo "          payload/el8.x86_64.glibc2p28/lib64/libsqlite3.so.0.bz2 \\"
 echo "          .strip-manifest .content-manifest payload/packages.json \\"

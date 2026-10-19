@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """Content fingerprinting shared by the release gates and the test suite.
 
 Two modes, same output shape:

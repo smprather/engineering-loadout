@@ -17,9 +17,9 @@ caches and Neovim data always stay under the real `$HOME`. Repo developers can
 also `git clone` and run `./loadout` from a checkout -- the script resolves the
 repo from its own path and works from any cwd.
 
-`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.14
-interpreter (an installed `<prefix>/bin/python3.14` ->
-`<repo>/.loadout-bootstrap/bin/python3.14`
+`./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.15
+interpreter (an installed `<prefix>/bin/python3.15` ->
+`<repo>/.loadout-bootstrap/bin/python3.15`
 -> cold-bootstrap from `payload/<platform>/portable-python-*.tar.bz2`) and
 execs `loadout_main.py` under it. No system Python is required -- `bzip2` +
 `tar` (always present on EL8/Suse/Debian) are the only host prerequisites.
@@ -36,7 +36,7 @@ run it under the bundled interpreter or another 3.14+ build.
 ./loadout list                                # show all packages
 ./loadout list --groups                       # show all @groups
 ./loadout list --tag editor                   # filter packages by tag
-./loadout search vim                          # case-insensitive substring search
+./loadout search vim                          # substring search; shows @groups
 ./loadout info gvim                           # full package metadata + reverse-deps
 ./loadout info @core-cli                      # group membership
 ./loadout resolve gvim                        # dry-run resolver, prints set by kind
@@ -69,7 +69,7 @@ Shared tree (`<prefix>`):
 |-------------|--------|
 | `<prefix>/bin/` | `payload/<platform>/bin/*.bz2` (decompressed) |
 | `<prefix>/lib64/` | `payload/<platform>/lib64/*.bz2` (decompressed) |
-| `<prefix>/bin/python3.14` | `payload/<platform>/portable-python-*.tar.bz2` |
+| `<prefix>/bin/python3.15` | `payload/<platform>/portable-python-*.tar.bz2` |
 | `<prefix>/share/helix/runtime/` | `payload/<platform>/runtime/helix.tar.bz2` |
 | `<prefix>/share/vim/vim92/` | `payload/<platform>/runtime/vim92.tar.bz2` |
 | `<prefix>/share/nvim/runtime/` | `payload/<platform>/runtime/nvim.tar.bz2` |

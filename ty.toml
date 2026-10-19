@@ -10,7 +10,7 @@
 #   and click.shell_completion.ParameterSource. `loadout_main.py` imports
 #   `rich_click as click` in a try/except ImportError; ty cannot infer the module
 #   type through that shape. Runtime verification:
-#   `PYTHONPATH=installer_vendor ~/.local/bin/python3.14 -c 'import rich_click; print(hasattr(rich_click.exceptions, "Abort"), hasattr(rich_click.exceptions, "ClickException"), hasattr(rich_click.exceptions, "UsageError"))'`
+#   `PYTHONPATH=installer_vendor ~/.local/bin/python3.15 -c 'import rich_click; print(hasattr(rich_click.exceptions, "Abort"), hasattr(rich_click.exceptions, "ClickException"), hasattr(rich_click.exceptions, "UsageError"))'`
 #   prints `True True True`.
 # - 2x invalid-argument-type on rich.progress.Progress.update/advance. Rich wants
 #   TaskID, but `_progress_task` is typed None | TaskID. The calls are correct:

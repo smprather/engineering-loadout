@@ -101,8 +101,8 @@ EOF
 cat > "$test_hooks/hook2.sh" <<'EOF'
 #!/bin/sh
 # Hooks get LOADOUT_DEST_DIR = the resolved install root; portable-python is a
-# shared package, so its interpreter lives at <install_root>/bin/python3.14.
-py="$LOADOUT_DEST_DIR/bin/python3.14"
+# shared package, so its interpreter lives at <install_root>/bin/python3.15.
+py="$LOADOUT_DEST_DIR/bin/python3.15"
 exec "$py" -c '
 import os
 with open(os.path.join(os.environ["LOADOUT_HOME"], "post-install-hooks.log"), "a") as fh:
@@ -351,7 +351,7 @@ fi
 # PATH order from the installed bashrc: prefer/ shims first (the explicit
 # per-tool exception), the shared bin appended behind system dirs.
 path_out=$(env -i HOME="$test_home" TERM=xterm /bin/bash -lc 'printf "%s" "$PATH"' 2>/dev/null)
-"$prefix/bin/python3.14" - "$path_out" "$prefix" <<'PY'
+"$prefix/bin/python3.15" - "$path_out" "$prefix" <<'PY'
 import sys
 entries = [e for e in sys.argv[1].split(":") if e]
 prefix = sys.argv[2]

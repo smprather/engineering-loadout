@@ -6,8 +6,8 @@
 # EL8 bytes -- see the Build Machine Mandate in AGENTS.md).
 set -euo pipefail
 
-ARCHIVE=/repo/payload/el8.x86_64.glibc2p28/portable-python-3.14.7-el8-clang23.tar.bz2
-NAME=portable-python-3.14.7-el8-clang23
+ARCHIVE=/repo/payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2
+NAME=portable-python-3.15.0-el8-clang23
 WORK=/cache/dynsym-repack
 
 echo "=== bzip2 version in this container ==="
@@ -20,7 +20,7 @@ mkdir -p "$WORK"
 tar xjf "$ARCHIVE" -C "$WORK"
 ls -d "$WORK/$NAME"
 
-LIB="$WORK/$NAME/local/lib/libpython3.14.so.1.0"
+LIB="$WORK/$NAME/local/lib/libpython3.15.so.1.0"
 ls -l "$LIB"
 
 echo
@@ -45,12 +45,12 @@ SMOKE=/cache/dynsym-smoke
 rm -rf "$SMOKE"
 mkdir -p "$SMOKE"
 cp -a "$WORK/$NAME" "$SMOKE/"
-PYTHONDONTWRITEBYTECODE=1 "$SMOKE/$NAME/local/bin/python3.14" -B \
+PYTHONDONTWRITEBYTECODE=1 "$SMOKE/$NAME/local/bin/python3.15" -B \
     -c 'import sys, json, sqlite3, ssl; print("  interp OK", sys.version.split()[0])'
 rm -rf "$SMOKE"
 
 echo
-echo "=== confirm the tree is byte-identical except libpython3.14.so.1.0 ==="
+echo "=== confirm the tree is byte-identical except libpython3.15.so.1.0 ==="
 # Guard against contamination: __pycache__ and similar are created by merely
 # RUNNING the interpreter, and anything new here would ship in the archive.
 if find "$WORK/$NAME" -name '__pycache__' -o -name '*.pyc' | grep -q .; then
@@ -73,7 +73,7 @@ VERIFY=/cache/dynsym-verify
 rm -rf "$VERIFY"
 mkdir -p "$VERIFY"
 tar xjf "$NEW" -C "$VERIFY"
-python3 /repo/build/repair-libpython-dynsym --check "$VERIFY/$NAME/local/lib/libpython3.14.so.1.0"
+python3 /repo/build/repair-libpython-dynsym --check "$VERIFY/$NAME/local/lib/libpython3.15.so.1.0"
 
 echo
 echo "=== compare the file LIST against the original (must be identical) ==="
@@ -88,7 +88,7 @@ else
 fi
 
 echo
-echo "=== verify only libpython3.14.so.1.0 changed inside ==="
+echo "=== verify only libpython3.15.so.1.0 changed inside ==="
 mkdir -p /cache/oldx && rm -rf /cache/oldx && mkdir -p /cache/oldx
 tar xjf "$ARCHIVE" -C /cache/oldx
 python3 - <<'PYEOF'
@@ -115,8 +115,8 @@ def digest(root, name):
             out[os.path.relpath(p, root) + "/"] = "dir"
     return out
 
-old = digest("/cache/oldx", "portable-python-3.14.7-el8-clang23")
-new = digest("/cache/dynsym-verify", "portable-python-3.14.7-el8-clang23")
+old = digest("/cache/oldx", "portable-python-3.15.0-el8-clang23")
+new = digest("/cache/dynsym-verify", "portable-python-3.15.0-el8-clang23")
 
 changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
 print(f"  {len(old)} entries compared; {len(changed)} differ:")

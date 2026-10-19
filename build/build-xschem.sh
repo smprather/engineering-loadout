@@ -449,13 +449,13 @@ with open(path, 'w') as f:
 echo "==> Running strip-all-elf-binaries ..."
 # The image ships only python3.6; strip-all-elf-binaries needs a 3.14
 # interpreter (PEP 758 syntax). Resolve one like build-netlistsvg.sh does: the
-# warm bootstrap interpreter, else any python3.14/python3 on PATH.
+# warm bootstrap interpreter, else any python3.15/python3 on PATH.
 PY=
-for cand in "$REPO/.loadout-bootstrap/bin/python3.14" "$HOME/.local/bin/python3.14" \
-            "$(command -v python3.14 || true)" "$(command -v python3 || true)"; do
+for cand in "$REPO/.loadout-bootstrap/bin/python3.15" "$HOME/.local/bin/python3.15" \
+            "$(command -v python3.15 || true)" "$(command -v python3 || true)"; do
     if [ -n "$cand" ] && [ -x "$cand" ]; then PY="$cand"; break; fi
 done
-[ -n "$PY" ] || { echo "ERROR: no python3.14/python3 interpreter found for strip" >&2; exit 1; }
+[ -n "$PY" ] || { echo "ERROR: no python3.15/python3 interpreter found for strip" >&2; exit 1; }
 "$PY" "$REPO/build/strip-all-elf-binaries"
 
 echo ""
@@ -465,6 +465,6 @@ echo "  $RUNTIME_DIR/xschem.tar.bz2"
 echo ""
 echo "Reminders:"
 echo "  - ./build/strip-all-elf-binaries already ran; regen sizes+manifest if needed:"
-echo "      python3.14 build/gen-installed-sizes && python3.14 build/gen-content-manifest"
+echo "      python3.15 build/gen-installed-sizes && python3.15 build/gen-content-manifest"
 echo "  - ./loadout completion bash > envs/bash/global/completions/loadout.bash"
 echo "  - build/ADDING_BINARIES.md note is MANDATORY"

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """nvim-formatters-resolve: every conform.nvim filetype must map to a formatter
 that actually EXISTS on a loadout install.
 

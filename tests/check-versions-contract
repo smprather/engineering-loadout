@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.14
+#!/usr/bin/env python3.15
 """check-versions -- unit tests for the currency report's honesty contract.
 
 The 2026-09-02 portable-python CA regression made EVERY upstream lookup fail.

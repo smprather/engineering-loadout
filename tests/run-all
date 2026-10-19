@@ -49,13 +49,13 @@ for arg in "$@"; do
 done
 
 PY=""
-for cand in "$HOME/.local/bin/python3.14" "$REPO_DIR/.loadout-bootstrap/bin/python3.14" python3.14; do
+for cand in "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
     if command -v "$cand" > /dev/null 2>&1; then
         PY=$cand
         break
     fi
 done
-[ -n "$PY" ] || { echo "ERROR: python3.14 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
+[ -n "$PY" ] || { echo "ERROR: python3.15 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
 
 FAILURES=0
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/test-cache-v1"
@@ -262,6 +262,7 @@ run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
 run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
 run_test "registry-integrity" "$PY" tests/registry-integrity
+run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
@@ -307,6 +308,7 @@ run_test "install-fonts-rejoin" --deps auto "$PY" tests/install-fonts-rejoin
 run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
 run_test "install-modules" --deps auto tests/install-modules
 run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
+run_test "install-env-bash" --deps auto tests/install-env-bash
 run_test "install-env-st" --deps auto tests/install-env-st
 run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh

@@ -19,7 +19,7 @@
 #
 # Then, as for every payload change:
 #   ./build/strip-all-elf-binaries
-#   python3.14 build/gen-content-manifest
+#   python3.15 build/gen-content-manifest
 
 set -eu
 
@@ -130,7 +130,7 @@ tar cjf "$STAGE/vim92.tar.bz2" -C "$STAGE/rt" ./runtime
 # a 0 fallback reproduces the older behaviour on old Pango. Guarded by version
 # so a newer build host still gets upstream's code.
 echo "==> Applying the EL8 Pango back-port ..."
-python3.14 - "$SRC" <<'PYEOF'
+python3.15 - "$SRC" <<'PYEOF'
 import sys, os
 src = sys.argv[1]
 path = os.path.join(src, "src", "hardcopy_pango.c")
@@ -187,7 +187,7 @@ cp "$STAGE/vim92.tar.bz2" "$RT_DIR/vim92.tar.bz2"
 chmod 644 "$RT_DIR/vim92.tar.bz2"
 
 # --- stamp the registry ------------------------------------------------------
-python3.14 - "$REPO/payload/packages.json" "$VERSION" <<'PYEOF'
+python3.15 - "$REPO/payload/packages.json" "$VERSION" <<'PYEOF'
 import json, re, sys
 path, version = sys.argv[1], sys.argv[2]
 raw = open(path).read()
@@ -208,4 +208,4 @@ echo "  payload/$PLATFORM/runtime/vim92.tar.bz2"
 echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-content-manifest"

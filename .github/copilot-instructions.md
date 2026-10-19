@@ -12,7 +12,7 @@ engineering / compute work environments. Multi-platform (RedHat 7/8/9, Suse,
 x86_64/ARM/PowerPC), six-layer shell configuration
 (global -> corp -> site -> team -> project -> user), and two-layer Neovim/tmux
 configuration (global -> user).
-`./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.14`),
+`./loadout` is a POSIX-sh shim that bootstraps bundled Python 3.14 and execs `loadout_main.py` (Python 3.14+, shebang `#!/usr/bin/env python3.15`),
 driven by `payload/packages.json` (`schema_version: 3`). The source uses **PEP 758**
 syntax (`except A, B:` without parentheses, still `except (A, B) as e:` when binding),
 so only a 3.14+ interpreter can parse it -- never run an older Python or analyzer over
@@ -33,7 +33,7 @@ the parentheses).
 ./loadout list vim helix                        # names matching either filter
 ./loadout list --groups                         # all @-groups
 ./loadout list --tag editor                     # filter by tag
-./loadout search vim                            # name/desc/tag substring search
+./loadout search vim                            # name/desc/tag search, GROUPS col
 ./loadout info gvim                             # metadata + reverse-deps
 ./loadout info @core-cli                        # group members
 ./loadout resolve gvim                          # dry-run resolver
@@ -317,7 +317,7 @@ symlinks to it), probes every executable in `<dest>/bin` with
 workers, memory-scaled), checks editor runtime
 sentinels, and runs installed `nvim` headless against its installed runtime
 before any tag is created. Portable Python keeps generic `python3`/`pip3` links in
-`<prefix>/bin` so `python3` on PATH resolves to 3.14; the only hard py3.6
+`<prefix>/bin` so `python3` on PATH resolves to 3.15; the only hard py3.6
 holdout is Meld's `bin/meld` launcher, which pins `/usr/bin/python3.6` for
 PyGObject compatibility (independent of the loadout bootstrap).
 Python's private SQLite in `<prefix>/lib` must include built-in FTS5
@@ -430,7 +430,7 @@ guard each server with `vim.fn.executable`, and keep missing tools in
 `vim.g.loadout_missing_lsp_servers` instead of enabling a server that will fail
 when its filetype opens.
 
-Use `./build/strip-all-elf-binaries` (Python 3.14) after adding vendored
+Use `./build/strip-all-elf-binaries` (Python 3.15) after adding vendored
 binaries, libraries, parser grammars, or tar archives. It walks the repo
 outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs
@@ -466,6 +466,17 @@ under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. The installer
 seeds both user layers only when absent; it offers interactive migration from
 `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
 migrations need a manual move of its contents into `tmux-user.conf`.
+
+Themes: `themes/tmux-theme-loadout2.conf` pins every paintable tmux colour to a
+literal hex, `window-style` (the fill of panes that are NOT the active pane)
+included -- at tmux's `default` that fill is the terminal's own background, and
+because the two pane fills are only 1.055:1 apart the active/inactive cue
+inverts on any terminal whose background is lighter than #090909 (observed on
+Windows Terminal). `default` is kept only for component styles that inherit a
+pinned base (named at the bottom of the theme file). It is the shipped
+default (`@theme "loadout2"`), and `focus-follows-mouse` defaults to ON -- both
+are per-user overridable in `tmux-settings-user.conf`. Keep it that way when
+adding appearance options.
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
 When a loadout nvim binary and env-nvim config are both present, the installer

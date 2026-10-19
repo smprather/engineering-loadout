@@ -153,7 +153,7 @@ readelf -d "$BIN" 2>/dev/null | grep NEEDED || true
 
 echo ""
 echo "Next:"
-echo "  python3.14 build/gen-content-manifest"
+echo "  python3.15 build/gen-content-manifest"
 echo "  tests/prebuilt-binaries --keep    # or ./build/release --dry-run"
 echo "  git add payload/ .strip-manifest build/build-${PKG}.sh \\"
 echo "          build/farm-versions build/ADDING_BINARIES.md"
