@@ -1,5 +1,174 @@
 # Current Handoff
 
+## 2026-10-12 (4): the operator's personal tmux user layer merged into the managed global layer -- and the installed-tree drift ported
+
+**Goal (operator):** everything running on this host is the loadout out-of-box
+experience. So `tmux-user.conf` + `tmux-settings-user.conf` (the two personal
+layers) move into the managed global layers, and the installed-tree drift found
+by the earlier inventory gets ported at the same time.
+
+**Merged into `envs/tmux/tmux-global.conf`** (order-preserving: inserted after
+every active binding the user layer used to override, before the commented-out
+legacy mouse graveyard):
+
+- `set -g -w cursor-style block` -- **scope FIXED.** The user-layer original was
+  `set -s cursor-style block`, but `cursor-style` is a WINDOW option
+  (`options-table.c`: scope `OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE`), so `-s`
+  wrote a phantom server entry and the window option stayed `default` (verified
+  on the live server and on a fresh scratch server). The block cursor the
+  operator saw was alacritty's own default, not tmux's. Visually identical on
+  this host; the difference appears only where an application uses DECSCUSR.
+- Copy-mode entry with `-e` (`Prefix+[` / `PgUp` / `PgDn`), the 3-line wheel-notch
+  and root-wheel binds, the `j` / `Down` / `G` bottom-exit handling.
+- FFM and the theme were already in the settings layers with identical values,
+  so nothing was duplicated.
+
+**Discovery: the user layer's wheel block has been dead code since it was
+written.** `nhdaly/tmux-better-mouse-mode` is still declared in
+`tmux-global.conf`, and TPM sources plugins after the user layer, so the
+plugin's generated bindings win at runtime. Evidence: the live root
+`WheelUpPane` binding's innermost else is `copy-mode -e -t= ; send-keys -M x3`
+(the plugin's script-built shape, odd whitespace included), not the user file's
+`-X -N 3 scroll-up`. The user file's comment claiming the plugin was "removed
+from tmux-global.conf" was simply wrong. **Decision: keep the declaration** --
+the instruction was "exactly what I have right now", and today's behaviour is the
+plugin's -- and ship the block with an explicit SHADOWED comment naming the
+one-line activation (drop the `@plugin` line), which restores the documented
+first-wheel-up fix. **Open question for the operator: drop it or keep it.**
+
+Related semantic check, recorded because it is easy to get wrong: `set -g
+@plugin X` **replaces**, it does not accumulate (`show-options -g @plugin` after
+two sets shows only the last value, in both `-g` and `-gA` list form). Three
+declarations still work in practice because TPM sources plugin *directories*;
+the declaration list is not the source of truth for what gets sourced.
+
+**Ported from the installed tree** (the drift the 2026-10-12 inventory found):
+`bind-key 7` -> `tmux-3col-layout.sh --left-last`, and the newer
+`scripts/tmux-3col-layout.sh` (154 lines: `move_to_index`,
+`pane_last`-based left-last mode, 35/35/30 widths) replacing the older
+classic-only 73-line version. Nothing was lost -- the repo-only lines in the
+diff were the old implementation of the same classic path.
+
+**Equivalence proof** (two scratch servers, full `show-options -gA` /
+`-g -w -A` / `-s -A` + `list-keys` dumps):
+A = today's layering (installed managed files + personal user files);
+B = post-merge (repo managed files + shipped user templates = a fresh install);
+B' = B with the user's verbatim `-s` cursor line.
+
+- A vs B': **identical** -- the merge is behaviour-preserving.
+- A vs B: **one line** -- `cursor-style default -> block`, the intended fix.
+
+**Gates/docs.** `tests/install-env-tmux-nvim-layers` gained a merged-defaults
+block (key 7 + `--left-last` support, the cursor pin, the wheel binds, the
+copy-mode-vi exit binds), so a future refactor cannot silently drop them.
+README, `docs/TMUX.md` (new "Mouse wheel and cursor" section + `Prefix+7` row)
+and AGENTS.md synced. Env sources changed -> `gen-installed-sizes` then
+`gen-content-manifest` regenerated in that order.
+
+**Deploy note for the operator's own test:** the merged `tmux-global.conf` was
+copied into `~/.config/tmux/` (the 3col script there already matched). The
+dispatcher sources both user files unconditionally, so *removing* them makes the
+next reload print a `source-file` error; leave empty files, or re-run
+`loadout install env-tmux -y` after moving them aside (it re-seeds the templates
+only when absent).
+
+## 2026-10-12 (3): shipped tmux defaults flipped -- @theme=loadout2 and focus-follows-mouse ON
+
+Both user-facing defaults in the managed tmux settings layers changed. The
+mechanism is unchanged; only the shipped values are.
+
+- `tmux-settings-global.conf` and the seeded `tmux-settings-user.conf`:
+  `@theme "loadout1"` -> `"loadout2"`. loadout2 is the fully-pinned,
+  terminal-independent theme from entry (2); loadout1 is now purely the
+  pre-2026-10-01 rollback. This also removes the hazard the baseline used to
+  document about itself -- a missing or broken user layer fell back to
+  loadout1's 1.19:1 active window under catppuccin mocha. The baseline is now
+  the safe one.
+- `focus-follows-mouse`: OFF -> ON in the managed baseline (still `%if`-guarded
+  on tmux >= 3.7). The 2026-10-06 trial entry below concluded positively, and
+  hovering only means anything with mouse mode, which `tmux-global.conf`
+  enables. The seeded user layer now carries the commented OPT-OUT
+  (`set -g focus-follows-mouse off`) where it used to carry the opt-in.
+
+Preservation semantics are unchanged: user layers are seeded only when absent,
+so existing installs keep whatever their `tmux-settings-user.conf` already says
+-- only fresh installs (and new users on a shared tree) pick up the new
+defaults. On this dev host nothing visibly changes: the preserved user layer
+already selected loadout2 and FFM on.
+
+`tests/install-env-tmux-nvim-layers` updated to pin the new defaults (theme in
+both layers; baseline FFM on plus the user opt-out hint) and to prove the
+layering in the other direction on a real server (baseline on, user override to
+off). The reinstall-preservation case now appends `loadout1` to the user layer
+and asserts it survives -- i.e. a user choice that contradicts the new default
+is not reset. README, `docs/TMUX.md`, AGENTS.md and the Copilot instructions
+were synced; `docs/TMUX.md` was added to the AGENTS.md doc-sync list, since it
+had drifted unnoticed (it documented both old defaults).
+
+## 2026-10-12 (2): tmux loadout2 theme made terminal-independent -- window-style pinned (the pane-fill cue used to invert on non-black terminals)
+
+**Symptom.** On this host the active pane is a slightly raised dark-gray over
+black inactive panes; a friend on Windows Terminal saw it *backwards* --
+near-black active over dark-gray inactive -- on the same tmux version (3.7c).
+
+**Cause (proved).** loadout2 painted only the ACTIVE pane. `window-active-style
+"bg=#090909"` was set; `window-style` was set nowhere, so it stayed at tmux's
+`default`. tmux's own options table defines `window-style` as *"Default style of
+panes that are not the active pane"*, and `default` there means **paint
+nothing**: `tty.c` fills `cached_gc` from `window-style` and `cached_active_gc`
+from `window-active-style`, and a default marker leaves the cell to the
+terminal. So the inactive fill was whatever the terminal paints -- pure black
+here (alacritty pins `background = "0x000000"`), a lighter gray on Windows
+Terminal. The two fills are only 1.055:1 apart, so a background lighter than
+#090909 flips which one reads as raised; the theme's own comment had already
+predicted "the active pane reads as a sunken hole instead of a raised block".
+Nothing version-dependent -- each machine rendered exactly what its terminal
+supplied.
+
+**Fix -- the theme no longer delegates any colour to the terminal**
+(`envs/tmux/themes/tmux-theme-loadout2.conf`):
+
+- `window-style "fg=#cdd6f4 bg=#000000"` (the regression) and
+  `window-active-style "fg=#cdd6f4 bg=#090909"`. Both pane classes are now
+  painted, and `fg` is pinned too, so default-coloured application text is
+  theme-coloured instead of terminal-coloured.
+- Every previously ANSI-named tmux default, pinned: `mode-style`,
+  `copy-mode-{match,current-match,mark,line-number,current-line-number}-style`,
+  `message-style` / `message-command-style` (with `fill=`),
+  `clock-mode-colour` + `clock-mode-style 24`, `display-panes-colour` /
+  `-active-colour`, `menu-{style,selected-style,border-style}`,
+  `popup-{style,border-style}`, `pane-scrollbars-style` (geometry kept:
+  `width=1,pad=0`), `cursor-colour`. WCAG ratio beside each pair.
+- `default` is retained only where it means *inherit a pinned base* (not
+  "terminal decides"): `status-right-style`, `window-status-last-style`,
+  `copy-mode-selection-style`/`-position-style` (`#{E:mode-style}`),
+  `pane-status-*`/`session-status-*` (unused pane/session status formats).
+  Reasoning recorded at the bottom of the theme file.
+- loadout1 is NOT touched: it is the pre-2026-10-01 rollback theme, deliberately
+  ANSI/stock, with no pane fill of its own.
+
+**Verification.** 21 candidate options probed on a scratch socket against the
+bundled tmux 3.7c: zero parse errors (all values resolved to the intended hex).
+NOTE for future config work: starting a server with `-f FILE` does NOT report
+config errors -- `tmux source-file FILE` does. Negative control (`fg=#zzz`,
+bogus option) => `invalid style` / `invalid option`, rc=1; the theme => silent,
+rc=0. A pty capture of a real tmux client running the theme emitted exactly two
+background codes for the whole session, `48;2;0;0;0` and `48;2;9;9;9` -- both
+fills painted, no terminal default anywhere. `tests/install-env-tmux-nvim-layers`
+extended with (a) a 27-option file-level pin list (value must be a literal hex)
+and (b) live-server checks of both fill values; both were confirmed to fail when
+the pin is deleted (deleted-line negative control).
+
+**Deploy note.** On this host the theme was copied into
+`~/.config/tmux/themes/` directly; a full `install env-tmux` would also sync it
+but would clobber the local `tmux-global.conf` drift (an added
+`bind-key 7 ... tmux-3col-layout.sh --left-last` line plus a newer
+`tmux-3col-layout.sh` that exists only in the installed tree). That drift is
+still un-reconciled.
+
+**Resolved in (3):** the shipped default is now `loadout2`, so the pinning above
+is what a fresh install gets; loadout1 is opt-in rollback only.
+
 ## 2026-10-12 (1): xfce4-terminal 1.2.0 evaluated -- GUI toolkits are the one inherited distro dependency (knowledge recorded, not pursued)
 
 Follow-up to the RMB-paste question: **1.0.4 already has it** --

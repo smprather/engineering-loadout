@@ -467,6 +467,17 @@ seeds both user layers only when absent; it offers interactive migration from
 `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
 migrations need a manual move of its contents into `tmux-user.conf`.
 
+Themes: `themes/tmux-theme-loadout2.conf` pins every paintable tmux colour to a
+literal hex, `window-style` (the fill of panes that are NOT the active pane)
+included -- at tmux's `default` that fill is the terminal's own background, and
+because the two pane fills are only 1.055:1 apart the active/inactive cue
+inverts on any terminal whose background is lighter than #090909 (observed on
+Windows Terminal). `default` is kept only for component styles that inherit a
+pinned base (named at the bottom of the theme file). It is the shipped
+default (`@theme "loadout2"`), and `focus-follows-mouse` defaults to ON -- both
+are per-user overridable in `tmux-settings-user.conf`. Keep it that way when
+adding appearance options.
+
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
 When a loadout nvim binary and env-nvim config are both present, the installer
 runs headless `Lazy! sync` from the local/shared plugin stash before the user's

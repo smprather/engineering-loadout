@@ -540,7 +540,8 @@ points at a shared tcsh config root.
 
 Prefix `Ctrl-\`. Shift-arrows for pane navigation, Ctrl-arrows for windows,
 `Prefix+1`-`5` for layout presets, `Prefix+6` to reapply the custom 3-column
-layout, `Prefix+o` to open a new seven-pane 3-column work window, and
+layout, `Prefix+7` for the 3-column layout with the previously-active pane
+pinned left, `Prefix+o` to open a new seven-pane 3-column work window, and
 `Prefix+v` to capture the pane buffer into nvim. tmux-persist bundled (the
 maintained fork of the abandoned tmux-resurrect) -- it auto-saves pane contents
 and layout per session on detach/exit, so your sessions come back after a
@@ -551,8 +552,10 @@ tmux reads the dispatcher natively from `~/.config/tmux/tmux.conf` (tmux >=
 then your settings (`tmux-settings-user.conf`, which wins), then the managed
 `tmux-global.conf`, then the persistent `tmux-user.conf`, and finally
 initializes TPM. Plugins live at `~/.config/tmux/plugins/`, and tmux-persist
-snapshots live under `~/.local/share/tmux/` (XDG data). The settings layers hold user-facing knobs -- currently just
-the `@theme` choice, defaulting to `loadout1` -- and the global layer loads
+snapshots live under `~/.local/share/tmux/` (XDG data). The settings layers hold user-facing knobs -- the
+`@theme` choice (defaulting to `loadout2`, the fully pinned theme that does not
+depend on the terminal background) and `focus-follows-mouse` (on by default;
+set it off in your settings layer to opt out) -- and the global layer loads
 `themes/tmux-theme-#{@theme}.conf` plus the generated `word-separators.conf`.
 Put personal settings and plugin declarations in
 `~/.config/tmux/tmux-user.conf`; reinstalling `env-tmux` never overwrites the

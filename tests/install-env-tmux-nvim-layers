@@ -45,23 +45,56 @@ grep -qF 'source-file ~/.config/tmux/tmux.conf' "$tmux_dir/tmux-global.conf" \
 for theme in tmux-theme-loadout1.conf tmux-theme-loadout2.conf; do
     [ -f "$tmux_dir/themes/$theme" ] || fail "tmux theme $theme not installed"
 done
+# loadout2 must not delegate any paintable option to the terminal: `default`
+# means "paint nothing" for these, so the value is then the terminal's -- which
+# is how the pane-fill cue came to invert on terminals whose background is
+# lighter than #090909 (observed on Windows Terminal).  Every entry in this
+# list must be set to a literal hex in the theme file.
+for opt in window-style window-active-style pane-border-style pane-active-border-style \
+           mode-style copy-mode-match-style copy-mode-current-match-style copy-mode-mark-style \
+           copy-mode-line-number-style copy-mode-current-line-number-style \
+           message-style message-command-style menu-style menu-selected-style menu-border-style \
+           popup-style popup-border-style pane-scrollbars-style cursor-colour \
+           clock-mode-colour display-panes-colour display-panes-active-colour \
+           status-style status-left-style window-status-style window-status-current-style \
+           window-status-activity-style window-status-bell-style; do
+    grep -qE "^set -g ${opt} +\"[^\"]*#" "$tmux_dir/themes/tmux-theme-loadout2.conf" \
+        || fail "loadout2 theme leaves $opt to the terminal"
+done
 for helper in shell-state-export.sh tmux-3col-layout.sh tmux-popin.sh tmux-popout.sh tmux-word-separators; do
     [ -f "$tmux_dir/scripts/$helper" ] || fail "tmux helper scripts/$helper not installed"
 done
-# Requested default: loadout1 in both shipped settings layers.
-grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-global.conf" \
-    || fail "managed tmux settings do not default to loadout1"
-grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
-    || fail "seeded tmux settings user layer does not default to loadout1"
+# The operator's user-layer defaults were merged into the MANAGED global layer
+# (2026-10-12).  A fresh install must carry them, or the out-of-box behaviour
+# silently regresses: key 7 and the --left-last mode it calls, the cursor pin,
+# and the copy-mode / mouse-wheel handling.
+grep -qE '^bind-key +7 +run-shell .*--left-last' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer does not bind key 7 to the 3col --left-last layout"
+grep -qF 'left-last' "$tmux_dir/scripts/tmux-3col-layout.sh" \
+    || fail "3col layout script lacks the --left-last mode key 7 calls"
+grep -qF 'set -g -w cursor-style block' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer does not pin the cursor style (window option)"
+grep -qF 'bind -n WheelUpPane' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer lacks the merged root-wheel handling"
+grep -qF 'bind -T copy-mode-vi j' "$tmux_dir/tmux-global.conf" \
+    || fail "global layer lacks the copy-mode cursor-down exit handling"
+# Shipped default: loadout2 in both settings layers -- the fully pinned,
+# terminal-independent theme.  loadout1 is the rollback.
+grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "managed tmux settings do not default to loadout2"
+grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer does not default to loadout2"
 # The theme file the default selects must be the one the global layer loads.
 grep -qF 'source-file -F "~/.config/tmux/themes/tmux-theme-#{@theme}.conf"' "$tmux_dir/tmux-global.conf" \
     || fail "global layer does not load the theme selected by @theme"
-grep -qF 'set -g focus-follows-mouse off' "$tmux_dir/tmux-settings-global.conf" \
-    || fail "managed tmux settings do not default focus-follows-mouse off"
-grep -qF '# set -g focus-follows-mouse on' "$tmux_dir/tmux-settings-user.conf" \
-    || fail "seeded tmux settings user layer lacks the FFM opt-in hint"
-! grep -qE '^[[:space:]]*set -g focus-follows-mouse on' "$tmux_dir/tmux-settings-user.conf" \
-    || fail "seeded tmux settings user layer enables FFM by default"
+grep -qF 'set -g focus-follows-mouse on' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "managed tmux settings do not default focus-follows-mouse on"
+! grep -qE '^[[:space:]]*set -g focus-follows-mouse off' "$tmux_dir/tmux-settings-global.conf" \
+    || fail "managed tmux settings still disable focus-follows-mouse"
+grep -qF '# set -g focus-follows-mouse off' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer lacks the FFM opt-out hint"
+! grep -qE '^[[:space:]]*set -g focus-follows-mouse (on|off)' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "seeded tmux settings user layer forces FFM either way"
 
 settings_global_line=$(grep -nF 'tmux-settings-global.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
 settings_user_line=$(grep -nF 'tmux-settings-user.conf' "$tmux_dir/tmux.conf" | head -1 | cut -d: -f1)
@@ -80,8 +113,8 @@ tpm_line=$(grep -nF "run '~/.config/tmux/plugins/tpm/tpm'" "$tmux_dir/tmux.conf"
 grep -qF 'set-environment -g TMUX_PLUGIN_MANAGER_PATH "~/.config/tmux/plugins/"' "$tmux_dir/tmux-global.conf" \
     || fail "global layer does not pin the XDG plugin path"
 
-# FFM layering on a real server: the managed baseline leaves it off and the
-# user layer (sourced after it) overrides to on.  Skipped where tmux is absent
+# FFM layering on a real server: the managed baseline turns it ON and the
+# user layer (sourced after it) can opt out.  Skipped where tmux is absent
 # or predates the option (added in tmux 3.7).
 tmux_bin=$(command -v tmux || true)
 tmux_ver=$("$tmux_bin" -V 2>/dev/null | awk '{print $2}')
@@ -94,13 +127,28 @@ if [ -n "$tmux_bin" ]; then
     tm -f /dev/null new-session -d 'sleep 30'
     tm source-file "$tmux_dir/tmux-settings-global.conf"
     got=$(tm show-options -g focus-follows-mouse)
-    [ "$got" = "focus-follows-mouse off" ] \
-        || fail "managed baseline did not leave focus-follows-mouse off (got: $got)"
-    printf '%s\n' 'set -g focus-follows-mouse on' >> "$tmux_dir/tmux-settings-user.conf"
+    [ "$got" = "focus-follows-mouse on" ] \
+        || fail "managed baseline did not default focus-follows-mouse on (got: $got)"
+    printf '%s\n' 'set -g focus-follows-mouse off' >> "$tmux_dir/tmux-settings-user.conf"
     tm source-file "$tmux_dir/tmux-settings-user.conf"
     got=$(tm show-options -g focus-follows-mouse)
-    [ "$got" = "focus-follows-mouse on" ] \
+    [ "$got" = "focus-follows-mouse off" ] \
         || fail "user layer did not override focus-follows-mouse (got: $got)"
+    # Pane fills must be pinned, not delegated to the terminal.  window-style is
+    # the fill of every pane that is NOT active; left at tmux's default it paints
+    # nothing, and the active/inactive cue becomes whatever background the
+    # terminal paints (see the file-level pin list above).
+    tm source-file "$tmux_dir/themes/tmux-theme-loadout2.conf"
+    got=$(tm show-options -g -w window-style)
+    case "$got" in
+        *'fg=#cdd6f4 bg=#000000'*) ;;
+        *) fail "loadout2 leaves the inactive pane fill to the terminal (window-style: $got)" ;;
+    esac
+    got=$(tm show-options -g -w window-active-style)
+    case "$got" in
+        *'bg=#090909'*) ;;
+        *) fail "loadout2 does not pin the active pane fill (window-active-style: $got)" ;;
+    esac
 else
     echo "SKIP: focus-follows-mouse server check (no tmux >= 3.7)"
 fi
@@ -118,7 +166,7 @@ grep -qF 'local LAYERS = { "global", "user" }' "$fresh_home/.config/nvim/init.lu
 # populated retired Neovim layers without deleting them.
 printf '%s\n' 'set -g status-left "USER-KEPT"' >> "$tmux_dir/tmux-user.conf"
 printf '%s\n' '# GLOBAL-STALE' >> "$tmux_dir/tmux-global.conf"
-printf '%s\n' 'set -g @theme "loadout2"' >> "$tmux_dir/tmux-settings-user.conf"
+printf '%s\n' 'set -g @theme "loadout1"' >> "$tmux_dir/tmux-settings-user.conf"
 printf '%s\n' '# SETTINGS-GLOBAL-STALE' >> "$tmux_dir/tmux-settings-global.conf"
 printf '%s\n' 'vim.g.user_layer_kept = true' > "$nvim_lua/user/config.lua"
 mkdir -p "$nvim_lua/corp" "$nvim_lua/site"
@@ -128,7 +176,7 @@ HOME="$fresh_home" "$REPO/loadout" install -y env-tmux env-nvim --no-backup >"$T
 
 grep -qF 'USER-KEPT' "$tmux_dir/tmux-user.conf" || fail "reinstall overwrote the tmux user layer"
 ! grep -qF 'GLOBAL-STALE' "$tmux_dir/tmux-global.conf" || fail "reinstall did not refresh the tmux global layer"
-grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-user.conf" \
+grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
     || fail "reinstall overwrote the tmux settings user layer"
 ! grep -qF 'SETTINGS-GLOBAL-STALE' "$tmux_dir/tmux-settings-global.conf" \
     || fail "reinstall did not refresh the managed tmux settings"

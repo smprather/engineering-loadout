@@ -3327,6 +3327,7 @@ sha256  c7614d8cc1386ff649c5d2bb261731178b791ff6f15bcdf7b40ed010e0bef160  payloa
 sha256  c76fcadd1e5bfb9b8bafc2200d51e4e78eb0dad67f56881c21dfb6484c7e7746  payload/el8.x86_64.glibc2p28/wheels/lxml_html_clean-0.4.5-py3-none-any.whl
 sha256  c78bc755844e65b7212cef76782117b153a54399a785054891a50ec45916b877  payload/treesitter/vendor/nvim-treesitter/tests/indent/ruby/indent-brackets.rb
 sha256  c799e6092a8d54a63aaf2617d8667190e45a5a7e90e7e1d082a67523ab6bb3a7  payload/el8.x86_64.glibc2p28/lib64/libunwind.so.8.bz2
+sha256  c7ac485b58d0edb7485dfa5946cb2ba7ac781b6218aed4e2cbd3f020b9c882be  payload/installed-sizes.json
 sha256  c7b4e49950b0861a742f1f68ac84264f60beef667c4c44e85a33f45a50aa54b5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/vimdoc/highlights.scm
 sha256  c7b4e49950b0861a742f1f68ac84264f60beef667c4c44e85a33f45a50aa54b5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/vimdoc/highlights.scm
 sha256  c7c8f2e37573569906e76736aee7c99d767a802cf8bb21b2a6385a3b6f9433b4  payload/el8.x86_64.glibc2p28/bin/yosys.bz2
@@ -3453,7 +3454,6 @@ sha256  cfb713bef2df8f67e1c8c31fd7f672c90bb7e1dbfd01817c5d5f261dd3da6b2f  payloa
 sha256  d0009fc7710b422ae46a9c4d2daab6d48f78395ebf1d8d38cc878831fc73e169  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/bitbake/highlights.scm
 sha256  d0009fc7710b422ae46a9c4d2daab6d48f78395ebf1d8d38cc878831fc73e169  payload/treesitter/vendor/nvim-treesitter/runtime/queries/bitbake/highlights.scm
 sha256  d033a36a9645a6efbf458c282526e472c98a6da89051e3091f876e38c1120603  payload/treesitter/vendor/nvim-treesitter/runtime/queries/helm/highlights.scm
-sha256  d0368f4fe4e313571eb9e9ce74ff545aa3db8a97dea2f47307f53f50e4e289a0  payload/installed-sizes.json
 sha256  d037a36040e5b4fb3460f56e8b3efc2e0f7b2455c863aeb1689f928d2f42d8e8  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/mlir/highlights.scm
 sha256  d037a36040e5b4fb3460f56e8b3efc2e0f7b2455c863aeb1689f928d2f42d8e8  payload/treesitter/vendor/nvim-treesitter/runtime/queries/mlir/highlights.scm
 sha256  d0405eae18ec6e8210a471c97dbfe87a7e4d605274b7fe572a1f276e92158f13  payload/el8.x86_64.glibc2p28/wheels/duckdb-1.5.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
