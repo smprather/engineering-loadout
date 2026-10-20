@@ -1,5 +1,66 @@
 # Current Handoff
 
+## 2026-10-20 (2): env-tmux managed tree is read-only; only the user layers stay writable
+
+Operator report: after `loadout install env-tmux`, every file under
+`~/.config/tmux` was owner-writable. The documented intended-permissions rule
+was the opposite ("every installed file/dir gets owner-write"), so this is a
+policy change, not a regression fix: managed config and vendored content are
+replaced by the next install and must not be edited in place.
+
+New `_seal_managed(path)` clears write bits recursively, preserving read and
+execute bits (plugins/scripts keep running) and skipping symlinks. At the end
+of `_install_env_tmux`:
+
+- `tmux.conf`, `tmux-settings-global.conf`, `tmux-global.conf`,
+  `word-separators.conf` -> 0444;
+- `themes/`, `scripts/`, `plugins/` -> 0555 (exec files 0555);
+- `tmux-user.conf` and `tmux-settings-user.conf` -> owner-writable (the
+  top-level `~/.config/tmux` also stays writable because it holds them).
+
+Every reinstall re-heals the dirs through `require_writable_dir`/`sync_dir`
+and re-seals at the end, so `chmod u+w` drift (and the reinstall test's stale
+markers) is repaired. `tests/install-env-tmux-nvim-layers` now asserts the
+fresh-install modes, re-seals after simulated drift, keeps user layers
+writable, and re-opens the tree in cleanup before `rm -rf`. Backup-enabled
+reinstall over the read-only tree verified manually (backup contains the
+files and both installs exit 0).
+
+## 2026-10-20 (1): env-xfce4-terminal -- operator's 1.2.0 config absorbed and translated for the EL build
+
+New `env-xfce4-terminal` package (`envs/xfce4-terminal/`). The operator's live
+Xfconf channel was absorbed verbatim from
+`~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml` (twelve
+properties: font, palette, scrolling, copy-on-select, right-click paste,
+unsafe-paste dialog, URL highlight, menubar, blink mode, maximize).
+
+**Two formats, one setting set.** xfce4-terminal 1.1.0+ reads xfconf; the
+loadout build (1.0.4, EPEL8 shanghai) reads `~/.config/xfce4/terminal/terminalrc`
+with each property's **blurb** as the key (`terminal-preferences.c`:
+`xfce_rc_read_entry (rc, g_param_spec_get_blurb (pspec), ...)`).
+`envs/xfce4-terminal/terminalrc` is the 1.0.4 translation; both files are
+**seeded once** by `_install_env_xfce4_terminal` (only when absent) and then
+owned by the user: xfce4-terminal rewrites them when preferences change, so a
+reinstall must not clobber them and they stay writable. Per-file install, not
+`install_path()` on `~/.config/xfce4`, which would sync with delete=True and
+remove other apps' xfconf channels.
+
+**Compatibility, 12 settings -> 11 exact + 1 gap.** Every key exists in 1.0.4
+and enum spellings match (`TERMINAL_SCROLLBAR_NONE`,
+`TERMINAL_RIGHT_CLICK_ACTION_PASTE_SELECTION`,
+`TERMINAL_TEXT_BLINK_MODE_NEVER`); `ColorPalette` keeps the `rgb()` form
+because 1.0.4 parses it with `gdk_rgba_parse()`. The gap is
+`misc-maximize-default`: no `MiscMaximizeDefault` exists in the 1.0.4 property
+table, so `terminalrc` deliberately omits it (1.0.4 offers only the
+`--maximize` CLI flag). The XML keeps the setting for 1.1+ hosts.
+
+**Proof:** `tests/install-env-xfce4-terminal` asserts both seeded files are
+byte-identical to the shipped copies and mode 644, an unrelated xfconf channel
+survives fresh install and reinstall, user edits and a pre-existing config are
+preserved across reinstall, and mechanically enforces the 1.2.0 -> 1.0.4
+mapping (every XML property has an exact terminalrc key or is the one
+documented exception; terminalrc has no extra keys).
+
 ## 2026-10-19 (1): issue #4 -- env-bash now creates its five override layers
 
 `install_bash()` installed `global/` plus the entrypoint files but never created

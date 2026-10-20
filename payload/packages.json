@@ -3414,6 +3414,19 @@
       ],
       "description": "WezTerm config (Lua)"
     },
+    "env-xfce4-terminal": {
+      "kind": "env",
+      "source": "envs/xfce4-terminal/",
+      "install_to": "~/.config/xfce4",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "env",
+        "terminal"
+      ],
+      "description": "Xfce Terminal settings seeded once in both storage formats: xfconf XML (1.1+) and terminalrc (1.0.x); user edits and unrelated Xfce config preserved"
+    },
     "env-editorconfig": {
       "kind": "env",
       "source": "envs/editorconfig/editorconfig",
