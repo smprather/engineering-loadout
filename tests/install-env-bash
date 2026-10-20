@@ -13,7 +13,7 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 TMPHOME="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-bash.XXXXXX")"
-trap 'rm -rf "$TMPHOME"' EXIT
+trap 'chmod -R u+w "$TMPHOME" 2>/dev/null; rm -rf "$TMPHOME"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

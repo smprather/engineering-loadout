@@ -4795,8 +4795,11 @@ def install_tealdeer_config(repo_dir, home):
     require_writable_parent(dest, "tealdeer config")
     if os.path.exists(dest) or os.path.islink(dest):
         require_writable_dir(dest, "tealdeer config")
+        # A previous install sealed this managed file; re-open for the rewrite.
+        _grant_owner_write(dest)
     with open(dest, "w") as f:
         f.write(text)
+    _seal_managed(dest)
 
 
 def _install_env_bash(repo_dir, home):
@@ -4808,6 +4811,11 @@ def _install_env_bash(repo_dir, home):
     install_bash(repo_dir, home, links_mode=False)
     _mirror_shared_prefix(home, ("bash",))
     install_tealdeer_config(repo_dir, home)
+    # Managed config is read-only; the corp..user layer directories stay
+    # writable for the user's own overrides. Seal after _mirror_shared_prefix,
+    # which rewrites global/config.sh in place.
+    for managed in ("global", "functions.sh", "README.md", "bashrc", "profile"):
+        _seal_managed(os.path.join(home, ".config", "bash", managed))
 
 
 def _install_env_nvim(repo_dir, home):
@@ -4830,6 +4838,16 @@ def _install_env_nvim(repo_dir, home):
     for layer in NVIM_LAYERS:
         ensure_dir(os.path.join(nvim_config, "lua", layer), f"Neovim {layer} layer")
     _nvim_migration_notice(nvim_config)
+    # Managed config is read-only; lua/user stays writable. after/ftplugin is
+    # user-adjacent, so only the shipped files there are sealed.
+    for managed in ("init.lua", os.path.join("lua", "global"), "lsp", os.path.join("after", "lsp")):
+        _seal_managed(os.path.join(nvim_config, managed))
+    _shipped_after = os.path.join(nvim_src, "after", "ftplugin")
+    if os.path.isdir(_shipped_after):
+        for name in os.listdir(_shipped_after):
+            _seal_managed(os.path.join(nvim_config, "after", "ftplugin", name))
+    # lazy-lock.json intentionally stays writable: :Lazy sync/restore rewrites
+    # it, and it is the user's pin file for `:Lazy restore`.
 
 
 def _install_env_vim(repo_dir, home):
@@ -4862,6 +4880,11 @@ def _install_env_vim(repo_dir, home):
         dest = os.path.join(vim_config, rel)
         ensure_dir(os.path.dirname(dest), "Vim after directory")
         install_path(os.path.join(repo_dir, "envs", "vim", rel), dest, False)
+        _seal_managed(dest)
+    # Managed vimrc and vendored packs are read-only; the after/ directory
+    # stays writable so users can add their own ftplugins.
+    _seal_managed(os.path.join(vim_config, "vimrc"))
+    _seal_managed(os.path.join(vim_config, "pack", "vendor"))
 
 
 def _install_tmux_user_layer(repo_dir, home, tmux_config):
@@ -5029,6 +5052,7 @@ def _install_env_editorconfig(repo_dir, home):
         False,
     )
     lns(".config/editorconfig/editorconfig", os.path.join(home, ".editorconfig"), verbose=True)
+    _seal_managed(os.path.join(editorconfig_dir, "editorconfig"))
 
 
 def _install_env_pip(repo_dir, home):
@@ -5037,7 +5061,9 @@ def _install_env_pip(repo_dir, home):
         return
     _pip_cfg_dir = os.path.join(home, ".config", "pip")
     ensure_dir(_pip_cfg_dir, "pip config")
-    install_path(_pip_conf_src, os.path.join(_pip_cfg_dir, "pip.conf"), False)
+    _pip_conf_dest = os.path.join(_pip_cfg_dir, "pip.conf")
+    install_path(_pip_conf_src, _pip_conf_dest, False)
+    _seal_managed(_pip_conf_dest)
 
 
 def _install_env_starship(repo_dir, home):
@@ -5055,6 +5081,8 @@ def _install_env_starship(repo_dir, home):
         os.path.join(starship_dir, "starship.toml"),
         False,
     )
+    for managed in ("config-schema.json", "starship.toml"):
+        _seal_managed(os.path.join(starship_dir, managed))
 
 
 def _install_env_helix(repo_dir, home):
@@ -5072,6 +5100,9 @@ def _install_env_helix(repo_dir, home):
     for name in _present:
         install_path(os.path.join(_src_dir, name), os.path.join(home, ".config", "helix", name), False)
     _relocate_helix_languages(home)
+    # Seal after relocation, which rewrites languages.toml in place.
+    for name in _present:
+        _seal_managed(os.path.join(home, ".config", "helix", name))
 
 
 def _relocate_helix_languages(home):
@@ -5152,6 +5183,9 @@ def _install_env_st(repo_dir, home):
             False,
         )
         print(f"  st user config seeded -> {user_cfg}")
+    # Managed global layer is read-only; user/ (and the sibling layers) stay
+    # writable for the user's own resources.
+    _seal_managed(os.path.join(st_dir, "global"))
 
 
 def _install_env_xfce4_terminal(repo_dir, home):
@@ -5188,6 +5222,8 @@ def _install_env_xfce4_terminal(repo_dir, home):
         if os.path.isfile(src_file):
             ensure_dir(os.path.dirname(dest), "xfce4-terminal config")
             install_path(src_file, dest, False)
+    # Deliberately not sealed: these are seed-once user files (the terminal
+    # rewrites them), so the read-only rule for managed config does not apply.
 
 
 def _install_env_tcsh(repo_dir, home):
@@ -5216,6 +5252,9 @@ def _install_env_tcsh(repo_dir, home):
         lns(os.path.join(tcsh_dir, "tcshrc"), dest, verbose=True)
     for entrypoint in TCSH_ENTRYPOINTS_RETIRED:
         remove_if_exists(os.path.join(home, entrypoint))
+    # Managed config is read-only; the five override layers stay writable.
+    for managed in ("global", "tcshrc"):
+        _seal_managed(os.path.join(tcsh_dir, managed))
 
 
 def _install_env_zsh(repo_dir, home):
@@ -5250,6 +5289,9 @@ def _install_env_zsh(repo_dir, home):
         dest = os.path.join(home, entrypoint)
         remove_if_exists(dest)
         lns(os.path.join(zsh_dir, "zshrc"), dest, verbose=True)
+    # Managed config is read-only; the five override layers stay writable.
+    for managed in ("global", "site-functions", "zshrc"):
+        _seal_managed(os.path.join(zsh_dir, managed))
 
 
 ENV_HANDLERS = {
@@ -5390,6 +5432,10 @@ def _install_env_generic(pkg_name, pkg_entry, repo_dir, home):
         return False
     print(f"  Installing env: {pkg_name} ({source} -> {install_to})")
     install_path(src, dest, links_mode=False)
+    # Generic env packages are managed config: read-only so an edit cannot be
+    # silently lost to the next install. A package that needs app-rewritten or
+    # user-editable files needs a custom handler (see env-xfce4-terminal).
+    _seal_managed(dest)
     return True
 
 
