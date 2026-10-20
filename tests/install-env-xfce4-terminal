@@ -1,0 +1,137 @@
+#!/bin/sh
+# env-xfce4-terminal: seeds both upstream storage formats once, never
+# overwrites the user's terminal config, keeps unrelated Xfce config, and
+# proves every 1.2.0 xfconf setting has a 1.0.4 terminalrc decision.
+#
+# terminalrc is read by xfce4-terminal 1.0.x (the loadout build); the xfconf
+# XML is read by 1.1.0+. Shipping only one leaves the other version with no
+# config, so both are seeded from the same absorbed settings.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMPHOME="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-xfce4-terminal.XXXXXX")"
+trap 'rm -rf "$TMPHOME"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+mode_of() { stat -c %a "$1"; }
+
+XFCE="$TMPHOME/.config/xfce4"
+TRC="$XFCE/terminal/terminalrc"
+XML="$XFCE/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"
+
+# A sibling channel proves the handler installs files, not the whole
+# ~/.config/xfce4 tree (install_path() on a directory deletes extras). It is
+# created before the first install so seeding cannot account for it.
+mkdir -p "$(dirname "$XML")"
+printf '%s\n' '<channel name="other" version="1.0"/>' >"$XFCE/xfconf/xfce-perchannel-xml/other.xml"
+
+HOME="$TMPHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
+
+[ -f "$TRC" ] || fail "terminalrc not seeded"
+[ -f "$XML" ] || fail "xfconf XML not seeded"
+[ -f "$XFCE/xfconf/xfce-perchannel-xml/other.xml" ] || fail "unrelated xfconf channel was deleted"
+
+# The seeded files are the absorbed config, byte for byte, and writable:
+# xfce4-terminal rewrites them when preferences change.
+cmp -s "$REPO/envs/xfce4-terminal/terminalrc" "$TRC" || fail "terminalrc differs from the shipped file"
+cmp -s "$REPO/envs/xfce4-terminal/xfce4-terminal.xml" "$XML" || fail "xfconf XML differs from the shipped file"
+for f in "$TRC" "$XML"; do
+    [ "$(mode_of "$f")" = 644 ] || fail "$f must be user-writable (got $(mode_of "$f"))"
+done
+
+# --- 1.2.0 -> 1.0.4 compatibility gate. 1.0.4 reads each property's blurb as
+# --- its terminalrc key (terminal/terminal-preferences.c). Every property in
+# --- the absorbed XML must either have an exact key in terminalrc or be named
+# --- here with a reason. A new 1.2.0 setting must fail this test, not vanish.
+trc_key_for() {
+    case $1 in
+        scrolling-bar) echo ScrollingBar ;;
+        scrolling-on-keystroke) echo ScrollingOnKeystroke ;;
+        misc-copy-on-select) echo MiscCopyOnSelect ;;
+        misc-show-unsafe-paste-dialog) echo MiscShowUnsafePasteDialog ;;
+        font-use-system) echo FontUseSystem ;;
+        font-name) echo FontName ;;
+        text-blink-mode) echo TextBlinkMode ;;
+        misc-menubar-default) echo MiscMenubarDefault ;;
+        color-palette) echo ColorPalette ;;
+        misc-right-click-action) echo MiscRightClickAction ;;
+        misc-highlight-urls) echo MiscHighlightUrls ;;
+        # 1.0.4 has no MiscMaximizeDefault; --maximize is CLI-only there.
+        misc-maximize-default) echo "" ;;
+        *) echo "__UNMAPPED__" ;;
+    esac
+}
+
+xml_props=$(sed -n 's/.*<property name="\([^"]*\)" type="[^"]*".*/\1/p' "$XML")
+[ -n "$xml_props" ] || fail "no properties parsed from xfconf XML"
+
+mapped=0
+unmapped=0
+for prop in $xml_props; do
+    key=$(trc_key_for "$prop")
+    case $key in
+        __UNMAPPED__) fail "1.2.0 property '$prop' has no 1.0.4 mapping decision" ;;
+        "")
+            [ "$prop" = misc-maximize-default ] || fail "'$prop' is unrepresentable in 1.0.4 without a documented reason"
+            unmapped=$((unmapped + 1))
+            ;;
+        *)
+            grep -q "^$key=" "$TRC" || fail "terminalrc missing 1.0.4 key $key for '$prop'"
+            mapped=$((mapped + 1))
+            ;;
+    esac
+done
+[ "$mapped" -eq 11 ] || fail "expected 11 mapped settings, got $mapped"
+[ "$unmapped" -eq 1 ] || fail "expected exactly 1 unrepresentable setting, got $unmapped"
+! grep -q '^MiscMaximizeDefault=' "$TRC" \
+    || fail "terminalrc carries MiscMaximizeDefault, which 1.0.4 does not implement"
+
+# No terminalrc key may be extra: it must correspond to an XML property.
+trc_keys=$(sed -n 's/^\([A-Za-z][A-Za-z0-9]*\)=.*/\1/p' "$TRC")
+[ "$(echo "$trc_keys" | grep -c .)" -eq 11 ] || fail "terminalrc has keys beyond the mapped set"
+for key in $trc_keys; do
+    found=0
+    for prop in $xml_props; do
+        [ "$(trc_key_for "$prop")" = "$key" ] && found=1
+    done
+    [ "$found" -eq 1 ] || fail "terminalrc key $key does not come from the absorbed XML"
+done
+
+# Settings the two formats share must survive the terminalrc translation.
+for line in \
+    'FontName=Hack Nerd Font Mono 12' \
+    'FontUseSystem=FALSE' \
+    'MiscCopyOnSelect=TRUE' \
+    'MiscHighlightUrls=FALSE' \
+    'MiscMenubarDefault=FALSE' \
+    'MiscRightClickAction=TERMINAL_RIGHT_CLICK_ACTION_PASTE_SELECTION' \
+    'MiscShowUnsafePasteDialog=FALSE' \
+    'ScrollingBar=TERMINAL_SCROLLBAR_NONE' \
+    'ScrollingOnKeystroke=TRUE' \
+    'TextBlinkMode=TERMINAL_TEXT_BLINK_MODE_NEVER'; do
+    grep -qxF "$line" "$TRC" || fail "terminalrc missing: $line"
+done
+grep -q '^ColorPalette=rgb(0,0,0);rgb(224,27,36);rgb(0,170,0);rgb(170,85,0);' "$TRC" \
+    || fail "terminalrc palette was not absorbed"
+
+# The 1.1+ property the loadout build cannot represent still applies to 1.1+.
+grep -q 'name="misc-maximize-default" type="bool" value="true"' "$XML" \
+    || fail "xfconf XML lost misc-maximize-default"
+
+# Seed-once: edits made by the terminal (or the user) survive a reinstall.
+printf '%s\n' 'FontName=User Changed 13' >"$TRC"
+printf '%s\n' '<channel name="xfce4-terminal" version="1.0"><property name="user-changed" type="bool" value="true"/></channel>' >"$XML"
+HOME="$TMPHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
+grep -qxF 'FontName=User Changed 13' "$TRC" || fail "reinstall overwrote the user terminalrc"
+grep -q 'user-changed' "$XML" || fail "reinstall overwrote the user xfconf XML"
+[ -f "$XFCE/xfconf/xfce-perchannel-xml/other.xml" ] || fail "reinstall deleted the unrelated xfconf channel"
+
+# A pre-existing config in an otherwise empty HOME is also left alone.
+OLDHOME="$TMPHOME/old"
+mkdir -p "$OLDHOME/.config/xfce4/terminal"
+printf '%s\n' '[Configuration]' 'FontName=Existing 9' >"$OLDHOME/.config/xfce4/terminal/terminalrc"
+HOME="$OLDHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
+grep -qxF 'FontName=Existing 9' "$OLDHOME/.config/xfce4/terminal/terminalrc" \
+    || fail "install overwrote a pre-existing terminalrc"
+
+echo "install-env-xfce4-terminal: OK"

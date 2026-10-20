@@ -19,11 +19,24 @@ TEST_ROOT=$(mktemp -d "$tmp_root/loadout-env-two-layers.XXXXXX")
 TEST_TMUX_SOCK="loadout-ffm-test-$$"
 cleanup() {
     tmux -L "$TEST_TMUX_SOCK" kill-server 2>/dev/null || true
+    # Managed trees are installed read-only (and backups copy those modes);
+    # re-open them so rm -rf can remove the test root.
+    chmod -R u+w "$TEST_ROOT" 2>/dev/null || true
     rm -rf "$TEST_ROOT"
 }
 trap cleanup EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+mode_of() { stat -c %a "$1"; }
+assert_readonly() {
+    [ "$(mode_of "$1")" = "$2" ] || fail "$1 must be mode $2 (got $(mode_of "$1"))"
+}
+assert_writable() {
+    case $(mode_of "$1") in
+        [2367]*) ;;
+        *) fail "$1 must stay owner-writable (got $(mode_of "$1"))" ;;
+    esac
+}
 
 fresh_home="$TEST_ROOT/fresh"
 mkdir -p "$fresh_home"
@@ -63,6 +76,19 @@ for opt in window-style window-active-style pane-border-style pane-active-border
 done
 for helper in shell-state-export.sh tmux-3col-layout.sh tmux-popin.sh tmux-popout.sh tmux-word-separators; do
     [ -f "$tmux_dir/scripts/$helper" ] || fail "tmux helper scripts/$helper not installed"
+done
+# Permission contract: managed files and vendored trees are read-only; only
+# the two user layers (and the top-level dir holding them) stay writable.
+for managed_file in tmux.conf tmux-global.conf tmux-settings-global.conf word-separators.conf; do
+    assert_readonly "$tmux_dir/$managed_file" 444
+done
+for managed_dir in plugins scripts themes; do
+    assert_readonly "$tmux_dir/$managed_dir" 555
+done
+assert_readonly "$tmux_dir/scripts/tmux-3col-layout.sh" 555
+assert_readonly "$tmux_dir/plugins/tpm/tpm" 555
+for user_file in tmux-user.conf tmux-settings-user.conf; do
+    assert_writable "$tmux_dir/$user_file"
 done
 # The operator's user-layer defaults were merged into the MANAGED global layer
 # (2026-10-12).  A fresh install must carry them, or the out-of-box behaviour
@@ -165,6 +191,8 @@ grep -qF 'local LAYERS = { "global", "user" }' "$fresh_home/.config/nvim/init.lu
 # Reinstall refreshes managed files, preserves user files, and warns about
 # populated retired Neovim layers without deleting them.
 printf '%s\n' 'set -g status-left "USER-KEPT"' >> "$tmux_dir/tmux-user.conf"
+# Managed files are read-only now; simulate drift by re-opening them first.
+chmod u+w "$tmux_dir/tmux-global.conf" "$tmux_dir/tmux-settings-global.conf"
 printf '%s\n' '# GLOBAL-STALE' >> "$tmux_dir/tmux-global.conf"
 printf '%s\n' 'set -g @theme "loadout1"' >> "$tmux_dir/tmux-settings-user.conf"
 printf '%s\n' '# SETTINGS-GLOBAL-STALE' >> "$tmux_dir/tmux-settings-global.conf"
@@ -180,6 +208,17 @@ grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
     || fail "reinstall overwrote the tmux settings user layer"
 ! grep -qF 'SETTINGS-GLOBAL-STALE' "$tmux_dir/tmux-settings-global.conf" \
     || fail "reinstall did not refresh the managed tmux settings"
+# Reinstall heals the chmod u+w drift above and re-applies the read-only
+# contract, while the user layers stay writable.
+for managed_file in tmux.conf tmux-global.conf tmux-settings-global.conf word-separators.conf; do
+    assert_readonly "$tmux_dir/$managed_file" 444
+done
+for managed_dir in plugins scripts themes; do
+    assert_readonly "$tmux_dir/$managed_dir" 555
+done
+for user_file in tmux-user.conf tmux-settings-user.conf; do
+    assert_writable "$tmux_dir/$user_file"
+done
 grep -qF 'user_layer_kept' "$nvim_lua/user/config.lua" || fail "reinstall overwrote the Neovim user layer"
 grep -qF 'retired_layer_must_not_load' "$nvim_lua/corp/config.lua" \
     || fail "reinstall deleted a retired Neovim layer"

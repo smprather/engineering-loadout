@@ -46,6 +46,16 @@ selected `themes/tmux-theme-<name>.conf` plus the generated
 `word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
 Helper scripts live in `scripts/`.
 
+### Permissions
+
+The managed tree is read-only: `tmux.conf`, `tmux-settings-global.conf`,
+`tmux-global.conf`, `word-separators.conf` (0444), and `themes/`, `scripts/`,
+`plugins/` (0555, executable files stay executable). Only the two user layers
+-- `tmux-settings-user.conf` and `tmux-user.conf` -- and the top-level
+`~/.config/tmux` directory stay writable. Managed files are replaced by the
+next `loadout install env-tmux`; edit the repo (or the user layers), not the
+installed managed files.
+
 ## Optional plugins (`tmux-yank`)
 
 [tmux-yank](https://github.com/tmux-plugins/tmux-yank) copies selections to the

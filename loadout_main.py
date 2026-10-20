@@ -990,6 +990,27 @@ def nearest_existing_parent(path):
     return path
 
 
+def _seal_managed(path):
+    """Clear write bits on an installer-managed path (recursive for dirs).
+
+    Managed config and vendored content are replaced by the next install, not
+    edited in place: only the user layers stay owner-writable. Read and execute
+    bits are kept, so scripts/plugins keep running. Symlinks are skipped (their
+    effective permission is the parent directory's).
+    """
+    try:
+        if os.path.islink(path):
+            return
+        if os.path.isdir(path):
+            for entry in os.scandir(path):
+                _seal_managed(entry.path)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode & 0o222:
+            os.chmod(path, mode & ~0o222)
+    except OSError as exc:
+        warn(f"could not make managed path read-only: {path}: {exc}")
+
+
 def _grant_owner_write(path):
     """Enforce the installer's intended permission on one path it owns.
 
@@ -4979,6 +5000,21 @@ def _install_env_tmux(repo_dir, home):
         "tmux-popout.sh",
     ):
         remove_if_exists(os.path.join(tmux_config, stale))
+    # Permission contract: the managed dispatcher, settings/global layers,
+    # themes, helpers and vendored plugins are read-only; only the two user
+    # layers (and the top-level directory that holds them) stay writable.
+    for managed in (
+        "tmux.conf",
+        "tmux-global.conf",
+        "tmux-settings-global.conf",
+        "word-separators.conf",
+        "plugins",
+        "scripts",
+        "themes",
+    ):
+        _seal_managed(os.path.join(tmux_config, managed))
+    for user_file in ("tmux-user.conf", "tmux-settings-user.conf"):
+        _grant_owner_write(os.path.join(tmux_config, user_file))
 
 
 def _install_env_editorconfig(repo_dir, home):
@@ -5118,6 +5154,42 @@ def _install_env_st(repo_dir, home):
         print(f"  st user config seeded -> {user_cfg}")
 
 
+def _install_env_xfce4_terminal(repo_dir, home):
+    """Install Xfce Terminal settings in both upstream storage formats.
+
+    xfce4-terminal 1.0.x (the loadout build) reads
+    ~/.config/xfce4/terminal/terminalrc; 1.1.0+ reads the xfconf channel
+    persisted at ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml.
+    Both shipped files carry the same settings.
+
+    Install each file separately: install_path() on ~/.config/xfce4 would sync
+    with delete=True and remove unrelated apps' xfconf channels and config.
+
+    The files are seeded once and then user-owned: xfce4-terminal itself
+    rewrites them when preferences change, so a reinstall must not clobber the
+    current settings. They stay owner-writable; only this seeding step creates
+    them.
+    """
+    src = os.path.join(repo_dir, "envs", "xfce4-terminal")
+    if not os.path.isdir(src):
+        return
+    xfce_config = os.path.join(home, ".config", "xfce4")
+    shipped = (
+        ("terminalrc", os.path.join(xfce_config, "terminal", "terminalrc")),
+        (
+            "xfce4-terminal.xml",
+            os.path.join(xfce_config, "xfconf", "xfce-perchannel-xml", "xfce4-terminal.xml"),
+        ),
+    )
+    for name, dest in shipped:
+        if os.path.lexists(dest):
+            continue
+        src_file = os.path.join(src, name)
+        if os.path.isfile(src_file):
+            ensure_dir(os.path.dirname(dest), "xfce4-terminal config")
+            install_path(src_file, dest, False)
+
+
 def _install_env_tcsh(repo_dir, home):
     """Install the tcsh config layers and point ~/.tcshrc at them.
 
@@ -5192,6 +5264,7 @@ ENV_HANDLERS = {
     "env-st": _install_env_st,
     "env-tcsh": _install_env_tcsh,
     "env-zsh": _install_env_zsh,
+    "env-xfce4-terminal": _install_env_xfce4_terminal,
 }
 
 
@@ -5208,6 +5281,7 @@ ENV_INSTALL_ORDER = (
     "env-st",
     "env-tcsh",
     "env-zsh",
+    "env-xfce4-terminal",
 )
 
 # Package names hardcoded as phase gates elsewhere in this file (per-phase

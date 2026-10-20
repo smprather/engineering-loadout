@@ -1,0 +1,12 @@
+[Configuration]
+ColorPalette=rgb(0,0,0);rgb(224,27,36);rgb(0,170,0);rgb(170,85,0);rgb(53,132,228);rgb(170,0,170);rgb(0,170,170);rgb(170,170,170);rgb(85,85,85);rgb(255,0,0);rgb(85,255,85);rgb(255,255,85);rgb(85,85,255);rgb(255,85,255);rgb(85,255,255);rgb(255,255,255)
+FontName=Hack Nerd Font Mono 12
+FontUseSystem=FALSE
+MiscCopyOnSelect=TRUE
+MiscHighlightUrls=FALSE
+MiscMenubarDefault=FALSE
+MiscRightClickAction=TERMINAL_RIGHT_CLICK_ACTION_PASTE_SELECTION
+MiscShowUnsafePasteDialog=FALSE
+ScrollingBar=TERMINAL_SCROLLBAR_NONE
+ScrollingOnKeystroke=TRUE
+TextBlinkMode=TERMINAL_TEXT_BLINK_MODE_NEVER
