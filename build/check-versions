@@ -21,6 +21,11 @@ pass --include-na to show them too.
 Network: queries api.github.com and pypi.org. Pass --offline to skip network
 lookups (just print current versions). Requires network for accurate output;
 fails individual queries gracefully with status=error.
+
+TLS: the bundled Python sets SSL_CERT_FILE from the host bundle via its
+sitecustomize hook. Test the negative path with
+`env -u SSL_CERT_FILE -u SSL_CERT_DIR`; an exported SSL_CERT_FILE in the parent
+shell masks a missing hook. See docs/PYTHON-CA-TLS.md.
 """
 
 import importlib.machinery

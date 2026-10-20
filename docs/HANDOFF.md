@@ -29,6 +29,9 @@ variables: 0 TLS failures (only the ncdu 503 remains). The warm
 `.loadout-bootstrap` cache was patched in place; older warm caches need
 deletion or a reinstall to pick up the archive hook.
 
+Canonical notes (why, precedence, stale copies, internal CAs, rebuild):
+`docs/PYTHON-CA-TLS.md`.
+
 ## 2026-10-20 (3): every managed env config is read-only -- agentic edits cannot be lost to the next install
 
 Operator follow-up: agentic AI experiments on installed configs routinely edit
