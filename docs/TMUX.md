@@ -95,13 +95,14 @@ move actually brings the view back to the live bottom, so a first press while
 already at the bottom (e.g. straight after `Prefix+[`) does not bounce the
 cursor off the visible screen.
 
-One caveat: the bundled `better-mouse-mode` plugin is still declared, and TPM
-sources plugins **after** the user layer, so its root `WheelUpPane` /
-`WheelDownPane` bindings currently win over the ones in `tmux-global.conf`.
-Dropping the `set -g @plugin 'nhdaly/tmux-better-mouse-mode'` line activates the
-global layer's own root-wheel handling (which fixes a first-wheel-up case the
-plugin gets wrong); the copy-mode binds and `j`/`Down`/`G` are unaffected either
-way.
+The bundled `better-mouse-mode` plugin is **not declared** (dropped 2026-10-20),
+so the managed root-wheel binds above are the ones in effect. They fix a
+first-wheel-up case the plugin gets wrong; the copy-mode binds and `j`/`Down`/`G`
+are unchanged. The plugin remains vendored only as historical payload.
+
+The managed layer also sets `default-terminal "tmux-256color"` and
+`allow-passthrough on`, and marker-guards the `terminal-overrides` /
+`terminal-features` array appends so a reload cannot grow them.
 
 ## Focus follows mouse (FFM)
 
