@@ -5089,6 +5089,35 @@ ships `qt5-qtcharts 5.15.3-1.el8`, an exact match for the Qt5 already in
 OpenROAD-flow-scripts (ORFS) is a scripts + PDK layer **on top of** this binary;
 it changes nothing here and only decides whether the PDK data also ships.
 
+## Portable Python 3.15.0 -- host CA store hook (2026-10-20)
+
+The EL8 build compiles OpenSSL's cert paths to `/opt/cpython3150p/ssl`, which
+does not exist after deployment; the build's original `sitecustomize.py` only
+probed the RHEL bundle path, so Arch/Debian hosts had zero trusted roots.
+
+`build/import-portable-python` now injects
+`build/portable-python-sitecustomize.py` as `local/lib/pythonX.Y/sitecustomize.py`
+(the stdlib; a site-packages copy is shadowed by `sys.path` order). It probes
+`/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`, and
+`/etc/ssl/cert.pem`, and never overrides a caller-set `SSL_CERT_FILE` or
+`SSL_CERT_DIR`. The build's original hook is renamed
+`sitecustomize_portable.py` and imported afterwards, preserving
+`OPENSSL_MODULES`, `TCL_LIBRARY`, and `TK_LIBRARY`.
+
+Repack and verify (normally inside `loadout-build` for byte-identical bzip2;
+host-side is fine for local verification):
+
+```bash
+rm -rf /tmp/pp && mkdir -p /tmp/pp
+tar -xjf payload/<platform>/portable-python-<ver>.tar.bz2 -C /tmp/pp
+./build/import-portable-python /tmp/pp/portable-python-<ver> --platform <platform>
+./build/gen-installed-sizes && ./build/gen-content-manifest
+./tests/portable-python-ca
+```
+
+Full notes -- precedence, stale warm caches, internal CAs, diagnosis, and the
+2026-10-20 incident: **`docs/PYTHON-CA-TLS.md`**.
+
 ## Portable Python 3.15.0 -- private SQLite FTS5 fix (2026-09-16)
 
 Artifact: `payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2`.
