@@ -1,5 +1,34 @@
 # Current Handoff
 
+## 2026-10-20 (4): portable Python gets the host CA store -- check-versions/update HTTPS works with no env var
+
+The EL8 portable Python compiled OpenSSL's cert paths to
+`/opt/cpython3150p/ssl` (absent after deployment) and its original
+`sitecustomize.py` only probed `/etc/pki/tls/certs/ca-bundle.crt` (RHEL).
+On Arch/Debian-family hosts every HTTPS request failed:
+`CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` -- 111 of
+158 `check-versions` lookups; `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`
+was the workaround.
+
+Fix: `build/portable-python-sitecustomize.py` probes
+`/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
+`/etc/ssl/cert.pem` in order and sets `SSL_CERT_FILE` only when the caller set
+neither `SSL_CERT_FILE` nor `SSL_CERT_DIR`. `build/import-portable-python`
+injects it into the archive's **stdlib** `lib/pythonX.Y/sitecustomize.py`
+(site-packages would be shadowed); the build's own hook (OPENSSL_MODULES,
+TCL_LIBRARY, TK_LIBRARY + its single RHEL path) is renamed to
+`sitecustomize_portable.py` and imported afterwards. The current
+`portable-python-3.15.0-el8-clang23.tar.bz2` was repacked with the hook;
+`installed-sizes.json` and `.content-manifest` regenerated.
+
+Verification: `tests/portable-python-ca` extracts the payload interpreter,
+proves the host bundle is selected with no env, `create_default_context()`
+loads 121 certs, the build hook still sets TCL_LIBRARY, and a caller-set
+`SSL_CERT_FILE` wins. Re-running `check-versions --outdated-only` with no SSL
+variables: 0 TLS failures (only the ncdu 503 remains). The warm
+`.loadout-bootstrap` cache was patched in place; older warm caches need
+deletion or a reinstall to pick up the archive hook.
+
 ## 2026-10-20 (3): every managed env config is read-only -- agentic edits cannot be lost to the next install
 
 Operator follow-up: agentic AI experiments on installed configs routinely edit

@@ -1,0 +1,47 @@
+#!/bin/sh
+# The portable Python must find the host CA store without any caller setup.
+#
+# The EL8 build compiles OpenSSL's default cert paths to /opt/cpython3150p/ssl,
+# which does not exist after deployment; on non-RHEL hosts the build's original
+# /etc/pki/tls/certs/ca-bundle.crt check also misses. The archive's
+# sitecustomize.py must probe the common system bundles, never override a
+# caller-set SSL_CERT_FILE/SSL_CERT_DIR, and still run the build's own hook
+# (OPENSSL_MODULES, TCL_LIBRARY, TK_LIBRARY).
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/loadout-pp-ca.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+archive=$(ls "$REPO"/payload/*/portable-python-*.tar.bz2 2>/dev/null | head -1)
+[ -n "$archive" ] || fail "no portable-python archive in payload/"
+root=$(basename "$archive" .tar.bz2)
+bzip2 -dc "$archive" | tar xf - -C "$TMP" --strip-components=2 "$root/local"
+
+PY="$TMP/bin/python3.15"
+[ -x "$PY" ] || fail "archive did not provide bin/python3.15"
+
+out=$(env -u SSL_CERT_FILE -u SSL_CERT_DIR "$PY" -c '
+import os, ssl
+print("CA=" + (os.environ.get("SSL_CERT_FILE") or ""))
+print("certs=%d" % len(ssl.create_default_context().get_ca_certs()))
+print("TCL=" + (os.environ.get("TCL_LIBRARY") or ""))
+')
+echo "$out" | grep -q '^CA=/etc/\(ssl/certs/ca-certificates.crt\|pki/tls/certs/ca-bundle.crt\|ssl/cert.pem\)$' \
+    || fail "no host CA bundle selected: $out"
+echo "$out" | grep -qE '^certs=[1-9][0-9]*$' \
+    || fail "default SSL context loaded no certificates: $out"
+echo "$out" | grep -q '^TCL=.*/lib/tcl' \
+    || fail "portable build hook (TCL_LIBRARY) did not run: $out"
+
+# A caller-set value always wins.
+out=$(env -u SSL_CERT_DIR SSL_CERT_FILE=/tmp/caller-ca.pem "$PY" -c 'import os; print(os.environ.get("SSL_CERT_FILE"))')
+[ "$out" = "/tmp/caller-ca.pem" ] || fail "hook overrode caller SSL_CERT_FILE: $out"
+
+# The hook itself is in the stdlib (site-packages would be shadowed).
+[ -f "$TMP/lib/python3.15/sitecustomize.py" ] || fail "stdlib sitecustomize.py missing"
+[ -f "$TMP/lib/python3.15/sitecustomize_portable.py" ] || fail "build hook was not preserved"
+
+echo "portable-python-ca: OK"

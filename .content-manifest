@@ -780,7 +780,6 @@ sha256  2df6bc1ff79995bdfe8fdf2c22b2840478cc4e669a99642f23f745a9cb29819f  envs/t
 sha256  2e24f7ffbe492b35da80f6fb07cb30d015dc74e6b8635ea35a1be727fb56fbf8  payload/treesitter/vendor/nvim-treesitter/tests/indent/python/break_continue.py
 sha256  2e30bf13df470f2f636d31e22d520a1afa9259b3f9ecc90902d4801c7e57e4c3  payload/el8.x86_64.glibc2p28/lib64/libgmp.so.10.bz2
 sha256  2e39d91e3ebc769e8efe1e063b8e60edde3c34031a2441fb2edf878c2d1ca982  payload/el8.x86_64.glibc2p28/lib64/libharfbuzz.so.0.bz2
-sha256  2e3d26d3aab2c9cfbeb2ca8e6f7787659dfa434c6c44184f1b331843c6f03f7c  payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2
 sha256  2e455963eac44831e7653f193d74706b1343097a686b30285481f5413cf1fe29  payload/fonts/IosevkaTerm.zip.part-006
 sha256  2e4b44779daa4ac0f53875f1a50d42f32e4585ce705563256920983e04a6b582  envs/tmux/vendor/plugins/tpm/bindings/install_plugins
 sha256  2e6901c1569a4a367523e8ba20a526d855253a3ef4dde7c7ae66b4cc3eb65fff  payload/el8.x86_64.glibc2p28/bin/rsync.bz2
@@ -1923,6 +1922,7 @@ sha256  7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523  payloa
 sha256  724ccc63c4b47cce6ad995f956a924b58a0f0201739765e38cf07f0dd080c71d  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/fish/highlights.scm
 sha256  724ccc63c4b47cce6ad995f956a924b58a0f0201739765e38cf07f0dd080c71d  payload/treesitter/vendor/nvim-treesitter/runtime/queries/fish/highlights.scm
 sha256  7261fbf74af9d48a33b97a685d1b19a45d75b0bf4a9464ea3464bfecc0cc9da2  payload/treesitter/vendor/nvim-treesitter/tests/indent/python/error_state_funcall.py
+sha256  7286adad15b9950e0562712571f2965de7b298431b03957299ff5c97900331bc  payload/el8.x86_64.glibc2p28/portable-python-3.15.0-el8-clang23.tar.bz2
 sha256  728e8268d653eea78c2836088ffdcfb3ce9612c248d99272dcce6d59a1ca0f23  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/gap/highlights.scm
 sha256  728e8268d653eea78c2836088ffdcfb3ce9612c248d99272dcce6d59a1ca0f23  payload/treesitter/vendor/nvim-treesitter/runtime/queries/gap/highlights.scm
 sha256  72a7d1f48e74e629ae9c6c6ed2d23f376b691cbc59f28a59fcd5920dd8cb6c9d  payload/fonts/IosevkaTerm.zip.part-004
@@ -2845,9 +2845,9 @@ sha256  a94060b4303752b45718ac84c48b64aea9fc5ebc52340de07e0c72e81165c2e9  payloa
 sha256  a9462224a505ade19a605f71f8fa63c2048833ce50abc86768a0d81d876dc81c  payload/el8.x86_64.glibc2p28/wheels/ipython_pygments_lexers-1.1.1-py3-none-any.whl
 sha256  a946edb24d5bc8802f1d7d29d6a75f8645eba35ee24d6681831e8bd27b694bc4  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/puppet.so.bz2
 sha256  a94b4b0c3c67cd205a0377470afe4ba1cada37f0747aaa86fe7fa2e593e5a762  payload/el8.x86_64.glibc2p28/bin/spice-netlist-ls.bz2
-sha256  a972c00e80f0a6bd850308b6de44a3b341c55260c2f4904dbac348e51486c127  payload/installed-sizes.json
 sha256  a97b18e52b7bc8b70075ed1a78dad12e72e5e5ae769bb212d8276186a972dd91  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ecma/folds.scm
 sha256  a97b18e52b7bc8b70075ed1a78dad12e72e5e5ae769bb212d8276186a972dd91  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ecma/folds.scm
+sha256  a9d0a7d1bb2ae558f8fed5f154e1a846f8faeeb39067ab97abbb83c0a73a9d09  payload/installed-sizes.json
 sha256  aa295f5d57986bcb6fc1154d84c35670b5f76ec49ab6360139d4abb7c399e286  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/gdscript.so.bz2
 sha256  aa33168b2fb6e22c080abf0605cee0fd7daa845af2139cfcfd6b10d9fd0f70d0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/v/folds.scm
 sha256  aa33168b2fb6e22c080abf0605cee0fd7daa845af2139cfcfd6b10d9fd0f70d0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/v/folds.scm

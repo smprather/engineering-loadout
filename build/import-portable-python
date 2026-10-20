@@ -22,8 +22,10 @@ Python version is read from <portable-dir>/local/bin/python3.x --version, or
 parsed from the directory name as a fallback.
 """
 
+import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -213,6 +215,41 @@ def detect_python_version(portable_dir):
 # Archive construction
 # ---------------------------------------------------------------------------
 
+CA_HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "portable-python-sitecustomize.py")
+
+
+def inject_ca_hook(portable_dir):
+    """Install the host-CA sitecustomize hook into the standard library.
+
+    sitecustomize.py is imported from lib/pythonX.Y before site-packages, so
+    the hook must live there (a site-packages copy would be shadowed). The
+    build's own hook -- OPENSSL_MODULES/TCL_LIBRARY/TK_LIBRARY plus its
+    single RHEL CA path -- is renamed to sitecustomize_portable.py and
+    imported by the replacement, so nothing is lost.
+
+    The hook is part of the archive so every extraction (install.sh, the
+    loadout bootstrap, or a manual untar) gets working HTTPS.
+    """
+    lib_dir = os.path.join(portable_dir, "local", "lib")
+    py_dirs = [path for path in sorted(glob.glob(os.path.join(lib_dir, "python3.*"))) if os.path.isdir(path)]
+    if not py_dirs:
+        die(f"no local/lib/python3.* in {portable_dir}")
+    py_lib = py_dirs[-1]
+    hook = os.path.join(py_lib, "sitecustomize.py")
+    preserved = os.path.join(py_lib, "sitecustomize_portable.py")
+    if os.path.isfile(hook):
+        with open(hook, "rb") as fh:
+            already_ours = b"LOADOUT_CA_HOOK" in fh.read(4096)
+        if not already_ours:
+            os.replace(hook, preserved)
+    shutil.copy2(CA_HOOK, hook)
+    # A copy from an earlier injection into site-packages is shadowed and must
+    # not linger as a second source of truth.
+    stale = os.path.join(py_lib, "site-packages", "sitecustomize.py")
+    if os.path.isfile(stale):
+        os.unlink(stale)
+    print(f"ca hook    : {hook}")
+
 
 def make_archive(portable_dir, dest_path, dry_run):
     basename = os.path.basename(os.path.abspath(portable_dir))
@@ -221,9 +258,10 @@ def make_archive(portable_dir, dest_path, dry_run):
     print(f"archive    : {dest_path}")
 
     if dry_run:
-        print(f"[dry-run] would create {dest_path}")
+        print(f"[dry-run] would create {dest_path} (with the CA hook)")
         return
 
+    inject_ca_hook(portable_dir)
     dest_dir = os.path.dirname(dest_path)
     if dest_dir:
         os.makedirs(dest_dir, exist_ok=True)
