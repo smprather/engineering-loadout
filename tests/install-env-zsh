@@ -34,7 +34,7 @@ fi
 ZSH_BIN="$(command -v zsh)"
 tmp_root=${TMPDIR:-/tmp}
 TMPHOME="$(mktemp -d "$tmp_root/loadout-env-zsh.XXXXXX")"
-trap 'rm -rf "$TMPHOME"' EXIT
+trap 'chmod -R u+w "$TMPHOME" 2>/dev/null; rm -rf "$TMPHOME"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 ERRFILE="$TMPHOME/stderr.txt"

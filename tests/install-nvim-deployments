@@ -24,7 +24,7 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 tmp_root=${TMPDIR:-/tmp}
 TMP="$(mktemp -d "$tmp_root/loadout-nvim-deploy.XXXXXX")"
-trap 'rm -rf "$TMP"' EXIT
+trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 assert_lazy_sync_ran() {

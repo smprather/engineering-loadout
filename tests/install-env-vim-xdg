@@ -25,7 +25,7 @@ command -v script >/dev/null 2>&1 || { echo "SKIP: no 'script' for a PTY"; exit 
 tmp_root=${TMPDIR:-/tmp}
 TMPHOME="$(mktemp -d "$tmp_root/loadout-env-vim.XXXXXX")"
 CTRL="$(mktemp -d "$tmp_root/loadout-env-vim-ctrl.XXXXXX")"
-trap 'rm -rf "$TMPHOME" "$CTRL"' EXIT
+trap 'chmod -R u+w "$TMPHOME" "$CTRL" 2>/dev/null; rm -rf "$TMPHOME" "$CTRL"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 echo "== install vim + env-vim into a temp HOME"

@@ -1,5 +1,30 @@
 # Current Handoff
 
+## 2026-10-20 (3): every managed env config is read-only -- agentic edits cannot be lost to the next install
+
+Operator follow-up: agentic AI experiments on installed configs routinely edit
+files that `loadout install` overwrites, silently discarding the work. The
+2026-10-20 (2) tmux fix generalized to all env handlers.
+
+`_seal_managed()` now runs at the end of every env handler (after in-place
+rewrites such as `_mirror_shared_prefix`, helix relocation, and tealdeer
+regeneration): bash/tcsh/zsh managed trees + entrypoints, nvim
+init/lua/global/lsp/after-lsp/shipped ftplugins, vim vimrc + pack/vendor,
+tmux managed tree, st global, starship, helix, editorconfig, pip, tealdeer,
+and generic-file envs (btop, wezterm). Files 0444, dirs 0555, exec bits kept.
+
+Deliberately writable surfaces: bash/tcsh/zsh corp..user layers, nvim
+`lua/user` and `lazy-lock.json` (Lazy rewrites it), st user layer, tmux user
+layers, and seed-once app-owned files (`env-xfce4-terminal`, which the
+terminal rewrites). Reinstalls re-heal the dirs and re-seal.
+
+`tests/env-managed-readonly` (new Tier 2 gate) installs every env into a temp
+HOME, asserts managed 0444/0555 vs user-writable surfaces, rejects a write
+through a managed path (non-root), and proves reinstall re-seals drift.
+`install-env-tcsh` still fails its pre-existing completion assertion on this
+host (prompt-prefixed `grep -c` output); reproduced identically on the
+unmodified HEAD worktree, so it is not from this change.
+
 ## 2026-10-20 (2): env-tmux managed tree is read-only; only the user layers stay writable
 
 Operator report: after `loadout install env-tmux`, every file under

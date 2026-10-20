@@ -1,0 +1,105 @@
+#!/bin/sh
+# Every installed env config is either:
+#   * EL-managed -> read-only (0444 files, 0555 dirs), because the next
+#     install replaces it, or
+#   * user-owned -> writable (seed-once files and the corp..user layers).
+#
+# This is the guard against agentic experiments silently editing a file that
+# `loadout install` will overwrite. xfce4-terminal is the deliberate seed-once
+# exception: the terminal rewrites its own files.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMPHOME="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-ro.XXXXXX")"
+trap 'chmod -R u+w "$TMPHOME" 2>/dev/null; rm -rf "$TMPHOME"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+mode_of() { stat -c %a "$1"; }
+assert_ro() {
+    [ "$(mode_of "$1")" = "$2" ] || fail "$1 must be managed mode $2 (got $(mode_of "$1"))"
+}
+assert_user_writable() {
+    case $(mode_of "$1") in
+        [2367]*) ;;
+        *) fail "$1 must stay user-writable (got $(mode_of "$1"))" ;;
+    esac
+}
+
+H="$TMPHOME"
+ENVS="env-bash env-tcsh env-zsh env-nvim env-vim env-tmux env-st env-starship env-helix env-editorconfig env-pip env-btop env-wezterm env-xfce4-terminal"
+HOME="$H" "$REPO/loadout" install -y $ENVS --no-backup >"$H/install.log" 2>&1
+
+# --- managed config: read-only -------------------------------------------
+for f in \
+    "$H/.config/bash/global/bashrc" \
+    "$H/.config/bash/functions.sh" \
+    "$H/.config/bash/bashrc" \
+    "$H/.config/tcsh/global/tcshrc" \
+    "$H/.config/tcsh/tcshrc" \
+    "$H/.config/zsh/global/zshrc" \
+    "$H/.config/zsh/zshrc" \
+    "$H/.config/nvim/init.lua" \
+    "$H/.config/nvim/after/ftplugin/tcl.lua" \
+    "$H/.config/vim/vimrc" \
+    "$H/.config/vim/after/ftplugin/markdown.vim" \
+    "$H/.config/tmux/tmux-global.conf" \
+    "$H/.config/starship/starship.toml" \
+    "$H/.config/starship/config-schema.json" \
+    "$H/.config/helix/config.toml" \
+    "$H/.config/helix/languages.toml" \
+    "$H/.config/editorconfig/editorconfig" \
+    "$H/.config/pip/pip.conf" \
+    "$H/.config/btop/btop.conf" \
+    "$H/.config/wezterm/wezterm.lua" \
+    "$H/.config/tealdeer/config.toml"; do
+    assert_ro "$f" 444
+done
+for d in \
+    "$H/.config/bash/global" \
+    "$H/.config/tcsh/global" \
+    "$H/.config/zsh/global" \
+    "$H/.config/zsh/site-functions" \
+    "$H/.config/nvim/lua/global" \
+    "$H/.config/nvim/lsp" \
+    "$H/.config/nvim/after/lsp" \
+    "$H/.config/vim/pack/vendor" \
+    "$H/.config/tmux/plugins" \
+    "$H/.config/tmux/scripts" \
+    "$H/.config/tmux/themes"; do
+    assert_ro "$d" 555
+done
+[ -L "$H/.editorconfig" ] || fail "~/.editorconfig symlink missing"
+
+# --- user surfaces: writable ---------------------------------------------
+for d in \
+    "$H/.config/bash/user" "$H/.config/bash/corp" \
+    "$H/.config/tcsh/user" "$H/.config/zsh/user" \
+    "$H/.config/nvim/lua/user" "$H/.config/st/user"; do
+    assert_user_writable "$d"
+done
+for f in \
+    "$H/.config/tmux/tmux-user.conf" \
+    "$H/.config/tmux/tmux-settings-user.conf" \
+    "$H/.config/nvim/lazy-lock.json" \
+    "$H/.config/xfce4/terminal/terminalrc" \
+    "$H/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"; do
+    assert_user_writable "$f"
+done
+
+# --- enforcement: a write through a managed path must fail (non-root) -----
+if [ "$(id -u)" != "0" ]; then
+    if ( : >>"$H/.config/bash/global/bashrc" ) 2>/dev/null; then
+        fail "managed bashrc accepted a write"
+    fi
+    if ( : >>"$H/.config/helix/config.toml" ) 2>/dev/null; then
+        fail "managed helix config accepted a write"
+    fi
+fi
+
+# --- reinstall re-seals drift --------------------------------------------
+chmod u+w "$H/.config/bash/global/bashrc" "$H/.config/helix/config.toml"
+HOME="$H" "$REPO/loadout" install -y $ENVS --no-backup >"$H/reinstall.log" 2>&1
+assert_ro "$H/.config/bash/global/bashrc" 444
+assert_ro "$H/.config/helix/config.toml" 444
+
+echo "env-managed-readonly: OK"
