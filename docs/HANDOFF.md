@@ -1,5 +1,39 @@
 # Current Handoff
 
+## 2026-10-20 (5): home-dir tmux config merged into the managed layers
+
+The live `~/.config/tmux/tmux-user.conf` still carried three settings that the
+managed layer did not: `allow-passthrough on`, `default-terminal
+"tmux-256color"`, and a guarded `terminal-features 'xterm-256color:sync'`
+append. Merged into `envs/tmux/tmux-global.conf`; the live user file is reset to
+the shipped seed (comments + optional tmux-yank). The older
+`tmux-user.conf.aside` content (FFM, block cursor, wheel binds, j/Down/G) was
+already merged 2026-10-12 and remains a backup only.
+
+Details:
+- `default-terminal` replaces `set -s default-terminal "$TERM"` -- the explicit
+  name keeps terminfo stable across reloads/clients.
+- `allow-passthrough` is a SESSION option despite the name: `set -s` writes a
+  phantom server entry and leaves the effective value `off` (same trap as
+  cursor-style). The merged line is `set -g allow-passthrough on`.
+- The sync append is marker-guarded like `xterm*:extkeys`; `terminal-overrides`
+  and `terminal-features` no longer grow on `Prefix+r` (verified: 3 overrides
+  and 5 feature entries after three loads, unchanged).
+- The operator's working-tree edits are included: `nhdaly/tmux-better-mouse-mode`
+  is no longer declared, so the managed root-wheel binds are active (resolves
+  the 2026-10-12 open question); array reload guards added.
+- `tmux-theme-loadout2.conf` drops `window-status-activity-style`: the activity
+  flag cannot fire because `monitor-activity` is off (tmux default), and the
+  test now asserts that instead of requiring the unused pin. The bell style
+  stays pinned -- `bell-action none` suppresses the action, not the flag.
+
+Verification: `tests/install-env-tmux-nvim-layers` asserts the merged lines,
+the plugin is not declared, live-server values (`default-terminal`,
+`allow-passthrough on`, sync feature), and the activity-off invariant. A live
+scratch server with the installed dispatcher reports `default-terminal
+tmux-256color`, `allow-passthrough on`, sync+extkeys, 3 overrides after reloads.
+Live install re-sealed the managed tree; `tmux-user.conf` is 644 and the seed.
+
 ## 2026-10-20 (4): portable Python gets the host CA store -- check-versions/update HTTPS works with no env var
 
 The EL8 portable Python compiled OpenSSL's cert paths to

@@ -70,7 +70,7 @@ for opt in window-style window-active-style pane-border-style pane-active-border
            popup-style popup-border-style pane-scrollbars-style cursor-colour \
            clock-mode-colour display-panes-colour display-panes-active-colour \
            status-style status-left-style window-status-style window-status-current-style \
-           window-status-activity-style window-status-bell-style; do
+           window-status-bell-style; do
     grep -qE "^set -g ${opt} +\"[^\"]*#" "$tmux_dir/themes/tmux-theme-loadout2.conf" \
         || fail "loadout2 theme leaves $opt to the terminal"
 done
@@ -108,6 +108,17 @@ grep -qF 'bind -T copy-mode-vi j' "$tmux_dir/tmux-global.conf" \
 # terminal-independent theme.  loadout1 is the rollback.
 grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-global.conf" \
     || fail "managed tmux settings do not default to loadout2"
+# Settings merged from the operator's home layer (2026-10-20).
+grep -qxF 'set -s default-terminal "tmux-256color"' "$tmux_dir/tmux-global.conf" \
+    || fail "default-terminal is not the merged tmux-256color"
+grep -qxF 'set -g allow-passthrough on' "$tmux_dir/tmux-global.conf" \
+    || fail "allow-passthrough was not merged into the managed layer"
+grep -qF "set -as terminal-features 'xterm-256color:sync'" "$tmux_dir/tmux-global.conf" \
+    || fail "terminal-features sync guard is missing"
+grep -qF '@terminal-features-sync' "$tmux_dir/tmux-global.conf" \
+    || fail "terminal-features sync marker guard is missing"
+! grep -qE "^[[:space:]]*set -g @plugin 'nhdaly/tmux-better-mouse-mode'" "$tmux_dir/tmux-global.conf" \
+    || fail "shadowing mouse plugin is still declared"
 grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-user.conf" \
     || fail "seeded tmux settings user layer does not default to loadout2"
 # The theme file the default selects must be the one the global layer loads.
@@ -149,8 +160,19 @@ case "$tmux_ver" in
     *) tmux_bin="" ;;
 esac
 if [ -n "$tmux_bin" ]; then
-    tm() { TERM=xterm "$tmux_bin" -L "$TEST_TMUX_SOCK" "$@"; }
+    tm() { HOME="$fresh_home" TERM=xterm "$tmux_bin" -L "$TEST_TMUX_SOCK" "$@"; }
     tm -f /dev/null new-session -d 'sleep 30'
+    # The dispatcher sources settings before global (global interpolates @theme).
+    tm source-file "$tmux_dir/tmux-settings-global.conf"
+    tm source-file "$tmux_dir/tmux-global.conf"
+    got=$(tm show-options -s default-terminal)
+    [ "$got" = "default-terminal tmux-256color" ] \
+        || fail "merged default-terminal did not take effect (got: $got)"
+    got=$(tm show-options -g allow-passthrough)
+    [ "$got" = "allow-passthrough on" ] \
+        || fail "merged allow-passthrough did not take effect (got: $got)"
+    tm show-options -g terminal-features | grep -q 'xterm-256color:sync' \
+        || fail "merged terminal-features sync did not take effect"
     tm source-file "$tmux_dir/tmux-settings-global.conf"
     got=$(tm show-options -g focus-follows-mouse)
     [ "$got" = "focus-follows-mouse on" ] \
@@ -170,6 +192,9 @@ if [ -n "$tmux_bin" ]; then
         *'fg=#cdd6f4 bg=#000000'*) ;;
         *) fail "loadout2 leaves the inactive pane fill to the terminal (window-style: $got)" ;;
     esac
+    got=$(tm show-options -g monitor-activity)
+    [ "$got" = "monitor-activity off" ] \
+        || fail "window-status-activity-style is unpinned but monitor-activity is on (got: $got)"
     got=$(tm show-options -g -w window-active-style)
     case "$got" in
         *'bg=#090909'*) ;;
