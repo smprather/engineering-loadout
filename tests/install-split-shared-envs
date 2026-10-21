@@ -64,6 +64,12 @@ cleanup() {
         echo "Kept XDG_STATE_HOME: $test_state"
         echo "Kept run dir: $test_run"
     else
+        # The installed tree is SEALED read-only (0444 files, 0555 dirs) on
+        # purpose, so a plain `rm -rf` cannot remove it: the cleanup
+        # leaks the whole tree into $TMPDIR and the next test that
+        # installs a shared tree then dies with ENOSPC. Make it writable
+        # first, then remove it.
+        chmod -R u+w "$test_home" "$test_cache" "$test_state" "$test_run" "$shared_root" 2>/dev/null || true
         rm -rf "$test_home" "$test_cache" "$test_state" "$test_run"
         # Only the temp-created tree is ours to delete.
         if [[ -z "$seed" ]]; then

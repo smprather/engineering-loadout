@@ -10,7 +10,15 @@ test_home=$(mktemp -d "$tmp_root/loadout-tsls-home.XXXXXX")
 dest_dir=$(mktemp -d "$tmp_root/loadout-tsls-dest.XXXXXX")
 local_prefix="$dest_dir"
 
-cleanup() { rm -rf "$test_home" "$dest_dir"; }
+cleanup() {
+    # The installed tree is SEALED read-only (0444 files, 0555 dirs) on
+    # purpose, so a plain `rm -rf` cannot remove it: the cleanup
+    # leaks the whole tree into $TMPDIR and the next test that
+    # installs a shared tree then dies with ENOSPC. Make it writable
+    # first, then remove it.
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
+    rm -rf "$test_home" "$dest_dir"
+}
 trap cleanup EXIT
 
 fail() {

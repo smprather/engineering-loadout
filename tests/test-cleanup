@@ -1,0 +1,91 @@
+#!/usr/bin/env python3.15
+"""
+test-cleanup -- a test that installs a tree must be able to DELETE it.
+
+The loadout seals the managed config read-only on purpose (0444 files, 0555
+dirs), so a test whose cleanup does a plain `rm -rf` of an installed tree
+CANNOT remove it: the tree is LEAKED into $TMPDIR, and the next test that
+installs a shared tree then dies with ENOSPC. The failure surfaces as an
+unrelated red test several steps later, which is why this class cost two
+consecutive red gates on 2026-10-21 (install-fonts-shared leaked ~6 GB and
+took install-readonly-tree, install-split-shared-envs, install-nvim-deployments,
+install-nvim-shared-stash, install-xdesk and install-linux-tmp-home down with
+it).
+
+The rule: any test that removes a directory an install could have populated
+must make it writable first. This gate checks that mechanically -- every
+`rm -rf` of a test-owned path must be preceded by a `chmod -R u+w` of the
+same path.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TESTS = os.path.join(REPO, "tests")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def main():
+    scripts = sorted(
+        f
+        for f in os.listdir(TESTS)
+        if os.path.isfile(os.path.join(TESTS, f)) and os.access(os.path.join(TESTS, f), os.X_OK)
+    )
+    print(f"-- {len(scripts)} test scripts")
+
+    # A test that removes a tree an install could have populated. The
+    # directories below are what the installer writes into a temp HOME.
+    TARGET_RE = re.compile(r'rm -rf\s+((?:"\$[A-Za-z_]+"\s*)+)')
+
+    offenders = []
+    checked = 0
+    for name in scripts:
+        path = os.path.join(TESTS, name)
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        if "rm -rf" not in text:
+            continue
+        # Only the cleanup function matters (the body may legitimately remove
+        # a scratch file it just created).
+        for m in re.finditer(r"cleanup\(\)\s*\{(.*?)\n\}", text, re.S):
+            body = m.group(1)
+            for rm in TARGET_RE.finditer(body):
+                checked += 1
+                paths = re.findall(r'"(\$[A-Za-z_]+)"', rm.group(1))
+                for var in paths:
+                    # A chmod of that variable must appear before the rm.
+                    # NOTE: the "+" in "u+w" is a REGEX quantifier unless
+                    # escaped -- `u+w` would match "uw", not "u+w". And the
+                    # variable name carries its "$", so no leading \b (there
+                    # is no word boundary between a space and a "$").
+                    if not re.search(rf"chmod\s+-R\s+u\+w\s+[^\n]*{re.escape(var)}\b", body):
+                        offenders.append(f"{name}: rm -rf {var} with no chmod -R u+w first")
+    check("every cleanup rm of a test-owned tree is preceded by chmod -R u+w", not offenders, "; ".join(offenders[:4]))
+    check("the gate actually inspects cleanups", checked > 0, f"{checked} rm sites scanned")
+
+    print()
+    if FAILED:
+        print(f"{PASSED} passed, {FAILED} failed")
+        return 1
+    print(f"{PASSED} passed, 0 failed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

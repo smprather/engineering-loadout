@@ -28,6 +28,7 @@ module_runtime_files=(
 )
 
 cleanup() {
+    chmod -R u+w "$test_home" "$test_cache" "$test_state" 2>/dev/null || true
     rm -rf "$test_home" "$test_cache" "$test_state"
 }
 trap cleanup EXIT

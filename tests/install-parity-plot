@@ -22,6 +22,7 @@ cleanup() {
         kill "$designer_pid" 2>/dev/null || true
         wait "$designer_pid" 2>/dev/null || true
     fi
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
     rm -rf "$test_home" "$dest_dir"
 }
 trap cleanup EXIT
