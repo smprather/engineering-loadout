@@ -37,7 +37,10 @@ The goal is a "sorta loadout" experience for those users.
   deliberately **no drift test** between the two: a sync gate would fail CI on every
   future bash change and impose exactly the maintenance cost this project does not
   want to pay for a shell with an expected user count near zero.
-- **No Starship.** Upstream has no tcsh support. The prompt is hand-rolled and will
+- **No Starship.** Upstream has no tcsh support. (SUPERSEDED 2026-10-21: the
+  payload's starship is 1.26.0, which DOES ship a tcsh target, so the prompt is
+  now starship-driven like the bash env, with a yellow path as the shell cue.)
+  The prompt is hand-rolled and will
   not match bash. Accepted, not a defect.
 - **No function library.** csh has no functions (see below).
 - No shell integration (OSC 133), no fzf/zoxide keybindings, no bash-preexec.

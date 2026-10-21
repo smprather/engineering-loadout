@@ -1,0 +1,164 @@
+#!/usr/bin/env python3.15
+"""
+env-tcsh-starship -- the tcsh prompt is starship-driven, and the tcsh
+starship config may differ from the shared one ONLY in the path colour.
+
+Two claims are pinned here, because both were stale in this repo:
+
+  1. "Starship has no tcsh support upstream" -- true when the tcsh env was
+     written, false for the shipped starship (1.26.0 has a tcsh target:
+     `starship init tcsh`). The tcsh prompt is now starship-driven, like
+     the bash one, so the env must not still claim otherwise.
+
+  2. The tcsh prompt uses its OWN config (the shared one with a YELLOW
+     path, so a glance at the prompt says which shell you are in). Two
+     copies of a config WILL drift -- so the copy is pinned to the shared
+     one: every line must be identical except the `[directory] style`,
+     which must be the yellow one.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SHARED = os.path.join(REPO, "envs", "starship", "starship.linux.toml")
+TCSH = os.path.join(REPO, "envs", "tcsh", "global", "starship-tcsh.toml")
+TCSHRC = os.path.join(REPO, "envs", "tcsh", "global", "tcshrc")
+CONFIG_CSH = os.path.join(REPO, "envs", "tcsh", "global", "config.csh")
+README = os.path.join(REPO, "envs", "tcsh", "README.md")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def read(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def directory_style(text):
+    """The `style = "..."` inside the [directory] section."""
+    m = re.search(r"\[directory\](.*?)(?=\n\[|\Z)", text, re.S)
+    if not m:
+        return None
+    s = re.search(r'style\s*=\s*"([^"]*)"', m.group(1))
+    return s.group(1) if s else None
+
+
+def main():
+    print("-- the tcsh starship config")
+    check("the shared starship config exists", os.path.isfile(SHARED), SHARED)
+    check("the tcsh starship config exists", os.path.isfile(TCSH), TCSH)
+    if not (os.path.isfile(SHARED) and os.path.isfile(TCSH)):
+        return 1
+
+    shared = read(SHARED)
+    tcsh = read(TCSH)
+
+    shared_style = directory_style(shared)
+    tcsh_style = directory_style(tcsh)
+    check("the shared config has a [directory] style", shared_style is not None, str(shared_style))
+    check("the tcsh config has a [directory] style", tcsh_style is not None, str(tcsh_style))
+    check(
+        "the tcsh path is YELLOW (the shell cue)",
+        bool(tcsh_style) and "yellow" in tcsh_style,
+        f"tcsh directory style={tcsh_style!r}, shared={shared_style!r}",
+    )
+    check(
+        "the shared path colour is unchanged",
+        shared_style == "bold cyan",
+        f"shared directory style={shared_style!r}",
+    )
+
+    # The two configs must be identical apart from the directory style (and
+    # the schema path, which is relative to each file's own location).
+    def normalize(text):
+        # Comments may differ (the tcsh file explains itself); the SETTINGS
+        # may not. Compare the configuration, not the prose around it.
+        text = re.sub(r'"\$schema"\s*=\s*"[^"]*"', '"$schema" = "<per-file>"', text)
+        # Only the [directory] style may differ -- and "bold yellow" also
+        # appears in [custom.username], so the substitution is scoped to the
+        # [directory] section rather than taking the first match in the file.
+        # BOTH files get their directory style replaced, so the shared config's
+        # "bold cyan" and the tcsh config's "bold yellow" compare equal.
+        text = re.sub(
+            r"(\[directory\][^\[]*?style\s*=\s*)\"[^\"]*\"",
+            r'\1"<directory-style>"',
+            text,
+            count=1,
+            flags=re.S,
+        )
+        return [ln.rstrip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+    shared_lines = normalize(shared)
+    tcsh_lines = normalize(tcsh)
+    if shared_lines == tcsh_lines:
+        check("the two configs are identical apart from the directory style", True)
+    else:
+        diff = []
+        for a, b in zip(shared_lines, tcsh_lines, strict=False):
+            if a != b:
+                diff.append(f"{a!r} != {b!r}")
+        check(
+            "the two configs are identical apart from the directory style",
+            False,
+            "; ".join(diff[:3]) or f"length {len(shared_lines)} vs {len(tcsh_lines)}",
+        )
+
+    print("-- the tcsh env uses it")
+    rc = read(TCSHRC)
+    check("the tcshrc points STARSHIP_CONFIG at the tcsh config", "starship-tcsh.toml" in rc)
+    check("the tcshrc runs starship's tcsh init", "init tcsh" in rc)
+    check("the tcshrc does not use bash's `command -v`", "command -v starship" not in rc)
+    check("the hand-rolled prompt is the fallback only", "loadout_prompt_starship" in rc)
+
+    print("-- the stale claims are gone")
+    cfg = read(CONFIG_CSH)
+    check(
+        "the tcsh config defines LOADOUT_CFG_ENABLE_STARSHIP",
+        "LOADOUT_CFG_ENABLE_STARSHIP" in cfg and "setenv LOADOUT_CFG_ENABLE_STARSHIP 1" in cfg,
+    )
+    readme = read(README)
+    # The claim that is now FALSE is specifically about starship. fzf and
+    # zoxide still genuinely have no tcsh target, so their lines stay.
+    stale = [
+        ln
+        for ln in readme.splitlines()
+        if "starship" in ln.lower()
+        and ("no tcsh target" in ln or "no tcsh support" in ln)
+        # A line that says the claim USED to hold is the fix, not the bug.
+        and not re.search(r"\b(used to|had no|stopped being|not any more|no longer)\b", ln)
+    ]
+    check(
+        "the tcsh README no longer claims starship has no tcsh target",
+        not stale,
+        "; ".join(stale[:2]),
+    )
+    check(
+        "the tcsh README mentions the starship prompt",
+        "starship" in readme.lower(),
+    )
+
+    print()
+    if FAILED:
+        print(f"{PASSED} passed, {FAILED} failed")
+        return 1
+    print(f"{PASSED} passed, 0 failed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

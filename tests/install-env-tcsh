@@ -259,9 +259,23 @@ echo "$out" | grep -q  'ED=nvim' || fail "EDITOR not derived from LOADOUT_CFG_PR
 
 # --- Completions and key bindings loaded (they are separate sourced files, so a
 # --- syntax error in either is silent unless something asserts they took).
+#
+# The count is NOT at the start of the captured output: the pty echoes the
+# command, and the PROMPT is printed in front of the result -- the repo's own
+# tcshrc paints a coloured prompt (starship's, with ANSI colour escapes and
+# the path, the git branch, the python version and the character glyph). So
+# the number lands at the END of a prompt-prefixed line, and asserting the
+# output STARTS with a digit failed even though the completions WERE
+# registered (the count was 1). Extract the TRAILING number instead: strip
+# the colour escapes, take the number at the end of a line, and use the last
+# one -- the echoed command line has no trailing number, so it cannot
+# contribute a false positive.
 out=$(tcsh_i 'complete | grep -c loadout')
 assert_no_csh_noise "completions" "$out"
-echo "$out" | grep -qE '^[1-9]' || fail "completions.csh did not register anything: [$out]"
+count=$(printf '%s\n' "$out" \
+    | sed -e 's/\x1b\[[0-9;]*m//g' \
+    | grep -oE '[0-9]+$' | tail -1)
+[ "${count:-0}" -gt 0 ] || fail "completions.csh did not register anything: [$out]"
 out=$(tcsh_i 'bindkey "^I"')
 assert_no_csh_noise "keybinds" "$out"
 echo "$out" | grep -q 'complete-word-fwd' || fail "keybinds.csh did not bind TAB: [$out]"

@@ -349,15 +349,41 @@ if ( $?prompt ) then
     alias cwdcmd 'ls ; printf "\033]7;file://%s%s\033\\" "$HOST" "$cwd"'
 
     # ---- prompt ---------------------------------------------------------------
-    # cwd + git branch, with the farm/LSF color swap and optional host and uid
-    # from the same LOADOUT_CFG_* variables the bash prompt uses.
+    # Starship drives the prompt, exactly like the bash env -- same modules,
+    # same glyphs, same git branch, same LSF/user handling. The one deliberate
+    # difference is the PATH COLOUR: tcsh renders it yellow (the tcsh-specific
+    # config next to this file), bash keeps the shared config's cyan, so a
+    # glance at the prompt says which shell you are in.
+    #
+    # This used to be hand-rolled because "starship has no tcsh support" -- that
+    # was true when this env was written, and it stopped being true: the
+    # shipped starship (1.26.0) has a tcsh target
+    # (`starship init tcsh`), and it chains its own precmd/postcmd to the
+    # USER_PRECMD/USER_POSTCMD aliases, so it composes with the rest of this
+    # file instead of replacing it.
+    #
+    # The hand-rolled prompt below stays as the FALLBACK for a host with no
+    # starship: it needs no external binary and keeps the shell usable.
     #
     # precmd runs before EVERY prompt, so it must stay cheap: git is resolved once
     # here, and the branch lookup is a single fork whose stderr is discarded.
-    #
-    # Starship has no tcsh support upstream, so this is hand-rolled and does not
-    # match the bash prompt glyph for glyph. That is expected -- see
-    # envs/tcsh/README.md.
+    if ( $?LOADOUT_CFG_ENABLE_STARSHIP && $?prompt ) then
+        # csh has no `command -v` (it prints "command: Command not found." and
+        # carries on) -- `which` is the csh/tcsh spelling.
+        set _loadout_starship_bin = "`which starship`"
+        if ( "$_loadout_starship_bin" != "" ) then
+            # The tcsh-specific config: the shared one with a yellow path.
+            setenv STARSHIP_CONFIG "${_loadout_global}/starship-tcsh.toml"
+            # starship's tcsh init defines precmd/postcmd aliases that chain to
+            # USER_PRECMD/USER_POSTCMD. Nothing else here defines a precmd, so
+            # USER_PRECMD stays empty and starship owns the prompt.
+            eval "`"$_loadout_starship_bin" init tcsh --print-full-init`"
+            # The flag the hand-rolled prompt below checks: with starship
+            # driving, that path must not touch `prompt` or `precmd`.
+            set loadout_prompt_starship = 1
+        endif
+    endif
+
     set _loadout_host = ""
     if ( $?LOADOUT_CFG_PROMPT_INCLUDE_HOST ) then
         if ( "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" == "1" ) set _loadout_host = "%m:"
@@ -414,11 +440,18 @@ if ( $?prompt ) then
     # git-branch.sh does the stderr suppression csh cannot do itself (csh has no
     # `2>/dev/null`; an inline `|&` merges git's error text into the prompt -- an
     # unborn HEAD then prints git's "Use '--' to separate paths" hint at you).
-    if ( -X git && -x "$_loadout_gitbranch" ) then
-        set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
-        alias precmd 'set _lb = "`'"$_loadout_gitbranch"'`" ; if ( "$_lb" != "" ) set prompt = "${loadout_prompt_lead}%B%~%b (${_lb}) %#${loadout_prompt_tail}" ; if ( "$_lb" == "" ) set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
-    else
-        set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
+    #
+    # ONLY when starship is not driving the prompt. Starship owns `prompt` and
+    # the `precmd` alias; setting either here would fight it (the hand-rolled
+    # precmd would overwrite starship's, and its prompt would overwrite
+    # starship's). The hand-rolled path is the no-starship fallback.
+    if ( ! $?loadout_prompt_starship ) then
+        if ( -X git && -x "$_loadout_gitbranch" ) then
+            set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
+            alias precmd 'set _lb = "`'"$_loadout_gitbranch"'`" ; if ( "$_lb" != "" ) set prompt = "${loadout_prompt_lead}%B%~%b (${_lb}) %#${loadout_prompt_tail}" ; if ( "$_lb" == "" ) set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
+        else
+            set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"
+        endif
     endif
     unset _loadout_host
     unset _loadout_uid

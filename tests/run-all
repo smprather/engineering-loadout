@@ -29,6 +29,29 @@ set -euo pipefail
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_DIR"
 
+# --- scratch root -----------------------------------------------------------
+# The Tier 2 tests install whole shared trees (a full @shared is ~8 GB
+# installed, plus extraction transients) into $TMPDIR. On a host where /tmp is
+# a small tmpfs (CachyOS: 16 GB) that does not fit, and the failure is
+# ENOSPC part-way through an install -- which the installer WARNs-and-skips
+# past, so the missing files surface later as unrelated, run-varying test
+# failures, and the LEAKED tree (the installed tree is sealed read-only, so
+# the test's cleanup `rm -rf` cannot remove it) fills /tmp for every test
+# after it. One undersized scratch dir turned into six red tests.
+#
+# So: if TMPDIR is already set, use it. Otherwise pick a disk-backed scratch
+# when /tmp is a tmpfs with less than 12 GB free (AGENTS.md, Build Machine
+# Mandate, says the same thing). Explicit TMPDIR always wins.
+if [ -z "${TMPDIR:-}" ]; then
+    _tmp_free_kb=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    _tmp_type=$(df -Pk /tmp 2>/dev/null | awk 'NR==2 {print $2}')
+    if [ -n "${_tmp_free_kb:-}" ] && [ "$_tmp_free_kb" -lt 12582912 ] \
+        && [ "${_tmp_type:-}" = "tmpfs" ] && [ -d /var/tmp ] && [ -w /var/tmp ]; then
+        export TMPDIR=/var/tmp
+        echo "scratch: /tmp is a ${_tmp_type} with $((_tmp_free_kb / 1024 / 1024)) GB free -- using /var/tmp for the test scratch"
+    fi
+fi
+
 FAST=0
 CONTAINER=0
 NO_CACHE=0
@@ -87,11 +110,30 @@ FP_ROOTS_CONTAINER=("${FP_ROOTS[@]}" \
 # runs. Best-effort: logging must never fail the suite.
 CI_LOG="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/ci-runtimes.tsv"
 
+# The TRACKED timing dataset (assurance/release-timings.tsv, in the repo).
+#
+# This is the sink that must ALWAYS be current: the project is a moving target
+# (payloads get rebuilt, gates get added, tools get faster), so a timing
+# snapshot that only exists in a cache -- or that is only written at release
+# time -- is stale the moment it is written. Every test, every release gate
+# and every payload rebuild appends a row here, so the file in git is the
+# live picture, and the diff of a change shows how the timings MOVED.
+#
+# Same rule as the local log: best-effort, never fails the suite.
+TRACKED_TIMINGS="$REPO_DIR/assurance/release-timings.tsv"
+
 _log_runtime() {  # suite test seconds status detail
     mkdir -p "$(dirname "$CI_LOG")" 2>/dev/null || return 0
     printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" \
         >> "$CI_LOG" 2>/dev/null || true
+    # ... and the tracked, always-current dataset (scope "test:<name>").
+    mkdir -p "$(dirname "$TRACKED_TIMINGS")" 2>/dev/null || return 0
+    [ -f "$TRACKED_TIMINGS" ] || \
+        printf '# utc-timestamp\tgate\tseconds\tstatus\tdetail\n' > "$TRACKED_TIMINGS" 2>/dev/null || true
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "test:$2" "$3" "$4" "$5" \
+        >> "$TRACKED_TIMINGS" 2>/dev/null || true
 }
 
 # Two cache modes:
@@ -282,6 +324,7 @@ run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
 run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "release-timings" "$PY" tests/release-timings
+run_test "env-tcsh-starship" "$PY" tests/env-tcsh-starship
 run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
 run_test "dep-capture" tests/dep-capture
 run_test "oom-guard-reap" "$PY" tests/oom-guard-reap

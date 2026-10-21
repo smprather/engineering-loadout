@@ -310,7 +310,6 @@ sha256  119fb06e14eeb9ad6155eaf29451b093107bb2efe1f41c75e60326014ed2919e  payloa
 sha256  11b1e0adac789acbedcbb25ecd6623c27d9362761320375abed1d56c02cc7bfb  envs/tmux/vendor/plugins/tmux-persist/tests/test_session_name_sanitization.sh
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/djot/folds.scm
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/djot/folds.scm
-sha256  11e6e558175e45ea5f3c696c5a6688a79f2d23b9e6c048089c96a85e28c97e91  payload/installed-sizes.json
 sha256  1200c9e3a7dfff71e864c4b975bb9a1af899a54c1bb7ddd4409fd423804dd772  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/issue-4525.c
 sha256  1205fd8432bf74e6407693b3397595ee6b4b58fad2bde65c76a65e4fffbb575c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/templ.so.bz2
 sha256  120bafb011c7cd01389fc6cc68d3df8a299989e52ecb5aeeaae71f1d33d4a9f4  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/t32/comments.cmm
@@ -4113,6 +4112,7 @@ sha256  eb515bd3885c8e46f4092eddc750d7cbe48592305d965dc7ec5ff269fe4ca310  payloa
 sha256  eb544639a0df47ca60cca6f03438b26ad5798677ff39130194bb11321b5372a8  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/apex/injections.scm
 sha256  eb544639a0df47ca60cca6f03438b26ad5798677ff39130194bb11321b5372a8  payload/treesitter/vendor/nvim-treesitter/runtime/queries/apex/injections.scm
 sha256  eb56aff35cc567e93dbfe91a3be7c2f47f79a482275070f6e5459a5037b84039  payload/treesitter/vendor/nvim-treesitter/scripts/compare-upstream-queries.sh
+sha256  eb633c969c67fc4e89525d30fed3550e275c38782dd2e05f9b9abb653f2f98b0  payload/installed-sizes.json
 sha256  eb79cef5fbb620acbe139b51fd0228aa526614bba36b9bbb6bd1b60afafe4bfa  envs/tmux/vendor/plugins/tmux-persist/AGENTS.md
 sha256  eb7f62392b5035dca98f1443a9fedd25340fa860a045bf2fa4c0b87ca0cedaff  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/vim.so.bz2
 sha256  eb8d4228d58cc26edd1c7ce312cfc02acd30e9016f7df06f76d5af4f82c59507  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/m68k/highlights.scm

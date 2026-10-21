@@ -83,9 +83,12 @@ EXPECTED_MISSING_COMMANDS = {
 }
 
 # LOADOUT_CFG_* variables the bash env defines that the tcsh config does not.
+#
+# LOADOUT_CFG_ENABLE_STARSHIP is NOT here any more: the payload's starship
+# (1.26.0) ships a tcsh target, so the tcsh env defines it and drives the
+# prompt with starship like the bash env does.
 EXPECTED_MISSING_CONFIG = {
     "LOADOUT_CFG_PREFERRED_BASH": "shell-specific; the tcsh analogue is LOADOUT_CFG_PREFERRED_TCSH",
-    "LOADOUT_CFG_ENABLE_STARSHIP": "starship init has no tcsh target",
     "LOADOUT_CFG_ENABLE_FZF": "fzf --bash/--zsh/--fish only; no tcsh keybinding script exists",
     "LOADOUT_CFG_ENABLE_ZOXIDE": "zoxide init has no tcsh target",
     "LOADOUT_CFG_ENABLE_ICECREAM": "IceCream-Bash needs ${!var} indirection and export -f",

@@ -135,17 +135,41 @@ Two of them are worth knowing about specifically:
 
 ## What you do not get, and why
 
-These are absent because **upstream provides no tcsh support at all** — not because
-the port stopped early. Each is a dependency on a generated shell snippet that only
-exists for bash/zsh/fish.
+These are absent because **upstream ships no tcsh target for them** — not
+because the port stopped early. Each is a dependency on a generated shell snippet
+that only exists for bash/zsh/fish.
 
 | | why |
 |---|---|
-| Starship | `starship init` has no tcsh target. The prompt here is hand-rolled and does not match the bash one. |
 | fzf keybindings (`Ctrl+T`, `Ctrl+R`, `Alt+C`) | `fzf --bash` / `--zsh` / `--fish` only. fzf itself works fine as a command. |
 | zoxide (`z` / `zi`) | `zoxide init` has no tcsh target. |
 | OSC 133 semantic zones / OSC 7 cwd | Needs a preexec framework (bash-preexec). tcsh's `precmd`/`postcmd` can carry OSC 7, which the prompt block does; full 133 zoning needs per-command hooks csh does not expose. |
 | IceCream-Bash (`ic`/`icp`/`ict`/`ictp`) | A bash function library that relies on `${!var}` indirect expansion and `export -f`. |
+
+**Starship IS supported.** The tcsh prompt used to be hand-rolled because
+`starship init` had no tcsh target — that stopped being true when the payload
+moved to starship 1.26.0, which ships one (`starship init tcsh`). The prompt is
+now starship-driven, exactly like the bash env: the same modules, the same
+glyphs, the same git branch and LSF/user handling.
+
+**The one deliberate difference: the path is YELLOW.** The tcsh prompt uses its
+own config (`global/starship-tcsh.toml` — the shared one with a yellow
+`[directory]` style), so a glance at the prompt says which shell you are in.
+Bash keeps the shared config's cyan path. `tests/env-tcsh-starship` pins the
+two configs to be identical apart from that one line, so they cannot drift.
+
+Two caveats on the starship prompt in tcsh:
+
+- **Some starship modules have no tcsh equivalent.** A module that reads the
+  SHELL's own state (the `jobs` module is the classic one) cannot work here,
+  because tcsh exposes no such hook to starship. The shared config's `format`
+  does not include `$jobs`, so nothing is lost here; if you add a
+  shell-state module to the config, expect it to be blank under tcsh.
+- **The hand-rolled prompt is still there, as the fallback.** With
+  `LOADOUT_CFG_ENABLE_STARSHIP=0`, or on a host with no starship binary, the
+  original tcsh prompt is used — it needs no external binary. The two paths
+  never fight: the hand-rolled one is skipped when starship owns `prompt` and
+  the `precmd` alias.
 
 Everything else in the bash env has a tcsh form and should have one here. If you find
 a gap that is not in this table, it is a bug, not a design decision.

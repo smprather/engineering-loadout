@@ -4,12 +4,18 @@
 # add it here too unless tcsh genuinely cannot act on it.
 #
 # Deliberately omitted, because upstream ships no tcsh target for the thing they
-# control (see envs/tcsh/README.md): LOADOUT_CFG_ENABLE_STARSHIP,
-# LOADOUT_CFG_ENABLE_FZF, LOADOUT_CFG_ENABLE_ZOXIDE, LOADOUT_CFG_ENABLE_ICECREAM,
+# control (see envs/tcsh/README.md): LOADOUT_CFG_ENABLE_FZF,
+# LOADOUT_CFG_ENABLE_ZOXIDE, LOADOUT_CFG_ENABLE_ICECREAM,
 # LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION / _WEZTERM_SHELL_INTEGRATION,
 # LOADOUT_CFG_PRESERVE_FUNCTIONS (csh has no functions to preserve),
 # LOADOUT_CFG_PREFERRED_BASH (see LOADOUT_CFG_PREFERRED_TCSH below instead).
 # Setting them here would be a variable nothing reads.
+#
+# NOT omitted any more: LOADOUT_CFG_ENABLE_STARSHIP. It used to be listed here
+# because "starship has no tcsh target" -- that stopped being true when the
+# payload moved to starship 1.26.0, which ships a tcsh target
+# (`starship init tcsh`). The tcsh prompt is now starship-driven, with the
+# path in yellow so the two shells are distinguishable at a glance.
 #
 # Every value is an EXPORTED SCALAR (`setenv`, not `set`), exactly as in bash --
 # they must survive into child processes and show up in `env | grep LOADOUT_CFG_`,
@@ -25,6 +31,14 @@
 # it is set, differs from the running shell, and is executable. The bash analogue
 # is LOADOUT_CFG_PREFERRED_BASH.
 if ( ! $?LOADOUT_CFG_PREFERRED_TCSH )      setenv LOADOUT_CFG_PREFERRED_TCSH ""
+
+# ---- prompt ------------------------------------------------------------------
+# Starship drives the tcsh prompt, same as the bash env. The tcsh prompt uses
+# its OWN config (global/starship-tcsh.toml: the shared one with a yellow
+# path), so the two shells are distinguishable at a glance.
+#
+# Set to 0 for the hand-rolled fallback prompt (no starship binary needed).
+if ( ! $?LOADOUT_CFG_ENABLE_STARSHIP )    setenv LOADOUT_CFG_ENABLE_STARSHIP 1
 
 # ---- deployment layout -------------------------------------------------------
 # Local-root of a separately-installed shared/read-only tree (the dir holding
