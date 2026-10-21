@@ -370,9 +370,18 @@ def disabled_packages(registry):
             if name in disabled or name.startswith("@"):
                 continue
             for dep in entry.get("depends", []):
-                if dep in disabled:
-                    disabled[name] = f"hard-depends on '{dep}', which is disabled ({disabled[dep]})"
-                    changed = True
+                # A @group dependency counts as depending on its MEMBERS: a
+                # package that hard-depends on a group holding a disabled
+                # member cannot be installed either.
+                candidates = [dep]
+                if dep.startswith("@"):
+                    candidates = list(registry.get(dep, {}).get("members", []))
+                for candidate in candidates:
+                    if candidate in disabled:
+                        disabled[name] = f"hard-depends on '{candidate}', which is disabled ({disabled[candidate]})"
+                        changed = True
+                        break
+                if changed:
                     break
     return disabled
 
@@ -615,7 +624,12 @@ def resolve_tool_selection(args, registry):
     no_deps = bool(getattr(args, "no_deps", False))
     force = bool(getattr(args, "force", False))
 
-    skip_set = expand_groups(_parse_namelist(args.skip), registry) if args.skip else set()
+    # --skip is a SUBTRACTION, never a demand: naming a package that is not
+    # installable (unknown, or disabled) must be a no-op, not an error. A
+    # non-empty stack selects the warn-and-continue branch of expand_groups
+    # for a DISABLED name, so `--skip klayout` on a tree where klayout is
+    # already out of service says so and carries on.
+    skip_set = expand_groups(_parse_namelist(args.skip), registry, _stack=("--skip",)) if args.skip else set()
 
     only = getattr(args, "only", None)
     add = getattr(args, "add", None)

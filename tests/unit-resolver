@@ -377,6 +377,77 @@ def test_tmpdir_respected_for_global_temp_state(m):
         check("TMPDIR controls loadout global temp state", True)
 
 
+def test_disabled_packages(m):
+    """A disabled package is out of service; the cascade rules are exact."""
+    reg = {
+        "rg": {"kind": "bin", "platforms": ["linux"]},
+        "broken": {
+            "kind": "bin",
+            "platforms": ["linux"],
+            "disabled": True,
+            "disabled_reason": "payload is stale",
+        },
+        # hard-depends on a disabled package -> offline by the cascade
+        "needs-broken": {"kind": "bin", "platforms": ["linux"], "depends": ["broken"]},
+        # depends on a group that holds a disabled member -> also offline
+        "needs-group": {"kind": "bin", "platforms": ["linux"], "depends": ["@g"]},
+        # soft dependency on a disabled package -> NOT offline (a
+        # recommendation never forces anything)
+        "recommends-broken": {
+            "kind": "bin",
+            "platforms": ["linux"],
+            "recommends": ["broken"],
+        },
+        # a disabled package's OWN dependencies stay online (the cascade runs
+        # up, not down)
+        "lib": {"kind": "lib-bundle", "platforms": ["linux"]},
+        "uses-lib": {
+            "kind": "bin",
+            "platforms": ["linux"],
+            "depends": ["lib"],
+            "disabled": True,
+            "disabled_reason": "stale payload",
+        },
+        "@g": {"kind": "group", "members": ["rg", "broken"]},
+    }
+    disabled = m.disabled_packages(reg)
+    check("explicitly disabled package is disabled", "broken" in disabled)
+    check("cascade takes a hard dependent offline", "needs-broken" in disabled)
+    check("cascade follows a @group dependency", "needs-group" in disabled)
+    check("a soft recommendation does NOT disable", "recommends-broken" not in disabled)
+    check("the cascade does not run DOWN", "lib" not in disabled)
+    check("a disabled package's own deps stay online", "uses-lib" in disabled and "lib" not in disabled)
+    check("the reason names the dependency", "broken" in disabled.get("needs-broken", ""))
+
+    # A disabled package is excluded from every sweep.
+    shared = m.expand_groups(["@shared-all"], reg)
+    check("disabled package is out of @shared-all", "broken" not in shared)
+    check("cascade-disabled package is out of @shared-all", "needs-broken" not in shared)
+    check("healthy packages stay in @shared-all", "rg" in shared)
+
+    # Named directly -> a hard error (the user asked for it by name).
+    try:
+        m.expand_groups(["broken"], reg)
+        check("naming a disabled package is an error", False, "no error raised")
+    except m.ResolverError:
+        check("naming a disabled package is an error", True)
+    except Exception as exc:  # noqa: BLE001
+        check("naming a disabled package is an error", False, f"wrong exception: {exc}")
+
+    # Reached through a GROUP -> skipped with a warning (a group is a sweep).
+    got = m.expand_groups(["@g"], reg)
+    check("a group skips its disabled members", got == {"rg"})
+
+    # --skip is a SUBTRACTION, never a demand: skipping a disabled package
+    # must be a no-op, not an error.
+    args = types.SimpleNamespace(skip="broken", only="rg", add=None, no_deps=False, force=False)
+    selected = m.resolve_tool_selection(args, reg)
+    check("--skip on a disabled package is a no-op", selected == {"rg"})
+    args = types.SimpleNamespace(skip="broken,rg", only="rg", add=None, no_deps=False, force=False)
+    selected = m.resolve_tool_selection(args, reg)
+    check("--skip on a disabled package alongside a live one works", selected == set())
+
+
 def main():
     mod = load_loadout()
     for fn in (
@@ -392,6 +463,7 @@ def main():
         test_get_version_release_stamp,
         test_local_root_and_install_to,
         test_tmpdir_respected_for_global_temp_state,
+        test_disabled_packages,
     ):
         print(f"-- {fn.__name__}")
         fn(mod)
