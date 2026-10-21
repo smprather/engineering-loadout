@@ -142,7 +142,20 @@ cp -r "/tmp/sby-click-$$/click" "$STAGE/share/sby/click"
 cp -r "/tmp/sby-click-$$"/click-*.dist-info "$STAGE/share/sby/"
 chmod -R a+rX "$STAGE/share/sby/click" "$STAGE"/share/sby/click-*.dist-info
 rm -rf "/tmp/sby-click-$$"
-python3.15 -c "import sys; sys.path.insert(0, '$STAGE/share/sby'); import click; from importlib.metadata import version; print('  vendored click OK:', version('click'))"
+# The vendored-click smoke must run under the SAME interpreter the shipped
+# wrapper invokes (python3.15), not the build image's system python3.12: a
+# click that imports on 3.12 can still fail on 3.15. Prefer LOADOUT_PY_PREFIX
+# (set by build/build-shell), then the repo's own bootstrap tree, then PATH --
+# the same resolution order build/build-klayout.sh uses.
+PY_PREFIX="${LOADOUT_PY_PREFIX:-$REPO/.loadout-bootstrap}"
+PY315="$PY_PREFIX/bin/python3.15"
+[ -x "$PY315" ] || PY315=$(command -v python3.15 || true)
+[ -n "$PY315" ] && [ -x "$PY315" ] || {
+    echo "ERROR: python3.15 not found (needed to verify the vendored click)." >&2
+    echo "  Set LOADOUT_PY_PREFIX to a portable-python prefix, or put python3.15 on PATH." >&2
+    exit 1
+}
+"$PY315" -c "import sys; sys.path.insert(0, '$STAGE/share/sby'); import click; from importlib.metadata import version; print('  vendored click OK:', version('click'))"
 
 # --- bin/sby wrapper ----------------------------------------------------------
 # Derives prefix from its own path (never $HOME -- dest-dir installs must work),
@@ -270,7 +283,7 @@ echo "Stage-verify: sby prove with repo Yosys 0.68 + staged z3 ..."
 YOSYS_TMP="/tmp/sby-verify-yosys"
 rm -rf "$YOSYS_TMP"
 mkdir -p "$YOSYS_TMP/bin" "$YOSYS_TMP/share"
-for b in yosys yosys-abc yosys-config yosys-filterlib yosys-smtbmc; do
+for b in yosys yosys.bin yosys-abc yosys-config yosys-filterlib yosys-smtbmc; do
     bzip2 -dc "$REPO/payload/$LOADOUT_PLATFORM/bin/$b.bz2" > "$YOSYS_TMP/bin/$b" \
         || { echo "ERROR: cannot stage repo yosys binary $b" >&2; exit 1; }
     chmod 755 "$YOSYS_TMP/bin/$b"
@@ -316,6 +329,15 @@ demo.v
 EOF
 export PATH="$STAGE/bin:$YOSYS_TMP/bin:$PATH"
 export PYTHONPATH="$STAGE/share/sby"
+# The staged sby resolves its interpreter the way a real install does:
+# <prefix>/bin/python3.15 first, then python3.15 / python3 from PATH. In the
+# build container there is NO python3.15 on PATH and the system python3 is
+# 3.6, so the wrapper's PATH fallback used to land on python3.6 -- which dies
+# on click's `from __future__ import annotations` (a 3.7+ feature). The staged
+# prefix therefore gets the SAME interpreter a real install provides: link
+# python3.15 into $STAGE/bin so the "prefix interpreter" branch is taken and
+# the smoke exercises the shipped path, not the fallback.
+ln -sf "$PY315" "$STAGE/bin/python3.15"
 if ! "$STAGE/bin/sby" --help > /tmp/sby-help.log 2>&1; then
     echo "ERROR: staged sby --help failed:" >&2
     head -20 /tmp/sby-help.log >&2

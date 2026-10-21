@@ -66,6 +66,7 @@ SHA256SUMS_NAME = "sha256sums.txt"
 STASH_REL = "envs/nvim/vendor/plugins/nvim-plugin-stash.tar.bz2"
 STASH_ASSET_NAME = os.path.basename(STASH_REL)
 STEP_SCAN_TITLE = "Step 0: Scanning bundled binaries for malware (YARA-Forge)"
+STEP_PAYLOAD_TITLE = "Step 0b: Verifying the payload agrees with the shipped interpreter"
 STEP_SMOKE_TITLE = "Step 1: Smoke-testing pre-built binaries"
 STEP_VERSIONS_TITLE = "Step 2: Generating version table"
 STEP_CHECKSUMS_TITLE = f"Step 3: Generating {SHA256SUMS_NAME} + SBOM + checksum table"
@@ -338,6 +339,55 @@ def _skip_scan_step(script_dir, tag):
         name="malware scan",
         title=STEP_SCAN_TITLE,
         output="SKIPPED via --skip-scan (not recommended).\n",
+    )
+
+
+def _payload_consistency_step(script_dir):
+    """The payload must agree with the interpreter the payload ships.
+
+    Two cheap gates (seconds, no container, no network):
+      tests/payload-interpreter-abi -- no shipped ELF may link a libpython
+        other than the shipped one, no shipped script may pick another
+        interpreter, no extension module may carry another ABI tag.
+      tests/wheelhouse-closure -- every enabled python-tool must resolve
+        offline from the bundled wheelhouse under the shipped interpreter.
+
+    They exist because the class they catch is INVISIBLE until an install
+    fails on a node that does not have the dev host's libraries: the
+    2026-10-10 Python 3.15 sweep updated the interpreter and every reference
+    to it, but not the payloads that EMBED it -- four tools shipped linking
+    libpython3.14 while the payload carried 3.15, and seven python-tools
+    could not be installed at all (cp314 wheels under a cp315 interpreter).
+    The binary smoke test does catch the ELF half, but only in the Tier 3
+    container, i.e. at release time -- hours later, with a rebuild queued.
+    These run in the Tier 1 suite, on every commit.
+    """
+    gates = (
+        os.path.join(script_dir, "tests", "payload-interpreter-abi"),
+        os.path.join(script_dir, "tests", "wheelhouse-closure"),
+    )
+    outputs = []
+    for gate in gates:
+        proc = subprocess.run(
+            [sys.executable, gate],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        outputs.append(f"--- {os.path.basename(gate)} (rc={proc.returncode})\n{proc.stdout}")
+        if proc.returncode != 0:
+            return StepResult(
+                name="payload consistency",
+                title=STEP_PAYLOAD_TITLE,
+                returncode=proc.returncode,
+                output="\n".join(outputs),
+            )
+    return StepResult(
+        name="payload consistency",
+        title=STEP_PAYLOAD_TITLE,
+        output="\n".join(outputs),
     )
 
 
@@ -686,6 +736,7 @@ def _run_parallel_pre_release_steps(
                 ),
             ),
             ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
+            ("payload consistency", STEP_PAYLOAD_TITLE, lambda: _payload_consistency_step(script_dir)),
             ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
             ("manifest export", STEP_MANIFEST_TITLE, lambda: _manifest_export_step(script_dir)),
             ("secret scan", STEP_SECRET_TITLE, lambda: _secret_scan_step(script_dir)),
@@ -732,6 +783,13 @@ def _run_parallel_pre_release_steps(
 
         future = submit(_smoke_step, script_dir, smoke_test, use_smoke_cache)
         futures[future] = ("binary smoke test", STEP_SMOKE_TITLE)
+
+        # Cheap (seconds) and independent of the container smoke: the payload
+        # must agree with the interpreter it ships. Run it FIRST-class in the
+        # release gate so a payload that cannot install is caught here, not
+        # by a user on a node.
+        future = submit(_payload_consistency_step, script_dir)
+        futures[future] = ("payload consistency", STEP_PAYLOAD_TITLE)
 
         future = submit(_version_step, farm_versions)
         futures[future] = ("version table", STEP_VERSIONS_TITLE)

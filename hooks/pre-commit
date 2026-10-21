@@ -42,7 +42,21 @@ if [[ -n "$staged_strip_candidates" ]]; then
         echo "  WARNING: 'strip' not found in PATH -- skipping ELF stripping." >&2
         echo "  Run ./build/strip-all-elf-binaries manually before committing binary/archive changes." >&2
     else
-        "$script_dir/build/strip-all-elf-binaries"
+        # build/strip-all-elf-binaries is `#!/usr/bin/env python3.15`, and the
+        # bundle's interpreter is not necessarily on PATH (it may live only in
+        # ~/.local/bin or the repo's own bootstrap tree). Put it on PATH for
+        # this call, or the shebang fails with "env: 'python3.15': No such
+        # file or directory" and the commit is blocked for a reason that has
+        # nothing to do with the change.
+        _strip_py=""
+        for _cand in "$HOME/.local/bin/python3.15" "$script_dir/.loadout-bootstrap/bin/python3.15"; do
+            if [[ -x "$_cand" ]]; then _strip_py="$_cand"; break; fi
+        done
+        if [[ -n "$_strip_py" ]]; then
+            PATH="$(dirname "$_strip_py"):$PATH" "$script_dir/build/strip-all-elf-binaries"
+        else
+            "$script_dir/build/strip-all-elf-binaries"
+        fi
         # Re-stage candidate files, converted tar.bz2 names, removals, and updated manifests
         # without sweeping unrelated untracked files into the commit.
         git add -u

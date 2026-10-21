@@ -298,6 +298,112 @@ if [ "$KLAYOUT_VERSION" != "$VERSION" ]; then
     exit 1
 fi
 
+# ------------------------------------------------------------------ py3.15 patch
+# Python 3.15 REMOVED PyWeakref_GetObject (deprecated in 3.12, gone in 3.15);
+# the replacement is PyWeakref_GetRef, which returns a STRONG reference and
+# signals expiry with a 0 return instead of Py_None. KLayout 0.30.12's
+# pyaSignalHandler.cc still calls the removed API, so the pya (Python
+# bindings) build fails with
+#   error: 'PyWeakref_GetObject' was not declared in this scope;
+#          did you mean 'PyWeakref_GetRef'?
+# and the whole build dies.
+#
+# The fix is upstream's own (klayout master, commit that added the 3.15
+# branch to src/pya/pya/pyaSignalHandler.cc): keep the old call for Python < 3.15
+# and use PyWeakref_GetRef for 3.15+. The patch below is that upstream change,
+# backported to the released tag, so the shipped pymod/klayout/*.cpython-315-*
+# modules are built from a source tree that matches the interpreter the loadout
+# actually ships.
+#
+# Guarded: the patch must apply cleanly or the build stops. A silent no-op here
+# is how the stale libpython3.14 payload shipped in the first place.
+echo "==> Applying the Python 3.15 weakref-API patch ..."
+PATCH_FILE="$WORK_DIR/py315-weakref.patch"
+cat >"$PATCH_FILE" <<'PY315_PATCH_EOF'
+--- a/src/pya/pya/pyaSignalHandler.cc
++++ b/src/pya/pya/pyaSignalHandler.cc
+@@ -63,16 +63,34 @@
+ {
+   if (m_callable && m_weak_self) {
+
++#if PY_MAJOR_VERSION < 3
+     PyObject *self = PyWeakref_GetObject (m_weak_self.get ());
+     if (self == Py_None) {
+       //  object expired - no callback possible
+       return PythonRef ();
+     }
+
+-#if PY_MAJOR_VERSION < 3
+     return PythonRef (PyMethod_New (m_callable.get (), self, m_class.get ()));
+-#else
++#elif PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 15
++    PyObject *self = PyWeakref_GetObject (m_weak_self.get ());
++    if (self == Py_None) {
++      //  object expired - no callback possible
++      return PythonRef ();
++    }
++
+     return PythonRef (PyMethod_New (m_callable.get (), self));
++#else
++    PyObject *ptr;
++    int res = PyWeakref_GetRef (m_weak_self.get (), &ptr);
++    if (res < 0) {
++      PyErr_Clear ();
++      return PythonRef ();
++    } else if (res == 0) {
++      return PythonRef ();
++    } else {
++      PythonRef self (ptr);
++      return PythonRef (PyMethod_New (m_callable.get (), self.get ()));
++    }
+ #endif
+
+   } else {
+@@ -87,7 +105,24 @@
+
+ PyObject *CallbackFunction::self_ref () const
+ {
++#if PY_MAJOR_VERSION < 3 || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 15)
+   return PyWeakref_GetObject (m_weak_self.get ());
++#else
++  PyObject *res;
++  int ret = PyWeakref_GetRef (m_weak_self.get (), &res);
++  if (ret < 0) {
++    PyErr_Clear ();
++    return NULL;
++  } else if (ret == 0) {
++    return NULL;
++  } else {
++    //  Emulate the behavior of Python <3.15 and return a borrowed reference.
++    //  Usually we should not do that, but we only use the result of that method
++    //  for pointer comparison.
++    Py_DECREF (res);
++    return res;
++  }
++#endif
+ }
+
+ PyObject *CallbackFunction::callable_ref () const
+PY315_PATCH_EOF
+patch -p1 --forward <"$PATCH_FILE" >/dev/null 2>&1 || {
+    echo "ERROR: the Python 3.15 weakref patch did not apply -- upstream layout changed." >&2
+    echo "  KLayout 0.30.12 needs it to build against Python 3.15 (PyWeakref_GetObject" >&2
+    echo "  was removed in 3.15). Upstream fixed this on master; backport it here." >&2
+    exit 1
+}
+# The patch is load-bearing: assert the removed API is gone from the patched
+# file and the replacement is present, so a mis-applied patch cannot ship.
+grep -q "PyWeakref_GetObject" "$SRC/src/pya/pya/pyaSignalHandler.cc" \
+    && grep -q "PY_MINOR_VERSION < 15" "$SRC/src/pya/pya/pyaSignalHandler.cc" || {
+    echo "ERROR: weakref patch verification failed -- the 3.15 branch is missing." >&2
+    exit 1
+}
+grep -q "PyWeakref_GetRef" "$SRC/src/pya/pya/pyaSignalHandler.cc" || {
+    echo "ERROR: weakref patch verification failed -- PyWeakref_GetRef not present." >&2
+    exit 1
+}
+echo "  weakref patch applied and verified"
+
 echo "==> Building (this takes ~25 min) ..."
 # See "THE LINK TRAP" in the header: build-time only, never a runtime path.
 export LD_LIBRARY_PATH="$PY_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

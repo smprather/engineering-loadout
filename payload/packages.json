@@ -18,6 +18,8 @@
     "relocate_root": "Package-relative subtree of install_to scanned for relocate_token. Restricts token replacement to package-owned files; must be paired with relocate_token.",
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
     "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the only gating field.",
+    "disabled": "If true, the package is DISABLED (out of service): excluded from EVERY sweep (@shared, @shared-all, @envs-all, @all) and refused when named directly or pulled in as a hard dependency. Use it for a package whose payload is known-broken on the current platform and whose repair needs a heavy rebuild -- it stays in the registry (so 'loadout info' still documents it) but it cannot reach a deployment. A package that hard-depends on a disabled one is disabled too; a soft 'recommends' edge never propagates. NOTE: this is NOT the project's 'offline' (which means no network needed) -- 'disabled' is the term for a package taken out of service.",
+    "disabled_reason": "Why the package is disabled; shown by the install-time refusal and by 'loadout info'.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
     "members": "For kind='group': list of package names or @group refs the group expands to. Resolver expands recursively with cycle detection.",
     "bins": "List of bin/*.bz2 stems (without .bz2) owned by this package.",
@@ -296,7 +298,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools"
+      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "librelane": {
       "kind": "python-tool",
@@ -353,7 +357,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled, bring your own). Console scripts `librelane`, `librelane.config`, `librelane.env_info`, `librelane.help`, `librelane.state`, `librelane.steps` (equivalently `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel"
+      "description": "librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled, bring your own). Console scripts `librelane`, `librelane.config`, `librelane.env_info`, `librelane.help`, `librelane.state`, `librelane.steps` (equivalently `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "vcd-toggle-profiler": {
       "kind": "runtime",
@@ -2350,7 +2356,9 @@
         "bin/strmxor"
       ],
       "missing_hint": "KLayout will NOT be installed",
-      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.15; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
+      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.15; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: the payload was built against Python 3.14 and links libpython3.14.so.1.0, which the payload no longer ships (it is 3.15 now) -- every KLayout launcher died with 'error while loading shared libraries'. The rebuild needs the upstream Python 3.15 backport of PyWeakref_GetObject (klayout master) and a ~25 min EL8 source build, so it is deferred rather than shipped broken. Re-enable with 'loadout install klayout' once payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2 is rebuilt against portable-python 3.15."
     },
     "verilator": {
       "kind": "bin",
@@ -2871,7 +2879,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "Web-based interactive development environment for notebooks, code, and data"
+      "description": "Web-based interactive development environment for notebooks, code, and data",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "time-plot": {
       "kind": "python-tool",
@@ -2903,7 +2913,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers"
+      "description": "Plot arbitrary data vs. zero-based time with plugins for custom data file parsers",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "text-serdes": {
       "kind": "python-tool",
@@ -2983,7 +2995,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.15 wheel). Opt-in: ./loadout install cicwave"
+      "description": "cicwave — PyQtGraph waveform viewer (ngspice/Xyce/VCD/CSV). loadout PyQt6 fork of the upstream PySide6 app (PySide6 has no EL8 glibc-2.28 + Python 3.15 wheel). Opt-in: ./loadout install cicwave",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "mdformat": {
       "kind": "python-tool",
@@ -3098,7 +3112,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing"
+      "description": "45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "pygwalker": {
       "kind": "python-tool",
@@ -3150,7 +3166,9 @@
         "portable-python",
         "uv"
       ],
-      "description": "Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`)"
+      "description": "Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`)",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
     },
     "portable-python": {
       "kind": "python-base",
@@ -4008,7 +4026,9 @@
         "lib/yosys-pyosys"
       ],
       "missing_hint": "the Yosys techlib tree (share/yosys) will NOT be installed; `yosys` starts but every synth pass fails",
-      "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"
+      "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python",
+      "disabled": true,
+      "disabled_reason": "DISABLED 2026-10-21: the 'yosys -y' bridge needs a pyosys extension module built for the shipped interpreter, and upstream publishes pyosys only per CPython ABI (cp310..cp314t -- there is no cp315 wheel), so a cp314 module refuses to load under 3.15 ('Python version mismatch'). Fixing it needs a pyosys source build against portable-python 3.15; deferred rather than shipped broken. 'sby' depends on yosys and goes offline with it."
     },
     "sby": {
       "kind": "bin",

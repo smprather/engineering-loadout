@@ -1,0 +1,308 @@
+#!/usr/bin/env python3.15
+"""
+wheelhouse-closure -- every python-tool in the registry must be installable
+OFFLINE from the bundled wheelhouse, under the interpreter the payload ships.
+
+The 2026-10-10 Python 3.15 sweep replaced the payload interpreter and the
+wheelhouse only partially caught up: 17 wheels became cp315, 29 stayed cp314.
+A cp314 wheel is ABI-LOCKED to CPython 3.14 -- it cannot be installed by a
+3.15 interpreter at all. `uv tool install` then fails at install time:
+
+    error: No solution found when resolving dependencies
+      cause: Because numpy==2.4.6 has no wheels with a matching Python ABI
+             tag (e.g., `cp315`) ...
+
+which is a FAILED row in the install results -- seven of them
+(liberty-tools, librelane, jupyterlab, time-plot, cicwave, parity-plot,
+pygwalker). The install reported the failure, but nothing STOPPED the bad
+wheelhouse from being committed, so the next install failed the same way.
+
+This gate is the pre-commit check: it walks each python-tool's dependency
+closure over the bundled wheelhouse and requires every wheel in it to be
+installable by the shipped interpreter:
+
+  * an ABI tag of cp3XY where XY == the shipped interpreter's version, or
+  * abi3 (stable ABI, forward compatible), or
+  * py3-none-any (pure python)
+
+A closure that needs a cp314 wheel, or a wheel that is not in the wheelhouse
+at all, FAILS here with the exact tool and the exact missing/incompatible
+wheel named.
+
+Read-only: it never installs anything and never touches the network.
+"""
+
+import glob
+import os
+import re
+import sys
+import zipfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PLATFORM_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28")
+WHEELS_DIR = os.path.join(PLATFORM_DIR, "wheels")
+PAYLOADS_JSON = os.path.join(REPO, "payload", "packages.json")
+
+FAILURES = []
+
+
+def fail(msg):
+    FAILURES.append(msg)
+    print(f"  FAIL  {msg}")
+
+
+def ok(msg):
+    print(f"  OK    {msg}")
+
+
+def shipped_python_version():
+    """The interpreter version the payload ships (e.g. '3.15')."""
+    archives = [f for f in os.listdir(PLATFORM_DIR) if f.startswith("portable-python-") and f.endswith(".tar.bz2")]
+    if not archives:
+        return None
+    m = re.search(r"portable-python-(\d+)\.(\d+)\.", archives[0])
+    return f"{m.group(1)}.{m.group(2)}" if m else None
+
+
+def normalize(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def wheel_tags(filename):
+    """The (python, abi, platform) tag triple a wheel filename declares.
+
+    A wheel filename is {name}-{version}(-{build})?-{py}-{abi}-{plat}.whl, so
+    the tag triple is the LAST three dash-separated fields -- for a pure
+    python wheel that is (py3, none, any), not just (py3).
+    """
+    parts = filename[: -len(".whl")].split("-")
+    if len(parts) < 5:
+        return ()
+    return tuple(parts[-3:])
+
+
+def wheel_is_abi_compatible(filename, shipped):
+    """True if a wheel can be installed by the shipped interpreter.
+
+    A cpXY tag is ABI-locked: only an exact match works. abi3 (the stable
+    ABI) and a pure-python tag (py3, or the dotted py2.py3) work for any
+    CPython 3.
+    """
+    tags = wheel_tags(filename)
+    if len(tags) != 3:
+        return False
+    py_tag, abi_tag, plat_tag = tags
+    if abi_tag == "none" and plat_tag == "any" and "py3" in py_tag.split("."):
+        return True
+    if abi_tag == "abi3":
+        return True
+    if re.fullmatch(r"cp3\d+", py_tag):
+        return py_tag[2:] == shipped.replace(".", "")
+    return False
+
+
+# The environment a bundled wheel is resolved against: the shipped
+# interpreter on the EL8 target.
+MARKER_VALUES = {
+    "python_version": None,  # filled in per run
+    "python_full_version": None,
+    "os_name": "posix",
+    "sys_platform": "linux",
+    "platform_system": "Linux",
+    "platform_machine": "x86_64",
+    "platform_python_implementation": "CPython",
+    "implementation_name": "cpython",
+    "implementation_version": None,
+}
+
+
+def _version_tuple(text):
+    parts = re.findall(r"\d+", text or "")
+    return tuple(int(p) for p in parts[:3])
+
+
+def _compare(left, op, right):
+    """Compare two marker operands, numerically when both look like versions."""
+    if op in ("==", "!="):
+        same = left == right
+        if op == "!=":
+            return not same
+        return same
+    lv, rv = _version_tuple(left), _version_tuple(right)
+    if lv and rv:
+        a = (lv + (0, 0, 0))[:3]
+        b = (rv + (0, 0, 0))[:3]
+    else:
+        a, b = left, right
+    if op == "<":
+        return a < b
+    if op == "<=":
+        return a <= b
+    if op == ">":
+        return a > b
+    if op == ">=":
+        return a >= b
+    return False
+
+
+def marker_applies(marker):
+    """Evaluate a PEP 508 environment marker for the shipped target.
+
+    Only the forms that appear in the bundled wheels are supported; an
+    unrecognised marker is treated as NOT applying (so the requirement is
+    skipped) rather than inventing a dependency that may not exist.
+    """
+    if not marker:
+        return True
+    marker = marker.strip()
+    if "extra ==" in marker or "extra==" in marker:
+        return False  # an opt-in extra: the base install does not pull it
+    for clause in re.split(r"\s+or\s+", marker):
+        if all(_clause_applies(part) for part in re.split(r"\s+and\s+", clause)):
+            return True
+    return False
+
+
+def _clause_applies(clause):
+    clause = clause.strip().strip("()").strip()
+    match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(==|!=|<=|>=|<|>)\s*(.+)$", clause)
+    if not match:
+        return False
+    var, op, raw = match.group(1), match.group(2), match.group(3).strip()
+    if raw.startswith(("'", '"')):
+        raw = raw[1:-1]
+    value = MARKER_VALUES.get(var)
+    if value is None:
+        return False
+    return _compare(value, op, raw)
+
+
+def wheel_metadata(path):
+    """(name, version, [requirement strings]) from a wheel's METADATA."""
+    with zipfile.ZipFile(path) as z:
+        for member in z.namelist():
+            if member.endswith(".dist-info/METADATA"):
+                text = z.read(member).decode("utf-8", "replace")
+                break
+        else:
+            return None
+    name = version = None
+    requires = []
+    for line in text.splitlines():
+        if line.startswith("Name: ") and name is None:
+            name = line[6:].strip()
+        elif line.startswith("Version: ") and version is None:
+            version = line[9:].strip()
+        elif line.startswith("Requires-Dist: "):
+            requires.append(line[15:].strip())
+    return name, version, requires
+
+
+def requirement_name(req):
+    """The distribution name a Requires-Dist line names."""
+    # Strip the marker/extras tail, then take the leading name.
+    base = req.split(";")[0].split("[")[0].strip()
+    match = re.match(r"^([A-Za-z0-9._-]+)", base)
+    return match.group(1) if match else None
+
+
+def main():
+    version = shipped_python_version()
+    if not version:
+        fail("no portable-python archive in payload/ -- cannot audit the wheelhouse")
+        return 1
+    ok(f"payload ships portable-python {version} (ABI tag cp{version.replace('.', '')})")
+    MARKER_VALUES["python_version"] = version
+    MARKER_VALUES["python_full_version"] = version + ".0"
+    MARKER_VALUES["implementation_version"] = version + ".0"
+
+    if not os.path.isdir(WHEELS_DIR):
+        fail(f"no wheelhouse at {WHEELS_DIR}")
+        return 1
+
+    # Index the wheelhouse: normalized name -> [(filename, path, meta)]
+    index = {}
+    for path in sorted(glob.glob(os.path.join(WHEELS_DIR, "*.whl"))):
+        filename = os.path.basename(path)
+        meta = wheel_metadata(path)
+        if meta is None:
+            continue
+        name, _ver, _req = meta
+        index.setdefault(normalize(name), []).append((filename, path, meta))
+
+    ok(f"wheelhouse: {sum(len(v) for v in index.values())} wheels, {len(index)} distributions")
+
+    try:
+        import json
+
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+    except OSError, KeyError, ValueError:
+        fail("cannot read payload/packages.json")
+        return 1
+
+    tools = {n: e for n, e in packages.items() if e.get("kind") == "python-tool"}
+    if not tools:
+        ok("no python-tools in the registry")
+        return 0
+
+    bad = []
+    for tool_name, entry in sorted(tools.items()):
+        if entry.get("disabled"):
+            continue  # out of service: it is not installed, so it cannot fail
+        spec = entry.get("uv_tool", "")
+        root = normalize(spec)
+        candidates = index.get(root, [])
+        if not candidates:
+            bad.append(f"{tool_name}: no wheel for '{spec}' in the wheelhouse")
+            continue
+        # Walk the closure over the wheelhouse, ABI-compatibility first.
+        seen = set()
+        queue = [root]
+        problems = []
+        while queue:
+            current = queue.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            entries = index.get(current, [])
+            usable = [e for e in entries if wheel_is_abi_compatible(e[0], version)]
+            if not usable:
+                if entries:
+                    problems.append(
+                        f"{current} (bundled only as {', '.join(e[0] for e in entries)} -- "
+                        f"no cp{version.replace('.', '')}/abi3/py3-none-any wheel)"
+                    )
+                else:
+                    problems.append(f"{current} (no wheel in the wheelhouse)")
+                continue
+            _fn, _p, (_n, _v, requires) = usable[0]
+            for req in requires:
+                dep = requirement_name(req)
+                if not dep:
+                    continue
+                # A requirement guarded by an environment marker only applies on
+                # the target: "tomli; python_version < '3.11'" is not a
+                # dependency of a 3.15 install.
+                marker = req.split(";", 1)[1].strip() if ";" in req else ""
+                if not marker_applies(marker):
+                    continue
+                queue.append(normalize(dep))
+        if problems:
+            bad.append(f"{tool_name}: " + "; ".join(sorted(set(problems))))
+
+    for problem in bad:
+        fail(problem)
+    if not bad:
+        ok(f"all {len(tools)} python-tools resolve offline under cp{version.replace('.', '')}")
+
+    print()
+    if FAILURES:
+        print(f"wheelhouse-closure: {len(FAILURES)} failure(s)")
+        return 1
+    print("wheelhouse-closure: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

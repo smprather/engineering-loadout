@@ -1,5 +1,159 @@
 # Current Handoff
 
+## 2026-10-21 (2): `@shared-all --dest-dir` audit -- the 3.15 sweep never rebuilt the payloads that embed the interpreter
+
+Operator request: run a `@shared-all` install into a `--dest-dir` and audit it
+so that NO local (dev-host) dependency can shroud a missing one on another
+system.
+
+**The audit.** `loadout install @shared-all --dest-dir <prefix>` (clean
+`env -i`, temp HOME/XDG) produced a 5.9 GB tree, then every ELF in it was
+resolved twice with the SAME script: once on the dev host (CachyOS, glibc
+2.44) and once inside a clean `almalinux:8.10` container with only the tree
+mounted. Diffing the two runs per (binary, soname) is the whole point --
+a library that resolves on the dev host but NOT in the container was satisfied
+by a HOST library the payload never bundled.
+
+The diff was NOT empty: **307 (binary, library) pairs resolved differently**.
+287 of them resolved on the dev host and were MISSING in the EL8 container.
+
+**Four real defects, all the same root cause.** The 2026-10-10 Python 3.15
+sweep (commit `817d636`) replaced the payload interpreter (portable-python
+3.14.7 -> 3.15.0) and swept every *reference* to the new version across build
+scripts, docs and tests -- but it did not REBUILD the payloads that embed or
+invoke that interpreter. The repo templates were all correct; the shipped
+artifacts were not:
+
+| Payload | Symptom on a clean EL8 host | Masked on the dev host by |
+|---|---|---|
+| `klayout` | every launcher died: `error while loading shared libraries: libpython3.14.so.1.0` | the host's `/usr/lib/libpython3.14.so.1.0` (Arch `python 3.14.8`) |
+| `openroad` | same: `libpython3.14.so.1.0` not found | the same host library |
+| `sby` | `sby: no python3 found` -- the wrapper ran `$prefix/bin/python3.14`, then fell back to `command -v python3.14` | the host's `/usr/bin/python3.14` |
+| `yosys` | `yosys: -y needs the bundled interpreter, but <prefix>/bin/python3.14 is missing` (no fallback -- dead everywhere) | nothing; it was broken on the dev host too |
+
+52 ELFs in the tree linked `libpython3.14.so.1.0` (all of KLayout) and one more
+was `openroad`. The KLayout `pymod/klayout/*.so` extension modules were
+`cpython-314` ABI as well.
+
+**The fixes.**
+
+- **OpenROAD (FIXED, shipped):** `build/build-openroad.sh` already extracted the
+  payload's own portable-python for the embed; a rebuild was all that was
+  needed. The binary now links `libpython3.15.so.1.0`.
+- **KLayout (DISABLED, not shipped):** rebuilding needs MORE than a rebuild --
+  upstream v0.30.12 uses `PyWeakref_GetObject`, which Python 3.15 REMOVED, so
+  the pya build fails with `error: 'PyWeakref_GetObject' was not declared in
+  this scope; did you mean 'PyWeakref_GetRef'?`. `build/build-klayout.sh` now
+  applies upstream's own fix (the 3.15 branch of
+  `src/pya/pya/pyaSignalHandler.cc`, from klayout master) as a guarded patch
+  and ASSERTS it applied -- a silent no-op there is how the stale payload
+  shipped in the first place. The patch is in place and the build was proven
+  to get past it, but the ~25 min EL8 source build was NOT completed in this
+  pass, so the package is DISABLED rather than shipped broken. Rebuilding it
+  is the next step; the build script is ready for it.
+- **yosys (DISABLED, not shipped):** the upstream `pyosys` wheels are published
+  per CPython ABI (cp310..cp314t) and there is NO cp315 wheel -- and a cp314
+  extension REFUSES to load under 3.15 (`ImportError: Python version mismatch:
+  module was compiled for Python 3.14, but the interpreter version is
+  incompatible: 3.15.0`). The wheel route therefore made `yosys -y` -- which
+  every LibreLane stage-5 script execs -- dead on arrival. The fix (building
+  the pyosys module for the shipped interpreter from the yosys source tree,
+  upstream's `YOSYS_WITH_PYTHON=ON` path) is FEASIBLE and was proven to
+  configure correctly against portable-python 3.15, but it needs a full yosys
+  rebuild; deferred, so the package is DISABLED rather than shipped broken.
+  `build/build-yosys.sh` carries the source-build path (with a venv that
+  picks a python whose pip can resolve pybind11 3.x -- EL8's system python3 is
+  3.6, whose pip 9.0.3 cannot) and an ABI GATE: the staged module must
+  actually import under python3.15 or the build fails.
+- **sby (DISABLED, not shipped):** it hard-depends on `yosys`, so it is taken
+  offline by the same cascade (see below) rather than installing a tool that
+  cannot run. Its own build fixes ARE in place for the day yosys comes back:
+  `build/build-sby.sh` now resolves the interpreter the way
+  `build/build-klayout.sh` does (`LOADOUT_PY_PREFIX`, then the repo's own
+  bootstrap tree, then PATH) instead of calling a bare `python3.15` that the
+  build image does not have, and two more gaps in the same script were fixed:
+  the stage-verify staged `yosys` but not `yosys.bin` (the payload ships the
+  real ELF under that name since the wrapper split), and the staged `sby` fell
+  back to the build image's python3.6 -- which dies on click's `from __future__
+  import annotations` (a 3.7+ feature), so the prove smoke could never have
+  passed.
+
+**NEW MECHANISM: `disabled` -- taking a package out of service.** The registry
+gained a `disabled` flag (with a `disabled_reason` string) so a package whose
+payload is known-broken can be withdrawn from every deployment without
+deleting it. Semantics, as decided by the operator:
+
+- A disabled package is excluded from EVERY sweep (`@shared`, `@shared-all`,
+  `@envs-all`, `@all`) and REFUSED when named directly, with the reason
+  printed.
+- The cascade runs **UP** the dependency chain only, and only through HARD
+  dependencies: a package that hard-depends on a disabled one is offline too
+  (that is how `sby` goes offline with `yosys`), but a package the offline one
+  depends on is NOT (offlining `klayout` leaves `portable-python` alone), and
+  a SOFT `recommends` edge never propagates (a recommendation never forces
+  anything, so it never takes a package out of service).
+- A disabled package pulled in by a GROUP is skipped with a warning (a group
+  is a sweep, not a demand); named directly, it is a hard error.
+- Terminuology note: this is NOT the project's "offline" (which means "no
+  network needed" -- the #1 feature of an offline-first package manager). The
+  flag is called `disabled` for exactly that reason.
+
+**The new gate.** `tests/payload-interpreter-abi` (Tier 1) audits the PAYLOAD
+(not the repo templates) so this class cannot ship again silently: no payload
+ELF may link a `libpython3.X` other than the shipped version; no shipped
+script may PICK an interpreter other than the shipped version (the shapes that
+count are `.../bin/python3.X`, `command -v python3.X` and `env python3.X` --
+a mere mention does not, which is why cloc's language table and taplo's uv
+schema catalog are not false positives); and no shipped extension module may
+carry a `cpython-3XX` tag other than the shipped ABI. It also asserts the
+registry's `portable-python` version matches the shipped archive. Artifacts
+belonging to a DISABLED package are reported but not failed: they cannot reach
+a deployment.
+
+**Why the existing gates missed it.** `tests/prebuilt-binaries` DOES run
+`ldd` in the clean EL8 container and WOULD have failed on `libpython3.14.so.1.0`
+-- but it is a Tier 3 gate (needs `--container`), and no Tier 3 run happened
+after the 3.15 sweep. The new Tier 1 gate needs no container, so it runs on
+every commit.
+
+**THE DURABLE FIX -- fail in seconds, not at release time.** The operator's
+point, and the reason this took hours to unpick: the whole wave was
+INVISIBLE until a user installed on a node that did not have the dev host's
+libraries. The expensive gate (the Tier 3 container smoke) runs at RELEASE
+time, so the feedback loop was "merge -> hours of release prep -> a failed
+install on a farm node -> hours of rebuild". Two gates now close that loop at
+COMMIT time, in seconds, with no container and no network:
+
+- `tests/payload-interpreter-abi` -- the payload must agree with the shipped
+  interpreter (no ELF linking another `libpython3.X`, no script picking
+  another interpreter, no extension module with another ABI tag).
+- `tests/wheelhouse-closure` -- every ENABLED python-tool must resolve
+  offline from the bundled wheelhouse under the shipped interpreter. This is
+  the gate that catches the cp314-wheel-under-a-cp315-interpreter class: it
+  walks each tool's dependency closure over the wheelhouse and requires an
+  installable wheel (cp315 / abi3 / pure-python) at every step, evaluating
+  environment markers so `tomli; python_version < "3.11"` is correctly not a
+  dependency. RED-proof: re-enabling `librelane` in the registry makes it
+  fail with the exact offending wheels named.
+
+Both are in the Tier 1 suite (`tests/run-all --fast`, ~2 min) AND in the
+release gate: `build/release` gained a "Step 0b: Verifying the payload agrees
+with the shipped interpreter" step, so a release can no longer ship a payload
+whose interpreter and contents disagree. The rule this restores: **a payload
+change must be provable by a gate that runs in seconds**; the container smoke
+is the last line of defence, not the first detector.
+
+**Also fixed in passing:** `build/build-shell` now puts the repo's own
+python3.15 bootstrap on PATH inside the build container (the build image
+deliberately does not install python3.15, and several repo scripts carry a
+`#!/usr/bin/env python3.15` shebang -- `strip-all-elf-binaries`,
+`gen-installed-sizes`, `gen-content-manifest` -- so they died with "env:
+'python3.15': No such file or directory"; this is what broke
+`build/build-klayout.sh`'s final strip step). `build/build-sby.sh` (interpreter
+resolution, `yosys.bin` staging, stage interpreter),
+`build/build-klayout.sh` (the 3.15 weakref patch), `build/build-yosys.sh` (the
+pyosys source-build path + ABI gate).
+
 ## 2026-10-21 (1): shared nvim stash is found from the binary, not only LOADOUT_CFG_SHARED_PREFIX
 
 Reported split-deployment failure: userA installs `@shared-all` (shared nvim +

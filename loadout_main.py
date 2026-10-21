@@ -264,6 +264,14 @@ def _load_tool_registry(repo_dir):
       wheels       -- Python wheel basenames bundled offline.
       uv_tool      -- package name passed to 'uv tool install'.
       uv_extras    -- optional extras included in the uv tool requirement.
+      disabled     -- if true, the package is DISABLED: it is excluded from every
+                     sweep (@shared, @shared-all, @envs-all, @all) and installing
+                     it by name is a hard error. Use this for a tool whose
+                     payload is known-broken on the current platform and whose
+                     repair needs a heavy rebuild -- the package stays in the
+                     registry (so `loadout info` still documents it) but it
+                     cannot be pulled into a deployment. Optional string
+                     "disabled_reason" explains why, and is shown by the error.
 
     Files not claimed by any entry are unregistered and always installed.
     """
@@ -336,7 +344,40 @@ _RETIRED_GROUPS = {
 }
 
 
-def expand_groups(names, registry, _stack=None):
+def disabled_packages(registry):
+    """The set of packages that cannot be installed, and why.
+
+    A package is disabled when the registry says so ("disabled": true), or
+    when it HARD-depends on a package that is disabled -- a tool whose required
+    dependency is not installable cannot be installed either. That cascade
+    runs UP the dependency chain only (dependents of a disabled package), and
+    only through HARD dependencies: a soft "recommends" edge never forces
+    anything, so it never takes a package out of service.
+
+    Returns {package_name: reason}. The reason for an explicitly disabled
+    package is its "disabled_reason"; for a package taken out of service by
+    the cascade it names the dependency that put it there.
+    """
+    explicit = {
+        name: entry.get("disabled_reason") or "disabled" for name, entry in registry.items() if entry.get("disabled")
+    }
+    disabled = dict(explicit)
+    # Iterate to a fixed point: the cascade can be several levels deep.
+    changed = True
+    while changed:
+        changed = False
+        for name, entry in registry.items():
+            if name in disabled or name.startswith("@"):
+                continue
+            for dep in entry.get("depends", []):
+                if dep in disabled:
+                    disabled[name] = f"hard-depends on '{dep}', which is disabled ({disabled[dep]})"
+                    changed = True
+                    break
+    return disabled
+
+
+def expand_groups(names, registry, _stack=None, _disabled=None):
     """Expand @group references recursively into leaf package names.
 
     @shared is special: every non-group package except per-user "env" config
@@ -361,6 +402,8 @@ def expand_groups(names, registry, _stack=None):
     """
     if _stack is None:
         _stack = ()
+    if _disabled is None:
+        _disabled = disabled_packages(registry)
     out = set()
     for name in names:
         if name == "all":
@@ -370,7 +413,7 @@ def expand_groups(names, registry, _stack=None):
             raise ResolverError(
                 "bare 'all' is not a group -- did you mean '@all'?\n"
                 "  (the old bare 'all' meant 'every NON-optional package', the opposite of\n"
-                "   what the -all suffix means elsewhere, so it was removed. '@all' now\n"
+                "   what the -all suffix means everywhere else, so it was removed. '@all' now\n"
                 "   means literally everything.)\n"
                 "  bundled tools    : @shared-all\n"
                 "  shell configs    : @envs-all\n"
@@ -381,12 +424,18 @@ def expand_groups(names, registry, _stack=None):
             out |= {
                 n
                 for n, e in registry.items()
-                if not n.startswith("@") and e.get("kind") != "env" and not e.get("optional")
+                if not n.startswith("@") and e.get("kind") != "env" and not e.get("optional") and n not in _disabled
             }
             continue
         if name == "@shared-all":
             # @shared but optionals INCLUDED -- the full shared/read-only tree.
-            out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") != "env"}
+            # Offline packages are excluded here too: "everything installable
+            # right now", not "everything, including what is known broken".
+            out |= {
+                n
+                for n, e in registry.items()
+                if not n.startswith("@") and e.get("kind") != "env" and n not in _disabled
+            }
             continue
         if name == "@envs":
             # env-bash plus env-tcsh: tcsh is the majority interactive shell on
@@ -400,7 +449,11 @@ def expand_groups(names, registry, _stack=None):
             continue
         if name == "@envs-all":
             # Full per-user env set, including optional env packages.
-            out |= {n for n, e in registry.items() if not n.startswith("@") and e.get("kind") == "env"}
+            out |= {
+                n
+                for n, e in registry.items()
+                if not n.startswith("@") and e.get("kind") == "env" and n not in _disabled
+            }
             continue
         if name == "@all":
             # Literally everything. Defined as the union of the two full sweeps
@@ -430,11 +483,26 @@ def expand_groups(names, registry, _stack=None):
                 warn(f"unknown group '{name}' (ignored)")
                 continue
             members = entry.get("members", [])
-            out |= expand_groups(members, registry, _stack + (name,))
+            out |= expand_groups(members, registry, _stack + (name,), _disabled)
             continue
         if name not in registry:
             warn(f"unknown package '{name}' (ignored)")
             continue
+        if name in _disabled:
+            # A DISABLED package pulled in by a group is SKIPPED (a group is a
+            # sweep, not a demand); the same package named DIRECTLY is an
+            # error, because the user asked for it by name.
+            reason = _disabled[name]
+            if _stack:
+                head = reason.split(".")[0][:70]
+                warn(f"skipping disabled package '{name}' ({head}...)")
+                continue
+            raise ResolverError(
+                f"package '{name}' is DISABLED and cannot be installed.\n"
+                f"  reason: {reason}\n"
+                f"  Fix the package first, or drop 'disabled' from its entry in\n"
+                f"  payload/packages.json to bring it back online."
+            )
         out.add(name)
     return out
 
@@ -469,6 +537,20 @@ def walk_depends(names, registry, forbidden=None, force=False):
                         f"package '{name}' hard-depends on '{d}', but '{d}' was passed to --skip. "
                         f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force."
                     )
+                # A DISABLED package cannot be pulled in as a hard
+                # dependency either: the install would be broken by
+                # construction. Same treatment as a --skip'd dep, but the
+                # message names the real cause.
+                if registry.get(d, {}).get("disabled"):
+                    reason = registry.get(d, {}).get("disabled_reason") or "disabled"
+                    if force:
+                        warn(f"package '{name}' hard-depends on disabled '{d}' ({reason}) (--force: continuing)")
+                        continue
+                    raise ResolverError(
+                        f"package '{name}' hard-depends on '{d}', but '{d}' is DISABLED.\n"
+                        f"  reason: {reason}\n"
+                        f"  Either drop '{name}' from the selection, or bring '{d}' back online."
+                    )
                 if d not in out:
                     pending.append(d)
     return out
@@ -490,6 +572,11 @@ def walk_recommends(names, registry, forbidden=None):
                 rec_set = {rec}
             for r in rec_set:
                 if r in forbidden or r in out or r not in registry:
+                    continue
+                # A soft dependency on a DISABLED package is dropped, exactly
+                # like a soft dependency on a --skip'd one: "recommended" never
+                # forces anything, and a disabled package cannot be installed.
+                if registry.get(r, {}).get("disabled"):
                     continue
                 out.add(r)
                 pending.append(r)
@@ -5802,6 +5889,15 @@ def cmd_describe(args, registry):
         return 0
     print("version:     {}".format(entry.get("version", "")))
     print("platforms:   {}".format(", ".join(entry.get("platforms", ["linux"]))))
+    # A disabled package is out of service: say so, and why, before anything
+    # else -- an operator who asks about it must not have to read the
+    # registry to learn it cannot be installed.
+    disabled = disabled_packages(registry)
+    if name in disabled:
+        explicit = entry.get("disabled")
+        state = "DISABLED" if explicit else "DISABLED (cascade)"
+        print(f"status:      {state}")
+        print(f"reason:      {disabled[name]}")
     if entry.get("tags"):
         print("tags:        {}".format(", ".join(entry["tags"])))
     print("description: {}".format(entry.get("description", "")))

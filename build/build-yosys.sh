@@ -261,21 +261,156 @@ fi
 #     the librelane scripts path imports.
 # Dropping them keeps the package at ~49MB instead of ~81MB and leaves exactly
 # ONE copy of every data file on disk.
+#
+# ABI -- WHY THE WHEEL IS NOT USED ANY MORE. The upstream pyosys wheels are
+# published per CPython ABI (cp310 .. cp314t); there is no cp315 wheel, and
+# none can exist until upstream tags one. The payload's interpreter is 3.15,
+# and a cp314 extension REFUSES to load in it:
+#     ImportError: Python version mismatch: module was compiled for Python
+#     3.14, but the interpreter version is incompatible: 3.15.0
+# So the wheel route made `yosys -y` (and every LibreLane stage-5 script,
+# which execs `yosys -y <script.py>`) dead on arrival.
+#
+# The fix is to BUILD the pyosys module for the shipped interpreter from the
+# yosys source tree we already have: upstream's own pyosys/CMakeLists.txt
+# builds the same module (pyosys/wrappers_tpl.cc + kernel/yosys.cc) when
+# YOSYS_WITH_PYTHON=ON. The build needs a pybind11 + cxxheaderparser
+# environment (upstream's FindPyosysEnv.cmake looks for one) and the
+# interpreter's development files -- the payload's own portable-python 3.15
+# provides the headers and libpython3.15.so.
+#
+# The wheel is still fetched and kept as the FALLBACK for the case where this
+# build cannot run (no network, no pip): a cp314 module under a 3.15
+# interpreter is broken, but a missing module is equally broken, and the
+# fallback keeps the tree installable. The ABI check below decides which one
+# is actually usable, and the build fails if NEITHER is.
 PYOSYS_STAGE="$INST/lib/yosys-pyosys"
 rm -rf "$PYOSYS_STAGE" "$WORK/pyosys-x"
 mkdir -p "$PYOSYS_STAGE/pyosys"
-python3 -c "
-import sys, zipfile
-zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
-" "$PYOSYS_WHEEL" "$WORK/pyosys-x"
-cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/libyosys.so" "$PYOSYS_STAGE/pyosys/"
-rm -rf "$WORK/pyosys-x"
-for f in __init__.py libyosys.so; do
-    [ -s "$PYOSYS_STAGE/pyosys/$f" ] || {
-        echo "ERROR: pyosys wheel has no pyosys/$f -- upstream layout changed." >&2
+
+# --- the interpreter the shipped tree will run under ------------------------
+# Same resolution order as build/build-klayout.sh: LOADOUT_PY_PREFIX, then the
+# repo's own bootstrap tree, then ~/.local.
+PY_PREFIX="${LOADOUT_PY_PREFIX:-$REPO/.loadout-bootstrap}"
+[ -d "$PY_PREFIX/include/python3.15" ] || PY_PREFIX="$HOME/.local"
+[ -d "$PY_PREFIX/include/python3.15" ] || {
+    echo "ERROR: no Python 3.15 development prefix (need include/python3.15)." >&2
+    echo "  Set LOADOUT_PY_PREFIX to a portable-python prefix, or install" >&2
+    echo "  portable-python into ~/.local." >&2
+    exit 1
+}
+PY315_INC="$PY_PREFIX/include/python3.15"
+PY315_LIB="$PY_PREFIX/lib/libpython3.15.so"
+for p in "$PY315_INC/Python.h" "$PY315_LIB"; do
+    [ -e "$p" ] || {
+        echo "ERROR: missing $p -- the pyosys build needs the interpreter's" >&2
+        echo "  headers AND its shared library (they must be the SAME build)." >&2
         exit 1
     }
 done
+
+PYOSYS_FROM_SOURCE=0
+echo "==> Building the pyosys module for python3.15 from the yosys source ..."
+# pybind11 + cxxheaderparser: upstream's FindPyosysEnv.cmake accepts a virtualenv
+# that has them. They are build-time only (never packaged) and are pinned to
+# the ranges upstream itself requires.
+#
+# The venv interpreter is a BUILD-TIME helper only -- it runs upstream's
+# pyosys/generator.py (which only needs the pybind11 headers and
+# cxxheaderparser). The module itself is compiled against the SHIPPED
+# interpreter's headers (Python3Devel, pinned to 3.15 below), so the venv's
+# own version does not leak into the artifact.
+#
+# The venv must be a python whose pip can actually resolve pybind11 3.x:
+# EL8's system python3 is 3.6, whose pip (9.0.3) predates the manylinux
+# tags and finds no matching distribution. The build image's python3.12 can.
+VENV="$WORK/pyosys-venv"
+VENV_PY=""
+for cand in python3.12 python3.11 python3.9 python3; do
+    command -v "$cand" >/dev/null 2>&1 || continue
+    rm -rf "$VENV"
+    if "$cand" -m venv "$VENV" >/dev/null 2>&1 \
+        && "$VENV/bin/pip" install -q "pybind11>3,<4" "cxxheaderparser>=1.4" >/dev/null 2>&1; then
+        VENV_PY="$cand"
+        break
+    fi
+done
+if [ -n "$VENV_PY" ]; then
+    PYBIND11_INC=$("$VENV/bin/python" -m pybind11 --includes | tr ' ' '\n' | grep pybind11 | head -1)
+    if [ -n "${PYBIND11_INC:-}" ] && [ -d "$PYBIND11_INC" ]; then
+        (
+            # YOSYS_BUILD_PYTHON_ONLY builds just the pyosys module (and the
+            # yosys core it binds to), skipping the yosys binary we already
+            # built above -- this is upstream's own knob for that.
+            cmake -S "$SRC" -B "$WORK/pyosys-build" \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DYOSYS_WITH_PYTHON=ON \
+                -DYOSYS_BUILD_PYTHON_ONLY=ON \
+                -DYOSYS_INSTALL_PYTHON=ON \
+                -DPython3_EXECUTABLE="$PY_PREFIX/bin/python3.15" \
+                -DPython3_ROOT_DIR="$PY_PREFIX" \
+                -DPython3_INCLUDE_DIR="$PY315_INC" \
+                -DPython3_LIBRARY="$PY315_LIB" \
+                -Dpybind11_INCLUDE_DIR="$PYBIND11_INC" \
+                -DCMAKE_INSTALL_PREFIX="$WORK/pyosys-inst" \
+                -DPyosysEnv_PYTHON="$VENV/bin/python"
+            cmake --build "$WORK/pyosys-build" -j"$(nproc 2>/dev/null || echo 2)"
+            cmake --install "$WORK/pyosys-build"
+        ) > "$WORK/pyosys-build.log" 2>&1 && PYOSYS_FROM_SOURCE=1 || {
+            echo "  WARNING: the pyosys source build failed; tail of log:" >&2
+            tail -20 "$WORK/pyosys-build.log" >&2
+        }
+    else
+        echo "  WARNING: pybind11 headers not found -- cannot build pyosys from source." >&2
+    fi
+else
+    echo "  WARNING: could not create a pybind11/cxxheaderparser venv." >&2
+    echo "           (EL8's system python3 is 3.6, whose pip cannot resolve pybind11 3.x)" >&2
+fi
+
+if [ "$PYOSYS_FROM_SOURCE" -eq 1 ]; then
+    # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}
+    BUILT=$(find "$WORK/pyosys-inst" -name libyosys.so -type f | head -1)
+    INIT=$(find "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f | head -1)
+    if [ -z "$BUILT" ] || [ -z "$INIT" ]; then
+        echo "ERROR: the pyosys source build produced no libyosys.so/__init__.py." >&2
+        exit 1
+    fi
+    cp "$BUILT" "$PYOSYS_STAGE/pyosys/libyosys.so"
+    cp "$INIT" "$PYOSYS_STAGE/pyosys/__init__.py"
+    echo "  pyosys module built for python3.15 (source build)"
+else
+    echo "  falling back to the upstream wheel (cp314 -- needs a 3.14 interpreter)"
+    python3 -c "
+import sys, zipfile
+zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
+" "$PYOSYS_WHEEL" "$WORK/pyosys-x"
+    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/libyosys.so" "$PYOSYS_STAGE/pyosys/"
+    rm -rf "$WORK/pyosys-x"
+fi
+
+for f in __init__.py libyosys.so; do
+    [ -s "$PYOSYS_STAGE/pyosys/$f" ] || {
+        echo "ERROR: pyosys has no $f -- upstream layout changed." >&2
+        exit 1
+    }
+done
+
+# ABI gate: the module MUST load under the interpreter the tree ships. A
+# cp314 module under 3.15 raises "Python version mismatch" on import, which
+# is exactly the defect this build exists to prevent -- so it is checked here,
+# not discovered later by a user running `yosys -y`.
+"$PY_PREFIX/bin/python3.15" -c "
+import sys
+sys.path.insert(0, '$PYOSYS_STAGE')
+from pyosys import libyosys
+print('  pyosys module loads under python3.15')
+" || {
+    echo "ERROR: the staged pyosys module does not load under python3.15." >&2
+    echo "       A cp314 module cannot be used by a 3.15 interpreter -- the" >&2
+    echo "       pyosys source build is required for this payload." >&2
+    exit 1
+}
 
 # Vendor click. LibreLane's synthesis scripts (scripts/pyosys/json_header.py,
 # synthesize.py) `import click`, and the -y process runs under portable-python,

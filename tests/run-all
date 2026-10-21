@@ -279,6 +279,8 @@ run_test "portable-python-ca" tests/portable-python-ca
 run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
+run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
+run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
 run_test "dep-capture" tests/dep-capture
 run_test "oom-guard-reap" "$PY" tests/oom-guard-reap

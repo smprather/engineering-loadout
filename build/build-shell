@@ -39,7 +39,41 @@ if [ -t 0 ] && [ -t 1 ]; then
     tty_flags="-it"
 fi
 
-# shellcheck disable=SC2086  # tty_flags is intentionally word-split (0 or 1 flags)
+# python3.15 on PATH inside the container. The build image deliberately does
+# NOT install python3.15 (build/Dockerfile: loadout self-hosts it), so the
+# repo's own bootstrap tree -- the SAME portable-python the payload ships,
+# extracted by ./loadout -- is put on PATH here. Several repo scripts are
+# `#!/usr/bin/env python3.15` (strip-all-elf-binaries, gen-installed-sizes,
+# gen-content-manifest, gen-readme-table) and the build scripts invoke them
+# by path, so without this they die with "env: 'python3.15': No such file or
+# directory" -- which is how build-klayout.sh's final strip step failed on
+# 2026-10-21.
+#
+# The bootstrap tree is extracted from payload/<platform>/portable-python-*.tar.bz2
+# by the `loadout` shim (offline, no dnf package needed). If it is not there
+# yet, create it here -- the extraction is the shim's cold-bootstrap path.
+BOOT="$REPO/.loadout-bootstrap"
+if [ ! -x "$BOOT/bin/python3.15" ]; then
+    archive=$(ls "$REPO"/payload/*/portable-python-*.tar.bz2 2>/dev/null | head -1)
+    if [ -n "$archive" ]; then
+        archive_root=$(basename "$archive" .tar.bz2)
+        mkdir -p "$BOOT"
+        bzip2 -dc "$archive" | tar xf - -C "$BOOT" --strip-components=2 "$archive_root/local"
+    fi
+fi
+if [ -x "$BOOT/bin/python3.15" ]; then
+    # The container sees the repo at /repo, so the bootstrap is at
+    # /repo/.loadout-bootstrap there -- the HOST path would point at host
+    # directories that do not exist in the container. The image's own PATH is
+    # the base (verified to be exactly what is set below).
+    boot_path="/repo/.loadout-bootstrap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+else
+    echo "WARNING: no python3.15 bootstrap in $BOOT -- repo scripts with a" >&2
+    echo "         python3.15 shebang will fail. Run ./loadout -V first." >&2
+    boot_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+fi
+
+# shellcheck disable=SC2086  # tty_flags is intentionally word-split (1 or 2 flags)
 exec docker run --rm $tty_flags \
     -v "$REPO:/repo" \
     -w /repo \
@@ -48,6 +82,7 @@ exec docker run --rm $tty_flags \
     -v /etc/group:/etc/group:ro \
     -v "$CACHE_DIR:/cache" \
     -e HOME=/tmp \
+    -e PATH="$boot_path" \
     -e LOADOUT_BUILD_CACHE=/cache \
     -e LOADOUT_PATCHELF=/usr/bin/patchelf \
     "$IMAGE" "$@"

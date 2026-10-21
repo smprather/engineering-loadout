@@ -1,0 +1,335 @@
+#!/usr/bin/env python3.15
+"""
+payload-interpreter-abi -- the shipped payloads must agree with the shipped
+interpreter.
+
+The 2026-10-10 Python 3.15 sweep updated the interpreter in the payload
+(portable-python 3.14.7 -> 3.15.0) and swept every REFERENCE to the new
+version across build scripts and docs -- but it did not REBUILD the payloads
+that embed or invoke that interpreter. Four shipped artifacts were left on
+3.14 and broke on every host that does not happen to have a system
+python3.14:
+
+  * klayout  -- the runtime tarball's ELFs NEED libpython3.14.so.1.0, which
+                no longer exists in the tree (portable-python ships 3.15).
+                Every KLayout launcher died with "error while loading shared
+                libraries: libpython3.14.so.1.0".
+  * openroad -- the binary NEEDs libpython3.14.so.1.0 (same failure).
+  * sby      -- the launcher script ran $prefix/bin/python3.14, then fell back
+                to `command -v python3.14`, which resolved to a HOST
+                python3.14 on the dev box and masked the defect.
+  * yosys    -- the launcher script ran $prefix/bin/python3.14 with no
+                fallback, so `yosys -y script.py` was dead everywhere.
+
+This test audits the PAYLOAD (not the repo templates) for stale interpreter
+references, so the class cannot ship again silently:
+
+  1. No ELF in the payload links a libpython3.X other than the version the
+     payload's portable-python provides.
+  2. No interpreter version is referenced by name in a payload that does not
+     match the shipped portable-python version.
+  3. The payload's Python extension modules are built for the shipped ABI
+     (the cpython-3XX tag on a .so must match).
+
+Exits 0 when the payload is consistent, 1 otherwise.
+"""
+
+import bz2
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import tarfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PLATFORM_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28")
+PAYLOADS_JSON = os.path.join(REPO, "payload", "packages.json")
+
+FAILURES = []
+
+
+def fail(msg):
+    FAILURES.append(msg)
+    print(f"  FAIL  {msg}")
+
+
+def ok(msg):
+    print(f"  OK    {msg}")
+
+
+def shipped_python_version():
+    """The interpreter version the payload ships, from the archive name."""
+    archives = [f for f in os.listdir(PLATFORM_DIR) if f.startswith("portable-python-") and f.endswith(".tar.bz2")]
+    if not archives:
+        return None
+    m = re.search(r"portable-python-(\d+\.\d+\.\d+)", archives[0])
+    return m.group(1) if m else None
+
+
+def payload_files():
+    """Every shipped payload file: (relpath, bytes).
+
+    Reads .bz2 blobs and the members of .tar.bz2 runtime archives without
+    extracting anything to disk.
+    """
+    out = []
+    bin_dir = os.path.join(PLATFORM_DIR, "bin")
+    for name in sorted(os.listdir(bin_dir)):
+        path = os.path.join(bin_dir, name)
+        if not os.path.isfile(path):
+            continue
+        if name.endswith(".bz2"):
+            try:
+                with bz2.open(path, "rb") as fh:
+                    out.append((f"bin/{name}", fh.read()))
+            except OSError:
+                continue
+        else:
+            with open(path, "rb") as fh:
+                out.append((f"bin/{name}", fh.read()))
+
+    lib64 = os.path.join(PLATFORM_DIR, "lib64")
+    for name in sorted(os.listdir(lib64)):
+        path = os.path.join(lib64, name)
+        if not os.path.isfile(path):
+            continue
+        if name.endswith(".bz2"):
+            try:
+                with bz2.open(path, "rb") as fh:
+                    out.append((f"lib64/{name}", fh.read()))
+            except OSError:
+                continue
+        else:
+            with open(path, "rb") as fh:
+                out.append((f"lib64/{name}", fh.read()))
+
+    runtime = os.path.join(PLATFORM_DIR, "runtime")
+    for name in sorted(os.listdir(runtime)):
+        path = os.path.join(runtime, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            if name.endswith(".tar.bz2"):
+                with bz2.open(path, "rb") as fh:
+                    data = fh.read()
+                with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+                    for member in tf.getmembers():
+                        if not member.isfile():
+                            continue
+                        fobj = tf.extractfile(member)
+                        if fobj is None:
+                            continue
+                        out.append((f"runtime/{name}:{member.name}", fobj.read()))
+            elif name.endswith(".bz2"):
+                with bz2.open(path, "rb") as fh:
+                    out.append((f"runtime/{name}", fh.read()))
+        except OSError, tarfile.TarError:
+            continue
+    return out
+
+
+def elf_dynamic(data):
+    """The DT_NEEDED sonames of an ELF blob (via readelf on a temp file)."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".elf", delete=True) as fh:
+        fh.write(data)
+        fh.flush()
+        try:
+            proc = subprocess.run(["readelf", "-d", fh.name], capture_output=True, timeout=30)
+        except OSError, subprocess.TimeoutExpired:
+            return []
+    text = proc.stdout.decode("utf-8", "replace")
+    return re.findall(r"\(NEEDED\).*?\[([^\]]+)\]", text)
+
+
+def disabled_packages():
+    """Packages marked disabled in the registry.
+
+    A disabled package is excluded from every install sweep, so its payload is
+    NOT part of any deployment -- a stale artifact there cannot break a user.
+    It is still reported (so the debt stays visible) but it does not fail the
+    gate.
+    """
+    try:
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+    except OSError, KeyError, json.JSONDecodeError:
+        return set()
+    return {name for name, entry in packages.items() if entry.get("disabled")}
+
+
+def disabled_artifacts(disabled):
+    """Map payload file paths -> the disabled package that owns them.
+
+    A payload file belongs to a package through the registry's "archive"
+    (a runtime tarball), "bins" (bin/ stems) and "libs" (lib64/ stems).
+    """
+    if not disabled:
+        return {}
+    try:
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+    except OSError, KeyError, json.JSONDecodeError:
+        return {}
+    owned = {}
+    for name in disabled:
+        entry = packages.get(name, {})
+        archive = entry.get("archive")
+        if archive:
+            owned[f"runtime/{os.path.basename(archive)}"] = name
+        for stem in entry.get("bins", []):
+            owned[f"bin/{stem}.bz2"] = name
+        for stem in entry.get("libs", []):
+            owned[f"lib64/{stem}.bz2"] = name
+    return owned
+
+
+def main():
+    version = shipped_python_version()
+    if not version:
+        fail("no portable-python archive in payload/ -- cannot audit the ABI")
+        return 1
+    short = ".".join(version.split(".")[:2])  # 3.15
+    ok(f"payload ships portable-python {version} (expecting libpython{short}.so)")
+
+    disabled = disabled_packages()
+    disabled_owned = disabled_artifacts(disabled)
+    if disabled:
+        ok(f"disabled (excluded from every sweep): {', '.join(sorted(disabled))}")
+
+    files = payload_files()
+    ok(f"scanned {len(files)} shipped payload files")
+
+    # An artifact owned by a disabled package is not part of any deployment,
+    # so it cannot break a user -- it is reported, not failed.
+    def owner(rel):
+        """The disabled package owning this payload file, if any."""
+        for path, pkg in disabled_owned.items():
+            if rel == path or rel.startswith(path + ":"):
+                return pkg
+        return None
+
+    # --- 1. ELF DT_NEEDED against the shipped libpython ----------------------
+    stale_needed = {}
+    disabled_stale = []
+    for rel, data in files:
+        if not data.startswith(b"\x7fELF"):
+            continue
+        for soname in elf_dynamic(data):
+            m = re.match(r"libpython(\d+\.\d+)\.so", soname)
+            if not m:
+                continue
+            if m.group(1) == short:
+                continue
+            pkg = owner(rel)
+            if pkg:
+                disabled_stale.append(f"{pkg}: {rel} -> {soname}")
+                continue
+            stale_needed.setdefault(m.group(1), []).append(f"{rel} -> {soname}")
+    for found, users in sorted(stale_needed.items()):
+        fail(
+            f"payload ELF links libpython{found}.so but the payload ships "
+            f"libpython{short}.so -- {len(users)} file(s), e.g. {users[0]}"
+        )
+    if not stale_needed:
+        ok(f"no payload ELF links a libpython other than {short}")
+    for note in sorted(set(disabled_stale)):
+        ok(f"disabled package, not installed: {note}")
+
+    # --- 2. interpreter references by name in payload scripts/strings -------
+    # Only LOAD-BEARING references count: a reference that PICKS a specific
+    # interpreter version to execute. Three shapes qualify:
+    #
+    #   .../bin/python3.X        a path to an interpreter in the install tree
+    #   command -v python3.X     an explicit version lookup on PATH
+    #   #!/usr/bin/env python3.X a shebang
+    #
+    # A mere mention is NOT a dependency and must not fail the gate: cloc
+    # ships a table of every language it knows ("'python3.10' => 'Python'"),
+    # which names versions without ever running one.
+    PICK = re.compile(
+        r"bin/python3\.(\d+)"  # a path to an interpreter
+        r"|(?:command -v|which)\s+python3\.(\d+)"  # an explicit version lookup
+        r"|env\s+python3\.(\d+)"  # a shebang / env exec
+    )
+    stale_ref = {}
+    disabled_refs = []
+    for rel, data in files:
+        if data.startswith(b"\x7fELF"):
+            continue
+        if b"\x00" in data[:4096]:
+            continue  # not text
+        # Only EXECUTABLE SCRIPTS can pick an interpreter. A data file that
+        # merely mentions one (taplo's uv.json schema catalog lists
+        # "bin/python3.10" among the interpreters uv can install) is not a
+        # dependency. The marker is the shebang: a shipped launcher is a
+        # script, a data file is not.
+        if not data.startswith(b"#!"):
+            continue
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        for m in PICK.finditer(text):
+            found = next(g for g in m.groups() if g)
+            if found == short.split(".")[1]:
+                continue
+            if not re.fullmatch(r"1[0-9]", found):
+                continue
+            line_no = text.count("\n", 0, m.start()) + 1
+            pkg = owner(rel)
+            if pkg:
+                disabled_refs.append(f"{pkg}: {rel}:{line_no}: {m.group(0)}")
+                continue
+            stale_ref.setdefault(f"3.{found}", []).append(f"{rel}:{line_no}: {m.group(0)}")
+    for found, users in sorted(stale_ref.items()):
+        fail(
+            f"payload picks python{found} but the payload ships python{short} -- {len(users)} site(s), e.g. {users[0]}"
+        )
+    if not stale_ref:
+        ok(f"no payload script picks an interpreter other than python{short}")
+    for note in sorted(set(disabled_refs)):
+        ok(f"disabled package, not installed: {note}")
+
+    # --- 3. extension modules built for the shipped ABI ---------------------
+    stale_ext = {}
+    for rel, _data in files:
+        if not rel.startswith("runtime/"):
+            continue
+        for m in re.finditer(r"cpython-(\d)(\d+)[-.]", rel):
+            abi = f"{m.group(1)}.{m.group(2)}"
+            if abi != short:
+                stale_ext.setdefault(abi, []).append(rel)
+    for abi, users in sorted(stale_ext.items()):
+        fail(
+            f"payload ships cpython-{abi} extension modules but the payload "
+            f"ships python{short} -- {len(users)} file(s), e.g. {users[0]}"
+        )
+    if not stale_ext:
+        ok(f"no payload extension module is built for an ABI other than {short}")
+
+    # --- 4. the registry's portable-python version must match ---------------
+    try:
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+        reg_version = packages.get("portable-python", {}).get("version", "")
+    except OSError, KeyError, json.JSONDecodeError:
+        reg_version = ""
+    if reg_version and not reg_version.startswith(short):
+        fail(f"registry says portable-python {reg_version}, but the payload archive ships {version}")
+    else:
+        ok(f"registry portable-python version matches the archive ({reg_version})")
+
+    print()
+    if FAILURES:
+        print(f"payload-interpreter-abi: {len(FAILURES)} failure(s)")
+        return 1
+    print("payload-interpreter-abi: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
