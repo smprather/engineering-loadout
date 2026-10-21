@@ -1,0 +1,61 @@
+#!/bin/sh
+# Split deployment: userA installs the shared nvim + offline stash, userB
+# installs only env-nvim and puts the shared <root>/bin on PATH (no
+# LOADOUT_CFG_SHARED_PREFIX). The running binary must find the shared stash and
+# the private git from its own location; otherwise lazy bootstraps from github
+# and fails offline even though the stash is right there.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# A dev shell's exported prefix would make the installer clone from the REAL
+# shared stash into the test HOME, masking the bug this test exists to catch.
+unset LOADOUT_CFG_SHARED_PREFIX LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR 2>/dev/null || true
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/loadout-nvim-shared.XXXXXX")"
+trap 'chmod -R u+w "$TMP" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+A="$TMP/a"
+B="$TMP/b"
+S="$TMP/shared"
+mkdir -p "$A" "$B" "$S"
+
+HOME="$A" "$REPO/loadout" install -y nvim nvim-plugin-stash git-nvim --dest-dir "$S" --no-backup \
+    >"$TMP/a.log" 2>&1 || { tail -20 "$TMP/a.log" >&2; fail "shared install failed"; }
+HOME="$B" "$REPO/loadout" install -y env-nvim --no-backup \
+    >"$TMP/b.log" 2>&1 || { tail -20 "$TMP/b.log" >&2; fail "env-nvim install failed"; }
+
+[ -d "$S/share/nvim/loadout/vendor/plugin-stash" ] || fail "shared stash missing"
+[ -x "$S/lib/loadout-git/bin/git" ] || fail "private git missing"
+
+# Clean env, no shared-prefix variable, only the shared bin on PATH (so the
+# system git is invisible too). The private git wrapper needs `dirname`; give
+# it that one tool without re-exposing /usr/bin/git.
+TOOLBIN="$TMP/toolbin"
+mkdir -p "$TOOLBIN"
+ln -s "$(command -v dirname)" "$TOOLBIN/dirname"
+OUT="$TMP/out"
+env -i HOME="$B" PATH="$S/bin:$TOOLBIN" TERM=xterm LANG=C.UTF-8 \
+    https_proxy=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 \
+    LOADOUT_ONLINE=0 \
+    "$S/bin/nvim" --headless -n \
+    '+lua print("LOADOUT-PLUGINS=" .. tostring(vim.g.loadout_plugins_enabled)); print("LOADOUT-GIT=" .. tostring(vim.fn.executable("git"))); print("LOADOUT-STASH=" .. tostring(vim.g.cfg_nvim_plugin_stash_dir))' \
+    '+qa' >"$OUT" 2>&1 || true
+
+grep -qxF 'LOADOUT-PLUGINS=true' "$OUT" \
+    || { tail -30 "$OUT" >&2; fail "nvim disabled the plugin layer"; }
+grep -qxF 'LOADOUT-GIT=1' "$OUT" \
+    || { tail -30 "$OUT" >&2; fail "nvim did not find the private git"; }
+grep -qxF "LOADOUT-STASH=$S/share/nvim/loadout/vendor/plugin-stash" "$OUT" \
+    || { tail -30 "$OUT" >&2; fail "nvim did not resolve the shared stash"; }
+
+lazy="$B/.local/share/nvim/lazy/lazy.nvim"
+[ -d "$lazy/.git" ] || { tail -30 "$OUT" >&2; fail "lazy.nvim was not cloned"; }
+origin=$(git -C "$lazy" remote get-url origin 2>/dev/null || true)
+[ "$origin" = "$S/share/nvim/loadout/vendor/plugin-stash/folke/lazy.nvim.git" ] \
+    || fail "lazy.nvim origin is not the shared stash: $origin"
+
+count=$(find "$B/.local/share/nvim/lazy" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+[ "$count" -ge 2 ] || fail "only $count lazy plugin(s) cloned from the stash"
+
+echo "install-nvim-shared-stash: OK"

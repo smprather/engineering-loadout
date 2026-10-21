@@ -202,7 +202,6 @@ sha256  0c96f55b889aa8f44e9c5fd893c5c36169f1ef255376b281777509261efa7f1b  payloa
 sha256  0caa2987e274d06aeb8f9a8a521c8348fc0dd92683b52a303338d066f0432137  payload/treesitter/vendor/nvim-treesitter/runtime/queries/typescript/highlights.scm
 sha256  0cbd57c368113b6af493830edcd010e8fe7a9a82726f2e726527ed59a664cd61  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/smali.lua
 sha256  0cc9651013ba9bb73bcc46853baa3694d6c67d2fecd283a3db54c42aa724bb81  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/terraform.lua
-sha256  0ccbd86907d6c2adffcfc508c472dec1aeeb0c8f8e6f0b06eda667a1db598540  payload/installed-sizes.json
 sha256  0cd875c190e1f677f02154aa729f292c342b854c447db50fcb8e5095cf149f4a  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hyprlang/highlights.scm
 sha256  0cd875c190e1f677f02154aa729f292c342b854c447db50fcb8e5095cf149f4a  payload/treesitter/vendor/nvim-treesitter/runtime/queries/hyprlang/highlights.scm
 sha256  0cf125b035a8df384f9d8c7399757fac36f2b96a3d8f694e2ea769aadb9f6a42  payload/treesitter/vendor/nvim-treesitter/tests/indent/ql/module.ql
@@ -1684,6 +1683,7 @@ sha256  64281d317455089b5cdb984d1537accdd8ea3b621684bb69df2aa1b409137ccb  payloa
 sha256  64642270adc2de29054092008fc530be2f315e8a5b124e4e7d45f6bbea80c3f6  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/heex.so.bz2
 sha256  646dd8c85beb770d4abbbd38fd39be0f22e86397be05ee6406fb4347c9725069  payload/treesitter/vendor/nvim-treesitter/lua/nvim-treesitter/init.lua
 sha256  6475072a3c6bf3fdca22d286373b994c18ed33265acb675218207f5086d39adc  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/git_rebase.lua
+sha256  6483fe70e5411cf58349d9b3030ea3118ad9a77434805e87e9b418cf22b920e5  payload/installed-sizes.json
 sha256  6484c292b37d3c11d6e2a9a6fc8c3ab9a6a3630a5bac6f9c5e291a5e9599901b  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/devicetree/locals.scm
 sha256  6484c292b37d3c11d6e2a9a6fc8c3ab9a6a3630a5bac6f9c5e291a5e9599901b  payload/treesitter/vendor/nvim-treesitter/runtime/queries/devicetree/locals.scm
 sha256  6485faa08fa544ebc4170382f1be3edb69646456824045c75742a16e6912d74b  envs/tmux/vendor/plugins.lock

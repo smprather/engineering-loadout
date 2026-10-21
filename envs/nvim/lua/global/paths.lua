@@ -19,10 +19,48 @@
 -- read-only payloads (the 251 MB treesitter parser set, the plugin catalog) shared
 -- once instead of copied per user, while letting any user override a directory
 -- simply by having their own.
+--
+-- The shared root comes from LOADOUT_CFG_SHARED_PREFIX when the shell baked it,
+-- but `env-nvim` alone does not bake it. So also derive the root from the running
+-- nvim binary (<root>/bin/nvim -> <root> when <root>/share/nvim exists). Without
+-- that fallback, a user who just puts the shared <root>/bin on PATH falls back to
+-- github for every plugin -- and fails offline even though the shared stash is
+-- right there.
 
 local M = {}
 
-local shared = os.getenv("LOADOUT_CFG_SHARED_PREFIX")
+--- All shared install roots, most explicit first.
+--- @return string[]
+local function shared_roots()
+    local roots = {}
+    local env = os.getenv("LOADOUT_CFG_SHARED_PREFIX")
+    if env and env ~= "" then
+        table.insert(roots, env)
+    end
+
+    local prog = vim.v.progpath or ""
+    if prog ~= "" then
+        local exe = vim.fn.resolve(vim.fn.fnamemodify(prog, ":p"))
+        if vim.fn.fnamemodify(exe, ":t") == "nvim" then
+            local bin = vim.fn.fnamemodify(exe, ":h")
+            local root = vim.fn.fnamemodify(bin, ":h")
+            -- <root>/share/nvim is the nvim package's install_to outside HOME
+            -- (plain prefix) or inside a HOME root (<home>/.local).
+            if vim.fn.isdirectory(root .. "/share/nvim") == 1 then
+                local seen = false
+                for _, known in ipairs(roots) do
+                    if known == root then
+                        seen = true
+                    end
+                end
+                if not seen then
+                    table.insert(roots, root)
+                end
+            end
+        end
+    end
+    return roots
+end
 
 --- Resolve a path under nvim's data dir, preferring $HOME then the shared tree.
 --- @param rel string  e.g. "tree-sitter-parsers" or "loadout/vendor/nvim-treesitter"
@@ -32,8 +70,8 @@ function M.data(rel)
     if vim.fn.isdirectory(home_path) == 1 then
         return home_path
     end
-    if shared and shared ~= "" then
-        local shared_path = shared .. "/share/nvim/" .. rel
+    for _, root in ipairs(shared_roots()) do
+        local shared_path = root .. "/share/nvim/" .. rel
         if vim.fn.isdirectory(shared_path) == 1 then
             return shared_path
         end
@@ -56,8 +94,8 @@ end
 --- @return string|nil absolute path, or nil when the file exists in neither tree
 function M.share(rel)
     local candidates = { vim.fn.expand("~/.local/share/") .. rel }
-    if shared and shared ~= "" then
-        table.insert(candidates, shared .. "/share/" .. rel)
+    for _, root in ipairs(shared_roots()) do
+        table.insert(candidates, root .. "/share/" .. rel)
     end
     for _, path in ipairs(candidates) do
         if vim.fn.filereadable(path) == 1 then
@@ -70,7 +108,13 @@ end
 --- The offline plugin stash (bare git mirrors), or nil when there is none.
 --- With a stash present, lazy clones plugins FROM IT instead of github, and
 --- :Lazy update fetches from it -- so plugin updates work with no network.
+--- LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR / vim.g.cfg_nvim_plugin_stash_dir wins when
+--- it points at an existing directory (documented override).
 function M.stash()
+    local override = vim.g.cfg_nvim_plugin_stash_dir
+    if type(override) == "string" and override ~= "" and vim.fn.isdirectory(override) == 1 then
+        return override
+    end
     local dir = M.data("loadout/vendor/plugin-stash")
     if vim.fn.isdirectory(dir) == 1 then
         return dir
@@ -90,13 +134,30 @@ function M.ensure_git()
     if vim.fn.executable("git") == 1 then
         return true
     end
-    for _, root in ipairs({ vim.fn.expand("~/.local"), os.getenv("LOADOUT_CFG_SHARED_PREFIX") or "" }) do
-        if root ~= "" then
-            local bin = root .. "/lib/loadout-git/bin"
-            if vim.fn.executable(bin .. "/git") == 1 then
-                vim.env.PATH = bin .. ":" .. vim.env.PATH
-                return true
+    local roots = { vim.fn.expand("~/.local") }
+    for _, root in ipairs(shared_roots()) do
+        table.insert(roots, root)
+    end
+    for _, root in ipairs(roots) do
+        local bin = root .. "/lib/loadout-git/bin"
+        if vim.fn.executable(bin .. "/git") == 1 then
+            -- The private git is an EL8 build, so it needs the loadout's
+            -- OpenSSL 1.1 (libcrypto.so.1.1) on hosts that only ship OpenSSL 3
+            -- (Arch/Debian). Add the install root's lib dirs for nvim's
+            -- subprocesses only; the user's shell is untouched.
+            local libdirs = {}
+            for _, dir in ipairs({ root .. "/lib64", root .. "/lib" }) do
+                if vim.fn.isdirectory(dir) == 1 then
+                    table.insert(libdirs, dir)
+                end
             end
+            if #libdirs > 0 then
+                local existing = vim.env.LD_LIBRARY_PATH
+                vim.env.LD_LIBRARY_PATH =
+                    table.concat(libdirs, ":") .. (existing and existing ~= "" and (":" .. existing) or "")
+            end
+            vim.env.PATH = bin .. ":" .. vim.env.PATH
+            return true
         end
     end
     return false
