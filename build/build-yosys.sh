@@ -310,6 +310,14 @@ for p in "$PY315_INC/Python.h" "$PY315_LIB"; do
 done
 
 PYOSYS_FROM_SOURCE=0
+PYOSYS_CACHED=0
+# The pyosys compile is the expensive step (~15 min) and every last-mile
+# failure used to throw it away, because $WORK is a fresh mktemp that the
+# EXIT trap removes. Cache the built module under a persistent prefix so a
+# re-run is a copy instead of a rebuild -- the same pattern
+# build/build-openroad.sh uses for its OR-Tools build.
+PYOSYS_CACHE="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/yosys-pyosys-${tag}"
+PYOSYS_CACHE_STAMP="$PYOSYS_CACHE/.loadout-pyosys-1"
 echo "==> Building the pyosys module for python3.15 from the yosys source ..."
 # pybind11 + cxxheaderparser: upstream's FindPyosysEnv.cmake accepts a virtualenv
 # that has them. They are build-time only (never packaged) and are pinned to
@@ -326,16 +334,34 @@ echo "==> Building the pyosys module for python3.15 from the yosys source ..."
 # tags and finds no matching distribution. The build image's python3.12 can.
 VENV="$WORK/pyosys-venv"
 VENV_PY=""
-for cand in python3.12 python3.11 python3.9 python3; do
-    command -v "$cand" >/dev/null 2>&1 || continue
-    rm -rf "$VENV"
-    if "$cand" -m venv "$VENV" >/dev/null 2>&1 \
-        && "$VENV/bin/pip" install -q "pybind11>3,<4" "cxxheaderparser>=1.4" >/dev/null 2>&1; then
-        VENV_PY="$cand"
-        break
-    fi
-done
-if [ -n "$VENV_PY" ]; then
+# A cached module from an earlier run of the SAME tag is reused as-is: the
+# compile is the long pole and its output does not depend on anything that
+# changes between runs of the same tag. This is checked BEFORE the venv is
+# built, because a cached module does not need the build-time venv at all.
+if [ "${YOSYS_NO_CACHE:-0}" != "1" ] \
+    && [ -f "$PYOSYS_CACHE_STAMP" ] \
+    && [ -s "$PYOSYS_CACHE/pyosys/liblyosys.so" ] \
+    && [ -s "$PYOSYS_CACHE/pyosys/__init__.py" ]; then
+    echo "  reusing the cached pyosys module in $PYOSYS_CACHE (YOSYS_NO_CACHE=1 to force)"
+    mkdir -p "$PYOSYS_STAGE/pyosys"
+    cp "$PYOSYS_CACHE/pyosys/liblyosys.so" "$PYOSYS_CACHE/pyosys/__init__.py" \
+        "$PYOSYS_STAGE/pyosys/"
+    PYOSYS_FROM_SOURCE=1
+    PYOSYS_CACHED=1
+fi
+if [ "$PYOSYS_CACHED" -eq 0 ]; then
+    for cand in python3.12 python3.11 python3.9 python3; do
+        command -v "$cand" >/dev/null 2>&1 || continue
+        rm -rf "$VENV"
+        if "$cand" -m venv "$VENV" >/dev/null 2>&1 \
+            && "$VENV/bin/pip" install -q "pybind11>3,<4" "cxxheaderparser>=1.4" >/dev/null 2>&1; then
+            VENV_PY="$cand"
+            break
+        fi
+    done
+fi
+
+if [ "$PYOSYS_FROM_SOURCE" -eq 0 ] && [ -n "$VENV_PY" ]; then
     # `python -m pybind11 --includes` prints COMPILER FLAGS ("-I<dir>"), so the
     # leading -I has to come off before the path can be tested or handed to
     # cmake as an include directory.
@@ -391,7 +417,7 @@ else
     echo "           (EL8's system python3 is 3.6, whose pip cannot resolve pybind11 3.x)" >&2
 fi
 
-if [ "$PYOSYS_FROM_SOURCE" -eq 1 ]; then
+if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
     # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}
     # The pyosys PACKAGE lands in $WORK/pyosys-site/pyosys (that is what
     # YOSYS_INSTALL_PYTHON_SITEDIR points at); the yosys binaries and headers
@@ -408,14 +434,26 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 1 ]; then
     fi
     cp "$BUILT" "$PYOSYS_STAGE/pyosys/libyosys.so"
     cp "$INIT" "$PYOSYS_STAGE/pyosys/__init__.py"
+    # Keep the built module for the next run (see PYOSYS_CACHE above). The
+    # stamp is written only now, so an interrupted build never leaves a
+    # half-cached module behind that a later run would reuse.
+    if [ "${YOSYS_NO_CACHE:-0}" != "1" ]; then
+        mkdir -p "$PYOSYS_CACHE/pyosys"
+        cp "$PYOSYS_STAGE/pyosys/liblyosys.so" "$PYOSYS_STAGE/pyosys/__init__.py" \
+            "$PYOSYS_CACHE/pyosys/"
+        printf '%s\n' "$tag" "$PYOSYS_STAGE/pyosys/liblyosys.so" \
+            "$PYOSYS_STAGE/pyosys/__init__.py" > "$PYOSYS_CACHE_STAMP"
+    fi
     echo "  pyosys module built for python3.15 (source build)"
+elif [ "$PYOSYS_CACHED" -eq 1 ]; then
+    echo "  pyosys module reused from the cache ($PYOSYS_CACHE)"
 else
     echo "  falling back to the upstream wheel (cp314 -- needs a 3.14 interpreter)"
     python3 -c "
 import sys, zipfile
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 " "$PYOSYS_WHEEL" "$WORK/pyosys-x"
-    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/libyosys.so" "$PYOSYS_STAGE/pyosys/"
+    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/liblyosys.so" "$PYOSYS_STAGE/pyosys/"
     rm -rf "$WORK/pyosys-x"
 fi
 
