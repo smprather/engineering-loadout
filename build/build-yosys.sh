@@ -393,12 +393,15 @@ fi
 
 if [ "$PYOSYS_FROM_SOURCE" -eq 1 ]; then
     # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}
-    BUILT=$(find "$WORK/pyosys-inst" -name libyosys.so -type f | head -1)
-    INIT=$(find "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f | head -1)
+    # The pyosys PACKAGE lands in $WORK/pyosys-site/pyosys (that is what
+    # YOSYS_INSTALL_PYTHON_SITEDIR points at); the yosys binaries and headers
+    # land in $WORK/pyosys-inst. Look in both.
+    BUILT=$(find "$WORK/pyosys-site" "$WORK/pyosys-inst" -name libyosys.so -type f 2>/dev/null | head -1)
+    INIT=$(find "$WORK/pyosys-site" "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f 2>/dev/null | head -1)
     if [ -z "$BUILT" ] || [ -z "$INIT" ]; then
         echo "ERROR: the pyosys source build produced no libyosys.so/__init__.py." >&2
-        echo "  install tree:" >&2
-        find "$WORK/pyosys-inst" -maxdepth 6 2>/dev/null | head -30 >&2
+        echo "  install trees:" >&2
+        find "$WORK/pyosys-site" "$WORK/pyosys-inst" -maxdepth 4 2>/dev/null | head -30 >&2
         echo "  build log tail:" >&2
         tail -30 "$WORK/pyosys-build.log" >&2
         exit 1
