@@ -202,6 +202,17 @@ def report_timeline(path, limit=12):
         print(f"  {sum(secs) / len(secs):8.1f}s avg {max(secs):8.1f}s max  n={len(secs):<3d} {gate}")
     print()
 
+    # The payload REBUILDS are the dominant cost of a release and they are not
+    # release gates: they are timed by build/build-shell and land here as
+    # "build:<script>". Report them on their own, because "which rebuild ate
+    # the afternoon" is the question that gets asked.
+    rebuilds = {g: s for g, s in allgates.items() if g.startswith("build:")}
+    if rebuilds:
+        print("=== PAYLOAD REBUILDS (build/build-shell) -- the dominant release cost")
+        for gate, secs in sorted(rebuilds.items(), key=lambda kv: -sum(kv[1]))[:limit]:
+            print(f"  {sum(secs) / len(secs):8.1f}s avg {max(secs):8.1f}s max  n={len(secs):<3d} {gate}")
+        print()
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

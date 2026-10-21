@@ -73,8 +73,36 @@ else
     boot_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 fi
 
+# --- timing (first-class requirement) --------------------------------------
+# The release gates and the test suite are timed, but the DOMINANT cost of a
+# release is the payload REBUILDS: openroad 60-90 min, strace-ui ~35 min,
+# klayout ~25 min -- none of which the release gates see. build-shell is the
+# MANDATED entry point for all payload work (build/Dockerfile: "do all
+# compiling/packaging/payload-mutating work in this container via
+# build/build-shell"), so timing it HERE captures every rebuild with no
+# per-script change.
+#
+# The row lands in the same tracked timeline as the release gates
+# (assurance/release-timings.tsv), so "where did the release time go" has
+# the rebuilds in it and not just the two-minute gates. The gate name is
+# "build:<script>" -- build:build-openroad.sh, build:build-klayout.sh, ...
+#
+# `exec` is replaced by a foreground run so the duration can be measured; the
+# container still gets the terminal (docker run -it) and the host shell
+# forwards SIGINT to the foreground process group, so an interactive session
+# still interrupts the container.
+_t_start=$(date +%s)
+_t_label="build:shell"
+for _t_arg in "$@"; do
+    case "$_t_arg" in
+        -*) continue ;;
+        *.sh|*/build-*) _t_label="build:$(basename "$_t_arg")"; break ;;
+    esac
+done
+
 # shellcheck disable=SC2086  # tty_flags is intentionally word-split (1 or 2 flags)
-exec docker run --rm $tty_flags \
+_t_rc=0
+docker run --rm $tty_flags \
     -v "$REPO:/repo" \
     -w /repo \
     -u "$(id -u):$(id -g)" \
@@ -85,4 +113,18 @@ exec docker run --rm $tty_flags \
     -e PATH="$boot_path" \
     -e LOADOUT_BUILD_CACHE=/cache \
     -e LOADOUT_PATCHELF=/usr/bin/patchelf \
-    "$IMAGE" "$@"
+    "$IMAGE" "$@" || _t_rc=$?
+
+_t_end=$(date +%s)
+# Timing data must never fail a build.
+{
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "$_t_label" \
+        "$((_t_end - _t_start))" \
+        "$([ "$_t_rc" -eq 0 ] && echo PASS || echo FAIL)" \
+        "build-shell" \
+        >> "$REPO/assurance/release-timings.tsv"
+} 2>/dev/null || true
+
+exit "$_t_rc"

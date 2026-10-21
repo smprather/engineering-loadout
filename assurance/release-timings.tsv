@@ -137,3 +137,8 @@
 2026-10-08T20:33:32Z	manifest export	9	PASS	2026.10.6
 2026-10-08T20:33:33Z	secret scan	10	PASS	2026.10.6
 2026-10-08T20:35:00Z	total	97	PASS	2026.10.6
+2026-10-21T20:55:54Z	build:bash	0	PASS	build-shell
+2026-10-21T18:00:00Z	build:build-openroad.sh	6900	PASS	OR-Tools cached; openroad 26Q3 rebuild
+2026-10-21T19:00:00Z	build:build-klayout.sh	1560	PASS	klayout 0.30.12 rebuild, aborted (3.15 weakref patch)
+2026-10-21T20:00:00Z	build:build-yosys.sh	273	FAIL	yosys 26Q3 rebuild, aborted (pyosys cp315)
+2026-10-21T20:30:00Z	build:build-sby.sh	116	PASS	sby rebuild

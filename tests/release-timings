@@ -25,6 +25,7 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TIMINGS = os.path.join(REPO, "assurance", "release-timings.tsv")
 RELEASE = os.path.join(REPO, "build", "release")
+BUILD_SHELL = os.path.join(REPO, "build", "build-shell")
 BOTTLENECKS = os.path.join(REPO, "build", "bottlenecks")
 HEADER = "# utc-timestamp\tgate\tseconds\tstatus\tdetail"
 
@@ -84,6 +85,21 @@ def main():
     check(
         "the gate result path calls the append helper",
         "_log_gate_result" in release_src and release_src.count("_append_release_timing") >= 2,
+    )
+
+    print("-- the payload rebuilds are timed too")
+    # The DOMINANT cost of a release is the payload REBUILDS (openroad 60-90
+    # min, strace-ui ~35 min, klayout ~25 min); the release gates never see
+    # them. build-shell is the mandated entry point for all payload work, so
+    # timing it there is what makes the rebuilds visible.
+    with open(BUILD_SHELL, encoding="utf-8", errors="replace") as fh:
+        shell_src = fh.read()
+    check("build/build-shell times its invocations", "_t_start" in shell_src and "_t_end" in shell_src)
+    check("build/build-shell writes to the tracked timeline", "release-timings.tsv" in shell_src)
+    check("build/build-shell labels the gate by script", "_t_label" in shell_src)
+    check(
+        "build/build-shell still propagates the exit status",
+        'exit "$_t_rc"' in shell_src,
     )
 
     print("-- the data is actionable")
