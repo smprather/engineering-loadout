@@ -15,7 +15,11 @@ set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tmp_root=${TMPDIR:-/tmp}
 work=$(mktemp -d "$tmp_root/loadout-fonts-shared.XXXXXX")
-trap 'rm -rf "$work"' EXIT
+# The installed tree is SEALED read-only (0444 files, 0555 dirs) on purpose,
+# so a plain `rm -rf` cannot remove it: the cleanup leaks the whole tree into
+# /tmp, and the next test that installs a shared tree then dies with ENOSPC.
+# Make it writable first, then remove it.
+trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
 basic_path="/usr/bin:/bin:/usr/sbin:/sbin"
 
 fail() {

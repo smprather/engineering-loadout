@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # Offline end-to-end smoke for parity-plot's CLI and bundled NiceGUI designer.
+#
+# parity-plot was DISABLED on 2026-10-21 (its bundled dependency closure has
+# no cp315 wheel, so it cannot be installed offline under the shipped
+# interpreter). A disabled package is refused by name, so this test asks the
+# registry first: while parity-plot is disabled it reports that and exits 0
+# -- the coverage comes back the moment the package does, without anyone
+# having to remember to re-add it.
 
 set -euo pipefail
 
@@ -23,6 +30,11 @@ fail() {
     echo "parity-plot smoke failed: $*" >&2
     exit 1
 }
+
+if "$repo_dir/loadout" info parity-plot 2>/dev/null | grep -q '^status: *DISABLED'; then
+    echo "parity-plot is disabled -- skipping its smoke (it comes back with the package)"
+    exit 0
+fi
 
 echo "Installing parity-plot into: $dest_dir"
 env -i \

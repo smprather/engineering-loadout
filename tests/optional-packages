@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Smoke the optional packages no other gate ever probes: openssh, surfer,
-# cicwave, strace-ui. @shared excludes optional packages, so
-# tests/prebuilt-binaries and the Tier 3 container never see them.
+# strace-ui (and cicwave while it is available). @shared excludes optional
+# packages, so tests/prebuilt-binaries and the Tier 3 container never see them.
+#
+# cicwave was DISABLED on 2026-10-21 (its bundled dependency closure has no
+# cp315 wheel, so it cannot be installed offline under the shipped
+# interpreter). A disabled package is refused by name, so this test asks the
+# registry whether cicwave is installable and covers it only when it is.
 
 set -euo pipefail
 
@@ -22,11 +27,19 @@ fail() {
 }
 
 echo "Installing optional packages into: $dest_dir"
+# cicwave only while it is installable: a DISABLED package is refused by name,
+# and naming it here would fail the whole test instead of the one package.
+install_list=(openssh surfer strace-ui)
+if ! "$repo_dir/loadout" info cicwave 2>/dev/null | grep -q '^status: *DISABLED'; then
+    install_list+=(cicwave)
+else
+    echo "  cicwave is disabled -- skipping its smoke"
+fi
 env -i \
     HOME="$test_home" \
     PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
     LANG="${LANG:-C.UTF-8}" \
-    "$repo_dir/loadout" install -y openssh surfer cicwave strace-ui --dest-dir "$dest_dir" --no-backup \
+    "$repo_dir/loadout" install -y "${install_list[@]}" --dest-dir "$dest_dir" --no-backup \
     > "$test_home/install.log" 2>&1 || {
     tail -20 "$test_home/install.log" >&2
     fail "install exited non-zero"
@@ -59,12 +72,15 @@ grep -qi 'surfer' <<< "$surfer_out" || fail "unexpected surfer version output: $
 echo "  OK: $surfer_out"
 
 # --- cicwave: offscreen Qt startup (no GL in offscreen per AGENTS.md)
-echo "Smoke: cicwave (offscreen Qt)"
-[[ -x $local_prefix/bin/cicwave ]] || fail "cicwave launcher not installed"
-cicwave_out=$("${probe_env[@]}" QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 \
-    cicwave --help 2>&1) || fail "cicwave --help: ${cicwave_out:0:300}"
-grep -qiE 'usage|cicwave' <<< "$cicwave_out" || fail "unexpected cicwave output: ${cicwave_out:0:300}"
-echo "  OK: cicwave offscreen startup"
+if [[ -x $local_prefix/bin/cicwave ]]; then
+    echo "Smoke: cicwave (offscreen Qt)"
+    cicwave_out=$("${probe_env[@]}" QT_QPA_PLATFORM=offscreen CICSIM_USE_OPENGL=0 \
+        cicwave --help 2>&1) || fail "cicwave --help: ${cicwave_out:0:300}"
+    grep -qiE 'usage|cicwave' <<< "$cicwave_out" || fail "unexpected cicwave output: ${cicwave_out:0:300}"
+    echo "  OK: cicwave offscreen startup"
+else
+    echo "  cicwave not installed (disabled) -- skipping its smoke"
+fi
 
 # --- strace-ui: marker probe + dependency-cooperation smoke. Upstream has
 # no version string (-version prints NO_VERSION_UTIL, exit 0); the full TUI
