@@ -336,7 +336,10 @@ for cand in python3.12 python3.11 python3.9 python3; do
     fi
 done
 if [ -n "$VENV_PY" ]; then
-    PYBIND11_INC=$("$VENV/bin/python" -m pybind11 --includes | tr ' ' '\n' | grep pybind11 | head -1)
+    # `python -m pybind11 --includes` prints COMPILER FLAGS ("-I<dir>"), so the
+    # leading -I has to come off before the path can be tested or handed to
+    # cmake as an include directory.
+    PYBIND11_INC=$("$VENV/bin/python" -m pybind11 --includes | tr ' ' '\n' | grep pybind11 | head -1 | sed -e 's/^-I//')
     if [ -n "${PYBIND11_INC:-}" ] && [ -d "$PYBIND11_INC" ]; then
         (
             # YOSYS_BUILD_PYTHON_ONLY builds just the pyosys module (and the
@@ -353,6 +356,13 @@ if [ -n "$VENV_PY" ]; then
                 -DPython3_LIBRARY="$PY315_LIB" \
                 -Dpybind11_INCLUDE_DIR="$PYBIND11_INC" \
                 -DCMAKE_INSTALL_PREFIX="$WORK/pyosys-inst" \
+                # The pyosys package normally lands in the INTERPRETER's
+                # site-packages (YOSYS_INSTALL_PYTHON_SITEDIR defaults to
+                # Python3_SITEARCH) -- which here is the repo's own bootstrap
+                # tree, i.e. it would write into the checkout and be found
+                # nowhere near the build output. Point it at the build dir so
+                # the module is staged where the script can find it.
+                -DYOSYS_INSTALL_PYTHON_SITEDIR="$WORK/pyosys-site" \
                 -DPyosysEnv_PYTHON="$VENV/bin/python"
             cmake --build "$WORK/pyosys-build" -j"$(nproc 2>/dev/null || echo 2)"
             cmake --install "$WORK/pyosys-build"
@@ -374,6 +384,10 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 1 ]; then
     INIT=$(find "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f | head -1)
     if [ -z "$BUILT" ] || [ -z "$INIT" ]; then
         echo "ERROR: the pyosys source build produced no libyosys.so/__init__.py." >&2
+        echo "  install tree:" >&2
+        find "$WORK/pyosys-inst" -maxdepth 6 2>/dev/null | head -30 >&2
+        echo "  build log tail:" >&2
+        tail -30 "$WORK/pyosys-build.log" >&2
         exit 1
     fi
     cp "$BUILT" "$PYOSYS_STAGE/pyosys/libyosys.so"
