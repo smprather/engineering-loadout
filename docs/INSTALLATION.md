@@ -284,6 +284,13 @@ Neovim itself needs `git` to clone from the stash; `git-nvim` (in `@shared-all`)
 provides a private one for boxes with no system git. See the full behavior in
 `AGENTS.md` -> "nvim plugin stash delivery".
 
+The shared root is resolved user-copy-first, then from
+`LOADOUT_CFG_SHARED_PREFIX`, then from the running binary itself
+(`<root>/bin/nvim` -> `<root>/share/nvim`). A user who installs only `env-nvim`
+and puts the shared `<root>/bin` on `PATH` therefore finds the shared stash and
+private git without exporting any variable. `LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR`
+still overrides the stash location.
+
 **Deploying to a farm or an air-gapped site** -- where the network policy varies
 and a shared filesystem is read-only on the secure side -- is documented
 step-by-step, per network state, in

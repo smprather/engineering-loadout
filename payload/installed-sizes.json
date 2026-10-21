@@ -1630,7 +1630,7 @@
     "envs/nvim/lsp/zls.lua": 270,
     "envs/nvim/lua/global/config.lua": 6053,
     "envs/nvim/lua/global/init.lua": 19766,
-    "envs/nvim/lua/global/paths.lua": 4273,
+    "envs/nvim/lua/global/paths.lua": 6901,
     "envs/nvim/lua/global/plugins/blink_cmp.lua": 895,
     "envs/nvim/lua/global/plugins/bufdel.lua": 57,
     "envs/nvim/lua/global/plugins/catalog.lua": 13606,

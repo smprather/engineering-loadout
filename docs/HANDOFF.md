@@ -1,5 +1,39 @@
 # Current Handoff
 
+## 2026-10-21 (1): shared nvim stash is found from the binary, not only LOADOUT_CFG_SHARED_PREFIX
+
+Reported split-deployment failure: userA installs `@shared-all` (shared nvim +
+stash + private git), userB installs only `env-nvim` and puts the shared
+`<root>/bin` on PATH. Starting nvim fell back to `https://github.com` for
+`lazy.nvim` and failed offline -- the shared stash was present but invisible.
+
+Reproduced with two temp HOMEs and a temp prefix: with a clean environment
+(`env -i`, no `LOADOUT_CFG_SHARED_PREFIX`) and github blackholed, nvim reported
+`plugins=false` and `fatal: unable to access 'https://github.com/...'`. The
+stash resolved to `~/.local/share/nvim/loadout/vendor/plugin-stash` (absent)
+because `paths.lua` only consulted the env var.
+
+Fix in `envs/nvim/lua/global/paths.lua`:
+- `shared_roots()` returns `LOADOUT_CFG_SHARED_PREFIX` first, then the root
+  inferred from the running binary (`vim.v.progpath` -> `<root>/bin/nvim`, with
+  `<root>/share/nvim` present, realpath-resolved). `M.data`/`M.share` search the
+  user path first, then every root.
+- `M.stash()` honors `LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR` /
+  `vim.g.cfg_nvim_plugin_stash_dir` (documented override; previously set but
+  never read).
+- `M.ensure_git()` searches the derived roots too and prepends
+  `<root>/lib64:<root>/lib` for the EL8 private git, whose `libcrypto.so.1.1`
+  is absent on OpenSSL-3-only hosts.
+
+New T2 `tests/install-nvim-shared-stash`: installs `nvim` +
+`nvim-plugin-stash` + `git-nvim` into a temp prefix and `env-nvim` into a temp
+HOME, then runs the shared nvim with `env -i`, PATH containing only the shared
+bin (no system git; a `dirname` shim lets the private-git wrapper run) and
+github blackholed. Asserts `loadout_plugins_enabled`, the resolved stash path,
+`lazy.nvim` origin == the shared stash, and >=2 cloned plugins. Verified:
+`plugins=true`, private git discovered, 24 plugins cloned from the shared stash
+with no network. `install-nvim-deployments` and Tier 1 stay green.
+
 ## 2026-10-20 (5): home-dir tmux config merged into the managed layers
 
 The live `~/.config/tmux/tmux-user.conf` still carried three settings that the
