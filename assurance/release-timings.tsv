@@ -411,3 +411,9 @@
 2026-10-21T22:08:16Z	test:oom-guard-reap	1	PASS	mode=all
 2026-10-21T22:08:25Z	test:check-installer	9	PASS	mode=all
 2026-10-21T22:08:25Z	test:st-wrapper	0	PASS	mode=all
+2026-10-21T22:08:26Z	test:env-helix-config	1	PASS	mode=all
+2026-10-21T22:08:26Z	test:update-cadence	0	PASS	mode=all
+2026-10-21T22:08:26Z	test:release-tag-scheme	0	PASS	mode=all
+2026-10-21T22:08:27Z	test:security-pipeline	1	PASS	mode=all
+2026-10-21T22:08:27Z	test:check-versions-contract	0	PASS	mode=all
+2026-10-21T22:08:27Z	test:total	125	PASS	flags=--fast
