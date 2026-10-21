@@ -650,6 +650,37 @@ def _log_gate_result(result, seconds, detail=""):
     if "SKIPPED" in (result.output or ""):
         status = "SKIP"
     _log_runtime("release", result.name, seconds, status, detail)
+    _append_release_timing(result.name, seconds, status, detail)
+
+
+# The release gate's own timings, kept IN THE REPO so the history of "how long
+# did a release take, and which gate was the critical path" is in git rather
+# than in a cache that gets wiped. A gate that was 12 s last release and 170 s
+# this one is a regression nobody FELT -- with this file, the diff shows it.
+RELEASE_TIMINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assurance", "release-timings.tsv")
+RELEASE_TIMINGS_HEADER = "# utc-timestamp\tgate\tseconds\tstatus\tdetail\n"
+
+
+def _append_release_timing(gate, seconds, status, detail=""):
+    """Append one gate's duration to the tracked release-timings file."""
+    path = os.path.abspath(RELEASE_TIMINGS)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.path.exists(path):
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(RELEASE_TIMINGS_HEADER)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(
+                "{}\t{}\t{:.1f}\t{}\t{}\n".format(
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    gate,
+                    seconds,
+                    status,
+                    (detail or "").replace("\t", " "),
+                )
+            )
+    except OSError:
+        pass  # timing data must never block a release
 
 
 def _kill_descendants():

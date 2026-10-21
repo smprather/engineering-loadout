@@ -310,6 +310,7 @@ sha256  119fb06e14eeb9ad6155eaf29451b093107bb2efe1f41c75e60326014ed2919e  payloa
 sha256  11b1e0adac789acbedcbb25ecd6623c27d9362761320375abed1d56c02cc7bfb  envs/tmux/vendor/plugins/tmux-persist/tests/test_session_name_sanitization.sh
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/djot/folds.scm
 sha256  11e2ddc7a3a8be46928e7bff4c290abe0defe04b672034df3b23ea07569743a9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/djot/folds.scm
+sha256  11e6e558175e45ea5f3c696c5a6688a79f2d23b9e6c048089c96a85e28c97e91  payload/installed-sizes.json
 sha256  1200c9e3a7dfff71e864c4b975bb9a1af899a54c1bb7ddd4409fd423804dd772  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/issue-4525.c
 sha256  1205fd8432bf74e6407693b3397595ee6b4b58fad2bde65c76a65e4fffbb575c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/templ.so.bz2
 sha256  120bafb011c7cd01389fc6cc68d3df8a299989e52ecb5aeeaae71f1d33d4a9f4  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/t32/comments.cmm
@@ -399,7 +400,6 @@ sha256  16ecb93d0038c8757ab12bca7cf172d6f65e65769f436d1c396bd3da4f5447fc  payloa
 sha256  16f0575edf08a00fbca39eb52936fb533841dde179ddf3cd88e38c99247afdae  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/glimmer/indents.scm
 sha256  16f0575edf08a00fbca39eb52936fb533841dde179ddf3cd88e38c99247afdae  payload/treesitter/vendor/nvim-treesitter/runtime/queries/glimmer/indents.scm
 sha256  16fb1705b4d8bd15e5bb5a920e658d63156b3e0c792553f7d9834a6aa1ef1640  payload/el8.x86_64.glibc2p28/bin/wish.bz2
-sha256  170ce1165432bb5a7ff4f6dc9eb1801c5afd75f3b2a57407eedf8b8f1ffe6d18  payload/installed-sizes.json
 sha256  170d5587a503a2933e303fdfffe2df3e41a004af2d46424bea9a4dc7647a3462  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/pkl.so.bz2
 sha256  1716c04604c492f4786029caa0e603c7a6f1009ae25b8017ed43736dbf3fa0a6  envs/tmux/vendor/plugins/tmux-persist/scripts/continuum_restore_compat.sh
 sha256  17303b74890867f161e48dd96a5ec3ff374be3c885ab22d4edd0a5865b62d946  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/gomod/highlights.scm

@@ -1,0 +1,106 @@
+#!/usr/bin/env python3.15
+"""
+release-timings -- enforce the project's timing requirement.
+
+The project requires that every non-trivial action is TIMED and that the
+timing lands somewhere durable and comparable (AGENTS.md, "Timing
+Requirement"). Two things must therefore hold, and this gate checks both:
+
+  1. The TRACKED timeline `assurance/release-timings.tsv` exists, has the
+     right header, and every row parses -- a corrupted timeline is worse
+     than none, because it looks like data.
+  2. `build/release` actually WRITES to it (the file is named in the release
+     script, and the write helper is present). A requirement whose sink
+     silently stops being written is worse than no requirement at all.
+
+It also checks that `build/bottlenecks` can read the timeline, because the
+point of collecting the data is that somebody can act on it.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import os
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TIMINGS = os.path.join(REPO, "assurance", "release-timings.tsv")
+RELEASE = os.path.join(REPO, "build", "release")
+BOTTLENECKS = os.path.join(REPO, "build", "bottlenecks")
+HEADER = "# utc-timestamp\tgate\tseconds\tstatus\tdetail"
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def main():
+    print("-- the tracked timeline")
+    check("assurance/release-timings.tsv exists", os.path.isfile(TIMINGS), TIMINGS)
+    if not os.path.isfile(TIMINGS):
+        return 1
+
+    with open(TIMINGS, encoding="utf-8", errors="replace") as fh:
+        lines = [ln.rstrip("\n") for ln in fh]
+    check("the timeline has a header", bool(lines) and lines[0].startswith("# utc-timestamp"), lines[:1])
+
+    rows = []
+    bad = []
+    for lineno, line in enumerate(lines[1:], start=2):
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 4:
+            bad.append(f"line {lineno}: {len(parts)} fields")
+            continue
+        try:
+            seconds = float(parts[2])
+        except ValueError:
+            bad.append(f"line {lineno}: seconds={parts[2]!r}")
+            continue
+        if seconds < 0:
+            bad.append(f"line {lineno}: negative seconds")
+            continue
+        rows.append((parts[0], parts[1], seconds, parts[3]))
+    check("every row parses", not bad, "; ".join(bad[:3]))
+    check("the timeline is not empty", len(rows) > 0, f"{len(rows)} rows")
+
+    gates = {r[1] for r in rows}
+    check("it records the release gates", len(gates) >= 3, f"gates seen: {sorted(gates)[:6]}")
+
+    print("-- the release script writes to it")
+    with open(RELEASE, encoding="utf-8", errors="replace") as fh:
+        release_src = fh.read()
+    check("build/release names the timeline file", "release-timings.tsv" in release_src)
+    check("build/release has the append helper", "_append_release_timing" in release_src)
+    check(
+        "the gate result path calls the append helper",
+        "_log_gate_result" in release_src and release_src.count("_append_release_timing") >= 2,
+    )
+
+    print("-- the data is actionable")
+    check("build/bottlenecks exists", os.path.isfile(BOTTLENECKS), BOTTLENECKS)
+    if os.path.isfile(BOTTLENECKS):
+        with open(BOTTLENECKS, encoding="utf-8", errors="replace") as fh:
+            bn = fh.read()
+        check("bottlenecks reads the tracked timeline", "release-timings.tsv" in bn)
+        check("bottlenecks can report the critical path", "CRITICAL PATH" in bn)
+
+    print()
+    if FAILED:
+        print(f"{PASSED} passed, {FAILED} failed")
+        return 1
+    print(f"{PASSED} passed, 0 failed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

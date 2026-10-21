@@ -1,0 +1,238 @@
+#!/usr/bin/env python3.15
+"""
+bottlenecks -- where the release time actually goes.
+
+The repo already COLLECTS the timings: tests/run-all and build/release append
+one row per test / per release gate to
+  ${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/ci-runtimes.tsv
+  <utc-timestamp> <scope> <name> <seconds> <status> <detail>
+
+but nothing ever READS it, so the cache grows silently and the slow parts
+stay invisible. This turns that log into the answer:
+
+  * per release gate, and per test, ranked by wall time
+  * the CRITICAL PATH of a release: the gates run in parallel, so the release
+    is bounded by the SLOWEST gate, not by their sum
+  * a snapshot written next to the log, so two releases can be compared
+    (this is the part that finds the bottlenecks over time: a gate that was
+    12 s last quarter and 170 s now is a regression nobody felt)
+
+Usage:
+  build/bottlenecks                 # report from the collected log
+  build/bottlenecks --save NAME     # also write a snapshot named NAME
+  build/bottlenecks --compare A B   # diff two snapshots
+  build/bottlenecks --log PATH      # read a different log
+"""
+
+import argparse
+import os
+import statistics
+import sys
+from collections import defaultdict
+
+DEFAULT_LOG = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+    "engineering-loadout",
+    "ci-runtimes.tsv",
+)
+# The TRACKED timeline: every release's gate durations, in the repo, so the
+# history of "where did the time go" survives a wiped cache and shows up in
+# the git diff of a release.
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RELEASE_TIMINGS = os.path.join(REPO, "assurance", "release-timings.tsv")
+SNAP_DIR = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+    "engineering-loadout",
+    "timing-snapshots",
+)
+
+
+def read_rows(path):
+    """[(ts, scope, name, seconds, status)] from the runtime log."""
+    rows = []
+    if not os.path.isfile(path):
+        return rows
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 5:
+                continue
+            try:
+                seconds = float(parts[3])
+            except ValueError:
+                continue
+            rows.append((parts[0], parts[1], parts[2], seconds, parts[4]))
+    return rows
+
+
+def latest_release(rows):
+    """The timestamp of the most recent release-scope row."""
+    stamps = [ts for ts, scope, *_ in rows if scope == "release"]
+    return max(stamps) if stamps else None
+
+
+def report(rows, limit=15):
+    by_name = defaultdict(list)
+    for _ts, scope, name, seconds, _status in rows:
+        by_name[(scope, name)].append(seconds)
+
+    for scope, title in (
+        ("release", "RELEASE GATES"),
+        ("run-all", "TEST SUITE"),
+    ):
+        entries = [(n, v) for (s, n), v in by_name.items() if s == scope and n != "total"]
+        if not entries:
+            continue
+        entries.sort(key=lambda e: -sum(e[1]))
+        print(f"=== {title} (total time accumulated, slowest first)")
+        for name, secs in entries[:limit]:
+            print(f"  {sum(secs):9.1f}s  avg {statistics.mean(secs):7.1f}s  n={len(secs):<4d} {name}")
+        print()
+
+    # The release runs its gates in parallel (4 workers), so the wall time is
+    # bounded by the SLOWEST gate, not the sum. That is the number to watch.
+    rel = [r for r in rows if r[1] == "release" and r[2] != "total"]
+    if rel:
+        last = latest_release(rows)
+        gate_secs = [(r[2], r[3]) for r in rel if r[0] == last]
+        if gate_secs:
+            slowest = max(gate_secs, key=lambda g: g[1])
+            print("=== CRITICAL PATH of the last release (gates run in parallel)")
+            for name, secs in sorted(gate_secs, key=lambda g: -g[1]):
+                print(f"  {secs:9.1f}s  {name}")
+            print(f"  -> bounded by the slowest gate: {slowest[0]} ({slowest[1]:.1f}s)")
+            print()
+
+
+def snapshot(rows, name):
+    """A per-gate/per-test timing snapshot, for release-to-release comparison."""
+    os.makedirs(SNAP_DIR, exist_ok=True)
+    path = os.path.join(SNAP_DIR, f"{name}.tsv")
+    by_name = defaultdict(list)
+    for _ts, scope, name_, seconds, _status in rows:
+        by_name[(scope, name_)].append(seconds)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("scope\tname\tlast_seconds\tmedian_seconds\truns\n")
+        for (scope, item), secs in sorted(by_name.items()):
+            fh.write(f"{scope}\t{item}\t{secs[-1]:.1f}\t{statistics.median(secs):.1f}\t{len(secs)}\n")
+    print(f"wrote snapshot: {path}")
+    return path
+
+
+def compare(a, b):
+    """Diff two snapshots: what got slower, what got faster."""
+
+    def load(path):
+        out = {}
+        with open(path, encoding="utf-8") as fh:
+            next(fh, None)
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) >= 4:
+                    out[(parts[0], parts[1])] = float(parts[2])
+        return out
+
+    old, new = load(a), load(b)
+    rows = []
+    for key in set(old) | set(new):
+        o, n = old.get(key), new.get(key)
+        if o is None:
+            rows.append((n - 0, key, o, n, "NEW"))
+        elif n is None:
+            rows.append((0 - o, key, o, n, "gone"))
+        else:
+            rows.append((n - o, key, o, n, ""))
+    rows.sort(key=lambda r: -abs(r[0]))
+    print(f"=== {os.path.basename(a)} -> {os.path.basename(b)}")
+    print("  delta      old      new  scope/name")
+    for delta, key, o, n, tag in rows[:25]:
+        if abs(delta) < 0.5:
+            continue
+        print(f"  {delta:+8.1f}s  {o or 0:7.1f} {n or 0:7.1f}  {key[0]}/{key[1]} {tag}".rstrip())
+
+
+def read_release_timeline(path):
+    """The TRACKED per-release gate timeline: [(release_tag, gate, seconds)]."""
+    out = []
+    if not os.path.isfile(path):
+        return out
+    release = None
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            try:
+                seconds = float(parts[2])
+            except ValueError:
+                continue
+            detail = parts[4] if len(parts) > 4 else ""
+            if parts[1] == "total":
+                release = detail or parts[0]
+                continue
+            out.append((detail or release or "?", parts[1], seconds))
+    return out
+
+
+def report_timeline(path, limit=12):
+    """Per-release view of the tracked timeline: which gate was the critical path."""
+    rows = read_release_timeline(path)
+    if not rows:
+        print(f"no tracked release timeline at {path}")
+        return
+    by_release = defaultdict(list)
+    for release, gate, seconds in rows:
+        by_release[release].append((gate, seconds))
+    print(f"=== TRACKED RELEASE TIMELINE ({len(by_release)} releases, {path})")
+    print("  release              critical gate        gate time   gate total")
+    for release in sorted(by_release):
+        gates = by_release[release]
+        slowest = max(gates, key=lambda g: g[1])
+        total = sum(s for _g, s in gates)
+        print(f"  {release[:20]:20s}  {slowest[0][:20]:20s}  {slowest[1]:8.1f}s  {total:9.1f}s")
+    print()
+    allgates = defaultdict(list)
+    for _r, gate, seconds in rows:
+        allgates[gate].append(seconds)
+    print("=== gate cost across releases (avg / max)")
+    for gate, secs in sorted(allgates.items(), key=lambda kv: -sum(kv[1]))[:limit]:
+        print(f"  {sum(secs) / len(secs):8.1f}s avg {max(secs):8.1f}s max  n={len(secs):<3d} {gate}")
+    print()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--log", default=DEFAULT_LOG, help="runtime log to read")
+    ap.add_argument("--save", metavar="NAME", help="write a timing snapshot")
+    ap.add_argument("--compare", nargs=2, metavar=("A", "B"), help="diff two snapshots")
+    ap.add_argument("--limit", type=int, default=15, help="rows per section")
+    ap.add_argument("--timeline", action="store_true", help="report the tracked release timeline")
+    args = ap.parse_args()
+
+    if args.compare:
+        compare(args.compare[0], args.compare[1])
+        return 0
+
+    if args.timeline:
+        report_timeline(RELEASE_TIMINGS, args.limit)
+        return 0
+
+    rows = read_rows(args.log)
+    if not rows:
+        print(f"no runtime data at {args.log} -- run ./tests/run-all or ./build/release first")
+        return 0
+
+    print(f"runtime log: {args.log} ({len(rows)} rows)")
+    print()
+    report(rows, args.limit)
+
+    if args.save:
+        snapshot(rows, args.save)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

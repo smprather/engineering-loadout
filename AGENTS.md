@@ -33,6 +33,19 @@ Default install root (the shared tree) is `$XDG_DATA_HOME/loadout` (`~/.local/sh
 
 Gates: `sh -n loadout`; `python3 -m py_compile loadout_main.py`; `bash -n envs/bash/global/bashrc`; first-party Python stays ruff-formatted (`ruff format --check --force-exclude`, T1; py314 so multi-except parens are stripped); headless nvim needs temp state dirs: `XDG_CACHE_HOME=/tmp/codex-nvim-cache XDG_STATE_HOME=/tmp/codex-nvim-state nvim --headless +qa`.
 
+## Timing Requirement (first-class, always)
+
+**Every non-trivial action must be TIMED, and the timing must land somewhere durable and comparable.** This is a standing project requirement, not a habit of a session: releases here are dominated by long builds and container gates, and without data the slow parts are invisible until someone is waiting on them.
+
+Rules:
+- Time EVERY non-trivial action: a build, a payload rebuild, a test suite, a release gate, a container run, a long investigation. A trivial command (< a few seconds) does not need a timer.
+- The timing must be RECORDED, not just observed in the terminal. Terminal output dies with the scrollback; a number nobody wrote down cannot be compared against the next run.
+- The sink is `assurance/release-timings.tsv` (TRACKED, in the repo): `<utc-timestamp> <gate> <seconds> <status> <detail>`. `build/release` appends every gate's duration to it, so the release history -- and which gate was the CRITICAL PATH, since the gates run in parallel -- is in git, and the diff of a release shows what got slower.
+- The per-test/per-gate detail goes to the local runtime log `~/.cache/engineering-loadout/ci-runtimes.tsv` (one row per test / per gate).
+- READ the data with `build/bottlenecks` (ranked gates and tests, the critical path of the last release) and `build/bottlenecks --timeline` (the tracked per-release history). `build/bottlenecks --save NAME` writes a snapshot and `--compare A B` diffs two.
+- When a release or a long build feels slow, the FIRST move is to measure it and add the row -- not to guess. A gate that was 12 s last release and 170 s this one is a regression nobody FELT; with the tracked file, the diff shows it.
+- `tests/release-timings` (T1) enforces the plumbing: the tracked file exists, parses, and is actually written by `build/release`. A requirement nobody checks is a requirement nobody keeps.
+
 ## Build Machine Mandate
 
 Dev platform moved 2026-09-01: AlmaLinux 8.10 WSL2 → CachyOS (Arch-family, glibc 2.44, kernel 6.x). The EL8 build machine is now the **`loadout-build` docker container** (`build/Dockerfile`, base `almalinux:8.10`, glibc 2.28, base gcc 8.5.0 + gcc-toolset-14 at `/opt/rh/gcc-toolset-14/enable`). Enter via `build/build-shell [cmd]` (bind-mounts repo at `/repo`, runs as invoking uid).

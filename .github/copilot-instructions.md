@@ -20,6 +20,18 @@ so only a 3.14+ interpreter can parse it -- never run an older Python or analyze
 identical to the parenthesized one; `ruff format`, `target-version = "py314"`, strips
 the parentheses).
 
+## Timing Requirement (first-class, always)
+
+Time EVERY non-trivial action -- builds, payload rebuilds, test suites, release
+gates, container runs, long investigations -- and RECORD the number, not just
+watch it scroll by. The sink is `assurance/release-timings.tsv` (tracked in
+the repo; `build/release` appends every gate's duration), the per-test detail
+goes to `~/.cache/engineering-loadout/ci-runtimes.tsv`, and
+`build/bottlenecks [--timeline]` reads both (ranked gates/tests + the critical
+path of the last release). Releases here are dominated by long builds; without
+the data the slow parts stay invisible. `tests/release-timings` (T1) enforces
+the plumbing.
+
 ## Key Commands
 
 ```bash
