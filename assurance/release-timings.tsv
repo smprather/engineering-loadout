@@ -583,3 +583,4 @@
 2026-10-21T22:58:28Z	test:install-xdesk	21	FAIL	mode=auto
 2026-10-21T22:58:28Z	test:completion in sync	0	PASS	mode=all
 2026-10-21T22:58:28Z	test:total	1498	FAIL	flags=
+2026-10-21T23:04:05Z	build:build-yosys.sh	232	FAIL	build-shell

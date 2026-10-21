@@ -341,29 +341,42 @@ if [ -n "$VENV_PY" ]; then
     # cmake as an include directory.
     PYBIND11_INC=$("$VENV/bin/python" -m pybind11 --includes | tr ' ' '\n' | grep pybind11 | head -1 | sed -e 's/^-I//')
     if [ -n "${PYBIND11_INC:-}" ] && [ -d "$PYBIND11_INC" ]; then
+        # Upstream's FindPyosysEnv.cmake finds the pybind11/cxxheaderparser
+        # environment itself, and it OVERWRITES the PyosysEnv_PYTHON cache
+        # variable with its own detection -- so -DPyosysEnv_PYTHON does not
+        # survive. Its "virtualenv" strategy reads $VIRTUAL_ENV, which is what
+        # has to be set.
+        VIRTUAL_ENV="$VENV"
+        export VIRTUAL_ENV
+        PATH="$VENV/bin:$PATH"
+        export PATH
         (
             # YOSYS_BUILD_PYTHON_ONLY builds just the pyosys module (and the
             # yosys core it binds to), skipping the yosys binary we already
             # built above -- this is upstream's own knob for that.
+            #
+            # The pyosys package normally lands in the INTERPRETER's
+            # site-packages (YOSYS_INSTALL_PYTHON_SITEDIR defaults to
+            # Python3_SITEARCH) -- which here is the repo's own bootstrap
+            # tree, i.e. it would write into the checkout and be found
+            # nowhere near the build output. Point it at the build dir so the
+            # module is staged where this script can find it.
+            #
+            # NOTE: no comment may sit between the backslashes of a continued
+            # command -- a comment ends the command, and the rest of the flags
+            # runs as a command of its own.
             cmake -S "$SRC" -B "$WORK/pyosys-build" \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DYOSYS_WITH_PYTHON=ON \
                 -DYOSYS_BUILD_PYTHON_ONLY=ON \
                 -DYOSYS_INSTALL_PYTHON=ON \
+                -DYOSYS_INSTALL_PYTHON_SITEDIR="$WORK/pyosys-site" \
                 -DPython3_EXECUTABLE="$PY_PREFIX/bin/python3.15" \
                 -DPython3_ROOT_DIR="$PY_PREFIX" \
                 -DPython3_INCLUDE_DIR="$PY315_INC" \
                 -DPython3_LIBRARY="$PY315_LIB" \
                 -Dpybind11_INCLUDE_DIR="$PYBIND11_INC" \
-                -DCMAKE_INSTALL_PREFIX="$WORK/pyosys-inst" \
-                # The pyosys package normally lands in the INTERPRETER's
-                # site-packages (YOSYS_INSTALL_PYTHON_SITEDIR defaults to
-                # Python3_SITEARCH) -- which here is the repo's own bootstrap
-                # tree, i.e. it would write into the checkout and be found
-                # nowhere near the build output. Point it at the build dir so
-                # the module is staged where the script can find it.
-                -DYOSYS_INSTALL_PYTHON_SITEDIR="$WORK/pyosys-site" \
-                -DPyosysEnv_PYTHON="$VENV/bin/python"
+                -DCMAKE_INSTALL_PREFIX="$WORK/pyosys-inst"
             cmake --build "$WORK/pyosys-build" -j"$(nproc 2>/dev/null || echo 2)"
             cmake --install "$WORK/pyosys-build"
         ) > "$WORK/pyosys-build.log" 2>&1 && PYOSYS_FROM_SOURCE=1 || {
