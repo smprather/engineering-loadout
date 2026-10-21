@@ -124,6 +124,22 @@ def main():
     check("the tcshrc runs starship's tcsh init", "init tcsh" in rc)
     check("the tcshrc does not use bash's `command -v`", "command -v starship" not in rc)
     check("the hand-rolled prompt is the fallback only", "loadout_prompt_starship" in rc)
+    # STARSHIP_SHELL=bash ON PURPOSE: starship runs each module's `when`
+    # expression with that shell, and the config's expressions are bash
+    # snippets (custom.username uses `for u in $VAR; do ... done`, which tcsh
+    # cannot parse) -- so under STARSHIP_SHELL=tcsh that module silently
+    # never appears. The prompt's zero-width markers are then bash's, which
+    # the helper converts to tcsh's.
+    check("STARSHIP_SHELL is set to bash for the module checks", "setenv STARSHIP_SHELL bash" in rc)
+    check(
+        "the bash markers are converted to tcsh's",
+        "prompt-markers" in rc,
+    )
+    helper = os.path.join(REPO, "envs", "tcsh", "global", "helpers", "prompt-markers")
+    check("the marker-conversion helper exists", os.path.isfile(helper), helper)
+    if os.path.isfile(helper):
+        helper_src = read(helper)
+        check("the helper rewrites bash's markers", "\\\\\\[" in helper_src and "%{" in helper_src)
 
     print("-- the stale claims are gone")
     cfg = read(CONFIG_CSH)

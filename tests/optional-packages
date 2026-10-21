@@ -31,10 +31,15 @@ echo "Installing optional packages into: $dest_dir"
 # cicwave only while it is installable: a DISABLED package is refused by name,
 # and naming it here would fail the whole test instead of the one package.
 install_list=(openssh surfer strace-ui)
-if ! "$repo_dir/loadout" info cicwave 2>/dev/null | grep -q '^status: *DISABLED'; then
-    install_list+=(cicwave)
-else
+# The output is captured FIRST and matched afterwards: `loadout info | grep -q`
+# would let grep exit early and kill the shim with SIGPIPE, which under
+# `set -o pipefail` makes the whole pipeline look like a failure -- so the
+# self-gate would never fire and the test would fail on the install instead.
+_cicwave_info=$("$repo_dir/loadout" info cicwave 2>/dev/null || true)
+if printf '%s\n' "$_cicwave_info" | grep -q '^status: *DISABLED'; then
     echo "  cicwave is disabled -- skipping its smoke"
+else
+    install_list+=(cicwave)
 fi
 env -i \
     HOME="$test_home" \

@@ -32,7 +32,12 @@ fail() {
     exit 1
 }
 
-if "$repo_dir/loadout" info parity-plot 2>/dev/null | grep -q '^status: *DISABLED'; then
+# The output is captured FIRST and matched afterwards: `loadout info | grep -q`
+# would let grep exit early and kill the shim with SIGPIPE, which under
+# `set -o pipefail` makes the whole pipeline look like a failure -- so the
+# self-gate would never fire and the test would fail on the install instead.
+_info=$("$repo_dir/loadout" info parity-plot 2>/dev/null || true)
+if printf '%s\n' "$_info" | grep -q '^status: *DISABLED'; then
     echo "parity-plot is disabled -- skipping its smoke (it comes back with the package)"
     exit 0
 fi

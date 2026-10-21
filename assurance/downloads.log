@@ -112,3 +112,7 @@
 2026-10-08T02:50:32Z	https://github.com/astral-sh/ty/releases/download/0.0.85/ty-x86_64-unknown-linux-gnu.tar.gz	0c3564f13296c42f96e576a06276f7f0b67cbdf030888ff99c697259946162f0
 2026-10-08T02:50:34Z	https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-unknown-linux-musl.tar.gz	69dcb4043f55c29118f408c6efd30115e0a4e0a6709253343b8c8fa814ab4a31
 2026-10-08T02:50:35Z	https://github.com/sharkdp/hyperfine/releases/download/v2.0.0/hyperfine-v2.0.0-x86_64-unknown-linux-musl.tar.gz	38e59087bd65520930a13cf513d8a493b7043741e8ad62349a8a9929eb61bc5c
+2026-10-21T22:15:22Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-devel-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	11c56a5abd6188745b4a21b6f1aef438c84296475c60d7f048ed9691bdf12ab3
+2026-10-21T22:15:22Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
+2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
+2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9

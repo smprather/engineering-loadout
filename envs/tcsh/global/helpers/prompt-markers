@@ -1,0 +1,27 @@
+#!/bin/sh
+# Convert starship's BASH zero-width prompt markers to TCSh's.
+#
+# Starship renders its prompt for the shell named by $STARSHIP_SHELL: bash
+# markers (\[ ... \]) when that is bash, tcsh markers (%{ ... %}) when it is
+# tcsh.
+#
+# The tcsh env runs starship with STARSHIP_SHELL=bash on purpose: the module
+# checks (each module's `when` expression) are BASH snippets -- the shared
+# config's custom.username uses `for u in $VAR; do ... done`, which tcsh
+# cannot parse at all -- so under STARSHIP_SHELL=tcsh that module silently
+# never appears, and a module with bash syntax in `when` fails the same way.
+# Running the checks under bash makes the shared config behave identically in
+# both shells.
+#
+# The consequence: starship hands back bash's \[ \], which tcsh prints
+# LITERALLY (it has no readline, so it has no zero-width markers -- tcsh's
+# own are %{ %}). This helper rewrites them, and only them: the ANSI colour
+# bytes around the styled segments are passed through untouched.
+#
+# Input: the prompt text in $_LOADOUT_STARSHIP_PROMPT. Output: the converted
+# prompt on stdout.
+#
+# printf '%s' (not echo) because csh's echo interprets backslash escapes, and
+# the very markers this helper is here to convert would be consumed by it.
+
+printf '%s' "$_LOADOUT_STARSHIP_PROMPT" | sed -e 's/\\\[/%{/g' -e 's/\\\]/%}/g'

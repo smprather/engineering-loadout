@@ -374,10 +374,40 @@ if ( $?prompt ) then
         if ( "$_loadout_starship_bin" != "" ) then
             # The tcsh-specific config: the shared one with a yellow path.
             setenv STARSHIP_CONFIG "${_loadout_global}/starship-tcsh.toml"
+            # The marker conversion must be a `precmd` ALIAS defined BEFORE
+            # starship's init: the init captures the current precmd alias into
+            # USER_PRECMD and then defines `alias precmd
+            # "$STARSHIP_PRECMD;$USER_PRECMD"` -- and BOTH are expanded when
+            # that alias is DEFINED, so anything set afterwards (a USER_PRECMD
+            # variable, say) never runs.
+            #
+            # The helper path uses $TCSH_CONFIG_ROOT_DIR (an ENVIRONMENT
+            # variable, exported by the entry point) rather than
+            # ${_loadout_helpers} (a shell-local one): csh validates an
+            # alias body when the alias is defined, and a body naming a
+            # shell-local variable that is not yet set is rejected as a
+            # "Faulty alias". $TCSH_CONFIG_ROOT_DIR is set before this file
+            # runs and is correct for both layouts -- the shared config root
+            # and the home-local one.
+            alias precmd 'setenv _LOADOUT_STARSHIP_PROMPT "$prompt" ; set prompt = "`$TCSH_CONFIG_ROOT_DIR/global/helpers/prompt-markers`"'
             # starship's tcsh init defines precmd/postcmd aliases that chain to
-            # USER_PRECMD/USER_POSTCMD. Nothing else here defines a precmd, so
-            # USER_PRECMD stays empty and starship owns the prompt.
+            # the precmd alias above (captured as USER_PRECMD), so starship
+            # renders the prompt and the alias converts its markers.
             eval "`"$_loadout_starship_bin" init tcsh --print-full-init`"
+            # STARSHIP_SHELL=bash ON PURPOSE, even though the shell being
+            # serviced is tcsh. Starship runs each module's `when` expression
+            # with THAT shell, and the config's expressions are bash snippets:
+            # the shared custom.username uses `for u in $VAR; do ... done`,
+            # which tcsh cannot parse at all -- so under STARSHIP_SHELL=tcsh
+            # that module silently never appears, and any module with bash
+            # syntax in `when` fails the same way. Running the checks under
+            # bash makes the shared config behave identically in both shells.
+            #
+            # The consequence: starship then hands back BASH's zero-width
+            # markers (\[ \]), which tcsh prints literally (it has no
+            # readline; its own are %{ %}). The precmd alias above rewrites
+            # just those two markers, through helpers/prompt-markers.
+            setenv STARSHIP_SHELL bash
             # The flag the hand-rolled prompt below checks: with starship
             # driving, that path must not touch `prompt` or `precmd`.
             set loadout_prompt_starship = 1

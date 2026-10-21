@@ -2356,9 +2356,7 @@
         "bin/strmxor"
       ],
       "missing_hint": "KLayout will NOT be installed",
-      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.15; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix",
-      "disabled": true,
-      "disabled_reason": "DISABLED 2026-10-21: the payload was built against Python 3.14 and links libpython3.14.so.1.0, which the payload no longer ships (it is 3.15 now) -- every KLayout launcher died with 'error while loading shared libraries'. The rebuild needs the upstream Python 3.15 backport of PyWeakref_GetObject (klayout master) and a ~25 min EL8 source build, so it is deferred rather than shipped broken. Re-enable with 'loadout install klayout' once payload/el8.x86_64.glibc2p28/runtime/klayout.tar.bz2 is rebuilt against portable-python 3.15."
+      "description": "KLayout — GDSII/OASIS/DXF/CIF/LEF-DEF mask layout viewer and editor with scriptable DRC/LVS (Qt5 GUI), plus the strm* batch converters. Embeds the loadout's Ruby 3.3 and portable Python 3.15; the bin/ launchers derive RUBYLIB and KLAYOUT_PYTHONHOME from the install prefix"
     },
     "verilator": {
       "kind": "bin",
