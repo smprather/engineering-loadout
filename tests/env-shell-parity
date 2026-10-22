@@ -7,12 +7,16 @@ community this project serves is ~90% tcsh. A bash-env change is not finished
 until the tcsh form lands.
 
 That policy needs a gate or it decays into a comment nobody reads. This is the
-gate. It checks two mechanical things:
+gate. It checks three mechanical things:
 
   1. every user-facing alias/function the bash env defines has a tcsh alias of
      the same name, and
-  2. every LOADOUT_CFG_* the bash env defines is either defined in the tcsh
-     config or explicitly recorded as inapplicable.
+  2. every LOADOUT_CFG_* the bash env defines is either DEFINED in the tcsh
+     config or explicitly recorded as inapplicable, and
+  3. every LOADOUT_CFG_* either env READS is DEFINED by that env's own config
+     -- a switch nobody defines is a dead switch, and reading it is not
+     coverage (that conflation is what let LOADOUT_CFG_ENABLE_SSH_AGENT sit
+     unreachable behind a passing gate).
 
 Anything genuinely impossible in csh goes in the EXPECTED_* tables below WITH A
 REASON. That is the point: the exception is cheap to add but has to be written
@@ -35,9 +39,15 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASH_ALIASES = os.path.join(REPO, "envs", "bash", "global", "aliases.sh")
 BASH_BASHRC = os.path.join(REPO, "envs", "bash", "global", "bashrc")
 BASH_CONFIG = os.path.join(REPO, "envs", "bash", "global", "config.sh")
-TCSH_ALIASES = os.path.join(REPO, "envs", "tcsh", "global", "aliases.csh")
-TCSH_TCSHRC = os.path.join(REPO, "envs", "tcsh", "global", "tcshrc")
-TCSH_CONFIG = os.path.join(REPO, "envs", "tcsh", "global", "config.csh")
+BASH_FUNCTIONS = os.path.join(REPO, "envs", "bash", "functions.sh")
+BASH_KEYBINDS = os.path.join(REPO, "envs", "bash", "global", "keybinds.sh")
+BASH_ICECREAM = os.path.join(REPO, "envs", "bash", "global", "icecream-ext.sh")
+BASH_MODULES_INIT = os.path.join(REPO, "envs", "bash", "global", "modules-init.bash")
+TCSH_GLOBAL = os.path.join(REPO, "envs", "tcsh", "global")
+TCSH_HELPERS = os.path.join(TCSH_GLOBAL, "helpers")
+TCSH_ALIASES = os.path.join(TCSH_GLOBAL, "aliases.csh")
+TCSH_TCSHRC = os.path.join(TCSH_GLOBAL, "tcshrc")
+TCSH_CONFIG = os.path.join(TCSH_GLOBAL, "config.csh")
 ZSH_ENTRY = os.path.join(REPO, "envs", "zsh", "zshrc")
 ZSH_ZSHRC = os.path.join(REPO, "envs", "zsh", "global", "zshrc")
 ZSH_COMPLETIONS = os.path.join(REPO, "envs", "zsh", "global", "completions.zsh")
@@ -154,6 +164,48 @@ def config_names(text):
     return set(re.findall(r"(LOADOUT_CFG_[A-Za-z0-9_]+)", text))
 
 
+def setenv_names(text):
+    """Names the tcsh config DEFINES (`setenv NAME ...`).
+
+    A definition is not a mention. This gate used to count a READ of a variable
+    (`$?NAME` in the rc) as coverage, which is exactly how
+    LOADOUT_CFG_ENABLE_SSH_AGENT passed for months while the ssh-agent block it
+    gates stayed unreachable: the rc read it, but NOTHING ever defined it, so
+    the switch could never be turned on.
+    """
+    return set(re.findall(r"\bsetenv\s+([A-Z_][A-Z0-9_]*)", text))
+
+
+def tcsh_env_files():
+    """Every file in the tcsh env that can READ a LOADOUT_CFG_* variable.
+
+    The rc, the aliases, the completions, the keybinds, the modules init and
+    the POSIX-sh helpers -- a helper is a separate process and sees only the
+    ENVIRONMENT, so a variable it reads must be exported by config.csh.
+    """
+    files = [TCSH_TCSHRC, TCSH_ALIASES, TCSH_CONFIG]
+    files += [os.path.join(TCSH_GLOBAL, n) for n in sorted(os.listdir(TCSH_GLOBAL)) if n.endswith(".csh")]
+    if os.path.isdir(TCSH_HELPERS):
+        files += [
+            os.path.join(TCSH_HELPERS, n)
+            for n in sorted(os.listdir(TCSH_HELPERS))
+            if os.path.isfile(os.path.join(TCSH_HELPERS, n))
+        ]
+    return files
+
+
+def bash_env_files():
+    """Every file in the bash env that can READ a LOADOUT_CFG_* variable."""
+    return [
+        BASH_BASHRC,
+        BASH_ALIASES,
+        BASH_FUNCTIONS,
+        BASH_KEYBINDS,
+        BASH_ICECREAM,
+        BASH_MODULES_INIT,
+    ]
+
+
 def exported_names(text):
     """Environment variables the file exports.
 
@@ -210,24 +262,72 @@ def main():
         "these now EXIST in tcsh; drop them from EXPECTED_MISSING_COMMANDS: " + ", ".join(stale),
     )
 
+    # ---- LOADOUT_CFG_* definitions -------------------------------------------
+    # A variable the env READS but never DEFINES is a DEAD SWITCH: the feature
+    # it gates can never fire, and nothing says so. The tcsh env does not depend
+    # on env-bash, so every switch it reads has to be defined by ITS OWN
+    # config.csh -- the read alone is not coverage.
     bash_cfg = config_names(read(BASH_CONFIG))
-    tcsh_cfg = config_names(read(TCSH_CONFIG)) | config_names(read(TCSH_TCSHRC))
+    tcsh_defined = setenv_names(read(TCSH_CONFIG))
+    bash_defined = exported_names(read(BASH_CONFIG))
 
-    missing_cfg = sorted(bash_cfg - tcsh_cfg - set(EXPECTED_MISSING_CONFIG))
+    tcsh_used = set()
+    for path in tcsh_env_files():
+        tcsh_used |= config_names(read(path))
+    # A name built at runtime ("$LOADOUT_CFG_PROMPT_COLOR_$kind") is a PREFIX,
+    # not a variable; the concrete variants are checked on their own.
+    tcsh_used = {n for n in tcsh_used if not n.endswith("_")}
+
+    bash_used = set()
+    for path in bash_env_files():
+        bash_used |= config_names(read(path))
+    bash_used = {n for n in bash_used if not n.endswith("_")}
+
+    missing_cfg = sorted(bash_cfg - tcsh_defined - set(EXPECTED_MISSING_CONFIG))
     check(
-        "every LOADOUT_CFG_* is handled or excused",
+        "every LOADOUT_CFG_* is defined in tcsh or excused",
         not missing_cfg,
-        "not handled in tcsh: "
+        "not defined in tcsh: "
         + ", ".join(missing_cfg)
         + "\n        Add it to envs/tcsh/global/config.csh, or to EXPECTED_MISSING_CONFIG"
         "\n        with the reason tcsh cannot act on it.",
     )
 
-    stale_cfg = sorted(n for n in EXPECTED_MISSING_CONFIG if n in tcsh_cfg)
+    stale_cfg = sorted(n for n in EXPECTED_MISSING_CONFIG if n in tcsh_defined)
     check(
         "no stale config exceptions",
         not stale_cfg,
-        "these are now handled in tcsh; drop them from EXPECTED_MISSING_CONFIG: " + ", ".join(stale_cfg),
+        "these are now defined in tcsh; drop them from EXPECTED_MISSING_CONFIG: " + ", ".join(stale_cfg),
+    )
+
+    dead_tcsh = sorted(tcsh_used - tcsh_defined)
+    check(
+        "no dead switches in the tcsh env (read but never defined)",
+        not dead_tcsh,
+        "the tcsh env reads these but config.csh never defines them: "
+        + ", ".join(dead_tcsh)
+        + "\n        A switch nobody defines can never fire. Define it in"
+        "\n        envs/tcsh/global/config.csh (the env does not depend on env-bash),"
+        "\n        or stop reading it.",
+    )
+
+    excused_but_read = sorted(tcsh_used & set(EXPECTED_MISSING_CONFIG))
+    check(
+        "no excused variable is still read by the tcsh env",
+        not excused_but_read,
+        "excused as inapplicable to tcsh, yet the tcsh env reads: "
+        + ", ".join(excused_but_read)
+        + "\n        Either the excuse is wrong (define it) or the read is dead code"
+        "\n        (remove it).",
+    )
+
+    dead_bash = sorted(bash_used - bash_defined)
+    check(
+        "no dead switches in the bash env (read but never defined)",
+        not dead_bash,
+        "the bash env reads these but config.sh never exports them: "
+        + ", ".join(dead_bash)
+        + "\n        Export it from envs/bash/global/config.sh, or stop reading it.",
     )
 
     # ---- zsh -----------------------------------------------------------------

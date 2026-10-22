@@ -83,6 +83,23 @@ if ( ! $?LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT ) setenv LOADOUT_CFG_STARSHIP
 if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX )      setenv LOADOUT_CFG_ATTACH_TO_TMUX 0
 if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS ) setenv LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS 0
 
+# ---- ssh-agent -----------------------------------------------------------------
+# Fixed-socket ssh-agent (~/.ssh/loadout-agent.sock), started on demand when no
+# agent is listening there yet. The socket path is FIXED, so anything outside
+# this one shell can find the agent -- the random per-shell socket of
+# `eval "$(ssh-agent -s)"` cannot be found by anything else.
+#
+# Does NOT run ssh-add: a passphrase-protected key would prompt on every new
+# shell. Load it once per agent lifetime yourself.
+#
+# The tcsh form of the switch. The bash env defines the same variable in
+# envs/bash/global/config.sh; env-tcsh does NOT depend on env-bash, so this env
+# MUST carry its own definition. Without it the ssh-agent block in
+# global/tcshrc reads a variable nobody ever sets: a DEAD SWITCH that can never
+# fire (and nothing complained -- see tests/env-shell-parity, which now fails
+# on a variable the tcsh env READS but never DEFINES).
+if ( ! $?LOADOUT_CFG_ENABLE_SSH_AGENT )  setenv LOADOUT_CFG_ENABLE_SSH_AGENT 0
+
 # ---- online connectivity detection -------------------------------------------
 # auto (parallel TCP probe on startup) | 1 (force online) | 0 (force offline).
 # Exports LOADOUT_ONLINE=1/0, inherited by child shells and tmux panes.

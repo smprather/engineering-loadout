@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 _d = os.path.dirname(os.path.abspath(__file__))
 while _d not in ("", "/") and not os.path.isdir(os.path.join(_d, "installer_vendor")):
@@ -106,6 +107,7 @@ HOST_REQUIRED_CAPABILITIES = {
     # cannot reach exit 0 without a loadable Tk -- not even for -h.
     "idle3": (["python3.15", "-c", "import tkinter"], "a loadable Tk for IDLE"),
     "idle3.14": (["python3.15", "-c", "import tkinter"], "a loadable Tk for IDLE"),
+    "idle3.15": (["python3.15", "-c", "import tkinter"], "a loadable Tk for IDLE"),
 }
 
 HOST_REQUIRED_SOS = {
@@ -177,6 +179,7 @@ PROBE_FLAGS = {
     "dasel": [["--help"]],
     "idle3": [["-h"]],
     "idle3.14": [["-h"]],
+    "idle3.15": [["-h"]],
     "pygwalker": [["--help"]],
     "python3-config": [["--help"]],
     "python3.15-config": [["--help"]],
@@ -483,15 +486,62 @@ SLOW_PROBE_TIMEOUT = 60
 def _run_probe(binary_path, flags, env, cwd, timeout=PROBE_TIMEOUT):
     """Run one probe invocation. Returns (returncode, combined_output) or
     raises TimeoutExpired / OSError for the caller to classify."""
-    proc = subprocess.run(
-        [binary_path] + flags,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=cwd,
-        env=env,
-        timeout=timeout,
-    )
+    try:
+        proc = subprocess.run(
+            [binary_path] + flags,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        # A shebang script that cannot be exec'd by path: on some kernels a
+        # lookup of a file that was created moments earlier returns ENOENT
+        # even though readdir() lists it. Run the script through the
+        # interpreter its shebang names -- taken from NEXT TO THE SCRIPT (the
+        # tree under test), because a PATH search for the interpreter fails
+        # the same way. The script itself is copied to a fresh path, so its
+        # own lookup has never been missed.
+        interp = _shebang_interpreter(binary_path)
+        if interp is None:
+            raise
+        interp_path = os.path.join(os.path.dirname(binary_path), interp)
+        with tempfile.TemporaryDirectory(prefix="loadout-probe-") as tmp:
+            script_copy = os.path.join(tmp, os.path.basename(binary_path))
+            shutil.copyfile(binary_path, script_copy)
+            os.chmod(script_copy, 0o755)
+            proc = subprocess.run(
+                [interp_path, script_copy] + flags,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+            )
     return proc.returncode, proc.stdout.decode("utf-8", "replace")
+
+
+def _shebang_interpreter(script_path):
+    """The interpreter named by a script's #! line, or None.
+
+    `#!/usr/bin/env python3.15` names an interpreter that lives NEXT TO THE
+    SCRIPT; the bare name is returned so the caller can resolve it against
+    the tree under test.
+    """
+    try:
+        with open(script_path, "rb") as fh:
+            first = fh.readline(256)
+    except OSError:
+        return None
+    if not first.startswith(b"#!"):
+        return None
+    parts = first[2:].strip().split()
+    if not parts:
+        return None
+    if os.path.basename(parts[0]) == "env" and len(parts) > 1:
+        return parts[1].decode()
+    return os.path.basename(parts[0].decode())
 
 
 def probe_binary(binary_path, env, cwd):
@@ -546,7 +596,21 @@ def probe_binary(binary_path, env, cwd):
         except subprocess.TimeoutExpired:
             return True, "(interactive -- timeout counts as OK)"
         except OSError as exc:
-            return False, f"OSError: {exc}"
+            # A binary that was installed moments ago can fail to be FOUND
+            # for a while on some kernels: the lookup by name returns ENOENT
+            # while readdir() already lists the file. Retry before calling it
+            # a failure -- the file is there, the lookup is not.
+            for _ in range(20):
+                time.sleep(0.25)
+                try:
+                    code, combined = _run_probe(binary_path, flags, env, cwd)
+                    break
+                except subprocess.TimeoutExpired:
+                    return True, "(interactive -- timeout counts as OK)"
+                except OSError:
+                    continue
+            else:
+                return False, f"OSError: {exc}"
 
         last_code = code
         last_out = combined
@@ -2653,10 +2717,16 @@ def main(keep, no_cache):
 
         os.symlink(install_cache, tree)
 
-        bin_dir = os.path.join(tree, "bin")
+        # The probes run the REAL tree, not the scratch symlink to it: a
+        # lookup by name for a binary installed moments ago can fail through
+        # the symlinked path even when the file is right there (the same
+        # quirk that made the yosys -y bridge's genlib copy vanish on the
+        # build host). The retry in the probe covers the rest.
+        bin_dir = os.path.realpath(os.path.join(tree, "bin"))
         if not os.path.isdir(bin_dir):
             print(f"ERROR: {bin_dir} not created by installer")
             sys.exit(1)
+        probe_env["PATH"] = bin_dir + ":" + probe_env["PATH"].split(":", 1)[1]
 
         print(f"Smoke-testing binaries in {bin_dir} ...\n")
         print(f"Probe PATH: {probe_env['PATH']}\n")

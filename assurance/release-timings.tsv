@@ -865,3 +865,13 @@
 2026-10-22T03:56:48Z	test:install-xdesk	20	FAIL	mode=auto
 2026-10-22T03:56:48Z	test:completion in sync	0	PASS	mode=all
 2026-10-22T03:56:48Z	test:total	156	FAIL	flags=
+2026-10-22T14:32:20Z	test:py_compile	0	PASS	mode=all
+2026-10-22T14:32:20Z	test:ruff check	0	FAIL	mode=all
+2026-10-22T14:32:21Z	test:ruff format check	0	FAIL	mode=all
+2026-10-22T14:32:21Z	test:unit-resolver	0	PASS	mode=all
+2026-10-22T14:32:21Z	test:doctor-system-newer	0	PASS	mode=all
+2026-10-22T14:32:21Z	test:registry-integrity	0	PASS	mode=all
+2026-10-22T14:32:22Z	test:search-groups	1	PASS	mode=all
+2026-10-22T14:32:22Z	test:tar-safety	0	PASS	mode=all
+2026-10-22T14:32:22Z	test:content-verify	0	PASS	mode=all
+2026-10-22T14:32:24Z	test:content-manifest in sync	2	PASS	mode=all
