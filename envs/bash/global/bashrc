@@ -386,13 +386,17 @@ fi
 
 if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
-    # STARSHIP_SHELL=bash ON PURPOSE, in every shell env -- tcsh included (see
-    # envs/tcsh/global/tcshrc, which needs it for the same reason). Starship
-    # runs each module's `when` expression AND its `command` with THAT shell,
-    # falling back to `sh` when it is unset -- and `sh` is dash on plenty of
-    # hosts, where the shared config's `when` snippets behave differently (or
-    # not at all). Pinning bash makes the prompt identical in bash, zsh and
-    # tcsh no matter what the OUTER shell is, or what /bin/sh points at.
+    # STARSHIP_SHELL=bash, matching the shell being serviced. It picks BOTH
+    # the shell starship runs each module's `when`/`command` with (falling
+    # back to `sh` -- dash on plenty of hosts -- when unset) AND the
+    # zero-width marker syntax it emits: bash's are readline's `\[ \]`, which
+    # only STARSHIP_SHELL=bash produces and which PS1 needs to compute the
+    # prompt width. Unset, starship emits no markers at all.
+    #
+    # So this is NOT a one-size pin. The other envs need different values:
+    # envs/zsh/global/zshrc sets zsh (its markers are %{ %}), and
+    # envs/tcsh/global/tcshrc sets `sh` -- POSIX for the snippets, and the
+    # only value that emits no markers, which is what tcsh wants.
     #
     # It cannot carry flags: STARSHIP_SHELL is a shell name, so
     # `bash --norc --noprofile` has to go in a module's own `shell = [...]`.

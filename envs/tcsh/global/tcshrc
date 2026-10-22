@@ -394,20 +394,26 @@ if ( $?prompt ) then
             # the precmd alias above (captured as USER_PRECMD), so starship
             # renders the prompt and the alias converts its markers.
             eval "`"$_loadout_starship_bin" init tcsh --print-full-init`"
-            # STARSHIP_SHELL=bash ON PURPOSE, even though the shell being
-            # serviced is tcsh. Starship runs each module's `when` expression
-            # with THAT shell, and the config's expressions are bash snippets:
-            # the shared custom.username uses `for u in $VAR; do ... done`,
-            # which tcsh cannot parse at all -- so under STARSHIP_SHELL=tcsh
-            # that module silently never appears, and any module with bash
-            # syntax in `when` fails the same way. Running the checks under
-            # bash makes the shared config behave identically in both shells.
+            # STARSHIP_SHELL=sh, and it must be set HERE -- after the init
+            # above, which exports STARSHIP_SHELL=tcsh itself.
             #
-            # The consequence: starship then hands back BASH's zero-width
-            # markers (\[ \]), which tcsh prints literally (it has no
-            # readline; its own are %{ %}). The precmd alias above rewrites
-            # just those two markers, through helpers/prompt-markers.
-            setenv STARSHIP_SHELL bash
+            # It controls two things, and tcsh needs a value that is right
+            # for both:
+            #
+            #   1. the shell each module's `when` runs under. `sh` is POSIX,
+            #      which every expression in the shared config is. `tcsh`
+            #      cannot parse custom.username's `for u in $VAR; do ... done`
+            #      at all, so that module silently never appears.
+            #   2. the zero-width marker syntax starship emits. `sh` emits
+            #      NONE. `bash` emits readline's `\[ \]` -- which tcsh prints
+            #      literally, because tcsh has no readline -- and `tcsh`
+            #      emits zsh's `%{ %}`, which tcsh happens to understand but
+            #      which is not what the helper below expects.
+            #
+            # So `sh` is the one value that both renders cleanly and keeps
+            # every module. This env used to pin `bash`, which is what made
+            # helpers/prompt-markers necessary in the first place.
+            setenv STARSHIP_SHELL sh
             # The flag the hand-rolled prompt below checks: with starship
             # driving, that path must not touch `prompt` or `precmd`.
             set loadout_prompt_starship = 1

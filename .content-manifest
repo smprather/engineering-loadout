@@ -146,6 +146,7 @@ sha256  0905c124d68839a4438cf831295b0a31b2ef11d45600a4f0e022e7ea13026fb3  payloa
 sha256  0906f1eedc6500aa65c6a58571106b8d8e49630746091807808f3ce901f71302  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/zathurarc/injections.scm
 sha256  0906f1eedc6500aa65c6a58571106b8d8e49630746091807808f3ce901f71302  payload/treesitter/vendor/nvim-treesitter/runtime/queries/zathurarc/injections.scm
 sha256  0921e551ab5c42d2a58d93d3d95ee7d8df9390b5e915d478ebfa216efe30d1df  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/sxhkdrc.lua
+sha256  095574ad421bdc37d6ffd7f50b6ffa25325b9e620439717a62501c7d997fbfc8  payload/installed-sizes.json
 sha256  096f9b8350b65ebd2fd1346b12452efe5b9607f7482813ffca50c22722a807ce  payload/el8.x86_64.glibc2p28/wheels/ply-3.11-py2.py3-none-any.whl
 sha256  097ba6cc0a7fa16942c2c184c6d2cdcf1240698d50fbc9efab047c44d4f116c3  payload/el8.x86_64.glibc2p28/runtime/mesa3d_libs.tar.bz2.part-000
 sha256  0997720834fc89306610d1b3530fffe864a4d525910cad0b2ce2aec7074f5b15  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/hurl/folds.scm
@@ -2056,7 +2057,6 @@ sha256  78fb2ac89f01cf9e189501a19bb990c1e7ffd198f52961430852ba9a8daeff8c  payloa
 sha256  790419734d77cb16af0f9b2b05395a2d1478659819dfa2c862c7b506fcce5e48  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ruby.so.bz2
 sha256  7912b8ae6b2720bf66293444cddc773e662544b2d7bd59802b243c164fb46d36  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/pem/folds.scm
 sha256  7912b8ae6b2720bf66293444cddc773e662544b2d7bd59802b243c164fb46d36  payload/treesitter/vendor/nvim-treesitter/runtime/queries/pem/folds.scm
-sha256  79132107a01cb5a564a33db281515e9ed730c4563d7199a31ca5be83f5ed7e4d  payload/installed-sizes.json
 sha256  792068985238ef50c37d0e26c4fb455c4402c6156c63380012def038959ae878  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/puppet/folds.scm
 sha256  792068985238ef50c37d0e26c4fb455c4402c6156c63380012def038959ae878  payload/treesitter/vendor/nvim-treesitter/runtime/queries/puppet/folds.scm
 sha256  79427b4a99d5ded4ccb65f042ce2b0e553213721c62b76acc642f423dd9129c8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/gitattributes.lua

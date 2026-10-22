@@ -1,5 +1,50 @@
 # Current Handoff
 
+## 2026-10-22 (4): STARSHIP_SHELL is per-shell and load-bearing -- tcsh was pinning the one value that breaks it
+
+Reported from elsewhere: pinning `STARSHIP_SHELL=bash` in tcsh breaks
+formatting. Validated, and the mechanism turned out to control TWO things,
+which is why no single value is right for every shell:
+
+| `STARSHIP_SHELL` | zero-width markers emitted | `when` shell |
+|---|---|---|
+| `bash` | readline `\[ \]` | bash |
+| `zsh` | `%{ %}` | zsh |
+| `tcsh` | `%{ %}` | **tcsh** |
+| `sh` / unset | **none** | POSIX sh |
+
+**The tcsh pin was wrong twice over.** `bash` gave the prompt readline's
+`\[ \]`, which tcsh prints literally -- tcsh has no readline. That is what
+`global/helpers/prompt-markers` exists to strip, so the pin CREATED the
+problem the helper solves. And the reason for the pin was also wrong: it was
+set to make the shared config's `when` snippets parseable, but `sh` already
+does that.
+
+**The trap that made "just unset it" wrong too:** `starship init tcsh
+--print-full-init` exports `STARSHIP_SHELL=tcsh` ITSELF (line 1 of its
+output). Unpinned, the `when` expressions run under tcsh, where
+`custom.username`'s `for u in $VAR; do ... done` cannot parse at all -- that
+module silently never appears, with no error. So the value has to be
+explicitly `sh`, set AFTER the init so it overrides starship's own export.
+
+**Fixed:** `setenv STARSHIP_SHELL sh` after the init in
+`envs/tcsh/global/tcshrc`. `sh` is the only value that is both POSIX for the
+snippets and marker-free.
+
+While there, the same measurement corrected the bash and zsh envs from the
+previous commit: bash pins `bash` (PS1 needs readline's markers to compute
+the prompt width) and zsh pins `zsh` (`%{ %}`, and `starship init zsh`
+exports it anyway) -- the zsh env had been pinned to `bash`, which would
+have handed zsh readline's markers verbatim.
+
+**Verified in a real PTY tcsh session** with a probe module:
+`STARSHIP_SHELL=sh`, probe renders, `custom.username` renders, literal `\[`
+count 0, literal `%{` count 0. Both wrong values RED-proven against the gate
+(pin removed -> FAIL, pin set to `bash` -> FAIL); 20/20 with `sh`.
+
+`tests/env-tcsh-starship` now asserts the pin is `sh` (it used to assert
+`bash`, i.e. it was pinning the bug), `tests/env-shell-parity` 24/24.
+
 ## 2026-10-22 (3): every starship command runs under bash, whatever the outer shell -- and why not `--norc --noprofile`
 
 Request: make every shell command starship runs use `/bin/bash --norc

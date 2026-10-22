@@ -174,19 +174,26 @@ own config (`global/starship-tcsh.toml` — the shared one with a yellow
 Bash keeps the shared config's cyan path. `tests/env-tcsh-starship` pins the
 two configs to be identical apart from that one line, so they cannot drift.
 
-**STARSHIP_SHELL=bash, on purpose.** Starship runs each module's `when`
-expression with the shell named by `$STARSHIP_SHELL`, and the config's
-expressions are bash snippets -- `custom.username` uses
-`for u in $VAR; do ... done`, which tcsh cannot parse at all. Under
-`STARSHIP_SHELL=tcsh` that module silently never appears (no error, no
-username in the prompt), and any module with bash syntax in `when` fails the
-same way. So the tcsh env sets `STARSHIP_SHELL=bash` for the module checks,
-even though the shell being serviced is tcsh.
+**STARSHIP_SHELL=sh, on purpose — and it must be set AFTER the init.**
+`starship init tcsh --print-full-init` exports `STARSHIP_SHELL=tcsh` itself,
+so leaving it unset is not the same as setting it to `sh`. The variable
+controls two things, and `sh` is the only value that is right for both:
 
-The consequence is that starship hands back BASH's zero-width markers
-(`\[ ... \]`), which tcsh prints literally -- it has no readline, so its own
-are `%{ ... %}`. `global/helpers/prompt-markers` rewrites exactly those two
-markers on the way into the prompt; the ANSI colour bytes are untouched.
+1. **The shell each module's `when` runs under.** `sh` is POSIX, and every
+   expression in the shared config is (`for u in $VAR; do ... done`, `test`,
+   `[ ]`). Under `tcsh` — which is what the init sets — `custom.username`'s
+   `for` loop cannot parse at all, so that module silently never appears: no
+   error, no username in the prompt.
+2. **The zero-width marker syntax starship emits.** `sh` emits none.
+   `bash` emits readline's `\[ ... \]`, which tcsh prints literally because
+   it has no readline; `tcsh` emits zsh's `%{ ... %}`.
+
+This env used to pin `bash` for reason 1, which broke reason 2 — and
+`global/helpers/prompt-markers` exists only to convert the markers that pin
+produced. With `sh` the prompt carries no markers and the helper is a no-op
+passthrough; it is kept as the belt for a prompt that arrives carrying them
+anyway. `tests/env-tcsh-starship` fails if the pin is missing, changed to
+`bash`, or moved above the init.
 
 Two caveats on the starship prompt in tcsh:
 

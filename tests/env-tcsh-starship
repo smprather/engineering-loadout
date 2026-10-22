@@ -152,13 +152,24 @@ def main():
     check("the tcshrc runs starship's tcsh init", "init tcsh" in rc)
     check("the tcshrc does not use bash's `command -v`", "command -v starship" not in rc)
     check("the hand-rolled prompt is the fallback only", "loadout_prompt_starship" in rc)
-    # STARSHIP_SHELL=bash ON PURPOSE: starship runs each module's `when`
-    # expression with that shell, and the config's expressions are bash
-    # snippets (custom.username uses `for u in $VAR; do ... done`, which tcsh
-    # cannot parse) -- so under STARSHIP_SHELL=tcsh that module silently
-    # never appears. The prompt's zero-width markers are then bash's, which
-    # the helper converts to tcsh's.
-    check("STARSHIP_SHELL is set to bash for the module checks", "setenv STARSHIP_SHELL bash" in rc)
+    # STARSHIP_SHELL must be `sh` in the tcsh env -- and it has to be set
+    # AFTER the init, which exports STARSHIP_SHELL=tcsh itself. Two things
+    # ride on the value, and `sh` is the only one right for both: it is POSIX,
+    # so custom.username's `for u in $VAR; do ... done` runs (under `tcsh`
+    # that module silently never appears), and it makes starship emit NO
+    # zero-width markers (`bash` emits readline's `\[ \]`, which tcsh prints
+    # literally -- that is what helpers/prompt-markers exists to strip, and
+    # pinning `bash` is what made it necessary).
+    check(
+        "the tcsh env pins STARSHIP_SHELL=sh",
+        "setenv STARSHIP_SHELL sh" in rc,
+        "the tcshrc does not set STARSHIP_SHELL=sh -- starship's own tcsh init"
+        " exports STARSHIP_SHELL=tcsh, under which custom.username's `for` loop"
+        " cannot parse and the module silently never appears",
+    )
+    # The helper stays: with `sh` the prompt carries no markers, so it is a
+    # no-op passthrough -- and it is the belt for a prompt that arrives
+    # carrying them anyway.
     check(
         "the bash markers are converted to tcsh's",
         "prompt-markers" in rc,
