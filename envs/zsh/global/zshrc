@@ -347,7 +347,8 @@ set_prompt() {
         prompt_joined="LSF"
         prompt_color="${LOADOUT_CFG_PROMPT_COLOR_FARM:-$PROMPT_RED}"
     fi
-    [[ ${LOADOUT_CFG_PROMPT_INCLUDE_HOST} == "1" ]] && prompt_joined+=":%m"
+    # Separator only BETWEEN parts -- see the note in the bash env.
+    [[ ${LOADOUT_CFG_PROMPT_INCLUDE_HOST} == "1" ]] && prompt_joined+="${prompt_joined:+:}%m"
     local whoiam=$(/bin/whoami)
     local uid_part=""
     [[ $whoiam != "$USER" ]] && uid_part="$whoiam "

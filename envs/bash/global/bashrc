@@ -322,7 +322,10 @@ set_prompt() {
 
     prompt_joined=$(join_by : "${prompt_parts[@]}")
 
-    [[ $include_host == "1" ]] && prompt_joined+=":$(hostname -s)"
+    # The separator only goes BETWEEN parts: with no farm tag, ":host" would
+    # render a leading colon ('LOADOUT_CFG_PROMPT_INCLUDE_HOST=1' on a plain
+    # shell, which is exactly what the `sp2` alias does).
+    [[ $include_host == "1" ]] && prompt_joined+="${prompt_joined:+:}$(hostname -s)"
 
     get_prompt_uid() {
         local whoami=$(/bin/whoami)

@@ -435,7 +435,9 @@ if ( $?prompt ) then
 
     set _loadout_host = ""
     if ( $?LOADOUT_CFG_PROMPT_INCLUDE_HOST ) then
-        if ( "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" == "1" ) set _loadout_host = "%m:"
+        # No trailing colon: the LSF branch below prepends "LSF:", which is
+        # the only separator the prompt needs ('LSF:host' / 'host').
+        if ( "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" == "1" ) set _loadout_host = "%m"
     endif
 
     # Show the username when it is in the highlight list, or when the effective

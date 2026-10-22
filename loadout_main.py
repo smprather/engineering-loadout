@@ -5182,6 +5182,11 @@ def _install_env_starship(repo_dir, home):
         os.path.join(starship_dir, "starship.toml"),
         False,
     )
+    # Retired: the per-OS variant (the project is Linux-only, and the config is
+    # shared by bash/zsh/tcsh now). Left behind it is a stale duplicate a user
+    # could edit instead of starship.toml -- prune it the way the retired
+    # ~/.cshrc and .bash_login entrypoints are pruned.
+    remove_if_exists(os.path.join(starship_dir, "starship.linux.toml"))
     for managed in ("config-schema.json", "starship.toml"):
         _seal_managed(os.path.join(starship_dir, managed))
 

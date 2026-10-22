@@ -685,6 +685,7 @@ sha256  27765d4c05b1221f3062385fcacea0f6015b0b79888e046a9bc4ad6ca5216b73  payloa
 sha256  27765d4c05b1221f3062385fcacea0f6015b0b79888e046a9bc4ad6ca5216b73  payload/treesitter/vendor/nvim-treesitter/runtime/queries/racket/injections.scm
 sha256  2777541f83ea8b82d318513d61c756b1b84743b0233970788bb2f83351ca161f  payload/treesitter/vendor/nvim-treesitter/.github/workflows/test-queries.yml
 sha256  27af381927ed6876263f9740a76738b642875e08c836b31a6131ec2a8ff3ed5d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/m68k.so.bz2
+sha256  27afdc26d1b0a29734fc3844efcef3e0e1e8cb6e20a88818a28097b3c97c41be  payload/installed-sizes.json
 sha256  27b2a53706b1b0d22a61eedd56312cad9f11b6fff5020e064b5b4cffcdbc1644  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/starlark/test.bzl
 sha256  27c0e6577ab3ab33761c47316095199317c1cf596eb0fe7ed4f7abffedbdb2f3  payload/el8.x86_64.glibc2p28/bin/yq.bz2
 sha256  27c1ca24f12f13a381db9dd5fc2d9dbd2dccf839daa38b048635d120f48ef5b5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/capnp/locals.scm
@@ -787,7 +788,6 @@ sha256  2e455963eac44831e7653f193d74706b1343097a686b30285481f5413cf1fe29  payloa
 sha256  2e4b44779daa4ac0f53875f1a50d42f32e4585ce705563256920983e04a6b582  envs/tmux/vendor/plugins/tpm/bindings/install_plugins
 sha256  2e6901c1569a4a367523e8ba20a526d855253a3ef4dde7c7ae66b4cc3eb65fff  payload/el8.x86_64.glibc2p28/bin/rsync.bz2
 sha256  2e750e24b44ed9e0b7afc25bf40579da8e5f47aafce2af71da5b90a7d05f201b  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/csv.lua
-sha256  2e7716f033750d9a15ac023d586f0af26fde4829c2d350e8eb436d9a1f0e3a05  payload/installed-sizes.json
 sha256  2e7dc93b35f0bb0cd1de7fa49ef6a1ebe3578e37f249999fc7ccd23ea2cb9d11  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/arduino.lua
 sha256  2ea07ee5b3dda51bdc33bdc904a0762b31211bbd1669c5286a4d8f862d14f2df  payload/el8.x86_64.glibc2p28/lib64/libcairo.so.2.bz2
 sha256  2ec0308875f7999deb2901bec7bf3fe927c49a3e11041c9db4040599d057faeb  payload/el8.x86_64.glibc2p28/bin/espresso.bz2
