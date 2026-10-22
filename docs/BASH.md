@@ -79,6 +79,12 @@ GNOME Terminal and prompt stalls on plain SSH/tmux hosts where the loadout puts
 > integration"** for the full rationale, the required ordering, and how to verify
 > with a real PTY (not `bash -lic`, which hides the bug).
 
+> **Anything about how Starship itself behaves** — `STARSHIP_SHELL` and its
+> per-shell values, the marker syntax it emits, why there is no config-time
+> env-var substitution, why `--norc --noprofile` buy nothing — is measured and
+> recorded in **`docs/STARSHIP.md`**, with the commands that reproduce every
+> finding. Check there before re-deriving it.
+
 ## Notable aliases
 
 ```bash

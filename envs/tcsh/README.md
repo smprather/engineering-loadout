@@ -188,12 +188,27 @@ controls two things, and `sh` is the only value that is right for both:
    `bash` emits readline's `\[ ... \]`, which tcsh prints literally because
    it has no readline; `tcsh` emits zsh's `%{ ... %}`.
 
-This env used to pin `bash` for reason 1, which broke reason 2 — and
-`global/helpers/prompt-markers` exists only to convert the markers that pin
-produced. With `sh` the prompt carries no markers and the helper is a no-op
-passthrough; it is kept as the belt for a prompt that arrives carrying them
-anyway. `tests/env-tcsh-starship` fails if the pin is missing, changed to
-`bash`, or moved above the init.
+**The performance trap, which is the reason this matters at all.** Starship
+runs each module's `when` AND `command` as a subprocess. If that subprocess
+is `tcsh`, it **sources `~/.tcshrc`** — tcsh does that for non-interactive
+shells too — so every module, on every prompt, pays the whole loadout rc.
+On one deployment that was 2 s per module, twice, i.e. a 4 s prompt.
+
+Both configs therefore give **every `[custom.*]` an explicit
+`shell = ["/bin/bash"]`**, which overrides `STARSHIP_SHELL` for both `when`
+and `command`. Measured with a 1 s delay injected into the rc: 3.84 s without
+the explicit shell, 1.52 s with it — and 1.52 s even with
+`STARSHIP_SHELL=tcsh`, which is the proof the module shell is what decides.
+`tests/env-tcsh-starship` fails if any custom module lacks it, and if the
+`STARSHIP_SHELL=sh` pin is missing, changed, or placed above the init.
+
+`global/helpers/prompt-markers` still exists: with `sh` the prompt carries no
+markers, so it is a no-op passthrough, kept as the belt for a prompt that
+arrives carrying them anyway.
+
+The full measurements — the marker table for every value, the `init`-exports-
+`tcsh` trap, why there is no config-time env-var substitution, and the
+commands that reproduce all of it — are in **`docs/STARSHIP.md`**.
 
 Two caveats on the starship prompt in tcsh:
 

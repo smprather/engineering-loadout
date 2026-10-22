@@ -207,6 +207,12 @@ switch the env reads but never defines is a dead switch -- the feature silently
 never fires. `tests/env-shell-parity` fails on that shape (definitions and
 reads are counted separately, on both envs).
 
+Starship behavior that is measured rather than obvious -- `STARSHIP_SHELL` is
+per-shell and also selects the marker syntax starship emits, there is no
+config-time env-var substitution, `--norc --noprofile` buy nothing -- lives in
+`docs/STARSHIP.md` with the commands that reproduce every finding. Check it
+before re-deriving.
+
 ### Hook Injection Points
 
 Each layer can inject code into `global/bashrc` via numbered files in

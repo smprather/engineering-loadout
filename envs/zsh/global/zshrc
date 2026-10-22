@@ -356,13 +356,15 @@ set_prompt() {
 
 if (( _loadout_starship_ok )); then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
-    # STARSHIP_SHELL=zsh, matching the shell being serviced -- see the full
-    # rationale in envs/bash/global/bashrc. It picks BOTH the shell starship
-    # runs each module's `when`/`command` with (falling back to `sh`, i.e.
-    # dash on many hosts, when unset) AND the zero-width marker syntax it
-    # emits: zsh's are %{ %}, which only `STARSHIP_SHELL=zsh` produces.
-    # Pinning bash here would hand zsh readline's \[ \] verbatim.
-    export STARSHIP_SHELL=zsh
+    # STARSHIP_SHELL=sh, NOT zsh. `starship init zsh` exports zsh itself,
+    # and zsh sources ~/.zshenv EVEN FOR NON-INTERACTIVE SHELLS -- so
+    # STARSHIP_SHELL=zsh means every module's `when`/`command` re-enters the
+    # whole loadout zsh config, per module, per prompt. `sh` is POSIX (the
+    # shared config's expressions are) and sources no rc. The per-module
+    # `shell = ["/bin/bash"]` in the starship config already pins the actual
+    # shell-out to bash; this pin is about the marker syntax it emits.
+    # Measurements: docs/STARSHIP.md §1c.
+    export STARSHIP_SHELL=sh
     eval "$(starship init zsh)"
 else
     set_prompt

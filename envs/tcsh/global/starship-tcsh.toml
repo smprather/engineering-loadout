@@ -25,6 +25,7 @@ $character"""
 
 [custom.username]
 when = 'for u in $LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT; do [ "$(whoami)" = "$u" ] && exit 0; done; exit 1'
+shell = ["/bin/bash"]
 command = 'whoami'
 format = "[$output]($style) "
 style = "bold yellow"
@@ -36,19 +37,18 @@ style = "bold yellow"
 # too -- without it the preference was silently ignored in every shell where
 # starship drives the prompt (the default).
 #
-# `when` runs under STARSHIP_SHELL=bash (the tcsh env sets it on purpose --
-# see envs/tcsh/README.md), so a POSIX test is safe in both shells.
-#
 # On an LSF node the hostname is already carried by custom.lsf ("LSF:<host>"),
 # so the plain host is suppressed there: no double host.
 [custom.host]
 when = 'test "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" = "1" && test -z "$LSB_JOBID"'
+shell = ["/bin/bash"]
 command = "hostname -s"
 format = "[$output]($style) "
 style = "bold dimmed white"
 
 [custom.lsf]
 when = 'test -n "$LSB_JOBID"'
+shell = ["/bin/bash"]
 command = "hostname -s"
 format = "[LSF:$output]($style) "
 style = "bold red"

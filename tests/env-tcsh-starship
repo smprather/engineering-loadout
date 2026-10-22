@@ -145,6 +145,23 @@ def main():
             "no module in the format string is gated on the switch (referenced custom "
             f"modules: {sorted(refs) or 'none'})",
         )
+        # Every custom module must pin its own shell-out to bash. This is the
+        # structural guarantee behind "a prompt render never invokes a shell
+        # rc": starship runs `when` and `command` as subprocesses of
+        # STARSHIP_SHELL (or of the module's `shell`, when set), and a module
+        # whose shell falls back to tcsh/zsh re-enters ~/.tcshrc / ~/.zshenv
+        # on EVERY prompt -- measured at 3.8s vs 1.5s with a 1s rc. A module
+        # added without `shell` silently reintroduces that. See
+        # docs/STARSHIP.md section 1b/1c.
+        unpinned = sorted(n for n, mod in custom.items() if not (mod or {}).get("shell"))
+        check(
+            f"every {label} custom module pins shell=/bin/bash",
+            not unpinned,
+            "no explicit shell on: "
+            + ", ".join(unpinned)
+            + '\n        Add shell = ["/bin/bash"] -- otherwise the module runs under'
+            "\n        STARSHIP_SHELL, which can be a shell that sources an rc.",
+        )
 
     print("-- the tcsh env uses it")
     rc = read(TCSHRC)
@@ -166,6 +183,16 @@ def main():
         "the tcshrc does not set STARSHIP_SHELL=sh -- starship's own tcsh init"
         " exports STARSHIP_SHELL=tcsh, under which custom.username's `for` loop"
         " cannot parse and the module silently never appears",
+    )
+    # ...and it must come AFTER the init, or starship's own
+    # `setenv STARSHIP_SHELL tcsh;` overwrites it. A bare substring test cannot
+    # catch that, so assert the ordering explicitly.
+    pin_at = rc.find("setenv STARSHIP_SHELL sh")
+    init_at = rc.find("init tcsh --print-full-init")
+    check(
+        "the pin comes after starship's init (which exports STARSHIP_SHELL=tcsh)",
+        pin_at > init_at >= 0,
+        f"pin at {pin_at}, init at {init_at} -- the pin must be later, or the init overwrites it back to tcsh",
     )
     # The helper stays: with `sh` the prompt carries no markers, so it is a
     # no-op passthrough -- and it is the belt for a prompt that arrives

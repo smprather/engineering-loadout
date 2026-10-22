@@ -351,6 +351,34 @@ def main():
         "the tcsh prompt no longer assembles _loadout_host",
     )
 
+    # ---- STARSHIP_SHELL, one value per env ---------------------------------
+    # It picks BOTH the shell each module's `when`/`command` runs under AND
+    # the zero-width marker syntax starship emits (bash -> readline \[ \],
+    # zsh -> %{ %}, sh -> none). No single value is right for every shell, so
+    # each env pins its own: docs/STARSHIP.md has the measurements.
+    #
+    # tcsh's is `sh`, NOT `tcsh` and NOT `bash`: `starship init tcsh
+    # --print-full-init` exports STARSHIP_SHELL=tcsh itself, under which
+    # custom.username's `for u in $VAR; do ... done` cannot parse and that
+    # module silently never appears; and `bash` emits readline's markers,
+    # which tcsh prints literally.
+    for env_name, path, expected, why in (
+        ("bash", BASH_BASHRC, "bash", "PS1 needs readline's \\[ \\] for prompt width"),
+        (
+            "zsh",
+            ZSH_ZSHRC,
+            "sh",
+            "zsh sources ~/.zshenv even non-interactively, so zsh re-enters the loadout config per module",
+        ),
+        ("tcsh", TCSH_TCSHRC, "sh", "POSIX for the snippets, and the only marker-free value"),
+    ):
+        text = read(path)
+        check(
+            f"the {env_name} env pins STARSHIP_SHELL={expected}",
+            re.search(rf"(export|setenv)\s+STARSHIP_SHELL[=\s]+{expected}\b", text) is not None,
+            f"expected STARSHIP_SHELL={expected} -- {why}. See docs/STARSHIP.md.",
+        )
+
     # ---- zsh -----------------------------------------------------------------
     for path in (ZSH_ENTRY, ZSH_ZSHRC, ZSH_COMPLETIONS):
         if not os.path.isfile(path):
