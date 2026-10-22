@@ -169,6 +169,19 @@ done
 # fails on libffi.so.6 -- which the yosys package does install into
 # <prefix>/lib64, but nothing had told the interpreter where to look. A build
 # host that happens to have libffi.so.6 in /usr/lib64 hides this.
+# TMPDIR points into the prefix unless the caller set one. The module
+# copies the genlib and the netlist into a temp directory and then reads
+# them back BY NAME; on a filesystem where a file that was just written
+# cannot be found by name (a tmpfs /tmp is one such case) that copy
+# silently fails and ABC dies with "execution of script ... failed: return
+# code 127". A temp directory on the prefix's own filesystem does not have
+# that problem.
+if [ -z "${TMPDIR:-}" ]; then
+    _loadout_tmpdir="$PREFIX/var/tmp"
+    mkdir -p "$_loadout_tmpdir" 2>/dev/null && TMPDIR="$_loadout_tmpdir"
+    export TMPDIR
+fi
+
 LD_LIBRARY_PATH="$PREFIX/lib64:$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 PYTHONPATH="$PYOSYS_DIR${PYTHONPATH:+:$PYTHONPATH}" \
     exec "$PYTHON" "$script" "$@"
