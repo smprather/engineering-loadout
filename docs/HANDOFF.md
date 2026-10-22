@@ -63,18 +63,40 @@ has `libffi.so.6` in `/usr/lib64` and its `/tmp` is not the target's):
   `lib64`/`lib` on `LD_LIBRARY_PATH`.
 - The module copies the genlib and the netlist into a temp directory and
   reads them back BY NAME. The wrapper now points `TMPDIR` into the prefix
-  (unless the caller set one), so the temp directory is on the prefix's own
-  filesystem.
+  (unless the caller set one), so the module's temp files stay on the
+  prefix's own filesystem. This does NOT fix the failure below -- it only
+  changes where the temp directory lives.
 
-**End-to-end check.** Installing the shipped payload (`loadout install
-yosys portable-python --dest-dir ...`) and running `yosys -y` with a real
-synthesis and ABC passes: `E2E_OK 0.69+post`. On THIS dev host it fails
-with `ABC: execution of script ... failed: return code 127` -- the genlib
-copy into the temp directory does not land on this host's filesystem, where
-a file that was just written can be listed by `readdir()` but not found by a
-`stat()` on its name. The same copy works in the EL8 container (the build
-smoke and the container end-to-end both pass), so it is a quirk of this
-host, not of the payload.
+**End-to-end check, and an OPEN host-only failure.** Installing the shipped
+payload (`loadout install yosys portable-python --dest-dir ...`) and
+running `yosys -y` with a real synthesis and ABC passes in the EL8
+container: `E2E_OK 0.69+post`.
+
+On THIS dev host the same install fails with `ABC: execution of script
+... failed: return code 127` (ABC cannot read the genlib the module copied
+into its temp directory). What is known:
+
+- It is NOT the filesystem of the prefix: the container run used a prefix
+  under the host's `/tmp` (the same tmpfs) and PASSED, and the host run
+  also failed with a prefix on the host's nvme-backed home.
+- It is NOT fixed by moving `TMPDIR` into the prefix (the temp directory
+  moved; the failure did not).
+- The build's own relocation smoke passes -- but it runs in the container,
+  where the end-to-end also passes.
+
+So the difference is between the container's mount namespace and the host's
+-- or something else host-side -- and it is NOT yet explained. The payload
+is correct on the target platform; the host-only failure is unresolved.
+Reproduction, for whoever picks it up:
+
+```
+D=/home/mylesp/e2e-prefix; H=/home/mylesp/e2e-home
+env -i HOME="$H" PATH=/usr/bin:/bin XDG_DATA_HOME="$H/.local/share" \
+  ./loadout install yosys portable-python --dest-dir "$D" --yes
+cd "$D" && PATH="$D/bin:/usr/bin:/bin" "$D/bin/yosys" -y smoke.py
+```
+
+(the same prefix directory mounted into the container passes).
 
 **Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
 ("nested server accepted a connection with no cookie"), which fails

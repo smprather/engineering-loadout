@@ -1869,6 +1869,44 @@ def smoke_runtime_layout(tmpdir, env):
                 print(f"  FAIL (synth):        yosys  rc={proc.returncode} cells={cells} {detail}")
                 failures.append(("yosys", detail))
 
+            # The `-y` bridge is a separate path from the passthrough above:
+            # it runs a Python script through the pyosys module, which is
+            # dlopen()ed by the INTERPRETER (no RPATH of its own -- it needs
+            # the prefix's lib64 for libffi.so.6) and which finds yosys-abc
+            # next to itself. A tree where any of that is missing runs
+            # `yosys` fine and dies on `yosys -y`, so the bridge gets its own
+            # probe.
+            py_script = os.path.join(work, "py_smoke.py")
+            with open(py_script, "w") as fh:
+                fh.write(
+                    "import sys\n"
+                    "from pyosys import libyosys as ys\n"
+                    "d = ys.Design()\n"
+                    "d.run_pass('read_verilog smoke.v')\n"
+                    "d.run_pass('synth')\n"
+                    "print('PYOSYS_SMOKE_OK')\n"
+                )
+            try:
+                proc = subprocess.run(
+                    [os.path.join(bin_dir, "yosys"), "-y", "py_smoke.py"],
+                    cwd=work,
+                    env=env,
+                    timeout=300,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+            except Exception as exc:
+                print(f"  FAIL (pyosys):       yosys -y  {exc}")
+                failures.append(("yosys -y", str(exc)))
+            else:
+                out = proc.stdout.decode("utf-8", "replace")
+                if proc.returncode == 0 and "PYOSYS_SMOKE_OK" in out:
+                    print("  OK   (pyosys):       yosys -y  ran a python script through pyosys")
+                else:
+                    detail = output_excerpt(proc.stdout)
+                    print(f"  FAIL (pyosys):       yosys -y  rc={proc.returncode} {detail}")
+                    failures.append(("yosys -y", detail))
+
     if has_bin("netlistsvg"):
         # Neither netlistsvg CLI has a zero-exit flag invocation (yargs-6
         # demand rejects --help/--version with exit 1; pinned above), and a
