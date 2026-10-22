@@ -239,6 +239,20 @@ It uses `git symbolic-ref` rather than `git rev-parse --abbrev-ref`, because
 `symbolic-ref` resolves correctly on an unborn HEAD; a detached HEAD falls back to a
 short sha.
 
+### `>&2` does not mean stderr in tcsh
+
+When instrumenting this env, never write `echo ... >&2`. In tcsh `>&` means
+"redirect stdout **and** stderr to a *file*", so `>&2` silently creates a file
+named **`2`** in the current directory. Verified:
+
+```sh
+tcsh -f -c 'echo HELLO >&2'   # -> creates ./2 containing HELLO; nothing on stderr
+```
+
+This has bitten this repo twice: a stray tracked file named `2` was committed
+from exactly this mistake. To reach stderr, `echo ... > /dev/stderr`; to
+discard, `>& /dev/null`.
+
 ## Testing
 
 `tests/install-env-tcsh`. It skips cleanly where there is no tcsh (the dev box) and

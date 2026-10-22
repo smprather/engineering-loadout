@@ -169,7 +169,6 @@ sha256  0a8af880042c112743005f6d80b8dc7c71f4acb9f969d40ad3b6f3573462c4df  payloa
 sha256  0aa487e7b9408b4b8afdb0b286785e71251f5849e9b73d2d211487937484f777  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/typoscript/injections.scm
 sha256  0aa487e7b9408b4b8afdb0b286785e71251f5849e9b73d2d211487937484f777  payload/treesitter/vendor/nvim-treesitter/runtime/queries/typoscript/injections.scm
 sha256  0aa5c6288394a37c5cff3e20247db99825721abd7eae3f5fa0bb43c1021efaf9  payload/treesitter/vendor/nvim-treesitter/tests/indent/julia_spec.lua
-sha256  0ac95641e198ba5ac51400a7a59f4d07e731dc2779a6dad0ddac0dacf85926ae  payload/installed-sizes.json
 sha256  0ae67975f5c9f595072adc654fdb1e3c2d21c2e03dfded2001a94695a07f1feb  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/meson/folds.scm
 sha256  0ae67975f5c9f595072adc654fdb1e3c2d21c2e03dfded2001a94695a07f1feb  payload/treesitter/vendor/nvim-treesitter/runtime/queries/meson/folds.scm
 sha256  0aee36c829db4ada48b1e66ff95a6e7c92ef1c00447e8a3ec41900743a337232  payload/el8.x86_64.glibc2p28/bin/gocheat.bz2
@@ -3340,6 +3339,7 @@ sha256  c7fea9cbb9e868a232f6417261d26febb6f5562de3832edd0865b82fcce615ac  payloa
 sha256  c87b10d5c14676b41fdd73bbe2601b43a74bfa5ded7547f48db0dfde7912db2f  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/typst.lua
 sha256  c880e9d9bb9c9d66f3827748b1fb9768b8f75b4c79e24d001ffc12ec0fc63b42  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/lalrpop.lua
 sha256  c8ad816f051f8806a56146625af3fd6d2c0d19ff111f502b3179d8e3de6ae702  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/hlsl.so.bz2
+sha256  c8b7cdae88bc0620cefd08ebdb3e9996ae25e838279eaa83649c699615c3c859  payload/installed-sizes.json
 sha256  c8ba68ee83211b4c8dc43cbae74ced124b389d671a658ac0ee0890435546f229  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/kos/folds.scm
 sha256  c8ba68ee83211b4c8dc43cbae74ced124b389d671a658ac0ee0890435546f229  payload/treesitter/vendor/nvim-treesitter/runtime/queries/kos/folds.scm
 sha256  c90409d14c10ebd8a981e6c726629155f5a57e7b05b6a37125c8ba667404e8bd  payload/treesitter/vendor/nvim-treesitter/tests/indent/dart/switch.dart
