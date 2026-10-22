@@ -1,0 +1,270 @@
+#!/usr/bin/env python3.15
+"""prompt-no-rc: prompt module commands must not run under the serviced shell.
+
+Reported from a deployment system: the tcsh prompt took ~4 s to render --
+"the tcsh rc sequence was 2 s x run twice" -- and the fix reported back was
+"use custom /bin/bash commands in the modules".
+
+Mechanism: starship runs each module's `when` AND `command` in a subprocess of
+`STARSHIP_SHELL`, unless the module sets its own `shell = [...]`. The config now
+pins every `[custom.*]` to `shell = ["/bin/bash"]`, and
+tests/env-tcsh-starship checks that STATICALLY. This test proves the EFFECT,
+because a static check cannot: a module added without a `shell`, or a
+STARSHIP_SHELL change, would still pass the static check while every prompt
+paid for a slow shell.
+
+What is asserted (measured, not assumed):
+
+  1. the module's command actually runs under /bin/bash -- recorded by the
+     module itself via /proc/$$/exe. This is the real invariant and it does not
+     depend on shell version quirks.
+  2. no NON-INTERACTIVE source of the shell's rc happens during a prompt. The
+     rc is instrumented to log AND sleep 1 s when sourced that way.
+  3. the first prompt renders well under that 1 s.
+
+Note on (2): starship 1.27.0 execs the module shell with NO arguments and feeds
+the command on stdin, and `tcsh` in stdin-script mode does NOT source
+~/.tcshrc (only `tcsh -c` does). So (2) is a belt on this version -- it fires
+for a starship/tcsh combination that does source the rc, and it is free.
+
+Skips cleanly where starship / tcsh / zsh are absent.
+
+Exits 0 on pass (or skip), 1 on failure.
+"""
+
+import fcntl
+import os
+import pty
+import select
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GLYPH = "\u276f".encode()  # the $character symbol, last thing a prompt draws
+
+PASSED = 0
+FAILED = 0
+SKIPPED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def skip(name, why):
+    global SKIPPED
+    SKIPPED += 1
+    print(f"  SKIP  {name}  {why}")
+
+
+TCSH_HOOK = """if ( ! $?prompt ) then
+    sleep 1
+    echo SUBSHELL_RC >> "$HOME/rc-runs.log"
+endif
+"""
+
+# `zsh -c` sets ZSH_EXECUTION_STRING; the interactive session does not.
+ZSH_HOOK = """if [[ -n ${ZSH_EXECUTION_STRING-} ]]; then
+    sleep 1
+    echo SUBSHELL_RC >> "$HOME/rc-runs.log"
+fi
+"""
+
+
+def prepare(home, env_name, extra_envs=()):
+    """Install an env bundle, the starship config, and probe the module shell."""
+    for name in (env_name,) + tuple(extra_envs):
+        dest = os.path.join(home, ".config", name)
+        os.makedirs(dest, exist_ok=True)
+        subprocess.run(["cp", "-r", f"{REPO}/envs/{name}/.", dest + "/"], check=True)
+    os.makedirs(os.path.join(home, ".config", "starship"), exist_ok=True)
+    # custom.host records the interpreter that runs it. `hostname -s` after the
+    # redirect keeps the module's real output intact.
+    with open(f"{REPO}/envs/starship/starship.toml", encoding="utf-8") as fh:
+        cfg = fh.read()
+    probe = os.path.join(home, "module-shell.txt")
+    cfg = cfg.replace(
+        'command = "hostname -s"\nformat = "[$output]($style) "\nstyle = "bold dimmed white"',
+        f'command = "readlink -f /proc/$$/exe > {probe}; hostname -s"\n'
+        'format = "[$output]($style) "\nstyle = "bold dimmed white"',
+    )
+    if probe not in cfg:
+        raise SystemExit("FAIL: could not patch custom.host's command to probe its shell")
+    with open(os.path.join(home, ".config", "starship", "starship.toml"), "w", encoding="utf-8") as fh:
+        fh.write(cfg)
+    return probe
+
+
+def drive(shell_path, home, extra_env=None):
+    """Run an interactive shell; return (elapsed, output) up to the first prompt."""
+    env = {
+        "HOME": home,
+        "PATH": "/usr/bin:/bin",
+        "TERM": "xterm-256color",
+        "LANG": os.environ.get("LANG") or "C.UTF-8",
+    }
+    env.update(extra_env or {})
+    start = time.time()
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ.clear()
+        os.environ.update(env)
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        os.execv(shell_path, [shell_path, "-i"])
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    buf = b""
+    deadline = start + 10.0
+    while time.time() < deadline:
+        r, _, _ = select.select([fd], [], [], 0.2)
+        if not r:
+            continue
+        try:
+            data = os.read(fd, 65536)
+        except OSError:
+            break
+        if not data:
+            break
+        buf += data
+        if GLYPH in buf:
+            break
+    elapsed = time.time() - start
+    for closer in (lambda: os.close(fd), lambda: os.waitpid(pid, 0)):
+        try:
+            closer()
+        except Exception:  # noqa: BLE001 -- already gone
+            pass
+    return elapsed, buf.decode("utf-8", "replace")
+
+
+def rc_runs(home):
+    path = os.path.join(home, "rc-runs.log")
+    if not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as fh:
+        return sum(1 for ln in fh if ln.strip())
+
+
+def probe_shell(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return fh.read().strip()
+
+
+def case(label, shell_path, home, extra_env, expect_switch):
+    """Shared assertions for one shell."""
+    elapsed, _ = drive(shell_path, home, extra_env)
+    shell = probe_shell(os.path.join(home, "module-shell.txt"))
+    # resolved through /dev symlinks, so compare the program NAME: any bash is
+    # correct, any tcsh/zsh is the bug.
+    is_bash = shell is not None and os.path.basename(shell) == "bash"
+    check(
+        f"{label}: module command runs under bash",
+        is_bash,
+        f'ran under {shell!r} -- a module with no `shell = ["/bin/bash"]` runs'
+        " under STARSHIP_SHELL; see docs/STARSHIP.md 1b",
+    )
+    if expect_switch:
+        check(
+            f"{label}: the module actually rendered (probe fired)",
+            shell is not None,
+            "the probe never ran, so the prompt did not render the module",
+        )
+    runs = rc_runs(home)
+    check(
+        f"{label}: no non-interactive rc sourcing during a prompt",
+        runs == 0,
+        f"{runs} subshell rc run(s); each costs the 1s sleep in the rc",
+    )
+    check(
+        f"{label}: first prompt renders without paying the rc's sleep",
+        elapsed < 1.0,
+        f"{elapsed:.2f}s (one rc re-entry adds 1s)",
+    )
+
+
+def main():
+    starship = shutil.which("starship")
+
+    print("-- tcsh")
+    if not starship:
+        skip("tcsh prompt modules", "starship not on PATH")
+    elif not os.path.exists("/usr/bin/tcsh"):
+        skip("tcsh prompt modules", "tcsh not installed")
+    else:
+        home = tempfile.mkdtemp(prefix="no-rc-tcsh-")
+        try:
+            probe = prepare(home, "tcsh")
+            entry = os.path.join(home, ".config", "tcsh", "tcshrc")
+            with open(entry, encoding="utf-8") as fh:
+                body = fh.read()
+            with open(entry, "w", encoding="utf-8") as fh:
+                fh.write(TCSH_HOOK + body)
+            shutil.copy(entry, os.path.join(home, ".tcshrc"))
+            # config.csh uses `if ( ! $?VAR )`, so an inherited value wins.
+            # Hostile STARSHIP_SHELL, set in the user layer so it WINS over the
+            # env's own `sh` pin: this is the historical configuration that made
+            # the prompt take seconds. The per-module `shell` must still win.
+            with open(os.path.join(home, ".tcshrc"), "a", encoding="utf-8") as fh:
+                fh.write("\nsetenv STARSHIP_SHELL tcsh\n")
+            case(
+                "tcsh",
+                "/usr/bin/tcsh",
+                home,
+                {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "1"},
+                expect_switch=True,
+            )
+            del probe
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    print("-- zsh")
+    if not starship:
+        skip("zsh prompt modules", "starship not on PATH")
+    elif not os.path.exists("/usr/bin/zsh"):
+        skip("zsh prompt modules", "zsh not installed")
+    else:
+        home = tempfile.mkdtemp(prefix="no-rc-zsh-")
+        try:
+            probe = prepare(home, "zsh", extra_envs=("bash",))
+            entry = os.path.join(home, ".config", "zsh", "zshrc")
+            with open(entry, encoding="utf-8") as fh:
+                body = fh.read()
+            with open(entry, "w", encoding="utf-8") as fh:
+                # config.sh exports LOADOUT_CFG_PROMPT_INCLUDE_HOST=0
+                # unconditionally, so force it on after the entry runs.
+                fh.write(
+                    ZSH_HOOK
+                    + body
+                    + "\nexport LOADOUT_CFG_PROMPT_INCLUDE_HOST=1\n"
+                    # hostile: wins over the env's own `sh` pin
+                    + "export STARSHIP_SHELL=zsh\n"
+                )
+            for link in (".zshenv", ".zshrc", ".zprofile"):
+                os.symlink(entry, os.path.join(home, link))
+            case("zsh", "/usr/bin/zsh", home, {}, expect_switch=True)
+            del probe
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    print()
+    if FAILED:
+        print(f"{PASSED} passed, {FAILED} failed, {SKIPPED} skipped")
+        return 1
+    print(f"{PASSED} passed, 0 failed, {SKIPPED} skipped")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

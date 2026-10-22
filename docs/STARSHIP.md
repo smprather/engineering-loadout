@@ -76,6 +76,23 @@ So the per-module `shell` is the structural fix: it removes the dependence on
 sources an rc** — and with `shell = ["/bin/bash"]` plus a non-rc shell for
 `STARSHIP_SHELL` (`sh`), none can.
 
+**How starship actually spawns it (1.27.0, `strace -f -e execve`):** the module
+shell is executed with **no arguments**, and the command is fed on **stdin** --
+`execve("/usr/bin/tcsh", ["/usr/bin/tcsh"])`. Measured consequence: `tcsh`
+reading a script from stdin does NOT source `~/.tcshrc`, while `tcsh -c` DOES:
+
+```sh
+printf 'true\n' | tcsh            # no ~/.tcshrc
+tcsh -c true                       # sources ~/.tcshrc
+```
+
+So on this version a tcsh module shell-out does not re-enter the rc by itself;
+a different starship/tcsh combination can. The per-module `shell = ["/bin/bash"]`
+is the guarantee either way, and that is what `tests/prompt-no-rc` asserts: the
+module's command must run under bash **even when `STARSHIP_SHELL` is forced to
+`tcsh`/`zsh` in the user layer**, with an rc instrumented to log and sleep 1 s
+as a second, independent tripwire.
+
 Reproduce the slow case:
 
 ```sh

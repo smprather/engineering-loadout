@@ -325,6 +325,7 @@ run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "release-timings" "$PY" tests/release-timings
 run_test "env-tcsh-starship" "$PY" tests/env-tcsh-starship
+run_test "prompt-no-rc" "$PY" tests/prompt-no-rc
 run_test "test-cleanup" "$PY" tests/test-cleanup
 run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
 run_test "dep-capture" tests/dep-capture
