@@ -167,6 +167,12 @@ the short hostname to the prompt. It is honored by the starship prompt (the
 prompt, so the switch means the same thing in every shell. On an LSF node the
 hostname is already carried by the `LSF:` tag, so it is not repeated.
 
+**No python snake, and a label instead.** tcsh drops astral (4-byte)
+characters when rendering a prompt in a UTF-8 locale, so `$python`'s `🐍`
+cannot be shown. Left alone the module reads as a bare `v3.14.8`, which says
+nothing; the helper substitutes `python `, so the prompt shows
+`python v3.14.8`. bash and zsh keep the real emoji.
+
 **One starship config, shared with bash and zsh; only the path colour differs.**
 All three envs read `~/.config/starship/starship.toml`. Starship has **no
 config-time environment-variable substitution** (measured: `style = "$VAR"` is

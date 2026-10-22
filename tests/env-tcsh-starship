@@ -210,6 +210,24 @@ def main():
         bool(honoring),
         f"no module in the format string is gated on the switch (referenced custom modules: {sorted(refs) or 'none'})",
     )
+    # tcsh DROPS astral (4-byte) characters when rendering a prompt in a UTF-8
+    # locale, so `$python`'s snake cannot be shown -- it would leave a bare
+    # `vX.Y.Z`, which tells a new user nothing. The helper substitutes a BMP
+    # label instead, and this check ties that substitution to the configured
+    # symbol: change `[python] symbol` and the gate fails until the helper is
+    # updated, rather than silently dropping the label.
+    py_symbol = str(cfg.get("python", {}).get("symbol", ""))
+    if py_symbol:
+        py_sed = "s/" + "".join(f"\\x{b:02x}" for b in py_symbol.encode()) + "/python /g"
+        check(
+            "the helper replaces the python symbol with a BMP label",
+            py_sed in read(HELPER),
+            f"expected {py_sed} in helpers/prompt-markers -- tcsh cannot render"
+            f" {py_symbol!r} (astral), so it needs a text label",
+        )
+    else:
+        check("the config has a [python] symbol", False, "no symbol to substitute")
+
     # Every custom module must pin its own shell-out to bash. This is the
     # structural guarantee behind "a prompt render never invokes a shell rc":
     # starship runs `when` and `command` as subprocesses of STARSHIP_SHELL (or
@@ -360,7 +378,7 @@ def main():
         # makes the capture environment-dependent, so pin it.
         lang = os.environ.get("LANG", "C.UTF-8")
 
-        def tcsh_prompt(extra_env):
+        def tcsh_prompt(extra_env, with_python=False):
             home = tempfile.mkdtemp(prefix="tcsh-expect-")
             try:
                 os.makedirs(os.path.join(home, ".config", "tcsh"))
@@ -377,6 +395,16 @@ def main():
                 proj = os.path.join(home, "proj")
                 os.makedirs(proj)
                 subprocess.run(["git", "init", "-q", "-b", "main", proj], check=True)
+                if with_python:
+                    # committed, so git_status renders nothing: only $python
+                    # differs from the plain fixture.
+                    with open(os.path.join(proj, "x.py"), "w") as fh:
+                        fh.write("print(1)\n")
+                    subprocess.run(["git", "-C", proj, "add", "x.py"], check=True)
+                    subprocess.run(
+                        ["git", "-C", proj, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"],
+                        check=True,
+                    )
                 env = {
                     "HOME": home,
                     "PATH": "/usr/bin:/bin",
@@ -427,17 +455,23 @@ def main():
         path = "\x1b[1;33m~/proj\x1b[0m "
         char = "\x1b[1;32m\u276f\x1b[0m "
         body = "on " + branch + brk + path + brk + char
+        # tcsh DROPS the astral python snake, so the helper substitutes a BMP
+        # label; without it the module reads as a bare `v3.14.8`.
+        py_seg = "\x1b[1;33mpython v3.14.8\x1b[0m "
+        body_py = "on " + branch + py_seg + brk + path + brk + char
         expected_tcsh = {
             "off": body,
             "on": f"\x1b[1;2;37m{host}\x1b[0m " + body,
             "lsf": f"\x1b[1;31mLSF:{host}\x1b[0m " + body,
+            "python": body_py,
         }
-        for label, extra in (
-            ("off", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "0"}),
-            ("on", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "1"}),
-            ("lsf", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "1", "LSB_JOBID": "9"}),
+        for label, extra, with_py in (
+            ("off", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "0"}, False),
+            ("on", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "1"}, False),
+            ("lsf", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "1", "LSB_JOBID": "9"}, False),
+            ("python", {"LOADOUT_CFG_PROMPT_INCLUDE_HOST": "0"}, True),
         ):
-            got = tcsh_prompt(extra)
+            got = tcsh_prompt(extra, with_python=with_py)
             check(
                 f"tcsh DISPLAYS exactly: {label}",
                 got == expected_tcsh[label],

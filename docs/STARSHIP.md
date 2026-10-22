@@ -282,10 +282,23 @@ So with a normal UTF-8 environment tcsh renders `v3.14.8` with no snake; it is
 (the bytes reach it intact -- the same bytes print correctly outside a prompt,
 and the helper's output is byte-perfect under `od`).
 
-Practical consequence: the snake is not reliably obtainable there. If a marker
-is wanted, `envs/tcsh/global/helpers/prompt-markers` is the place to substitute
-a BMP-safe glyph -- it already rewrites this prompt. Not done, because
-`v3.14.8` is unambiguous on its own.
+Practical consequence: the snake is not obtainable there, and a bare `v3.14.8`
+says nothing to a new user. The helper therefore substitutes a BMP label:
+
+```sh
+-e 's/\xf0\x9f\x90\x8d/python /g'    # 🐍 -> "python "
+```
+
+so tcsh shows `python v3.14.8`. The substitution cannot be avoided by passing
+the emoji through differently -- `%{ %}`, a variable and a command substitution
+were all tried and all dropped it; only a non-UTF-8 locale preserves astral
+characters, which would break i18n for the whole shell. bash/zsh keep the real
+emoji.
+
+`tests/env-tcsh-starship` ties the two together: it reads `[python] symbol`
+from the config, encodes it to its bytes, and requires exactly that `s/…/`
+rewrite in the helper -- and it asserts the DISPLAYED prompt for a repo
+containing a `.py` file, so the label is covered end to end.
 
 Note also that `tests/env-tcsh-starship`'s exact-match fixture is a repo with
 NO python file, so `$python` does not fire there at all -- the snake is absent

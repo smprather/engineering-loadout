@@ -39,7 +39,17 @@
 # printf '%s' (not echo) because csh's echo interprets backslash escapes, and
 # the very markers this helper is here to convert would be consumed by it.
 
-# 3. NEWLINES. csh collapses newlines inside a quoted command substitution,
+# 3. THE PYTHON SYMBOL. `$python`'s symbol is U+1F40D (4 bytes). tcsh DROPS
+#    astral characters when rendering a prompt in a UTF-8 locale -- verified
+#    with two different astral characters, with the rc file's bytes confirmed
+#    by `od`, and with `%{ %}`, a variable and a command substitution all
+#    tried. Only a non-UTF-8 locale preserves them, which would break i18n.
+#    So the snake cannot be kept: substitute a BMP label, or the prompt shows a
+#    bare `vX.Y.Z` that says nothing. bash/zsh keep the real emoji -- this is
+#    tcsh-only, which is why it belongs here and not in the shared config.
+#    tests/env-tcsh-starship ties this to `[python] symbol` in the config.
+#
+# 4. NEWLINES. csh collapses newlines inside a quoted command substitution,
 #    and the precmd alias is `set prompt = "`helper`"` -- so a MULTI-LINE
 #    prompt arrives as ONE line, putting the path on the same line as the
 #    branch/status block. tcsh DOES interpret `\n` in `prompt` (verified:
@@ -59,4 +69,5 @@ awk 'BEGIN { ORS = "" } NR > 1 { printf "\\n" } { print }' \
         -e 's/\\\[/%{/g' \
         -e 's/\\\]/%}/g' \
         -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
-        -e 's/\x1b\[[0-9;]*m/%{&%}/g'
+        -e 's/\x1b\[[0-9;]*m/%{&%}/g' \
+        -e 's/\xf0\x9f\x90\x8d/python /g'

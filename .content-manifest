@@ -787,6 +787,7 @@ sha256  2e455963eac44831e7653f193d74706b1343097a686b30285481f5413cf1fe29  payloa
 sha256  2e4b44779daa4ac0f53875f1a50d42f32e4585ce705563256920983e04a6b582  envs/tmux/vendor/plugins/tpm/bindings/install_plugins
 sha256  2e6901c1569a4a367523e8ba20a526d855253a3ef4dde7c7ae66b4cc3eb65fff  payload/el8.x86_64.glibc2p28/bin/rsync.bz2
 sha256  2e750e24b44ed9e0b7afc25bf40579da8e5f47aafce2af71da5b90a7d05f201b  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/csv.lua
+sha256  2e7716f033750d9a15ac023d586f0af26fde4829c2d350e8eb436d9a1f0e3a05  payload/installed-sizes.json
 sha256  2e7dc93b35f0bb0cd1de7fa49ef6a1ebe3578e37f249999fc7ccd23ea2cb9d11  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/arduino.lua
 sha256  2ea07ee5b3dda51bdc33bdc904a0762b31211bbd1669c5286a4d8f862d14f2df  payload/el8.x86_64.glibc2p28/lib64/libcairo.so.2.bz2
 sha256  2ec0308875f7999deb2901bec7bf3fe927c49a3e11041c9db4040599d057faeb  payload/el8.x86_64.glibc2p28/bin/espresso.bz2
@@ -1485,7 +1486,6 @@ sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  payloa
 sha256  571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320  payload/el8.x86_64.glibc2p28/wheels/annotated_doc-0.0.4-py3-none-any.whl
 sha256  572435efca2fde905938c3dc7921928b198d0b08cb43b12dd25cc5c999f803ab  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/javadoc.so.bz2
 sha256  57322ee2333c0dceaaa878d1423c118b223f959b0d5d8a16f5b9dab99bfb2ee5  payload/el8.x86_64.glibc2p28/lib64/libwayland-client.so.0.bz2
-sha256  5735064f6b833d914f6dbc7ffd6e9a58e3a4b10fc504d1719d60f1c0962ef0bf  payload/installed-sizes.json
 sha256  5740d8bf5a6418664045d286580a2030a8a367e114e978ae447a139408d42c09  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/haskell/injections.scm
 sha256  5740d8bf5a6418664045d286580a2030a8a367e114e978ae447a139408d42c09  payload/treesitter/vendor/nvim-treesitter/runtime/queries/haskell/injections.scm
 sha256  575f636a7a9836bc94677fcb2cd41169bb4529388696ab5f2a5e8f96cb595bee  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/lua.so.bz2
