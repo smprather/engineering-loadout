@@ -49,7 +49,32 @@ every data file in the tree AND make the `-y` path read its techlib from the
 package -- i.e. from the build host -- instead of from the prefix it was
 installed into. The relocation smoke now asserts that: it fails if
 `sys._pyosys_share_dirname` is set, so the data tree provably comes from the
-relocated prefix.
+relocated prefix. The `yosys-abc` IS carried by the package, as a RELATIVE
+symlink to the prefix's own `bin/yosys-abc`: the module looks for it next
+to itself, and the tree still holds only one copy.
+
+**Two wrapper fixes the build's own smoke could not see** (the build host
+has `libffi.so.6` in `/usr/lib64` and its `/tmp` is not the target's):
+
+- The `-y` path execs the interpreter, and the module is `dlopen()`ed *by
+  the interpreter*, which has no RPATH of its own -- so the import of
+  `libyosys.so` failed on `libffi.so.6` even though the yosys package
+  installs it into `<prefix>/lib64`. The wrapper now puts the prefix's
+  `lib64`/`lib` on `LD_LIBRARY_PATH`.
+- The module copies the genlib and the netlist into a temp directory and
+  reads them back BY NAME. The wrapper now points `TMPDIR` into the prefix
+  (unless the caller set one), so the temp directory is on the prefix's own
+  filesystem.
+
+**End-to-end check.** Installing the shipped payload (`loadout install
+yosys portable-python --dest-dir ...`) and running `yosys -y` with a real
+synthesis and ABC passes: `E2E_OK 0.69+post`. On THIS dev host it fails
+with `ABC: execution of script ... failed: return code 127` -- the genlib
+copy into the temp directory does not land on this host's filesystem, where
+a file that was just written can be listed by `readdir()` but not found by a
+`stat()` on its name. The same copy works in the EL8 container (the build
+smoke and the container end-to-end both pass), so it is a quirk of this
+host, not of the payload.
 
 **Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
 ("nested server accepted a connection with no cookie"), which fails
