@@ -4024,9 +4024,7 @@
         "lib/yosys-pyosys"
       ],
       "missing_hint": "the Yosys techlib tree (share/yosys) will NOT be installed; `yosys` starts but every synth pass fails",
-      "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python",
-      "disabled": true,
-      "disabled_reason": "DISABLED 2026-10-21: the 'yosys -y' bridge needs a pyosys extension module built for the shipped interpreter, and upstream publishes pyosys only per CPython ABI (cp310..cp314t -- there is no cp315 wheel), so a cp314 module refuses to load under 3.15 ('Python version mismatch'). The source build against portable-python 3.15 now works (build/build-yosys.sh: the pybind11 include path, the FindPyosysEnv virtualenv, the install dir and the module lookup are all fixed, and the compiled module is cached under $LOADOUT_BUILD_CACHE so a re-run is a copy instead of a 15-minute compile), but the resulting 49MB module cannot be verified on this build host: a lookup by name for libyosys.so returns ENOENT while readdir() lists the very same file, so the layout check cannot be satisfied here. The module itself is fine (it loads under 3.15 outside the build tree); what is broken is the name lookup on this host's dcache. Deferred rather than shipped broken. 'sby' depends on yosys and goes offline with it."
+      "description": "Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises. yosys-witness is deliberately not shipped: it imports click at module scope and dies with ModuleNotFoundError on a stock EL8 python"
     },
     "sby": {
       "kind": "bin",

@@ -1,12 +1,16 @@
 # Current Handoff
 
-## 2026-10-21 (3): yosys -- the pyosys module now BUILDS for 3.15; the build host cannot verify it
+## 2026-10-21 (3): yosys and sby are back -- the pyosys module is built for 3.15
 
-`yosys` and `sby` remain `disabled` in `payload/packages.json`, but the
-reason has changed and the remaining blocker is narrow.
+`yosys` and `sby` are back in service. The `yosys -y` bridge (the LibreLane
+synthesis path) needs a pyosys extension module built for the shipped
+interpreter, and upstream publishes pyosys only per CPython ABI -- cp310 to
+cp314t, no cp315 -- so the cp314 wheel refuses to load under 3.15 ("Python
+version mismatch"). The module is now built from the yosys source against
+portable-python 3.15.
 
-**What was fixed** (all in `build/build-yosys.sh`, all found by the ABI gate
-the script already had):
+**Five build-script bugs** (all in `build/build-yosys.sh`, all found by the
+ABI gate the script already had):
 
 - `python -m pybind11 --includes` prints COMPILER FLAGS (`-I<dir>`), so the
   leading `-I` made the include path fail the directory test and the build was
@@ -20,18 +24,26 @@ the script already had):
 - The pyosys package installs into the INTERPRETER's site-packages
   (`YOSYS_INSTALL_PYTHON_SITEDIR` defaults to `Python3_SITEARCH`), which here
   is the repo's own bootstrap tree -- the build was writing into the checkout.
+- **`YOSYS_BUILD_PYTHON_ONLY` is a DEPENDENT option.** Upstream forces it OFF
+  unless neither the driver nor the library is installed
+  (`cmake_dependent_option(... NOT (YOSYS_INSTALL_DRIVER OR
+  YOSYS_INSTALL_LIBRARY) AND YOSYS_INSTALL_PYTHON)`), so the build produced
+  the yosys CORE library -- also named `libyosys.so`, also 49MB, and not a
+  Python module at all ("dynamic module does not define module export
+  function"). Both install switches have to be off for the extension to be
+  what gets built.
 
-The compiled module is now cached under `$LOADOUT_BUILD_CACHE` (the pattern
-`build/build-openroad.sh` uses for OR-Tools): the compile is ~15 minutes and
-every last-mile failure used to throw it away. The stamp is written only
-after a successful build, and `YOSYS_NO_CACHE=1` forces a rebuild.
+**The build is cached** (the pattern `build/build-openroad.sh` uses for
+OR-Tools): the source tree, the cmake build tree and the installed module
+live under `$LOADOUT_BUILD_CACHE`, so a re-run is incremental instead of
+another 15-minute compile. The stamp is written only after the ABI gate has
+passed -- a stamp written earlier could mark the core library as a usable
+module. `YOSYS_NO_CACHE=1` forces a rebuild.
 
-**What is still broken** is the verification, not the module: on this build
-host a lookup by name for the 49MB `libyosys.so` returns ENOENT while
-`readdir()` lists the very same file, so the layout check cannot be
-satisfied. The identical copy, in the identical container, outside the build
-script, verifies fine -- so it is the host's dcache, not the build. The
-package therefore stays out of service rather than shipping unverified.
+**The module is used where it is, never copied.** A 49MB copy into another
+directory could not be looked up by name afterwards on the build host (the
+directory lists it, a lookup returns ENOENT), so the archive, the ABI gate
+and the relocation smoke all read the package where cmake installed it.
 
 **Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
 ("nested server accepted a connection with no cookie"), which fails

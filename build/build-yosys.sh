@@ -50,14 +50,13 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/build-yosys-XXXXXX")
 # Version-scoped install prefix so successive builds cannot contaminate each
 # other -- the trap build-octave.sh hit with a fixed /tmp/<pkg>-install.
 #
-# The prefix is UNIQUE per run, not just per version: a fixed path is
-# recreated on every run, and the kernel's dcache then keeps a NEGATIVE
-# dentry for a name that a previous run looked up before it existed. The
-# symptom is a file that readdir() lists but a lookup by name cannot find
-# ("pyosys has no libyosys.so" with the 49MB module plainly in the
-# directory) -- a fresh path has no such stale entry.
-INST=$(mktemp -d "${TMPDIR:-/tmp}/yosys-inst-${tag}-XXXXXX")
+# The prefix is STABLE, not per-run: the cmake build tree is cached and its
+# cache has the install prefix baked in, so a prefix that changes every run
+# makes the cached tree install into a directory that no longer exists.
+INST="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/yosys-inst-${tag}"
 trap 'rm -rf "$WORK" "$INST"' EXIT INT TERM
+rm -rf "$INST"
+mkdir -p "$INST"
 
 # ---------------------------------------------------------------------------
 # Step 5: build bison 3.8.2.
@@ -93,11 +92,22 @@ export PATH
 # directly as the source root.
 # ---------------------------------------------------------------------------
 echo "==> Downloading Yosys $tag ..."
-SRC="$WORK/yosys-src"
-mkdir -p "$SRC"
-curl -fL --retry 3 --retry-delay 2 -o "$WORK/yosys.tar.gz" \
-    "https://github.com/YosysHQ/yosys/releases/download/${tag}/yosys.tar.gz"
-tar xzf "$WORK/yosys.tar.gz" -C "$SRC"
+# The source tree and the cmake build trees live in the persistent cache, not
+# in $WORK: the pyosys compile is ~15 minutes, and a build tree that is thrown
+# away with $WORK turns every last-mile failure into another full compile.
+# The source path has to be stable as well -- cmake refuses a build tree whose
+# source directory moved.
+SRC="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/yosys-src-${tag}"
+PYOSYS_BUILD_DIR="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/pyosys-build-${tag}"
+PYOSYS_BUILD_LOG="$PYOSYS_BUILD_DIR/build.log"
+mkdir -p "$SRC" "$PYOSYS_BUILD_DIR"
+if [ ! -f "$SRC/CMakeLists.txt" ]; then
+    curl -fL --retry 3 --retry-delay 2 -o "$WORK/yosys.tar.gz" \
+        "https://github.com/YosysHQ/yosys/releases/download/${tag}/yosys.tar.gz"
+    tar xzf "$WORK/yosys.tar.gz" -C "$SRC"
+else
+    echo "  reusing the source tree in $SRC"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 7: build with CMake.
@@ -354,6 +364,10 @@ if [ "${YOSYS_NO_CACHE:-0}" != "1" ] \
     echo "  reusing the cached pyosys module in $PYOSYS_CACHE (YOSYS_NO_CACHE=1 to force)"
     PYOSYS_FROM_SOURCE=1
     PYOSYS_CACHED=1
+else
+    # A rebuild invalidates the cache until the ABI gate below has
+    # passed again: the stamp must never outlive the module it marks.
+    rm -f "$PYOSYS_CACHE_STAMP"
 fi
 if [ "$PYOSYS_CACHED" -eq 0 ]; then
     for cand in python3.12 python3.11 python3.9 python3; do
@@ -383,37 +397,61 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 0 ] && [ -n "$VENV_PY" ]; then
         PATH="$VENV/bin:$PATH"
         export PATH
         (
-            # YOSYS_BUILD_PYTHON_ONLY builds just the pyosys module (and the
-            # yosys core it binds to), skipping the yosys binary we already
-            # built above -- this is upstream's own knob for that.
+            # YOSYS_BUILD_PYTHON_ONLY builds just the pyosys components (the
+            # pybind11 extension and the core it binds to), skipping the
+            # yosys binary we already built above.
+            #
+            # It is a DEPENDENT option: upstream forces it OFF unless neither
+            # the driver nor the library is installed --
+            #   cmake_dependent_option(YOSYS_BUILD_PYTHON_ONLY "Build only
+            #   Pyosys components" ON
+            #     "NOT (YOSYS_INSTALL_DRIVER OR YOSYS_INSTALL_LIBRARY) AND
+            #      YOSYS_INSTALL_PYTHON" OFF)
+            # With it OFF the build produces the yosys CORE library -- named
+            # libyosys.so -- and installs that instead of the extension, which
+            # is not a Python module at all ("dynamic module does not define
+            # module export function"). Both install switches therefore have
+            # to be off for the extension to be what gets built.
             #
             # The pyosys package normally lands in the INTERPRETER's
             # site-packages (YOSYS_INSTALL_PYTHON_SITEDIR defaults to
             # Python3_SITEARCH) -- which here is the repo's own bootstrap
             # tree, i.e. it would write into the checkout and be found
-            # nowhere near the build output. Point it at the build dir so the
-            # module is staged where this script can find it.
+            # nowhere near the build output. Point it at the build dir so
+            # the module is staged where this script can find it.
             #
             # NOTE: no comment may sit between the backslashes of a continued
             # command -- a comment ends the command, and the rest of the flags
             # runs as a command of its own.
-            cmake -S "$SRC" -B "$WORK/pyosys-build" \
+            #
+            # The -U flags drop the values cmake cached on the first run from
+            # the (cached) build tree -- the install prefix and the package
+            # directory move with the cache layout, and cmake would otherwise
+            # keep the old ones and install into a directory that no longer
+            # exists.
+            cmake -S "$SRC" -B "$PYOSYS_BUILD_DIR" \
                 -DCMAKE_BUILD_TYPE=Release \
+                -U YOSYS_INSTALL_PYTHON_SITEDIR \
+                -U YOSYS_INSTALL_DRIVER \
+                -U YOSYS_INSTALL_LIBRARY \
+                -U CMAKE_INSTALL_PREFIX \
                 -DYOSYS_WITH_PYTHON=ON \
                 -DYOSYS_BUILD_PYTHON_ONLY=ON \
                 -DYOSYS_INSTALL_PYTHON=ON \
-                -DYOSYS_INSTALL_PYTHON_SITEDIR="$WORK/pyosys-site" \
+                -DYOSYS_INSTALL_DRIVER=OFF \
+                -DYOSYS_INSTALL_LIBRARY=OFF \
+                -DYOSYS_INSTALL_PYTHON_SITEDIR="$PYOSYS_CACHE" \
                 -DPython3_EXECUTABLE="$PY_PREFIX/bin/python3.15" \
                 -DPython3_ROOT_DIR="$PY_PREFIX" \
                 -DPython3_INCLUDE_DIR="$PY315_INC" \
                 -DPython3_LIBRARY="$PY315_LIB" \
                 -Dpybind11_INCLUDE_DIR="$PYBIND11_INC" \
                 -DCMAKE_INSTALL_PREFIX="$WORK/pyosys-inst"
-            cmake --build "$WORK/pyosys-build" -j"$(nproc 2>/dev/null || echo 2)"
-            cmake --install "$WORK/pyosys-build"
-        ) > "$WORK/pyosys-build.log" 2>&1 && PYOSYS_FROM_SOURCE=1 || {
+            cmake --build "$PYOSYS_BUILD_DIR" -j"$(nproc 2>/dev/null || echo 2)"
+            cmake --install "$PYOSYS_BUILD_DIR"
+        ) > "$PYOSYS_BUILD_LOG" 2>&1 && PYOSYS_FROM_SOURCE=1 || {
             echo "  WARNING: the pyosys source build failed; tail of log:" >&2
-            tail -20 "$WORK/pyosys-build.log" >&2
+            tail -20 "$PYOSYS_BUILD_LOG" >&2
         }
     else
         echo "  WARNING: pybind11 headers not found -- cannot build pyosys from source." >&2
@@ -423,35 +461,32 @@ else
     echo "           (EL8's system python3 is 3.6, whose pip cannot resolve pybind11 3.x)" >&2
 fi
 
+# The package is used WHERE IT IS -- no copy. A 49MB copy into another
+# directory cannot be looked up by name on this build host afterwards (the
+# directory lists it, a lookup by name returns ENOENT), and a copy buys
+# nothing: the archive, the ABI gate and the smoke can all read the package
+# where the build (or the cache) put it.
 if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
-    # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}
-    # The pyosys PACKAGE lands in $WORK/pyosys-site/pyosys (that is what
-    # YOSYS_INSTALL_PYTHON_SITEDIR points at); the yosys binaries and headers
-    # land in $WORK/pyosys-inst. Look in both.
-    BUILT=$(find "$WORK/pyosys-site" "$WORK/pyosys-inst" -name libyosys.so -type f 2>/dev/null | head -1)
-    INIT=$(find "$WORK/pyosys-site" "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f 2>/dev/null | head -1)
+    # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}. The
+    # package lands in $PYOSYS_CACHE/pyosys (that is what
+    # YOSYS_INSTALL_PYTHON_SITEDIR points at) -- the cache IS the install
+    # directory, not a copy of one. A copied file cannot be looked up by name
+    # on this build host afterwards (the directory lists it, a lookup returns
+    # ENOENT), so the module is used exactly where cmake installed it.
+    BUILT=$(find "$PYOSYS_CACHE" "$WORK/pyosys-inst" -name libyosys.so -type f 2>/dev/null | head -1)
+    INIT=$(find "$PYOSYS_CACHE" "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f 2>/dev/null | head -1)
     if [ -z "$BUILT" ] || [ -z "$INIT" ]; then
         echo "ERROR: the pyosys source build produced no libyosys.so/__init__.py." >&2
         echo "  install trees:" >&2
-        find "$WORK/pyosys-site" "$WORK/pyosys-inst" -maxdepth 4 2>/dev/null | head -30 >&2
+        find "$PYOSYS_CACHE" "$WORK/pyosys-inst" -maxdepth 4 2>/dev/null | head -30 >&2
         echo "  build log tail:" >&2
-        tail -30 "$WORK/pyosys-build.log" >&2
+        tail -30 "$PYOSYS_BUILD_LOG" >&2
         exit 1
     fi
-    # The package is kept in the CACHE directory, never copied into $INST.
-    # A 49MB copy into the install prefix could not be looked up by name
-    # afterwards on this kernel (readdir() listed it, a lookup returned
-    # ENOENT), and the runtime archive is built from the cache directly, so
-    # the copy buys nothing.
-    if [ "${YOSYS_NO_CACHE:-0}" != "1" ]; then
-        mkdir -p "$PYOSYS_CACHE/pyosys"
-        cat "$BUILT" > "$PYOSYS_CACHE/pyosys/liblyosys.so"
-        cat "$INIT" > "$PYOSYS_CACHE/pyosys/__init__.py"
-        printf '%s\n' "$tag" "$PYOSYS_CACHE/pyosys/liblyosys.so" \
-            "$PYOSYS_CACHE/pyosys/__init__.py" > "$PYOSYS_CACHE_STAMP"
-    fi
+    PYOSYS_PKG="$PYOSYS_CACHE"
     echo "  pyosys module built for python3.15 (source build)"
 elif [ "$PYOSYS_CACHED" -eq 1 ]; then
+    PYOSYS_PKG="$PYOSYS_CACHE"
     echo "  pyosys module reused from the cache ($PYOSYS_CACHE)"
 else
     echo "  falling back to the upstream wheel (cp314 -- needs a 3.14 interpreter)"
@@ -459,31 +494,25 @@ else
 import sys, zipfile
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 " "$PYOSYS_WHEEL" "$WORK/pyosys-x"
-    mkdir -p "$PYOSYS_CACHE/pyosys"
-    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/liblyosys.so" \
-        "$PYOSYS_CACHE/pyosys/"
-    rm -rf "$WORK/pyosys-x"
+    PYOSYS_PKG="$WORK/pyosys-x"
 fi
 
-# The package is copied into a path that is unique to this run before
-# anything looks it up. The dcache keeps a NEGATIVE dentry for a name that
-# was looked up before it existed, and a directory that is looked up under
-# a path a previous build used can then list its files (readdir) while a
-# lookup by name still fails. A path that no build has ever looked up
-# cannot carry such an entry.
-PYOSYS_PKG="$WORK/pyosys-pkg"
-rm -rf "$PYOSYS_PKG"
-mkdir -p "$PYOSYS_PKG"
-cp -a "$PYOSYS_CACHE/pyosys" "$PYOSYS_PKG/pyosys"
-
-for f in __init__.py libyosys.so; do
-    if [ ! -s "$PYOSYS_PKG/pyosys/$f" ]; then
-        echo "ERROR: pyosys has no $f -- upstream layout changed." >&2
-        echo "  package dir: $PYOSYS_PKG/pyosys" >&2
-        ls -la "$PYOSYS_PKG/pyosys/" >&2 2>&1 || true
-        exit 1
-    fi
-done
+# The layout check runs in python, not in the shell: on this build host the
+# shell's own file tests are unreliable (a lookup by name for a file that
+# readdir() lists returns ENOENT, and `ls | grep -x` does not match a line
+# that `ls` prints), while python's os.stat agrees with the filesystem.
+"$PY_PREFIX/bin/python3.15" -c "
+import os, sys
+pkg = os.path.join('$PYOSYS_PKG', 'pyosys')
+for f in ('__init__.py', 'libyosys.so'):
+    p = os.path.join(pkg, f)
+    if not os.path.isfile(p) or os.path.getsize(p) == 0:
+        sys.stderr.write('ERROR: pyosys has no %s -- upstream layout changed.\n' % f)
+        sys.stderr.write('  package dir: %s\n' % pkg)
+        for n in sorted(os.listdir(pkg)) if os.path.isdir(pkg) else []:
+            sys.stderr.write('  %s\n' % n)
+        sys.exit(1)
+" || exit 1
 
 # ABI gate: the module MUST load under the interpreter the tree ships. A
 # cp314 module under 3.15 raises "Python version mismatch" on import, which
@@ -500,6 +529,18 @@ print('  pyosys module loads under python3.15')
     echo "       pyosys source build is required for this payload." >&2
     exit 1
 }
+
+# Only now -- the module is PROVEN to load under the shipped interpreter --
+# may the cache be marked good. The module itself is already in the cache
+# (cmake installed it there); only the stamp is missing until this gate
+# passes. A stamp written before the gate could mark the yosys CORE library
+# (also called libyosys.so) as a usable module -- it is not a Python module
+# at all.
+if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
+    printf '%s\n' "$tag" "$PYOSYS_CACHE/pyosys/liblyosys.so" \
+        "$PYOSYS_CACHE/pyosys/__init__.py" > "$PYOSYS_CACHE_STAMP"
+    echo "  marked the verified module in $PYOSYS_CACHE as reusable"
+fi
 
 # Vendor click. LibreLane's synthesis scripts (scripts/pyosys/json_header.py,
 # synthesize.py) `import click`, and the -y process runs under portable-python,
@@ -723,12 +764,16 @@ done
 # a second archive would have nowhere to be listed). One `remove_before_extract`
 # entry per top-level tree keeps reinstalls clean.
 mkdir -p "$RUNTIME_DIR"
-tar cjf "$RUNTIME_DIR/yosys.tar.bz2" -C "$INST" ./share ./lib
-# The pyosys package is appended from the cache directory: it never has to
-# be copied into the install prefix (see the note at the staging step).
-tar rjf "$RUNTIME_DIR/yosys.tar.bz2" \
+# The archive is built UNCOMPRESSED, the pyosys package is appended to it,
+# and the result is compressed: tar cannot append to a compressed archive
+# ("Cannot update compressed archives"), and the --transform must apply to
+# the package members only -- the share/ and lib/ members keep their paths.
+tar cf "$WORK/yosys.tar" -C "$INST" ./share ./lib
+tar rf "$WORK/yosys.tar" \
     --transform 's|^\./|./lib/yosys-pyosys/|' \
     -C "$PYOSYS_PKG" ./pyosys ./click
+bzip2 -c "$WORK/yosys.tar" > "$RUNTIME_DIR/yosys.tar.bz2"
+rm -f "$WORK/yosys.tar"
 echo "Packaged: $RUNTIME_DIR/yosys.tar.bz2 ($(du -h "$RUNTIME_DIR/yosys.tar.bz2" | cut -f1))"
 
 # Step 16: stamp version in packages.json.

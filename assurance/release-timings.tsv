@@ -587,3 +587,13 @@
 2026-10-21T23:13:29Z	build:build-yosys.sh	452	FAIL	build-shell
 2026-10-21T23:21:39Z	build:build-yosys.sh	453	FAIL	build-shell
 2026-10-21T23:30:44Z	build:build-yosys.sh	452	FAIL	build-shell
+2026-10-22T02:13:17Z	test:py_compile	0	PASS	mode=all
+2026-10-22T02:13:17Z	test:ruff check	0	PASS	mode=all
+2026-10-22T02:13:17Z	test:ruff format check	0	PASS	mode=all
+2026-10-22T02:13:18Z	test:unit-resolver	1	PASS	mode=all
+2026-10-22T02:13:18Z	test:doctor-system-newer	0	PASS	mode=all
+2026-10-22T02:13:18Z	test:registry-integrity	0	PASS	mode=all
+2026-10-22T02:13:19Z	test:search-groups	1	PASS	mode=all
+2026-10-22T02:13:20Z	test:tar-safety	1	PASS	mode=all
+2026-10-22T02:13:20Z	test:content-verify	0	PASS	mode=all
+2026-10-22T02:13:22Z	test:content-manifest in sync	2	PASS	mode=all
