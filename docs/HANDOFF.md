@@ -153,11 +153,13 @@ variant) had three failures on a fresh install, all now fixed:
 IDLE rejects `--version` but accepts `-h`; and `pip3`/`pip3.15` are 185-byte
 shebang scripts whose exec needs a lookup of a file the installer created
 moments earlier, which on some kernels returns ENOENT while `readdir()`
-lists it. A probe that cannot exec a shebang script now runs it through the
+So a probe that cannot exec a shebang script now runs it through the
 interpreter named next to the script, with the script copied to a fresh
-path. The host variant is green (rc=0); the container variant could not be
-re-verified here because its bootstrap step is flaky on this host (it dies
-before any probe runs, and it passed on an earlier run).
+path. Both variants are green: the host variant passes idle3, idle3.15,
+pip3 and pip3.15; the container variant reports "All 312 binaries OK (23
+skipped)" -- idle3 and idle3.15 among the skipped, because the container has
+no loadable Tk (the host-capability entry names all three), and the yosys -y
+probe passes there too.
 
 ## 2026-10-21 (2): `@shared-all --dest-dir` audit -- the 3.15 sweep never rebuilt the payloads that embed the interpreter
 
