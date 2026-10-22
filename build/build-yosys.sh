@@ -49,9 +49,15 @@ version=${tag#v}  # v0.68 -> 0.68
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/build-yosys-XXXXXX")
 # Version-scoped install prefix so successive builds cannot contaminate each
 # other -- the trap build-octave.sh hit with a fixed /tmp/<pkg>-install.
-INST="/tmp/yosys-inst-${tag}"
-trap 'rm -rf "$WORK"' EXIT INT TERM
-rm -rf "$INST"
+#
+# The prefix is UNIQUE per run, not just per version: a fixed path is
+# recreated on every run, and the kernel's dcache then keeps a NEGATIVE
+# dentry for a name that a previous run looked up before it existed. The
+# symptom is a file that readdir() lists but a lookup by name cannot find
+# ("pyosys has no libyosys.so" with the 49MB module plainly in the
+# directory) -- a fresh path has no such stale entry.
+INST=$(mktemp -d "${TMPDIR:-/tmp}/yosys-inst-${tag}-XXXXXX")
+trap 'rm -rf "$WORK" "$INST"' EXIT INT TERM
 
 # ---------------------------------------------------------------------------
 # Step 5: build bison 3.8.2.
@@ -286,7 +292,10 @@ fi
 # is actually usable, and the build fails if NEITHER is.
 PYOSYS_STAGE="$INST/lib/yosys-pyosys"
 rm -rf "$PYOSYS_STAGE" "$WORK/pyosys-x"
-mkdir -p "$PYOSYS_STAGE/pyosys"
+# The package itself is NOT staged here: it is copied into $WORK/pyosys-pkg
+# (a path unique to this run) and appended to the runtime archive from
+# there. $INST/lib has to exist for the archive's ./lib member.
+mkdir -p "$INST/lib"
 
 # --- the interpreter the shipped tree will run under ------------------------
 # Same resolution order as build/build-klayout.sh: LOADOUT_PY_PREFIX, then the
@@ -343,9 +352,6 @@ if [ "${YOSYS_NO_CACHE:-0}" != "1" ] \
     && [ -s "$PYOSYS_CACHE/pyosys/liblyosys.so" ] \
     && [ -s "$PYOSYS_CACHE/pyosys/__init__.py" ]; then
     echo "  reusing the cached pyosys module in $PYOSYS_CACHE (YOSYS_NO_CACHE=1 to force)"
-    mkdir -p "$PYOSYS_STAGE/pyosys"
-    cp "$PYOSYS_CACHE/pyosys/liblyosys.so" "$PYOSYS_CACHE/pyosys/__init__.py" \
-        "$PYOSYS_STAGE/pyosys/"
     PYOSYS_FROM_SOURCE=1
     PYOSYS_CACHED=1
 fi
@@ -432,17 +438,17 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
         tail -30 "$WORK/pyosys-build.log" >&2
         exit 1
     fi
-    cp "$BUILT" "$PYOSYS_STAGE/pyosys/libyosys.so"
-    cp "$INIT" "$PYOSYS_STAGE/pyosys/__init__.py"
-    # Keep the built module for the next run (see PYOSYS_CACHE above). The
-    # stamp is written only now, so an interrupted build never leaves a
-    # half-cached module behind that a later run would reuse.
+    # The package is kept in the CACHE directory, never copied into $INST.
+    # A 49MB copy into the install prefix could not be looked up by name
+    # afterwards on this kernel (readdir() listed it, a lookup returned
+    # ENOENT), and the runtime archive is built from the cache directly, so
+    # the copy buys nothing.
     if [ "${YOSYS_NO_CACHE:-0}" != "1" ]; then
         mkdir -p "$PYOSYS_CACHE/pyosys"
-        cp "$PYOSYS_STAGE/pyosys/liblyosys.so" "$PYOSYS_STAGE/pyosys/__init__.py" \
-            "$PYOSYS_CACHE/pyosys/"
-        printf '%s\n' "$tag" "$PYOSYS_STAGE/pyosys/liblyosys.so" \
-            "$PYOSYS_STAGE/pyosys/__init__.py" > "$PYOSYS_CACHE_STAMP"
+        cat "$BUILT" > "$PYOSYS_CACHE/pyosys/liblyosys.so"
+        cat "$INIT" > "$PYOSYS_CACHE/pyosys/__init__.py"
+        printf '%s\n' "$tag" "$PYOSYS_CACHE/pyosys/liblyosys.so" \
+            "$PYOSYS_CACHE/pyosys/__init__.py" > "$PYOSYS_CACHE_STAMP"
     fi
     echo "  pyosys module built for python3.15 (source build)"
 elif [ "$PYOSYS_CACHED" -eq 1 ]; then
@@ -453,15 +459,30 @@ else
 import sys, zipfile
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 " "$PYOSYS_WHEEL" "$WORK/pyosys-x"
-    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/liblyosys.so" "$PYOSYS_STAGE/pyosys/"
+    mkdir -p "$PYOSYS_CACHE/pyosys"
+    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/liblyosys.so" \
+        "$PYOSYS_CACHE/pyosys/"
     rm -rf "$WORK/pyosys-x"
 fi
 
+# The package is copied into a path that is unique to this run before
+# anything looks it up. The dcache keeps a NEGATIVE dentry for a name that
+# was looked up before it existed, and a directory that is looked up under
+# a path a previous build used can then list its files (readdir) while a
+# lookup by name still fails. A path that no build has ever looked up
+# cannot carry such an entry.
+PYOSYS_PKG="$WORK/pyosys-pkg"
+rm -rf "$PYOSYS_PKG"
+mkdir -p "$PYOSYS_PKG"
+cp -a "$PYOSYS_CACHE/pyosys" "$PYOSYS_PKG/pyosys"
+
 for f in __init__.py libyosys.so; do
-    [ -s "$PYOSYS_STAGE/pyosys/$f" ] || {
+    if [ ! -s "$PYOSYS_PKG/pyosys/$f" ]; then
         echo "ERROR: pyosys has no $f -- upstream layout changed." >&2
+        echo "  package dir: $PYOSYS_PKG/pyosys" >&2
+        ls -la "$PYOSYS_PKG/pyosys/" >&2 2>&1 || true
         exit 1
-    }
+    fi
 done
 
 # ABI gate: the module MUST load under the interpreter the tree ships. A
@@ -470,7 +491,7 @@ done
 # not discovered later by a user running `yosys -y`.
 "$PY_PREFIX/bin/python3.15" -c "
 import sys
-sys.path.insert(0, '$PYOSYS_STAGE')
+sys.path.insert(0, '$PYOSYS_PKG')
 from pyosys import libyosys
 print('  pyosys module loads under python3.15')
 " || {
@@ -501,12 +522,12 @@ python3 -c "
 import sys, zipfile
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 " "$CLICK_WHEEL" "$WORK/click-x"
-cp -a "$WORK/click-x/click" "$PYOSYS_STAGE/click"
+cp -a "$WORK/click-x/click" "$PYOSYS_PKG/click"
 rm -rf "$WORK/click-x"
-[ -f "$PYOSYS_STAGE/click/__init__.py" ] || { echo "ERROR: vendored click is incomplete" >&2; exit 1; }
+[ -f "$PYOSYS_PKG/click/__init__.py" ] || { echo "ERROR: vendored click is incomplete" >&2; exit 1; }
 echo "  vendored click $(basename "$CLICK_WHEEL") into lib/yosys-pyosys/"
 
-echo "  staged lib/yosys-pyosys: $(du -sh "$PYOSYS_STAGE" | cut -f1) (libyosys.so + __init__.py + click)"
+echo "  staged lib/yosys-pyosys: $(du -sh "$PYOSYS_PKG" | cut -f1) (libyosys.so + __init__.py + click)"
 
 # Install the wrapper as `yosys` and keep the real binary beside it as
 # `yosys.bin`. This is the deployed layout the smoke below exercises.
@@ -544,6 +565,14 @@ echo "==> Relocation + synthesis smoke ..."
 STAGE="$WORK/relocated"
 rm -rf "$STAGE"
 cp -a "$INST" "$STAGE"
+# The pyosys package is not part of $INST (it is appended to the runtime
+# archive from the cache), so the smoke stage gets it as a symlink. The
+# relocation proof is about the yosys BINARY finding its own data tree
+# through /proc/self/exe -- the Python module's location is irrelevant to
+# that, and libyosys.so resolves the tree from the staged binary.
+mkdir -p "$STAGE/lib/yosys-pyosys"
+ln -sfn "$PYOSYS_PKG/pyosys" "$STAGE/lib/yosys-pyosys/pyosys"
+ln -sfn "$PYOSYS_PKG/click" "$STAGE/lib/yosys-pyosys/click"
 
 # portable-python, for the -y path. Optional in the sense that it is skipped
 # only if no payload archive exists at all -- but then the -y check would be
@@ -695,6 +724,11 @@ done
 # entry per top-level tree keeps reinstalls clean.
 mkdir -p "$RUNTIME_DIR"
 tar cjf "$RUNTIME_DIR/yosys.tar.bz2" -C "$INST" ./share ./lib
+# The pyosys package is appended from the cache directory: it never has to
+# be copied into the install prefix (see the note at the staging step).
+tar rjf "$RUNTIME_DIR/yosys.tar.bz2" \
+    --transform 's|^\./|./lib/yosys-pyosys/|' \
+    -C "$PYOSYS_PKG" ./pyosys ./click
 echo "Packaged: $RUNTIME_DIR/yosys.tar.bz2 ($(du -h "$RUNTIME_DIR/yosys.tar.bz2" | cut -f1))"
 
 # Step 16: stamp version in packages.json.

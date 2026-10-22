@@ -585,3 +585,5 @@
 2026-10-21T22:58:28Z	test:total	1498	FAIL	flags=
 2026-10-21T23:04:05Z	build:build-yosys.sh	232	FAIL	build-shell
 2026-10-21T23:13:29Z	build:build-yosys.sh	452	FAIL	build-shell
+2026-10-21T23:21:39Z	build:build-yosys.sh	453	FAIL	build-shell
+2026-10-21T23:30:44Z	build:build-yosys.sh	452	FAIL	build-shell
