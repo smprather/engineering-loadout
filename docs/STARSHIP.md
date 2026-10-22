@@ -265,29 +265,32 @@ exact-match expectation has to contain.
 multi-byte glyph in the prompt (`\xee\x82\xa0` renders as `\x82\xa0`). Not a
 config bug, but tests must pin `LANG` or they compare garbage.
 
-## 5d. tcsh drops astral (4-byte) glyphs from the prompt — the python snake
+## 5d. tcsh drops astral (4-byte) glyphs from the prompt -- the python snake
 
-The `$python` module's `🐍` is U+1F40D, a 4-byte UTF-8 sequence. Measured in a
-bare `set prompt`:
+The `$python` module's `🐍` is U+1F40D, a 4-byte UTF-8 sequence. Measured on a
+bare `set prompt` with the rc file's bytes verified by `od`:
 
-| glyph | LANG=en_US.UTF-8 | LANG unset (C) |
+| glyph | UTF-8 locale (`C.utf8`, `en_US.utf8`) | `C` / no locale vars |
 |---|---|---|
-| `🐍` (4 bytes) | **dropped entirely** | preserved |
-| `\ue0a0` (3 bytes) | preserved | first byte dropped |
-| `❯` (3 bytes) | preserved | first byte dropped |
+| `🐍` U+1F40D (4 bytes) | **dropped** | preserved |
+| `😀` U+1F600 (4 bytes) | **dropped** (left a NUL in one run) | preserved |
+| `☀` U+2600 (3 bytes) | preserved | preserved |
+| `\ue0a0` U+E0A0 (3 bytes) | preserved | preserved |
 
-So in a normal UTF-8 session tcsh renders `v3.14.8` with no snake, and in a C
-locale it keeps the snake but mangles the 3-byte glyphs. There is no locale
-that renders all of them. This is tcsh's prompt code, not the config or the
-helper — the helper's output is byte-perfect (verified with `od`).
+So with a normal UTF-8 environment tcsh renders `v3.14.8` with no snake; it is
+**astral characters**, not multibyte in general, and it is tcsh's prompt code
+(the bytes reach it intact -- the same bytes print correctly outside a prompt,
+and the helper's output is byte-perfect under `od`).
 
-If a marker is wanted there for tcsh, the helper is the place to substitute a
-BMP-safe glyph (it already rewrites this prompt); that has not been done
-because the version text is unambiguous on its own.
+Practical consequence: the snake is not reliably obtainable there. If a marker
+is wanted, `envs/tcsh/global/helpers/prompt-markers` is the place to substitute
+a BMP-safe glyph -- it already rewrites this prompt. Not done, because
+`v3.14.8` is unambiguous on its own.
 
 Note also that `tests/env-tcsh-starship`'s exact-match fixture is a repo with
-NO python file, so `$python` does not fire at all there — the snake is absent
-from that test by construction, regardless of this limitation.
+NO python file, so `$python` does not fire there at all -- the snake is absent
+from that test by construction, independently of this limitation. That fixture
+pins `LANG` to a UTF-8 locale, which is what real sessions have.
 
 ## 6. Other measured details worth keeping
 
