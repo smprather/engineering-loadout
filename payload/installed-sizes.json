@@ -2613,7 +2613,7 @@
     "payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2": 32900802,
     "payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2": 133027057,
     "payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2": 12897467,
-    "payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2": 85464084,
+    "payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2": 50877452,
     "payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2": 7225710,
     "payload/el8.x86_64.glibc2p28/typelibs/Atk-1.0.typelib": 71872,
     "payload/el8.x86_64.glibc2p28/typelibs/GIRepository-2.0.typelib": 26736,

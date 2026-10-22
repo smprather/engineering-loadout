@@ -506,7 +506,7 @@ tar-meta  284862  1789353499  payload/el8.x86_64.glibc2p28/runtime/verilator.tar
 tar-meta  8231106  1791428823  payload/el8.x86_64.glibc2p28/runtime/vim92.tar.bz2
 tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar.bz2.part-000
 tar-meta  3922221  1790482906  payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2
-tar-meta  25653756  1792635102  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
+tar-meta  14924359  1792638006  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2037945  1788989391  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
 tar-meta  985198  1791429832  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2

@@ -40,10 +40,16 @@ another 15-minute compile. The stamp is written only after the ABI gate has
 passed -- a stamp written earlier could mark the core library as a usable
 module. `YOSYS_NO_CACHE=1` forces a rebuild.
 
-**The module is used where it is, never copied.** A 49MB copy into another
-directory could not be looked up by name afterwards on the build host (the
-directory lists it, a lookup returns ENOENT), so the archive, the ABI gate
-and the relocation smoke all read the package where cmake installed it.
+**The package ships ONLY `pyosys/{__init__.py,libyosys.so}`** (plus the
+vendored click). Upstream's install directory also holds the techlib
+`share/` tree and a second `yosys-abc`, and those are moved out of the
+package rather than packed: `__init__.py` prefers a package-local `share/`
+over the one next to the yosys binary, so shipping them would duplicate
+every data file in the tree AND make the `-y` path read its techlib from the
+package -- i.e. from the build host -- instead of from the prefix it was
+installed into. The relocation smoke now asserts that: it fails if
+`sys._pyosys_share_dirname` is set, so the data tree provably comes from the
+relocated prefix.
 
 **Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
 ("nested server accepted a connection with no cookie"), which fails

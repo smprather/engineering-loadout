@@ -98,7 +98,11 @@ echo "==> Downloading Yosys $tag ..."
 # The source path has to be stable as well -- cmake refuses a build tree whose
 # source directory moved.
 SRC="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/yosys-src-${tag}"
-PYOSYS_BUILD_DIR="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/pyosys-build-${tag}"
+# The build tree name carries a layout version: cmake keeps the values it
+# cached on the first run, so a tree built for a different package layout
+# would install into a directory that no longer exists. A new layout gets a
+# new tree; the same layout still rebuilds incrementally.
+PYOSYS_BUILD_DIR="${LOADOUT_BUILD_CACHE:-${TMPDIR:-/tmp}}/pyosys-build-${tag}-v2"
 PYOSYS_BUILD_LOG="$PYOSYS_BUILD_DIR/build.log"
 mkdir -p "$SRC" "$PYOSYS_BUILD_DIR"
 if [ ! -f "$SRC/CMakeLists.txt" ]; then
@@ -266,17 +270,21 @@ fi
 #     lib/yosys-pyosys/click/           vendored, see below
 # PYTHONPATH=<prefix>/lib/yosys-pyosys makes both importable in the -y process.
 #
-# The wheel's other ~32MB (a duplicate share/ tree and a second yosys-abc) is not
-# needed:
+# The package is ONLY the two files above (plus the vendored click). Both the
+# upstream wheel and the source build's install directory also carry a share/
+# tree and a second yosys-abc, and those are NOT packed:
 #   - python3.15 in the same prefix is the interpreter, so libyosys resolves its
 #     data tree through the readlink("/proc/self/exe") path this repo's yosys
 #     already installs (share/yosys) and finds the sibling yosys-abc.
-#     VERIFIED: `synth` (which reads the techlib tree and shells out to ABC)
-#     succeeds with just __init__.py + libyosys.so on PYTHONPATH.
+#     VERIFIED: the relocation smoke runs `yosys -y` in a relocated stage that
+#     has ONLY these two files, and the synthesis passes -- so the data tree
+#     really does come from the prefix the tree was installed into.
 #   - share/python3 is a copy of the interpreter's own stubs that nothing in
 #     the librelane scripts path imports.
-# Dropping them keeps the package at ~49MB instead of ~81MB and leaves exactly
-# ONE copy of every data file on disk.
+# Packing the rest would duplicate every data file in the tree -- and
+# __init__.py prefers a package-local share/ over the one next to the yosys
+# binary, so the -y path would read its data tree from the package rather
+# than from the prefix.
 #
 # ABI -- WHY THE WHEEL IS NOT USED ANY MORE. The upstream pyosys wheels are
 # published per CPython ABI (cp310 .. cp314t); there is no cp315 wheel, and
@@ -466,13 +474,19 @@ fi
 # directory lists it, a lookup by name returns ENOENT), and a copy buys
 # nothing: the archive, the ABI gate and the smoke can all read the package
 # where the build (or the cache) put it.
+# The package IS the install directory cmake wrote: no copy, so no file is
+# duplicated and no name has to be looked up in a directory that was just
+# created (on this build host a file that was just written can be listed by
+# readdir() but not found by a stat() on its name).
+PYOSYS_PKG="$PYOSYS_CACHE"
+
 if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
-    # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so}. The
-    # package lands in $PYOSYS_CACHE/pyosys (that is what
-    # YOSYS_INSTALL_PYTHON_SITEDIR points at) -- the cache IS the install
-    # directory, not a copy of one. A copied file cannot be looked up by name
-    # on this build host afterwards (the directory lists it, a lookup returns
-    # ENOENT), so the module is used exactly where cmake installed it.
+    # upstream installs <sitearch>/pyosys/{__init__.py,libyosys.so} plus the
+    # techlib share/ tree and a second yosys-abc. Only the two files of the
+    # package are staged, because __init__.py prefers a package-local share/
+    # over the one next to the yosys binary -- shipping the tree would make
+    # the -y path read its data from the package instead of from the prefix
+    # it was installed into.
     BUILT=$(find "$PYOSYS_CACHE" "$WORK/pyosys-inst" -name libyosys.so -type f 2>/dev/null | head -1)
     INIT=$(find "$PYOSYS_CACHE" "$WORK/pyosys-inst" -name __init__.py -path "*pyosys*" -type f 2>/dev/null | head -1)
     if [ -z "$BUILT" ] || [ -z "$INIT" ]; then
@@ -483,10 +497,18 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
         tail -30 "$PYOSYS_BUILD_LOG" >&2
         exit 1
     fi
-    PYOSYS_PKG="$PYOSYS_CACHE"
+    # Move the techlib share/ tree and the second yosys-abc OUT of the
+    # package: __init__.py prefers a package-local share/ over the one next to
+    # the yosys binary, and shipping them would duplicate every data file in
+    # the tree and make the -y path read its data from the package instead of
+    # from the prefix it was installed into. They stay in the install
+    # directory, which is a build artefact, not a shipped one.
+    for extra in share yosys-abc; do
+        [ -e "$PYOSYS_PKG/pyosys/$extra" ] && \
+            mv "$PYOSYS_PKG/pyosys/$extra" "$PYOSYS_PKG/$extra"
+    done
     echo "  pyosys module built for python3.15 (source build)"
 elif [ "$PYOSYS_CACHED" -eq 1 ]; then
-    PYOSYS_PKG="$PYOSYS_CACHE"
     echo "  pyosys module reused from the cache ($PYOSYS_CACHE)"
 else
     echo "  falling back to the upstream wheel (cp314 -- needs a 3.14 interpreter)"
@@ -494,19 +516,27 @@ else
 import sys, zipfile
 zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
 " "$PYOSYS_WHEEL" "$WORK/pyosys-x"
-    PYOSYS_PKG="$WORK/pyosys-x"
+    mkdir -p "$PYOSYS_PKG/pyosys"
+    cp "$WORK/pyosys-x/pyosys/__init__.py" "$WORK/pyosys-x/pyosys/liblyosys.so" \
+        "$PYOSYS_PKG/pyosys/"
 fi
 
 # The layout check runs in python, not in the shell: on this build host the
 # shell's own file tests are unreliable (a lookup by name for a file that
 # readdir() lists returns ENOENT, and `ls | grep -x` does not match a line
 # that `ls` prints), while python's os.stat agrees with the filesystem.
+# The lookup can also take a moment to become visible after a file appears
+# (a stale dentry), so the check retries before it gives up.
 "$PY_PREFIX/bin/python3.15" -c "
-import os, sys
+import os, sys, time
 pkg = os.path.join('$PYOSYS_PKG', 'pyosys')
 for f in ('__init__.py', 'libyosys.so'):
     p = os.path.join(pkg, f)
-    if not os.path.isfile(p) or os.path.getsize(p) == 0:
+    for _ in range(20):
+        if os.path.isfile(p) and os.path.getsize(p) > 0:
+            break
+        time.sleep(0.25)
+    else:
         sys.stderr.write('ERROR: pyosys has no %s -- upstream layout changed.\n' % f)
         sys.stderr.write('  package dir: %s\n' % pkg)
         for n in sorted(os.listdir(pkg)) if os.path.isdir(pkg) else []:
@@ -518,11 +548,22 @@ for f in ('__init__.py', 'libyosys.so'):
 # cp314 module under 3.15 raises "Python version mismatch" on import, which
 # is exactly the defect this build exists to prevent -- so it is checked here,
 # not discovered later by a user running `yosys -y`.
+# The import is retried for the same reason as the layout check above: the
+# module's own lookup can take a moment to become visible after the file
+# appears.
 "$PY_PREFIX/bin/python3.15" -c "
-import sys
+import sys, time
 sys.path.insert(0, '$PYOSYS_PKG')
-from pyosys import libyosys
-print('  pyosys module loads under python3.15')
+for _ in range(20):
+    try:
+        from pyosys import libyosys
+    except ImportError:
+        time.sleep(0.25)
+        continue
+    print('  pyosys module loads under python3.15')
+    break
+else:
+    raise SystemExit('the pyosys module does not import')
 " || {
     echo "ERROR: the staged pyosys module does not load under python3.15." >&2
     echo "       A cp314 module cannot be used by a 3.15 interpreter -- the" >&2
@@ -607,10 +648,12 @@ STAGE="$WORK/relocated"
 rm -rf "$STAGE"
 cp -a "$INST" "$STAGE"
 # The pyosys package is not part of $INST (it is appended to the runtime
-# archive from the cache), so the smoke stage gets it as a symlink. The
-# relocation proof is about the yosys BINARY finding its own data tree
-# through /proc/self/exe -- the Python module's location is irrelevant to
-# that, and libyosys.so resolves the tree from the staged binary.
+# archive from the cache), so the smoke stage gets it as a symlink to the
+# package DIRECTORY -- a symlink to the individual files does not import
+# (python's extension loader rejects a symlinked .so). The package directory
+# holds only __init__.py and libyosys.so, so the module resolves its data
+# tree through /proc/self/exe -- i.e. from the RELOCATED stage -- which is
+# exactly what this smoke has to prove.
 mkdir -p "$STAGE/lib/yosys-pyosys"
 ln -sfn "$PYOSYS_PKG/pyosys" "$STAGE/lib/yosys-pyosys/pyosys"
 ln -sfn "$PYOSYS_PKG/click" "$STAGE/lib/yosys-pyosys/click"
@@ -662,6 +705,17 @@ from pyosys import libyosys as ys
 
 if not getattr(sys, "_pyosys_dir", None):
     sys.exit("pyosys did not initialise sys._pyosys_dir")
+
+# --- the data tree must come from the RELOCATED prefix, not from the package
+# __init__.py prefers a package-local share/ over the one next to the yosys
+# binary. If the package carried its own share/ tree, the -y path would read
+# the techlib and the ABC binary from the package -- i.e. from the build
+# host's cache -- and the relocation would prove nothing. The package
+# therefore ships only the two files, so the module has to find its data
+# through /proc/self/exe, i.e. next to the relocated yosys.
+if getattr(sys, "_pyosys_share_dirname", None):
+    sys.exit(f"the package carries its own share/ tree ({sys._pyosys_share_dirname!r}) -- "
+             "the -y path would read its data from the package, not the prefix")
 
 # --- argv contract (driver.cc:530-553) -------------------------------------
 # Only what follows `--` may reach the script. `--config-in <path>` is the
@@ -769,6 +823,20 @@ mkdir -p "$RUNTIME_DIR"
 # ("Cannot update compressed archives"), and the --transform must apply to
 # the package members only -- the share/ and lib/ members keep their paths.
 tar cf "$WORK/yosys.tar" -C "$INST" ./share ./lib
+# The ABI gate's import leaves a __pycache__ behind; it is a build artefact,
+# not something to ship.
+rm -rf "$PYOSYS_PKG/pyosys/__pycache__" "$PYOSYS_PKG/click/__pycache__"
+# Only the two files of the package are packed -- NOT the whole cmake install
+# site directory, which also holds the techlib share/ tree and a second
+# yosys-abc. Shipping those would duplicate every data file in the tree, and
+# __init__.py prefers a package-local share/ over the one next to the yosys
+# binary, so the -y path would read its data tree from the package instead of
+# the prefix it was installed into.
+#
+# The package is packed as a DIRECTORY member: on this build host a file
+# that was just created can be listed by readdir() but not found by a
+# stat() on its name, so a tar that names the files individually fails
+# ("Cannot stat") where one that walks the directory works.
 tar rf "$WORK/yosys.tar" \
     --transform 's|^\./|./lib/yosys-pyosys/|' \
     -C "$PYOSYS_PKG" ./pyosys ./click
