@@ -113,6 +113,15 @@ Behaviour:
 - **`set implicitcd`** — typing a bare directory name changes to it.
 - **History** — per-PID, inherited from the parent shell, 10000 entries, dedup'd.
 - **`LOADOUT_ONLINE`** — the same parallel TCP probe the bash env runs.
+- **Fixed-socket ssh-agent** — `LOADOUT_CFG_ENABLE_SSH_AGENT=1` exports
+  `SSH_AUTH_SOCK=$HOME/.ssh/loadout-agent.sock` and starts an agent there when
+  none is listening. The path is fixed, so anything outside this one shell can
+  find the agent. `ssh-add` is NOT run for you: a passphrase-protected key
+  would prompt on every new shell. Off by default, exactly like the bash env.
+  The switch is defined by **this** env's `config.csh` — `env-tcsh` does not
+  depend on `env-bash`, so it carries its own copy of every switch it reads
+  (`tests/env-shell-parity` fails on a switch the env reads but never
+  defines).
 
 ### The helper scripts
 

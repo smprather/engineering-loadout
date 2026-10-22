@@ -1,5 +1,49 @@
 # Current Handoff
 
+## 2026-10-22 (1): the tcsh env's ssh-agent switch was a DEAD SWITCH -- and the parity gate let it pass
+
+Found by a drift audit of the `LOADOUT_CFG_*` switches across the two envs:
+exactly one variable the tcsh env READS but never DEFINES --
+`LOADOUT_CFG_ENABLE_SSH_AGENT`.
+
+**Why it was invisible.** `envs/tcsh/global/tcshrc` gates its fixed-socket
+ssh-agent block on `if ( $?LOADOUT_CFG_ENABLE_SSH_AGENT ) then`, and
+`envs/tcsh/global/config.csh` never defined the variable: `env-tcsh` does NOT
+depend on `env-bash`, so the bash env's `export` never reached a tcsh session.
+In tcsh `$?name` is 1 when the variable IS set and 0 when it is not, so the
+guard evaluated FALSE and the block was skipped -- SILENTLY. No error, no
+startup noise, no feature. The bash env's own copy of the switch was masked by
+the assumption that "the variable is shared"; the rc comment even said so
+("defined once in envs/bash/global/config.sh").
+
+**The gate was part of the problem.** `tests/env-shell-parity` computed the
+tcsh side as `config_names(read(TCSH_CONFIG)) | config_names(read(TCSH_TCSHRC))`
+-- the rc's READ of a variable counted as coverage. Reading a variable is not
+defining it, so the switch passed a gate whose stated job is to police exactly
+this ("every LOADOUT_CFG_* the bash env defines is either defined in the tcsh
+config or explicitly recorded as inapplicable").
+
+**What changed:**
+
+- `envs/tcsh/global/config.csh` now defines `LOADOUT_CFG_ENABLE_SSH_AGENT`
+  (default `0`, same value and same meaning as the bash env's).
+- `envs/tcsh/global/tcshrc`'s comment no longer claims the switch is "defined
+  once in envs/bash/global/config.sh".
+- `tests/env-shell-parity` separates DEFINITIONS from READS and fails on
+  three new shapes: a variable either env READS but never DEFINES (a dead
+  switch), a variable EXCUSED as inapplicable that the tcsh env still reads
+  (the excuse is wrong, or the read is dead code), and the same dead-switch
+  shape on the bash side. RED proof: removing the new definition fails two
+  checks; the test is 22/22 with it.
+- Functional proof (real PTY, `script`): with the switch on, the tcsh session
+  exports `SSH_AUTH_SOCK=$HOME/.ssh/loadout-agent.sock` and the socket is live
+  (`srw-------`, `ssh-add -l` reaches it); with the default `0` nothing starts
+  and the rc stays silent.
+
+The general rule this establishes: **the tcsh env owns its own copies of every
+switch it reads** (it does not depend on `env-bash`), and a READ is not
+coverage. `envs/tcsh/README.md` and `AGENTS.md` carry the rule.
+
 ## 2026-10-21 (3): yosys and sby are back -- the pyosys module is built for 3.15
 
 `yosys` and `sby` are back in service. The `yosys -y` bridge (the LibreLane
@@ -102,6 +146,18 @@ cd "$D" && PATH="$D/bin:/usr/bin:/bin" "$D/bin/yosys" -y smoke.py
 ("nested server accepted a connection with no cookie"), which fails
 identically on the original HEAD (`ad539c4`) in a separate worktree -- an
 environmental X-server assertion, not from this work.
+
+**The binary smoke test.** `tests/prebuilt-binaries` (and its container
+variant) had three failures on a fresh install, all now fixed:
+`idle3.15` had no `PROBE_FLAGS` entry, so it got the default probe --
+IDLE rejects `--version` but accepts `-h`; and `pip3`/`pip3.15` are 185-byte
+shebang scripts whose exec needs a lookup of a file the installer created
+moments earlier, which on some kernels returns ENOENT while `readdir()`
+lists it. A probe that cannot exec a shebang script now runs it through the
+interpreter named next to the script, with the script copied to a fresh
+path. The host variant is green (rc=0); the container variant could not be
+re-verified here because its bootstrap step is flaky on this host (it dies
+before any probe runs, and it passed on an earlier run).
 
 ## 2026-10-21 (2): `@shared-all --dest-dir` audit -- the 3.15 sweep never rebuilt the payloads that embed the interpreter
 

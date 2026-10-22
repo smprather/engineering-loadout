@@ -201,6 +201,12 @@ root, the entrypoint sources that root first, then still applies the user's
 home-local `corp/site/team/project/user` override layers. Split `@envs` installs
 bake `LOADOUT_CFG_SHARED_PREFIX` into both bash and tcsh global config defaults.
 
+`env-tcsh` does NOT depend on `env-bash`, so the tcsh env defines its own copy
+of every `LOADOUT_CFG_*` switch it reads (`envs/tcsh/global/config.csh`). A
+switch the env reads but never defines is a dead switch -- the feature silently
+never fires. `tests/env-shell-parity` fails on that shape (definitions and
+reads are counted separately, on both envs).
+
 ### Hook Injection Points
 
 Each layer can inject code into `global/bashrc` via numbered files in
