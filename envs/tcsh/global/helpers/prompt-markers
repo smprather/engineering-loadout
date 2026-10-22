@@ -1,22 +1,37 @@
 #!/bin/sh
-# Convert starship's BASH zero-width prompt markers to TCSh's.
+# Post-process starship's prompt for tcsh: zero-width markers + the path colour.
 #
-# Starship renders its prompt for the shell named by $STARSHIP_SHELL: bash
-# markers (\[ ... \]) when that is bash, tcsh markers (%{ ... %}) when it is
-# tcsh.
+# TWO jobs, both because starship cannot express them for tcsh:
 #
-# The tcsh env runs starship with STARSHIP_SHELL=bash on purpose: the module
-# checks (each module's `when` expression) are BASH snippets -- the shared
-# config's custom.username uses `for u in $VAR; do ... done`, which tcsh
-# cannot parse at all -- so under STARSHIP_SHELL=tcsh that module silently
-# never appears, and a module with bash syntax in `when` fails the same way.
-# Running the checks under bash makes the shared config behave identically in
-# both shells.
+# 1. MARKERS. Starship renders zero-width markers for the shell named by
+#    $STARSHIP_SHELL: readline's `\[ ... \]` for bash, `%{ ... %}` for
+#    zsh/tcsh, NONE for sh. The tcsh env pins STARSHIP_SHELL=sh -- `tcsh`
+#    would make every module's `when`/`command` re-enter ~/.tcshrc (measured
+#    at seconds per prompt), and `bash` emits markers tcsh prints literally.
 #
-# The consequence: starship hands back bash's \[ \], which tcsh prints
-# LITERALLY (it has no readline, so it has no zero-width markers -- tcsh's
-# own are %{ %}). This helper rewrites them, and only them: the ANSI colour
-# bytes around the styled segments are passed through untouched.
+#    With `sh` starship emits NO markers, and tcsh then CARET-ESCAPES every
+#    unmarked control character in the prompt: a raw ESC[1;33m is DISPLAYED
+#    as the five characters `^[[1;33m`. Verified:
+#
+#        set prompt = "RAW:\033[1;31mX\033[0m> "      -> shows  RAW:^[[1;31mX^[[0m>
+#        set prompt = "MARKED:%{\033[1;31m%}X%{\033[0m%}> " -> shows MARKED:X (coloured)
+#
+#    So wrapping the SGR sequences in `%{ ... %}` is REQUIRED, not cosmetic:
+#    it is what makes the prompt readable at all, and it is also what lets
+#    tcsh exclude those bytes from the prompt width.
+#
+# 2. THE PATH COLOUR. All three envs use ONE starship config
+#    (envs/starship/starship.toml). Starship has no config-time env-var
+#    substitution -- `style = "$VAR"` is emitted verbatim -- so the per-shell
+#    path colour cannot be a config parameter; it is applied here instead.
+#    The shared config's `[directory] style` is `bold cyan`, which starship
+#    renders as ESC[1;36m; this rewrites it to `bold yellow` (ESC[1;33m) so a
+#    glance at the prompt says which shell you are in.
+#
+#    The mapping is not magic: `tests/env-tcsh-starship` parses
+#    `[directory] style` out of the config, maps it to its SGR sequence, and
+#    asserts this file carries that exact `s/<from>/<to>/` pair. Change the
+#    directory style and the gate tells you to update the sed here.
 #
 # Input: the prompt text in $_LOADOUT_STARSHIP_PROMPT. Output: the converted
 # prompt on stdout.
@@ -24,4 +39,8 @@
 # printf '%s' (not echo) because csh's echo interprets backslash escapes, and
 # the very markers this helper is here to convert would be consumed by it.
 
-printf '%s' "$_LOADOUT_STARSHIP_PROMPT" | sed -e 's/\\\[/%{/g' -e 's/\\\]/%}/g'
+printf '%s' "$_LOADOUT_STARSHIP_PROMPT" | sed \
+    -e 's/\\\[/%{/g' \
+    -e 's/\\\]/%}/g' \
+    -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
+    -e 's/\x1b\[[0-9;]*m/%{&%}/g'

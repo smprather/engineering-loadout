@@ -3407,6 +3407,9 @@
       "kind": "env",
       "optional": true,
       "source": "envs/tcsh/",
+      "recommends": [
+        "env-starship"
+      ],
       "install_to": "~/.config/tcsh",
       "platforms": [
         "linux"

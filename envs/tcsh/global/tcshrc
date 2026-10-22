@@ -372,8 +372,13 @@ if ( $?prompt ) then
         # carries on) -- `which` is the csh/tcsh spelling.
         set _loadout_starship_bin = "`which starship`"
         if ( "$_loadout_starship_bin" != "" ) then
-            # The tcsh-specific config: the shared one with a yellow path.
-            setenv STARSHIP_CONFIG "${_loadout_global}/starship-tcsh.toml"
+            # ONE starship config, shared with the bash and zsh envs.
+            # Starship has no config-time env-var substitution (verified:
+            # `style = "$VAR"` is emitted verbatim), so the per-shell path
+            # colour cannot live IN the config. It is applied afterwards,
+            # by helpers/prompt-markers below, which recolours the directory
+            # segment. See docs/STARSHIP.md.
+            setenv STARSHIP_CONFIG "${TCSH_CONFIG_ROOT_DIR}/../starship/starship.toml"
             # The marker conversion must be a `precmd` ALIAS defined BEFORE
             # starship's init: the init captures the current precmd alias into
             # USER_PRECMD and then defines `alias precmd

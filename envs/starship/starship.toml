@@ -10,7 +10,7 @@ scan_timeout = 2000
 command_timeout = 2000
 
 format = """
-(${custom.username}$custom.host${custom.lsf}$git_branch$git_status$cmd_duration$python\n)$directory
+(${custom.username}${custom.host}${custom.lsf}$git_branch$git_status$cmd_duration$python\n)$directory
 $character"""
 
 [custom.username]

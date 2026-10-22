@@ -5,10 +5,11 @@ on a host where `/bin/sh -> bash`), not taken from the docs. Re-verify with the
 commands in each section — they take seconds. Recorded 2026-10-22 because the
 first pass at this cost an hour of exploration.
 
-Shipped config: `envs/starship/starship.toml` (installed as
-`~/.config/starship/starship.toml`). The tcsh twin is
-`envs/tcsh/global/starship-tcsh.toml`, pinned identical apart from the
-`[directory]` style by `tests/env-tcsh-starship`.
+Shipped config: **one file**, `envs/starship/starship.toml` (installed as
+`~/.config/starship/starship.toml`), read by the bash, zsh AND tcsh envs. There
+is no per-shell variant: starship has no config-time env-var substitution
+(§4), so the tcsh-only path colour is applied by
+`envs/tcsh/global/helpers/prompt-markers` after starship renders (§4b).
 
 ---
 
@@ -103,6 +104,21 @@ PTY. So the marker-free prompt does not regress width in practice; the
 `%{ %}`-wrapping the repo's hand-rolled prompts do is still the belt — see
 `envs/tcsh/global/helpers/prompt-markers`.
 
+**Correction (measured later, and it matters): that width A/B was measuring an
+already-broken prompt.** tcsh CARET-ESCAPES unmarked control characters, so
+with no markers the prompt renders as literal `^[[1;33m...` text — visible
+garbage, not merely a width error:
+
+```sh
+set prompt = "RAW:\033[1;31mX\033[0m> "       # displays: RAW:^[[1;31mX^[[0m>
+set prompt = "MARKED:%{\033[1;31m%}X%{\033[0m%}> "  # displays: MARKED:X (coloured)
+```
+
+The helper therefore wraps every SGR sequence in `%{ ... %}`
+(`s/\x1b\[[0-9;]*m/%{&%}/g`), which is what makes the prompt readable AND
+keeps those bytes out of the width count. Verify bytes, not `repr`: a correct
+tcsh prompt has real `\x1b` and **zero** literal `^[`.
+
 ## 3. The tcsh trap: `starship init tcsh` exports `STARSHIP_SHELL=tcsh` itself
 
 ```sh
@@ -154,6 +170,34 @@ If a user-tunable color is ever wanted, the only routes are a custom module
 whose `command` emits ANSI bytes itself, or generating the config at startup
 (the latter breaks the sealed-config invariant — don't).
 
+## 4b. The one per-shell difference: the path colour
+
+Since a config VALUE cannot follow a switch, the tcsh path colour (the "which
+shell am I in?" cue) is applied to the rendered prompt. Starship's output
+already passes through `envs/tcsh/global/helpers/prompt-markers` (it converts
+zero-width markers), and that helper adds one rewrite:
+
+```sh
+sed -e 's/\x1b\[1;36m/\x1b[1;33m/g'   # bold cyan -> bold yellow
+```
+
+`bold cyan` appears exactly once in the config (the `[directory]` style), so
+the mapping is unambiguous. It is NOT hidden magic: `tests/env-tcsh-starship`
+parses `[directory] style`, maps it through a `STYLE_SGR` table, and requires
+the helper to carry exactly that `s/<from>/<to>/` pair — change the style
+without updating the helper and the gate fails.
+
+Measured end to end, all three envs on the same file:
+
+| shell | path SGR | real ESC bytes | literal `^[` |
+|---|---|---|---|
+| bash | `1;36m` (cyan) | 10 | 0 |
+| zsh | `1;36m` (cyan) | 32 | 0 |
+| tcsh | `1;33m` (yellow) | 7 | 0 |
+
+The `%{ %}` wrapping is REQUIRED (see §2's correction) — the helper does both
+jobs in one pass: recolour, then wrap every SGR in `%{ %}`.
+
 ## 5. `--norc --noprofile` do not do what they look like
 
 A non-interactive bash reads **no** startup files already:
@@ -175,6 +219,28 @@ and `STARSHIP_SHELL` cannot carry flags anyway (it is a shell name). The only
 thing that closes the `BASH_ENV` hole is `unset BASH_ENV`. Nothing in this
 repo or on the dev host sets `BASH_ENV`, so that is not done — it would be
 defending against an unobserved variable.
+
+## 5b. An UNBRACED `$custom.x` in `format` leaks literal text
+
+Braces are mandatory around custom-module references in the format string:
+
+```sh
+format = "A $custom.host B"     # -> "A H .host B"   (module output PLUS literal ".host")
+format = "A ${custom.host} B"   # -> "A H B"
+```
+
+This shipped for a while and was invisible by eye: the leaked `.host` ran
+straight into `git_branch`'s DEFAULT format (`on [$symbol$branch...]`, verified
+in the vendored schema), so the prompt read `.hoston  main` — which scans as a
+plausible prefix rather than garbage. It was spotted by a human reading the
+prompt; every automated probe looked at the path or counted markers and never
+at the head of the line.
+
+`tests/env-tcsh-starship` now fails on an unbraced reference. That gate's
+sibling check had the mirror-image bug — its extractor only understood the
+UNBRACED form, so bracing the reference made it silently find no modules at
+all; it now accepts both and fails when the host module is dropped from the
+format.
 
 ## 6. Other measured details worth keeping
 

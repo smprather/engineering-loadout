@@ -163,16 +163,24 @@ glyphs, the same git branch and LSF/user handling.
 
 **The hostname follows the switch.** `LOADOUT_CFG_PROMPT_INCLUDE_HOST=1` adds
 the short hostname to the prompt. It is honored by the starship prompt (the
-`custom.host` module — the same one in the shared config and in the tcsh twin)
-*and* by the hand-rolled fallback prompt, so the switch means the same thing
-in every shell. On an LSF node the hostname is already carried by the `LSF:`
-tag, so it is not repeated.
+`custom.host` module in the shared config) *and* by the hand-rolled fallback
+prompt, so the switch means the same thing in every shell. On an LSF node the
+hostname is already carried by the `LSF:` tag, so it is not repeated.
 
-**The one deliberate difference: the path is YELLOW.** The tcsh prompt uses its
-own config (`global/starship-tcsh.toml` — the shared one with a yellow
-`[directory]` style), so a glance at the prompt says which shell you are in.
-Bash keeps the shared config's cyan path. `tests/env-tcsh-starship` pins the
-two configs to be identical apart from that one line, so they cannot drift.
+**One starship config, shared with bash and zsh; only the path colour differs.**
+All three envs read `~/.config/starship/starship.toml`. Starship has **no
+config-time environment-variable substitution** (measured: `style = "$VAR"` is
+emitted verbatim by `print-config`), so the per-shell path colour cannot be a
+config parameter — there is no `STARSHIP_SHELL`-style switch for a *value*.
+Instead the colour is applied after starship renders: starship's output already
+passes through `global/helpers/prompt-markers` for the zero-width markers, and
+that helper also rewrites the directory's SGR from `bold cyan` to `bold
+yellow`. So a glance at the prompt still says which shell you are in.
+
+The mapping is not hidden magic: `tests/env-tcsh-starship` parses
+`[directory] style` out of the shared config, maps it to the SGR sequence, and
+requires the helper to carry exactly that rewrite — change the style without
+updating the helper and the gate fails instead of the path silently going cyan.
 
 **STARSHIP_SHELL=sh, on purpose — and it must be set AFTER the init.**
 `starship init tcsh --print-full-init` exports `STARSHIP_SHELL=tcsh` itself,
