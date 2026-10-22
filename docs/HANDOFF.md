@@ -1,5 +1,43 @@
 # Current Handoff
 
+## 2026-10-21 (3): yosys -- the pyosys module now BUILDS for 3.15; the build host cannot verify it
+
+`yosys` and `sby` remain `disabled` in `payload/packages.json`, but the
+reason has changed and the remaining blocker is narrow.
+
+**What was fixed** (all in `build/build-yosys.sh`, all found by the ABI gate
+the script already had):
+
+- `python -m pybind11 --includes` prints COMPILER FLAGS (`-I<dir>`), so the
+  leading `-I` made the include path fail the directory test and the build was
+  skipped with "pybind11 headers not found".
+- Upstream's `FindPyosysEnv.cmake` detects the pybind11/cxxheaderparser
+  environment itself and overwrites the `PyosysEnv_PYTHON` cache variable, so
+  `-DPyosysEnv_PYTHON` never survives ("Could NOT find PyosysEnv"). Its
+  "virtualenv" strategy reads `$VIRTUAL_ENV` -- that is what has to be set.
+- A comment line between the backslashes of a continued command ENDS the
+  command: the remaining flags ran as a command of their own.
+- The pyosys package installs into the INTERPRETER's site-packages
+  (`YOSYS_INSTALL_PYTHON_SITEDIR` defaults to `Python3_SITEARCH`), which here
+  is the repo's own bootstrap tree -- the build was writing into the checkout.
+
+The compiled module is now cached under `$LOADOUT_BUILD_CACHE` (the pattern
+`build/build-openroad.sh` uses for OR-Tools): the compile is ~15 minutes and
+every last-mile failure used to throw it away. The stamp is written only
+after a successful build, and `YOSYS_NO_CACHE=1` forces a rebuild.
+
+**What is still broken** is the verification, not the module: on this build
+host a lookup by name for the 49MB `libyosys.so` returns ENOENT while
+`readdir()` lists the very same file, so the layout check cannot be
+satisfied. The identical copy, in the identical container, outside the build
+script, verifies fine -- so it is the host's dcache, not the build. The
+package therefore stays out of service rather than shipping unverified.
+
+**Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
+("nested server accepted a connection with no cookie"), which fails
+identically on the original HEAD (`ad539c4`) in a separate worktree -- an
+environmental X-server assertion, not from this work.
+
 ## 2026-10-21 (2): `@shared-all --dest-dir` audit -- the 3.15 sweep never rebuilt the payloads that embed the interpreter
 
 Operator request: run a `@shared-all` install into a `--dest-dir` and audit it
