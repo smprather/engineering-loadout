@@ -2056,6 +2056,7 @@ sha256  78fb2ac89f01cf9e189501a19bb990c1e7ffd198f52961430852ba9a8daeff8c  payloa
 sha256  790419734d77cb16af0f9b2b05395a2d1478659819dfa2c862c7b506fcce5e48  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ruby.so.bz2
 sha256  7912b8ae6b2720bf66293444cddc773e662544b2d7bd59802b243c164fb46d36  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/pem/folds.scm
 sha256  7912b8ae6b2720bf66293444cddc773e662544b2d7bd59802b243c164fb46d36  payload/treesitter/vendor/nvim-treesitter/runtime/queries/pem/folds.scm
+sha256  79132107a01cb5a564a33db281515e9ed730c4563d7199a31ca5be83f5ed7e4d  payload/installed-sizes.json
 sha256  792068985238ef50c37d0e26c4fb455c4402c6156c63380012def038959ae878  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/puppet/folds.scm
 sha256  792068985238ef50c37d0e26c4fb455c4402c6156c63380012def038959ae878  payload/treesitter/vendor/nvim-treesitter/runtime/queries/puppet/folds.scm
 sha256  79427b4a99d5ded4ccb65f042ce2b0e553213721c62b76acc642f423dd9129c8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/gitattributes.lua
@@ -2640,7 +2641,6 @@ sha256  9bb3fe3116b0e5315d624d64267fd14d594d97b47fccc650b745f3489e462ecf  payloa
 sha256  9bb3fe3116b0e5315d624d64267fd14d594d97b47fccc650b745f3489e462ecf  payload/treesitter/vendor/nvim-treesitter/runtime/queries/rasi/highlights.scm
 sha256  9bb9eb7350a5b4782aff955a6e9417451bec3ea65794db9415df6735ec6fe0fe  payload/treesitter/vendor/nvim-treesitter/tests/indent/gdscript_spec.lua
 sha256  9bc8cc6917e7c73b3f58cac26f18c859e8e7629b49374fc5c771fcf69a2a4197  envs/tmux/vendor/plugins/tpm/tests/test_plugin_installation_legacy.sh
-sha256  9bdcfe73579eb8d1a97a439006ea9308811f9a25ce5b0cd1ed99f4db37820078  payload/installed-sizes.json
 sha256  9bfaa3e0ef3f38feefe13e6a75ca678f9627912015385f8b16b2cf35eded3d8d  envs/tmux/vendor/plugins/tmux-yank/Vagrantfile
 sha256  9c2358100ab325ad0e0282fc7352495e8bfcf81bceec074998e6587656ed8849  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/rescript.lua
 sha256  9c27ebb685a3376b1340beacb0de33234f3fbdade7ae0554e620f6aee2aa2352  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/dockerfile.lua

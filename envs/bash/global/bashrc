@@ -386,6 +386,20 @@ fi
 
 if is_truthy "${LOADOUT_CFG_ENABLE_STARSHIP}" && command -v starship >/dev/null; then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
+    # STARSHIP_SHELL=bash ON PURPOSE, in every shell env -- tcsh included (see
+    # envs/tcsh/global/tcshrc, which needs it for the same reason). Starship
+    # runs each module's `when` expression AND its `command` with THAT shell,
+    # falling back to `sh` when it is unset -- and `sh` is dash on plenty of
+    # hosts, where the shared config's `when` snippets behave differently (or
+    # not at all). Pinning bash makes the prompt identical in bash, zsh and
+    # tcsh no matter what the OUTER shell is, or what /bin/sh points at.
+    #
+    # It cannot carry flags: STARSHIP_SHELL is a shell name, so
+    # `bash --norc --noprofile` has to go in a module's own `shell = [...]`.
+    # That buys nothing here -- a non-interactive bash reads NO startup files
+    # already (verified: `bash -c` sources neither ~/.bashrc nor ~/.bash_profile),
+    # and neither flag suppresses the one file it does read, $BASH_ENV.
+    export STARSHIP_SHELL=bash
     # starship self-hooks: it appends starship_precmd to precmd_functions when a
     # framework (the wezterm/bash-preexec above, or ble.sh) is active, else it
     # uses a plain PROMPT_COMMAND. Do NOT unset or overwrite PROMPT_COMMAND

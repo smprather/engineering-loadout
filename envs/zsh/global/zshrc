@@ -356,6 +356,13 @@ set_prompt() {
 
 if (( _loadout_starship_ok )); then
     export STARSHIP_CONFIG="$BASH_CONFIG_ROOT_DIR/../starship/starship.toml"
+    # STARSHIP_SHELL=bash ON PURPOSE, in every shell env -- see the matching
+    # block in envs/bash/global/bashrc and envs/tcsh/global/tcshrc for the
+    # full rationale. Short version: starship runs each module's `when` AND
+    # its `command` with this shell, falling back to `sh` (dash on many hosts)
+    # when it is unset, so pinning bash keeps the shared config's snippets
+    # behaving identically no matter what the OUTER shell is.
+    export STARSHIP_SHELL=bash
     eval "$(starship init zsh)"
 else
     set_prompt

@@ -1072,3 +1072,13 @@
 2026-10-22T15:03:36Z	test:content-manifest in sync	2	PASS	mode=all
 2026-10-22T15:03:43Z	test:content-manifest matches export	7	PASS	mode=all
 2026-10-22T15:03:43Z	test:content-manifest shipped-set	0	FAIL	mode=all
+2026-10-22T15:04:34Z	test:py_compile	1	PASS	mode=all
+2026-10-22T15:04:34Z	test:ruff check	0	PASS	mode=all
+2026-10-22T15:04:34Z	test:ruff format check	0	PASS	mode=all
+2026-10-22T15:04:34Z	test:unit-resolver	0	PASS	mode=all
+2026-10-22T15:04:34Z	test:doctor-system-newer	0	PASS	mode=all
+2026-10-22T15:04:34Z	test:registry-integrity	0	PASS	mode=all
+2026-10-22T15:04:35Z	test:search-groups	1	PASS	mode=all
+2026-10-22T15:04:35Z	test:tar-safety	0	PASS	mode=all
+2026-10-22T15:04:35Z	test:content-verify	0	PASS	mode=all
+2026-10-22T15:04:37Z	test:content-manifest in sync	2	PASS	mode=all

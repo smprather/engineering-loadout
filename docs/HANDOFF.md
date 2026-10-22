@@ -1,5 +1,55 @@
 # Current Handoff
 
+## 2026-10-22 (3): every starship command runs under bash, whatever the outer shell -- and why not `--norc --noprofile`
+
+Request: make every shell command starship runs use `/bin/bash --norc
+--noprofile`, even when the outer shell is not bash. Two corrections to how
+that can be done, both measured on the shipped starship (1.27.0):
+
+**`STARSHIP_SHELL` is the switch, not `STARSHELL`.** A module's `shell`
+falls back to `STARSHIP_SHELL`, and only then to `sh`
+(`starship.rs/config/#custom-command-shell`). `starship init <shell>` does
+NOT export it -- so every env has to. The tcsh env already did, deliberately
+(`setenv STARSHIP_SHELL bash`, with the reason in a comment); the bash and
+zsh envs did not, and were relying on `/bin/sh` -- which is dash on plenty
+of hosts, where the shared config's `when` snippets behave differently.
+
+**Fixed:** `export STARSHIP_SHELL=bash` in the bash and zsh envs, next to
+their `starship init` calls, so all three envs now pin the same shell.
+
+**Verified, in real PTY sessions with a probe module in the prompt:**
+
+| outer shell | starship's command ran as |
+|---|---|
+| bash | `SHELL=bash INTERP=/usr/bin/bash` |
+| tcsh | `SHELL=bash INTERP=/usr/bin/bash` |
+
+**`--norc --noprofile` are NOT part of the fix, and the reason is worth
+keeping.** `STARSHIP_SHELL` is a shell name, so flags can only go in a
+module's own `shell = [...]` -- and they would buy nothing:
+
+```
+bash -c 'echo ran'                      → runs, no rc sourced
+BASH_ENV=x bash -c 'echo ran'           → x IS sourced      (the hole)
+BASH_ENV=x bash --norc --noprofile -c   → x IS STILL sourced (flags don't help)
+```
+
+A non-interactive bash reads no startup files already; the ONE file it does
+read is `$BASH_ENV`, and neither flag suppresses it. Only `unset BASH_ENV`
+closes that hole, and it would close it for every subshell rather than only
+starship's. Not done here -- say the word if you want it.
+
+**Also settled while checking "are starship modules customizable by env
+var":** there is no config-time substitution. `style = "$FOO"` is emitted
+verbatim by `print-config` and rendered as a literal, so a config VALUE
+cannot follow a `LOADOUT_CFG_*` switch. Only `when` (whether the module
+appears) and `command` (what it prints at run time) can -- and a built-in
+module's `detect_env_vars` tests variable PRESENCE, not value, which
+always-exported switches cannot express.
+
+Localized gates: `tests/env-shell-parity` 24/24, `tests/env-tcsh-starship`
+20/20 (the twin config was not touched).
+
 ## 2026-10-22 (2): the starship prompt honors LOADOUT_CFG_PROMPT_INCLUDE_HOST -- and the config file loses its "linux" suffix
 
 **The switch did nothing under starship.** `LOADOUT_CFG_PROMPT_INCLUDE_HOST` is
