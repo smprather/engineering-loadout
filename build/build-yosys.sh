@@ -507,6 +507,13 @@ if [ "$PYOSYS_FROM_SOURCE" -eq 1 ] && [ "$PYOSYS_CACHED" -eq 0 ]; then
         [ -e "$PYOSYS_PKG/pyosys/$extra" ] && \
             mv "$PYOSYS_PKG/pyosys/$extra" "$PYOSYS_PKG/$extra"
     done
+    # The module looks for yosys-abc NEXT TO ITSELF, so the package has to
+    # carry it -- as a symlink to the prefix's own copy, so the tree holds
+    # ONE abc and the link stays relocatable. The link TEXT is what the
+    # archive stores, and it is relative to the package's installed location
+    # (<prefix>/lib/yosys-pyosys/pyosys/ -> <prefix>/bin/yosys-abc).
+    rm -f "$PYOSYS_PKG/pyosys/yosys-abc"
+    ln -s ../../../bin/yosys-abc "$PYOSYS_PKG/pyosys/yosys-abc"
     echo "  pyosys module built for python3.15 (source build)"
 elif [ "$PYOSYS_CACHED" -eq 1 ]; then
     echo "  pyosys module reused from the cache ($PYOSYS_CACHE)"
@@ -648,14 +655,19 @@ STAGE="$WORK/relocated"
 rm -rf "$STAGE"
 cp -a "$INST" "$STAGE"
 # The pyosys package is not part of $INST (it is appended to the runtime
-# archive from the cache), so the smoke stage gets it as a symlink to the
-# package DIRECTORY -- a symlink to the individual files does not import
-# (python's extension loader rejects a symlinked .so). The package directory
-# holds only __init__.py and libyosys.so, so the module resolves its data
-# tree through /proc/self/exe -- i.e. from the RELOCATED stage -- which is
-# exactly what this smoke has to prove.
+# archive from the cache), so the smoke stage gets its own copy -- a
+# DIRECTORY copy, because a copy that names the files individually stats
+# them by name, and on this build host a name that was looked up before its
+# file existed cannot be found that way (readdir lists it, the lookup
+# returns ENOENT). A symlink to the individual files does not import either
+# (python's extension loader rejects a symlinked .so).
+#
+# The stage's yosys-abc is a symlink to the stage's OWN bin/yosys-abc: the
+# module looks for it NEXT TO ITSELF, so that is where it has to be, and
+# pointing it at the stage's own copy is what proves the relocation.
 mkdir -p "$STAGE/lib/yosys-pyosys"
-ln -sfn "$PYOSYS_PKG/pyosys" "$STAGE/lib/yosys-pyosys/pyosys"
+cp -a "$PYOSYS_PKG/pyosys" "$STAGE/lib/yosys-pyosys/pyosys"
+ln -sfn "$STAGE/bin/yosys-abc" "$STAGE/lib/yosys-pyosys/pyosys/yosys-abc"
 ln -sfn "$PYOSYS_PKG/click" "$STAGE/lib/yosys-pyosys/click"
 
 # portable-python, for the -y path. Optional in the sense that it is skipped

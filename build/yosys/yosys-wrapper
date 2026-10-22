@@ -156,10 +156,19 @@ done
 # Python puts the script's directory at sys.path[0], and `python <file>` runs it
 # as __main__ -- matching PyRun_SimpleFile.
 #
-# PYOSYS_DIR goes FIRST on PYTHONPATH and is prepended, not replaced: librelane
+# PYTHONPATH goes FIRST on PYTHONPATH and is prepended, not replaced: librelane
 # appends its own scripts/ directory (ys_common.py, construct_abc_script.py) to
 # the PYTHONPATH it hands the subprocess, and those imports must keep working.
 # It carries the vendored click that those scripts import (portable-python has
 # no site-packages click).
+#
+# LD_LIBRARY_PATH is the prefix's lib64/lib, the same directories the yosys
+# binary finds through its RPATH ($ORIGIN/../lib64:$ORIGIN/../lib). It is
+# needed because the module is dlopen()ed by the INTERPRETER, and the
+# interpreter has no RPATH of its own: without it the import of libyosys.so
+# fails on libffi.so.6 -- which the yosys package does install into
+# <prefix>/lib64, but nothing had told the interpreter where to look. A build
+# host that happens to have libffi.so.6 in /usr/lib64 hides this.
+LD_LIBRARY_PATH="$PREFIX/lib64:$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 PYTHONPATH="$PYOSYS_DIR${PYTHONPATH:+:$PYTHONPATH}" \
     exec "$PYTHON" "$script" "$@"
