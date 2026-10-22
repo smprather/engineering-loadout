@@ -394,7 +394,15 @@ if ( $?prompt ) then
             # "Faulty alias". $TCSH_CONFIG_ROOT_DIR is set before this file
             # runs and is correct for both layouts -- the shared config root
             # and the home-local one.
-            alias precmd 'setenv _LOADOUT_STARSHIP_PROMPT "$prompt" ; set prompt = "`$TCSH_CONFIG_ROOT_DIR/global/helpers/prompt-markers`"'
+            # The prompt is rendered HERE and piped straight into the helper,
+            # NOT taken from `$prompt`: starship's own precmd already did
+            # `set prompt = "`starship prompt`"`, and csh collapses newlines
+            # inside a command substitution -- so by the time `$prompt` exists
+            # the line structure is gone and the path ends up on the branch's
+            # line. A PIPE inside the backticks preserves it.
+            # $STARSHIP_PATH / $STARSHIP_CMD_STATUS / $STARSHIP_DURATION are
+            # set by the stock STARSHIP_PRECMD, which runs just before this.
+            alias precmd 'set prompt = "`$STARSHIP_PATH prompt --status $STARSHIP_CMD_STATUS --cmd-duration $STARSHIP_DURATION | $TCSH_CONFIG_ROOT_DIR/global/helpers/prompt-markers`"'
             # starship's tcsh init defines precmd/postcmd aliases that chain to
             # the precmd alias above (captured as USER_PRECMD), so starship
             # renders the prompt and the alias converts its markers.

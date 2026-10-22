@@ -1485,6 +1485,7 @@ sha256  5702acc2a4d3c78b7ce64de117ae39015205bdbb985a794a9ec7f4c6139e4b58  payloa
 sha256  571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320  payload/el8.x86_64.glibc2p28/wheels/annotated_doc-0.0.4-py3-none-any.whl
 sha256  572435efca2fde905938c3dc7921928b198d0b08cb43b12dd25cc5c999f803ab  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/javadoc.so.bz2
 sha256  57322ee2333c0dceaaa878d1423c118b223f959b0d5d8a16f5b9dab99bfb2ee5  payload/el8.x86_64.glibc2p28/lib64/libwayland-client.so.0.bz2
+sha256  5735064f6b833d914f6dbc7ffd6e9a58e3a4b10fc504d1719d60f1c0962ef0bf  payload/installed-sizes.json
 sha256  5740d8bf5a6418664045d286580a2030a8a367e114e978ae447a139408d42c09  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/haskell/injections.scm
 sha256  5740d8bf5a6418664045d286580a2030a8a367e114e978ae447a139408d42c09  payload/treesitter/vendor/nvim-treesitter/runtime/queries/haskell/injections.scm
 sha256  575f636a7a9836bc94677fcb2cd41169bb4529388696ab5f2a5e8f96cb595bee  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/lua.so.bz2
@@ -2904,7 +2905,6 @@ sha256  ad21142e29fd7dc26b51e0f2b8322098f475da2791e1abbde0ac438c3437f39e  payloa
 sha256  ad21142e29fd7dc26b51e0f2b8322098f475da2791e1abbde0ac438c3437f39e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/c3/folds.scm
 sha256  ad23dd47c8e50ad25e85e08f6e481bf69a1038b7e470b6fd7d563fd1b0b31d77  envs/tmux/vendor/plugins/tmux-persist/docs/auto_save_and_restore.md
 sha256  ad37a844bfcfc017aebed179204551cd2e8a39ec2b9b37674a58aebe15acf9f2  payload/el8.x86_64.glibc2p28/lib64/libqxcb.so.bz2
-sha256  ad3ade74758c88834e9bc5ffcbc0a7856efcbd7a1448628f400778d260c4b6c1  payload/installed-sizes.json
 sha256  ad3b49671bb6604f208b3bccd76ff16682abc1a446ed23abf4890d1c8f732cb9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/smali/folds.scm
 sha256  ad3b49671bb6604f208b3bccd76ff16682abc1a446ed23abf4890d1c8f732cb9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/smali/folds.scm
 sha256  ad722ff49a4de8fadef373a6f677ecb8427b9d1798f08cf465d95d4bedc08871  payload/treesitter/vendor/nvim-treesitter/tests/indent/gleam/todo.gleam

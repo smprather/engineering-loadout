@@ -242,6 +242,29 @@ UNBRACED form, so bracing the reference made it silently find no modules at
 all; it now accepts both and fails when the host module is dropped from the
 format.
 
+## 5c. tcsh: csh collapses newlines in a command substitution
+
+`set prompt = "`cmd`"` joins a multi-line command substitution into ONE line.
+Starship's own tcsh precmd does exactly that, so by the time `$prompt` exists
+the line structure is gone — the path renders on the branch's line. Measured:
+
+```sh
+set prompt = "`printf 'A\nB'`"    # -> one line
+set prompt = "`printf 'A\nB' | cat`"  # a PIPE inside the backticks keeps the newlines
+```
+
+So the tcsh env does NOT read `$prompt`: its precmd renders the prompt itself
+and pipes it straight into `helpers/prompt-markers`, which turns newlines into
+tcsh's `\n` escape (tcsh interprets it: `set prompt = "AAA\nBBB"` renders two
+lines). Cost: a second `starship prompt` render, measured at ~4 ms.
+
+tcsh renders a prompt newline as `ESC[80G<2 spaces>CR`, which is what an
+exact-match expectation has to contain.
+
+**Locale matters:** without a UTF-8 locale tcsh drops the first byte of every
+multi-byte glyph in the prompt (`\xee\x82\xa0` renders as `\x82\xa0`). Not a
+config bug, but tests must pin `LANG` or they compare garbage.
+
 ## 6. Other measured details worth keeping
 
 - **`starship init <shell>` does not export `STARSHIP_SHELL` for bash or zsh**

@@ -33,14 +33,30 @@
 #    asserts this file carries that exact `s/<from>/<to>/` pair. Change the
 #    directory style and the gate tells you to update the sed here.
 #
-# Input: the prompt text in $_LOADOUT_STARSHIP_PROMPT. Output: the converted
-# prompt on stdout.
+# Input: the prompt text on STDIN (the precmd pipes `starship prompt` into
+# this script). Output: the converted prompt on stdout.
 #
 # printf '%s' (not echo) because csh's echo interprets backslash escapes, and
 # the very markers this helper is here to convert would be consumed by it.
 
-printf '%s' "$_LOADOUT_STARSHIP_PROMPT" | sed \
-    -e 's/\\\[/%{/g' \
-    -e 's/\\\]/%}/g' \
-    -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
-    -e 's/\x1b\[[0-9;]*m/%{&%}/g'
+# 3. NEWLINES. csh collapses newlines inside a quoted command substitution,
+#    and the precmd alias is `set prompt = "`helper`"` -- so a MULTI-LINE
+#    prompt arrives as ONE line, putting the path on the same line as the
+#    branch/status block. tcsh DOES interpret `\n` in `prompt` (verified:
+#    `set prompt = "AAA\nBBB"` renders on two lines), so emit the two-character
+#    escape and let tcsh do the line break.
+#
+#    awk, not `sed ':a;N;$!ba'`: that idiom appends a `\n` even to a
+#    single-line prompt (GNU sed's N at EOF), which would break the line after
+#    the prompt.
+# Reads STDIN: the precmd pipes `starship prompt` straight into this script.
+# THAT is what preserves the newlines -- csh collapses them only when the
+# starship output passes through a bare command substitution
+# (`set prompt = "`starship prompt`"`). A pipe inside the backticks keeps the
+# line structure, so the newline->`\n` step below still has something to do.
+awk 'BEGIN { ORS = "" } NR > 1 { printf "\\n" } { print }' \
+    | sed \
+        -e 's/\\\[/%{/g' \
+        -e 's/\\\]/%}/g' \
+        -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
+        -e 's/\x1b\[[0-9;]*m/%{&%}/g'
