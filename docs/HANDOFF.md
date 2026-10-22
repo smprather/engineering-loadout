@@ -1,5 +1,71 @@
 # Current Handoff
 
+## 2026-10-22 (2): the starship prompt honors LOADOUT_CFG_PROMPT_INCLUDE_HOST -- and the config file loses its "linux" suffix
+
+**The switch did nothing under starship.** `LOADOUT_CFG_PROMPT_INCLUDE_HOST` is
+exported by every shell env and honored by the hand-rolled fallback prompts
+(bash/zsh/tcsh), but starship drives the prompt BY DEFAULT in bash and tcsh --
+and the starship config had no hostname module at all. So the preference was
+silently ignored in exactly the configuration that ships by default. (The
+vendored schema confirms built-in modules carry no `when`, so this has to be a
+`custom` module -- the `custom.lsf` pattern.)
+
+**Fixed, in the shared config and the tcsh twin** (the twin gate requires them
+to be identical apart from the directory style):
+
+```toml
+[custom.host]
+when = 'test "$LOADOUT_CFG_PROMPT_INCLUDE_HOST" = "1" && test -z "$LSB_JOBID"'
+command = "hostname -s"
+format = "[$output]($style) "
+style = "bold dimmed white"
+```
+
+The `LSB_JOBID` guard is not cosmetic: `custom.lsf` already renders
+`LSF:<host>` on a farm node, so without it the host would appear twice.
+
+**The bash built-in prompt had the same disease, differently.** `set_prompt`
+COMPUTED the farm tag and the host into `prompt_joined` and then never used the
+variable -- a dead one. So under starship the switch did nothing, and without
+starship it did nothing either. `PS1` now renders `prompt_joined`, and `sp2`
+(which passed an `include_host` argument that `set_prompt` ignored) is now the
+zsh-shaped `LOADOUT_CFG_PROMPT_INCLUDE_HOST=1 set_prompt`. `sp1` drops it
+again.
+
+**Verified, not assumed:**
+
+- real `starship prompt` renders: switch 0 -> no host; switch 1 -> the short
+  hostname; switch 1 + `LSB_JOBID` -> `LSF:<host>` once, not twice; the tcsh
+  twin renders the same.
+- a real PTY **tcsh** session (starship-driven) starts with the host in the
+  prompt.
+- a real PTY **bash** session with starship disabled: `PS1` gains `:host` with
+  the switch on; `sp2` adds it, `sp1` removes it.
+- `env-starship` installs `~/.config/starship/starship.toml` +
+  `config-schema.json` (the installer source path moved with the rename).
+
+**New permanent checks** (both RED-proven -- they fail when the behavior is
+removed):
+
+- `tests/env-tcsh-starship`: both configs must PARSE, and the format string
+  must reference a custom module whose `when` tests
+  `LOADOUT_CFG_PROMPT_INCLUDE_HOST`.
+- `tests/env-shell-parity`: the bash `PS1` assignment must use
+  `prompt_joined` (the dead-variable regression), and the tcsh prompt must
+  still assemble `_loadout_host`.
+
+**The rename.** `envs/starship/starship.linux.toml` -> `envs/starship/starship.toml`.
+Windows/macOS were retired from this repo on 2026-08-31, so the platform
+qualifier in the file name was a leftover (and the tcsh twin is called
+`starship-tcsh.toml`, not `starship.linux-csh.toml`). Updated: the installer's
+source path (`loadout_main.py`), `tests/env-tcsh-starship`, the twin's
+comment, `docs/INSTALLATION.md`, `AGENTS.md`'s repo map, the README's Starship
+row, and the registry description -- which still read "Starship prompt config
+(Linux/macOS variant)", a claim that has been false since 2026-08-31.
+
+Regenerated `payload/installed-sizes.json` and `.content-manifest` (the env
+packages ship the `envs/` trees, so their sizes moved).
+
 ## 2026-10-22 (1): the tcsh env's ssh-agent switch was a DEAD SWITCH -- and the parity gate let it pass
 
 Found by a drift audit of the `LOADOUT_CFG_*` switches across the two envs:
@@ -1156,7 +1222,7 @@ hardcodes its links. It also hid W1's dead `~/.vim` link.
   handlers still create every link they did before -- no behavior change.
 - Sizing (D2's consequence): `env-starship`'s `source` is now the directory
   `envs/starship/`, so the directory walk counts `config-schema.json` beside
-  `starship.linux.toml`; `_artifact_paths('env-starship')` verified to return
+  `starship.toml`; `_artifact_paths('env-starship')` verified to return
   both files. `gen-installed-sizes` regenerated (map unchanged, 6368
   artifacts), then `.content-manifest`.
 - Docs: AGENTS sizing note rewritten (directory sources count their tree),

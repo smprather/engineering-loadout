@@ -90,7 +90,7 @@ Per-user (`$HOME`):
 | `~/.editorconfig` | `envs/editorconfig/editorconfig` |
 | `~/.config/nvim/` | `envs/nvim/` |
 | `~/.config/helix/` | `envs/helix/` |
-| `~/.config/starship/starship.toml` | `envs/starship/starship.linux.toml` + `envs/starship/config-schema.json` |
+| `~/.config/starship/starship.toml` | `envs/starship/starship.toml` + `envs/starship/config-schema.json` |
 | `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives; a shared tree outside `$HOME` installs them once to `<prefix>/share/fonts` instead, with a generated `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
 | `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |

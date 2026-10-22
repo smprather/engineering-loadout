@@ -161,6 +161,13 @@ moved to starship 1.26.0, which ships one (`starship init tcsh`). The prompt is
 now starship-driven, exactly like the bash env: the same modules, the same
 glyphs, the same git branch and LSF/user handling.
 
+**The hostname follows the switch.** `LOADOUT_CFG_PROMPT_INCLUDE_HOST=1` adds
+the short hostname to the prompt. It is honored by the starship prompt (the
+`custom.host` module — the same one in the shared config and in the tcsh twin)
+*and* by the hand-rolled fallback prompt, so the switch means the same thing
+in every shell. On an LSF node the hostname is already carried by the `LSF:`
+tag, so it is not repeated.
+
 **The one deliberate difference: the path is YELLOW.** The tcsh prompt uses its
 own config (`global/starship-tcsh.toml` — the shared one with a yellow
 `[directory]` style), so a glance at the prompt says which shell you are in.

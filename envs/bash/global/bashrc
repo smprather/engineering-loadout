@@ -322,18 +322,23 @@ set_prompt() {
 
     prompt_joined=$(join_by : "${prompt_parts[@]}")
 
-    [[ $include_host == "1" ]] && prompt_joined+=":$(hostname)"
+    [[ $include_host == "1" ]] && prompt_joined+=":$(hostname -s)"
 
     get_prompt_uid() {
-        local whoiam=$(/bin/whoami)
-        if [[ "$whoiam" != "$USER" ]]; then
-            printf "$whoiam "
+        local whoami=$(/bin/whoami)
+        if [[ "$whoami" != "$USER" ]]; then
+            printf "$whoami "
         else
             printf ""
         fi
     }
 
-    PS1="${PROMPT_YELLOW}\$(get_prompt_uid)${prompt_color}\$ ${PROMPT_WHITE}"
+    # prompt_joined carries the farm tag and (with
+    # LOADOUT_CFG_PROMPT_INCLUDE_HOST=1) the hostname. It used to be computed
+    # and then DROPPED -- the built-in prompt showed neither the LSF tag nor
+    # the host, while the starship prompt (the default) and the zsh/tcsh
+    # built-in prompts both honored the switch.
+    PS1="${PROMPT_YELLOW}\$(get_prompt_uid)${prompt_color}${prompt_joined}\$ ${PROMPT_WHITE}"
 }
 
 # Reset any preexec-framework state to a clean baseline. A login shell may have

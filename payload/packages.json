@@ -3385,7 +3385,7 @@
         "env",
         "prompt"
       ],
-      "description": "Starship prompt config (Linux/macOS variant)"
+      "description": "Starship prompt config"
     },
     "env-btop": {
       "kind": "env",

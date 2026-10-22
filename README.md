@@ -127,7 +127,7 @@ Name packages or groups the same way `dnf` or `apt` works:
 | **[Vim](https://www.vim.org)** | Vim 9.2 with NERDTree, SimpylFold, and vim-liberty bundled |
 | **[Tmux](https://github.com/tmux/tmux)** | Sessions that survive reboot (tmux-persist), `Ctrl-\` prefix |
 | **[Helix](https://helix-editor.com)** | Ready to run offline |
-| **[Starship](https://starship.rs)** | Cross-shell prompt, Linux config |
+| **[Starship](https://starship.rs)** | Cross-shell prompt, one shared config for bash, zsh and tcsh |
 | **[WezTerm](https://wezfurlong.org/wezterm/)** | Terminal emulator config |
 | **[EditorConfig](https://editorconfig.org)** | Consistent formatting across all editors |
 | **Command-line tools** | 100+ modern CLI utilities, ready offline -- see table below |

@@ -24,7 +24,7 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SHARED = os.path.join(REPO, "envs", "starship", "starship.linux.toml")
+SHARED = os.path.join(REPO, "envs", "starship", "starship.toml")
 TCSH = os.path.join(REPO, "envs", "tcsh", "global", "starship-tcsh.toml")
 TCSHRC = os.path.join(REPO, "envs", "tcsh", "global", "tcshrc")
 CONFIG_CSH = os.path.join(REPO, "envs", "tcsh", "global", "config.csh")
@@ -116,6 +116,34 @@ def main():
             "the two configs are identical apart from the directory style",
             False,
             "; ".join(diff[:3]) or f"length {len(shared_lines)} vs {len(tcsh_lines)}",
+        )
+
+    print("-- the prompt honors the host switch")
+    # LOADOUT_CFG_PROMPT_INCLUDE_HOST is exported by every shell env and
+    # honored by the hand-rolled prompts. The STARSHIP prompt is the default
+    # in bash and tcsh, so without a module gated on the switch the
+    # preference was silently ignored in exactly the shells that show a
+    # prompt by default.
+    for label, path in (("shared", SHARED), ("tcsh", TCSH)):
+        try:
+            import tomllib
+
+            with open(path, "rb") as fh:
+                cfg = tomllib.load(fh)
+        except Exception as exc:  # noqa: BLE001 -- a broken config must fail the gate
+            check(f"the {label} starship config parses", False, str(exc))
+            continue
+        fmt = cfg.get("format", "")
+        custom = cfg.get("custom", {})
+        refs = set(re.findall(r"\$custom\.([A-Za-z0-9_]+)", fmt))
+        honoring = sorted(
+            n for n in refs if "LOADOUT_CFG_PROMPT_INCLUDE_HOST" in str((custom.get(n) or {}).get("when", ""))
+        )
+        check(
+            f"the {label} starship config honors LOADOUT_CFG_PROMPT_INCLUDE_HOST",
+            bool(honoring),
+            "no module in the format string is gated on the switch (referenced custom "
+            f"modules: {sorted(refs) or 'none'})",
         )
 
     print("-- the tcsh env uses it")

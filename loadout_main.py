@@ -5178,7 +5178,7 @@ def _install_env_starship(repo_dir, home):
         False,
     )
     install_path(
-        os.path.join(repo_dir, "envs", "starship", "starship.linux.toml"),
+        os.path.join(repo_dir, "envs", "starship", "starship.toml"),
         os.path.join(starship_dir, "starship.toml"),
         False,
     )

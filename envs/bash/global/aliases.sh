@@ -300,7 +300,7 @@ alias clean_bash='echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME U
 alias vman="MANPAGER='nvim +Man\!' man"
 str() { strace -o "$(loadout_tmp_root)/strace.${USER:-user}" -f -v -s 1000000 "$@"; }
 alias sp1="set_prompt"
-alias sp2="set_prompt include_host"
+alias sp2="LOADOUT_CFG_PROMPT_INCLUDE_HOST=1 set_prompt"
 alias fsbm='fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test; rm ./fio_test'
 # I was getting a weird completion failure for `x <tab>`. This is the work-around.
 # `complete` is a bash builtin with no zsh equivalent, and this file is sourced

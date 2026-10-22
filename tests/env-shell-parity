@@ -330,6 +330,27 @@ def main():
         + "\n        Export it from envs/bash/global/config.sh, or stop reading it.",
     )
 
+    # ---- the built-in prompts honor the same switch -------------------------
+    # LOADOUT_CFG_PROMPT_INCLUDE_HOST must mean the same thing in both envs:
+    # the tcsh built-in prompt renders the host, so the bash one must too.
+    # The bash prompt used to COMPUTE the farm tag and the host and then drop
+    # the result on the floor (a dead variable), so the switch did nothing
+    # there at all.
+    bash_rc = read(BASH_BASHRC)
+    ps1 = re.search(r"^[ \t]*PS1=.*$", bash_rc, re.M)
+    check(
+        "the bash built-in prompt renders the farm tag and the host",
+        bool(ps1) and "prompt_joined" in ps1.group(0),
+        "the PS1 assignment does not use prompt_joined -- the farm tag and the host"
+        " are computed and then dropped" + ("" if ps1 else " (no PS1 assignment found)"),
+    )
+    tcsh_rc = read(TCSH_TCSHRC)
+    check(
+        "the tcsh built-in prompt renders the host",
+        "_loadout_host" in tcsh_rc and "loadout_prompt_lead" in tcsh_rc,
+        "the tcsh prompt no longer assembles _loadout_host",
+    )
+
     # ---- zsh -----------------------------------------------------------------
     for path in (ZSH_ENTRY, ZSH_ZSHRC, ZSH_COMPLETIONS):
         if not os.path.isfile(path):
