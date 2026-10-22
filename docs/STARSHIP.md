@@ -265,6 +265,30 @@ exact-match expectation has to contain.
 multi-byte glyph in the prompt (`\xee\x82\xa0` renders as `\x82\xa0`). Not a
 config bug, but tests must pin `LANG` or they compare garbage.
 
+## 5d. tcsh drops astral (4-byte) glyphs from the prompt — the python snake
+
+The `$python` module's `🐍` is U+1F40D, a 4-byte UTF-8 sequence. Measured in a
+bare `set prompt`:
+
+| glyph | LANG=en_US.UTF-8 | LANG unset (C) |
+|---|---|---|
+| `🐍` (4 bytes) | **dropped entirely** | preserved |
+| `\ue0a0` (3 bytes) | preserved | first byte dropped |
+| `❯` (3 bytes) | preserved | first byte dropped |
+
+So in a normal UTF-8 session tcsh renders `v3.14.8` with no snake, and in a C
+locale it keeps the snake but mangles the 3-byte glyphs. There is no locale
+that renders all of them. This is tcsh's prompt code, not the config or the
+helper — the helper's output is byte-perfect (verified with `od`).
+
+If a marker is wanted there for tcsh, the helper is the place to substitute a
+BMP-safe glyph (it already rewrites this prompt); that has not been done
+because the version text is unambiguous on its own.
+
+Note also that `tests/env-tcsh-starship`'s exact-match fixture is a repo with
+NO python file, so `$python` does not fire at all there — the snake is absent
+from that test by construction, regardless of this limitation.
+
 ## 6. Other measured details worth keeping
 
 - **`starship init <shell>` does not export `STARSHIP_SHELL` for bash or zsh**
