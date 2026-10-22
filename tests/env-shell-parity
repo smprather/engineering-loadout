@@ -151,11 +151,12 @@ def bash_command_names(text):
 def tcsh_alias_names(text):
     """`alias NAME ...`, anywhere on the line -- NOT anchored to line start.
 
-    csh's one-line `if` puts the alias mid-line:
-        if ( "$LOADOUT_CFG_PREFERRED_CAT" == "bat" ) alias cat 'bat --paging=never'
-    An anchored pattern misses every conditionally-defined alias and then
-    reports it as an unimplemented gap. Comments are already stripped by read(),
-    so matching anywhere cannot pick up prose.
+    csh's one-line `if` puts the alias mid-line, e.g.
+        if ( -X bat ) alias catp 'bat'
+    (the file does not use that form today, but an anchored pattern would
+    silently miss it if it came back, and then report the alias as an
+    unimplemented gap). Comments are already stripped by read(), so matching
+    anywhere cannot pick up prose.
     """
     return set(re.findall(r"\balias[ \t]+([A-Za-z_][A-Za-z0-9_+-]*)[ \t]", text))
 

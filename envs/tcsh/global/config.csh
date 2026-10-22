@@ -52,7 +52,6 @@ if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX ""
 # not installed, so these are safe to leave as-is.
 if ( ! $?LOADOUT_CFG_PREFERRED_LS )        setenv LOADOUT_CFG_PREFERRED_LS  eza
 if ( ! $?LOADOUT_CFG_PREFERRED_VI )        setenv LOADOUT_CFG_PREFERRED_VI  nvim
-if ( ! $?LOADOUT_CFG_PREFERRED_CAT )       setenv LOADOUT_CFG_PREFERRED_CAT bat
 
 # ---- optional integrations ---------------------------------------------------
 # Generic Colorizer.

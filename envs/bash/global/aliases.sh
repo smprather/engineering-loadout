@@ -317,9 +317,10 @@ rp() {
 }
 if [[ -n $_bat_exec ]]; then
     loadout_bat_exec=$_bat_exec
-    if [[ ${LOADOUT_CFG_PREFERRED_CAT:-bat} == "bat" ]]; then
-        cat() { "$loadout_bat_exec" --paging=never "$@"; }
-    fi
+    # `cat` is deliberately NOT replaced: bat decorates its output (headers,
+    # line numbers), so `cat file | cmd`, `cat > file` and anything parsing
+    # `cat`'s bytes would silently change meaning. `catp` is the explicit
+    # reader for a human looking at a file.
     catp() { "$loadout_bat_exec" "$@"; }
 fi
 lns() {

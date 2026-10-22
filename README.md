@@ -527,7 +527,7 @@ six-layer override chain (`global -> corp -> site -> team -> project -> user`),
 - `f` -- `fd` with sensible defaults, falls back to `find`
 - `gs` / `gc` / `gp` / `gd` / `ga` -- git status / commit / push / diff / add
 - `vi` / `vim` -- your preferred editor (`nvim` by default)
-- `cat` -- `bat` with no paging
+- `catp` -- `bat` (paged, syntax-highlighted reader; `cat` itself is untouched)
 - `ll` / `la` / `lh` -- `ls` variants (sizes, all files, human-readable)
 
 tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,

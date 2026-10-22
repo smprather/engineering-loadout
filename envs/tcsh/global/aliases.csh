@@ -234,13 +234,14 @@ else
     alias df    'df --block-size=G'
 endif
 if ( -X bat ) then
-    if ( "$LOADOUT_CFG_PREFERRED_CAT" == "bat" ) alias cat 'bat --paging=never'
+    # `cat` is deliberately NOT replaced -- see the note in the bash env's
+    # aliases.sh: bat decorates its output, so anything piping or parsing
+    # `cat` would change meaning. `catp` is the explicit reader.
     alias catp  'bat'
 else if ( -X batcat ) then
     # Debian and derivatives ship bat as `batcat`. The bash env aliases `bat` to
     # whichever name exists so scripts and muscle memory keep working; same here.
     alias bat   'batcat'
-    if ( "$LOADOUT_CFG_PREFERRED_CAT" == "bat" ) alias cat 'batcat --paging=never'
     alias catp  'batcat'
 endif
 
