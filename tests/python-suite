@@ -18,6 +18,9 @@ Read-only: never installs, never touches the network.
 """
 
 import hashlib
+import importlib.machinery
+import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -47,6 +50,15 @@ def ok(msg):
 
 def normalize(name):
     return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def load_loadout():
+    path = os.path.join(REPO, "loadout_main.py")
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", path)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
 def shipped_python_version():
@@ -232,6 +244,17 @@ def main():
 
     if shared_wheelhouse_dirty():
         fail("suite build wrote into the shared wheelhouse (D8)")
+
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        entry = json.load(fh)["packages"]["python-loaded"]
+    paths = load_loadout()._artifact_paths(entry, REPO, PLATFORM_DIR)
+    wheel_paths = [p for p in paths if p.endswith((".whl", ".whl.part-000"))]
+    if not wheel_paths:
+        fail("_artifact_paths does not see the private wheelhouse (transaction size would be 0 B)")
+    elif not all(os.path.join("payload", "python-loaded", "wheels") in p for p in wheel_paths):
+        fail("_artifact_paths returned wheels outside the private wheelhouse")
+    else:
+        ok(f"_artifact_paths sizes {len(wheel_paths)} suite wheel files")
 
     print()
     if FAILURES:

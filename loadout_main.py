@@ -6497,6 +6497,18 @@ def _artifact_paths(entry, repo_dir, platform_dir):
             _add(os.path.join(platform_dir, "wheels", dist + "-*.whl"))
             _add(os.path.join(platform_dir, "wheels", re.sub(r"[-.]+", "_", dist) + "-*.whl"))
 
+    wheels_dir = entry.get("wheels_dir", "")
+    if wheels_dir:
+        resolved = wheels_dir
+        if "PLATFORM" in resolved and platform_dir:
+            resolved = resolved.replace("PLATFORM", os.path.basename(platform_dir))
+        full = os.path.join(repo_dir, resolved)
+        if os.path.isdir(full):
+            for root, _dirs, files in os.walk(full):
+                for name in files:
+                    if name.endswith(".whl") or ".whl.part-" in name:
+                        out.add(os.path.join(root, name))
+
     src = entry.get("source")
     if src:
         abs_src = os.path.join(repo_dir, src)
