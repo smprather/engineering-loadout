@@ -365,6 +365,7 @@ def _payload_consistency_step(script_dir):
     gates = (
         os.path.join(script_dir, "tests", "payload-interpreter-abi"),
         os.path.join(script_dir, "tests", "wheelhouse-closure"),
+        os.path.join(script_dir, "tests", "python-suite"),
     )
     outputs = []
     for gate in gates:

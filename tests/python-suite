@@ -1,0 +1,337 @@
+#!/usr/bin/env python3.15
+"""python-suite -- the python-loaded payload contract.
+
+The suite installs ONE curated environment from a private wheelhouse. This
+gate proves the maintained inputs and the generated artifacts agree BEFORE a
+user's install discovers a mismatch:
+
+  * requirements.in holds plain top names (no versions, no comments-as-tops)
+    and never contains the deferred/dropped packages.
+  * the lock's ABI matches the shipped interpreter and its header is complete.
+  * every lock pin names an exact wheel present in the PRIVATE wheelhouse
+    (chunked `.part-NNN` reassembled), and that wheel's sha256 matches the
+    lock hash.
+  * no sdist leaked into the wheelhouse.
+  * the suite did not write into the shared wheelhouse (D8).
+
+Read-only: never installs, never touches the network.
+"""
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PLATFORM_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28")
+SUITE = os.path.join(REPO, "payload", "python-loaded")
+REQUIREMENTS_IN = os.path.join(SUITE, "requirements.in")
+LOCK = os.path.join(SUITE, "requirements.lock.txt")
+WHEELS = os.path.join(SUITE, "wheels")
+SDIST_ALLOWLIST = os.path.join(REPO, "build", "python-loaded-sdist-allowlist.txt")
+SHARED_WHEELS = os.path.join(PLATFORM_DIR, "wheels")
+
+FAILURES = []
+
+
+def fail(msg):
+    FAILURES.append(msg)
+    print(f"  FAIL  {msg}")
+
+
+def ok(msg):
+    print(f"  OK    {msg}")
+
+
+def normalize(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def load_loadout():
+    path = os.path.join(REPO, "loadout_main.py")
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", path)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def shipped_python_version():
+    archives = [f for f in os.listdir(PLATFORM_DIR) if f.startswith("portable-python-") and f.endswith(".tar.bz2")]
+    if not archives:
+        return None
+    match = re.search(r"portable-python-(\d+)\.(\d+)\.", archives[0])
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
+def parse_requirements_in():
+    if not os.path.isfile(REQUIREMENTS_IN):
+        return None
+    names = []
+    with open(REQUIREMENTS_IN, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            names.append(line)
+    return names
+
+
+def parse_lock():
+    """(header_dict, [(normalized_name, version, sha256)]) or (None, None)."""
+    if not os.path.isfile(LOCK):
+        return None, None
+    header = {}
+    pins = []
+    pinned = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s]+)\s+--hash=sha256:([0-9a-f]{64})$")
+    with open(LOCK, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if line.startswith("# python-loaded lock "):
+                header["version"] = line.rsplit(" ", 1)[-1]
+            elif line.startswith("# abi: "):
+                header["abi"] = line[len("# abi: ") :].strip()
+            elif line.startswith("# python: "):
+                header["python"] = line[len("# python: ") :].strip()
+            elif line and not line.startswith("#"):
+                match = pinned.match(line)
+                if not match:
+                    return header, None
+                pins.append((normalize(match.group(1)), match.group(2), match.group(3)))
+    return header, pins
+
+
+def wheel_candidates():
+    """normalized dist -> [(filename, path)] for whole and `.part-000` wheels."""
+    index = {}
+    if not os.path.isdir(WHEELS):
+        return index
+    for name in sorted(os.listdir(WHEELS)):
+        if name.endswith(".whl"):
+            logical = name
+            path = os.path.join(WHEELS, name)
+        elif name.endswith(".whl.part-000"):
+            logical = name[: -len(".part-000")]
+            path = os.path.join(WHEELS, name)
+        else:
+            continue
+        parts = logical[: -len(".whl")].split("-")
+        if len(parts) < 5:
+            continue
+        index.setdefault(normalize(parts[0]), []).append((logical, path))
+    return index
+
+
+def materialize(path):
+    """A readable path for a whole wheel or its chunked parts (temp copy)."""
+    if path.endswith(".part-000"):
+        out = tempfile.NamedTemporaryFile(prefix=".python-suite-", suffix=".whl", delete=False)
+        with out:
+            for part in sorted(
+                p for p in (path[: -len("-000")] + f"-{i:03d}" for i in range(1000)) if os.path.exists(p)
+            ):
+                with open(part, "rb") as src:
+                    out.write(src.read())
+        return out.name
+    return path
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def shared_wheelhouse_dirty():
+    proc = subprocess.run(
+        ["git", "status", "--porcelain", "--", os.path.relpath(SHARED_WHEELS, REPO)],
+        cwd=REPO,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    return proc.returncode != 0 or proc.stdout.strip() != ""
+
+
+def main():
+    version = shipped_python_version()
+    if not version:
+        fail("no portable-python archive -- cannot derive the suite ABI")
+        version = ""
+    else:
+        ok(f"shipped interpreter is {version}")
+
+    tops = parse_requirements_in()
+    if tops is None:
+        fail(f"missing {os.path.relpath(REQUIREMENTS_IN, REPO)}")
+        tops = []
+    else:
+        if not tops:
+            fail("requirements.in is empty")
+        for name in tops:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+                fail(f"requirements.in entry is not a plain name: {name!r}")
+        dupes = {n for n in tops if tops.count(n) > 1}
+        if dupes:
+            fail(f"requirements.in has duplicates: {sorted(dupes)}")
+        ok(f"requirements.in: {len(tops)} tops")
+
+    for gone in ("kaleido", "uWSGI", "uwsgi", "bst", "pdfutil", "pdf2jpg", "nvidia-nccl-cu12", "evidently"):
+        if any(normalize(t) == normalize(gone) for t in tops):
+            fail(f"{gone} must not be a suite top")
+
+    allowlisted = set()
+    if os.path.isfile(SDIST_ALLOWLIST):
+        with open(SDIST_ALLOWLIST, encoding="utf-8") as fh:
+            allowlisted = {line.strip() for line in fh if line.strip() and not line.startswith("#")}
+    else:
+        fail(f"missing {os.path.relpath(SDIST_ALLOWLIST, REPO)}")
+    expected_allowlist = {"PyYAML", "python-ldap", "pyeda"}
+    if allowlisted != expected_allowlist:
+        fail(f"sdist allowlist is {sorted(allowlisted)}, expected {sorted(expected_allowlist)}")
+
+    header, pins = parse_lock()
+    if header is None:
+        fail(f"missing {os.path.relpath(LOCK, REPO)}")
+        return 1
+    if pins is None:
+        fail("lock has a line that is not `name==version --hash=sha256:<64 hex>`")
+        return 1
+    expected_abi = f"cpython-{version.replace('.', '')}" if version else None
+    if header.get("abi") != expected_abi:
+        fail(f"lock abi is {header.get('abi')!r}, expected {expected_abi!r}")
+    if not header.get("python", "").startswith(version + "."):
+        fail(f"lock python is {header.get('python')!r}, expected {version}.x")
+    if not re.fullmatch(r"\d{4}\.\d{2}\.\d{2}(\.post\d+)?", header.get("version", "")):
+        fail(f"lock version is {header.get('version')!r}, expected CalVer")
+    ok(f"lock: {len(pins)} pins, abi {header.get('abi')}, version {header.get('version')}")
+
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        registry_version = json.load(fh)["packages"]["python-loaded"].get("version", "")
+    if registry_version != header.get("version"):
+        fail(f"registry version {registry_version!r} != lock date {header.get('version')!r}")
+
+    locked = {name for name, _ver, _sha in pins}
+    for top in tops:
+        if normalize(top) not in locked:
+            fail(f"top {top} is not in the lock")
+
+    index = wheel_candidates()
+    if not os.path.isdir(WHEELS):
+        fail("private wheelhouse is missing")
+    for dist, ver, sha in pins:
+        candidates = [c for c in index.get(dist, []) if c[0][: -len(".whl")].split("-")[1] == ver]
+        if not candidates:
+            fail(f"{dist}=={ver} has no wheel in the private wheelhouse")
+            continue
+        filename, path = candidates[0]
+        materialized = materialize(path)
+        try:
+            actual = sha256_file(materialized)
+        finally:
+            if materialized != path:
+                os.unlink(materialized)
+        if actual != sha:
+            fail(f"{dist}=={ver}: lock hash {sha[:12]} != wheel {actual[:12]} ({filename})")
+    if pins:
+        ok(f"every pin resolves to a hashed wheel ({len(pins)} checked)")
+
+    strays = [f for f in os.listdir(WHEELS)] if os.path.isdir(WHEELS) else []
+    if any(f.endswith((".tar.gz", ".zip", ".tar.bz2")) for f in strays):
+        fail("private wheelhouse contains a source distribution")
+
+    if shared_wheelhouse_dirty():
+        fail("suite build wrote into the shared wheelhouse (D8)")
+
+    module = load_loadout()
+    if module._suite_abi_error("cpython-315", "cpython-315") != "":
+        fail("ABI gate rejects a matching interpreter")
+    mismatch = module._suite_abi_error("cpython-316", "cpython-315")
+    if "cpython-316" not in mismatch or "Regenerate" not in mismatch:
+        fail(f"ABI gate message is not actionable: {mismatch!r}")
+    if not module._suite_stamp_matches({"schema": 1, "abi": "cpython-315", "lock_sha256": "abc"}, "abc", "cpython-315"):
+        fail("stamp match rejects a matching stamp")
+    if module._suite_stamp_matches({"schema": 1, "abi": "cpython-316", "lock_sha256": "abc"}, "abc", "cpython-315"):
+        fail("stamp match accepts a different ABI")
+
+    # I1: the 3.16 bump REMOVES bin/python3.15 (install.sh replaces the prefix),
+    # so every probe must use the generic bin/python3 link.
+    with tempfile.TemporaryDirectory() as fake:
+        os.makedirs(os.path.join(fake, "bin"))
+        open(os.path.join(fake, "bin", "python3"), "w").close()
+        chosen = module._suite_python_bin(fake)
+        if os.path.basename(chosen) != "python3":
+            fail(f"interpreter probe prefers {os.path.basename(chosen)}, not the generic bin/python3")
+
+    # I4: rebuilding a live version directory must never target the live tree.
+    with tempfile.TemporaryDirectory() as fake:
+        versions = os.path.join(fake, "versions", "2026.10.23-abcdef12")
+        os.makedirs(versions)
+        os.symlink(os.path.relpath(versions, fake), os.path.join(fake, "venv"))
+        target = module._suite_build_dir(fake, versions)
+        if os.path.realpath(target) == os.path.realpath(versions):
+            fail("rebuild targets the live version directory")
+        os.remove(os.path.join(fake, "venv"))
+        other = module._suite_version_dir(fake, "2026.10.24", "1234567890")
+        if module._suite_build_dir(fake, other) != other:
+            fail("a non-live version directory was needlessly renamed")
+
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        entry_registry = json.load(fh)["packages"]
+    entry = entry_registry["python-loaded"]
+    paths = module._artifact_paths(entry, REPO, PLATFORM_DIR)
+    wheel_paths = [p for p in paths if p.endswith((".whl", ".whl.part-000"))]
+    if not wheel_paths:
+        fail("_artifact_paths does not see the private wheelhouse (transaction size would be 0 B)")
+    elif not all(os.path.join("payload", "python-loaded", "wheels") in p for p in wheel_paths):
+        fail("_artifact_paths returned wheels outside the private wheelhouse")
+    else:
+        ok(f"_artifact_paths sizes {len(wheel_paths)} suite wheel files")
+
+    # I3: the assurance tools must see the private wheelhouse, chunk-aware.
+    try:
+        loader = importlib.machinery.SourceFileLoader(
+            "security_tools", os.path.join(REPO, "build", "security_tools.py")
+        )
+        spec = importlib.util.spec_from_loader("security_tools", loader)
+        security_tools = importlib.util.module_from_spec(spec)
+        loader.exec_module(security_tools)
+        wheel_dirs = security_tools.wheelhouse_dirs(PLATFORM_DIR)
+        if os.path.normpath(WHEELS) not in [os.path.normpath(d) for d in wheel_dirs]:
+            fail("vuln-scan/SBOM wheelhouse list omits payload/python-loaded/wheels")
+        names = [name for name, _path in security_tools.iter_wheel_names(WHEELS)]
+        if not any(name.startswith("pyarrow-") and name.endswith(".whl") for name in names):
+            fail("chunked wheels are invisible to vuln-scan/SBOM")
+    except Exception as exc:  # noqa: BLE001 - a missing helper is the finding
+        fail(f"assurance wheelhouse helpers are missing: {exc}")
+
+    import contextlib
+    import io
+    import types
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = module.cmd_describe(types.SimpleNamespace(positional=["python-loaded"]), entry_registry)
+    rendered = out.getvalue()
+    if rc != 0 or not all(token in rendered for token in ("lock:", "abi:", "pins:")):
+        fail(f"`info python-loaded` lacks suite detail: {rendered[-200:]!r}")
+    else:
+        ok("`info python-loaded` shows lock, abi, and pin count")
+
+    print()
+    if FAILURES:
+        print(f"{len(FAILURES)} failure(s)")
+        return 1
+    print("python-loaded payload contract OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

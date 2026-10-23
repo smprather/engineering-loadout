@@ -81,23 +81,47 @@ def wheel_tags(filename):
     return tuple(parts[-3:])
 
 
-def wheel_is_abi_compatible(filename, shipped):
-    """True if a wheel can be installed by the shipped interpreter.
+def platform_is_el8(plat_tag):
+    """True if any compressed platform tag is installable on EL8 x86_64.
 
-    A cpXY tag is ABI-locked: only an exact match works. abi3 (the stable
-    ABI) and a pure-python tag (py3, or the dotted py2.py3) work for any
-    CPython 3.
+    `any` works everywhere. manylinux_N_M must be glibc <= 2.28; the legacy
+    aliases (manylinux1/2010/2014) map to 2.5/2.12/2.17. musllinux and
+    windows/macos tags never match.
+    """
+    for tag in plat_tag.split("."):
+        if tag == "any":
+            return True
+        match = re.fullmatch(r"manylinux_(\d+)_(\d+)_x86_64", tag)
+        if match and (int(match.group(1)), int(match.group(2))) <= (2, 28):
+            return True
+        if re.fullmatch(r"manylinux1_x86_64", tag):
+            return True
+        if re.fullmatch(r"manylinux2010_x86_64", tag):
+            return True
+        if re.fullmatch(r"manylinux2014_x86_64", tag):
+            return True
+    return False
+
+
+def wheel_is_abi_compatible(filename, shipped):
+    """True if a wheel can be installed by the shipped interpreter ON EL8.
+
+    A cpXY tag is ABI-locked: only an exact py/abi pair works (a cp315-cp315t
+    free-threaded wheel does not). abi3 (including compressed `abi3.abi3t`)
+    and a pure-python tag (py3, or the dotted py2.py3) work for any CPython 3.
     """
     tags = wheel_tags(filename)
     if len(tags) != 3:
         return False
     py_tag, abi_tag, plat_tag = tags
-    if abi_tag == "none" and plat_tag == "any" and "py3" in py_tag.split("."):
-        return True
-    if abi_tag == "abi3":
+    if not platform_is_el8(plat_tag):
+        return False
+    if abi_tag == "none":
+        return "py3" in py_tag.split(".")
+    if "abi3" in abi_tag.split("."):
         return True
     if re.fullmatch(r"cp3\d+", py_tag):
-        return py_tag[2:] == shipped.replace(".", "")
+        return py_tag[2:] == shipped.replace(".", "") and abi_tag == py_tag
     return False
 
 
@@ -206,6 +230,95 @@ def requirement_name(req):
     return match.group(1) if match else None
 
 
+SUITE_LOCK = os.path.join(REPO, "payload", "python-loaded", "requirements.lock.txt")
+SUITE_WHEELS = os.path.join(REPO, "payload", "python-loaded", "wheels")
+
+
+def suite_lock():
+    """(abi, [(normalized_name, version, sha256)]) from the suite lock."""
+    abi = None
+    pins = []
+    pinned = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s]+)\s+--hash=sha256:([0-9a-f]{64})$")
+    with open(SUITE_LOCK, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if line.startswith("# abi: "):
+                abi = line[len("# abi: ") :].strip()
+            elif line and not line.startswith("#"):
+                match = pinned.match(line)
+                if not match:
+                    return abi, None
+                pins.append((normalize(match.group(1)), match.group(2), match.group(3)))
+    return abi, pins
+
+
+def suite_wheel(wheels_dir, dist, version):
+    for name in sorted(os.listdir(wheels_dir)):
+        if name.endswith(".whl"):
+            logical, path = name, os.path.join(wheels_dir, name)
+        elif name.endswith(".whl.part-000"):
+            logical = name[: -len(".part-000")]
+            path = os.path.join(wheels_dir, name)
+        else:
+            continue
+        fields = logical[: -len(".whl")].split("-")
+        if len(fields) >= 2 and normalize(fields[0]) == dist and fields[1] == version:
+            return logical, path
+    return None
+
+
+def suite_wheel_path(path):
+    """A readable whole-wheel path, reassembling `.part-NNN` chunks."""
+    if not path.endswith(".part-000"):
+        return path, None
+    import tempfile
+
+    out = tempfile.NamedTemporaryFile(prefix=".wheelhouse-suite-", suffix=".whl", delete=False)
+    with out:
+        for part in sorted(p for p in (path[: -len("-000")] + f"-{i:03d}" for i in range(1000)) if os.path.exists(p)):
+            with open(part, "rb") as src:
+                out.write(src.read())
+    return out.name, out.name
+
+
+def audit_suite(shipped):
+    import hashlib
+
+    if not os.path.isdir(SUITE_WHEELS):
+        fail("python-loaded: private wheelhouse is missing")
+        return
+    abi, pins = suite_lock()
+    expected_abi = f"cpython-{shipped.replace('.', '')}"
+    if abi != expected_abi:
+        fail(f"python-loaded: lock abi {abi!r} != interpreter {expected_abi!r}")
+    if pins is None:
+        fail("python-loaded: lock has a malformed pin line")
+        return
+    missing = 0
+    for dist, version, sha in pins:
+        found = suite_wheel(SUITE_WHEELS, dist, version)
+        if not found:
+            fail(f"python-loaded: {dist}=={version} has no wheel")
+            missing += 1
+            continue
+        logical, path = found
+        if not wheel_is_abi_compatible(logical, shipped):
+            fail(f"python-loaded: {logical} is not EL8/cp{shipped.replace('.', '')}-compatible")
+        whole, temp = suite_wheel_path(path)
+        try:
+            digest = hashlib.sha256()
+            with open(whole, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    digest.update(chunk)
+        finally:
+            if temp:
+                os.unlink(temp)
+        if digest.hexdigest() != sha:
+            fail(f"python-loaded: {logical} hash does not match the lock")
+    if not missing:
+        ok(f"python-loaded: {len(pins)} pinned wheels match the lock, hashes and EL8 ABI")
+
+
 def main():
     version = shipped_python_version()
     if not version:
@@ -296,6 +409,11 @@ def main():
     if not bad:
         ok(f"all {len(tools)} python-tools resolve offline under cp{version.replace('.', '')}")
 
+    if os.path.isfile(SUITE_LOCK):
+        audit_suite(version)
+    else:
+        ok("no python-loaded lock in the payload")
+
     print()
     if FAILURES:
         print(f"wheelhouse-closure: {len(FAILURES)} failure(s)")
@@ -304,5 +422,38 @@ def main():
     return 0
 
 
+def self_test():
+    """Pin the predicate's EL8/ABI rules independently of the payload."""
+    cases = [
+        ("x-1-py3-none-any.whl", True),
+        ("x-1-py2.py3-none-any.whl", True),
+        ("x-1-py3-none-manylinux_2_28_x86_64.whl", True),
+        ("x-1-py3-none-manylinux2014_x86_64.whl", True),
+        ("x-1-cp36-abi3-manylinux_2_17_x86_64.whl", True),
+        ("x-1-cp315-abi3.abi3t-manylinux_2_28_x86_64.whl", True),
+        ("x-1-cp315-cp315-manylinux_2_28_x86_64.whl", True),
+        ("x-1-cp315-cp315-manylinux_2_39_x86_64.whl", False),
+        ("x-1-cp315-cp315-musllinux_1_2_x86_64.whl", False),
+        ("x-1-cp314-cp314-manylinux_2_28_x86_64.whl", False),
+        ("x-1-py3-none-win_amd64.whl", False),
+    ]
+    failed = 0
+    for filename, expected in cases:
+        got = wheel_is_abi_compatible(filename, "3.15")
+        if got == expected:
+            print(f"  OK    {filename} -> {got}")
+        else:
+            print(f"  FAIL  {filename} -> {got}, expected {expected}")
+            failed += 1
+    print()
+    if failed:
+        print(f"wheelhouse-closure self-test: {failed} failure(s)")
+        return 1
+    print("wheelhouse-closure self-test: OK")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv[1:]:
+        sys.exit(self_test())
     sys.exit(main())

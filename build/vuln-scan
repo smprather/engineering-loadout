@@ -50,12 +50,23 @@ def _version_key(version):
     return key
 
 
-def newest_wheels(wheels_dir):
+def _wheel_names(wheel_dirs):
+    """Logical wheel filenames across every shipped wheelhouse (chunk-aware).
+
+    Accepts one directory path as well as a list, so callers/tests that pass a
+    single wheelhouse keep working.
+    """
+    if isinstance(wheel_dirs, (str, bytes, os.PathLike)):
+        wheel_dirs = [wheel_dirs]
+    for wheels_dir in wheel_dirs:
+        for name, _path in security_tools.iter_wheel_names(wheels_dir):
+            yield name
+
+
+def newest_wheels(wheel_dirs):
     """[(normalized_name, version)] -- newest wheel per package."""
     best = {}
-    for name in sorted(os.listdir(wheels_dir)):
-        if not name.endswith(".whl"):
-            continue
+    for name in _wheel_names(wheel_dirs):
         parts = name[:-4].split("-")
         if len(parts) < 2:
             continue
@@ -65,16 +76,14 @@ def newest_wheels(wheels_dir):
     return sorted(best.items())
 
 
-def all_wheels(wheels_dir):
-    """[(normalized_name, version)] -- every wheel in the wheelhouse."""
-    out = []
-    for name in sorted(os.listdir(wheels_dir)):
-        if not name.endswith(".whl"):
-            continue
+def all_wheels(wheel_dirs):
+    """[(normalized_name, version)] -- every wheel in every wheelhouse."""
+    out = set()
+    for name in _wheel_names(wheel_dirs):
         parts = name[:-4].split("-")
         if len(parts) >= 2:
-            out.append((normalize(parts[0]), parts[1]))
-    return out
+            out.add((normalize(parts[0]), parts[1]))
+    return sorted(out)
 
 
 def _fixed_versions(vuln):
@@ -208,9 +217,12 @@ def main(argv):
         report_path = argv[argv.index("--report") + 1]
 
     platform_dir = security_tools.payload_platform_dir()
-    wheels_dir = os.path.join(platform_dir, "wheels")
-    wheels = all_wheels(wheels_dir) if all_versions else newest_wheels(wheels_dir)
-    print(f"vuln-scan: {len(wheels)} wheel package(s){' (all versions)' if all_versions else ' (newest per package)'}")
+    wheel_dirs = security_tools.wheelhouse_dirs(platform_dir)
+    wheels = all_wheels(wheel_dirs) if all_versions else newest_wheels(wheel_dirs)
+    print(
+        f"vuln-scan: {len(wheels)} wheel package(s) from {len(wheel_dirs)} wheelhouse(s)"
+        f"{' (all versions)' if all_versions else ' (newest per package)'}"
+    )
 
     with tempfile.TemporaryDirectory(prefix=".loadout-vuln-scan-") as tmp:
         with open(os.path.join(tmp, "requirements.txt"), "w") as fh:

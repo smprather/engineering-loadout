@@ -266,13 +266,29 @@ Font extraction counts real font members and renders a Rich progress bar like
 other bulk phases.
 
 Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
-`install_typelibs`, `install_portable_python`,
+`install_typelibs`, `install_portable_python`, `install_python_suite`,
 `install_treesitter_parsers`, `install_nvim_treesitter_vendor`,
 `install_*_runtime`, `install_python_tools`) receive `selected_tools` and
 short-circuit with a `SKIP` install-results row when their package(s) are not in
 the selected set. `--skip @fonts-all` short-circuits `install_fonts`; etc.
 Python-tool installs render a Rich progress bar for the uv_tool loop; use
 top-level `--verbose` when a test needs the exact `uv tool install` command.
+
+`python-loaded` (`kind: python-suite`, `standalone: true`) is one curated
+`uv venv` on the bundled interpreter. Tops live in
+`payload/python-loaded/requirements.in`; deps are resolved into a hashed
+`requirements.lock.txt` and a **private** wheelhouse
+(`payload/python-loaded/wheels`) so its newer pins never change what an
+unpinned `uv tool install` picks from the shared wheelhouse. Nothing is linked
+into `<prefix>/bin`; the shebang target is
+`<prefix>/share/python-loaded/venv/bin/python3` (a stable symlink to
+`versions/<lockdate>-<hash>/venv`). `standalone: true` keeps it out of
+`@shared`, `@shared-all`, and `@all`. The stamp is `{abi, lock_sha256}`: 3.15.x
+patches need no action, while 3.15 -> 3.16 makes `install_python_suite` FAIL
+with a regeneration instruction. Refresh with
+`./build/update python-loaded` (Docker + AlmaLinux 8 required; no host
+fallback; `uv 0.13.1` mis-evaluates 3.15 markers, so the build resolves with
+pip). Repair is auditwheel at build time, never patchelf at install time.
 
 The Linux installer resolves the repo from the script path, not the current
 working directory. It checks the Python version before running.

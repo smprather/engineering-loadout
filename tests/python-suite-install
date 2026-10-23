@@ -1,0 +1,261 @@
+#!/usr/bin/env python3.15
+"""python-suite-install -- end-to-end offline install of python-loaded.
+
+Installs the suite into a temp --dest-dir prefix and proves the observable
+contract: the venv runs on the bundled interpreter, every lock pin is
+importable/metadata-visible, every ELF resolves, no launcher leaks into the
+shared bin, the stable symlink survives a rebuild, and a second install is a
+no-op.
+
+Runs offline (the wheelhouse is local). Exits 0/1.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCK = os.path.join(REPO, "payload", "python-loaded", "requirements.lock.txt")
+FAILURES = []
+
+MODULES = {
+    "django": "django",
+    "django-auth-ldap": "django_auth_ldap",
+    "django-filter": "django_filters",
+    "flask": "flask",
+    "dash": "dash",
+    "litestar": "litestar",
+    "litestar-htmx": "litestar_htmx",
+    "uvicorn": "uvicorn",
+    "boto3": "boto3",
+    "numpy": "numpy",
+    "pandas": "pandas",
+    "scipy": "scipy",
+    "matplotlib": "matplotlib",
+    "scikit-learn": "sklearn",
+    "statsmodels": "statsmodels",
+    "xgboost-cpu": "xgboost",
+    "shapely": "shapely",
+    "pyarrow": "pyarrow",
+    "openpyxl": "openpyxl",
+    "pikepdf": "pikepdf",
+    "img2pdf": "img2pdf",
+    "pillow": "PIL",
+    "nltk": "nltk",
+    "graphviz": "graphviz",
+    "pylint": "pylint",
+    "pylintfileheader": "pylintfileheader",
+    "pydantic": "pydantic",
+    "rich": "rich",
+    "typer": "typer",
+    "httpx": "httpx",
+    "requests": "requests",
+    "jsonschema": "jsonschema",
+    "sqlobject": "sqlobject",
+    "pymysql": "pymysql",
+    "pyeda": "pyeda",
+    "ruamel.yaml": "ruamel.yaml",
+    "python-dotenv": "dotenv",
+    "psutil": "psutil",
+    "pexpect": "pexpect",
+    "prettytable": "prettytable",
+    "more-itertools": "more_itertools",
+    "tenacity": "tenacity",
+    "setproctitle": "setproctitle",
+    "websockets": "websockets",
+    "uvloop": "uvloop",
+    "httptools": "httptools",
+    "watchfiles": "watchfiles",
+    "watchdog": "watchdog",
+    "pyyaml": "yaml",
+    "python-ldap": "ldap",
+}
+
+
+def check(name, cond, detail=""):
+    if cond:
+        print(f"  PASS  {name}")
+    else:
+        print(f"  FAIL  {name}  {detail}")
+        FAILURES.append(name)
+
+
+def normalize(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def lock_pins():
+    pins = []
+    with open(LOCK, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            match = re.match(r"^([^=]+)==([^\s]+)", line)
+            if match:
+                pins.append((normalize(match.group(1)), match.group(2)))
+    return pins
+
+
+def run(cmd, env, **kwargs):
+    return subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kwargs)
+
+
+def install(env, dest, extra=()):
+    return run(
+        [os.path.join(REPO, "loadout"), "install", "python-loaded", "--dest-dir", dest, "--no-backup", "--yes", *extra],
+        env,
+    )
+
+
+def main():
+    free = shutil.disk_usage(tempfile.gettempdir()).free
+    if free < 3 * 1024**3:
+        print(
+            f"FAIL: need at least 3 GiB free in {tempfile.gettempdir()} "
+            f"for the suite install (have {free / 1024**3:.1f} GiB)"
+        )
+        return 1
+    tmp = tempfile.mkdtemp(prefix="loadout-python-suite.")
+    try:
+        home = os.path.join(tmp, "home")
+        dest = os.path.join(tmp, "dest")
+        os.makedirs(home)
+        env = os.environ.copy()
+        env.update(
+            HOME=home,
+            XDG_CONFIG_HOME=os.path.join(home, ".config"),
+            XDG_DATA_HOME=os.path.join(home, ".local", "share"),
+            XDG_CACHE_HOME=os.path.join(tmp, "cache"),
+            XDG_STATE_HOME=os.path.join(tmp, "state"),
+        )
+
+        started = time.time()
+        proc = install(env, dest)
+        elapsed = time.time() - started
+        check("install exits 0", proc.returncode == 0, proc.stdout[-800:])
+        check("install reports no FAILED phase", "FAILED" not in proc.stdout, proc.stdout[-800:])
+        print(f"  install wall time: {elapsed:.0f}s")
+
+        suite = os.path.join(dest, "share", "python-loaded")
+        venv = os.path.join(suite, "venv")
+        python = os.path.join(venv, "bin", "python3")
+        check("stable venv symlink exists", os.path.islink(venv))
+        check("versioned venv exists", os.path.isdir(os.path.join(suite, "versions")))
+        if not os.path.isfile(python):
+            print("no suite interpreter; stopping")
+            return 1
+
+        probe = run(
+            [
+                python,
+                "-c",
+                "import json,sys; print(json.dumps({'prefix': sys.prefix, 'tag': sys.implementation.cache_tag}))",
+            ],
+            env,
+        )
+        info = json.loads(probe.stdout)
+        check("interpreter tag is cpython-315", info["tag"] == "cpython-315", info["tag"])
+        check("sys.prefix is the stable suite venv", info["prefix"] == venv, info["prefix"])
+
+        pins = lock_pins()
+        versions = run(
+            [
+                python,
+                "-c",
+                "import importlib.metadata as m, json, sys; print(json.dumps({n: m.version(n) for n in sys.argv[1:]}))",
+                *[name for name, _ in pins],
+            ],
+            env,
+        )
+        if versions.returncode != 0:
+            check("every locked distribution has metadata", False, versions.stdout[-800:])
+        else:
+            installed = json.loads(versions.stdout)
+            bad = [f"{n}=={v} != {installed.get(n)}" for n, v in pins if installed.get(n) != v]
+            check("every locked distribution is installed at the lock version", not bad, "; ".join(bad[:5]))
+
+        imports = run(
+            [
+                python,
+                "-c",
+                "import importlib, sys; [importlib.import_module(m) for m in sys.argv[1:]]",
+                *sorted(set(MODULES.values())),
+            ],
+            env,
+        )
+        check("every curated top imports", imports.returncode == 0, imports.stdout[-800:])
+
+        site = os.path.join(venv, "lib", "python3.15", "site-packages")
+        unresolved = []
+        files = 0
+        for root, _dirs, names in os.walk(site):
+            for name in names:
+                if not name.endswith((".so", ".so.1", ".so.2")):
+                    continue
+                files += 1
+                path = os.path.join(root, name)
+                with open(path, "rb") as fh:
+                    if fh.read(4) != b"\x7fELF":
+                        continue
+                ldd = run(["ldd", path], {"PATH": "/usr/bin:/bin"})
+                if "not found" in ldd.stdout:
+                    unresolved.append(path)
+        check("every extension resolves under env -i", not unresolved, "; ".join(unresolved[:3]))
+        print(f"  ELF extensions checked: {files}")
+
+        scripts = set()
+        for name in os.listdir(os.path.join(venv, "bin")):
+            path = os.path.join(venv, "bin", name)
+            if os.path.isfile(path):
+                with open(path, "rb") as fh:
+                    if fh.read(2) == b"#!":
+                        scripts.add(name)
+        leaked = sorted(name for name in scripts if os.path.exists(os.path.join(dest, "bin", name)))
+        check("no suite launcher leaks into the shared bin", not leaked, ", ".join(leaked[:8]))
+
+        pylint = os.path.join(venv, "bin", "pylint")
+        with open(pylint, encoding="utf-8") as fh:
+            shebang = fh.readline()
+        check(
+            "console script shebang names the versioned venv",
+            os.path.join(suite, "versions") in shebang,
+            shebang.strip(),
+        )
+        check("console script runs through the stable symlink", run([pylint, "--version"], env).returncode == 0)
+
+        stamp_path = os.path.join(suite, "suite.lock.json")
+        stamp_mtime = os.path.getmtime(stamp_path)
+        second = install(env, dest)
+        check("second install exits 0", second.returncode == 0, second.stdout[-500:])
+        check("second install leaves the stamp untouched", os.path.getmtime(stamp_path) == stamp_mtime)
+        check("second install skips the suite", "SKIP" in second.stdout or "skip" in second.stdout.lower(), "")
+
+        with open(stamp_path, encoding="utf-8") as fh:
+            stamp = json.load(fh)
+        stamp["abi"] = "cpython-316"
+        with open(stamp_path, "w", encoding="utf-8") as fh:
+            json.dump(stamp, fh)
+        third = install(env, dest)
+        with open(stamp_path, encoding="utf-8") as fh:
+            repaired = json.load(fh)
+        check(
+            "stamp mismatch rebuilds rather than skipping",
+            third.returncode == 0 and repaired.get("abi") == "cpython-315",
+        )
+
+        versions_dirs = os.listdir(os.path.join(suite, "versions"))
+        check("exactly one suite version is kept", len(versions_dirs) == 1, str(versions_dirs))
+
+        return 0 if not FAILURES else 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

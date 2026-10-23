@@ -1,0 +1,9 @@
+# Console scripts safe to execute with --help in the build/install smoke.
+# Add a name only after confirming it prints help and exits without opening a
+# socket or starting a server.
+pylint
+pygmentize
+django-admin
+uvicorn
+watchmedo
+sqlformat

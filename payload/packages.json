@@ -2,7 +2,7 @@
   "_comment": "Package registry for the loadout package manager. See build/ADDING_BINARIES.md for the workflow.",
   "schema_version": 3,
   "_schema": {
-    "kind": "Package type: 'bin', 'lib-bundle', 'runtime', 'typelib', 'python-base', 'python-tool', 'env', 'font', 'data', 'group'.",
+    "kind": "Package type: 'bin', 'lib-bundle', 'runtime', 'typelib', 'python-base', 'python-tool', 'python-suite', 'env', 'font', 'data', 'group'.",
     "platforms": "'linux' (the project is 100% Linux-only; the windows/macos platform vocabulary was retired 2026-08-31 -- offloaded to the windows-dotfiles repo). Default ['linux'] when omitted.",
     "tags": "Free-form labels for filtering/grouping (e.g. ['search', 'editor', 'gui']).",
     "depends": "Hard dependencies: package names (or @group refs) that MUST be installed alongside this one. Resolver auto-pulls them; skipping a hard dep of a selected pkg is an error unless --no-deps or --force.",
@@ -17,7 +17,8 @@
     "relocate_token": "Distinctive ASCII build-path token in a runtime archive's text files. Generic runtime install replaces it with the deployed install root after extraction; must be paired with relocate_root.",
     "relocate_root": "Package-relative subtree of install_to scanned for relocate_token. Restricts token replacement to package-owned files; must be paired with relocate_token.",
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
-    "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the only gating field.",
+    "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members.",
+    "standalone": "If true, the package is excluded from EVERY synthetic sweep (@shared, @shared-all, @envs-all, @all) and installs only when named explicitly or pulled by a group that lists it. Use it for packages whose install cost or scope must never ride along with a broad sweep (e.g. python-loaded).",
     "disabled": "If true, the package is DISABLED (out of service): excluded from EVERY sweep (@shared, @shared-all, @envs-all, @all) and refused when named directly or pulled in as a hard dependency. Use it for a package whose payload is known-broken on the current platform and whose repair needs a heavy rebuild -- it stays in the registry (so 'loadout info' still documents it) but it cannot reach a deployment. A package that hard-depends on a disabled one is disabled too; a soft 'recommends' edge never propagates. NOTE: this is NOT the project's 'offline' (which means no network needed) -- 'disabled' is the term for a package taken out of service.",
     "disabled_reason": "Why the package is disabled; shown by the install-time refusal and by 'loadout info'.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
@@ -26,6 +27,9 @@
     "libs": "List of lib64/*.bz2 stems exclusively owned by this package. Omit or leave empty for libs shared by multiple tools — those are always installed.",
     "typelibs": "List of typelibs/*.typelib files required by this package (documentation only; all typelibs in the dir are always installed).",
     "wheels": "List of Python package names whose wheels are bundled in wheels/ for offline uv tool install.",
+    "wheels_dir": "Directory (relative to repo root) holding this package's private offline wheelhouse. Used by kind='python-suite' for install, transaction sizing, and doctor.",
+    "requirements": "Maintained tops file (relative to repo root) for kind='python-suite'; deps are resolved, never hand-maintained.",
+    "lock": "Fully pinned + hashed requirements lock (relative to repo root) for kind='python-suite'. Its header records version and ABI.",
     "uv_tool": "Base package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
     "uv_extras": "Optional Python extras included in the uv tool requirement. Their locked wheel closure must be bundled for offline installation.",
     "version": "Version of the bundled binary or package. Empty string when the payload has no meaningful upstream version.",
@@ -3164,6 +3168,26 @@
         "runtime"
       ],
       "description": "BOLT-optimized portable CPython build with bundled install.sh"
+    },
+    "python-loaded": {
+      "kind": "python-suite",
+      "requirements": "payload/python-loaded/requirements.in",
+      "lock": "payload/python-loaded/requirements.lock.txt",
+      "wheels_dir": "payload/python-loaded/wheels",
+      "version": "2026.10.23",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "python",
+        "suite"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "standalone": true,
+      "description": "Curated EL8 Python 3.15 import environment with its own bin; not on PATH and not part of any sweep"
     },
     "gobject-typelibs": {
       "kind": "typelib",

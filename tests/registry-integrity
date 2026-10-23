@@ -48,6 +48,7 @@ KNOWN_KINDS = {
     "typelib",
     "python-base",
     "python-tool",
+    "python-suite",
     "env",
     "font",
     "data",

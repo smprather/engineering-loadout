@@ -1,0 +1,8 @@
+# python-loaded resolver constraints.
+#
+# Only transitive requirements whose declared floor invites a pre-release
+# belong here. formulaic declares `wrapt>=1.17.0rc1`; a specifier that names a
+# pre-release enables pre-release candidates for that package, so pip picks
+# 2.5.2rc1 over the newest final. Pin the final until upstream changes the
+# floor. Remove the line when it no longer changes the resolve.
+wrapt==2.5.1

@@ -379,6 +379,7 @@ OpenSSH for those.
 | parity-plot | python-tool | v0.7.0 | 45-degree Plotly parity plots with an offline NiceGUI designer; generated HTML embeds Plotly for air-gapped viewing |
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
 | portable-python | python-base | 3.15.0 | BOLT-optimized portable CPython build with bundled install.sh |
+| python-loaded | python-suite | 2026.10.23 | Curated EL8 Python 3.15 import environment (50 tops, hashed private wheelhouse, own bin; not on PATH, explicit install only) |
 | gobject-typelibs | typelib |  | GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo) |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
 | git-nvim | runtime | 2.43.7 | PRIVATE git for nvim/lazy only -- installed to lib/loadout-git/, never on the user's PATH (a loadout git would shadow the corp git and break its subcommands/credential helpers, cf. openssh/ssh10). Optional: @shared-all or by name. nvim uses it only when the system has no git. |
