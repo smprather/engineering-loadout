@@ -116,3 +116,4 @@
 2026-10-21T22:15:22Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-libs-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	68a60cac5e91c8b7b7387517ab126d618429f51aaa22953c88a513c8c549ceb0
 2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
 2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
+2026-10-23T21:20:31Z	https://github.com/YARAHQ/yara-forge/releases/download/20261018/yara-forge-rules-full.zip	c6a860533194d8c1209bc066c6dc6df9ecb0a2f9b7fc4104a5d87d0d3a651b73
