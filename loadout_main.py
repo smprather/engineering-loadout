@@ -6192,6 +6192,42 @@ def cmd_describe(args, registry):
         print("depends:     {}".format(", ".join(entry["depends"])))
     if entry.get("recommends"):
         print("recommends:  {}".format(", ".join(entry["recommends"])))
+    if entry.get("kind") == "python-suite":
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        lock_path = os.path.join(repo_dir, entry.get("lock", ""))
+        if os.path.isfile(lock_path):
+            meta = _suite_lock_meta(lock_path)
+            pins = 0
+            with open(lock_path, encoding="utf-8") as fh:
+                pins = sum(1 for line in fh if "--hash=sha256:" in line)
+            tops = 0
+            requirements = os.path.join(repo_dir, entry.get("requirements", ""))
+            if os.path.isfile(requirements):
+                with open(requirements, encoding="utf-8") as fh:
+                    tops = sum(1 for line in fh if line.strip() and not line.lstrip().startswith("#"))
+            print(f"lock:        {meta.get('version', '')}")
+            print(f"abi:         {meta.get('abi', '')}")
+            print(f"pins:        {pins}")
+            print(f"tops:        {tops}")
+            wheels_dir = os.path.join(repo_dir, entry.get("wheels_dir", ""))
+            if os.path.isdir(wheels_dir):
+                size = sum(
+                    os.path.getsize(os.path.join(root, name))
+                    for root, _dirs, names in os.walk(wheels_dir)
+                    for name in names
+                )
+                print(f"wheelhouse:  {size / 1024 / 1024:.1f} MiB")
+        dest = _resolve_install_to(_SUITE_INSTALL_TO, os.path.expanduser("~"))
+        stamp_path = _suite_stamp_path(dest)
+        if os.path.isfile(stamp_path):
+            try:
+                with open(stamp_path, encoding="utf-8") as fh:
+                    stamp = json.load(fh)
+                print(f"installed:   {stamp.get('python', '')} ({stamp.get('abi', '')})")
+            except OSError, ValueError:
+                print("installed:   (unreadable stamp)")
+        else:
+            print("installed:   (not installed for this user)")
     for fkey in (
         "bins",
         "libs",

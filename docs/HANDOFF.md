@@ -1,5 +1,43 @@
 # Current Handoff
 
+## 2026-10-23: python-loaded -- one curated import environment, no shared-bin links
+
+`python-loaded` (`kind: python-suite`) is a single `uv venv` on the bundled
+portable Python, built from `payload/python-loaded/requirements.in` (50 tops)
+through a hashed lock and a **private** wheelhouse
+(`payload/python-loaded/wheels`, 130 wheels, 243 MB, pyarrow chunked). It adds
+nothing to `<prefix>/bin`; the shebang target is
+`<prefix>/share/python-loaded/venv/bin/python3`, a symlink to
+`versions/<lockdate>-<lockhash8>/venv`.
+
+```bash
+./loadout install python-loaded          # explicit only; in no sweep
+./loadout info python-loaded             # lock date, abi, pins, tops, installed stamp
+./build/update python-loaded             # full refresh (Docker + AlmaLinux 8)
+./build/build-python-loaded.sh --print-plan
+```
+
+Rules that are load-bearing:
+
+- **Patch vs minor.** The stamp is `{abi, lock_sha256}`. A 3.15.x patch needs
+  no action: the venv symlink re-resolves through the replaced
+  `bin/python3.15`, and cp315 extensions stay valid. A 3.15 -> 3.16 bump makes
+  the installer FAIL with the exact regeneration command; the release that
+  bumps `portable-python` must rerun the build.
+- **Resolve on EL8.** `uv 0.13.1` mis-evaluates `python_version` markers for
+  3.15, so the build resolves with pip on the real 3.15 interpreter. The
+  wheelhouse is private because `uv tool install` for the existing python-tools
+  is unpinned and would silently pick the suite's newer numpy/pandas.
+- **Repair at build time.** `auditwheel repair --plat manylinux_2_28_x86_64`
+  bundles non-policy libraries; locally built pure wheels are retagged
+  `py3-none-any`. Install is decompression + `uv pip install --require-hashes`,
+  never patchelf.
+- **Excluded:** `evidently` (0.7.23 imports a pandas symbol removed in pandas 3,
+  the only major with cp315 wheels), `uWSGI` (binary, not an import library),
+  `kaleido` (needs a ~300 MB chrome-headless-shell; separate future package),
+  `bst`/`pdfutil`/`pdf2jpg` (wrong/abandoned packages), CUDA/NCCL.
+- Measured: build 125 s; install test 30 s.
+
 ## 2026-10-22 (4): STARSHIP_SHELL is per-shell and load-bearing -- tcsh was pinning the one value that breaks it
 
 Reported from elsewhere: pinning `STARSHIP_SHELL=bash` in tcsh breaks

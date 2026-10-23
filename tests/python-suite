@@ -257,7 +257,8 @@ def main():
         fail("stamp match accepts a different ABI")
 
     with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
-        entry = json.load(fh)["packages"]["python-loaded"]
+        entry_registry = json.load(fh)["packages"]
+    entry = entry_registry["python-loaded"]
     paths = module._artifact_paths(entry, REPO, PLATFORM_DIR)
     wheel_paths = [p for p in paths if p.endswith((".whl", ".whl.part-000"))]
     if not wheel_paths:
@@ -266,6 +267,19 @@ def main():
         fail("_artifact_paths returned wheels outside the private wheelhouse")
     else:
         ok(f"_artifact_paths sizes {len(wheel_paths)} suite wheel files")
+
+    import contextlib
+    import io
+    import types
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = module.cmd_describe(types.SimpleNamespace(positional=["python-loaded"]), entry_registry)
+    rendered = out.getvalue()
+    if rc != 0 or not all(token in rendered for token in ("lock:", "abi:", "pins:")):
+        fail(f"`info python-loaded` lacks suite detail: {rendered[-200:]!r}")
+    else:
+        ok("`info python-loaded` shows lock, abi, and pin count")
 
     print()
     if FAILURES:
