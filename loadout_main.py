@@ -327,7 +327,7 @@ _SYNTHETIC_GROUPS = {
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, openssh, ...).",
     "@envs": "Bash + tcsh configuration (env-bash, env-tcsh); install other per-user config bundles explicitly.",
     "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh).",
-    "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
+    "@all": "Everything in @shared-all plus @envs-all, except standalone packages (python-loaded); install those by name.",
 }
 
 # Groups that were removed but are still likely to be typed. Expand them to a
@@ -435,7 +435,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
                 "bare 'all' is not a group -- did you mean '@all'?\n"
                 "  (the old bare 'all' meant 'every NON-optional package', the opposite of\n"
                 "   what the -all suffix means everywhere else, so it was removed. '@all' now\n"
-                "   means literally everything.)\n"
+                "   means everything except standalone packages.)\n"
                 "  bundled tools    : @shared-all\n"
                 "  shell configs    : @envs-all\n"
                 "  both shells      : @envs\n"
@@ -481,9 +481,11 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             }
             continue
         if name == "@all":
-            # Literally everything. Defined as the union of the two full sweeps
-            # rather than as its own filter, so there can never be a third
-            # answer to "what is everything?" that drifts from those two.
+            # Everything except standalone packages. Defined as the union of
+            # the two full sweeps rather than as its own filter, so there can
+            # never be a third answer to "what is everything?" that drifts
+            # from those two. Standalone packages (python-loaded) are excluded
+            # from BOTH sweeps by design: a >1 GB venv must never ride along.
             #
             # There is deliberately NO "@all minus the offline caches" variant.
             # The caches (nvim-plugin-stash, treesitter-parsers, tldr-data) are
@@ -2436,8 +2438,37 @@ def _suite_stamp_matches(stamp, lock_sha, abi):
     )
 
 
+def _suite_python_bin(home):
+    """The interpreter to probe and build with.
+
+    `install.sh --force` removes `<prefix>/bin/python3.15` when a new minor
+    lands, so the versioned name is absent exactly when the ABI gate must
+    speak. The generic `bin/python3` link always points at the shipped
+    interpreter (it is also what the uv launcher pins).
+    """
+    prefix = _local_root(home)
+    generic = os.path.join(prefix, "bin", "python3")
+    if os.path.isfile(generic):
+        return generic
+    return os.path.join(prefix, "bin", "python3.15")
+
+
 def _suite_version_dir(dest, version, lock_sha):
     return os.path.join(dest, "versions", f"{version}-{lock_sha[:8]}")
+
+
+def _suite_build_dir(dest, version_dir):
+    """A build target that is never the live version directory.
+
+    A corrupt/missing stamp triggers a rebuild into the same name; tearing
+    that directory down first would destroy the working environment before
+    the replacement is proven. Build beside it and let the post-swap cleanup
+    remove the old tree.
+    """
+    live = os.path.realpath(os.path.join(dest, "venv"))
+    if os.path.realpath(version_dir) == live:
+        return f"{version_dir}-rebuild-{int(time.time())}"
+    return version_dir
 
 
 def _suite_swap_symlink(dest, target_rel):
@@ -2489,7 +2520,7 @@ def _suite_warn_abi_drift(home):
             stamp = json.load(fh)
     except OSError, ValueError:
         return
-    abi = _suite_abi(os.path.join(_local_root(home), "bin", "python3.15"))
+    abi = _suite_abi(_suite_python_bin(home))
     if abi and stamp.get("abi") and stamp["abi"] != abi:
         warn(
             f"python-loaded was built for {stamp['abi']} but the interpreter is {abi}; "
@@ -2517,10 +2548,10 @@ def install_python_suite(repo_dir, home, selected_tools, registry):
         return
 
     prefix = _local_root(home)
-    python_bin = os.path.join(prefix, "bin", "python3.15")
+    python_bin = _suite_python_bin(home)
     uv_bin = os.path.join(prefix, "bin", "uv")
     if not os.path.isfile(python_bin):
-        warn("python-loaded needs portable-python (bin/python3.15 is absent)")
+        warn("python-loaded needs portable-python (bin/python3 is absent)")
         record_result("Python suite", "FAIL", "no bundled interpreter")
         return
     if not os.path.isfile(uv_bin):
@@ -2554,7 +2585,7 @@ def install_python_suite(repo_dir, home, selected_tools, registry):
         record_result("Python suite", "SKIP", "up to date")
         return
 
-    version_dir = _suite_version_dir(dest, meta["version"], lock_sha)
+    version_dir = _suite_build_dir(dest, _suite_version_dir(dest, meta["version"], lock_sha))
     new_venv = os.path.join(version_dir, "venv")
     print(f"  Building python-loaded {meta['version']} ({interp_abi}) ...")
     shutil.rmtree(version_dir, ignore_errors=True)
@@ -2610,7 +2641,9 @@ def install_python_suite(repo_dir, home, selected_tools, registry):
         _vprint(f"  Rewrote suite shebang: {name}")
 
     _suite_swap_symlink(dest, os.path.relpath(new_venv, dest))
-    with open(_suite_stamp_path(dest), "w", encoding="utf-8") as fh:
+    stamp_path = _suite_stamp_path(dest)
+    temp_stamp = stamp_path + ".tmp"
+    with open(temp_stamp, "w", encoding="utf-8") as fh:
         json.dump(
             {
                 "schema": 1,
@@ -2623,6 +2656,7 @@ def install_python_suite(repo_dir, home, selected_tools, registry):
             indent=2,
         )
         fh.write("\n")
+    os.replace(temp_stamp, stamp_path)
 
     versions_dir = os.path.join(dest, "versions")
     current = os.path.basename(version_dir)

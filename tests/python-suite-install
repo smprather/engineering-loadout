@@ -114,6 +114,13 @@ def install(env, dest, extra=()):
 
 
 def main():
+    free = shutil.disk_usage(tempfile.gettempdir()).free
+    if free < 3 * 1024**3:
+        print(
+            f"FAIL: need at least 3 GiB free in {tempfile.gettempdir()} "
+            f"for the suite install (have {free / 1024**3:.1f} GiB)"
+        )
+        return 1
     tmp = tempfile.mkdtemp(prefix="loadout-python-suite.")
     try:
         home = os.path.join(tmp, "home")

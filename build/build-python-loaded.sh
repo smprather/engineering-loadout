@@ -66,7 +66,7 @@ mkdir -p /work/ppy /work/prefix /work/bin /work/prebuilt /work/dl /work/final /w
 tar -xjf /work/portable-python.tar.bz2 -C /work/ppy
 PPY_ROOT=$(find /work/ppy -maxdepth 1 -mindepth 1 -type d | head -1)
 sh "$PPY_ROOT/install.sh" --prefix /work/prefix --force --no-test >/dev/null
-/work/prefix/bin/python3.15 -V
+/work/prefix/bin/python3 -V
 
 echo "== uv"
 bunzip2 -c /work/uv.bz2 > /work/bin/uv
@@ -75,7 +75,7 @@ chmod +x /work/bin/uv /work/bin/uv.bin
 /work/bin/uv --version
 
 echo "== build environment"
-/work/bin/uv venv --seed --python /work/prefix/bin/python3.15 /work/be >/dev/null
+/work/bin/uv venv --seed --python /work/prefix/bin/python3 /work/be >/dev/null
 BE=/work/be/bin
 export PATH="$BE:$PATH"
 "$BE/python" -m pip install -q --upgrade pip setuptools wheel
@@ -229,12 +229,14 @@ print(f"   {len(glob.glob('/work/final/*.whl'))} wheels pass the EL8 platform+AB
 PY
 
 echo "== emit lock"
-"$BE/python" - "$LOADOUT_LOCK_DATE" <<'PY'
+PY_ABI=$("$BE/python" -c 'import sys; print(sys.implementation.cache_tag)')
+PY_VER=$("$BE/python" -c 'import platform; print(platform.python_version())')
+"$BE/python" - "$LOADOUT_LOCK_DATE" "$PY_ABI" "$PY_VER" <<'PY'
 import hashlib
 import os
 import sys
 
-lock_date = sys.argv[1]
+lock_date, py_abi, py_ver = sys.argv[1:4]
 rows = []
 for name in sorted(os.listdir("/work/final")):
     if not name.endswith(".whl"):
@@ -248,8 +250,8 @@ for name in sorted(os.listdir("/work/final")):
 rows.sort(key=lambda row: (row[0].lower(), row[1]))
 with open("/work/requirements.lock.txt", "w", encoding="utf-8") as fh:
     fh.write(f"# python-loaded lock {lock_date}\n")
-    fh.write("# abi: cpython-315\n")
-    fh.write("# python: 3.15.0\n")
+    fh.write(f"# abi: {py_abi}\n")
+    fh.write(f"# python: {py_ver}\n")
     for dist, version, digest in rows:
         fh.write(f"{dist}=={version} --hash=sha256:{digest}\n")
 print(f"   {len(rows)} pinned distributions")
@@ -257,7 +259,7 @@ PY
 
 echo "== verify offline"
 rm -rf /work/verify
-/work/bin/uv venv --python /work/prefix/bin/python3.15 /work/verify >/dev/null
+/work/bin/uv venv --python /work/prefix/bin/python3 /work/verify >/dev/null
 env -i HOME=/work PATH=/usr/bin:/bin \
     /work/bin/uv pip install --python /work/verify/bin/python \
     --offline --no-index --find-links /work/final --require-hashes --no-cache \

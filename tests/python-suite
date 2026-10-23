@@ -213,6 +213,11 @@ def main():
         fail(f"lock version is {header.get('version')!r}, expected CalVer")
     ok(f"lock: {len(pins)} pins, abi {header.get('abi')}, version {header.get('version')}")
 
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        registry_version = json.load(fh)["packages"]["python-loaded"].get("version", "")
+    if registry_version != header.get("version"):
+        fail(f"registry version {registry_version!r} != lock date {header.get('version')!r}")
+
     locked = {name for name, _ver, _sha in pins}
     for top in tops:
         if normalize(top) not in locked:
@@ -256,6 +261,28 @@ def main():
     if module._suite_stamp_matches({"schema": 1, "abi": "cpython-316", "lock_sha256": "abc"}, "abc", "cpython-315"):
         fail("stamp match accepts a different ABI")
 
+    # I1: the 3.16 bump REMOVES bin/python3.15 (install.sh replaces the prefix),
+    # so every probe must use the generic bin/python3 link.
+    with tempfile.TemporaryDirectory() as fake:
+        os.makedirs(os.path.join(fake, "bin"))
+        open(os.path.join(fake, "bin", "python3"), "w").close()
+        chosen = module._suite_python_bin(fake)
+        if os.path.basename(chosen) != "python3":
+            fail(f"interpreter probe prefers {os.path.basename(chosen)}, not the generic bin/python3")
+
+    # I4: rebuilding a live version directory must never target the live tree.
+    with tempfile.TemporaryDirectory() as fake:
+        versions = os.path.join(fake, "versions", "2026.10.23-abcdef12")
+        os.makedirs(versions)
+        os.symlink(os.path.relpath(versions, fake), os.path.join(fake, "venv"))
+        target = module._suite_build_dir(fake, versions)
+        if os.path.realpath(target) == os.path.realpath(versions):
+            fail("rebuild targets the live version directory")
+        os.remove(os.path.join(fake, "venv"))
+        other = module._suite_version_dir(fake, "2026.10.24", "1234567890")
+        if module._suite_build_dir(fake, other) != other:
+            fail("a non-live version directory was needlessly renamed")
+
     with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
         entry_registry = json.load(fh)["packages"]
     entry = entry_registry["python-loaded"]
@@ -267,6 +294,23 @@ def main():
         fail("_artifact_paths returned wheels outside the private wheelhouse")
     else:
         ok(f"_artifact_paths sizes {len(wheel_paths)} suite wheel files")
+
+    # I3: the assurance tools must see the private wheelhouse, chunk-aware.
+    try:
+        loader = importlib.machinery.SourceFileLoader(
+            "security_tools", os.path.join(REPO, "build", "security_tools.py")
+        )
+        spec = importlib.util.spec_from_loader("security_tools", loader)
+        security_tools = importlib.util.module_from_spec(spec)
+        loader.exec_module(security_tools)
+        wheel_dirs = security_tools.wheelhouse_dirs(PLATFORM_DIR)
+        if os.path.normpath(WHEELS) not in [os.path.normpath(d) for d in wheel_dirs]:
+            fail("vuln-scan/SBOM wheelhouse list omits payload/python-loaded/wheels")
+        names = [name for name, _path in security_tools.iter_wheel_names(WHEELS)]
+        if not any(name.startswith("pyarrow-") and name.endswith(".whl") for name in names):
+            fail("chunked wheels are invisible to vuln-scan/SBOM")
+    except Exception as exc:  # noqa: BLE001 - a missing helper is the finding
+        fail(f"assurance wheelhouse helpers are missing: {exc}")
 
     import contextlib
     import io

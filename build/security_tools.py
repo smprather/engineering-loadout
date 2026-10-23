@@ -66,11 +66,52 @@ def sha256_file(path):
 
 
 def payload_platform_dir():
-    """The active payload platform dir (the one carrying the wheelhouse)."""
-    candidates = sorted(glob.glob(os.path.join(REPO, "payload", "*", "wheels")))
+    """The active payload platform dir (the one carrying the shared wheelhouse)."""
+    candidates = sorted(
+        path
+        for path in glob.glob(os.path.join(REPO, "payload", "*", "wheels"))
+        if "glibc" in os.path.basename(os.path.dirname(path))
+    )
     if not candidates:
-        raise RuntimeError("no payload/*/wheels directory found")
+        raise RuntimeError("no payload/<platform>/wheels directory found")
     return os.path.dirname(candidates[0])
+
+
+def wheelhouse_dirs(platform_dir):
+    """Every shipped wheelhouse: the shared one plus python-loaded's private one."""
+    dirs = [os.path.join(platform_dir, "wheels")]
+    suite = os.path.join(os.path.dirname(platform_dir), "python-loaded", "wheels")
+    if os.path.isdir(suite):
+        dirs.append(suite)
+    return [path for path in dirs if os.path.isdir(path)]
+
+
+def iter_wheel_names(wheel_dir):
+    """(logical_name, path) for whole wheels and chunked `.part-000` sets."""
+    for name in sorted(os.listdir(wheel_dir)):
+        path = os.path.join(wheel_dir, name)
+        if not os.path.isfile(path):
+            continue
+        if name.endswith(".whl"):
+            yield name, path
+        elif name.endswith(".whl.part-000"):
+            yield name[: -len(".part-000")], path
+
+
+def materialize_wheel(path, temp_dir):
+    """A whole-wheel path, reassembling `.part-NNN` chunks into temp_dir."""
+    if not path.endswith(".part-000"):
+        return path
+    dest = os.path.join(temp_dir, os.path.basename(path)[: -len(".part-000")])
+    with open(dest, "wb") as out:
+        base = path[: -len("-000")]
+        for index in range(1000):
+            part = f"{base}-{index:03d}"
+            if not os.path.exists(part):
+                break
+            with open(part, "rb") as src:
+                shutil.copyfileobj(src, out)
+    return dest
 
 
 def _download(url, dest):

@@ -67,18 +67,25 @@ def main(argv):
         output = argv[argv.index("--output") + 1]
 
     platform_dir = security_tools.payload_platform_dir()
-    wheels_dir = os.path.join(platform_dir, "wheels")
-    wheels = sorted(f for f in os.listdir(wheels_dir) if f.endswith(".whl"))
+    wheel_dirs = security_tools.wheelhouse_dirs(platform_dir)
+    wheels = []
+    seen = set()
+    for wheel_dir in wheel_dirs:
+        for name, path in security_tools.iter_wheel_names(wheel_dir):
+            if name in seen:
+                continue
+            seen.add(name)
+            wheels.append((name, path))
     if not wheels:
-        print(f"ERROR: no wheels in {wheels_dir}", file=sys.stderr)
+        print(f"ERROR: no wheels in {', '.join(wheel_dirs)}", file=sys.stderr)
         return 2
 
     syft = security_tools.tool_path("syft")
     with tempfile.TemporaryDirectory(prefix=".loadout-sbom-") as tmp:
         tree = os.path.join(tmp, "wheels")
         os.makedirs(tree)
-        for i, wheel in enumerate(wheels, 1):
-            _safe_extract_wheel(os.path.join(wheels_dir, wheel), tree)
+        for i, (_wheel, path) in enumerate(wheels, 1):
+            _safe_extract_wheel(security_tools.materialize_wheel(path, tmp), tree)
             if i % 50 == 0:
                 print(f"  extracted {i}/{len(wheels)} wheels", flush=True)
         print(f"  extracted {len(wheels)} wheels; running syft ...", flush=True)

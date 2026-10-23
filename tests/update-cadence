@@ -48,6 +48,9 @@ def main():
         "python-loaded declares a cadence",
         bool(upd.AUTOMATED.get("python-loaded", {}).get("auto_update_interval")),
     )
+    paths = upd.AUTOMATED.get("python-loaded", {}).get("git_paths", [])
+    for needed in ("payload/packages.json", ".content-manifest", ".strip-manifest"):
+        check(f"python-loaded commit covers {needed}", needed in paths)
 
     print("interval parsing")
     check("default is 6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL == "6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL)

@@ -99,6 +99,9 @@ AUTOMATED = {
         "git_paths": [
             "payload/python-loaded/",
             "payload/installed-sizes.json",
+            "payload/packages.json",
+            ".content-manifest",
+            ".strip-manifest",
             "build/python-loaded-constraints.txt",
         ],
         "desc": "Curated EL8 Python suite (private wheelhouse + hashed lock; Docker/EL8 required)",
@@ -935,6 +938,13 @@ def _run_python_loaded(dry_run=False, tag=None):
     rc = _run([script], False)
     if rc != 0:
         print(f"ERROR: build-python-loaded.sh exited {rc}; payload left unchanged.")
+        return False
+    # Chunk oversized wheels BEFORE the manifest is hashed: the pre-commit hook
+    # would otherwise chunk pyarrow during the update's own commit, leaving the
+    # manifest pinning a whole wheel that no longer exists.
+    rc = _run([sys.executable, os.path.join(REPO, "build", "strip-all-elf-binaries")], False)
+    if rc != 0:
+        print(f"WARNING: strip-all-elf-binaries exited {rc}")
         return False
     rc = _run_payload_manifests(dry_run=False)
     if rc != 0:
