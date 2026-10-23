@@ -1538,3 +1538,79 @@
 2026-10-23T21:05:59Z	test:security-pipeline	1	PASS	mode=all
 2026-10-23T21:05:59Z	test:check-versions-contract	0	PASS	mode=all
 2026-10-23T21:05:59Z	test:total	128	PASS	flags=--fast
+2026-10-23T21:30:37Z	test:py_compile	0	PASS	mode=all
+2026-10-23T21:30:38Z	test:ruff check	1	PASS	mode=all
+2026-10-23T21:30:38Z	test:ruff format check	0	PASS	mode=all
+2026-10-23T21:30:38Z	test:unit-resolver	0	PASS	mode=all
+2026-10-23T21:30:39Z	test:doctor-system-newer	1	PASS	mode=all
+2026-10-23T21:30:39Z	test:registry-integrity	0	PASS	mode=all
+2026-10-23T21:30:40Z	test:search-groups	1	PASS	mode=all
+2026-10-23T21:30:40Z	test:tar-safety	0	PASS	mode=all
+2026-10-23T21:30:40Z	test:content-verify	0	PASS	mode=all
+2026-10-23T21:30:42Z	test:content-manifest in sync	2	PASS	mode=all
+2026-10-23T21:30:50Z	test:content-manifest matches export	8	PASS	mode=all
+2026-10-23T21:30:51Z	test:content-manifest shipped-set	1	PASS	mode=all
+2026-10-23T21:31:11Z	test:installed-sizes in sync	20	PASS	mode=all
+2026-10-23T21:31:11Z	test:parser-locks in sync	0	PASS	mode=all
+2026-10-23T21:31:20Z	test:st font list in sync	9	PASS	mode=all
+2026-10-23T21:31:20Z	test:README table in sync	0	PASS	mode=all
+2026-10-23T21:31:21Z	test:assurance-check	1	PASS	mode=all
+2026-10-23T21:31:21Z	test:env-shell-parity	0	PASS	mode=all
+2026-10-23T21:31:21Z	test:env-bash-profile-shim	0	PASS	mode=all
+2026-10-23T21:31:24Z	test:portable-python-ca	3	PASS	mode=all
+2026-10-23T21:31:24Z	test:shell-typeahead	0	PASS	mode=all
+2026-10-23T21:31:25Z	test:install-zsh-relocation	1	PASS	mode=all
+2026-10-23T21:31:25Z	test:python-tool-source-patches	0	PASS	mode=all
+2026-10-23T21:32:31Z	test:payload-interpreter-abi	66	PASS	mode=all
+2026-10-23T21:32:31Z	test:wheelhouse-closure	0	PASS	mode=all
+2026-10-23T21:32:32Z	test:python-suite	1	PASS	mode=all
+2026-10-23T21:32:32Z	test:release-timings	0	PASS	mode=all
+2026-10-23T21:32:34Z	test:env-tcsh-starship	2	PASS	mode=all
+2026-10-23T21:32:35Z	test:prompt-no-rc	1	PASS	mode=all
+2026-10-23T21:32:35Z	test:test-cleanup	0	PASS	mode=all
+2026-10-23T21:32:36Z	test:nvim-formatters-resolve	1	PASS	mode=all
+2026-10-23T21:32:36Z	test:dep-capture	0	PASS	mode=all
+2026-10-23T21:32:37Z	test:oom-guard-reap	1	PASS	mode=all
+2026-10-23T21:32:46Z	test:check-installer	9	PASS	mode=all
+2026-10-23T21:32:47Z	test:st-wrapper	1	PASS	mode=all
+2026-10-23T21:32:47Z	test:env-helix-config	0	PASS	mode=all
+2026-10-23T21:32:48Z	test:update-cadence	1	PASS	mode=all
+2026-10-23T21:32:48Z	test:release-tag-scheme	0	PASS	mode=all
+2026-10-23T21:32:49Z	test:security-pipeline	1	PASS	mode=all
+2026-10-23T21:32:49Z	test:check-versions-contract	0	PASS	mode=all
+2026-10-23T21:33:03Z	test:install-fonts-rejoin	14	PASS	mode=auto
+2026-10-23T21:33:34Z	test:python-suite-install	31	PASS	mode=auto
+2026-10-23T21:33:39Z	test:install-fonts-shared	5	PASS	mode=auto
+2026-10-23T21:33:40Z	test:install-modules	1	PASS	mode=auto
+2026-10-23T21:33:45Z	test:valgrind-smoke	5	PASS	mode=auto
+2026-10-23T21:33:46Z	test:install-env-bash	1	PASS	mode=auto
+2026-10-23T21:33:47Z	test:install-env-st	1	PASS	mode=auto
+2026-10-23T21:33:57Z	test:install-env-tcsh	10	PASS	mode=auto
+2026-10-23T21:34:01Z	test:install-env-zsh	4	PASS	mode=auto
+2026-10-23T21:34:02Z	test:install-env-xfce4-terminal	1	PASS	mode=auto
+2026-10-23T21:34:05Z	test:env-managed-readonly	2	PASS	mode=auto
+2026-10-23T21:34:09Z	test:install-env-tmux-nvim-layers	4	PASS	mode=auto
+2026-10-23T21:34:12Z	test:install-env-vim-xdg	3	PASS	mode=auto
+2026-10-23T21:34:12Z	test:install-readonly-source	0	PASS	mode=auto
+2026-10-23T21:37:32Z	test:install-readonly-tree	200	PASS	mode=auto
+2026-10-23T21:37:55Z	test:optional-packages	23	PASS	mode=auto
+2026-10-23T21:37:55Z	test:install-parity-plot	0	PASS	mode=auto
+2026-10-23T21:38:09Z	test:install-python-tool-upgrade	14	PASS	mode=auto
+2026-10-23T21:38:17Z	test:uv-launchers	8	PASS	mode=auto
+2026-10-23T21:38:25Z	test:install-typescript-language-server	8	PASS	mode=auto
+2026-10-23T21:42:08Z	test:install-linux-tmp-home	223	PASS	mode=auto
+2026-10-23T21:45:28Z	test:install-split-shared-envs	200	PASS	mode=auto
+2026-10-23T21:46:46Z	test:install-nvim-deployments	78	PASS	mode=auto
+2026-10-23T21:47:24Z	test:install-nvim-shared-stash	38	PASS	mode=auto
+2026-10-23T21:47:24Z	test:completion in sync	0	PASS	mode=all
+2026-10-23T21:56:52Z	test:almalinux8.10 container smoke (--full)	568	PASS	mode=container
+2026-10-23T21:57:03Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	11	PASS	mode=container
+2026-10-23T21:57:04Z	test:total	1588	PASS	flags=--container
+2026-10-23T21:57:10Z	version table	0.2	PASS	2026.10.7
+2026-10-23T21:57:21Z	checksums	12.0	PASS	2026.10.7
+2026-10-23T21:57:30Z	manifest export	20.4	PASS	2026.10.7
+2026-10-23T21:57:40Z	secret scan	30.9	PASS	2026.10.7
+2026-10-23T21:57:41Z	vulnerability scan	31.8	PASS	2026.10.7
+2026-10-23T21:58:20Z	payload consistency	70.6	PASS	2026.10.7
+2026-10-23T22:01:16Z	binary smoke test	246.7	PASS	2026.10.7
+2026-10-23T22:02:36Z	malware scan	326.2	PASS	2026.10.7
