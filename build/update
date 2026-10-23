@@ -94,6 +94,15 @@ AUTOMATED = {
         "git_paths": ["envs/nvim/vendor/plugins/", ".strip-manifest"],
         "desc": "Neovim offline plugin stash -- bare git mirrors (build/build-nvim-plugin-stash)",
     },
+    "python-loaded": {
+        "auto_update_interval": "90d",
+        "git_paths": [
+            "payload/python-loaded/",
+            "payload/installed-sizes.json",
+            "build/python-loaded-constraints.txt",
+        ],
+        "desc": "Curated EL8 Python suite (private wheelhouse + hashed lock; Docker/EL8 required)",
+    },
 }
 
 # Build-script: requires EL8 build machine.  script lives in BUILD/.
@@ -914,8 +923,30 @@ def _run_env_nvim(dry_run=False):
     return True
 
 
+def _run_python_loaded(dry_run=False, tag=None):
+    """Regenerate the python-loaded lock + private wheelhouse in EL8."""
+    script = os.path.join(BUILD, "build-python-loaded.sh")
+    if dry_run:
+        return _run([script, "--print-plan"], False) == 0
+    if shutil.which("docker") is None:
+        print("ERROR: Docker is required to resolve the suite on EL8; no host fallback.")
+        print("       Install Docker (or set LOADOUT_EL8_IMAGE for an EL8 runtime) and retry.")
+        return False
+    rc = _run([script], False)
+    if rc != 0:
+        print(f"ERROR: build-python-loaded.sh exited {rc}; payload left unchanged.")
+        return False
+    rc = _run_payload_manifests(dry_run=False)
+    if rc != 0:
+        print(f"WARNING: payload manifest chain exited {rc}")
+        return False
+    return True
+
+
 def _run_automated(name, dry_run=False, tag=None):
     _sep(name)
+    if name == "python-loaded":
+        return _run_python_loaded(dry_run=dry_run, tag=tag)
     if name == "yara-rules":
         return _run_yara_rules(dry_run=dry_run, tag=tag)
     elif name == "nodejs":

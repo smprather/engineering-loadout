@@ -41,6 +41,14 @@ def check(label, cond, detail=""):
 def main():
     day = datetime.timedelta(days=1)
 
+    print("python-loaded refresh")
+    check("python-loaded is automated", "python-loaded" in upd.AUTOMATED)
+    check("python-loaded has a runner", callable(getattr(upd, "_run_python_loaded", None)))
+    check(
+        "python-loaded declares a cadence",
+        bool(upd.AUTOMATED.get("python-loaded", {}).get("auto_update_interval")),
+    )
+
     print("interval parsing")
     check("default is 6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL == "6mo", upd.DEFAULT_AUTO_UPDATE_INTERVAL)
     check("6mo -> 180d", upd._parse_interval("6mo") == 180 * day)
