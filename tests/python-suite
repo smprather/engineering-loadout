@@ -245,9 +245,20 @@ def main():
     if shared_wheelhouse_dirty():
         fail("suite build wrote into the shared wheelhouse (D8)")
 
+    module = load_loadout()
+    if module._suite_abi_error("cpython-315", "cpython-315") != "":
+        fail("ABI gate rejects a matching interpreter")
+    mismatch = module._suite_abi_error("cpython-316", "cpython-315")
+    if "cpython-316" not in mismatch or "Regenerate" not in mismatch:
+        fail(f"ABI gate message is not actionable: {mismatch!r}")
+    if not module._suite_stamp_matches({"schema": 1, "abi": "cpython-315", "lock_sha256": "abc"}, "abc", "cpython-315"):
+        fail("stamp match rejects a matching stamp")
+    if module._suite_stamp_matches({"schema": 1, "abi": "cpython-316", "lock_sha256": "abc"}, "abc", "cpython-315"):
+        fail("stamp match accepts a different ABI")
+
     with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
         entry = json.load(fh)["packages"]["python-loaded"]
-    paths = load_loadout()._artifact_paths(entry, REPO, PLATFORM_DIR)
+    paths = module._artifact_paths(entry, REPO, PLATFORM_DIR)
     wheel_paths = [p for p in paths if p.endswith((".whl", ".whl.part-000"))]
     if not wheel_paths:
         fail("_artifact_paths does not see the private wheelhouse (transaction size would be 0 B)")

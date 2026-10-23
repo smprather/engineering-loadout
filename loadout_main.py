@@ -2380,6 +2380,258 @@ def install_portable_python(repo_dir, home, selected_tools=None):
 
     record_result("portable Python", "OK", "")
     print(f"  Installed portable Python -> {_local_root(home)}/")
+    _suite_warn_abi_drift(home)
+
+
+_SUITE_INSTALL_TO = "~/.local/share/python-loaded"
+
+
+def _suite_lock_meta(lock_path):
+    """The three header lines of requirements.lock.txt."""
+    meta = {}
+    with open(lock_path, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("# python-loaded lock "):
+                meta["version"] = line.strip().rsplit(" ", 1)[-1]
+            elif line.startswith("# abi: "):
+                meta["abi"] = line[len("# abi: ") :].strip()
+            elif line.startswith("# python: "):
+                meta["python"] = line[len("# python: ") :].strip()
+    return meta
+
+
+def _suite_abi(python_bin):
+    """`cpython-315` for the given interpreter, or '' when it cannot run."""
+    if not os.path.isfile(python_bin):
+        return ""
+    proc = subprocess.run(
+        [python_bin, "-c", "import sys;print(sys.implementation.cache_tag)"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return proc.stdout.decode("utf-8", "replace").strip() if proc.returncode == 0 else ""
+
+
+def _suite_abi_error(interp_abi, lock_abi):
+    """The hard-fail message for a minor-version mismatch, or ''."""
+    if interp_abi == lock_abi:
+        return ""
+    return (
+        f"python-loaded: suite lock is {lock_abi}, interpreter is {interp_abi}. "
+        "Regenerate the lock and wheelhouse in the same release that bumps "
+        "portable-python (`./build/build-python-loaded.sh`)."
+    )
+
+
+def _suite_stamp_path(dest):
+    return os.path.join(dest, "suite.lock.json")
+
+
+def _suite_stamp_matches(stamp, lock_sha, abi):
+    return (
+        isinstance(stamp, dict)
+        and stamp.get("abi") == abi
+        and stamp.get("lock_sha256") == lock_sha
+        and stamp.get("schema") == 1
+    )
+
+
+def _suite_version_dir(dest, version, lock_sha):
+    return os.path.join(dest, "versions", f"{version}-{lock_sha[:8]}")
+
+
+def _suite_swap_symlink(dest, target_rel):
+    """Atomically point <dest>/venv at target_rel."""
+    link = os.path.join(dest, "venv")
+    temp = link + ".tmp"
+    if os.path.lexists(temp):
+        os.remove(temp)
+    os.symlink(target_rel, temp)
+    os.replace(temp, link)
+
+
+def _suite_fix_shebangs(venv_bin, python_bin):
+    """Point literal `#!/usr/bin/env python` scripts at the venv interpreter.
+
+    A few wheels ship `scripts/` files (SQLObject does) that installers copy
+    verbatim; on a deployed node those would run the HOST python and fail.
+    Generated entry points already carry the venv path and are untouched.
+    """
+    pattern = re.compile(r"#!\s*(/usr/bin/env\s+python3?|/usr/bin/python3?|/usr/local/bin/python3?)")
+    rewritten = []
+    for name in sorted(os.listdir(venv_bin)):
+        path = os.path.join(venv_bin, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as fh:
+            if fh.read(2) != b"#!":
+                continue
+        with open(path, encoding="utf-8", errors="surrogateescape") as fh:
+            text = fh.read()
+        first, _sep, rest = text.partition("\n")
+        if not pattern.fullmatch(first.strip()):
+            continue
+        with open(path, "w", encoding="utf-8", errors="surrogateescape") as fh:
+            fh.write(f"#!{python_bin}\n{rest}")
+        os.chmod(path, 0o755)
+        rewritten.append(name)
+    return rewritten
+
+
+def _suite_warn_abi_drift(home):
+    """Warn when an installed suite's ABI no longer matches the interpreter."""
+    dest = _resolve_install_to(_SUITE_INSTALL_TO, home)
+    stamp_path = _suite_stamp_path(dest)
+    if not os.path.isfile(stamp_path):
+        return
+    try:
+        with open(stamp_path, encoding="utf-8") as fh:
+            stamp = json.load(fh)
+    except OSError, ValueError:
+        return
+    abi = _suite_abi(os.path.join(_local_root(home), "bin", "python3.15"))
+    if abi and stamp.get("abi") and stamp["abi"] != abi:
+        warn(
+            f"python-loaded was built for {stamp['abi']} but the interpreter is {abi}; "
+            "run './loadout install python-loaded' after this release"
+        )
+
+
+def install_python_suite(repo_dir, home, selected_tools, registry):
+    """Create/refresh the curated python-loaded venv from the private wheelhouse."""
+    if selected_tools is not None and "python-loaded" not in selected_tools:
+        skipped("Python suite (python-loaded not selected)", "")
+        record_result("Python suite", "SKIP", "python-loaded not in selected packages")
+        return
+
+    entry = registry.get("python-loaded", {})
+    lock_path = os.path.join(repo_dir, entry.get("lock", ""))
+    wheels_dir = os.path.join(repo_dir, entry.get("wheels_dir", ""))
+    if not entry.get("lock") or not os.path.isfile(lock_path):
+        warn(f"python-loaded lock missing: {lock_path}")
+        record_result("Python suite", "FAIL", "lock missing")
+        return
+    if not entry.get("wheels_dir") or not os.path.isdir(wheels_dir):
+        warn(f"python-loaded wheelhouse missing: {wheels_dir}")
+        record_result("Python suite", "FAIL", "private wheelhouse missing")
+        return
+
+    prefix = _local_root(home)
+    python_bin = os.path.join(prefix, "bin", "python3.15")
+    uv_bin = os.path.join(prefix, "bin", "uv")
+    if not os.path.isfile(python_bin):
+        warn("python-loaded needs portable-python (bin/python3.15 is absent)")
+        record_result("Python suite", "FAIL", "no bundled interpreter")
+        return
+    if not os.path.isfile(uv_bin):
+        warn("python-loaded needs uv (bin/uv is absent)")
+        record_result("Python suite", "FAIL", "uv not installed")
+        return
+
+    meta = _suite_lock_meta(lock_path)
+    interp_abi = _suite_abi(python_bin)
+    abi_error = _suite_abi_error(interp_abi, meta.get("abi", ""))
+    if abi_error:
+        warn(abi_error)
+        record_result("Python suite", "FAIL", "lock ABI does not match the interpreter")
+        return
+    if not meta.get("version"):
+        warn(f"python-loaded lock has no version header: {lock_path}")
+        record_result("Python suite", "FAIL", "lock header incomplete")
+        return
+
+    lock_sha = _sha256_file(lock_path)
+    dest = _resolve_install_to(_SUITE_INSTALL_TO, home)
+    stamp = {}
+    if os.path.isfile(_suite_stamp_path(dest)):
+        try:
+            with open(_suite_stamp_path(dest), encoding="utf-8") as fh:
+                stamp = json.load(fh)
+        except OSError, ValueError:
+            stamp = {}
+    stable_python = os.path.join(dest, "venv", "bin", "python3")
+    if _suite_stamp_matches(stamp, lock_sha, interp_abi) and _suite_abi(stable_python) == interp_abi:
+        record_result("Python suite", "SKIP", "up to date")
+        return
+
+    version_dir = _suite_version_dir(dest, meta["version"], lock_sha)
+    new_venv = os.path.join(version_dir, "venv")
+    print(f"  Building python-loaded {meta['version']} ({interp_abi}) ...")
+    shutil.rmtree(version_dir, ignore_errors=True)
+    ensure_dir(version_dir, "python-loaded version dir")
+
+    install_env = os.environ.copy()
+    install_env["UV_PYTHON_DOWNLOADS"] = "never"
+    proc = run(
+        [uv_bin, "venv", "--python", python_bin, new_venv],
+        check=False,
+        env=install_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        eprint(proc.stderr.decode("utf-8", "replace"))
+        shutil.rmtree(version_dir, ignore_errors=True)
+        record_result("Python suite", "FAIL", "uv venv failed")
+        return
+
+    effective_wheels, cleanup_wheels = _prepare_wheels_dir(wheels_dir)
+    try:
+        proc = run(
+            [
+                uv_bin,
+                "pip",
+                "install",
+                "--python",
+                os.path.join(new_venv, "bin", "python"),
+                "--no-index",
+                "--find-links",
+                effective_wheels,
+                "--no-cache",
+                "--offline",
+                "--require-hashes",
+                "-r",
+                lock_path,
+            ],
+            check=False,
+            env=install_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    finally:
+        cleanup_wheels()
+    if proc.returncode != 0:
+        eprint(proc.stderr.decode("utf-8", "replace"))
+        shutil.rmtree(version_dir, ignore_errors=True)
+        record_result("Python suite", "FAIL", "offline install failed")
+        return
+
+    for name in _suite_fix_shebangs(os.path.join(new_venv, "bin"), os.path.join(new_venv, "bin", "python")):
+        _vprint(f"  Rewrote suite shebang: {name}")
+
+    _suite_swap_symlink(dest, os.path.relpath(new_venv, dest))
+    with open(_suite_stamp_path(dest), "w", encoding="utf-8") as fh:
+        json.dump(
+            {
+                "schema": 1,
+                "abi": interp_abi,
+                "python": meta.get("python", ""),
+                "lock_sha256": lock_sha,
+                "built_at": int(time.time()),
+            },
+            fh,
+            indent=2,
+        )
+        fh.write("\n")
+
+    versions_dir = os.path.join(dest, "versions")
+    current = os.path.basename(version_dir)
+    for name in sorted(os.listdir(versions_dir)):
+        if name != current:
+            shutil.rmtree(os.path.join(versions_dir, name), ignore_errors=True)
+
+    record_result("Python suite", "OK", f"{meta['version']} ({interp_abi})")
+    print(f"  Installed python-loaded {meta['version']} -> {dest}/venv")
 
 
 def install_typelibs(repo_dir, home, selected_tools=None):
@@ -6819,6 +7071,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     )
     run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
+    run_install_step("Python suite", install_python_suite, repo_dir, home, selected_tools, registry)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
     run_install_step(
