@@ -1,0 +1,55 @@
+# python-loaded tops. Dependencies are resolved at build time; never list them.
+# Add or remove a top, then run: ./build/update python-loaded
+Django
+django-auth-ldap
+django-filter
+Flask
+dash
+litestar
+litestar-htmx
+uvicorn
+boto3
+numpy
+pandas
+scipy
+matplotlib
+scikit-learn
+statsmodels
+xgboost-cpu
+shapely
+pyarrow
+openpyxl
+pikepdf
+img2pdf
+pillow
+nltk
+graphviz
+# evidently: excluded 2026-10-23. 0.7.23 imports
+# pandas.core.dtypes.common.infer_dtype_from_object, removed in pandas 3, and
+# pandas 3 is the only major with cp315 wheels. Re-add when upstream supports it.
+pylint
+pylintfileheader
+pydantic
+rich
+typer
+httpx
+requests
+jsonschema
+SQLObject
+PyMySQL
+pyeda
+ruamel.yaml
+python-dotenv
+psutil
+pexpect
+prettytable
+more-itertools
+tenacity
+setproctitle
+websockets
+uvloop
+httptools
+watchfiles
+watchdog
+PyYAML
+python-ldap

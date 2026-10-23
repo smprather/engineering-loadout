@@ -1,0 +1,6 @@
+# Distributions the python-loaded build may compile from an sdist in EL8.
+# Every other package MUST resolve to a wheel (cp315/abi3/py3) on the first
+# attempt; adding a name here is a build-recipe commitment, not a workaround.
+PyYAML
+python-ldap
+pyeda
