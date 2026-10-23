@@ -42,14 +42,6 @@ git add payload/ .strip-manifest
 git commit
 ```
 
-## Updating tldr pages
-
-```bash
-./build/update tldr-data
-git add payload/tldr/ .content-manifest
-git commit
-```
-
 > Cutting a release? Follow [`docs/RELEASE.md`](RELEASE.md) — it is the
 > authoritative, ordered procedure (currency sweep, security data, the
 > mandatory post-payload chain, gates by release class).

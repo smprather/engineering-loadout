@@ -48,7 +48,6 @@ complete ruff     'p@1@(check format rule config linter clean version server ana
 complete taplo    'p@1@(lint check validate format fmt lsp config get toml-test completions)@' 'n/{lsp}/(tcp stdio)/' 'n/{config}/(default schema)/' 'n/*/f/'
 complete just     'p@1@()@' 'n/*/`just --summary 2>/dev/null`/'
 complete lazygit  'c/--/(version path filter work-tree git-dir)/'
-complete tldr     'c/--/(update list clear-cache pager quiet language platform)/'
 
 # ---- module (Environment Modules) -------------------------------------------
 # Only when the loadout modules install is actually in use; `module` is otherwise

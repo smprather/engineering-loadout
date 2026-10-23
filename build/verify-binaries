@@ -187,7 +187,6 @@ _SKIP_REASONS = {
     "just": "EL8 source build (cargo, Rust 1.96); official release is static musl",
     "lazygit": "EL8 Go source build (go install, CGO disabled, version baked via -X main.version)",
     "shfmt": "EL8 Go source build -- static but different binary layout from official (older Go version)",
-    "tldr": "EL8 source build -- dynamic with libpthread+libdl (old Rust); official release is static musl",
     # Optional-only tools with no bins to check
     "gui_libs": "shared library bundle, no top-level binary",
     "meld": "Python uv tool, no standalone binary",

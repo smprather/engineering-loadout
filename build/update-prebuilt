@@ -74,11 +74,6 @@ TOOLS = {
         "raw",
     ),
     "scc": ("https://github.com/boyter/scc/releases/download/v{ver}/scc_Linux_x86_64.tar.gz", "scc"),
-    "tldr": (
-        "https://github.com/dbrgn/tealdeer/releases/download/v{ver}/tealdeer-linux-x86_64-musl",
-        "tldr",
-        "raw",
-    ),
     "glow": (
         "https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_Linux_x86_64.tar.gz",
         "glow",

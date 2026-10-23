@@ -70,7 +70,7 @@ Option B — atomic mkstemp + os.replace (preferred; matches the pattern already
             os.unlink(tmp)
         raise
 
-Option B also fixes the more general class: any installed config file @envs later edits in place could hit the same wall if the source is read-only. Consider auditing other in-place open(..., "w") edits of installed config for the same assumption (e.g. install_tealdeer_config, the tcsh path in _mirror_shared_prefix).
+Option B also fixes the more general class: any installed config file @envs later edits in place could hit the same wall if the source is read-only. Consider auditing other in-place open(..., "w") edits of installed config for the same assumption (e.g. the tcsh path in _mirror_shared_prefix).
 
 Note on scope
 

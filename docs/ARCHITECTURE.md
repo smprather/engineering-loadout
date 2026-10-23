@@ -23,7 +23,7 @@ config bundle, font, data cache, Python tool.
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
 | `env` | Per-user config bundle (shell rc, editor configs) |
 | `font` | Font archive -> `~/.local/share/fonts/` (shared tree: once to `<prefix>/share/fonts/` + `<prefix>/etc/fonts/loadout-fonts.conf`) |
-| `data` | Data archive (tldr pages, etc.) |
+| `data` | Data archive (Tree-sitter parsers, etc.) |
 | `group` | Virtual group -- no artifacts; just a `members` list |
 
 Every package also declares:
@@ -93,7 +93,6 @@ curated mega-group is retired: the resolver raises a loud error naming
 ./loadout install @shared-all                  # all bundled tools (shared tree)
 ./loadout install @envs-all                    # all per-user config bundles
 ./loadout install @shared-all --skip @fonts-all      # drop all font packages
-./loadout install @shared-all --skip tldr-data       # skip tldr cache install
 ./loadout install @core-cli vim                 # exact set (deps still walked)
 ./loadout install gvim --no-deps                # skip dep walking
 ./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
@@ -226,7 +225,7 @@ in same directory + `os.rename`). Prevents SIGBUS when a running Python process 
 memory-mapped a shared lib being overwritten.
 
 **Per-phase gating:** Each install phase (`install_prebuilt_binaries`, `install_fonts`,
-`install_tldr_cache`, etc.) receives `selected_tools` and short-circuits with a `SKIP`
+etc.) receives `selected_tools` and short-circuits with a `SKIP`
 row when its package(s) are not in the resolved set.
 
 **Platform fallback:** If no exact platform directory exists, the installer may use a

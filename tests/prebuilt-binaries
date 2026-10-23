@@ -2672,8 +2672,8 @@ def main(keep, no_cache):
         probe_env = test_env(tmpdir)
 
         # The install tree is NOT relocatable: the installer bakes absolute
-        # paths into some artifacts (taplo's schema catalog, tealdeer's cache
-        # dir), so a copied tree breaks. Instead the tree lives permanently at
+        # paths into some artifacts (taplo's schema catalog), so a copied
+        # tree breaks. Instead the tree lives permanently at
         # install_cache and the probe scratch dir symlinks to it.
         tree = os.path.join(tmpdir, "local")
         cache_valid = (

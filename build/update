@@ -68,7 +68,7 @@ _YARA_ZIP_MEMBER = "packages/full/yara-rules-full.yar"
 # Fully automated: ./build/update runs end-to-end.
 # yara-rules is a dev-only artifact: the scan data lives under build/
 # (export-ignored, never shipped). The other names here feed files the
-# installer does ship (tldr-data, tmux-plugins, env-nvim, ...).
+# installer does ship (tmux-plugins, env-nvim, ...).
 AUTOMATED = {
     "yara-rules": {
         "supports_tag": True,
@@ -78,9 +78,6 @@ AUTOMATED = {
     "nodejs": {
         "supports_tag": True,
         "git_paths": ["payload/", ".strip-manifest", "packages.json"],
-    },
-    "tldr-data": {
-        "git_paths": ["payload/tldr/"],
     },
     "tmux-plugins": {
         "git_paths": ["envs/tmux/vendor/plugins/"],
@@ -202,7 +199,6 @@ DOWNLOAD_ONLY = {
     "starship",
     "stylua",
     "tkdiff",
-    "tldr",
     "tree-sitter",
     "ty",
     "uutils-coreutils",
@@ -642,93 +638,6 @@ def _run_yara_rules(dry_run=False, tag=None):
     return True
 
 
-# tldr pages for offensive-security tools whose documented example commands
-# trip the YARA-Forge malware ruleset (mimikatz credential dumping, certutil
-# -decode/-urlcache LOLBin download, msfvenom payload generation). A
-# chip-design toolchain has no reason to ship them; pruning the whole family
-# (not just the individual pages that happened to trip a rule) keeps the
-# release scan clean and is audit-defensible. Glob patterns, matched under
-# every locale dir (pages*, pages.en, ...) in the tldr-pages/ cache root.
-_TLDR_OFFENSIVE_GLOBS = [
-    "pages*/*/mimikatz*.md",
-    "pages*/*/certutil.md",
-    "pages*/*/msfvenom.md",
-]
-
-
-def _prune_tldr_offensive_pages(pages_dir):
-    removed = []
-    for pat in _TLDR_OFFENSIVE_GLOBS:
-        for p in glob.glob(os.path.join(pages_dir, pat)):
-            os.remove(p)
-            removed.append(os.path.relpath(p, pages_dir))
-    if removed:
-        print(f"Pruned {len(removed)} offensive-security tldr page(s):")
-        for r in sorted(removed):
-            print(f"  - {r}")
-
-
-def _tldr_cache_dir():
-    """tealdeer's real cache dir -- honours the user's config file.
-
-    `tldr --show-paths` prints `Cache dir: <path> (source)`; the config file
-    can redirect it to an absolute cache_dir (e.g. ~/.local/share/tealdeer),
-    in which case the XDG default ~/.cache/tealdeer holds nothing.
-    """
-    try:
-        out = subprocess.check_output(["tldr", "--show-paths"], stderr=subprocess.DEVNULL).decode()
-        for line in out.splitlines():
-            if line.startswith("Cache dir:"):
-                return line.split(":", 1)[1].split("(")[0].strip()
-    except Exception:
-        pass
-    cache_home = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-    return os.path.join(cache_home, "tealdeer")
-
-
-def _run_tldr_data(dry_run=False):
-    cache_dir = _tldr_cache_dir()
-    pages_dir = os.path.join(cache_dir, "tldr-pages")
-    output = os.path.join(REPO, "payload", "tldr", "tldr-pages.tar.bz2")
-
-    if dry_run:
-        print("$ tldr --update")
-        print("$ (prune offensive-security tool pages from cache)")
-        print(f"$ tar cjf {output} -C {cache_dir} tldr-pages/")
-        _run_payload_manifests(dry_run=True)
-        return True
-
-    rc = subprocess.call(["tldr", "--update"])
-    if rc != 0:
-        print(f"ERROR: tldr --update failed rc={rc}")
-        return False
-
-    if not os.path.isdir(pages_dir):
-        print(f"ERROR: tldr-pages not found at {pages_dir} after update")
-        return False
-
-    _prune_tldr_offensive_pages(pages_dir)
-
-    os.makedirs(os.path.join(REPO, "payload", "tldr"), exist_ok=True)
-    old_gz = os.path.join(REPO, "payload", "tldr", "tldr-pages.tar.gz")
-    if os.path.exists(old_gz):
-        os.remove(old_gz)
-
-    print(f"Bundling {pages_dir} -> {output}")
-    rc = subprocess.call(["tar", "cjf", output, "-C", cache_dir, "tldr-pages/"])
-    if rc != 0:
-        print(f"ERROR: tar failed rc={rc}")
-        return False
-
-    size_mb = os.path.getsize(output) // 1024 // 1024
-    print(f"Done: {size_mb}M written to {output}")
-    rc = _run_payload_manifests(dry_run=False)
-    if rc != 0:
-        print(f"WARNING: payload manifest chain exited rc={rc}")
-        return False
-    return True
-
-
 _TMUX_PLUGINS_LOCK = os.path.join(REPO, "envs", "tmux", "vendor", "plugins.lock")
 
 
@@ -935,8 +844,6 @@ def _run_automated(name, dry_run=False, tag=None):
             print(f"WARNING: payload manifest chain exited rc={rc3}")
             return False
         return True
-    elif name == "tldr-data":
-        return _run_tldr_data(dry_run=dry_run)
     elif name == "taplo-schemas":
         return _run_taplo_schemas(dry_run=dry_run)
     elif name == "tmux-plugins":

@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # A caller's exported LOADOUT_CFG_SHARED_PREFIX wins over this temp HOME in the
-# installer (tealdeer cache_dir, the baked shell prefix), so a dev shell with a
+# installer (the baked shell prefix), so a dev shell with a
 # stale value fails this test for the wrong reason. The test measures a
 # self-contained temp install -- clear it. See HANDOFF 2026-10-08 (6) follow-up.
 unset LOADOUT_CFG_SHARED_PREFIX
@@ -130,11 +130,6 @@ install_args=(
 )
 if [[ "$with_fonts" != "1" ]]; then
     install_args+=(--skip @fonts-all)
-fi
-
-if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
-    mkdir -p "$prefix/share/tealdeer/cache/tldr-pages"
-    touch "$prefix/share/tealdeer/cache/tldr-pages/stale-before-install"
 fi
 
 echo "Temp HOME: $test_home"
@@ -251,19 +246,6 @@ assert_exists "$test_home/.config/tmux/scripts/tmux-popin.sh"
 assert_exists "$test_home/.config/tmux/scripts/tmux-popout.sh"
 assert_exists "$test_home/.config/tmux/scripts/tmux-word-separators"
 assert_exists "$test_home/.config/starship/starship.toml"
-if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
-    assert_exists "$prefix/share/tealdeer/cache/tldr-pages"
-    if [[ -e "$prefix/share/tealdeer/cache/tldr-pages/stale-before-install" ]]; then
-        echo "Expected tldr cache install to replace existing cache" >&2
-        exit 1
-    fi
-    assert_exists "$test_home/.config/tealdeer/config.toml"
-    if ! grep -q "cache_dir = \"$prefix/share/tealdeer/cache\"" "$test_home/.config/tealdeer/config.toml"; then
-        echo "Expected tealdeer config cache_dir to point at the installed cache" >&2
-        cat "$test_home/.config/tealdeer/config.toml" >&2
-        exit 1
-    fi
-fi
 if [[ -d "$repo_dir/payload/el8.x86_64.glibc2p28" ]]; then
     assert_exists "$prefix/bin/fd"
     assert_exists "$prefix/bin/eza"

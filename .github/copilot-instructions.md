@@ -61,7 +61,6 @@ the plumbing.
 ./loadout install octave                        # single package; deps auto-pulled
 ./loadout install @gui-suite                    # group; expands recursively
 ./loadout install @shared-all --skip @fonts-all   # all tools minus fonts
-./loadout install @shared-all --skip tldr-data
 ./loadout install @core-cli vim                 # exact set
 ./loadout install gvim --no-deps                # install verbatim, no dep walk
 ./loadout install gvim --skip gui_libs --force  # warn on conflict, continue
@@ -267,12 +266,11 @@ Font extraction counts real font members and renders a Rich progress bar like
 other bulk phases.
 
 Per-phase installers (`install_prebuilt_binaries`, `install_fonts`,
-`install_tldr_cache`, `install_typelibs`, `install_portable_python`,
+`install_typelibs`, `install_portable_python`,
 `install_treesitter_parsers`, `install_nvim_treesitter_vendor`,
 `install_*_runtime`, `install_python_tools`) receive `selected_tools` and
 short-circuit with a `SKIP` install-results row when their package(s) are not in
-the selected set. `--skip @fonts-all` short-circuits `install_fonts`;
-`--skip tldr-data` short-circuits `install_tldr_cache`; etc.
+the selected set. `--skip @fonts-all` short-circuits `install_fonts`; etc.
 Python-tool installs render a Rich progress bar for the uv_tool loop; use
 top-level `--verbose` when a test needs the exact `uv tool install` command.
 
@@ -459,10 +457,6 @@ binaries, libraries, parser grammars, or tar archives. It walks the repo
 outside `.git`, strips raw ELF files in place, strips ELF payloads inside
 standalone `.bz2`, and rewrites tar archives as `.tar.bz2`; processed tarballs
 are skipped later when size and modification time match the strip manifest.
-
-`./build/update tldr-data` writes `payload/tldr/tldr-pages.tar.bz2`; the installer also
-accepts legacy `.tar.gz` and replaces any existing tealdeer cache unless
-`--skip tldr-data` is passed (or `tldr-data` is not in the selected set).
 
 ### Bundled Plugins
 

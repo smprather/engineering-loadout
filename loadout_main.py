@@ -217,7 +217,7 @@ TCSH_ENTRYPOINTS = (".tcshrc",)
 TCSH_ENTRYPOINTS_RETIRED = (".cshrc",)
 NVIM_LAYERS = ("user",)
 
-# Repo-relative payload home: platform dirs, packages.json, fonts, tldr,
+# Repo-relative payload home: platform dirs, packages.json, fonts,
 # treesitter prebuilt/vendor, pending-daemon. Renamed from the
 # historical "pre_built" in the 2026-07 reorg.
 PAYLOAD_DIR = "payload"
@@ -470,7 +470,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             # answer to "what is everything?" that drifts from those two.
             #
             # There is deliberately NO "@all minus the offline caches" variant.
-            # The caches (nvim-plugin-stash, treesitter-parsers, tldr-data) are
+            # The caches (nvim-plugin-stash, treesitter-parsers) are
             # a large share of the payload and it is tempting to treat them as
             # an optimisation for connected machines. They are not: this project
             # ships a KNOWN-WORKING configuration of tools and their external
@@ -3243,40 +3243,6 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
         print("  WSL note: Linux GUI apps use these fonts through fontconfig.")
 
 
-def install_tldr_cache(repo_dir, home, selected_tools=None):
-    if selected_tools is not None and "tldr-data" not in selected_tools:
-        skipped("tldr cache (tldr-data not selected)", "")
-        record_result("tldr cache", "SKIP", "tldr-data not in selected packages")
-        return
-    archive = None
-    for candidate in ("tldr-pages.tar.bz2", "tldr-pages.tar.gz"):
-        path = os.path.join(repo_dir, PAYLOAD_DIR, "tldr", candidate)
-        if os.path.exists(path):
-            archive = path
-            break
-    if not archive:
-        skipped(
-            "payload/tldr/tldr-pages.tar.bz2 or payload/tldr/tldr-pages.tar.gz not found in repo",
-            "run ./build/update tldr-data on a connected machine to bundle the pages",
-        )
-        record_result("tldr cache", "SKIP", "no bundled cache archive")
-        return
-
-    cache_dir = _resolve_install_to("~/.local/share/tealdeer/cache", home)
-    dest_dir = os.path.join(cache_dir, "tldr-pages")
-    ensure_dir(cache_dir, "tldr cache")
-    if os.path.lexists(dest_dir):
-        require_writable_parent(dest_dir, "tldr cache")
-        if os.path.isdir(dest_dir) and not os.path.islink(dest_dir):
-            require_writable_dir(dest_dir, "tldr cache")
-            shutil.rmtree(dest_dir)
-        else:
-            os.unlink(dest_dir)
-
-    pv_extract_tar(archive, cache_dir)
-    print(f"  tldr page cache installed to {dest_dir}")
-
-
 def _validate_tar_members(members, dest_real):
     """Shared safety check for tar extraction.
 
@@ -4595,7 +4561,6 @@ def backup_existing(home, repo_dir):
             ".config/helix/config.toml",
             ".config/helix/languages.toml",
             ".config/pip/pip.conf",
-            ".config/tealdeer/config.toml",
         ]:
             path = os.path.join(home, rel)
             if not (os.path.exists(path) or os.path.islink(path)):
@@ -4872,37 +4837,6 @@ def install_prefer_shims(install_root, env_home, registry, selected_tools=None):
         print(f"  prefer shims: {', '.join(sorted(applied))}")
 
 
-def install_tealdeer_config(repo_dir, home):
-    src = os.path.join(repo_dir, "envs", "tealdeer", "config.toml")
-    if not os.path.isfile(src):
-        return
-    cfg_dir = os.path.join(home, ".config", "tealdeer")
-    ensure_dir(cfg_dir, "tealdeer config")
-    prefix = os.environ.get("LOADOUT_CFG_SHARED_PREFIX", "").strip()
-    if not prefix and _INSTALL_PATHS is not None:
-        prefix = _INSTALL_PATHS.shared_prefix
-    if prefix:
-        cache_dir = os.path.join(prefix, "share", "tealdeer", "cache")
-    else:
-        # Match install_tldr_cache's target so the config and the extracted pages
-        # agree in both HOME (.local) and --dest-dir (un-dotted local) layouts.
-        cache_dir = _resolve_install_to("~/.local/share/tealdeer/cache", home)
-    cache_dir = os.path.abspath(os.path.expanduser(cache_dir))
-    with open(src) as f:
-        text = f.read()
-    text = re.sub(r"(?ms)^\[directories\]\n.*?(?=^\[|\Z)", "", text).rstrip()
-    text = f"{text}\n\n[directories]\ncache_dir = {json.dumps(cache_dir)}\n"
-    dest = os.path.join(cfg_dir, "config.toml")
-    require_writable_parent(dest, "tealdeer config")
-    if os.path.exists(dest) or os.path.islink(dest):
-        require_writable_dir(dest, "tealdeer config")
-        # A previous install sealed this managed file; re-open for the rewrite.
-        _grant_owner_write(dest)
-    with open(dest, "w") as f:
-        f.write(text)
-    _seal_managed(dest)
-
-
 def _install_env_bash(repo_dir, home):
     # Sweep live and retired entrypoints (install_bash() recreates only the live
     # ones): this heals a legacy ~/.profile -> bashrc link to the POSIX shim and
@@ -4911,7 +4845,6 @@ def _install_env_bash(repo_dir, home):
         remove_if_exists(os.path.join(home, entrypoint))
     install_bash(repo_dir, home, links_mode=False)
     _mirror_shared_prefix(home, ("bash",))
-    install_tealdeer_config(repo_dir, home)
     # Managed config is read-only; the corp..user layer directories stay
     # writable for the user's own overrides. Seal after _mirror_shared_prefix,
     # which rewrites global/config.sh in place.
@@ -5440,7 +5373,6 @@ _HARDCODED_GATE_PKGS = frozenset(
     {
         "portable-python",
         "gobject-typelibs",
-        "tldr-data",
         "vim",
         "gvim",
         "mate-terminal",
@@ -6789,7 +6721,6 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         args.no_backup,
         fonts_shared_root,
     )
-    run_install_step("tldr cache", install_tldr_cache, repo_dir, home, selected_tools)
     run_install_step("portable Python", install_portable_python, repo_dir, home, selected_tools)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
@@ -7372,8 +7303,8 @@ def cli_install(
       LOADOUT_CFG_SHARED_PREFIX -- set in the environment of an `@envs` install
       to the local-root of a separately-installed shared/read-only tree (the dir
       holding bin/share/lib64, e.g. /foo/bar/local for `@shared --dest-dir
-      /foo/bar`). It is baked into the user's config.sh so PATH, TERMINFO_DIRS,
-      and the tealdeer cache resolve against it. Example:
+      /foo/bar`). It is baked into the user's config.sh so PATH and
+      TERMINFO_DIRS resolve against it. Example:
 
       LOADOUT_CFG_SHARED_PREFIX=/foo/bar/local loadout install @envs
     """

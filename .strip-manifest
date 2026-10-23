@@ -221,7 +221,6 @@ sha256  41433f6f6d2cf70f23e2ae1ffdfc4fa8946d346acadf3a2b9dc32d1bb6636b78  payloa
 sha256  fea4da869c4abd53a3e8b177585465e363a0a634ca3287bcb558394405a269ef  payload/el8.x86_64.glibc2p28/bin/test.bz2
 sha256  6cc3c5e147d4c7d95743cf7c9d08a1e1a4f39a745a6883c0950490e003fe63d4  payload/el8.x86_64.glibc2p28/bin/timeout.bz2
 sha256  ba2fe31e73d3afcdb19e00f803ae75b60546c0a37ae0de94ac1f1a02523e91fd  payload/el8.x86_64.glibc2p28/bin/tkdiff.bz2
-sha256  e3d2801ba3e5e263f1a51031112ebb769ae8ff212d7e0f902a99e31fcc08c548  payload/el8.x86_64.glibc2p28/bin/tldr.bz2
 sha256  d247020ac6543c44857cfc381210287aed9c268d8de002a632ab857e622d50ae  payload/el8.x86_64.glibc2p28/bin/tmux.bz2
 sha256  af29060493c7feec98af4650f51e40fda2f2164009fae0311fd047654a3b2572  payload/el8.x86_64.glibc2p28/bin/tokei.bz2
 sha256  e4882b9e915b954a7af639b05cef427bc83490a67af2e85cea780d6a2cbf64ac  payload/el8.x86_64.glibc2p28/bin/touch.bz2
@@ -508,7 +507,6 @@ tar-meta  41943040  1788197628  payload/el8.x86_64.glibc2p28/runtime/wezterm.tar
 tar-meta  3922221  1790482906  payload/el8.x86_64.glibc2p28/runtime/xschem.tar.bz2
 tar-meta  14942616  1792639900  payload/el8.x86_64.glibc2p28/runtime/yosys.tar.bz2
 tar-meta  2037945  1788989391  payload/el8.x86_64.glibc2p28/runtime/zsh.tar.bz2
-tar-meta  985198  1791429832  payload/tldr/tldr-pages.tar.bz2
 sha256  b4c80182d31ad43e135cc7d29564901a7c5f262025d3a7b6e4552933d09b445a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/ada.so.bz2
 sha256  ff6db2805bed6efcc0504fe6a1706bdc7e47311f02e3cb47374162437bc90302  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/agda.so.bz2
 sha256  dd4de208187c47636fe5ac53fdbb31347902ba5372e2d19b3959acb6c91b2526  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/angular.so.bz2

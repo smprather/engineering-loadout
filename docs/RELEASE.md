@@ -109,7 +109,7 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
 `./build/update --list` classifies every package: `automated`, `rolling-git`,
 `build`, `import-script`, `download`. That classification tells you the work:
 
-- **automated** (`yara-rules`, `nodejs`, `tldr-data`, `tmux-plugins`, `env-nvim`)
+- **automated** (`yara-rules`, `nodejs`, `tmux-plugins`, `env-nvim`)
   — `./build/update <name>` does it end to end. `env-nvim` is the expensive one: it
   re-mirrors all 79 plugins from upstream (~328 MB, network-bound), so do not
   run it casually. It is also the one with no safety net — the stash is
@@ -136,7 +136,6 @@ Bumping any of `nvim`, `rust`, `treesitter`, or `git-nvim`
 ```bash
 ./build/update yara-rules              # YARA-Forge ruleset -> build/yara/ (dev tooling)
 sudo freshclam                   # ClamAV signatures (needs sudo; do it yourself)
-./build/update tldr-data               # offline tldr cache
 ```
 
 A scan against stale signatures is a green light that means nothing. Check the

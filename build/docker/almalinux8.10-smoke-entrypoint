@@ -85,7 +85,7 @@ FP_PAYLOAD_REL="payload loadout loadout_main.py"
 #                                  (its smoke-install-v1 install cache lives
 #                                  here and persists across runs)
 # install-linux-tmp-home is NOT cached: the install phase IS its assertion
-# (post-install hooks, backup dir, symlinks, tealdeer path bake).
+# (post-install hooks, backup dir, symlinks, shared prefix bake).
 CACHE_OK=0
 CACHE_DIR=${LOADOUT_SMOKE_CACHE_DIR:-$cache}
 if [ -d "$CACHE_DIR" ] && [ -w "$CACHE_DIR" ]; then
@@ -216,7 +216,7 @@ if [ "${LOADOUT_SMOKE_FULL:-0}" = "1" ]; then
 
     echo "== full: fresh-user temp-HOME install"
     # NOT cached: the install phase IS the assertion (post-install hooks,
-    # backup dir, symlinks, tealdeer cache_dir bake). Re-running it is the test.
+    # backup dir, symlinks, shared prefix bake). Re-running it is the test.
     tests/install-linux-tmp-home
 
     echo "== full: split shared/envs install"

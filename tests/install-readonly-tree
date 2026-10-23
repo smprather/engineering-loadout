@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only install-tree contract: a shared deployment whose tree is mounted
 # read-only must still work -- every binary probes clean, shells start quiet,
-# python/uv/tealdeer/nvim behave, and nothing that should stay user-writable
+# python/uv/nvim behave, and nothing that should stay user-writable
 # tries to write into the tree. The farm/air-gapped shape (R/O shared FS +
 # LOADOUT_CFG_SHARED_PREFIX) is the production case this gate protects.
 set -euo pipefail
@@ -110,7 +110,6 @@ probe_bin nvim --headless -n +qa
 probe_bin fzf --version
 probe_bin fd --version
 probe_bin bat --version
-probe_bin tldr --quiet tar
 probe_bin uv --version
 probe_bin python3.15 -c 'import sys; print(sys.version)'
 probe_bin sqlite3 --version
@@ -143,16 +142,7 @@ if [ -n "$ST" ]; then
     echo "  OK: no write attempts into the RO tree (strace)"
 fi
 
-# 4. tealdeer on an RO tree: must still print pages from the installed cache
-#    without tripping on the MAX_CACHE_AGE refresh path.
-tldr_out=$("${probe_env[@]}" tldr --quiet tar 2>&1) || fail "tldr failed on RO tree: $tldr_out"
-case "$tldr_out" in
-    *"Read-only"*|*"Permission denied"*|*"updating"*|*"cache"*)
-        fail "tldr noisy/refreshing on RO tree: $tldr_out" ;;
-esac
-echo "  OK: tealdeer reads cached pages on RO tree"
-
-# 5. python bytecode must be redirected away from the tree (PYTHONPYCACHEPREFIX
+# 4. python bytecode must be redirected away from the tree (PYTHONPYCACHEPREFIX
 #    or PYTHONDONTWRITEBYTECODE) -- running a script from the RO tree must not
 #    even attempt a .pyc write (the strace scan catches the attempt).
 mkdir -p "$home/scriptdir"
@@ -162,7 +152,7 @@ py_out=$("${probe_env[@]}" python3.15 "$home/scriptdir/rotest.py" 2>&1) \
 [[ "$py_out" == ro-ok ]] || fail "python output unexpected: $py_out"
 echo "  OK: python bytecode redirected from RO tree"
 
-# 6. tree byte-identical: no new files, no changed sizes, no touched mtimes.
+# 5. tree byte-identical: no new files, no changed sizes, no touched mtimes.
 after=$(tree_state)
 [[ "$before" == "$after" ]] || fail "tree state changed during probes:
 $(diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -10)"

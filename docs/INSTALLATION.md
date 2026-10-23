@@ -50,7 +50,6 @@ run it under the bundled interpreter or another 3.14+ build.
 ./loadout install octave                      # single package; deps auto-pulled
 ./loadout install @gui-suite                  # group; expands recursively
 ./loadout install @shared-all --skip @fonts-all   # all tools minus fonts
-./loadout install @shared-all --skip tldr-data
 ./loadout install @shared-all --skip gnuplot,micro
 ./loadout install vim nvim rg tmux            # install exactly this set
 ./loadout install gvim --no-deps              # install gvim verbatim, no dep walk
@@ -76,7 +75,6 @@ Shared tree (`<prefix>`):
 | `<prefix>/share/terminfo/` | `payload/<platform>/runtime/st.tar.bz2` |
 | `<prefix>/share/nvim/tree-sitter-parsers/` | 326 prebuilt Tree-sitter parsers |
 | `<prefix>/share/nvim/loadout/vendor/plugin-stash/` | `nvim-plugin-stash` |
-| `<prefix>/share/tealdeer/cache/tldr-pages/` | `payload/tldr/tldr-pages.tar.bz2` |
 
 Per-user (`$HOME`):
 
@@ -383,7 +381,7 @@ nothing. Migrate in this order:
    `~/.local/bin` is yours to keep.
 
 5. **Remove the legacy payload subtrees** under `~/.local` after inspecting
-   them -- `~/.local/lib64`, `~/.local/lib`, `~/.local/share/{helix,vim,tealdeer}`
+   them -- `~/.local/lib64`, `~/.local/lib`, `~/.local/share/{helix,vim}`
    and the shipped Neovim dirs
    `~/.local/share/nvim/{runtime,tree-sitter-parsers,loadout}`. Keep
    `~/.local/share/nvim/lazy` (your own plugin clones) and

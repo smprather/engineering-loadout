@@ -18,8 +18,8 @@ URLs that are mutable by definition. Vendoring those would mean adopting 20
 more upstreams whose content can change under a fixed URL, and re-downloading
 them on every refresh for a diff nobody can review.
 
-The rule here is one trust anchor, matching how `yara-rules` (YARA-Forge) and
-`tldr-data` (tldr-pages) are sourced:
+The rule here is one trust anchor, matching how `yara-rules` (YARA-Forge) is
+sourced:
 
   * accept https://www.schemastore.org/... and https://json.schemastore.org/...
   * accept https://raw.githubusercontent.com/SchemaStore/schemastore/... --

@@ -42,8 +42,7 @@ Two engines; the scan fails if **either** detects:
 pre-release gates. The final tag/release step waits and aborts on detection.
 
 Coverage is the whole shipped tree: `bin`/`lib64`, runtime
-archives, wheels, typelibs, treesitter parsers, fonts, the tldr cache,
-portable-python, and the Neovim + tmux plugin
+archives, wheels, typelibs, treesitter parsers, fonts, portable-python, and the Neovim + tmux plugin
 bundles. (Historically only `bin`/`lib64`/runtime were effectively scanned;
 portable-python was skipped entirely -- fixed. The Windows payload left
 coverage when the platform was retired 2026-08-31.)
@@ -71,10 +70,7 @@ a full scan. `--verbose` bypasses the cache so raw YARA output is available.
 short, audited set of (rule, path) pairs, each with a written justification;
 any other rule on the same file, or that rule on any other file, still fails.
 Currently one entry: Firefox's `omni.ja` (its own resource zip trips a
-structural APPX/MSIX heuristic). The offensive-security tldr pages
-(mimikatz/certutil/msfvenom) that used to trip keyword rules are **not**
-allowlisted -- `./build/update tldr-data` prunes them from the bundled cache
-entirely (`_TLDR_OFFENSIVE_GLOBS`).
+structural APPX/MSIX heuristic).
 
 **Rule freshness + pinning.** `./build/update yara-rules` verifies the
 downloaded full-rules zip against the sha256 GitHub publishes for that release

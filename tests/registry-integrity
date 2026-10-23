@@ -65,7 +65,6 @@ FARM_ALIASES = {
     "neovim": "nvim",
     "ripgrep": "rg",
     "tclsh": "tcl",
-    "tealdeer": "tldr",
     "vd": "visidata",
     "jupyter-lab": "jupyterlab",
     "python3.15": "portable-python",
@@ -269,7 +268,6 @@ def main():
     # payload paths drifted after the reorg).
     scan_targets = [
         os.path.join(REPO, "build", "yara"),
-        os.path.join(REPO, "payload", "tldr"),
         os.path.join(REPO, "envs", "tmux"),
         os.path.join(REPO, "envs", "nvim", "vendor", "plugins"),
     ]

@@ -529,12 +529,6 @@ TOOLS = [
         "https://sourceforge.net/projects/tkdiff/",
         strategy_strings(r"g\(version\)\s+\"([0-9]+\.[0-9]+(?:\.[0-9]+)?)\""),
     ),
-    (
-        "tldr",
-        "tealdeer",
-        "https://github.com/dbrgn/tealdeer",
-        strategy_flag(["--version"], r"tealdeer ([0-9]+\.[0-9]+\.[0-9]+)"),
-    ),
     ("tmux", "tmux", "https://github.com/tmux/tmux", strategy_flag(["-V"], r"tmux ([0-9]+\.[0-9]+\w*)")),
     (
         "tree-sitter",

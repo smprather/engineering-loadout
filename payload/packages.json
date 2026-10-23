@@ -1468,23 +1468,6 @@
       ],
       "description": "Tcl/Tk visual diff and merge tool"
     },
-    "tldr": {
-      "kind": "bin",
-      "bins": [
-        "tldr"
-      ],
-      "version": "1.9.0",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "docs"
-      ],
-      "recommends": [
-        "tldr-data"
-      ],
-      "description": "Simplified community man pages (tealdeer)"
-    },
     "tmux": {
       "kind": "bin",
       "bins": [
@@ -3208,20 +3191,6 @@
       ],
       "description": "GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo)"
     },
-    "tldr-data": {
-      "kind": "data",
-      "archive": "payload/tldr/tldr-pages.tar.bz2",
-      "install_to": "~/.local/share/tealdeer/cache/tldr-pages",
-      "version": "",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "docs",
-        "cache"
-      ],
-      "description": "Bundled tldr-pages cache for offline tealdeer use"
-    },
     "treesitter-parsers": {
       "kind": "data",
       "archive": "payload/treesitter/prebuilt/TS_PLATFORM/",
@@ -3637,7 +3606,6 @@
         "miller",
         "choose",
         "sd",
-        "tldr",
         "broot",
         "numr",
         "yazi",
@@ -3939,10 +3907,9 @@
     "@data-bundles": {
       "kind": "group",
       "members": [
-        "tldr-data",
         "treesitter-parsers"
       ],
-      "description": "Bundled data caches (tldr, tree-sitter parsers)"
+      "description": "Bundled data caches (tree-sitter parsers)"
     },
     "rust-analyzer": {
       "kind": "bin",

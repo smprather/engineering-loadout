@@ -50,8 +50,7 @@ for f in \
     "$H/.config/editorconfig/editorconfig" \
     "$H/.config/pip/pip.conf" \
     "$H/.config/btop/btop.conf" \
-    "$H/.config/wezterm/wezterm.lua" \
-    "$H/.config/tealdeer/config.toml"; do
+    "$H/.config/wezterm/wezterm.lua"; do
     assert_ro "$f" 444
 done
 for d in \

@@ -31,10 +31,6 @@ install writes) and the gnuplot driver dir all hang
 off the same prefix, so a `--dest-dir` or shared install needs no extra
 environment. A caller-set `FONTCONFIG_FILE` wins.
 
-tealdeer's cache is read from `<prefix>/share/tealdeer/cache/tldr-pages`, and
-the tealdeer config the installer writes records that absolute path (the config
-format does not expand `~` or env vars), so a relocated prefix works without
-editing the config.
 
 ## GRC (Generic Colorizer)
 

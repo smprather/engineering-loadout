@@ -154,16 +154,6 @@ if ! grep -F "setenv LOADOUT_CFG_SHARED_PREFIX \"$shared_prefix\"" "$test_home/.
     exit 1
 fi
 
-if [[ -f "$repo_dir/payload/tldr/tldr-pages.tar.bz2" || -f "$repo_dir/payload/tldr/tldr-pages.tar.gz" ]]; then
-    assert_exists "$shared_prefix/share/tealdeer/cache/tldr-pages"
-    assert_exists "$test_home/.config/tealdeer/config.toml"
-    if ! grep -q "cache_dir = \"$shared_prefix/share/tealdeer/cache\"" "$test_home/.config/tealdeer/config.toml"; then
-        echo "Expected tealdeer config to use shared cache dir" >&2
-        cat "$test_home/.config/tealdeer/config.toml" >&2
-        exit 1
-    fi
-fi
-
 mkdir -p "$test_home/modulefiles"
 cat > "$test_home/modulefiles/loadout-modules-smoke" <<'EOF'
 #%Module

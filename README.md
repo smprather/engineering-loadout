@@ -332,7 +332,6 @@ OpenSSH for those.
 | strace-ui | bin | b48e51a | Interactive TUI for strace output (Jane Street OxCaml/Bonsai_term) — syscall browser with FD provenance tracking. Opt-in: install with ./loadout install strace-ui |
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
-| tldr | bin | 1.9.0 | Simplified community man pages (tealdeer) |
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7c | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
@@ -381,7 +380,6 @@ OpenSSH for those.
 | pygwalker | python-tool | 0.5.0.1 | Turn pandas DataFrames into an interactive Tableau-style data explorer (Jupyter or `pygwalker serve`) |
 | portable-python | python-base | 3.15.0 | BOLT-optimized portable CPython build with bundled install.sh |
 | gobject-typelibs | typelib |  | GObject introspection typelibs (GLib/Gtk3/GtkSource3/Pango/Atk/cairo) |
-| tldr-data | data |  | Bundled tldr-pages cache for offline tealdeer use |
 | treesitter-parsers | data |  | Pre-built tree-sitter parsers (.so), queries, parser-info, registry, and build-info for 300+ languages |
 | git-nvim | runtime | 2.43.7 | PRIVATE git for nvim/lazy only -- installed to lib/loadout-git/, never on the user's PATH (a loadout git would shadow the corp git and break its subcommands/credential helpers, cf. openssh/ssh10). Optional: @shared-all or by name. nvim uses it only when the system has no git. |
 | nvim-plugin-stash | data |  | Offline git stash for nvim plugins -- 78 bare mirrors covering the active set plus catalog, read-only, shared. lazy clones from it into the user's lazy/ and :Lazy update/sync fetches from it, so plugin updates work with no network. The installer runs headless `Lazy! sync` from this stash whenever a loadout nvim binary and env-nvim config are both present. Needs git (system, or the optional git-nvim package). |
