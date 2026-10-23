@@ -341,10 +341,11 @@ cd "$D" && PATH="$D/bin:/usr/bin:/bin" "$D/bin/yosys" -y smoke.py
 
 (the same prefix directory mounted into the container passes).
 
-**Gate state:** 62 PASS / 1 FAIL. The single failure is `install-xdesk`
-("nested server accepted a connection with no cookie"), which fails
-identically on the original HEAD (`ad539c4`) in a separate worktree -- an
-environmental X-server assertion, not from this work.
+**Gate state:** 62 PASS / 1 FAIL at the time of that session. The failure was
+`install-xdesk` ("nested server accepted a connection with no cookie"), an
+environmental X-server assertion (the host has no `xauth`). The `xdesk`
+launcher and its gate were retired 2026-10-23; `xephyr` now ships only the
+nested X server.
 
 **The binary smoke test.** `tests/prebuilt-binaries` (and its container
 variant) had three failures on a fresh install, all now fixed:

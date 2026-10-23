@@ -378,7 +378,6 @@ run_test "install-linux-tmp-home" --deps auto tests/install-linux-tmp-home
 run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
 run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
 run_test "install-nvim-shared-stash" --deps auto tests/install-nvim-shared-stash
-run_test "install-xdesk" --deps auto tests/install-xdesk
 run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------

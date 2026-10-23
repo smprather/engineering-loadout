@@ -1917,8 +1917,7 @@
       "kind": "bin",
       "bins": [
         "Xephyr",
-        "Xephyr.bin",
-        "xdesk"
+        "Xephyr.bin"
       ],
       "libs": [
         "libXdmcp.so.6",
@@ -1942,7 +1941,7 @@
         "gui",
         "desktop"
       ],
-      "description": "Xephyr — nested X server, plus the xdesk launcher: run any window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
+      "description": "Xephyr — nested X server: run another window manager or desktop session in a window inside the session you already have (no root, no display-manager change, no listening port)"
     },
     "xschem": {
       "kind": "bin",

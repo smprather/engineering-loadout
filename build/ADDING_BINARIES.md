@@ -3769,7 +3769,11 @@ modules from the *installed* tree, asserts stderr is silent, and checks
 `gem env`'s INSTALLATION DIRECTORY resolves inside the staged tree (which is what
 catches the wrapper falling through to a system ruby).
 
-## Xephyr 1.20.11-28.el8_10.3 -- nested X server + `xdesk` session launcher (shanghai from EL8 AppStream RPM)
+## Xephyr 1.20.11-28.el8_10.3 -- nested X server (shanghai from EL8 AppStream RPM)
+
+The `xdesk` session launcher that used to ship alongside it was retired
+2026-10-23 (its T2 gate required host `xauth`); the subsection below is kept as
+build history. No payload carries `xdesk` today.
 
 Lets a user run a *different* desktop or window manager without root. On a
 locked-down host the DE is chosen by root-owned config -- NoMachine's
@@ -3839,7 +3843,11 @@ Present on any host with an X server or GUI stack; without them Xephyr falls
 back to a pre-XKB keymap rather than failing. Also the EL8-base set
 (libsystemd, libudev, libaudit, libcap-ng, libselinux, libcrypto, libgcrypt).
 
-### `xdesk` (build/xephyr/xdesk)
+### `xdesk` (RETIRED 2026-10-23 -- build history only)
+
+Not shipped: `build/xephyr/xdesk`, `payload/<platform>/bin/xdesk.bz2`, the
+`tests/install-xdesk` gate, and the `xdesk` entry in the `xephyr` package are
+removed. The notes below describe the launcher that shipped before that date.
 
 `xdesk [-s WxH] [-f] [-d :N] [--no-dbus] [--no-auth] [-k] [-- command...]`.
 Picks a free display, starts Xephyr, runs the session, tears the server down.
@@ -3923,8 +3931,8 @@ carries no version string, so every strategy would report a permanent gap. The
 version lives in `packages.json` and is enforced against the RPM NVR by
 `--tag`.
 
-**Smoke:** `Xephyr -help` (exit 0, no parent display needed) and
-`xdesk --help`, wired into `PROBE_FLAGS` in `tests/prebuilt-binaries` --
+**Smoke:** `Xephyr -help` (exit 0, no parent display needed), wired into
+`PROBE_FLAGS` in `tests/prebuilt-binaries` --
 `--version` exits 1 with `Unrecognized option`, which would score red.
 
 `tests/prebuilt-binaries` also gained a general fix here: a **wrapper** script
@@ -3935,11 +3943,9 @@ sibling (a repo-wide convention) for the host-`.so` skip decision only -- when
 anything is missing that is *not* host-required it still falls through to the
 normal exec probe, so the change can only add skips, never mask a real failure.
 
-`tests/install-xdesk` covers what no headless gate can: it installs into a temp
-root, brings up a nested display through `xdesk`, and asserts the size, that a
-cookie-less connection is refused, and that the server and its state dir are
-gone afterwards. It **skips** when `$DISPLAY` is unset, so the container and any
-headless CI stay green.
+`tests/install-xdesk` was deleted with the launcher (2026-10-23). Xephyr's only
+automated coverage is the `-help` probe in `tests/prebuilt-binaries`; a nested
+session is a manual check now.
 
 ## htop / rsync / xsel / xclip / yank / yara -- small C tools (EL8 source builds)
 

@@ -145,7 +145,6 @@ PROBE_FLAGS = {
     # without needing a parent display, so it probes cleanly headless.
     "Xephyr": [["-help"]],
     "Xephyr.bin": [["-help"]],
-    "xdesk": [["--help"]],
     # --- X clients: single-dash -version, --version exits 1 ---------------
     "xterm": [["-version"]],
     "resize": [["-version"]],

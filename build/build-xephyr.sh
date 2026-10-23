@@ -314,7 +314,7 @@ chmod 755 "$STAGE/bin/Xephyr.bin"
 "$PATCHELF" --set-rpath '$ORIGIN/../lib64' "$STAGE/bin/Xephyr.bin"
 
 # --- wrappers ---------------------------------------------------------------
-for w in Xephyr xdesk; do
+for w in Xephyr; do
     [ -f "$WRAP_DIR/$w" ] || { echo "ERROR: missing wrapper $WRAP_DIR/$w" >&2; exit 1; }
     cp "$WRAP_DIR/$w" "$STAGE/bin/$w"
     chmod 755 "$STAGE/bin/$w"
@@ -427,7 +427,7 @@ fi
 
 # --- install into payload ---------------------------------------------------
 mkdir -p "$BIN_DIR" "$LIB_DIR"
-for f in Xephyr Xephyr.bin xdesk; do
+for f in Xephyr Xephyr.bin; do
     bzip2 -kf "$STAGE/bin/$f"
     cp "$STAGE/bin/$f.bz2" "$BIN_DIR/$f.bz2"
     chmod 644 "$BIN_DIR/$f.bz2"
@@ -470,7 +470,7 @@ PROV="$WRAP_DIR/PROVENANCE"
 } > "$PROV"
 
 echo "Staged:"
-for f in Xephyr Xephyr.bin xdesk; do
+for f in Xephyr Xephyr.bin; do
     echo "  payload/$PLATFORM/bin/$f.bz2"
 done
 for soname in $BUNDLE_LIBS; do

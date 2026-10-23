@@ -9,7 +9,7 @@ installs a shared tree then dies with ENOSPC. The failure surfaces as an
 unrelated red test several steps later, which is why this class cost two
 consecutive red gates on 2026-10-21 (install-fonts-shared leaked ~6 GB and
 took install-readonly-tree, install-split-shared-envs, install-nvim-deployments,
-install-nvim-shared-stash, install-xdesk and install-linux-tmp-home down with
+install-nvim-shared-stash and install-linux-tmp-home down with
 it).
 
 The rule: any test that removes a directory an install could have populated
