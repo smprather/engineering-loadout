@@ -21,6 +21,7 @@ config bundle, font, data cache, Python tool.
 | `typelib` | GObject `.typelib` file -> `<prefix>/lib/girepository-1.0/` |
 | `python-base` | Portable Python archive, installed via bundled `install.sh` |
 | `python-tool` | PyPI tool installed via `uv tool install` from bundled wheels |
+| `python-suite` | One curated Python environment (`uv venv`) from a private wheelhouse; no shared-bin launchers; `standalone` (explicit install only) |
 | `env` | Per-user config bundle (shell rc, editor configs) |
 | `font` | Font archive -> `~/.local/share/fonts/` (shared tree: once to `<prefix>/share/fonts/` + `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `data` | Data archive (tldr pages, etc.) |
@@ -30,7 +31,8 @@ Every package also declares:
 - `platforms: [linux]` -- resolver filters by current platform; `'linux'` is the sole
   value (windows/macos vocabulary retired 2026-08-31)
 - `tags: [...]` -- free-form labels for `list --tag T`
-- Per-kind artifact fields: `bins`, `libs`, `archive`, `wheels`, `uv_tool`, etc.
+- Per-kind artifact fields: `bins`, `libs`, `archive`, `wheels`, `uv_tool`,
+  `requirements`, `lock`, `wheels_dir`, etc.
 - `version`, `description`, `homepage`
 - Optional upstream version tracking: `version_url`, `version_pattern`,
   `version_url_accept`, `version_url_ua`

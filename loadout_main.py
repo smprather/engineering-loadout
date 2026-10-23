@@ -386,6 +386,17 @@ def disabled_packages(registry):
     return disabled
 
 
+def standalone_packages(registry):
+    """Package names excluded from every synthetic sweep.
+
+    A "standalone": true entry installs only when named explicitly (or pulled
+    by a group that lists it). It is not optional -- it is not part of
+    "@shared-all" either: python-loaded is a multi-GB environment that must
+    never ride along with the documented "install @shared-all" command.
+    """
+    return {name for name, entry in registry.items() if entry.get("standalone")}
+
+
 def expand_groups(names, registry, _stack=None, _disabled=None):
     """Expand @group references recursively into leaf package names.
 
@@ -413,6 +424,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
         _stack = ()
     if _disabled is None:
         _disabled = disabled_packages(registry)
+    _standalone = standalone_packages(registry)
     out = set()
     for name in names:
         if name == "all":
@@ -433,7 +445,11 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             out |= {
                 n
                 for n, e in registry.items()
-                if not n.startswith("@") and e.get("kind") != "env" and not e.get("optional") and n not in _disabled
+                if not n.startswith("@")
+                and e.get("kind") != "env"
+                and not e.get("optional")
+                and n not in _disabled
+                and n not in _standalone
             }
             continue
         if name == "@shared-all":
@@ -443,7 +459,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             out |= {
                 n
                 for n, e in registry.items()
-                if not n.startswith("@") and e.get("kind") != "env" and n not in _disabled
+                if not n.startswith("@") and e.get("kind") != "env" and n not in _disabled and n not in _standalone
             }
             continue
         if name == "@envs":
