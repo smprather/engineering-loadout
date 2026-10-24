@@ -5266,10 +5266,14 @@ def _install_tmux_user_layer(repo_dir, home, tmux_config):
 
 
 def _seed_tmux_settings_user(repo_dir, tmux_config):
-    """Seed the settings user layer once; it holds the user's theme choice."""
+    """Seed the settings user layer when absent or empty; it holds the theme choice."""
     dest = os.path.join(tmux_config, "tmux-settings-user.conf")
     if os.path.lexists(dest):
-        return
+        try:
+            if os.path.getsize(dest) > 0:
+                return
+        except OSError:
+            return
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux-settings-user.conf"), dest, False)
 
 

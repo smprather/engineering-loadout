@@ -72,6 +72,10 @@ are literal, so overriding it to `detect`, `light`, or `terminal` in
 the fills stayed dark. loadout1 is safe under any mode because both of its
 palettes are ANSI names. Themes require tmux 3.8; the bundled tmux is 3.8.
 
+The seeded `tmux-settings-user.conf` documents the choice and defaults to
+`loadout2`. It is seeded when absent **or empty**, so a zero-byte file cannot
+hide the theme section; a non-empty file is always preserved.
+
 ### Permissions
 
 The managed tree is read-only: `tmux.conf`, `tmux-settings-global.conf`,

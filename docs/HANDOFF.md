@@ -30,6 +30,14 @@ names. The bundled-version note is updated to 3.8.
 the file-level pin list and asserts the live server's mode, palette,
 `status-style`, pane fills, and the loadout1 mode.
 
+**Empty user settings re-seeded.** The live
+`~/.config/tmux/tmux-settings-user.conf` was zero bytes, so it carried no
+theme choice or documentation, and the old seed-only-if-absent rule preserved
+it forever. `_seed_tmux_settings_user` now seeds when the file is absent or
+empty (non-empty layers are still preserved), and the seed documents
+loadout2/loadout1 plus the loadout2 dark-only rule. The test empties the file,
+reinstalls, and asserts the theme section and default return.
+
 **Verified.** Fresh `env-tmux` install + `tmux -f tmux.conf`: `theme dark`,
 `dark-theme-blue "#89b4fa"`, `status-style "fg=themewhite bg=themedarkgrey"`,
 `window-style "fg=themewhite bg=#000000"`. An attached client's captured

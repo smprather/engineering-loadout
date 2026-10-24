@@ -258,6 +258,15 @@ grep -qF 'set -g @theme "loadout1"' "$tmux_dir/tmux-settings-user.conf" \
     || fail "reinstall overwrote the tmux settings user layer"
 ! grep -qF 'SETTINGS-GLOBAL-STALE' "$tmux_dir/tmux-settings-global.conf" \
     || fail "reinstall did not refresh the managed tmux settings"
+# A zero-byte user layer holds no choice to preserve.  It used to survive
+# reinstall empty, leaving the user with no theme documentation at all.
+: > "$tmux_dir/tmux-settings-user.conf"
+HOME="$fresh_home" "$REPO/loadout" install -y env-tmux --no-backup >"$TEST_ROOT/reseed.log" 2>&1
+[ -s "$tmux_dir/tmux-settings-user.conf" ] || fail "empty tmux settings user layer was not re-seeded"
+grep -qF -- '---- theme choice' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "re-seeded tmux settings user layer does not document the theme choice"
+grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-user.conf" \
+    || fail "re-seeded tmux settings user layer does not default to loadout2"
 # Reinstall heals the chmod u+w drift above and re-applies the read-only
 # contract, while the user layers stay writable.
 for managed_file in tmux.conf tmux-global.conf tmux-settings-global.conf word-separators.conf; do
