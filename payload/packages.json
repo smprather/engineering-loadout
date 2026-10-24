@@ -118,7 +118,7 @@
       "bins": [
         "biome"
       ],
-      "version": "2.6.2",
+      "version": "2.6.3",
       "platforms": [
         "linux"
       ],
@@ -1649,7 +1649,7 @@
         "libselinux.so.1",
         "libpixman-1.so.0"
       ],
-      "version": "9.2.1225",
+      "version": "9.2.1228",
       "platforms": [
         "linux"
       ],
@@ -1665,7 +1665,7 @@
         "gvim",
         "gvim.bin"
       ],
-      "version": "9.2.1225",
+      "version": "9.2.1228",
       "platforms": [
         "linux"
       ],

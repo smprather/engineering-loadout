@@ -258,7 +258,7 @@ OpenSSH for those.
 | bash | bin | 5.3.20 | Portable GNU Bash ahead of EL8 system version |
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
-| biome | bin | 2.6.2 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
+| biome | bin | 2.6.3 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | broot | bin | 1.61.0 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.17.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
@@ -338,8 +338,8 @@ OpenSSH for those.
 | ty | bin | 0.0.91 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.13.5 | Extremely fast Python package and project manager |
-| vim | bin | 9.2.1225 | Vi IMproved text editor |
-| gvim | bin | 9.2.1225 | GTK3 GUI Vim with clipboard and font rendering |
+| vim | bin | 9.2.1228 | Vi IMproved text editor |
+| gvim | bin | 9.2.1228 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
 | mesa3d_libs | runtime | 23.1.4 | Mesa 3D userspace runtime — Mesa EGL vendor library, GBM, libglapi, DRI drivers, and LLVM runtime (no GLVND dispatcher libs) |
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
