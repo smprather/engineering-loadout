@@ -62,7 +62,9 @@ done
 # means "paint nothing" for these, so the value is then the terminal's -- which
 # is how the pane-fill cue came to invert on terminals whose background is
 # lighter than #090909 (observed on Windows Terminal).  Every entry in this
-# list must be set to a literal hex in the theme file.
+# list must be a literal hex, or a tmux 3.8 theme name whose palette slot is a
+# literal hex (`theme dark` forces the palette).
+pinned_colour='(#[0-9a-fA-F]{6}|themeblack|themewhite|themelightgrey|themedarkgrey|themegreen|themeyellow|themered|themeblue|themecyan|thememagenta)'
 for opt in window-style window-active-style pane-border-style pane-active-border-style \
            mode-style copy-mode-match-style copy-mode-current-match-style copy-mode-mark-style \
            copy-mode-line-number-style copy-mode-current-line-number-style \
@@ -71,7 +73,7 @@ for opt in window-style window-active-style pane-border-style pane-active-border
            clock-mode-colour display-panes-colour display-panes-active-colour \
            status-style status-left-style window-status-style window-status-current-style \
            window-status-bell-style; do
-    grep -qE "^set -g ${opt} +\"[^\"]*#" "$tmux_dir/themes/tmux-theme-loadout2.conf" \
+    grep -qE "^set -g ${opt} +\"[^\"]*${pinned_colour}" "$tmux_dir/themes/tmux-theme-loadout2.conf" \
         || fail "loadout2 theme leaves $opt to the terminal"
 done
 for helper in shell-state-export.sh tmux-3col-layout.sh tmux-popin.sh tmux-popout.sh tmux-word-separators; do
@@ -151,12 +153,12 @@ grep -qF 'set-environment -g TMUX_PLUGIN_MANAGER_PATH "~/.config/tmux/plugins/"'
     || fail "global layer does not pin the XDG plugin path"
 
 # FFM layering on a real server: the managed baseline turns it ON and the
-# user layer (sourced after it) can opt out.  Skipped where tmux is absent
-# or predates the option (added in tmux 3.7).
+# user layer (sourced after it) can opt out.  Themes require tmux 3.8, and the
+# block also sources both theme files, so skip older servers entirely.
 tmux_bin=$(command -v tmux || true)
 tmux_ver=$("$tmux_bin" -V 2>/dev/null | awk '{print $2}')
 case "$tmux_ver" in
-    3.7* | 3.8* | 3.9* | 3.[1-9][0-9]* | [4-9]*) ;;
+    3.8* | 3.9* | 3.[1-9][0-9]* | [4-9]*) ;;
     *) tmux_bin="" ;;
 esac
 if [ -n "$tmux_bin" ]; then
@@ -187,9 +189,22 @@ if [ -n "$tmux_bin" ]; then
     # nothing, and the active/inactive cue becomes whatever background the
     # terminal paints (see the file-level pin list above).
     tm source-file "$tmux_dir/themes/tmux-theme-loadout2.conf"
+    got=$(tm show-options -s theme)
+    [ "$got" = "theme dark" ] \
+        || fail "loadout2 did not force the dark theme (got: $got)"
+    got=$(tm show-options -s dark-theme-blue)
+    case "$got" in
+        *'#89b4fa'*) ;;
+        *) fail "loadout2 palette did not set dark-theme-blue (got: $got)" ;;
+    esac
+    got=$(tm show-options -g status-style)
+    case "$got" in
+        *'fg=themewhite bg=themedarkgrey'*) ;;
+        *) fail "loadout2 status-style does not use the palette (got: $got)" ;;
+    esac
     got=$(tm show-options -g -w window-style)
     case "$got" in
-        *'fg=#cdd6f4 bg=#000000'*) ;;
+        *'fg=themewhite bg=#000000'*|*'fg=#cdd6f4 bg=#000000'*) ;;
         *) fail "loadout2 leaves the inactive pane fill to the terminal (window-style: $got)" ;;
     esac
     got=$(tm show-options -g monitor-activity)
@@ -200,8 +215,18 @@ if [ -n "$tmux_bin" ]; then
         *'bg=#090909'*) ;;
         *) fail "loadout2 does not pin the active pane fill (window-active-style: $got)" ;;
     esac
+    # loadout1 is the rollback theme: same file contract, ANSI palette mode.
+    tm source-file "$tmux_dir/themes/tmux-theme-loadout1.conf"
+    got=$(tm show-options -s theme)
+    [ "$got" = "theme terminal" ] \
+        || fail "loadout1 did not select the terminal palette (got: $got)"
+    got=$(tm show-options -g window-status-current-style)
+    case "$got" in
+        *'fg=themewhite bg=themeblue'*) ;;
+        *) fail "loadout1 does not use the ANSI palette names (got: $got)" ;;
+    esac
 else
-    echo "SKIP: focus-follows-mouse server check (no tmux >= 3.7)"
+    echo "SKIP: tmux theme/FFM server check (no tmux >= 3.8)"
 fi
 
 nvim_lua="$fresh_home/.config/nvim/lua"

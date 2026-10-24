@@ -835,6 +835,7 @@ sha256  2f9261e1cca57131801b377c455eb7f9d715d8528c32dd10bb1702bb59415c48  payloa
 sha256  2f99120fca78f536e07b114d3b60333bc4bb2a0969053b1250869bcdc1b5351b  payload/el8.x86_64.glibc2p28/wheels/rich_click-1.9.7-py3-none-any.whl
 sha256  2fa06ae08a70a7f652fb2c4cef9c681d962152e155f3ea99ee02771fc298c7a7  payload/el8.x86_64.glibc2p28/lib64/libQt5PrintSupport.so.5.bz2
 sha256  2fcbf86203809df38da0197b3eee8b926d8305ee4d443ab88b12a8a72ea3ea0c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/usd.so.bz2
+sha256  2fd984fb528d96655fda9e55066139cc956fa61e0c66ac155b6621c98ac4ba03  payload/installed-sizes.json
 sha256  2fe4218e1d72611564befd4e70199fc77ecd3a6d1e5eb3f0318fda51bc021fcd  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/embedded_template/injections.scm
 sha256  2fe4218e1d72611564befd4e70199fc77ecd3a6d1e5eb3f0318fda51bc021fcd  payload/treesitter/vendor/nvim-treesitter/runtime/queries/embedded_template/injections.scm
 sha256  3018b5a10bb639e59330f800a6da9134636feaa8b50f41efa43712977300390e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/blade/indents.scm
@@ -1096,7 +1097,6 @@ sha256  3f84652d98726d6e943b156e53ecbb99d88a1bdd7356c415505b5637ce3ffe05  payloa
 sha256  3f84652d98726d6e943b156e53ecbb99d88a1bdd7356c415505b5637ce3ffe05  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ocaml_interface/locals.scm
 sha256  3fa8c80b6d0329bf3a6cab21cd9b5e630f6b8391cd490663e8ae224222283470  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/issue-2086.c
 sha256  3faa6c766b9e683df21477876704b5e37c2dd81da02d0fbfe43683132ba90e02  payload/el8.x86_64.glibc2p28/bin/mermaid-ascii.bz2
-sha256  3fac52242d5cd957858d4ad106ccb11da06d215a387ad45be2d81c3850c9432f  payload/installed-sizes.json
 sha256  3fb6a65b350ada5e7e7583ec94eff4f74c34bf9d9bffd34350f402009e2734aa  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/printf.so.bz2
 sha256  3fd48aa2fdc80297d16bfb072bda24df204c0325f6494ddfb3765de2880a882d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/pug.lua
 sha256  3fd8c457068847ae522be7ff2bb49265bd82d2ab0b613937ee826b7ace27a598  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/htmldjango.so.bz2

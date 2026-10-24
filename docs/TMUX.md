@@ -39,12 +39,35 @@ the loadout-managed
 plugins. Plugins live at `~/.config/tmux/plugins/` -- TPM's own XDG location;
 the dispatcher's `run` line and the `TMUX_PLUGIN_MANAGER_PATH` pin in
 `tmux-global.conf` both point there, and there is no `~/.tmux` symlink. The settings layers hold user-facing knobs -- the
-`@theme` choice (defaulting to `loadout2`, the fully pinned
-terminal-independent theme; `loadout1` is the pre-2026-10-01 rollback) and the
+`@theme` choice (defaulting to `loadout2`, the fixed dark tmux 3.8 theme;
+`loadout1` is the pre-2026-10-01 rollback) and the
 `focus-follows-mouse` default (on) -- and the global layer loads the
 selected `themes/tmux-theme-<name>.conf` plus the generated
 `word-separators.conf` (regenerate with `scripts/tmux-word-separators`).
 Helper scripts live in `scripts/`.
+
+### Themes (tmux 3.8)
+
+Each theme file is a real tmux 3.8 theme: it sets the server-scoped `theme`
+option, fills the ten `dark-theme-*` (loadout2) or dark/light (loadout1)
+palette slots, and writes styles with the `themeblack`/`themewhite`/...
+colour names.
+
+- **loadout2** is `theme dark` with a literal-hex palette. Forcing the mode
+  means it does not follow the terminal's light/dark report; colours with no
+  palette slot -- the pane fills, the peach message fill, the frame and dim
+  greys -- stay literal hex, so the render is identical on every terminal.
+- **loadout1** is `theme terminal` with an ANSI-name palette. Its old
+  `red`/`blue`/`white`/`black` styles now use the equivalent theme names and
+  still resolve against the terminal palette, preserving the rollback
+  appearance.
+
+The palette also feeds tmux's built-in UI that this config does not pin
+(tree selection, fill character, display-panes border, copy-mode defaults),
+so those components stay inside the same design. Because the theme file runs
+after the settings layers, overriding the mode belongs in `tmux-user.conf`
+(sourced after the theme), e.g. `set -s theme detect`. Themes require tmux
+3.8; the bundled tmux is 3.8.
 
 ### Permissions
 
@@ -106,7 +129,7 @@ The managed layer also sets `default-terminal "tmux-256color"` and
 
 ## Focus follows mouse (FFM)
 
-`focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.7c) focuses the
+`focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.8) focuses the
 pane under the mouse pointer on hover, no click needed. The managed baseline
 sets it **on**; opt out per user in `tmux-settings-user.conf`, which is
 sourced after the baseline and therefore wins:

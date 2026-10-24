@@ -1,5 +1,42 @@
 # Current Handoff
 
+## 2026-10-24 (2): tmux themes rewritten as tmux 3.8 themes
+
+**Cause.** tmux 3.8 added the server-scoped `theme` option and the ten
+`*-theme-*` palette slots. The loadout theme files still pinned styles to raw
+hex (loadout2) or ANSI names (loadout1), so tmux's own built-in components
+(tree selection, fill character, display-panes border, copy-mode defaults)
+did not read the loadout design.
+
+**Change.** `envs/tmux/themes/tmux-theme-loadout1.conf` and
+`tmux-theme-loadout2.conf` are now real 3.8 themes:
+
+- `loadout2`: `set -s theme dark` plus all ten `dark-theme-*` slots set to the
+  existing literal hexes. Styles use `themeblack`, `themewhite`,
+  `themelightgrey`, `themedarkgrey`, `themeyellow`, `themered`, `themeblue`;
+  colours with no slot (pane fills, peach, the #45475a frame, the #6c7086 dim
+  grey) stay literal hex. The forced palette keeps the render identical and
+  terminal-independent. Green/cyan/magenta (unused by pinned styles) use
+  catppuccin mocha values so built-ins stay in-palette.
+- `loadout1`: `set -s theme terminal`, both palettes defined to the same ANSI
+  names; its five settings now use theme names, preserving the ANSI rollback.
+
+`tmux-settings-global.conf`, `docs/TMUX.md`, and `AGENTS.md` document the
+mode and the override path (`set -s theme ...` in `tmux-user.conf`, sourced
+after the theme) and update the bundled-version note to 3.8.
+`tests/install-env-tmux-nvim-layers` accepts a palette-backed theme name in
+the file-level pin list and asserts the live server's mode, palette,
+`status-style`, pane fills, and the loadout1 mode.
+
+**Verified.** Fresh `env-tmux` install + `tmux -f tmux.conf`: `theme dark`,
+`dark-theme-blue "#89b4fa"`, `status-style "fg=themewhite bg=themedarkgrey"`,
+`window-style "fg=themewhite bg=#000000"`. An attached client's captured
+output contained the resolved RGB: `38;2;205;214;244` (themewhite),
+`48;2;16;23;58` (themedarkgrey), `48;2;137;180;250` (themeblue). With
+`@theme "loadout1"` the same chain yields `theme terminal` and
+`window-status-current-style "fg=themewhite bg=themeblue"`.
+`tests/install-env-tmux-nvim-layers` passes.
+
 ## 2026-10-24: 2026.10.7 shipped; tldr/xdesk retired; registry-sourced release notes; vim 9.2.1225
 
 **2026.10.7** released (signed, verified): python-loaded, tldr retirement,
