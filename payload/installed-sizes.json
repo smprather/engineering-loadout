@@ -1704,7 +1704,7 @@
     "envs/tmux/scripts/tmux-word-separators": 3264,
     "envs/tmux/themes/tmux-theme-loadout1.conf": 3203,
     "envs/tmux/themes/tmux-theme-loadout2.conf": 12916,
-    "envs/tmux/tmux-global.conf": 16388,
+    "envs/tmux/tmux-global.conf": 16506,
     "envs/tmux/tmux-settings-global.conf": 2412,
     "envs/tmux/tmux-settings-user.conf": 1511,
     "envs/tmux/tmux-user.conf": 567,

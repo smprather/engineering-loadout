@@ -1,5 +1,26 @@
 # Current Handoff
 
+## 2026-10-24 (3): pane TERM restored to xterm-256color
+
+**Cause.** The 2026-10-20 home-layer merge set
+`default-terminal "tmux-256color"`. Corp tools hard-check
+`TERM=xterm-256color` and reject the tmux-specific name.
+
+**Change.** `envs/tmux/tmux-global.conf` pins
+`default-terminal "xterm-256color"`; the existing
+`terminal-features 'xterm-256color:sync'` and `xterm*:extkeys` entries already
+match that name. `tests/install-env-tmux-nvim-layers` now asserts both the
+server option and the `$TERM` of a freshly created pane.
+
+**Capability note.** The outer client TERM is unchanged (xterm-256color), so
+tmux's own rendering is unaffected. Inside panes, xterm-256color is the richer
+terminfo entry for most capabilities (bce, ccc, initc, keypad, margins, XM,
+ech) but lacks tmux-256color's `Smulx` (undercurl), title capabilities
+(`tsl`/`fsl`/`TS`), `U8#1`, and differs in `khome`/`kend`/`kmous`/`flash`.
+Clipboard `Ms`, cursor `Ss`/`Se`, 256 colours and 65536 pairs remain. Existing
+panes keep tmux-256color until respawned; new panes pick up xterm-256color
+after a config reload.
+
 ## 2026-10-24 (2): tmux themes rewritten as tmux 3.8 themes
 
 **Cause.** tmux 3.8 added the server-scoped `theme` option and the ten

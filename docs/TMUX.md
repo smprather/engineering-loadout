@@ -130,9 +130,10 @@ so the managed root-wheel binds above are the ones in effect. They fix a
 first-wheel-up case the plugin gets wrong; the copy-mode binds and `j`/`Down`/`G`
 are unchanged. The plugin remains vendored only as historical payload.
 
-The managed layer also sets `default-terminal "tmux-256color"` and
-`allow-passthrough on`, and marker-guards the `terminal-overrides` /
-`terminal-features` array appends so a reload cannot grow them.
+The managed layer also sets `default-terminal "xterm-256color"` (corp tools
+require that exact pane TERM) and `allow-passthrough on`, and marker-guards the
+`terminal-overrides` / `terminal-features` array appends so a reload cannot
+grow them.
 
 ## Focus follows mouse (FFM)
 

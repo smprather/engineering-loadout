@@ -110,9 +110,10 @@ grep -qF 'bind -T copy-mode-vi j' "$tmux_dir/tmux-global.conf" \
 # terminal-independent theme.  loadout1 is the rollback.
 grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-global.conf" \
     || fail "managed tmux settings do not default to loadout2"
-# Settings merged from the operator's home layer (2026-10-20).
-grep -qxF 'set -s default-terminal "tmux-256color"' "$tmux_dir/tmux-global.conf" \
-    || fail "default-terminal is not the merged tmux-256color"
+# Settings merged from the operator's home layer (2026-10-20); the pane TERM
+# is xterm-256color because corp tools hard-check that exact value.
+grep -qxF 'set -s default-terminal "xterm-256color"' "$tmux_dir/tmux-global.conf" \
+    || fail "default-terminal is not xterm-256color"
 grep -qxF 'set -g allow-passthrough on' "$tmux_dir/tmux-global.conf" \
     || fail "allow-passthrough was not merged into the managed layer"
 grep -qF "set -as terminal-features 'xterm-256color:sync'" "$tmux_dir/tmux-global.conf" \
@@ -168,8 +169,18 @@ if [ -n "$tmux_bin" ]; then
     tm source-file "$tmux_dir/tmux-settings-global.conf"
     tm source-file "$tmux_dir/tmux-global.conf"
     got=$(tm show-options -s default-terminal)
-    [ "$got" = "default-terminal tmux-256color" ] \
+    [ "$got" = "default-terminal xterm-256color" ] \
         || fail "merged default-terminal did not take effect (got: $got)"
+    # The effective contract: a pane created after the config loads sees the
+    # exact TERM corp tools check, not just the server option.
+    tm new-window -d -n termcheck 'printf "%s" "$TERM" > "$HOME/term-check"'
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [ -s "$fresh_home/term-check" ] && break
+        sleep 0.1
+    done
+    got=$(cat "$fresh_home/term-check" 2>/dev/null || true)
+    [ "$got" = "xterm-256color" ] \
+        || fail "new pane TERM is not xterm-256color (got: ${got:-<empty>})"
     got=$(tm show-options -g allow-passthrough)
     [ "$got" = "allow-passthrough on" ] \
         || fail "merged allow-passthrough did not take effect (got: $got)"
