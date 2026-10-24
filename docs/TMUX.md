@@ -55,9 +55,12 @@ Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist
 ```
 
 The installer reloads the user manager (`systemctl --user daemon-reload`) after
-writing the drop-in; if no user manager is reachable it prints the command to
-run. A hand-wired timer needs the same drop-in. If the helper lives elsewhere,
-set `TMUX_PERSIST_PLUGIN_DIR` to that directory in a drop-in instead.
+writing the drop-in when the target HOME is the live user home; if no user
+manager is reachable it prints the command to run. Env-only `--dest-dir`
+staging writes the drop-in into the staged HOME but skips the reload (the live
+manager cannot see that tree). A hand-wired timer needs the same drop-in. If
+the helper lives elsewhere, set `TMUX_PERSIST_PLUGIN_DIR` to that directory in
+a drop-in instead.
 `loadout doctor` reports user units and drop-ins that still reference
 `~/.tmux/plugins`. Do not recreate `~/.tmux`: the retired layout is not
 supported.

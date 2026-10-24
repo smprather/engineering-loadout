@@ -500,8 +500,10 @@ under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. When the external
 `persist-autosave.sh` helper and its user unit already exist, `env-tmux` writes
 `~/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf`
 with `TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist` and reloads
-the user manager automatically (the previous `~/.tmux/plugins` default silently
-skips); `doctor` reports units that still reference the retired path. The
+the user manager automatically for the live home (staged `--dest-dir` HOMEs
+write the drop-in without reloading the operator's manager; the previous
+`~/.tmux/plugins` default silently skips); `doctor` reports units that still
+reference the retired path. The
 installer seeds
 `tmux-user.conf` only when absent, and `tmux-settings-user.conf` when absent or
 empty; non-empty user layers are preserved. It offers interactive migration

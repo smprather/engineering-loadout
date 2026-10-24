@@ -18,8 +18,10 @@ loss stayed invisible until a hard crash.
 (0644, rewritten only when the content differs). User drop-ins are preserved;
 the `50-` ordering lets a later user drop-in override it. The install runs
 `systemctl --user daemon-reload` itself (also when the content was already
-current); if no user manager is reachable it warns with the manual command. A
-unit without the helper (or a helper without the unit) gets no drop-in.
+current); if no user manager is reachable it warns with the manual command.
+Env-only `--dest-dir` staging writes the drop-in into the staged HOME but skips
+the reload: the live manager cannot see that tree. A unit without the helper
+(or a helper without the unit) gets no drop-in.
 `loadout doctor` now reports
 `ExecStart=`/`Environment=` lines in user units/drop-ins that still reference
 `~/.tmux/plugins`. `docs/TMUX.md` and `AGENTS.md` no longer claim tmux-persist
@@ -33,8 +35,9 @@ reached `main`; #12 is assigned to `@smprather`, the acting account.
 
 **Verified.** `tests/install-env-tmux-nvim-layers` passes
 (14 s, focused): no drop-in on a plain install, drop-in written when helper+unit
-exist, the stubbed `systemctl --user daemon-reload` is invoked and reported,
-user drop-in preserved, unit-only home untouched, a stock-TPM home with no XDG
+exist, the stubbed `systemctl --user daemon-reload` is invoked and reported, a
+staged `--dest-dir` HOME writes the drop-in without calling the stub, user
+drop-in preserved, unit-only home untouched, a stock-TPM home with no XDG
 plugin tree stays quiet, and doctor names the stale line and the XDG path.
 Live doctor on this host is warning-free because its drop-in is correct.
 Live unit from the pre-existing manual drop-in: `systemctl --user show` has

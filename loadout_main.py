@@ -5281,6 +5281,23 @@ _TMUX_AUTOSAVE_UNIT = "tmux-persist-autosave.service"
 _TMUX_AUTOSAVE_DROPIN = "50-loadout-plugin-path.conf"
 
 
+def _systemd_manager_owns_home(home):
+    """True when `home` is the live user manager's home, not a staged tree.
+
+    env-only `--dest-dir` installs stage a whole HOME under a temporary root;
+    the operator's live manager cannot see that drop-in, so reloading it there
+    would be a real side effect with no matching unit.
+    """
+    if _INSTALL_PATHS is None:
+        return True
+    if getattr(_INSTALL_PATHS, "staging", False):
+        return False
+    try:
+        return os.path.realpath(home) == os.path.realpath(_INSTALL_PATHS.user_home)
+    except OSError:
+        return False
+
+
 def _reload_systemd_user_manager():
     """Apply a user-unit drop-in without making the operator run systemctl."""
     systemctl = shutil.which("systemctl")
@@ -5321,6 +5338,7 @@ def _seed_tmux_autosave_plugin_path(home, tmux_config):
     unit = os.path.join(home, ".config", "systemd", "user", _TMUX_AUTOSAVE_UNIT)
     if not (os.path.isfile(helper) and os.path.isfile(unit)):
         return
+    reload_manager = _systemd_manager_owns_home(home)
     plugin_dir = os.path.join(tmux_config, "plugins", "tmux-persist")
     try:
         relative = os.path.relpath(plugin_dir, home)
@@ -5344,7 +5362,8 @@ def _seed_tmux_autosave_plugin_path(home, tmux_config):
             with open(drop_in, encoding="utf-8") as fh:
                 if fh.read() == content:
                     _grant_owner_write(drop_in)
-                    _reload_systemd_user_manager()
+                    if reload_manager:
+                        _reload_systemd_user_manager()
                     return
         require_writable_parent(drop_in, "tmux-persist autosave drop-in")
         ensure_dir(drop_in_dir, "tmux-persist autosave drop-in")
@@ -5358,7 +5377,8 @@ def _seed_tmux_autosave_plugin_path(home, tmux_config):
         warn(f"tmux-persist autosave drop-in not written: {exc}")
         return
     print(f"  tmux-persist autosave: TMUX_PERSIST_PLUGIN_DIR={display_name(plugin_dir)}")
-    _reload_systemd_user_manager()
+    if reload_manager:
+        _reload_systemd_user_manager()
 
 
 def _install_env_tmux(repo_dir, home):

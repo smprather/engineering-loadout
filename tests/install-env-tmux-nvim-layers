@@ -135,6 +135,25 @@ grep -qxF 'Environment=USER_KEEP=1' \
     "$autosave_unit_dir/tmux-persist-autosave.service.d/10-user.conf" \
     || fail "installer overwrote a user autosave drop-in"
 
+# env-only --dest-dir stages a whole HOME under a temporary root.  The drop-in
+# must land in that staged HOME, but the operator's live manager must not be
+# reloaded for a unit/tree it cannot see.
+autosave_staged="$TEST_ROOT/autosave-staged"
+mkdir -p "$autosave_staged/.local/bin" "$autosave_staged/.config/systemd/user"
+printf '#!/usr/bin/env bash\n' > "$autosave_staged/.local/bin/persist-autosave.sh"
+chmod +x "$autosave_staged/.local/bin/persist-autosave.sh"
+printf '%s\n' '[Service]' 'ExecStart=%h/.local/bin/persist-autosave.sh' \
+    > "$autosave_staged/.config/systemd/user/tmux-persist-autosave.service"
+SYSTEMCTL_LOG="$TEST_ROOT/systemctl-staged.log" HOME="$autosave_staged" \
+    "$REPO/loadout" install -y env-tmux --no-backup --dest-dir "$autosave_staged" \
+    >"$TEST_ROOT/autosave-staged.log" 2>&1
+staged_dropin="$autosave_staged/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf"
+[ -f "$staged_dropin" ] || fail "staged install did not write the autosave drop-in"
+[ ! -e "$TEST_ROOT/systemctl-staged.log" ] \
+    || fail "staged install reloaded the live systemd user manager"
+! grep -qF 'Reloaded systemd user manager' "$TEST_ROOT/autosave-staged.log" \
+    || fail "staged install reported a live systemd user manager reload"
+
 # Unit without the helper is not our install either: leave it untouched.
 autosave_nohelper="$TEST_ROOT/autosave-nohelper"
 mkdir -p "$autosave_nohelper/.config/systemd/user"
