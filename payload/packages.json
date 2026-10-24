@@ -1479,7 +1479,7 @@
       "libs": [
         "libevent_core-2.1.so.6"
       ],
-      "version": "3.7c",
+      "version": "3.8",
       "platforms": [
         "linux"
       ],
@@ -1493,7 +1493,7 @@
       "bins": [
         "tree-sitter"
       ],
-      "version": "0.27.0",
+      "version": "0.27.1",
       "platforms": [
         "linux"
       ],
@@ -1879,7 +1879,7 @@
       "depends": [
         "gui_libs"
       ],
-      "version": "411",
+      "version": "412",
       "platforms": [
         "linux"
       ],
@@ -3840,7 +3840,7 @@
       "kind": "font",
       "archive": "payload/fonts/CascadiaCode.zip.part-*",
       "install_to": "~/.local/share/fonts/CascadiaCode",
-      "version": "3.4.0",
+      "version": "412",
       "platforms": [
         "linux"
       ],
@@ -3967,7 +3967,7 @@
       "bins": [
         "lua-language-server"
       ],
-      "version": "3.19.1",
+      "version": "3.19.2",
       "platforms": [
         "linux"
       ],
@@ -4224,7 +4224,7 @@
       "depends": [
         "nodejs"
       ],
-      "version": "6.0.1",
+      "version": "6.0.2",
       "platforms": [
         "linux"
       ],

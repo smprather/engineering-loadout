@@ -2,13 +2,13 @@
 # Validated by tests/assurance-check (re-hashes [artifacts] against disk).
 schema = 1
 package = "nvim"
-version = "0.12.5"
-verified_utc = "2026-08-23T21:45:00Z"
+version = "0.12.6"
+verified_utc = "2026-10-24T15:59:58Z"
 status = "verified"  # binary+plugins provenance + content hashes + dynamic detonation all pass
 
 [source]
 upstream = "https://github.com/neovim/neovim"
-ref = "v0.12.5"
+ref = "v0.12.6"
 dep_pinning = "upstream cmake.deps/deps.txt pins sha256 for every bundled dep (luajit, luv, libuv, tree-sitter)"
 
 [build]
@@ -17,12 +17,12 @@ policy = "stable tag only (script rejects nightly/dev)"
 
 [scan]
 engine = "scan-for-malware (YARA-Forge + optional ClamAV)"
-yara_forge_tag = "20260524"
+yara_forge_tag = "20261018"
 result = "clean"
 
 [artifacts]
-"payload/el8.x86_64.glibc2p28/bin/nvim.bz2" = "sha256:2509635e1f01c0d0097d1da011aab5aecdeeac33190d5f95fe7efda65bc4e819"
-"payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" = "sha256:4d922888a295d4a50ee53a0ab0882cac81d839dce184d9e3f641af928317f026"
+"payload/el8.x86_64.glibc2p28/bin/nvim.bz2" = "sha256:69a3678ff34618d59ee4e81566407b508861a5f4ac825137d6b608a03aaa38b9"
+"payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2" = "sha256:c4dcd97c83c20e66409b0f1b98143912d27647a36128f4d4bba56aa7b87ec86a"
 
 [dynamic]
 profile = "assurance/profiles/nvim.toml"

@@ -28,6 +28,9 @@
 LOADOUT_PLATFORM="${LOADOUT_PLATFORM:-el8.x86_64.glibc2p28}"
 LOADOUT_BIN_DIR="${LOADOUT_BIN_DIR:-$REPO/payload/$LOADOUT_PLATFORM/bin}"
 LOADOUT_PATCHELF="${LOADOUT_PATCHELF:-$HOME/.local/bin/patchelf}"
+# In a build container HOME is /root and the repo's patchelf is not there;
+# the EL8 image ships it at /usr/bin/patchelf.
+[ -x "$LOADOUT_PATCHELF" ] || LOADOUT_PATCHELF="$(command -v patchelf 2>/dev/null || true)"
 
 loadout_require_tag() {
     _lt_tag=$1
@@ -70,7 +73,10 @@ loadout_package_bin() {
     # shellcheck disable=SC2016  # $ORIGIN is an ld.so token, not a shell var
     _lp_rpath=${3:-'$ORIGIN/../lib64:$ORIGIN/../lib'}
     [ -f "$_lp_src" ] || { echo "loadout_package_bin: no such binary: $_lp_src" >&2; exit 1; }
-    [ -x "$LOADOUT_PATCHELF" ] || { echo "missing patchelf at $LOADOUT_PATCHELF" >&2; exit 1; }
+    [ -x "$LOADOUT_PATCHELF" ] || {
+        echo "missing patchelf (looked at $HOME/.local/bin and PATH)" >&2
+        exit 1
+    }
     _lp_work=$(mktemp "${TMPDIR:-/tmp}/loadout-pkg-${_lp_stem}.XXXXXX")
     cp "$_lp_src" "$_lp_work"
     strip "$_lp_work"

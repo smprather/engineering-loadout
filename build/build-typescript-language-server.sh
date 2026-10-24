@@ -297,6 +297,22 @@ tar cjf "$RUNTIME_DIR/typescript-language-server.tar.bz2" -C "$STAGE" bin lib 2>
 chmod 644 "$RUNTIME_DIR/typescript-language-server.tar.bz2"
 echo "  staged: $RUNTIME_DIR/typescript-language-server.tar.bz2 ($(du -h "$RUNTIME_DIR/typescript-language-server.tar.bz2" | cut -f1))"
 
+# The version stamped in the registry must be the one in the archive; the
+# script used to package a new tarball and leave packages.json behind.
+"$PY" - "$REPO/payload/packages.json" "$TAG" <<'PYEOF'
+import json
+import sys
+
+path, version = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as fh:
+    data = json.load(fh)
+data["packages"]["typescript-language-server"]["version"] = version
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+print("  packages.json: typescript-language-server version -> " + version)
+PYEOF
+
 echo ""
 echo "Done."
 echo ""

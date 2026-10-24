@@ -312,7 +312,7 @@ OpenSSH for those.
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
 | fresh | bin | 0.5.4 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
-| nvim | bin | 0.12.5 | Hyperextensible Vim-based text editor |
+| nvim | bin | 0.12.6 | Hyperextensible Vim-based text editor |
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
 | procs | bin | 0.14.12 | ps replacement with colors and process tree |
@@ -333,8 +333,8 @@ OpenSSH for those.
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
 | tkdiff | bin | 6.0 | Tcl/Tk visual diff and merge tool |
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
-| tmux | bin | 3.7c | Terminal multiplexer with session management |
-| tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
+| tmux | bin | 3.8 | Terminal multiplexer with session management |
+| tree-sitter | bin | 0.27.1 | Incremental parser generator and query tool |
 | ty | bin | 0.0.91 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
 | uv | bin | 0.13.5 | Extremely fast Python package and project manager |
@@ -345,7 +345,7 @@ OpenSSH for those.
 | gui_libs | lib-bundle |  | Qt5/GTK3/X11/Wayland shared library bundle (for headless compute farm GUI forwarding) |
 | xsel | bin | 1.2.1 | X11 clipboard command-line access tool |
 | xclip | bin | 0.13 | X11 clipboard command-line access tool — pipe stdin to a selection, stdout from it; member of @gui-suite (NEEDs the gui_libs Xmu/X11 stack) |
-| xterm | bin | 411 | X11 terminal emulator with Unicode and color |
+| xterm | bin | 412 | X11 terminal emulator with Unicode and color |
 | urxvt | bin | 9.31 | rxvt-unicode — X11 terminal with Unicode, Xft, and daemon mode (perl extensions disabled) |
 | wezterm | bin | 20260618_095146_c10636f3 | WezTerm terminal emulator — shanghai bundle from system install; sample app for bundled Mesa 3D runtime |
 | st | bin | 0.9.3 | suckless st — minimal X11 terminal with undercurl patch (UNDERCURL_CURLY) |
@@ -371,7 +371,7 @@ OpenSSH for those.
 | tclint | python-tool | 0.9.0 | tclint — modern dev tools for Tcl: `tclint` linter, `tclfmt` formatter, and `tclsp` language server (LSP for nvim/helix). Pure-Python wheel; zero-ver project (0ver.org). Covers .tcl and EDA constraint dialects (.sdc/.xdc/.upf). Drives envs/nvim/lsp/tclsp.lua and envs/helix/languages.toml |
 | mdformat | python-tool | 1.0.0 | mdformat — opinionated CommonMark Markdown formatter (pure-Python). Drives conform.nvim for the `markdown` filetype in envs/nvim; `--wrap keep` is passed so hand-wrapped prose is never reflowed and code blocks are left untouched. |
 | tk | bin | 9.0.3 | Tk GUI toolkit — wish interpreter and embedded Tk runtime |
-| nodejs | bin | 26.11.1 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
+| nodejs | bin | 26.12.1 | Node.js LTS JavaScript runtime with npm/npx (for LSP servers, JS tooling) |
 | jupyterlab | python-tool | 4.6.4 | Web-based interactive development environment for notebooks, code, and data |
 | time-plot | python-tool | v2026.9.15 | Plot arbitrary data vs. zero-based time with plugins for custom data file parsers |
 | text-serdes | python-tool | 361bbf0 | text-serdes — short-lived encrypted text transport for copy/paste workflows (enc/dec) |
@@ -398,10 +398,10 @@ OpenSSH for those.
 | iverilog | bin | 13.0 | Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design |
 | openroad | bin | 26Q3 | OpenROAD — RTL-to-GDS place & route: floorplanning, placement, clock-tree synthesis, global/detailed routing and parasitic extraction, driven from Tcl or Python. Ships `sta` (standalone OpenSTA timing) alongside. Completes the open flow already here: yosys synthesises → openroad places & routes → klayout views the layout |
 | openvaf | bin | 23.5.0 | OpenVAF — Verilog-A compiler: compiles Verilog-A compact model files to OSDI shared objects for circuit simulators (ngspice, Melange). GPL-3.0, Rust + statically-linked LLVM (no runtime LLVM dep). Member of @eda |
-| lua-language-server | bin | 3.19.1 | Lua language server (LSP) — useful for nvim config and Lua tooling |
+| lua-language-server | bin | 3.19.2 | Lua language server (LSP) — useful for nvim config and Lua tooling |
 | markdown-oxide | bin | 0.25.12 | PKM markdown language server — wikilinks, backlinks, daily notes and unresolved-link creation over a plain directory of markdown. Obsidian-vault compatible (reads a .obsidian root), so it indexes a vault a user maintains with Obsidian installed separately; Obsidian itself is not redistributable and is not bundled. Drives envs/nvim/lsp/markdown_oxide.lua. |
 | pyright | bin | 1.1.411 | Python language server (LSP) — type-checking, go-to-def, completions; upstream npm package on loadout's bundled Node.js (no PyPI wrapper, no runtime downloads) |
-| typescript-language-server | bin | 6.0.1 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |
+| typescript-language-server | bin | 6.0.2 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |
 | taplo | bin | 0.10.0 | TOML toolkit — linter, formatter and language server in one binary. Ships an offline JSON Schema catalog (49 SchemaStore schemas: Cargo.toml, pyproject.toml, ruff, uv, rustfmt, starship …) so `taplo lint` validates keys on an air-gapped node instead of silently degrading to grammar-only. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml |
 | tmux-path-store | python-tool | 2026.8.26 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
 
