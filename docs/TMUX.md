@@ -130,8 +130,12 @@ so the managed root-wheel binds above are the ones in effect. They fix a
 first-wheel-up case the plugin gets wrong; the copy-mode binds and `j`/`Down`/`G`
 are unchanged. The plugin remains vendored only as historical payload.
 
-The managed layer also sets `default-terminal "xterm-256color"` (corp tools
-require that exact pane TERM) and `allow-passthrough on`, and marker-guards the
+The managed layer sets `default-terminal` from `LOADOUT_CFG_TMUX_TERM`
+(default `xterm-256color`, exported by the bash/tcsh config), falling back to
+`xterm-256color` when the server was started outside a loadout shell. A
+`client-attached` hook re-applies the attaching client's value, so a changed
+setting reaches new panes after the next attach; existing panes keep their
+TERM. The layer also sets `allow-passthrough on`, and marker-guards the
 `terminal-overrides` / `terminal-features` array appends so a reload cannot
 grow them.
 

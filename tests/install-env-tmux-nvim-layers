@@ -110,10 +110,12 @@ grep -qF 'bind -T copy-mode-vi j' "$tmux_dir/tmux-global.conf" \
 # terminal-independent theme.  loadout1 is the rollback.
 grep -qF 'set -g @theme "loadout2"' "$tmux_dir/tmux-settings-global.conf" \
     || fail "managed tmux settings do not default to loadout2"
-# Settings merged from the operator's home layer (2026-10-20); the pane TERM
-# is xterm-256color because corp tools hard-check that exact value.
-grep -qxF 'set -s default-terminal "xterm-256color"' "$tmux_dir/tmux-global.conf" \
-    || fail "default-terminal is not xterm-256color"
+# Pane TERM is driven by LOADOUT_CFG_TMUX_TERM (exported by the bash/tcsh
+# config), with an xterm-256color fallback for servers outside a loadout shell.
+grep -qF 'set -sF default-terminal' "$tmux_dir/tmux-global.conf" \
+    || fail "default-terminal is not format-driven"
+grep -qF 'LOADOUT_CFG_TMUX_TERM' "$tmux_dir/tmux-global.conf" \
+    || fail "default-terminal does not read LOADOUT_CFG_TMUX_TERM"
 grep -qxF 'set -g allow-passthrough on' "$tmux_dir/tmux-global.conf" \
     || fail "allow-passthrough was not merged into the managed layer"
 grep -qF "set -as terminal-features 'xterm-256color:sync'" "$tmux_dir/tmux-global.conf" \
@@ -181,6 +183,27 @@ if [ -n "$tmux_bin" ]; then
     got=$(cat "$fresh_home/term-check" 2>/dev/null || true)
     [ "$got" = "xterm-256color" ] \
         || fail "new pane TERM is not xterm-256color (got: ${got:-<empty>})"
+    # The knob: the server environment overrides the pane TERM, and removing it
+    # falls back to xterm-256color.  New panes follow the re-sourced option.
+    tm set-environment -g LOADOUT_CFG_TMUX_TERM tmux-256color
+    tm source-file "$tmux_dir/tmux-global.conf"
+    got=$(tm show-options -s default-terminal)
+    [ "$got" = "default-terminal tmux-256color" ] \
+        || fail "LOADOUT_CFG_TMUX_TERM did not drive default-terminal (got: $got)"
+    rm -f "$fresh_home/term-check"
+    tm new-window -d -n termcheck2 'printf "%s" "$TERM" > "$HOME/term-check"'
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [ -s "$fresh_home/term-check" ] && break
+        sleep 0.1
+    done
+    got=$(cat "$fresh_home/term-check" 2>/dev/null || true)
+    [ "$got" = "tmux-256color" ] \
+        || fail "overridden pane TERM did not take effect (got: ${got:-<empty>})"
+    tm set-environment -gu LOADOUT_CFG_TMUX_TERM
+    tm source-file "$tmux_dir/tmux-global.conf"
+    got=$(tm show-options -s default-terminal)
+    [ "$got" = "default-terminal xterm-256color" ] \
+        || fail "unset LOADOUT_CFG_TMUX_TERM did not fall back (got: $got)"
     got=$(tm show-options -g allow-passthrough)
     [ "$got" = "allow-passthrough on" ] \
         || fail "merged allow-passthrough did not take effect (got: $got)"

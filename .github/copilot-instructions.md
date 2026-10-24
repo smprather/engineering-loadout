@@ -502,6 +502,10 @@ empty; non-empty user layers are preserved. It offers interactive migration
 from `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
 migrations need a manual move of its contents into `tmux-user.conf`.
 
+Pane TERM is `LOADOUT_CFG_TMUX_TERM` (default `xterm-256color`; corp tools
+hard-check it), expanded by `tmux-global.conf` with an xterm fallback and
+re-applied from the attaching client on attach.
+
 Themes are tmux 3.8 themes. `themes/tmux-theme-loadout2.conf` sets
 server `theme dark` and fills the ten `dark-theme-*` palette slots with literal
 hexes; styles use the theme colour names, with literal hex only for colours the

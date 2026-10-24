@@ -11,6 +11,10 @@ export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"
 export LOADOUT_CFG_ATTACH_TO_TMUX="0"
 export LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS="0"
+# Pane TERM inside tmux, read by the tmux config through the server
+# environment. Default xterm-256color because corp tools hard-check it; switch
+# to tmux-256color once they accept it. Only newly created panes are affected.
+export LOADOUT_CFG_TMUX_TERM="xterm-256color"
 export LOADOUT_CFG_ENABLE_TMUX_PATH_STORE="1"
 export LOADOUT_CFG_PROMPT_INCLUDE_HOST="0"
 export LOADOUT_CFG_PROMPT_COLOR_NORMAL="$PROMPT_YELLOW"

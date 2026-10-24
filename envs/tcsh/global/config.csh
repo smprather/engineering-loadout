@@ -81,6 +81,8 @@ if ( ! $?LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT ) setenv LOADOUT_CFG_STARSHIP
 # ---- tmux --------------------------------------------------------------------
 if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX )      setenv LOADOUT_CFG_ATTACH_TO_TMUX 0
 if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS ) setenv LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS 0
+# Pane TERM inside tmux; mirrors the bash variable.
+if ( ! $?LOADOUT_CFG_TMUX_TERM )          setenv LOADOUT_CFG_TMUX_TERM "xterm-256color"
 
 # ---- ssh-agent -----------------------------------------------------------------
 # Fixed-socket ssh-agent (~/.ssh/loadout-agent.sock), started on demand when no

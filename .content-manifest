@@ -2548,6 +2548,7 @@ sha256  8ff910bdd1edd4771fee0e2f876d7cd2a089c4f604ae012dbc36655df499c017  payloa
 sha256  9012bc61131d61fe9f158be644dca4c33378f00527293e26594d17b53f307d18  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/tablegen/locals.scm
 sha256  9012bc61131d61fe9f158be644dca4c33378f00527293e26594d17b53f307d18  payload/treesitter/vendor/nvim-treesitter/runtime/queries/tablegen/locals.scm
 sha256  901e04e1ec1336907c3f0b00e14dc6071de250466f5c7064ff322589eff693c2  payload/treesitter/vendor/nvim-treesitter/.gitattributes
+sha256  901f38e19395ee56bf35af89e82bfececc9f4eeaf732e2cff9cac97e9b0a6376  payload/installed-sizes.json
 sha256  90289ffa53ef3b5fbbb153789abd49a386a53a14ec52efa8aac0e976daa4c20a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/uxntal.lua
 sha256  90483f7924cddb2aca4a05ba09f6f29c129d2d9c37ee5f4114b216b935ca8aac  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/tlaplus/injections.scm
 sha256  90483f7924cddb2aca4a05ba09f6f29c129d2d9c37ee5f4114b216b935ca8aac  payload/treesitter/vendor/nvim-treesitter/runtime/queries/tlaplus/injections.scm
@@ -3549,7 +3550,6 @@ sha256  cd5ae58b8dd9682c965c6a6463dfce3f94bd3faf91d7b07265b229f637bb2c30  payloa
 sha256  cd5ae58b8dd9682c965c6a6463dfce3f94bd3faf91d7b07265b229f637bb2c30  payload/treesitter/vendor/nvim-treesitter/runtime/queries/foam/folds.scm
 sha256  cd63c6d83656c9af2d8a92141303805d49466d21e5ceeadaf91b182c114a5abf  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/nqc/highlights.scm
 sha256  cd6afed4f0d413eb843a12da7abf8f9bcc631222a92d4831919e7177cfc05702  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/terraform/highlights.scm
-sha256  cd765120ddd4d8fc928a52b21039faec0bc4f3b835794cb7843a869784c01037  payload/installed-sizes.json
 sha256  cd8299a553e27cfe2bd88737a6b0d59f69043cc19b01b17a8fe62d63055cb427  payload/python-loaded/wheels/python_ldap-3.4.8-cp315-cp315-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 sha256  cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be  payload/python-loaded/wheels/threadpoolctl-3.7.0-py3-none-any.whl
 sha256  cdadaef6c336ca6d75e53be80d1689f6b1d65182c2d51fc55226acded40ccc5c  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/bash/injections.scm
