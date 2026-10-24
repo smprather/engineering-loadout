@@ -22,8 +22,10 @@ did not read the loadout design.
   names; its five settings now use theme names, preserving the ANSI rollback.
 
 `tmux-settings-global.conf`, `docs/TMUX.md`, and `AGENTS.md` document the
-mode and the override path (`set -s theme ...` in `tmux-user.conf`, sourced
-after the theme) and update the bundled-version note to 3.8.
+mode: loadout2 supports `dark` only (no `light-theme-*` slots; `detect`,
+`light`, and `terminal` would leave the design while the literal fills stay
+dark), while loadout1 is safe under any mode because both palettes are ANSI
+names. The bundled-version note is updated to 3.8.
 `tests/install-env-tmux-nvim-layers` accepts a palette-backed theme name in
 the file-level pin list and asserts the live server's mode, palette,
 `status-style`, pane fills, and the loadout1 mode.

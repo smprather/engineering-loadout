@@ -65,9 +65,12 @@ colour names.
 The palette also feeds tmux's built-in UI that this config does not pin
 (tree selection, fill character, display-panes border, copy-mode defaults),
 so those components stay inside the same design. Because the theme file runs
-after the settings layers, overriding the mode belongs in `tmux-user.conf`
-(sourced after the theme), e.g. `set -s theme detect`. Themes require tmux
-3.8; the bundled tmux is 3.8.
+after the settings layers, its `theme` choice is part of the theme. loadout2
+supports `dark` only: it defines no `light-theme-*` slots and its pane fills
+are literal, so overriding it to `detect`, `light`, or `terminal` in
+`tmux-user.conf` is unsupported -- the palette would leave the design while
+the fills stayed dark. loadout1 is safe under any mode because both of its
+palettes are ANSI names. Themes require tmux 3.8; the bundled tmux is 3.8.
 
 ### Permissions
 

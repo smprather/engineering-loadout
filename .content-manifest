@@ -835,7 +835,6 @@ sha256  2f9261e1cca57131801b377c455eb7f9d715d8528c32dd10bb1702bb59415c48  payloa
 sha256  2f99120fca78f536e07b114d3b60333bc4bb2a0969053b1250869bcdc1b5351b  payload/el8.x86_64.glibc2p28/wheels/rich_click-1.9.7-py3-none-any.whl
 sha256  2fa06ae08a70a7f652fb2c4cef9c681d962152e155f3ea99ee02771fc298c7a7  payload/el8.x86_64.glibc2p28/lib64/libQt5PrintSupport.so.5.bz2
 sha256  2fcbf86203809df38da0197b3eee8b926d8305ee4d443ab88b12a8a72ea3ea0c  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/usd.so.bz2
-sha256  2fd984fb528d96655fda9e55066139cc956fa61e0c66ac155b6621c98ac4ba03  payload/installed-sizes.json
 sha256  2fe4218e1d72611564befd4e70199fc77ecd3a6d1e5eb3f0318fda51bc021fcd  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/embedded_template/injections.scm
 sha256  2fe4218e1d72611564befd4e70199fc77ecd3a6d1e5eb3f0318fda51bc021fcd  payload/treesitter/vendor/nvim-treesitter/runtime/queries/embedded_template/injections.scm
 sha256  3018b5a10bb639e59330f800a6da9134636feaa8b50f41efa43712977300390e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/blade/indents.scm
@@ -2132,6 +2131,7 @@ sha256  79427b4a99d5ded4ccb65f042ce2b0e553213721c62b76acc642f423dd9129c8  payloa
 sha256  7946e857230de4899bc8eed17744fe0672c404bfdcc53118dfdedd7bb509af92  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/json/folds.scm
 sha256  7946e857230de4899bc8eed17744fe0672c404bfdcc53118dfdedd7bb509af92  payload/treesitter/vendor/nvim-treesitter/runtime/queries/json/folds.scm
 sha256  794a943daced39300879e4e47bd94525280685f42dbb5a998d336cfff151d74f  payload/el8.x86_64.glibc2p28/wheels/pyopengl-3.1.10-py3-none-any.whl
+sha256  7957e28f211cc43549ac5a4f10c629981542fe250c53871c82cb033f732cfeec  payload/installed-sizes.json
 sha256  79abc43d0f2bf936a133b7ee476fe3b4778480d798da815a63009a46cffb96ee  payload/treesitter/vendor/nvim-treesitter/tests/indent/meson/ternary.meson
 sha256  79b011004988bd1f496afd3e6e9b25914ac67fd3389b15ae52b8a1e68b6a96e5  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/nickel.so.bz2
 sha256  79b4198d0646e657a4cc881a2c50019e96e49cbe45dd028dc71b522d8eb7ffc8  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/wing/class.w
