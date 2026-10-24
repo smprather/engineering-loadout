@@ -91,9 +91,8 @@ sha256  d749bb5adc3cd1128a276c828994df28f572a87150c48c7ef395449e3b8cc00f  payloa
 sha256  0905c124d68839a4438cf831295b0a31b2ef11d45600a4f0e022e7ea13026fb3  payload/el8.x86_64.glibc2p28/bin/keyb.bz2
 sha256  c2a3b9e5902e7a4f6a1495f16b291a02480bd3a84a0328ad04ea60717a5ba804  payload/el8.x86_64.glibc2p28/bin/lazygit.bz2
 sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  payload/el8.x86_64.glibc2p28/bin/ld.lld.bz2
-sha256  d4f1c0de33ea305fa9eea310ff62ded4f25293279df86f936c740317293077ab  payload/el8.x86_64.glibc2p28/bin/less.bz2
-sha256  ec144bf5b792e8e89af1edb31ae429096035f1abd2d5e4e72f613e480902dd69  payload/el8.x86_64.glibc2p28/bin/lessecho.bz2
-sha256  28740946a0389dc5395180aecdc808d73729b30d206e2448d1676c9c301f6883  payload/el8.x86_64.glibc2p28/bin/lesskey.bz2
+sha256  b8351832eb449b07852a3a1cf498652b80c5ca2437ddf8d9e1fd2462ac7a58f8  payload/el8.x86_64.glibc2p28/bin/less.bz2
+sha256  8a7d138b678894dec4da1bdd49bd2c0f9ad34bbe7129bf2ae2f3e818e8e8052d  payload/el8.x86_64.glibc2p28/bin/lessecho.bz2
 sha256  017fa921c470f6a616753ef179aa343811e47997d7997b81416bd8bde3bcfbb8  payload/el8.x86_64.glibc2p28/bin/liberty-filter.bz2
 sha256  7c7e32b41dfa78894edea565ff33dabbcd425dddf2dcbda16441564cc10cb2b5  payload/el8.x86_64.glibc2p28/bin/link.bz2
 sha256  30e6e28149d99d6fc2fe00a24d314d0145699fcc1f5d75cd00f30c67d60000a7  payload/el8.x86_64.glibc2p28/bin/lld.bz2

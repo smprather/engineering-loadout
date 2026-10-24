@@ -1010,11 +1010,9 @@
       "kind": "bin",
       "bins": [
         "less",
-        "lessecho",
-        "lesskey"
+        "lessecho"
       ],
-      "version": "704",
-      "pin_reason": "upstream 710 deleted the lesskey binary; bumping needs a recipe decision (drop lesskey from bins/smoke/packaging)",
+      "version": "710",
       "version_url": "https://www.greenwoodsoftware.com/less/download.html",
       "version_pattern": "RECOMMENDED</strong>\\s*version\\s*([0-9]+)",
       "platforms": [

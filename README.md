@@ -303,7 +303,7 @@ OpenSSH for those.
 | jq | bin | 1.8.2 | Lightweight JSON processor and formatter |
 | just | bin | 1.58.0 | Command runner, ergonomic Makefile alternative |
 | lazygit | bin | 0.66.0 | TUI git client for staging, committing, rebasing |
-| less | bin | 704 | less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling) |
+| less | bin | 710 | less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling) |
 | llvm-bolt | bin | 23.0git | LLVM BOLT binary optimizer + perf2bolt profile converter + merge-fdata |
 | micro | bin | 2.0.15 | Beginner-friendly terminal text editor |
 | miller | bin | 6.22.0 | CSV/TSV/JSON/NDJSON data processor (mlr) |

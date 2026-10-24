@@ -1076,20 +1076,22 @@ Installs `ngspice` to `<prefix>/bin/` and scripts to `<prefix>/share/ngspice/scr
 
 ---
 
-## less 704
+## less 710
+
+Upstream removed the standalone `lesskey` helper in 710; this package ships
+`less` + `lessecho` only.
 
 **Tool:** less -- the standard terminal file pager
-**Version:** 704 (upstream RECOMMENDED release)
-**Source:** http://www.greenwoodsoftware.com/less/less-704.tar.gz
-**Build script:** `build/build-less.sh --tag 704`
+**Version:** 710 (upstream RECOMMENDED release)
+**Source:** http://www.greenwoodsoftware.com/less/less-710.tar.gz
+**Build script:** `build/build-less.sh --tag 710`
 
-### Why 704 and not v708
+### Why 710 and not a git tag
 
-upstream's own download page says "Download RECOMMENDED version 704".
-`gwsw/less` publishes ZERO GitHub releases -- the v705-v708 git tags are
-DEVELOPMENT tags with no release tarball. This repo's stable-release policy
-forbids dev builds, so 704 is the only acceptable version until a new tarball
-appears on www.greenwoodsoftware.com.
+upstream's own download page says "Download RECOMMENDED version 710".
+`gwsw/less` publishes ZERO GitHub releases -- the git tags are DEVELOPMENT
+tags with no release tarball. This repo's stable-release policy forbids dev
+builds, so the RECOMMENDED tarball is the only acceptable source.
 
 ### Why POSIX regex and not PCRE2
 
@@ -1111,14 +1113,14 @@ dnf install -y gcc make ncurses-devel
 
 ```bash
 ./configure \
-    --prefix=/tmp/loadout-less-instdir-704 \
-    --libexecdir=/tmp/loadout-less-instdir-704/bin \
+    --prefix=/tmp/loadout-less-instdir-710 \
+    --libexecdir=/tmp/loadout-less-instdir-710/bin \
     --with-regex=posix
 ```
 
 `--libexecdir=$PREFIX/bin`: upstream installs `lessecho` to libexecdir and
-`less`/`lesskey` to bindir. Setting libexecdir=bindir puts all three in bin/
-so they can be packaged uniformly. The compiled-in `LIBEXECDIR` macro (used by
+`less` to bindir. Setting libexecdir=bindir puts both in bin/ so they can be
+packaged uniformly. The compiled-in `LIBEXECDIR` macro (used by
 `less` to find `lessecho` for glob expansion and `less-osc8-open` for OSC8
 hyperlink clicks) then points at the temp build prefix, which is dead once
 deployed. That is acceptable:
@@ -1126,15 +1128,15 @@ deployed. That is acceptable:
   var can override the compiled-in path if glob expansion is needed. When the
   dead path fails, `filename.c` falls back gracefully (returns the original
   filename) -- it does not crash.
-- `less-osc8-open` is a shell script not shipped (scope: 3 binaries). OSC8
+- `less-osc8-open` is a shell script not shipped (scope: 2 binaries). OSC8
   hyperlink clicking is opt-in via `LESS_OSC8_OPEN_ANY` env var; without it,
   links simply are not clickable -- not a crash, not a regression versus EL8's
   less 530 which predates OSC8 support.
 
-### Packaging (strip -> patchelf -> bzip2, all three binaries)
+### Packaging (strip -> patchelf -> bzip2, both binaries)
 
 ```bash
-for b in less lessecho lesskey; do
+for b in less lessecho; do
     cp $INST_DIR/bin/$b /tmp/${b}_work
     strip /tmp/${b}_work
     ~/.local/bin/patchelf --set-rpath '$ORIGIN/../lib64' /tmp/${b}_work
@@ -1153,7 +1155,7 @@ RPATH `$ORIGIN/../lib64` (repo standard for `bin/` binaries).
 | `libtinfo.so.6` | Bundled (lib64/) | RPATH `$ORIGIN/../lib64` picks it up |
 | `libc.so.6` | EL8 glibc | Never bundle (per policy) |
 
-All three binaries (`less`, `lessecho`, `lesskey`) have the same NEEDED closure:
+Both binaries (`less`, `lessecho`) have the same NEEDED closure:
 `libtinfo.so.6`, `libc.so.6`. No `depends` on `gui_libs` or any other package.
 
 ### glibc
@@ -1164,8 +1166,8 @@ Max symbol: `GLIBC_2.14`. Compatible with all EL8 machines.
 
 The build script verifies by actually paging: pipes multi-line input through
 the built `less` with `-F` (quit-if-one-screen, exits without a tty) and
-asserts every input line comes back out. Also runs `lesskey -V` and `lessecho`
-with real arguments. A `--version` probe proves nothing -- a mis-built less can
+asserts every input line comes back out. Also runs `lessecho` with real
+arguments. A `--version` probe proves nothing -- a mis-built less can
 print its banner and fail to page.
 
 ### Install
@@ -1174,8 +1176,8 @@ print its banner and fail to page.
 ./loadout install less
 ```
 
-Installs `less`, `lessecho`, and `lesskey` to `<prefix>/bin/`. No runtime
-archive; all three are self-contained binaries. Member of `@core-cli`.
+Installs `less` and `lessecho` to `<prefix>/bin/`. No runtime archive; both are
+self-contained binaries. Member of `@core-cli`.
 
 ---
 

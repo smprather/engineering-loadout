@@ -1723,9 +1723,9 @@ def smoke_runtime_layout(tmpdir, env):
         # Functional smoke: `less --version` proves nothing -- a mis-built less
         # can print its banner and fail to page. Pipe multi-line input through
         # `less -F` (quit-if-one-screen, so it exits without a tty) and assert
-        # every input line comes back out. Also exercise `lesskey -V` and
-        # `lessecho` with real arguments -- same reasoning as the miller CSV
-        # round-trip and gtkwave FST round-trip probes.
+        # every input line comes back out. Also exercise `lessecho` with real
+        # arguments -- same reasoning as the miller CSV round-trip and gtkwave
+        # FST round-trip probes. (`lesskey` was removed upstream in 710.)
         less_bin = os.path.join(bin_dir, "less")
         smoke_lines = ["alpha", "bravo", "charlie", "delta", "echo"]
         smoke_input = "\n".join(smoke_lines) + "\n"
@@ -1750,29 +1750,6 @@ def smoke_runtime_layout(tmpdir, env):
                 failures.append(("less", detail))
             else:
                 print("  OK   (page):         less  paged 5 lines, content matched")
-
-        # lesskey -V prints "lesskey  version 704" and exits 0.
-        if has_bin("lesskey"):
-            try:
-                proc = subprocess.run(
-                    [os.path.join(bin_dir, "lesskey"), "-V"],
-                    cwd=tmpdir,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    timeout=10,
-                )
-            except Exception as exc:
-                print(f"  FAIL (version):      lesskey  {exc}")
-                failures.append(("lesskey", str(exc)))
-            else:
-                out = proc.stdout.decode("utf-8", "replace")
-                if proc.returncode != 0 or "lesskey" not in out or "704" not in out:
-                    detail = output_excerpt(proc.stdout)
-                    print(f"  FAIL (version):      lesskey  {detail}")
-                    failures.append(("lesskey", detail))
-                else:
-                    print("  OK   (version):      lesskey")
 
         # lessecho: invoke with a real argument and assert output contains it.
         if has_bin("lessecho"):

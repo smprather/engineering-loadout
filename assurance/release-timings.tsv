@@ -1622,3 +1622,44 @@
 2026-10-24T13:11:07Z	secret scan	20.2	PASS	2026.10.7
 2026-10-24T13:11:56Z	payload consistency	69.2	PASS	2026.10.7
 2026-10-24T13:16:06Z	malware scan	318.6	PASS	2026.10.7
+2026-10-24T13:27:03Z	test:py_compile	0	PASS	mode=all
+2026-10-24T13:27:03Z	test:ruff check	0	PASS	mode=all
+2026-10-24T13:27:03Z	test:ruff format check	0	PASS	mode=all
+2026-10-24T13:27:03Z	test:unit-resolver	0	PASS	mode=all
+2026-10-24T13:27:03Z	test:doctor-system-newer	0	PASS	mode=all
+2026-10-24T13:27:03Z	test:registry-integrity	0	PASS	mode=all
+2026-10-24T13:27:04Z	test:search-groups	1	PASS	mode=all
+2026-10-24T13:27:04Z	test:tar-safety	0	PASS	mode=all
+2026-10-24T13:27:04Z	test:content-verify	0	PASS	mode=all
+2026-10-24T13:27:06Z	test:content-manifest in sync	2	PASS	mode=all
+2026-10-24T13:27:15Z	test:content-manifest matches export	9	PASS	mode=all
+2026-10-24T13:27:15Z	test:content-manifest shipped-set	0	PASS	mode=all
+2026-10-24T13:27:44Z	test:installed-sizes in sync	29	PASS	mode=all
+2026-10-24T13:27:44Z	test:parser-locks in sync	0	PASS	mode=all
+2026-10-24T13:27:53Z	test:st font list in sync	9	PASS	mode=all
+2026-10-24T13:27:53Z	test:README table in sync	0	PASS	mode=all
+2026-10-24T13:27:53Z	test:assurance-check	0	PASS	mode=all
+2026-10-24T13:27:53Z	test:env-shell-parity	0	PASS	mode=all
+2026-10-24T13:27:53Z	test:env-bash-profile-shim	0	PASS	mode=all
+2026-10-24T13:27:56Z	test:portable-python-ca	3	PASS	mode=all
+2026-10-24T13:27:56Z	test:shell-typeahead	0	PASS	mode=all
+2026-10-24T13:27:56Z	test:install-zsh-relocation	0	PASS	mode=all
+2026-10-24T13:27:56Z	test:python-tool-source-patches	0	PASS	mode=all
+2026-10-24T13:29:02Z	test:payload-interpreter-abi	66	PASS	mode=all
+2026-10-24T13:29:03Z	test:wheelhouse-closure	1	PASS	mode=all
+2026-10-24T13:29:03Z	test:python-suite	0	PASS	mode=all
+2026-10-24T13:29:03Z	test:release-timings	0	PASS	mode=all
+2026-10-24T13:29:05Z	test:env-tcsh-starship	2	PASS	mode=all
+2026-10-24T13:29:06Z	test:prompt-no-rc	1	PASS	mode=all
+2026-10-24T13:29:06Z	test:test-cleanup	0	PASS	mode=all
+2026-10-24T13:29:06Z	test:nvim-formatters-resolve	0	PASS	mode=all
+2026-10-24T13:29:07Z	test:dep-capture	1	PASS	mode=all
+2026-10-24T13:29:07Z	test:oom-guard-reap	0	PASS	mode=all
+2026-10-24T13:29:17Z	test:check-installer	10	PASS	mode=all
+2026-10-24T13:29:17Z	test:st-wrapper	0	PASS	mode=all
+2026-10-24T13:29:18Z	test:env-helix-config	1	PASS	mode=all
+2026-10-24T13:29:18Z	test:update-cadence	0	PASS	mode=all
+2026-10-24T13:29:18Z	test:release-tag-scheme	0	PASS	mode=all
+2026-10-24T13:29:18Z	test:security-pipeline	0	PASS	mode=all
+2026-10-24T13:29:18Z	test:check-versions-contract	0	PASS	mode=all
+2026-10-24T13:29:18Z	test:total	136	PASS	flags=--fast

@@ -4,7 +4,6 @@
 # Produces:
 #   payload/el8.x86_64.glibc2p28/bin/less.bz2
 #   payload/el8.x86_64.glibc2p28/bin/lessecho.bz2
-#   payload/el8.x86_64.glibc2p28/bin/lesskey.bz2
 #
 # WHY THIS EXISTS. EL8 ships less 530 from 2017 -- six years of upstream
 # development (search, filtering, key-binding improvements) never reached the
@@ -12,11 +11,12 @@
 # current pager without root.
 #
 # VERSION CHOICE, load-bearing:
-#   704  upstream's own download page says "Download RECOMMENDED version 704".
-#        gwsw/less publishes ZERO GitHub releases, so the v705-v708 git tags
-#        are DEVELOPMENT tags. This repo's stable-release policy forbids dev
-#        builds, so 704 is the only acceptable version until a new tarball
-#        appears on www.greenwoodsoftware.com.
+#   710  upstream's own download page says "Download RECOMMENDED version 710".
+#        gwsw/less publishes ZERO GitHub releases, so the git tags are
+#        DEVELOPMENT tags; only the RECOMMENDED tarball is acceptable.
+#        Upstream REMOVED the standalone `lesskey` helper in 710, so this
+#        package now ships `less` + `lessecho` only (less reads the source
+#        form of key bindings itself).
 #
 # REGEX BACKEND CHOICE, load-bearing:
 #   --with-regex=posix  PCRE2 would add libpcre2-8.so.0 to NEEDED, and that
@@ -32,7 +32,7 @@
 #   # patchelf at ~/.local/bin/patchelf (bundled in this repo)
 #
 # Usage (run from any directory):
-#   ./build/build-less.sh --tag 704
+#   ./build/build-less.sh --tag 710
 #
 # The install tree is removed after packaging (less has no runtime data files
 # and no downstream build needs its headers), unlike freetype whose devel tree
@@ -65,7 +65,7 @@ done
 
 if [ -z "$TAG" ]; then
     echo "ERROR: --tag is required. Specify a stable release, e.g.:" >&2
-    echo "  $0 --tag 704" >&2
+    echo "  $0 --tag 710" >&2
     echo "" >&2
     echo "Stable releases: http://www.greenwoodsoftware.com/less/download.html" >&2
     echo "" >&2
@@ -125,8 +125,8 @@ echo "==> Configuring ..."
 rm -rf "$INST_DIR"
 cd "$SRC_DIR"
 # --libexecdir=$INST_DIR/bin: upstream installs `lessecho` to libexecdir and
-# `less`/`lesskey` to bindir. Setting libexecdir=bindir puts all three in
-# bin/ so we can package them uniformly. The compiled-in LIBEXECDIR macro
+# `less` to bindir. Setting libexecdir=bindir puts both in bin/ so we can
+# package them uniformly. The compiled-in LIBEXECDIR macro
 # (used by `less` to find `lessecho` for glob expansion and `less-osc8-open`
 # for OSC8 hyperlink clicks) then points at this temp path, which is dead once
 # deployed. That is acceptable:
@@ -156,7 +156,7 @@ make -j"$(nproc 2>/dev/null || echo 2)" >"$WORK_DIR/make.log" 2>&1 || {
 }
 make install >"$WORK_DIR/install.log" 2>&1
 
-BINS="less lessecho lesskey"
+BINS="less lessecho"
 for b in $BINS; do
     [ -f "$INST_DIR/bin/$b" ] || {
         echo "ERROR: $b not produced in $INST_DIR/bin" >&2
@@ -171,9 +171,9 @@ echo "  built: $BINS"
 # A `--version` probe proves nothing -- a mis-built less can print its banner
 # and fail to page. Verify by actually paging: pipe multi-line input through
 # the built `less` with -F (quit-if-one-screen, so it exits without a tty) and
-# assert every input line comes back out. Also run `lesskey -V` and `lessecho`
-# with real arguments. This is the repo's house rule: a version probe is not a
-# smoke test.
+# assert every input line comes back out. Also run `lessecho` with real
+# arguments. This is the repo's house rule: a version probe is not a smoke
+# test.
 # ---------------------------------------------------------------------------
 echo "==> Functional stage-verify (paging, not --version) ..."
 SMOKE_INPUT="line one
@@ -194,12 +194,6 @@ LESSECHO_OUT=$("$INST_DIR/bin/lessecho" "hello world" 2>&1)
 case "$LESSECHO_OUT" in
     *hello*) echo "  lessecho: produced output containing 'hello'" ;;
     *) echo "ERROR: lessecho produced unexpected output: $LESSECHO_OUT" >&2; exit 1 ;;
-esac
-
-LESSKEY_OUT=$("$INST_DIR/bin/lesskey" -V 2>&1 || true)
-case "$LESSKEY_OUT" in
-    *lesskey*) echo "  lesskey -V: $LESSKEY_OUT" | head -1 ;;
-    *) echo "ERROR: lesskey -V produced unexpected output: $LESSKEY_OUT" >&2; exit 1 ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -289,6 +283,6 @@ echo ""
 echo "Next:"
 echo "  ./build/strip-all-elf-binaries"
 echo "  python3.15 build/gen-content-manifest"
-echo "  git add payload/el8.x86_64.glibc2p28/bin/{less,lessecho,lesskey}.bz2 \\"
+echo "  git add payload/el8.x86_64.glibc2p28/bin/{less,lessecho}.bz2 \\"
 echo "          .strip-manifest .content-manifest payload/packages.json \\"
 echo "          build/build-less.sh build/farm-versions tests/prebuilt-binaries"
