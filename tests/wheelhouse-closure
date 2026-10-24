@@ -36,6 +36,7 @@ import glob
 import os
 import re
 import sys
+import tempfile
 import zipfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -319,6 +320,23 @@ def audit_suite(shipped):
         ok(f"python-loaded: {len(pins)} pinned wheels match the lock, hashes and EL8 ABI")
 
 
+def materialized_wheel(path):
+    """(whole-wheel path, temp path or None) for a wheel or its `.part-NNN` set."""
+    if not path.endswith(".part-000"):
+        return path, None
+    out = tempfile.NamedTemporaryFile(prefix=".wheelhouse-", suffix=".whl", delete=False)
+    with out:
+        with open(path, "rb") as first:
+            out.write(first.read())
+        base = path[: -len("-000")]
+        index = 1
+        while os.path.exists(f"{base}-{index:03d}"):
+            with open(f"{base}-{index:03d}", "rb") as part:
+                out.write(part.read())
+            index += 1
+    return out.name, out.name
+
+
 def main():
     version = shipped_python_version()
     if not version:
@@ -333,11 +351,24 @@ def main():
         fail(f"no wheelhouse at {WHEELS_DIR}")
         return 1
 
-    # Index the wheelhouse: normalized name -> [(filename, path, meta)]
+    # Index the wheelhouse: normalized name -> [(filename, path, meta)].
+    # Chunked wheels are indexed by their logical name; metadata needs a
+    # seekable whole wheel, so the parts are rejoined to a temp file.
     index = {}
-    for path in sorted(glob.glob(os.path.join(WHEELS_DIR, "*.whl"))):
-        filename = os.path.basename(path)
-        meta = wheel_metadata(path)
+    paths = sorted(glob.glob(os.path.join(WHEELS_DIR, "*.whl"))) + sorted(
+        glob.glob(os.path.join(WHEELS_DIR, "*.whl.part-000"))
+    )
+    for path in paths:
+        if path.endswith(".part-000"):
+            filename = os.path.basename(path)[: -len(".part-000")]
+        else:
+            filename = os.path.basename(path)
+        whole, temp = materialized_wheel(path)
+        try:
+            meta = wheel_metadata(whole)
+        finally:
+            if temp:
+                os.unlink(temp)
         if meta is None:
             continue
         name, _ver, _req = meta
