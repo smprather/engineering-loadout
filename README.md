@@ -390,7 +390,7 @@ OpenSSH for those.
 | espresso | bin | 1.1.1 | Berkeley espresso two-level logic minimizer -- reduce a boolean function (PLA truth table) to a minimal sum-of-products |
 | rust-analyzer | bin | 410 | Rust language server (LSP) — diagnostics, go-to-def, completions |
 | gopls | bin | 0.23.0 | Go language server (LSP) — diagnostics, go-to-def, completions |
-| yosys | bin | 0.69 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
+| yosys | bin | 0.70 | Yosys — open-source RTL synthesis (Verilog/SystemVerilog → netlist; write_json/write_verilog/write_blif, ABC mapping bundled as yosys-abc). Complements the bundled simulators: iverilog simulates, verilator lints and generates C++ models, yosys synthesises |
 | sby | bin | b1a1e98 | SymbiYosys — front-end for Yosys-based formal hardware verification (bmc/prove/cover via yosys-smtbmc + Z3). Pure Python; commit-pinned (upstream has no releases). Member of @eda |
 | z3 | bin | 5.1.0.0 | Z3 — SMT solver from Microsoft Research, bundled as sby's prove/bmc engine (also usable standalone). From the official manylinux wheel; runs on stock EL8. Member of @eda |
 | bitwuzla | bin | 0.9.1 | Bitwuzla — SMT solver for bit-vectors, floating-point arithmetic, arrays and uninterpreted functions (SMT2/BTOR2 input, model generation, unsat cores). EL8 source build (static GMP 6.3 + MPFR 4.2.2); sby accepts it as an `smtbmc bitwuzla` engine. Member of @eda |

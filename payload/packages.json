@@ -3999,10 +3999,13 @@
         "libedit.so.0"
       ],
       "archive": "payload/PLATFORM/runtime/yosys.tar.bz2",
-      "version": "0.69",
+      "version": "0.70",
       "version_url": "https://github.com/YosysHQ/yosys/releases",
       "platforms": [
         "linux"
+      ],
+      "depends": [
+        "portable-python"
       ],
       "tags": [
         "eda",
