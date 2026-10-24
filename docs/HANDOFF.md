@@ -27,8 +27,9 @@ replaces continuum's no-client periodic autosave. The helper is external and
 not vendored; its own preferred fix (resolve
 `TMUX_PLUGIN_MANAGER_PATH` from the live server) belongs upstream.
 
-**Closed.** The commit carries `Fixes #12`, so GitHub closes the issue when it
-reaches `main`; `.github/copilot-instructions.md` records that convention.
+**Closed.** The commit carried `Fixes #12`, so GitHub closed the issue when it
+reached `main`; #12 is assigned to `@smprather`, the acting account.
+`.github/copilot-instructions.md` records the assign-then-close convention.
 
 **Verified.** `tests/install-env-tmux-nvim-layers` passes
 (14 s, focused): no drop-in on a plain install, drop-in written when helper+unit

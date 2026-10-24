@@ -573,12 +573,14 @@ plugins.
 
 ### Closing GitHub Issues
 
-When a change resolves a tracked GitHub issue, close it as part of completion:
-include `Fixes #<N>` (or `Closes #<N>`) in the commit message. GitHub closes
-the issue automatically when that commit reaches the default branch, so a
-separate manual close is only needed when the fix was already pushed without
-the keyword (`gh issue close <N> --comment ...`). Do not leave a resolved issue
-open or ask the user to close it.
+When work starts on a tracked GitHub issue, assign it to the acting account
+(`gh issue edit <N> --add-assignee @me`) if it is unassigned. When a change
+resolves the issue, close it as part of completion: include `Fixes #<N>` (or
+`Closes #<N>`) in the commit message. GitHub closes the issue automatically
+when that commit reaches the default branch, so a separate manual close is only
+needed when the fix was already pushed without the keyword (`gh issue close <N>
+--comment ...`). Do not leave a resolved issue open, unassigned, or ask the
+user to close it.
 
 ### Content manifest covers the SHIPPED set
 
