@@ -147,9 +147,9 @@ set -g focus-follows-mouse off
 
 It needs mouse mode, which `tmux-global.conf` already turns on.
 
-On a fresh install, loadout seeds `tmux-user.conf` and
-`tmux-settings-user.conf` only when absent. If
-the older `~/.tmux.local.conf` exists, an interactive install offers to move
-it; the legacy file is no longer loaded, so unattended or declined migrations
-need a manual move into `tmux-user.conf`. When both files exist, neither is changed and
-`tmux-user.conf` wins.
+On a fresh install, loadout seeds `tmux-user.conf` only when absent, and
+`tmux-settings-user.conf` when absent or empty; a non-empty settings layer is
+preserved. If the older `~/.tmux.local.conf` exists, an interactive install
+offers to move it; the legacy file is no longer loaded, so unattended or
+declined migrations need a manual move into `tmux-user.conf`. When both files
+exist, neither is changed and `tmux-user.conf` wins.

@@ -496,21 +496,27 @@ managed `tmux-settings-global.conf` -> preserved `tmux-settings-user.conf` ->
 managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The plugin tree
 is `~/.config/tmux/plugins/` (TPM's XDG path); the legacy `~/.tmux` symlink and
 nested `.config/tmux/tmux/` level are retired, and tmux-persist snapshots live
-under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. The installer
-seeds both user layers only when absent; it offers interactive migration from
-`~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
+under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. The installer seeds
+`tmux-user.conf` only when absent, and `tmux-settings-user.conf` when absent or
+empty; non-empty user layers are preserved. It offers interactive migration
+from `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
 migrations need a manual move of its contents into `tmux-user.conf`.
 
-Themes: `themes/tmux-theme-loadout2.conf` pins every paintable tmux colour to a
-literal hex, `window-style` (the fill of panes that are NOT the active pane)
-included -- at tmux's `default` that fill is the terminal's own background, and
-because the two pane fills are only 1.055:1 apart the active/inactive cue
-inverts on any terminal whose background is lighter than #090909 (observed on
-Windows Terminal). `default` is kept only for component styles that inherit a
-pinned base (named at the bottom of the theme file). It is the shipped
-default (`@theme "loadout2"`), and `focus-follows-mouse` defaults to ON -- both
-are per-user overridable in `tmux-settings-user.conf`. Keep it that way when
-adding appearance options.
+Themes are tmux 3.8 themes. `themes/tmux-theme-loadout2.conf` sets
+server `theme dark` and fills the ten `dark-theme-*` palette slots with literal
+hexes; styles use the theme colour names, with literal hex only for colours the
+slots do not cover (pane fills, peach, frame/dim greys). `window-style` (the fill
+of panes that are NOT the active pane) stays a literal pin: at tmux's `default`
+that fill is the terminal's own background, and because the two pane fills are
+only 1.055:1 apart the active/inactive cue inverts on any terminal whose
+background is lighter than #090909 (observed on Windows Terminal). loadout2 is
+dark-only -- do not override its server `theme` to detect/light/terminal.
+`default` is kept only for component styles that inherit a pinned base (named
+at the bottom of the theme file). It is the shipped default
+(`@theme "loadout2"`), and `focus-follows-mouse` defaults to ON -- both are
+per-user overridable in `tmux-settings-user.conf`. Keep it that way when adding
+appearance options. `loadout1` is the rollback: `theme terminal` with an
+ANSI-name palette.
 
 Neovim uses Lazy.nvim with versions locked in `envs/nvim/lazy-lock.json`.
 When a loadout nvim binary and env-nvim config are both present, the installer
