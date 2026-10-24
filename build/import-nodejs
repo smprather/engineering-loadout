@@ -457,6 +457,27 @@ def main(node_dir, tag, platform_override, dry_run, allow_downgrade):
 
     # Platform
     platform = platform_override or detect_platform()
+    if platform_override is None and platform.startswith("linux."):
+        # The repo ships EL8 payload dirs; auto-detecting a host that is not EL
+        # would write a payload dir no EL8 node can use (observed 2026-10-24:
+        # a CachyOS run created payload/linux.x86_64.glibc2p44). Require the
+        # target explicitly rather than silently shipping the build host's ABI.
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        payload_dir = os.path.join(os.path.dirname(script_dir), "payload")
+        el_dirs = (
+            sorted(
+                name
+                for name in os.listdir(payload_dir)
+                if name.startswith("el") and ".glibc" in name and os.path.isdir(os.path.join(payload_dir, name))
+            )
+            if os.path.isdir(payload_dir)
+            else []
+        )
+        if el_dirs:
+            die(
+                f"refusing to bundle a host-specific payload {platform!r}; "
+                f"this repo ships {', '.join(el_dirs)}. Pass --platform {el_dirs[0]}."
+            )
     print(f"platform     : {platform}")
 
     # Locate repo root (script lives at build/)
