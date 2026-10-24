@@ -1,5 +1,49 @@
 # Current Handoff
 
+## 2026-10-24: 2026.10.7 shipped; tldr/xdesk retired; registry-sourced release notes; vim 9.2.1225
+
+**2026.10.7** released (signed, verified): python-loaded, tldr retirement,
+xdesk retirement, aiohttp 3.14.4 / nbconvert 7.17.2. Currency for that release
+was a deliberate partial sweep (24 outdated packages deferred by owner
+decision), recorded here rather than silently.
+
+**tldr/tealdeer retired.** The tldr binary, bundled page cache, tealdeer config
+and cache-dir baking, refresh path, completions, tests and docs are gone. The
+working tree had carried that change uncommitted; it was verified
+(registry/content/sizes/README) and committed before the python-loaded merge.
+
+**xdesk retired, Xephyr kept.** The launcher's T2 gate needed host `xauth`,
+which is not a reasonable deployment contract. `xephyr` now ships only the
+nested X server (`Xephyr`, `Xephyr.bin`); the smoke is `Xephyr -help`.
+
+**less 710.** Upstream removed the standalone `lesskey` helper in 710, so the
+package ships `less` + `lessecho` and dropped it from the build script, bins,
+docs, and probes. EL8 build, POSIX regex, glibc 2.14 floor; functional paging
+verified.
+
+**Release-notes version table fixed** (RELEASE.md failure entry 9): built from
+`payload/packages.json` (`_version_table_from_registry`, 151 rows) instead of
+`farm-versions` (which probes the build box). Also added the missing version
+step to the low-memory sequential gate path.
+
+**Currency batch:** ruff 0.17.2, uv 0.13.5, ty 0.0.91, starship 1.27.0,
+biome 2.6.2, fresh 0.5.4 (NEEDED closures re-checked). `lefdef-tools` and
+`time-plot` were already current. Blocked on this host: `liberty-tools`
+(maturin rejects host GLIBC 2.33/2.34 — needs the EL8 image), `nodejs`
+(`import-nodejs` needs nvm, now available — rerun). Remaining: 8 source
+builds (nvim, lua-language-server, tmux, tree-sitter, typescript-language-
+server, xterm, yosys, and vim/gvim are now done) and `liberty-filter`'s
+date-vs-semver mismatch. Comparator mismatches for iverilog/openroad/
+patchelf/rust-analyzer/z3 are documented as `pin_reason`.
+
+**vim + gvim 9.2.1225.** One EL8 checkout produces `vim.bin`, `gvim.bin` and
+the `vim92.tar.bz2` runtime. Vim 9.2.12xx added Sixel support; its pixman
+backend auto-enables when `pixman-1` is visible via pkg-config, which coupled
+terminal vim to `gui_libs` on the first build (NEEDED `libpixman-1.so.0`).
+`--disable-pixman` is now passed alongside `--without-wayland`, and
+`build-vim.sh` fails if either reappears. Terminal vim closure stays
+libm/tinfo/selinux/rt/dl/c only. No cmake involved in this build.
+
 ## 2026-10-23: python-loaded -- one curated import environment, no shared-bin links
 
 `python-loaded` (`kind: python-suite`) is a single `uv venv` on the bundled

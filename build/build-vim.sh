@@ -84,12 +84,14 @@ echo "    source reports ${PATCHLEVEL:-?} patch ${HIGHEST:-?} (requested $VERSIO
 CFLAGS_COMMON="-O2 -fno-strength-reduce -Wall -Wno-deprecated-declarations -D_REENTRANT -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1"
 
 # --- 1. terminal vim ---------------------------------------------------------
-# --without-wayland is LOAD-BEARING. vim 9.2.07xx gained Wayland clipboard
-# support, so without it terminal vim links libwayland-client.so.0 -- a lib that
-# ships in gui_libs, which plain `vim` deliberately does not depend on.
+# --without-wayland and --disable-pixman are LOAD-BEARING. vim 9.2.07xx gained
+# Wayland clipboard support (libwayland-client.so.0), and 9.2.12xx gained Sixel
+# image support, whose pixman backend auto-enables whenever pixman-1 is visible
+# via pkg-config. Both libs ship in gui_libs, which plain `vim` deliberately
+# does not depend on -- a headless compute node must keep a working pager.
 echo "==> Building terminal vim ..."
 ( cd "$SRC" && ./configure --with-features=huge --enable-gui=no --without-x \
-    --without-wayland --enable-multibyte CFLAGS="$CFLAGS_COMMON" >/dev/null )
+    --without-wayland --disable-pixman --enable-multibyte CFLAGS="$CFLAGS_COMMON" >/dev/null )
 ( cd "$SRC" && make -j"$(nproc)" >/dev/null )
 [ -x "$SRC/src/vim" ] || { echo "ERROR: terminal vim did not build" >&2; exit 1; }
 
@@ -99,9 +101,9 @@ cp "$SRC/src/vim" "$STAGE/vim.bin"
 
 # Guard the --without-wayland trap: fail rather than ship a terminal vim that
 # needs a gui_libs-only shared object.
-if objdump -p "$STAGE/vim.bin" | awk '/NEEDED/ {print $2}' | grep -q '^libwayland-client'; then
-    echo "ERROR: terminal vim NEEDs libwayland-client -- --without-wayland did not take." >&2
-    echo "  plain vim must not depend on gui_libs; refusing to ship it." >&2
+if objdump -p "$STAGE/vim.bin" | awk '/NEEDED/ {print $2}' | grep -Eq '^(libwayland-client|libpixman-1)'; then
+    echo "ERROR: terminal vim NEEDs a gui_libs-only library (wayland/pixman)." >&2
+    echo "  --without-wayland / --disable-pixman did not take; refusing to ship it." >&2
     exit 1
 fi
 echo "    terminal vim NEEDED: $(objdump -p "$STAGE/vim.bin" | awk '/NEEDED/ {printf "%s ", $2}')"

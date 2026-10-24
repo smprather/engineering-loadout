@@ -411,11 +411,11 @@ repo. The former PowerShell 7.6.3 portable-ZIP packaging notes (bundle under
 README with source URL + SHA256) moved with it; do not reintroduce Windows
 payload content here.
 
-## vim + gvim build notes (vim 9.2.1169; originally added 2026-05-16 at 9.2.458)
+## vim + gvim build notes (vim 9.2.1225; originally added 2026-05-16 at 9.2.458)
 
 One vim source checkout produces all three artifacts: terminal `vim.bin`,
 GUI `gvim.bin`, and the `vim92.tar.bz2` runtime archive. Clone the stable
-patch tag: `git clone --depth 1 --branch v9.2.0782 https://github.com/vim/vim`.
+patch tag: `git clone --depth 1 --branch v9.2.1225 https://github.com/vim/vim`.
 Requires gcc-toolset-14 active.
 
 ### Terminal vim (vim.bin) + runtime archive
@@ -423,18 +423,20 @@ Requires gcc-toolset-14 active.
 ```bash
 cd <vim-checkout>
 ./configure --with-features=huge --enable-gui=no --without-x --without-wayland \
-  --enable-multibyte \
+  --disable-pixman --enable-multibyte \
   CFLAGS="-O2 -fno-strength-reduce -Wall -Wno-deprecated-declarations \
           -D_REENTRANT -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1"
 make -j$(nproc)
 # strip -> patchelf '$ORIGIN/../lib64:$ORIGIN/../lib' -> bzip2 -> bin/vim.bin.bz2
 ```
 
-`--without-wayland` is load-bearing: vim 9.2.07xx gained Wayland clipboard
-support and would otherwise link `libwayland-client.so.0`, which terminal vim
-must not depend on (that lib ships in gui_libs; plain `vim` has no gui_libs
-dependency). Expected NEEDED: libm, libtinfo, libselinux, librt, libacl,
-libdl, libc only.
+`--without-wayland` and `--disable-pixman` are load-bearing: vim 9.2.07xx
+gained Wayland clipboard support and 9.2.12xx gained Sixel image support, whose
+pixman backend auto-enables whenever `pixman-1` is visible via pkg-config.
+Either lib would couple terminal vim to `gui_libs`, which plain `vim`
+deliberately does not depend on. Expected NEEDED: libm, libtinfo, libselinux,
+librt, libdl, libc only. `build-vim.sh` fails the build if wayland or pixman
+reappears in the terminal binary.
 
 The runtime archive is packed from the **source tree's `runtime/` directory**
 (not `make install` output -- install drops the spell binaries and source-tree
