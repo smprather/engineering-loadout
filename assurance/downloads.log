@@ -117,3 +117,9 @@
 2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/ruby-3.3.10-7.module_el8.10.0+4210+b037b1ec.x86_64.rpm	932212c137f22c481e7ef34cd0fee5fcc13e261d1637cbd0c30a92a4e621f023
 2026-10-21T22:15:23Z	https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/Packages/rubygems-3.5.22-7.module_el8.10.0+4210+b037b1ec.noarch.rpm	fb6bfd75b7b1e00f206ae1438fb6eb1bde8004848c1b5ee4feeb8a3c9d8617e9
 2026-10-23T21:20:31Z	https://github.com/YARAHQ/yara-forge/releases/download/20261018/yara-forge-rules-full.zip	c6a860533194d8c1209bc066c6dc6df9ecb0a2f9b7fc4104a5d87d0d3a651b73
+2026-10-24T14:05:43Z	https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-x86_64-unknown-linux-gnu.tar.gz	7b2e6a6e132ecf7b5fe726163b186d5d209befe93bb25f83767b2d97fbdf14e5
+2026-10-24T14:05:44Z	https://github.com/astral-sh/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz	f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f
+2026-10-24T14:05:47Z	https://github.com/astral-sh/ty/releases/download/0.0.91/ty-x86_64-unknown-linux-gnu.tar.gz	f9ab9cef6d2d96ea4d8bac06aa464bbe6622e57d0476e91156bc0df3478b2c08
+2026-10-24T14:05:49Z	https://github.com/starship/starship/releases/download/v1.27.0/starship-x86_64-unknown-linux-gnu.tar.gz	3b94758850901717eb36aa1b53f8492c1322506ec6d41273bc6151e79ed8e4a1
+2026-10-24T14:05:51Z	https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%402.6.2/biome-linux-x64-musl	ebb3d0e80cbee503c4c19a70891dd7589e22e801412630a0cad402b19ca78c93
+2026-10-24T14:05:55Z	https://github.com/sinelaw/fresh/releases/download/v0.5.4/fresh-min-size-x86_64-unknown-linux-musl.tar.xz	dc104950d6a1883b91d6e8344385788b3dab9f2213ef97039794ce64ef76265f

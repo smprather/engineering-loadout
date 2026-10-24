@@ -258,7 +258,7 @@ OpenSSH for those.
 | bash | bin | 5.3.20 | Portable GNU Bash ahead of EL8 system version |
 | bash-docs | runtime | 5.3.9 | GNU Bash man page (bash.1) and info pages; extracted from bash 5.3 source |
 | bat | bin | 0.26.1 | cat clone with syntax highlighting and line numbers |
-| biome | bin | 2.5.15 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
+| biome | bin | 2.6.2 | Fast Rust JSON/JS/TS/CSS formatter, linter, and LSP (static-pie musl build, no glibc dep) |
 | broot | bin | 1.61.0 | Interactive tree navigator with fuzzy search |
 | gtkwave | bin | 3.3.116 | GTKWave — VCD/FST/LXT2/VZT waveform viewer (GTK3) plus the headless format-converter suite (fst2vcd, vcd2fst, vcd2vzt, ...); Tcl scripting not compiled in |
 | ipython | python-tool | 9.17.1 | Enhanced interactive Python REPL (tab completion, magics, history, introspection) |
@@ -311,7 +311,7 @@ OpenSSH for those.
 | marktext | bin | 0.20.0 | MarkText — simple and elegant markdown editor (Electron/Chromium GUI). Ships the official Linux release bundle with two native addons rebuilt against EL8 (`ced.node` upstream needs GLIBCXX_3.4.29 and `native-keymap.node` needs GLIBC_2.34 — both above the EL8 floor, and both loaded by top-level `require()` at startup); an NSS/NSPR + libsecret + libxkbfile + cups/avahi closure is co-located in `lib64`. Member of @editor-gui |
 | ninja | bin | 1.13.2 | Fast build system used by CMake and LLVM |
 | numr | bin | 0.8.0 | Text calculator for natural-language expressions with a vim-style TUI (units, currency, variables) |
-| fresh | bin | 0.5.2 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
+| fresh | bin | 0.5.4 | Fresh text editor (Rust, tree-sitter, TypeScript/JavaScript config) |
 | nvim | bin | 0.12.5 | Hyperextensible Vim-based text editor |
 | patchelf | bin | 0.12 | Modify ELF RPATH and interpreter in-place |
 | pigz | bin | 2.8 | Parallel implementation of gzip |
@@ -322,12 +322,12 @@ OpenSSH for those.
 | restic | bin | 0.19.1 | Fast, secure, user-space backup to a local repo -- content-defined deduplication, zstd compression, incremental snapshots, authenticated encryption. Single static binary, no root. |
 | rsync | bin | 3.5.1 | Efficient file sync with delta-transfer algorithm |
 | ruby | bin | 3.3.10 | Ruby 3.3 interpreter from the AlmaLinux 8 ruby:3.3 module stream — stdlib, default gems and rubygems, relocated via a RUBYLIB-deriving launcher |
-| ruff | bin | 0.16.10 | Extremely fast Python linter and formatter |
+| ruff | bin | 0.17.2 | Extremely fast Python linter and formatter |
 | sd | bin | 1.1.0 | sed alternative with simpler regex syntax |
 | shfmt | bin | 3.14.1 | Shell script formatter and parser |
 | shellcheck | bin | 0.11.0 | Static analysis linter for shell scripts |
 | sqlite | bin | 3.53.4 | SQLite database CLI and library — EL8 ships 3.26 from 2018; current upstream with readline line-editing and FTS4/5 + RTREE + session extensions |
-| starship | bin | 1.26.0 | Cross-shell customizable minimal prompt |
+| starship | bin | 1.27.0 | Cross-shell customizable minimal prompt |
 | strace | bin | 7.2 | System call tracer — EL8 ships 5.18 (2022) with stale syscall tables; current upstream (built without libunwind/libselinux: EPEL-only / absent on newer distros, both unused by strace-ui) |
 | strace-ui | bin | b48e51a | Interactive TUI for strace output (Jane Street OxCaml/Bonsai_term) — syscall browser with FD provenance tracking. Opt-in: install with ./loadout install strace-ui |
 | stylua | bin | 2.5.2 | Opinionated Lua code formatter |
@@ -335,9 +335,9 @@ OpenSSH for those.
 | valgrind | bin | 3.27.1 | Valgrind memory debugging + profiling (memcheck, cachegrind, callgrind, helgrind, massif) — EL8 ships 3.22 from 2022; current upstream with AVX-512 support and six releases of fixes |
 | tmux | bin | 3.7c | Terminal multiplexer with session management |
 | tree-sitter | bin | 0.27.0 | Incremental parser generator and query tool |
-| ty | bin | 0.0.85 | Fast Python type checker (Astral) |
+| ty | bin | 0.0.91 | Fast Python type checker (Astral) |
 | gnu-coreutils | bin | 9.7 | GNU coreutils — individual binaries (ls, cp, mv, etc.) built from source on EL8 |
-| uv | bin | 0.12.23 | Extremely fast Python package and project manager |
+| uv | bin | 0.13.5 | Extremely fast Python package and project manager |
 | vim | bin | 9.2.1172 | Vi IMproved text editor |
 | gvim | bin | 9.2.1172 | GTK3 GUI Vim with clipboard and font rendering |
 | surfer | bin | 0.7.0 | Surfer — waveform viewer (VCD/FST/GHW) for digital hardware debugging; egui/OpenGL GUI. Opt-in: install with ./loadout install surfer |
