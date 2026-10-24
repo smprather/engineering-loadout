@@ -327,7 +327,7 @@ _SYNTHETIC_GROUPS = {
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, openssh, ...).",
     "@envs": "Bash + tcsh configuration (env-bash, env-tcsh); install other per-user config bundles explicitly.",
     "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh).",
-    "@all": "Everything in @shared-all plus @envs-all, except standalone packages (python-loaded); install those by name.",
+    "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
 
 # Groups that were removed but are still likely to be typed. Expand them to a
@@ -386,17 +386,6 @@ def disabled_packages(registry):
     return disabled
 
 
-def standalone_packages(registry):
-    """Package names excluded from every synthetic sweep.
-
-    A "standalone": true entry installs only when named explicitly (or pulled
-    by a group that lists it). It is not optional -- it is not part of
-    "@shared-all" either: python-loaded is a multi-GB environment that must
-    never ride along with the documented "install @shared-all" command.
-    """
-    return {name for name, entry in registry.items() if entry.get("standalone")}
-
-
 def expand_groups(names, registry, _stack=None, _disabled=None):
     """Expand @group references recursively into leaf package names.
 
@@ -424,7 +413,6 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
         _stack = ()
     if _disabled is None:
         _disabled = disabled_packages(registry)
-    _standalone = standalone_packages(registry)
     out = set()
     for name in names:
         if name == "all":
@@ -435,7 +423,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
                 "bare 'all' is not a group -- did you mean '@all'?\n"
                 "  (the old bare 'all' meant 'every NON-optional package', the opposite of\n"
                 "   what the -all suffix means everywhere else, so it was removed. '@all' now\n"
-                "   means everything except standalone packages.)\n"
+                "   means literally everything.)\n"
                 "  bundled tools    : @shared-all\n"
                 "  shell configs    : @envs-all\n"
                 "  both shells      : @envs\n"
@@ -445,11 +433,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             out |= {
                 n
                 for n, e in registry.items()
-                if not n.startswith("@")
-                and e.get("kind") != "env"
-                and not e.get("optional")
-                and n not in _disabled
-                and n not in _standalone
+                if not n.startswith("@") and e.get("kind") != "env" and not e.get("optional") and n not in _disabled
             }
             continue
         if name == "@shared-all":
@@ -459,7 +443,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             out |= {
                 n
                 for n, e in registry.items()
-                if not n.startswith("@") and e.get("kind") != "env" and n not in _disabled and n not in _standalone
+                if not n.startswith("@") and e.get("kind") != "env" and n not in _disabled
             }
             continue
         if name == "@envs":
@@ -481,11 +465,9 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             }
             continue
         if name == "@all":
-            # Everything except standalone packages. Defined as the union of
-            # the two full sweeps rather than as its own filter, so there can
-            # never be a third answer to "what is everything?" that drifts
-            # from those two. Standalone packages (python-loaded) are excluded
-            # from BOTH sweeps by design: a >1 GB venv must never ride along.
+            # Literally everything. Defined as the union of the two full sweeps
+            # rather than as its own filter, so there can never be a third
+            # answer to "what is everything?" that drifts from those two.
             #
             # There is deliberately NO "@all minus the offline caches" variant.
             # The caches (nvim-plugin-stash, treesitter-parsers) are

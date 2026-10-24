@@ -274,7 +274,7 @@ the selected set. `--skip @fonts-all` short-circuits `install_fonts`; etc.
 Python-tool installs render a Rich progress bar for the uv_tool loop; use
 top-level `--verbose` when a test needs the exact `uv tool install` command.
 
-`python-loaded` (`kind: python-suite`, `standalone: true`) is one curated
+`python-loaded` (`kind: python-suite`, `optional: true`) is one curated
 `uv venv` on the bundled interpreter. Tops live in
 `payload/python-loaded/requirements.in`; deps are resolved into a hashed
 `requirements.lock.txt` and a **private** wheelhouse
@@ -282,8 +282,8 @@ top-level `--verbose` when a test needs the exact `uv tool install` command.
 unpinned `uv tool install` picks from the shared wheelhouse. Nothing is linked
 into `<prefix>/bin`; the shebang target is
 `<prefix>/share/python-loaded/venv/bin/python3` (a stable symlink to
-`versions/<lockdate>-<hash>/venv`). `standalone: true` keeps it out of
-`@shared`, `@shared-all`, and `@all`. The stamp is `{abi, lock_sha256}`: 3.15.x
+`versions/<lockdate>-<hash>/venv`). `optional: true` keeps it out of `@shared`;
+`@shared-all` (and therefore `@all`) installs it. The stamp is `{abi, lock_sha256}`: 3.15.x
 patches need no action, while 3.15 -> 3.16 makes `install_python_suite` FAIL
 with a regeneration instruction. Refresh with
 `./build/update python-loaded` (Docker + AlmaLinux 8 required; no host

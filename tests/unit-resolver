@@ -65,8 +65,6 @@ REGISTRY = {
     },
     "gui_libs": {"kind": "lib-bundle", "libs": ["libQt5Core.so.5"], "platforms": ["linux"]},
     "surfer": {"kind": "bin", "bins": ["surfer"], "platforms": ["linux"], "optional": True},
-    # Standalone: installable by name, present in no synthetic sweep.
-    "suite": {"kind": "python-suite", "platforms": ["linux"], "standalone": True},
     "env-bash": {"kind": "env", "platforms": ["linux"]},
     "env-vim": {"kind": "env", "platforms": ["linux"]},
     "env-zsh": {"kind": "env", "platforms": ["linux"]},
@@ -140,11 +138,6 @@ def test_expand_groups(m):
 
     check("group listing an optional pulls it", "surfer" in eg(["@with-optional"], REGISTRY))
     check("optional installable by explicit name", eg(["surfer"], REGISTRY) == {"surfer"})
-
-    # standalone: explicit-only, never in a sweep
-    sweeps = eg(["@shared"], REGISTRY) | eg(["@shared-all"], REGISTRY) | eg(["@all"], REGISTRY)
-    check("standalone excluded from every sweep", "suite" not in sweeps)
-    check("standalone installable by explicit name", eg(["suite"], REGISTRY) == {"suite"})
 
     try:
         eg(["@loop-a"], REGISTRY)

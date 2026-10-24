@@ -136,6 +136,15 @@ def main():
     except mod.ResolverError as exc:
         check("no group cycles", False, str(exc))
 
+    # 2b. python-loaded is @shared-all-only by contract: the big sweep installs
+    # it, the default shared tree does not.
+    shared = mod.expand_groups(["@shared"], registry)
+    shared_all = mod.expand_groups(["@shared-all"], registry)
+    all_set = mod.expand_groups(["@all"], registry)
+    check("python-loaded is in @shared-all", "python-loaded" in shared_all)
+    check("python-loaded is not in @shared", "python-loaded" not in shared)
+    check("python-loaded is in @all", "python-loaded" in all_set)
+
     # 3. hardcoded gates exist
     gate_names = set(mod._HARDCODED_GATE_PKGS) | set(mod.ENV_HANDLERS)
     missing = sorted(gate_names - set(registry))

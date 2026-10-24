@@ -36,6 +36,12 @@ server, xterm, yosys, and vim/gvim are now done) and `liberty-filter`'s
 date-vs-semver mismatch. Comparator mismatches for iverilog/openroad/
 patchelf/rust-analyzer/z3 are documented as `pin_reason`.
 
+**python-loaded is now `@shared-all`-only (2026-10-24, revised D9).** The
+`standalone` flag was removed; the package is `optional: true`, so `@shared`
+does not install it while `@shared-all` and `@all` do. `tests/registry-integrity`
+pins that membership, and `tests/install-linux-tmp-home` (which selects
+`@shared-all`) now builds the suite as part of its gate.
+
 **vim + gvim 9.2.1225.** One EL8 checkout produces `vim.bin`, `gvim.bin` and
 the `vim92.tar.bz2` runtime. Vim 9.2.12xx added Sixel support; its pixman
 backend auto-enables when `pixman-1` is visible via pkg-config, which coupled

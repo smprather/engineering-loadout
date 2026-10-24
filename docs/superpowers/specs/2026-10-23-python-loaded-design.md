@@ -62,7 +62,7 @@ libraries any native extension needs.
 "python-loaded": {
   "kind": "python-suite",
   "version": "2026.10.23",
-  "standalone": true,
+  "optional": true,
   "platforms": ["linux"],
   "depends": ["portable-python", "uv"],
   "requirements": "payload/python-loaded/requirements.in",
@@ -74,8 +74,8 @@ libraries any native extension needs.
 ```
 
 No `bins` field: nothing is claimed in the shared bin. `wheels_dir` feeds
-transaction sizing and doctor (D11). `standalone: true` is honored by the three
-synthetic sweeps (D9).
+transaction sizing and doctor (D11). `optional: true` keeps the suite out of
+`@shared` while `@shared-all` and `@all` install it (D9).
 
 **D2 — Wheels + lock at install time, not a prebuilt venv tarball.** A venv
 embeds absolute paths and does not survive `--dest-dir`; the repo already has an
@@ -149,11 +149,12 @@ and friends install on their next run. The suite therefore owns its own
 directory, with the same chunking and size conventions. Duplicate bytes are the
 price; hermetic tool installs are worth it.
 
-**D9 — Explicit install only.** `python-loaded` joins neither `@shared` nor
-`@shared-all` (the documented `./loadout install @shared-all` must not grow a
-~1.3 GB venv). A new registry flag `standalone: true` is honored by `@shared`,
-`@shared-all`, and `@all`; the `@all` doc comment is updated to say "everything
-except standalone packages", and `./loadout list` marks them.
+**D9 — `@shared-all` only (revised 2026-10-24).** `python-loaded` is
+`optional: true`: `@shared` (the default shared tree) does not install it,
+while `@shared-all` and therefore `@all` do. The original design kept it out of
+every sweep; the owner revised that after 2026.10.7 so a full shared-tree
+install carries the suite. `install_python_suite` still short-circuits when the
+package is not selected, and nothing appears in `<prefix>/bin`.
 
 **D10 — Hashes describe the final, repaired bytes.** Acquisition records the
 exact wheel filename chosen for every requirement. auditwheel rewrites any wheel

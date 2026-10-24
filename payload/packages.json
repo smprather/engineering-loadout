@@ -17,8 +17,7 @@
     "relocate_token": "Distinctive ASCII build-path token in a runtime archive's text files. Generic runtime install replaces it with the deployed install root after extraction; must be paired with relocate_root.",
     "relocate_root": "Package-relative subtree of install_to scanned for relocate_token. Restricts token replacement to package-owned files; must be paired with relocate_token.",
     "missing_hint": "Consequence string logged when the package's archive is absent from the platform dir.",
-    "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members.",
-    "standalone": "If true, the package is excluded from EVERY synthetic sweep (@shared, @shared-all, @envs-all, @all) and installs only when named explicitly or pulled by a group that lists it. Use it for packages whose install cost or scope must never ride along with a broad sweep (e.g. python-loaded).",
+    "optional": "If true, the package is excluded from the '@shared' and '@envs' sweeps and installs only when named explicitly, via '@shared-all' / '@envs-all', or pulled by a group that lists it in members. This is the gating field for @shared-all-only packages.",
     "disabled": "If true, the package is DISABLED (out of service): excluded from EVERY sweep (@shared, @shared-all, @envs-all, @all) and refused when named directly or pulled in as a hard dependency. Use it for a package whose payload is known-broken on the current platform and whose repair needs a heavy rebuild -- it stays in the registry (so 'loadout info' still documents it) but it cannot reach a deployment. A package that hard-depends on a disabled one is disabled too; a soft 'recommends' edge never propagates. NOTE: this is NOT the project's 'offline' (which means no network needed) -- 'disabled' is the term for a package taken out of service.",
     "disabled_reason": "Why the package is disabled; shown by the install-time refusal and by 'loadout info'.",
     "source": "Source dir or file (relative to repo root). For kind='env'.",
@@ -3185,8 +3184,8 @@
         "portable-python",
         "uv"
       ],
-      "standalone": true,
-      "description": "Curated EL8 Python 3.15 import environment with its own bin; not on PATH and not part of any sweep"
+      "optional": true,
+      "description": "Curated EL8 Python 3.15 import environment with its own bin; not on PATH, installed by @shared-all or by name"
     },
     "gobject-typelibs": {
       "kind": "typelib",
