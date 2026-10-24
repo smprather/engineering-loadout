@@ -409,7 +409,7 @@ what now catches it — where nothing does, that is the open risk.
 | 6 | Unsigned release tag shipped silently | `_preflight()` proves signing before any gate; post-tag re-read aborts |
 | 7 | `docs/SECURITY.md` claimed a tmux plugin pin whose lockfile had never been committed | lockfile now committed; **no automated check** that a documented control exists |
 | 8 | README package table: 30 stale versions, 6 missing packages | `build/gen-readme-table`, gated by `--check` in Tier 1 (**fixed** 2026-08-03; it immediately found 16 stale rows) |
-| 9 | Release-notes version table reports the **build box's installed binaries**, not the registry — 29 of 93 rows wrong | **NOT FIXED** — see below |
+| 9 | Release-notes version table reports the **build box's installed binaries**, not the registry — 29 of 93 rows wrong | **FIXED 2026-10-23**: built from `payload/packages.json` (`_version_table_from_registry`), 151 shipped rows, no `farm-versions` dependency |
 | 10 | Test version literals (`0.5.0`) went stale on every bump | `tests/install-parity-plot` reads the expected version from `packages.json` |
 | 11 | A patch's redundant hunk broke on upstream import re-sorts | patch reduced to the one hunk that carries meaning |
 | 12 | `./build/update tmux-plugins` cloned a commented-out `@plugin` line | anchored regex skips comments |
@@ -418,19 +418,17 @@ what now catches it — where nothing does, that is the open risk.
 | 15 | `tests/rust-offline-almalinux8` cloned a **hardcoded ripgrep 15.1.0** while the locks and registry moved to 15.2.0 (`552fb4e`, 2026-08-04), so the offline rebuild could not resolve `globset`'s deps. Broken for 13 days: **nothing in `tests/run-all` ever invoked this test**, at any tier | version now read from `payload/packages.json` and passed as a `--build-arg` (same fix as entry 10); the test is wired into Tier 3, so `--container` runs it. **Retired 2026-10-08 with the crate store and its Tier 3 test.** |
 | 16 | 2026.10.2 shipped a `.content-manifest` with 158 entries for gitignored `.agents/`, `.codex/` and `.claude/` files under the vendored tmux-persist tree. `gen-content-manifest --check` passed on the release host (the files were right there) and failed MISSING in every clean clone or `git archive` export; `build/export` refused. A signed tag cannot catch this -- it signs the commit, and the commit's manifest listed files the commit does not contain | generation now excludes untracked+ignored files (`git ls-files -o -i --exclude-standard`); `--check` reports a present-but-unshipped entry as NOT-SHIPPED; `build/verify-manifest-export` verifies `HEAD:.content-manifest` against `git archive HEAD` in Tier 1, `build/export` and release Step 3b; `tests/content-manifest-shipped-set` pins the ignored-vendored-file cases |
 
-### Open defect: release-notes version table (entry 9)
+### Fixed: release-notes version table (entry 9)
 
-`./build/release` builds the "Pre-built binary versions" table from
+`./build/release` used to build the "Pre-built binary versions" table from
 `build/farm-versions --format tsv`, which probes **binaries installed on the
 build box**, not `payload/packages.json`. On 2026-07-25 that published a table
 claiming parity-plot 0.2.0 while the release shipped 0.7.0; 29 of 93 rows
 disagreed with the registry (`vim`/`gvim`, `uv`, `ruff`, `fzf`, `tmux`, …).
 
-This is also the root cause of the stale README table (entry 8) — `farm-versions`
-documents itself as the source for README tables.
-
-**Fix:** source the release-notes table from `packages.json` (what the release
-contains) rather than from `farm-versions` (what the builder happens to have
-installed). `farm-versions` remains the right tool for "what is installed here",
-which is a different question. Until then, treat the version table in published
-release notes as unreliable.
+**Fixed 2026-10-23:** `_version_table_from_registry` reads
+`payload/packages.json` directly. The generated "Shipped package versions"
+table covers every non-disabled, versioned registry entry (151 today), including
+python tools and fonts, and can no longer describe the builder's box.
+`farm-versions` remains the right tool for "what is installed here", which is a
+different question.

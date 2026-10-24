@@ -284,24 +284,51 @@ def _sbom_section_md():
     )
 
 
-def _version_table_from_tsv(versions_tsv):
-    """Markdown release-notes table from farm-versions TSV output."""
-    lines = [row for row in versions_tsv.splitlines() if row.strip()]
-    md_rows = []
-    for line in lines[1:]:  # skip header
-        parts = line.split("\t")
-        if len(parts) >= 5 and parts[2]:  # skip missing
-            binary, name, version, _status, homepage = parts[0], parts[1], parts[2], parts[3], parts[4]
-            md_rows.append(f"| [{name}]({homepage}) | `{binary}` | {version} |")
+def _version_table_from_registry(registry_path):
+    """(markdown release-notes table, row count) from payload/packages.json.
 
-    if not md_rows:
-        return ""
+    Source of truth is the SHIPPED registry, not `farm-versions` (which probes
+    what the build box happens to have installed). The old table disagreed
+    with 29 of 93 rows on 2026-07-25 -- see docs/RELEASE.md failure entry 9.
+    Disabled packages, env bundles, and groups are omitted; a package with no
+    version has nothing to report.
+    """
+    with open(registry_path, encoding="utf-8") as fh:
+        packages = json.load(fh)["packages"]
 
-    version_table = "\n## Pre-built binary versions\n\n"
-    version_table += "| Tool | Binary | Version |\n"
-    version_table += "|------|--------|--------|\n"
-    version_table += "\n".join(md_rows)
-    return version_table
+    rows = []
+    for name, entry in packages.items():
+        if name.startswith("@") or not isinstance(entry, dict):
+            continue
+        if entry.get("kind") in ("env", "group") or entry.get("disabled"):
+            continue
+        version = str(entry.get("version") or "").strip()
+        if not version:
+            continue
+        if entry.get("bins"):
+            entry_point = entry["bins"][0]
+        elif entry.get("uv_tool"):
+            entry_point = entry["uv_tool"]
+        else:
+            entry_point = "-"
+        rows.append((name, entry_point, version))
+
+    rows.sort(key=lambda row: row[0].lower())
+    if not rows:
+        return "", 0
+
+    lines = [
+        "",
+        "## Shipped package versions",
+        "",
+        "Versions come from `payload/packages.json` -- what this release contains.",
+        "",
+        "| Tool | Entry point | Version |",
+        "|------|-------------|---------|",
+    ]
+    for name, entry_point, version in rows:
+        lines.append(f"| `{name}` | `{entry_point}` | {version} |")
+    return "\n".join(lines), len(rows)
 
 
 def _print_heading(title):
@@ -392,22 +419,13 @@ def _payload_consistency_step(script_dir):
     )
 
 
-def _version_step(farm_versions):
-    proc = subprocess.run(
-        [farm_versions, "--format", "tsv"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if proc.returncode != 0:
-        output = "  WARNING: version table generation failed; release notes omit tool versions.\n"
-        if proc.stderr:
-            output += proc.stderr
+def _version_step(registry_path):
+    try:
+        version_table, row_count = _version_table_from_registry(registry_path)
+    except (OSError, ValueError, KeyError) as exc:
+        output = f"  WARNING: version table generation failed ({exc}); release notes omit versions.\n"
         return StepResult(name="version table", title=STEP_VERSIONS_TITLE, output=output, data="")
 
-    version_table = _version_table_from_tsv(proc.stdout)
-    row_count = max(0, len([row for row in proc.stdout.splitlines() if row.strip()]) - 1)
     return StepResult(
         name="version table",
         title=STEP_VERSIONS_TITLE,
@@ -731,7 +749,7 @@ def _abort_oom(avail):
 
 
 def _run_parallel_pre_release_steps(
-    script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+    script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
 ):
     """Run all independent pre-release steps concurrently.
 
@@ -769,6 +787,7 @@ def _run_parallel_pre_release_steps(
             ),
             ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
             ("payload consistency", STEP_PAYLOAD_TITLE, lambda: _payload_consistency_step(script_dir)),
+            ("version table", STEP_VERSIONS_TITLE, lambda: _version_step(registry_path)),
             ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
             ("manifest export", STEP_MANIFEST_TITLE, lambda: _manifest_export_step(script_dir)),
             ("secret scan", STEP_SECRET_TITLE, lambda: _secret_scan_step(script_dir)),
@@ -823,7 +842,7 @@ def _run_parallel_pre_release_steps(
         future = submit(_payload_consistency_step, script_dir)
         futures[future] = ("payload consistency", STEP_PAYLOAD_TITLE)
 
-        future = submit(_version_step, farm_versions)
+        future = submit(_version_step, registry_path)
         futures[future] = ("version table", STEP_VERSIONS_TITLE)
 
         future = submit(_checksum_step, script_dir)
@@ -1253,7 +1272,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     """
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root; this script lives in build/
     smoke_test = os.path.join(script_dir, "tests", "prebuilt-binaries")
-    farm_versions = os.path.join(script_dir, "build", "farm-versions")
+    registry_path = os.path.join(script_dir, "payload", "packages.json")
     malware_scan = os.path.join(script_dir, "build/scan-for-malware")
 
     if clear_cache:
@@ -1277,7 +1296,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
 
     release_t0 = time.monotonic()
     results = _run_parallel_pre_release_steps(
-        script_dir, smoke_test, farm_versions, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+        script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
     )
 
     scan_result = results["malware scan"]
