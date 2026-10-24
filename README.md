@@ -269,7 +269,7 @@ OpenSSH for those.
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support, plus the bundled theme set and btop-theme-tour |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
 | lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
-| liberty-tools | python-tool | v2026.06.01.1-35-g73af358 | liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools |
+| open-eda-file-tools | python-tool | v2026.10.1-5-gebdd925 | open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs |
 | librelane | python-tool | 3.0.16 | librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled). Ships `librelane` + `librelane.config/env_info/help/state/steps` (or `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel. Member of @eda |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |

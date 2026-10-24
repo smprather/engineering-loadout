@@ -249,7 +249,7 @@
       ],
       "description": "lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend)"
     },
-    "liberty-tools": {
+    "open-eda-file-tools": {
       "kind": "python-tool",
       "bins": [
         "liberty-format",
@@ -267,6 +267,7 @@
         "idna",
         "markdown-it-py",
         "mdurl",
+        "opentelemetry-api",
         "polars",
         "polars-runtime-32",
         "polars-runtime-64",
@@ -287,8 +288,8 @@
         "websockets"
       ],
       "uv_tool": "liberty-tools",
-      "rolling_git": "https://github.com/smprather/liberty-tools.git",
-      "version": "v2026.06.01.1-35-g73af358",
+      "rolling_git": "https://github.com/smprather/open-eda-file-tools.git",
+      "version": "v2026.10.1-5-gebdd925",
       "platforms": [
         "linux"
       ],
@@ -301,9 +302,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "liberty-tools — Liberty .lib parser/query library (Rust backend) with liberty-format and liberty-view CLI tools",
-      "disabled": true,
-      "disabled_reason": "DISABLED 2026-10-21: this tool's bundled dependency closure has no cp315 wheel in the payload (the payload interpreter is 3.15; the closure still pins cp314 wheels), so 'uv tool install' cannot resolve it offline and the install FAILED. The wheel refresh is a version-bump pass with per-tool closure proofs, deferred to the 3.15.1 checkpoint; until then the tool is taken out of service rather than shipping a failed install."
+      "description": "open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs"
     },
     "librelane": {
       "kind": "python-tool",
@@ -3768,7 +3767,7 @@
         "librelane",
         "xschem"
       ],
-      "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/liberty-tools/lefdef-tools are reachable by name or their own groups"
+      "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/open-eda-file-tools/lefdef-tools are reachable by name or their own groups"
     },
     "@gui-suite": {
       "kind": "group",
@@ -3810,7 +3809,7 @@
         "parity-plot",
         "text-serdes",
         "pygwalker",
-        "liberty-tools",
+        "open-eda-file-tools",
         "lefdef-tools"
       ],
       "description": "Optional Python tools installed via uv tool install"

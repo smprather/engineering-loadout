@@ -3,10 +3,11 @@
 # source for el8.x86_64.glibc2p28.
 #
 # First-party project: github.com/smprather/liberty-filter -- a SEPARATE repo from
-# liberty-tools, which is easy to get wrong because the two ship related CLIs and
-# share a version lineage. liberty-tools is a Python wheel with a PyO3 cdylib
-# (rolling_git, built by ./build/update); this is a standalone Rust binary and
-# cannot use that path, because ./build/update's rolling path builds WHEELS.
+# open-eda-file-tools (whose first package is the liberty-tools distribution),
+# which is easy to get wrong because the two ship related CLIs and share a version
+# lineage. open-eda-file-tools is a Python wheel with a PyO3 cdylib (rolling_git,
+# built by ./build/update); this is a standalone Rust binary and cannot use that
+# path, because ./build/update's rolling path builds WHEELS.
 #
 # WHY THIS SCRIPT EXISTS AT ALL: liberty-filter entered the payload in the
 # `ad63c48` bootstrap snapshot with NO build script and NO note here, so its
@@ -30,8 +31,8 @@
 # never tagged: tag v2026.06.01.1 still declares `[[bin]] name = "liberty_filter"`
 # while HEAD declares `liberty-filter`. Building the tag would re-ship the
 # underscore name. Shipping a describe-versioned HEAD build is consistent with
-# how the other first-party tools already ship here -- liberty-tools is
-# `v2026.06.01.1-35-g73af358`, text-serdes is a bare sha -- but prefer `--tag`
+# how the other first-party tools already ship here -- open-eda-file-tools is
+# `v2026.10.1-5-gebdd925`, text-serdes is a bare sha -- but prefer `--tag`
 # whenever upstream has tagged the state you want.
 #
 # The binary NEEDs only glibc + libgcc_s, both present on every EL8 target and

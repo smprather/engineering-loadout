@@ -3529,9 +3529,10 @@ First-party (github.com/smprather/liberty-filter). Streams a Liberty timing file
 and drops groups/cells by regex, so a multi-GB `.lib` becomes something a tool or
 a human can actually work with. Reads `.gz` directly.
 
-**A SEPARATE repo from `liberty-tools`**, which is the thing to get right here: the
-two ship related CLIs and share a version lineage, but liberty-tools is a Python
-wheel with a PyO3 cdylib (`rolling_git`, built by `./build/update`) while this is a
+**A SEPARATE repo from `open-eda-file-tools`** (whose first package is the
+`liberty-tools` distribution), which is the thing to get right here: the two ship
+related CLIs and share a version lineage, but open-eda-file-tools is a Python wheel
+with a PyO3 cdylib (`rolling_git`, built by `./build/update`) while this is a
 standalone Rust binary. It cannot use the rolling path -- `./build/update` builds
 *wheels*, so it can never produce a Rust binary. Same reason `spice-subckt-rc-reduce`
 is not `rolling_git`.

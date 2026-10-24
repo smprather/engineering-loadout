@@ -4,8 +4,8 @@
 Usage:
   ./build/update                        run all automated packages (no commit)
   ./build/update nodejs yara-rules      run specific automated packages
-  ./build/update liberty-tools          rebuild a rolling-git wheel from fresh source
-  ./build/update liberty-tools --rebuild  force rebuild even if commit is unchanged
+  ./build/update open-eda-file-tools          rebuild a rolling-git wheel from fresh source
+  ./build/update open-eda-file-tools --rebuild  force rebuild even if commit is unchanged
   ./build/update nvim bat rg            show update guidance for those packages
   ./build/update --list                 table: package | kind | version | latest
   ./build/update --list-outdated        same table, only packages where latest > version
@@ -1450,7 +1450,7 @@ def main(
 
       ./build/update                          # run all automated packages
       ./build/update nodejs yara-rules        # update specific packages
-      ./build/update liberty-tools --rebuild  # force rebuild of a rolling-git wheel
+      ./build/update open-eda-file-tools --rebuild  # force rebuild of a rolling-git wheel
       ./build/update nvim bat rg              # show update guidance for those packages
       ./build/update --list                   # table of every known package
       ./build/update --list-outdated          # only outdated packages

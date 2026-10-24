@@ -700,14 +700,14 @@ TOOLS = [
     ),
     (
         "liberty-format",
-        "liberty-tools",
-        "https://github.com/smprather/liberty-tools",
+        "open-eda-file-tools",
+        "https://github.com/smprather/open-eda-file-tools",
         strategy_flag(["--version"], r"liberty-format ([0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?)"),
     ),
     (
         "liberty-view",
-        "liberty-tools",
-        "https://github.com/smprather/liberty-tools",
+        "open-eda-file-tools",
+        "https://github.com/smprather/open-eda-file-tools",
         strategy_flag(["--version"], r"liberty-view ([0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?)"),
     ),
     (

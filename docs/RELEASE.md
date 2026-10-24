@@ -122,7 +122,7 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
   Skipping it is defensible when `envs/nvim/lazy-lock.json` has not moved:
   the pins are the source of truth, so an unchanged lockfile means an
   equivalent stash. Say so in the release notes if you skip it.
-- **rolling-git** (`liberty-tools`, `text-serdes`, `time-plot`, `lefdef-tools`)
+- **rolling-git** (`open-eda-file-tools`, `text-serdes`, `time-plot`, `lefdef-tools`)
   — first-party; `./build/update <name>` rebuilds from source HEAD when the commit
   moved, `--rebuild` forces.
 - **build** — needs `build/build-<tool>.sh --tag vX.Y.Z` on this EL8 box.
