@@ -2589,7 +2589,7 @@
     "payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2": 13601068,
     "payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2": 888679,
     "payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2": 129383886,
-    "payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2": 22284317,
+    "payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2": 22286773,
     "payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2": 17133117,
     "payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2": 12929271,
     "payload/el8.x86_64.glibc2p28/runtime/prettier.tar.bz2": 8580619,

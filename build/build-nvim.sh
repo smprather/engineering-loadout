@@ -29,7 +29,9 @@ set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 RUNTIME_DIR="$REPO/payload/el8.x86_64.glibc2p28/runtime"
-PATCHELF="${HOME}/.local/bin/patchelf"
+PATCHELF="${LOADOUT_PATCHELF:-${HOME}/.local/bin/patchelf}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
+[ -n "$PATCHELF" ] || { echo "ERROR: patchelf not found" >&2; exit 1; }
 CLONE_URL="https://github.com/neovim/neovim.git"
 CMAKE="${CMAKE:-cmake}"
 

@@ -138,7 +138,7 @@ sha256  c67127a51d1190afd3ce56cbb7e3aa1327c00eb62cc1f8ba1c79373838980959  payloa
 sha256  b07a55cf07829ef22189172b0e58ca92cbca62ec48ca5c7a9703c2ec0b31d16e  payload/el8.x86_64.glibc2p28/bin/nproc.bz2
 sha256  20970dc40eddcfc2a99385a163ebdf8b4c346915c608c8dd234fa0a50ce78cb6  payload/el8.x86_64.glibc2p28/bin/numfmt.bz2
 sha256  8cea5405de5c17b7129f28bcec5a23b0c19fb2631dd8b38cc9dfac24cde3ea82  payload/el8.x86_64.glibc2p28/bin/numr.bz2
-sha256  2509635e1f01c0d0097d1da011aab5aecdeeac33190d5f95fe7efda65bc4e819  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
+sha256  69a3678ff34618d59ee4e81566407b508861a5f4ac825137d6b608a03aaa38b9  payload/el8.x86_64.glibc2p28/bin/nvim.bz2
 sha256  6b1a470da0f0258a2c25fd12c8dcc2bb1ae852765b734fdb3e21cc71c6256685  payload/el8.x86_64.glibc2p28/bin/octave.bz2
 sha256  41af2495fa5ede6a9d67c56f79e5fab4fba1b8e029c63e35f5171056ebaab317  payload/el8.x86_64.glibc2p28/bin/od.bz2
 sha256  7883371ae03eb8619c54728a70b4a23f20ae50da3e6944500cf7022fef5904bb  payload/el8.x86_64.glibc2p28/bin/openroad.bz2
@@ -487,7 +487,7 @@ tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.b
 tar-meta  2314970  1789782049  payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
 tar-meta  39700604  1792856712  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
-tar-meta  4858261  1787539454  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
+tar-meta  4858563  1792856937  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
 tar-meta  1642087  1790703932  payload/el8.x86_64.glibc2p28/runtime/prettier.tar.bz2
