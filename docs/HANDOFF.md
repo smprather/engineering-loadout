@@ -1,5 +1,47 @@
 # Current Handoff
 
+## 2026-10-24 (4): tmux-persist-autosave keeps saving after the XDG plugin move
+
+**Issue #12.** `_install_env_tmux()` puts the plugin tree at
+`~/.config/tmux/plugins` and removes `~/.tmux`. The external
+`tmux-persist-autosave` helper still defaults to
+`~/.tmux/plugins/tmux-persist`, so after a reinstall every timer tick logged
+`save: ... skipped` and exited 0: systemd reported `Finished` while nothing was
+saved. Clean detach/exit still saved through tmux-persist's own hooks, so the
+loss stayed invisible until a hard crash.
+
+**Change.** When `~/.local/bin/persist-autosave.sh` and
+`~/.config/systemd/user/tmux-persist-autosave.service` both exist,
+`_install_env_tmux()` now writes a loadout-owned drop-in
+`.../tmux-persist-autosave.service.d/50-loadout-plugin-path.conf` containing
+`Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist`
+(0644, rewritten only when the content differs). User drop-ins are preserved;
+the `50-` ordering lets a later user drop-in override it. The install runs
+`systemctl --user daemon-reload` itself (also when the content was already
+current); if no user manager is reachable it warns with the manual command. A
+unit without the helper (or a helper without the unit) gets no drop-in.
+`loadout doctor` now reports
+`ExecStart=`/`Environment=` lines in user units/drop-ins that still reference
+`~/.tmux/plugins`. `docs/TMUX.md` and `AGENTS.md` no longer claim tmux-persist
+replaces continuum's no-client periodic autosave. The helper is external and
+not vendored; its own preferred fix (resolve
+`TMUX_PLUGIN_MANAGER_PATH` from the live server) belongs upstream.
+
+**Closed.** The commit carries `Fixes #12`, so GitHub closes the issue when it
+reaches `main`; `.github/copilot-instructions.md` records that convention.
+
+**Verified.** `tests/install-env-tmux-nvim-layers` passes
+(14 s, focused): no drop-in on a plain install, drop-in written when helper+unit
+exist, the stubbed `systemctl --user daemon-reload` is invoked and reported,
+user drop-in preserved, unit-only home untouched, a stock-TPM home with no XDG
+plugin tree stays quiet, and doctor names the stale line and the XDG path.
+Live doctor on this host is warning-free because its drop-in is correct.
+Live unit from the pre-existing manual drop-in: `systemctl --user show` has
+`Environment=TMUX_PERSIST_PLUGIN_DIR=/home/mylesp/.config/tmux/plugins/tmux-persist`;
+the 17:00 tick logged
+`done (1 sessions saved, 0 reverted, 0 guard-skipped)`. `py_compile`,
+`ruff check`, `ruff format --check`, and `tests/doctor-system-newer` pass.
+
 ## 2026-10-24 (3): pane TERM configurable, currently xterm-256color
 
 **Cause.** The 2026-10-20 home-layer merge set

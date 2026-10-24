@@ -496,7 +496,13 @@ managed `tmux-settings-global.conf` -> preserved `tmux-settings-user.conf` ->
 managed `tmux-global.conf` -> preserved `tmux-user.conf` -> TPM. The plugin tree
 is `~/.config/tmux/plugins/` (TPM's XDG path); the legacy `~/.tmux` symlink and
 nested `.config/tmux/tmux/` level are retired, and tmux-persist snapshots live
-under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. The installer seeds
+under `${XDG_DATA_HOME:-~/.local/share}/tmux/`. When the external
+`persist-autosave.sh` helper and its user unit already exist, `env-tmux` writes
+`~/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf`
+with `TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist` and reloads
+the user manager automatically (the previous `~/.tmux/plugins` default silently
+skips); `doctor` reports units that still reference the retired path. The
+installer seeds
 `tmux-user.conf` only when absent, and `tmux-settings-user.conf` when absent or
 empty; non-empty user layers are preserved. It offers interactive migration
 from `~/.tmux.local.conf`, which is no longer loaded, so unattended or declined
@@ -564,6 +570,15 @@ manifests. Review staged files after it runs. For full binary smoke-testing
 use `./build/release --dry-run`, not the pre-commit hook. The scan must prune
 `./.git/*`; sandbox/worktree internals such as `./.git/.git` are not vendored
 plugins.
+
+### Closing GitHub Issues
+
+When a change resolves a tracked GitHub issue, close it as part of completion:
+include `Fixes #<N>` (or `Closes #<N>`) in the commit message. GitHub closes
+the issue automatically when that commit reaches the default branch, so a
+separate manual close is only needed when the fix was already pushed without
+the keyword (`gh issue close <N> --comment ...`). Do not leave a resolved issue
+open or ask the user to close it.
 
 ### Content manifest covers the SHIPPED set
 

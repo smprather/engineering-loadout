@@ -21,12 +21,46 @@ Prefix: **`Ctrl-\`** (not `Ctrl-b` -- your fingers will thank you)
 tmux-persist ([hyoretsu/tmux-persist](https://github.com/hyoretsu/tmux-persist),
 the maintained fork of the abandoned tmux-resurrect) auto-saves pane contents
 and layout per session on detach/exit/start, and restores a session when one of
-the same name is created -- so this replaces both tmux-resurrect and
-tmux-continuum. Snapshots live under `${XDG_DATA_HOME:-~/.local/share}/tmux/`
+the same name is created -- so this replaces tmux-resurrect and tmux-continuum's
+automatic restore. It does not replace continuum's periodic save: no clean
+detach/exit means no save, so a hard crash loses everything since the last one.
+See *Autosave across crashes* below. Snapshots live under
+`${XDG_DATA_HOME:-~/.local/share}/tmux/`
 (override with `set -g @persist-dir '<path>'`) and older than 7 days are pruned
 (`@persist-delete-backup-after`). Coming from resurrect, existing snapshots
 are migrated on first load and unset `@persist-*` options fall back to the old
 `@resurrect-*` names.
+
+## Autosave across crashes (tmux-persist-autosave)
+
+tmux-persist saves on clean detach/exit/start and when a session is created. A
+hard crash while a client is still attached triggers none of those, and a
+session with no attached client never reaches the status-line save at all. The
+companion
+[tmux-persist-autosave](https://github.com/theredspoon/tmux-persist-autosave)
+runs tmux-persist's `scripts/save.sh` from a systemd timer. It is not vendored
+and has no installer here.
+
+The helper defaults to `~/.tmux/plugins/tmux-persist`, the pre-XDG location,
+and exits 0 with a `skipped` line when the directory is absent -- so the timer
+can look healthy while saving nothing after `env-tmux` moves the tree to
+`~/.config/tmux/plugins`. If `~/.local/bin/persist-autosave.sh` and
+`~/.config/systemd/user/tmux-persist-autosave.service` already exist,
+`loadout install env-tmux` writes
+`~/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf`:
+
+```ini
+[Service]
+Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist
+```
+
+The installer reloads the user manager (`systemctl --user daemon-reload`) after
+writing the drop-in; if no user manager is reachable it prints the command to
+run. A hand-wired timer needs the same drop-in. If the helper lives elsewhere,
+set `TMUX_PERSIST_PLUGIN_DIR` to that directory in a drop-in instead.
+`loadout doctor` reports user units and drop-ins that still reference
+`~/.tmux/plugins`. Do not recreate `~/.tmux`: the retired layout is not
+supported.
 
 ## Configuration layers
 

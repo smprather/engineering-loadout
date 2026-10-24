@@ -92,6 +92,98 @@ assert_readonly "$tmux_dir/plugins/tpm/tpm" 555
 for user_file in tmux-user.conf tmux-settings-user.conf; do
     assert_writable "$tmux_dir/$user_file"
 done
+
+# tmux-persist-autosave (external companion) defaults to the pre-XDG
+# ~/.tmux/plugins/tmux-persist; after the plugin move that makes every timer
+# tick log `skipped` and exit 0.  A plain env-tmux install must not invent a
+# systemd drop-in for a helper it did not install.
+autosave_dropin="$fresh_home/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf"
+[ ! -e "$autosave_dropin" ] || fail "autosave drop-in created without an installed helper/unit"
+
+# With the helper and unit hand-installed, env-tmux points the unit at the
+# XDG plugin tree via a loadout-owned drop-in and leaves user drop-ins alone.
+autosave_unit_dir="$fresh_home/.config/systemd/user"
+mkdir -p "$fresh_home/.local/bin" "$autosave_unit_dir/tmux-persist-autosave.service.d"
+printf '#!/usr/bin/env bash\n' > "$fresh_home/.local/bin/persist-autosave.sh"
+chmod +x "$fresh_home/.local/bin/persist-autosave.sh"
+printf '%s\n' '[Service]' 'ExecStart=%h/.local/bin/persist-autosave.sh' \
+    > "$autosave_unit_dir/tmux-persist-autosave.service"
+printf '%s\n' '# USER-DROPIN' '[Service]' 'Environment=USER_KEEP=1' \
+    > "$autosave_unit_dir/tmux-persist-autosave.service.d/10-user.conf"
+# Stub systemctl so the test observes the reload without touching the real
+# user manager; the stub is the only fake binary on PATH.
+fakebin="$TEST_ROOT/fakebin"
+mkdir -p "$fakebin"
+cat > "$fakebin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
+exit 0
+EOF
+chmod +x "$fakebin/systemctl"
+export SYSTEMCTL_LOG="$TEST_ROOT/systemctl.log"
+export PATH="$fakebin:$PATH"
+HOME="$fresh_home" "$REPO/loadout" install -y env-tmux --no-backup \
+    >"$TEST_ROOT/autosave.log" 2>&1
+[ -f "$autosave_dropin" ] || fail "tmux-persist autosave drop-in was not written"
+grep -qxF 'Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.config/tmux/plugins/tmux-persist' "$autosave_dropin" \
+    || fail "tmux-persist autosave drop-in does not point at the XDG plugin tree"
+grep -qxF -- '--user daemon-reload' "$SYSTEMCTL_LOG" \
+    || fail "installer did not reload the systemd user manager"
+grep -qF 'Reloaded systemd user manager' "$TEST_ROOT/autosave.log" \
+    || fail "installer did not report the systemd user manager reload"
+grep -qxF 'Environment=USER_KEEP=1' \
+    "$autosave_unit_dir/tmux-persist-autosave.service.d/10-user.conf" \
+    || fail "installer overwrote a user autosave drop-in"
+
+# Unit without the helper is not our install either: leave it untouched.
+autosave_nohelper="$TEST_ROOT/autosave-nohelper"
+mkdir -p "$autosave_nohelper/.config/systemd/user"
+printf '%s\n' '[Service]' 'ExecStart=%h/.local/bin/persist-autosave.sh' \
+    > "$autosave_nohelper/.config/systemd/user/tmux-persist-autosave.service"
+HOME="$autosave_nohelper" "$REPO/loadout" install -y env-tmux --no-backup \
+    >"$TEST_ROOT/autosave-nohelper.log" 2>&1
+[ ! -e "$autosave_nohelper/.config/systemd/user/tmux-persist-autosave.service.d/50-loadout-plugin-path.conf" ] \
+    || fail "autosave drop-in created without the helper"
+
+# doctor is informational: a stale ~/.tmux/plugins reference must be named.
+autosave_stale="$TEST_ROOT/autosave-stale"
+mkdir -p "$autosave_stale/.config/systemd/user" \
+    "$autosave_stale/.config/tmux/plugins/tmux-persist"
+printf '%s\n' '[Service]' \
+    'Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.tmux/plugins/tmux-persist' \
+    > "$autosave_stale/.config/systemd/user/tmux-persist-autosave.service"
+env -u LOADOUT_CFG_SHARED_PREFIX -u LOADOUT_DEST_DIR HOME="$autosave_stale" \
+    PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin \
+    "$REPO/loadout" doctor >"$TEST_ROOT/doctor-autosave.log" 2>&1 || true
+grep -qF 'tmux-persist autosave references to the retired ~/.tmux/plugins' \
+    "$TEST_ROOT/doctor-autosave.log" || fail "doctor did not flag a stale autosave plugin path"
+grep -qF 'Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.tmux/plugins/tmux-persist' \
+    "$TEST_ROOT/doctor-autosave.log" || fail "doctor warning does not quote the stale unit line"
+grep -qF 'the plugin tree is ~/.config/tmux/plugins' "$TEST_ROOT/doctor-autosave.log" \
+    || fail "doctor warning does not name the XDG plugin tree"
+
+# Stock TPM legitimately keeps its unit at ~/.tmux/plugins; with no loadout XDG
+# tree present the audit must stay quiet (the repo checkout is not the HOME).
+autosave_stock="$TEST_ROOT/autosave-stock"
+mkdir -p "$autosave_stock/.config/systemd/user"
+printf '%s\n' '[Service]' \
+    'Environment=TMUX_PERSIST_PLUGIN_DIR=%h/.tmux/plugins/tmux-persist' \
+    > "$autosave_stock/.config/systemd/user/tmux-persist-autosave.service"
+HOME="$autosave_stock" "$PY" - "$REPO" "$autosave_stock" >"$TEST_ROOT/doctor-stock.log" <<'PY'
+import os
+import sys
+
+repo, home = sys.argv[1], sys.argv[2]
+sys.path.insert(0, repo)
+import loadout_main
+
+loadout_main._doctor_layout_audit(
+    repo, {}, os.path.join(home, ".local", "share", "loadout"), home
+)
+PY
+! grep -qF 'references to the retired ~/.tmux/plugins' "$TEST_ROOT/doctor-stock.log" \
+    || fail "doctor flagged a stock-TPM unit with no XDG plugin tree"
+
 # The operator's user-layer defaults were merged into the MANAGED global layer
 # (2026-10-12).  A fresh install must carry them, or the out-of-box behaviour
 # silently regresses: key 7 and the --left-last mode it calls, the cursor pin,

@@ -5277,6 +5277,90 @@ def _seed_tmux_settings_user(repo_dir, tmux_config):
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux-settings-user.conf"), dest, False)
 
 
+_TMUX_AUTOSAVE_UNIT = "tmux-persist-autosave.service"
+_TMUX_AUTOSAVE_DROPIN = "50-loadout-plugin-path.conf"
+
+
+def _reload_systemd_user_manager():
+    """Apply a user-unit drop-in without making the operator run systemctl."""
+    systemctl = shutil.which("systemctl")
+    manual = "run 'systemctl --user daemon-reload' to apply the tmux-persist autosave drop-in"
+    if not systemctl:
+        warn(f"systemctl not found; {manual}")
+        return
+    try:
+        proc = subprocess.run(
+            [systemctl, "--user", "daemon-reload"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        warn(f"could not reload the systemd user manager ({exc}); {manual}")
+        return
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        reason = f": {detail[0]}" if detail else ""
+        warn(f"could not reload the systemd user manager{reason}; {manual}")
+        return
+    print("  Reloaded systemd user manager; the autosave drop-in is active.")
+
+
+def _seed_tmux_autosave_plugin_path(home, tmux_config):
+    """Point a pre-existing tmux-persist-autosave unit at the XDG plugin tree.
+
+    persist-autosave.sh is an external companion, not vendored here. Its
+    default plugin directory is the pre-XDG ~/.tmux/plugins/tmux-persist; once
+    env-tmux moves the tree, every timer tick logs `skipped` and exits 0, so
+    systemd reports success while nothing is saved. When the user already
+    installed both the helper and its unit, add a drop-in instead of editing
+    either (a later drop-in can still override ours).
+    """
+    helper = os.path.join(home, ".local", "bin", "persist-autosave.sh")
+    unit = os.path.join(home, ".config", "systemd", "user", _TMUX_AUTOSAVE_UNIT)
+    if not (os.path.isfile(helper) and os.path.isfile(unit)):
+        return
+    plugin_dir = os.path.join(tmux_config, "plugins", "tmux-persist")
+    try:
+        relative = os.path.relpath(plugin_dir, home)
+    except ValueError:
+        relative = ""
+    if not relative or relative == ".." or relative.startswith(".." + os.sep):
+        value = plugin_dir
+    else:
+        value = "%h/" + relative.replace(os.sep, "/")
+    content = (
+        "# Managed by loadout (env-tmux). persist-autosave.sh defaults to the\n"
+        "# retired ~/.tmux/plugins/tmux-persist, where it exits 0 with 'skipped'\n"
+        "# after the plugin tree moved to the XDG location.\n"
+        "[Service]\n"
+        f"Environment=TMUX_PERSIST_PLUGIN_DIR={value}\n"
+    )
+    drop_in_dir = os.path.join(home, ".config", "systemd", "user", _TMUX_AUTOSAVE_UNIT + ".d")
+    drop_in = os.path.join(drop_in_dir, _TMUX_AUTOSAVE_DROPIN)
+    try:
+        if os.path.isfile(drop_in) and not os.path.islink(drop_in):
+            with open(drop_in, encoding="utf-8") as fh:
+                if fh.read() == content:
+                    _grant_owner_write(drop_in)
+                    _reload_systemd_user_manager()
+                    return
+        require_writable_parent(drop_in, "tmux-persist autosave drop-in")
+        ensure_dir(drop_in_dir, "tmux-persist autosave drop-in")
+        if os.path.lexists(drop_in) and (os.path.islink(drop_in) or not os.path.isfile(drop_in)):
+            remove_path(drop_in)
+        with open(drop_in, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        os.chmod(drop_in, 0o644)
+    except (OSError, InstallRefused) as exc:
+        # The timer is user-installed and optional: never fail env-tmux over it.
+        warn(f"tmux-persist autosave drop-in not written: {exc}")
+        return
+    print(f"  tmux-persist autosave: TMUX_PERSIST_PLUGIN_DIR={display_name(plugin_dir)}")
+    _reload_systemd_user_manager()
+
+
 def _install_env_tmux(repo_dir, home):
     remove_if_exists(os.path.join(home, ".tmux.conf"))
     # Legacy pre-XDG layout, retired 2026-10-08: ~/.tmux was a symlink to
@@ -5297,6 +5381,7 @@ def _install_env_tmux(repo_dir, home):
         os.path.join(tmux_config, "plugins"),
         delete=True,
     )
+    _seed_tmux_autosave_plugin_path(home, tmux_config)
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
     install_path(
         os.path.join(repo_dir, "envs", "tmux", "tmux-global.conf"),
@@ -6392,6 +6477,36 @@ def _system_newer_rows(registry, path_str=None, loadout_dirs=None):
     return rows
 
 
+def _stale_tmux_autosave_refs(user_home):
+    """User units/drop-ins still pointing persist-autosave at ~/.tmux/plugins."""
+    root = os.path.join(user_home, ".config", "systemd", "user")
+    hits = []
+    # Stock TPM legitimately uses ~/.tmux/plugins; only flag the reference when
+    # the loadout's XDG tree is actually present (env-tmux installed).
+    if not os.path.isdir(os.path.join(user_home, ".config", "tmux", "plugins")):
+        return hits
+    if not os.path.isdir(root):
+        return hits
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if not (name.endswith(".service") or name.endswith(".conf")):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    for lineno, line in enumerate(fh, 1):
+                        text = line.strip()
+                        if not (text.startswith("ExecStart=") or text.startswith("Environment=")):
+                            continue
+                        if ".tmux/plugins" not in text:
+                            continue
+                        hits.append((path, lineno, text))
+            except OSError:
+                continue
+    return hits
+
+
 def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
     """Read-only report: install layout, legacy copies, prefer shims, PATH shadows.
 
@@ -6454,6 +6569,16 @@ def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
         print(f"  legacy EL copies in ~/.local/bin ({len(legacy_copies)}): {shown}")
         print("    these win on PATH until pruned; see docs/INSTALLATION.md 'Migrating an existing install'")
         findings += len(legacy_copies)
+
+    stale_autosave = _stale_tmux_autosave_refs(user_home)
+    if stale_autosave:
+        print(f"  tmux-persist autosave references to the retired ~/.tmux/plugins ({len(stale_autosave)}):")
+        for path, lineno, line in stale_autosave[:8]:
+            print(f"    {display_name(path)}:{lineno}: {line}")
+        if len(stale_autosave) > 8:
+            print(f"    ... (+{len(stale_autosave) - 8})")
+        print("    the plugin tree is ~/.config/tmux/plugins; reinstall env-tmux or set TMUX_PERSIST_PLUGIN_DIR")
+        findings += len(stale_autosave)
 
     path_dirs = [os.path.realpath(d) for d in os.environ.get("PATH", "").split(os.pathsep) if d]
     system_dirs = {os.path.realpath(p) for p in ("/usr/bin", "/bin", "/usr/local/bin")}
