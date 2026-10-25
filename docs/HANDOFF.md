@@ -29,9 +29,18 @@ replaces continuum's no-client periodic autosave. The helper is external and
 not vendored; its own preferred fix (resolve
 `TMUX_PLUGIN_MANAGER_PATH` from the live server) belongs upstream.
 
-**Closed.** The commit carried `Fixes #12`, so GitHub closed the issue when it
-reached `main`; #12 is assigned to `@smprather`, the acting account.
-`.github/copilot-instructions.md` records the assign-then-close convention.
+**Shipped.**
+- `76adcb5` -- drop-in writer, automatic `systemctl --user daemon-reload`,
+  doctor stale-path report, docs/tests.
+- `a92bb68` -- assign-then-close convention: `Fixes #12` closed the issue
+  automatically (`closedAt` 22:19:08Z); it is assigned to `@smprather`, the
+  acting account.
+- `afc34e9` -- skip the reload for staged env-only `--dest-dir` HOMEs while
+  still writing the drop-in there.
+
+`main` is clean and synced to `origin/main` at `afc34e9`; no open tasks remain
+for #12. The external helper's own preferred fix (resolve
+`TMUX_PLUGIN_MANAGER_PATH` from the live server) belongs upstream.
 
 **Verified.** `tests/install-env-tmux-nvim-layers` passes
 (14 s, focused): no drop-in on a plain install, drop-in written when helper+unit
@@ -44,7 +53,8 @@ Live unit from the pre-existing manual drop-in: `systemctl --user show` has
 `Environment=TMUX_PERSIST_PLUGIN_DIR=/home/mylesp/.config/tmux/plugins/tmux-persist`;
 the 17:00 tick logged
 `done (1 sessions saved, 0 reverted, 0 guard-skipped)`. `py_compile`,
-`ruff check`, `ruff format --check`, and `tests/doctor-system-newer` pass.
+`ruff check`, `ruff format --check`, and `tests/doctor-system-newer` pass;
+`tests/release-timings` is 15/15.
 
 ## 2026-10-24 (3): pane TERM configurable, currently xterm-256color
 
