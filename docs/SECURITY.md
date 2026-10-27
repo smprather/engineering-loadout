@@ -247,6 +247,17 @@ such path before use and refuses one it does not privately own.
 - **Run log** (`<temp-root>/loadout.<user>.log`) opens with `O_NOFOLLOW`, mode
   0600, and an owner check on the opened descriptor, so a planted symlink or a
   co-tenant's file never receives install output.
+- **Shell and editor runtime dirs.** bash, zsh and tcsh keep the
+  `XDG_RUNTIME_DIR` fallback (per-PID history, the online-verdict cache),
+  `PYTHONPYCACHEPREFIX` and (bash) the eza copy every `ls` runs under
+  `$LOADOUT_CFG_SHM_DIR` (default `/dev/shm`); nvim keeps its swap dir, yank
+  file and lua_ls logs under `<TMPDIR or shm>/$USER`. Each is used only when the
+  per-user directory is private (`loadout_private_dir`, `helpers/private-dir`,
+  `global.paths.private_dir` -- the same rule as above). Otherwise the runtime
+  dir falls back to `~/.cache/loadout/runtime`, the pycache prefix stays unset,
+  eza runs in place, and nvim uses `stdpath("state")`/`stdpath("log")`.
+  `tests/env-private-dirs` (Tier 2) drives all three shells and nvim against a
+  0777 dir with a planted eza and against symlinked dirs.
 - **User name** for these paths comes from `getpass.getuser()`, falling back to
   the uid when no name is available (no `USER`/`LOGNAME`, uid absent from
   passwd), so the installer still starts in minimal containers.

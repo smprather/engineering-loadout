@@ -752,6 +752,36 @@ array_slice() {
 }
 alias array.slice="array_slice"
 
+# Succeed only when DIR is a directory only this user can write: created 0700
+# when absent, never a symlink, owned by us, no group/other write bit. Our own
+# merely group/other-readable dir is tightened to 0700. Prints nothing.
+#
+# /dev/shm and the temp root are world-writable and the per-user names under
+# them are predictable, so a co-tenant can create them first -- and whoever
+# owns the directory can swap what we keep there (the eza copy every `ls`
+# runs, .pyc files every Python imports, shell history). Callers fall back to
+# a HOME path when this fails. Shared with zsh; envs/tcsh/global/helpers/
+# private-dir is the same rule for tcsh, and global.paths.private_dir for nvim.
+# Usage: loadout_private_dir DIR
+loadout_private_dir() {
+    local _d=$1 _mode
+    [ -n "$_d" ] || return 1
+    if [ ! -e "$_d" ] && [ ! -L "$_d" ]; then
+        (umask 077 && mkdir -p "$_d") 2>/dev/null
+    fi
+    [ -d "$_d" ] && [ ! -L "$_d" ] && [ -O "$_d" ] || return 1
+    _mode=$(stat -c %a "$_d" 2>/dev/null) || return 1
+    # Group or other write bit (the last two octal digits) -> refuse.
+    case $_mode in
+    *[2367]? | *[2367]) return 1 ;;
+    esac
+    case $_mode in
+    *00) ;;
+    *) chmod 700 "$_d" 2>/dev/null || return 1 ;;
+    esac
+    return 0
+}
+
 source_if_exists() {
     [[ -r "$1" ]] || return 0
     source "$1"

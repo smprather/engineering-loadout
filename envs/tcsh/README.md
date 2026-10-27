@@ -141,6 +141,13 @@ Two of them are worth knowing about specifically:
 - **`seed-history`** — derives the parent pid from `/proc` because **tcsh has no
   `$PPID`**. Naming `$PPID` in the rc file makes every interactive shell print
   `PPID: Undefined variable.` on startup.
+- **`private-dir`** — the tcsh twin of bash's `loadout_private_dir`: succeeds only
+  for a directory private to you (created 0700; never a symlink; your uid; no
+  group/other write bit). `PYTHONPYCACHEPREFIX` and the `XDG_RUNTIME_DIR` fallback
+  under `$LOADOUT_CFG_SHM_DIR` (default `/dev/shm`) are used only when it passes;
+  otherwise the pycache prefix stays unset and the runtime dir falls back to
+  `~/.cache/loadout/runtime`. `seed-history` applies the same chain. See the
+  "Private runtime dirs" section of `envs/bash/global/README.md`.
 
 ## What you do not get, and why
 

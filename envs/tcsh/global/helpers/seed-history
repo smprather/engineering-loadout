@@ -31,10 +31,17 @@ if [ -z "$ppid" ]; then
 fi
 [ -n "$ppid" ] || ppid=0
 
+# The history may hold secrets, so the fallback runtime dir must be private to
+# us (private-dir); a co-tenant could have created the shm name first. Same
+# fallback chain as the XDG_RUNTIME_DIR block in global/tcshrc.
 runtime=${XDG_RUNTIME_DIR:-}
 if [ -z "$runtime" ] || [ ! -d "$runtime" ]; then
-    runtime="/dev/shm/$(id -u)"
-    mkdir -p "$runtime" 2>/dev/null || runtime=$HOME
+    here=$(dirname "$0")
+    runtime="${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$(id -u)"
+    if ! sh "$here/private-dir" "$runtime"; then
+        runtime=$HOME/.cache/loadout/runtime
+        sh "$here/private-dir" "$runtime" || runtime=$HOME
+    fi
 fi
 
 histfile="$runtime/tcsh_history.$pid"

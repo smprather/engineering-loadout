@@ -105,15 +105,28 @@ export PROMPT_NORMAL="\\[$NORMAL\\]"
 #export LC_ALL=en_US.UTF-8
 #export LANG=en_US.UTF-8
 
+# Fallback runtime dir. It holds per-PID history and the online-verdict cache,
+# so it must be private (loadout_private_dir); a co-tenant could have created
+# the predictable shm name first.
 if [[ ! -r $XDG_RUNTIME_DIR ]]; then
-    export XDG_RUNTIME_DIR=/dev/shm/$(id -u)
-    mkdir -p "$XDG_RUNTIME_DIR"
+    XDG_RUNTIME_DIR=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$(id -u)
+    if ! loadout_private_dir "$XDG_RUNTIME_DIR"; then
+        XDG_RUNTIME_DIR=$HOME/.cache/loadout/runtime
+        loadout_private_dir "$XDG_RUNTIME_DIR"
+    fi
+    export XDG_RUNTIME_DIR
 fi
 
 export COLORTERM=truecolor
 
-# Compile python bytecode cache to fast /dev/shm filesystem
-export PYTHONPYCACHEPREFIX=/dev/shm/$USER/pycache
+# Compile python bytecode cache to fast /dev/shm filesystem -- only into a dir
+# private to us: whoever owns the prefix can plant .pyc files every Python run
+# imports. Otherwise Python keeps its default __pycache__ next to the sources.
+if loadout_private_dir "${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER"; then
+    export PYTHONPYCACHEPREFIX=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER/pycache
+else
+    unset PYTHONPYCACHEPREFIX
+fi
 # When using Python Poetry, it tries to access the desktop keyring which for some reason causes a hang
 # This var disables keyring
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
@@ -474,12 +487,18 @@ if fpcmp $_glibc -gt 2.17; then
             $(realpath $(which lsd)) --size \$option_size \$LSD_ARGS --date '+%D %H:%M:%S' \$LSD_ARGS \$*
         }"
     elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
+        # Run eza from a copy in the fast scratch root, but only from a dir
+        # private to us (every `ls` executes it). Otherwise run it in place.
         _eza_src=$(realpath $(which eza) 2>/dev/null)
-        if [[ -n $_eza_src && (! -f /dev/shm/$USER/bin/eza || $_eza_src -nt /dev/shm/$USER/bin/eza) ]]; then
-            mkdir -p /dev/shm/$USER/bin
-            cp "$_eza_src" /dev/shm/$USER/bin/eza
+        _eza_bin=$_eza_src
+        _eza_dir=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER
+        if [[ -n $_eza_src ]] && loadout_private_dir "$_eza_dir" && loadout_private_dir "$_eza_dir/bin"; then
+            if [[ ! -f $_eza_dir/bin/eza || $_eza_src -nt $_eza_dir/bin/eza ]]; then
+                cp "$_eza_src" "$_eza_dir/bin/eza" 2>/dev/null
+            fi
+            [[ -x $_eza_dir/bin/eza ]] && _eza_bin=$_eza_dir/bin/eza
         fi
-        unset _eza_src
+        _eza_bin=$(printf '%q' "${_eza_bin:-eza}")
         eval "
         ls() {
             if [[ \$1 == '-1' ]]; then
@@ -489,8 +508,9 @@ if fpcmp $_glibc -gt 2.17; then
             local option_a=\$([[ \$list_all == 1 ]] && echo -n -a || echo -n '')
             local option_B=\$([[ \$human_readable == 1 ]] && echo -n '' || echo -n -B)
             local option_g=\$([[ \$show_group == 1 ]] && echo -n '-g' || echo -n '')
-            /dev/shm/$USER/bin/eza --time-style '+%D %H:%M:%S' \$option_a \$option_B \$option_g \$EZA_ARGS \$*
+            $_eza_bin --time-style '+%D %H:%M:%S' \$option_a \$option_B \$option_g \$EZA_ARGS \$*
         }"
+        unset _eza_src _eza_bin _eza_dir
     elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "ls" ]]; then
         eval "
         ls() {

@@ -6,6 +6,12 @@ export LOADOUT_CFG_PREFERRED_BASH=""
 # ~/.local. PATH and TERMINFO_DIRS resolve against
 # ${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}.
 export LOADOUT_CFG_SHARED_PREFIX=""
+# Fast scratch root for per-user runtime state: the XDG_RUNTIME_DIR fallback
+# ($LOADOUT_CFG_SHM_DIR/<uid>), the Python bytecode cache and the eza copy
+# ($LOADOUT_CFG_SHM_DIR/$USER), nvim's swap dir. Every per-user dir under it
+# must be private to you (loadout_private_dir) or it is not used. Mainly a test
+# seam; leave it at /dev/shm.
+export LOADOUT_CFG_SHM_DIR="/dev/shm"
 # Valid values for LOADOUT_CFG_PREFERRED_LS: eza, lsd, ls
 export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"

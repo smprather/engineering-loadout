@@ -101,6 +101,14 @@ does not have — so every hook registered through it silently never fired.
 Starship, fzf and zoxide **do** all work — unlike tcsh, upstream ships real zsh
 support for each.
 
+## Private runtime dirs
+
+`PYTHONPYCACHEPREFIX` and the `XDG_RUNTIME_DIR` fallback (where the per-PID
+`zsh_history.*` files live) go under `$LOADOUT_CFG_SHM_DIR` only when the
+shared `loadout_private_dir` check passes, exactly as in bash; otherwise the
+prefix stays unset and the runtime dir falls back to `~/.cache/loadout/runtime`.
+See "Private runtime dirs" in `envs/bash/global/README.md`.
+
 ## zsh-only configuration
 
 The shared defaults are not duplicated here; `global/config.zsh` holds only what

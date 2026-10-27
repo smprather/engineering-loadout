@@ -32,6 +32,28 @@ off the same prefix, so a `--dest-dir` or shared install needs no extra
 environment. A caller-set `FONTCONFIG_FILE` wins.
 
 
+## Private runtime dirs (`LOADOUT_CFG_SHM_DIR`)
+
+Per-user state in a world-writable scratch root is used only from a directory
+that is private to you. The names are predictable (`$LOADOUT_CFG_SHM_DIR/$USER`,
+`$LOADOUT_CFG_SHM_DIR/<uid>`), so a co-tenant could create them first and then
+swap what is kept there. `loadout_private_dir DIR` (envs/bash/functions.sh,
+shared with zsh) creates DIR 0700 when absent and succeeds only for a real
+directory (never a symlink) you own with no group/other write bit; your own
+merely-readable dir is tightened to 0700. It prints nothing.
+
+| state | used when private | fallback |
+|---|---|---|
+| `XDG_RUNTIME_DIR` (only when unset or unreadable) | `$LOADOUT_CFG_SHM_DIR/<uid>` | `~/.cache/loadout/runtime` |
+| `PYTHONPYCACHEPREFIX` | `$LOADOUT_CFG_SHM_DIR/$USER/pycache` | unset (Python's own `__pycache__`) |
+| eza copy run by `ls` | `$LOADOUT_CFG_SHM_DIR/$USER/bin/eza` | eza in place |
+| nvim swap dir / vitmp | `<TMPDIR or shm>/$USER/{vim,vitmp}` | `stdpath("state")/{swap,vitmp}` |
+
+`LOADOUT_CFG_SHM_DIR` defaults to `/dev/shm`; it exists mainly so
+`tests/env-private-dirs` can point it at a temp dir. tcsh applies the same rule
+through `envs/tcsh/global/helpers/private-dir`, nvim through
+`require("global.paths").private_dir`.
+
 ## GRC (Generic Colorizer)
 
 The `grc/` directory contains a patched GRC binary with hardcoded config paths

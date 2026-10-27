@@ -20,15 +20,24 @@ local function tmp_root()
     return tmp
 end
 local env_tmp_root = tmp_root()
+-- Logs go under a per-user scratch dir only when it is private to us
+-- (global.paths.private_dir); otherwise under stdpath("log").
 local lsp_log_dir
 if is_windows then
     lsp_log_dir = vim.fn.expand("$TEMP") .. "\\lua_language_server"
-elseif env_tmp_root ~= nil then
-    lsp_log_dir = env_tmp_root .. "/" .. username .. "/lua_language_server"
-elseif vim.fn.isdirectory("/dev/shm") == 1 then
-    lsp_log_dir = "/dev/shm/" .. username .. "/lua_language_server"
 else
-    lsp_log_dir = "/tmp/" .. username .. "/lua_language_server"
+    local shm_root = os.getenv("LOADOUT_CFG_SHM_DIR")
+    if shm_root == nil or shm_root == "" then shm_root = "/dev/shm" end
+    local scratch
+    if env_tmp_root ~= nil then
+        scratch = env_tmp_root
+    elseif vim.fn.isdirectory(shm_root) == 1 then
+        scratch = shm_root
+    else
+        scratch = "/tmp"
+    end
+    local mine = require("global.paths").private_dir(scratch .. "/" .. username)
+    lsp_log_dir = (mine or vim.fn.stdpath("log")) .. "/lua_language_server"
 end
 
 return {

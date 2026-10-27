@@ -25,6 +25,14 @@ export LOADOUT_CFG_ENABLE_FZF=1
 export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/share/loadout/bin/bash   # an installed loadout bash
 ```
 
+## Private runtime dirs
+
+`LOADOUT_CFG_SHM_DIR` (default `/dev/shm`) is the fast scratch root for the
+`XDG_RUNTIME_DIR` fallback, `PYTHONPYCACHEPREFIX` and the eza copy `ls` runs.
+Each per-user directory there is used only when `loadout_private_dir` says it
+is private to you; otherwise loadout falls back to a HOME path. The table of
+fallbacks is in `envs/bash/global/README.md` ("Private runtime dirs").
+
 ## Hook injection points
 
 Insert code at precise points in the shell startup sequence:

@@ -362,6 +362,7 @@ run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
 run_test "install-modules" --deps auto tests/install-modules
 run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
 run_test "install-env-bash" --deps auto tests/install-env-bash
+run_test "env-private-dirs" --deps auto tests/env-private-dirs
 run_test "install-env-st" --deps auto tests/install-env-st
 run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh

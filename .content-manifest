@@ -1738,7 +1738,6 @@ sha256  63d38e9a9a10a20fb57593742e63c6b1e78dd7f6ef5472de8e0b1e4cf4f3db26  payloa
 sha256  63d38e9a9a10a20fb57593742e63c6b1e78dd7f6ef5472de8e0b1e4cf4f3db26  payload/python-loaded/wheels/httptools-0.9.0-cp315-cp315-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
 sha256  63e2fdab903fef4d68af8bc91bc6b4a3cb6217fba893515fca6f9f60db1916b0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/heex/injections.scm
 sha256  63e2fdab903fef4d68af8bc91bc6b4a3cb6217fba893515fca6f9f60db1916b0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/heex/injections.scm
-sha256  63eb4bc93242c034b88786ce608a18353039666bfdd13ee553dec6936f0273ae  payload/installed-sizes.json
 sha256  63f6558e1086f3a8429626e693484f73dc3ec90d2edf938d4f844505803fa50e  payload/el8.x86_64.glibc2p28/lib64/libXau.so.6.bz2
 sha256  6421c8a6b856b73f0ae90779a11d991ea81df88f71f09d64bd3e1d132b594b7a  payload/el8.x86_64.glibc2p28/typelibs/Atk-1.0.typelib
 sha256  64281d317455089b5cdb984d1537accdd8ea3b621684bb69df2aa1b409137ccb  payload/treesitter/vendor/nvim-treesitter/tests/indent/rust/mod.rs
@@ -2329,6 +2328,7 @@ sha256  838e25fd0a922320e5f6ca5bc74be9daf0e816e52a1c84520d61e852a9b83b68  payloa
 sha256  838e25fd0a922320e5f6ca5bc74be9daf0e816e52a1c84520d61e852a9b83b68  payload/treesitter/vendor/nvim-treesitter/runtime/queries/faust/highlights.scm
 sha256  8397e46407d0ada29b00ef9f0e6d0174119b3d4ae95b8ffc435cac0978d8c870  payload/treesitter/vendor/nvim-treesitter/tests/indent/terraform/no-indent-after-brace.tf
 sha256  83ade5992bfa297fb02d179b62418be87e65855b871e4769c09e4e02e2f74c59  payload/el8.x86_64.glibc2p28/lib64/libxcb-xf86dri.so.0.bz2
+sha256  83d32d02e05f14fe9e9ed16fcd6ca4065ea60a7cad4b2a06f6510a3ea3326a72  payload/installed-sizes.json
 sha256  83dca4ae909cdfacd01b00d7ed7cd26f4a81bd51f9577a4aade9104c2596e4e9  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/cue.lua
 sha256  83dcacd97b1d279fd96c2e3ab49d4c42ac16e678901d45d15a8401c0131b1ce3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/commonlisp.so.bz2
 sha256  83f19adebe6fcdf6719e9a9c90c056358fc303edc15ce5e63abfe1547b5df61f  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sflog/highlights.scm

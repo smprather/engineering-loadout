@@ -47,6 +47,11 @@ if ( ! $?LOADOUT_CFG_ENABLE_STARSHIP )    setenv LOADOUT_CFG_ENABLE_STARSHIP 1
 # with LOADOUT_CFG_SHARED_PREFIX in the installer environment.
 if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX ""
 
+# Fast scratch root for per-user runtime state (XDG_RUNTIME_DIR fallback,
+# Python bytecode cache). A per-user dir under it is used only when it is
+# private to you (helpers/private-dir). Mirrors the bash variable.
+if ( ! $?LOADOUT_CFG_SHM_DIR )             setenv LOADOUT_CFG_SHM_DIR /dev/shm
+
 # ---- preferred tools ---------------------------------------------------------
 # The aliases in aliases.csh fall back automatically when the preferred binary is
 # not installed, so these are safe to leave as-is.

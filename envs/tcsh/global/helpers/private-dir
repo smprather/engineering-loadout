@@ -1,0 +1,33 @@
+#!/bin/sh
+# Succeed only when DIR is a directory only this user can write.
+#
+# The tcsh twin of loadout_private_dir in envs/bash/functions.sh -- same rule,
+# same exit status: create DIR 0700 when absent; then require a real directory
+# (never a symlink) owned by us with no group/other write bit. Our own merely
+# group/other-readable dir is tightened to 0700. Prints nothing.
+#
+# /dev/shm is world-writable and the per-user names under it are predictable,
+# so a co-tenant can create them first; whoever owns the directory controls the
+# history files and .pyc files kept there. Callers fall back to a HOME path.
+#
+# Usage: private-dir DIR     (tcsh: sh "$_loadout_helpers/private-dir" "$d")
+
+d=$1
+[ -n "$d" ] || exit 1
+if [ ! -e "$d" ] && [ ! -L "$d" ]; then
+    (umask 077 && mkdir -p "$d") 2>/dev/null
+fi
+[ -d "$d" ] && [ ! -L "$d" ] || exit 1
+# Owner via stat, not `test -O`: -O is not POSIX and /bin/sh may be dash.
+owner_mode=$(stat -c '%u %a' "$d" 2>/dev/null) || exit 1
+[ "${owner_mode%% *}" = "$(id -u)" ] || exit 1
+mode=${owner_mode#* }
+# Group or other write bit (the last two octal digits) -> refuse.
+case $mode in
+    *[2367]? | *[2367]) exit 1 ;;
+esac
+case $mode in
+    *00) ;;
+    *) chmod 700 "$d" 2>/dev/null || exit 1 ;;
+esac
+exit 0

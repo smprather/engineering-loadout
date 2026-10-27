@@ -65,6 +65,32 @@ end
 --- Resolve a path under nvim's data dir, preferring $HOME then the shared tree.
 --- @param rel string  e.g. "tree-sitter-parsers" or "loadout/vendor/nvim-treesitter"
 --- @return string     absolute path (the $HOME one when neither exists)
+--- Return `path` when it is a directory only this user can write, else nil.
+--- Created 0700 when absent; otherwise it must be a real directory (never a
+--- symlink) owned by us with no group/other write bit, and our own merely
+--- readable dir is tightened to 0700. Same rule as loadout_private_dir in
+--- envs/bash/functions.sh: the temp root and /dev/shm are world-writable and
+--- the per-user names under them are predictable, so a co-tenant can create
+--- them first and would then receive swap files (buffer contents) and logs.
+--- @param path string
+--- @return string|nil
+function M.private_dir(path)
+    if not path or path == "" then return nil end
+    local uv = vim.uv or vim.loop
+    if not uv.fs_lstat(path) then
+        pcall(vim.fn.mkdir, path, "p", tonumber("700", 8))
+    end
+    local st = uv.fs_lstat(path)
+    if not st or st.type ~= "directory" or st.uid ~= uv.getuid() then return nil end
+    local perm = st.mode % 512
+    local group, other = math.floor(perm / 8) % 8, perm % 8
+    if math.floor(group / 2) % 2 == 1 or math.floor(other / 2) % 2 == 1 then return nil end
+    if group ~= 0 or other ~= 0 then
+        if not uv.fs_chmod(path, tonumber("700", 8)) then return nil end
+    end
+    return path
+end
+
 function M.data(rel)
     local home_path = vim.fn.stdpath("data") .. "/" .. rel
     if vim.fn.isdirectory(home_path) == 1 then

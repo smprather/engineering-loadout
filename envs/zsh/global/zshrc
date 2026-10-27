@@ -90,7 +90,13 @@ fi
 # --- environment shared by interactive and non-interactive shells -------------
 export PIP_REQUIRE_VIRTUALENV=1
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
-export PYTHONPYCACHEPREFIX=/dev/shm/$USER/pycache
+# Bytecode cache in the fast scratch root, only in a dir private to us (whoever
+# owns the prefix can plant .pyc files every Python run imports).
+if loadout_private_dir "${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER"; then
+    export PYTHONPYCACHEPREFIX=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER/pycache
+else
+    unset PYTHONPYCACHEPREFIX
+fi
 # Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 export EGL_LOG_LEVEL=fatal
@@ -155,9 +161,14 @@ export PROMPT_BOLD="%{$BOLD%}"
 export PROMPT_NORMAL="%{$NORMAL%}"
 
 ### Environment ###
+# Fallback runtime dir (per-PID history lives here): private or not at all.
 if [[ ! -r ${XDG_RUNTIME_DIR:-} ]]; then
-    export XDG_RUNTIME_DIR=/dev/shm/$(id -u)
-    mkdir -p "$XDG_RUNTIME_DIR"
+    XDG_RUNTIME_DIR=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$(id -u)
+    if ! loadout_private_dir "$XDG_RUNTIME_DIR"; then
+        XDG_RUNTIME_DIR=$HOME/.cache/loadout/runtime
+        loadout_private_dir "$XDG_RUNTIME_DIR"
+    fi
+    export XDG_RUNTIME_DIR
 fi
 
 export COLORTERM=truecolor

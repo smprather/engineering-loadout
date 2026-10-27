@@ -130,21 +130,35 @@ local function _tmp_root()
 end
 local _env_tmp_root = _tmp_root()
 
+-- Swap files hold buffer contents and vitmp holds yanks, so both live in a
+-- per-user dir that must be private (global.paths.private_dir): the scratch
+-- roots are world-writable and <root>/<user> is a predictable name. When it is
+-- not private, fall back to stdpath("state").
 local _swap_dir, _vitmp_file
 if _is_windows then
     _swap_dir   = vim.fn.expand("$TEMP") .. "\\nvim\\swap"
     _vitmp_file = vim.fn.expand("$TEMP") .. "\\nvim_vitmp"
-elseif _env_tmp_root ~= nil then
-    _swap_dir   = _env_tmp_root .. "/" .. _username .. "/vim"
-    _vitmp_file = _env_tmp_root .. "/vitmp_" .. _username
-elseif vim.fn.isdirectory("/dev/shm") == 1 then
-    _swap_dir   = "/dev/shm/" .. _username .. "/vim"
-    _vitmp_file = "/dev/shm/" .. _username .. "/vitmp"
 else
-    _swap_dir   = "/tmp/" .. _username .. "/vim"
-    _vitmp_file = "/tmp/vitmp_" .. _username
+    local _shm_root = os.getenv("LOADOUT_CFG_SHM_DIR")
+    if _shm_root == nil or _shm_root == "" then _shm_root = "/dev/shm" end
+    local _scratch
+    if _env_tmp_root ~= nil then
+        _scratch = _env_tmp_root
+    elseif vim.fn.isdirectory(_shm_root) == 1 then
+        _scratch = _shm_root
+    else
+        _scratch = "/tmp"
+    end
+    local _mine = require("global.paths").private_dir(_scratch .. "/" .. _username)
+    if _mine then
+        _swap_dir   = _mine .. "/vim"
+        _vitmp_file = _mine .. "/vitmp"
+    else
+        _swap_dir   = vim.fn.stdpath("state") .. "/swap"
+        _vitmp_file = vim.fn.stdpath("state") .. "/vitmp"
+    end
 end
-vim.fn.mkdir(_swap_dir, "p")
+vim.fn.mkdir(_swap_dir, "p", tonumber("700", 8))
 
 vim.g.cfg_swap_dir   = _swap_dir
 vim.g.cfg_vitmp_file = _vitmp_file

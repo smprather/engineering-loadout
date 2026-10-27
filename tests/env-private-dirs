@@ -1,0 +1,212 @@
+#!/bin/sh
+# env-private-dirs: per-user runtime dirs in a shared scratch root must be
+# private before the shells or nvim use them.
+#
+# bash/zsh/tcsh put the Python bytecode cache, the XDG_RUNTIME_DIR fallback and
+# (bash) a copy of eza under /dev/shm at predictable names; nvim puts its swap
+# dir, vitmp file and lua_ls logs there too. /dev/shm is world-writable, so a
+# co-tenant can create those names first. A planted eza runs on every `ls`, and
+# a planted pycache prefix serves .pyc files to every Python the user runs. So
+# each use checks that the directory is a real dir (not a symlink) owned by the
+# user with no group/other write bit, and falls back to a HOME path otherwise.
+#
+# LOADOUT_CFG_SHM_DIR points the scratch root at a temp dir, so nothing here
+# touches the real /dev/shm. A foreign OWNER needs a second account; the two
+# shapes one account can build are a 0777 dir and a symlink.
+#
+# Harness rules (AGENTS.md "Shell-config test harness traps"): real PTY via
+# script(1), env -i, and output scanned for shell error vocabulary (the PTY
+# routes the shell's own diagnostics to stdout).
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-private.XXXXXX")"
+trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+ME=$(id -un)
+UID_NUM=$(id -u)
+H="$T/home"
+SHM="$T/shm"
+mkdir -p "$H"
+
+env -i HOME="$H" PATH=/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TMPDIR="${TMPDIR:-/tmp}" \
+    "$REPO/loadout" install -y --no-backup @envs env-zsh env-nvim >"$T/install.log" 2>&1 \
+    || { tail -30 "$T/install.log" >&2; fail "install of @envs env-zsh env-nvim failed"; }
+
+mkdir -p "$H/.config/bash/user" "$H/.config/tcsh/user"
+printf 'export LOADOUT_CFG_SHM_DIR="%s"\n' "$SHM" >>"$H/.config/bash/user/config.sh"
+printf 'setenv LOADOUT_CFG_SHM_DIR "%s"\n' "$SHM" >>"$H/.config/tcsh/user/config.csh"
+
+# One clean environment for every shell: no XDG_RUNTIME_DIR, no TMPDIR, so the
+# shm fallbacks are what gets exercised.
+run_env() {
+    env -i HOME="$H" USER="$ME" LOGNAME="$ME" PATH=/usr/bin:/bin TERM=xterm-256color \
+        LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 "$@"
+}
+
+strip_escapes() {
+    sed -e 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g' \
+        -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+        -e 's/\x1b[()][A-Za-z0-9]//g' \
+        | tr -d '\r'
+}
+
+shell_out() {
+    case $1 in
+        bash) run_env script -qec 'bash -i -c "ls >/dev/null; /usr/bin/env"' /dev/null </dev/null ;;
+        zsh) printf '/usr/bin/env\nexit\n' | run_env script -qec 'zsh -i' /dev/null ;;
+        tcsh) printf '/usr/bin/env\nexit\n' | run_env script -qec 'tcsh -i' /dev/null ;;
+    esac 2>&1 | strip_escapes
+}
+
+assert_quiet() {
+    for _pat in 'command not found' 'syntax error' 'No such file or directory' \
+                'Permission denied' 'not a valid identifier' 'Faulty alias' \
+                'Undefined variable' 'Unmatched' 'parse error' 'bad substitution'; do
+        case $2 in
+            *"$_pat"*) fail "$1: shell printed '$_pat':
+$2" ;;
+        esac
+    done
+}
+
+envval() {
+    printf '%s\n' "$2" | sed -n "s/^$1=//p" | tail -1
+}
+
+mode_of() { stat -c %a "$1"; }
+
+have_eza=0
+PATH=/usr/bin:/bin command -v eza >/dev/null 2>&1 && have_eza=1
+have_nvim=0
+PATH=/usr/bin:/bin command -v nvim >/dev/null 2>&1 && have_nvim=1
+
+reset_shm() {
+    chmod -R u+w "$SHM" "$T/elsewhere" "$T/elsewhere-uid" 2>/dev/null || true
+    rm -rf "$SHM" "$T/elsewhere" "$T/elsewhere-uid" "$T/pwned"
+    mkdir -p "$SHM"
+}
+
+plant_hostile() {
+    mkdir -m 777 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
+    chmod 777 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
+    printf '#!/bin/sh\ntouch "%s"\n' "$T/pwned" >"$SHM/$ME/bin/eza"
+    chmod 755 "$SHM/$ME/bin/eza"
+    # Newer than any real eza, so a copy-if-newer check would keep it.
+    touch -d '+1 day' "$SHM/$ME/bin/eza" 2>/dev/null || true
+}
+
+plant_symlinks() {
+    mkdir -m 700 "$T/elsewhere" "$T/elsewhere-uid"
+    ln -s "$T/elsewhere" "$SHM/$ME"
+    ln -s "$T/elsewhere-uid" "$SHM/$UID_NUM"
+}
+
+assert_refused() {
+    _case=$1
+    _sh=$2
+    _out=$3
+    assert_quiet "$_case/$_sh" "$_out"
+    _pyc=$(envval PYTHONPYCACHEPREFIX "$_out")
+    case $_pyc in
+        "$SHM"/*) fail "$_case/$_sh: PYTHONPYCACHEPREFIX=$_pyc is under the untrusted scratch root" ;;
+    esac
+    _xdg=$(envval XDG_RUNTIME_DIR "$_out")
+    [ -n "$_xdg" ] || fail "$_case/$_sh: XDG_RUNTIME_DIR not set:
+$_out"
+    case $_xdg in
+        "$SHM"/*) fail "$_case/$_sh: XDG_RUNTIME_DIR=$_xdg is under the untrusted scratch root" ;;
+    esac
+    [ -d "$_xdg" ] && [ ! -L "$_xdg" ] && [ "$(mode_of "$_xdg")" = 700 ] \
+        || fail "$_case/$_sh: fallback XDG_RUNTIME_DIR=$_xdg is not a private dir"
+}
+
+# ---- clean: the scratch root is empty, so the private dirs are created 0700 --
+for sh in bash zsh tcsh; do
+    reset_shm
+    out=$(shell_out "$sh")
+    assert_quiet "clean/$sh" "$out"
+    [ -d "$SHM/$ME" ] && [ "$(mode_of "$SHM/$ME")" = 700 ] \
+        || fail "clean/$sh: $SHM/$ME missing or not 0700:
+$out"
+    [ "$(envval PYTHONPYCACHEPREFIX "$out")" = "$SHM/$ME/pycache" ] \
+        || fail "clean/$sh: PYTHONPYCACHEPREFIX=$(envval PYTHONPYCACHEPREFIX "$out"), want $SHM/$ME/pycache"
+    [ "$(envval XDG_RUNTIME_DIR "$out")" = "$SHM/$UID_NUM" ] \
+        || fail "clean/$sh: XDG_RUNTIME_DIR=$(envval XDG_RUNTIME_DIR "$out"), want $SHM/$UID_NUM"
+    [ "$(mode_of "$SHM/$UID_NUM")" = 700 ] || fail "clean/$sh: $SHM/$UID_NUM is not 0700"
+    if [ "$sh" = bash ] && [ "$have_eza" = 1 ]; then
+        # Proves the eza branch runs against the scratch root at all, so the
+        # hostile case below is not passing because the copy never happens.
+        [ -x "$SHM/$ME/bin/eza" ] || fail "clean/bash: eza was not copied into $SHM/$ME/bin"
+    fi
+    echo "  PASS  clean/$sh"
+done
+
+# ---- hostile-dir: a co-tenant pre-created 0777 dirs and planted an eza -------
+for sh in bash zsh tcsh; do
+    reset_shm
+    plant_hostile
+    out=$(shell_out "$sh")
+    assert_refused hostile-dir "$sh" "$out"
+    [ ! -e "$T/pwned" ] || fail "hostile-dir/$sh: the planted eza ran"
+    [ "$(mode_of "$SHM/$ME")" = 777 ] || fail "hostile-dir/$sh: a refused dir had its mode changed"
+    echo "  PASS  hostile-dir/$sh"
+done
+
+# ---- symlink-dir: the per-user names are symlinks to somewhere else ---------
+for sh in bash zsh tcsh; do
+    reset_shm
+    plant_symlinks
+    out=$(shell_out "$sh")
+    assert_refused symlink-dir "$sh" "$out"
+    [ -z "$(ls -A "$T/elsewhere")" ] || fail "symlink-dir/$sh: wrote through the symlink into $T/elsewhere"
+    [ -z "$(ls -A "$T/elsewhere-uid")" ] || fail "symlink-dir/$sh: wrote through the symlink into $T/elsewhere-uid"
+    echo "  PASS  symlink-dir/$sh"
+done
+
+# ---- nvim: swap dir follows the same rule ------------------------------------
+if [ "$have_nvim" = 1 ]; then
+    # PATH holds nvim alone: with no git, lazy.nvim's bootstrap fails fast and
+    # offline instead of cloning plugins (this case is about config.lua only).
+    mkdir -p "$T/nvim-bin"
+    ln -sf "$(PATH=/usr/bin:/bin command -v nvim)" "$T/nvim-bin/nvim"
+    nvim_swap() {
+        rm -f "$T/nvim.out"
+        env -i HOME="$H" USER="$ME" LOGNAME="$ME" PATH="$T/nvim-bin" TERM=xterm-256color \
+            LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 LOADOUT_CFG_SHM_DIR="$SHM" \
+            "$T/nvim-bin/nvim" --headless -n \
+            +"lua vim.fn.writefile({vim.g.cfg_swap_dir, vim.g.cfg_vitmp_file}, '$T/nvim.out')" \
+            +qa >/dev/null 2>&1 </dev/null
+        cat "$T/nvim.out" 2>/dev/null
+    }
+    reset_shm
+    got=$(nvim_swap)
+    swap=$(printf '%s\n' "$got" | sed -n 1p)
+    [ "$swap" = "$SHM/$ME/vim" ] || fail "nvim clean: cfg_swap_dir=$swap, want $SHM/$ME/vim"
+    reset_shm
+    plant_hostile
+    got=$(nvim_swap)
+    for p in $got; do
+        case $p in
+            "$SHM"/*) fail "nvim hostile-dir: $p is under the untrusted scratch root" ;;
+        esac
+    done
+    [ -n "$got" ] || fail "nvim hostile-dir: printed nothing"
+    reset_shm
+    plant_symlinks
+    got=$(nvim_swap)
+    for p in $got; do
+        case $p in
+            "$SHM"/*) fail "nvim symlink-dir: $p is under the untrusted scratch root" ;;
+        esac
+    done
+    [ -z "$(ls -A "$T/elsewhere")" ] || fail "nvim symlink-dir: wrote through the symlink"
+    echo "  PASS  nvim"
+else
+    echo "  SKIP  nvim (no nvim on PATH)"
+fi
+
+[ "$have_eza" = 1 ] || echo "  NOTE  no eza on PATH; the planted-eza assertion ran without the eza branch"
+echo "env-private-dirs: OK"
