@@ -1,5 +1,37 @@
 # Current Handoff
 
+## 2026-10-27: python-loaded `versions/` layout -- why the venv path is indirection
+
+Design Q&A only; no code change. `share/python-loaded/venv` is a symlink to
+`versions/<lockdate>-<lockhash8>/venv` because the venv tree is immovable after
+creation: `uv pip install` writes absolute interpreter paths into every console
+script (47 in the `/tmp/el-test` install), and `uv venv --relocatable` is
+rejected (it swaps those shebangs for `sh` trampolines). `pyvenv.cfg` records
+only `home = <prefix>/bin` -- it does NOT contain the venv path -- and
+`venv/bin/python` -> `<prefix>/bin/python3`. The things that embed the
+versioned path and make the tree immovable are console-script shebangs, the
+activation scripts (`activate`, `activate.csh`, `activate.fish`, `activate.nu`,
+`activate.bat` each set `VIRTUAL_ENV` to the absolute path), and wheel-supplied
+`scripts/` files rewritten by `_suite_fix_shebangs`; `pyvenv.cfg` is not part
+of the constraint. The stable symlink is for user/external references and
+is the documented user shebang target; uv's own scripts point into the
+versioned directory, which is never renamed.
+
+Sweep behavior, confirmed by reading `install_python_suite`: old version dirs
+are deleted only after a successful build and symlink swap (`:2643-2647`). The
+stamp fast-path (`:2566`) returns before the sweep, so debris can survive a
+no-op reinstall only when the run was interrupted after the stamp commit
+(`os.replace` at `:2641`) and before the sweep. Interruption before that commit
+leaves a mismatched or missing stamp, so the next run rebuilds and removes the
+partial target at `:2573` (or via the post-success sweep). Concurrent installs
+are unguarded.
+
+Considered and not adopted: (a) also prune strays on the SKIP path via a
+`_suite_prune_versions(dest, current)` helper; (b) flatten `versions/` to a
+top-level `venv-<id>` + symlink (identical semantics, one fewer directory
+level). No decision; the current layout stays. `main` was clean at `bb1c299`
+before this docs commit.
+
 ## 2026-10-24 (4): tmux-persist-autosave keeps saving after the XDG plugin move
 
 **Issue #12.** `_install_env_tmux()` puts the plugin tree at
@@ -183,9 +215,10 @@ libm/tinfo/selinux/rt/dl/c only. No cmake involved in this build.
 portable Python, built from `payload/python-loaded/requirements.in` (50 tops)
 through a hashed lock and a **private** wheelhouse
 (`payload/python-loaded/wheels`, 130 wheels, 243 MB, pyarrow chunked). It adds
-nothing to `<prefix>/bin`; the shebang target is
+nothing to `<prefix>/bin`. The user-facing shebang target is
 `<prefix>/share/python-loaded/venv/bin/python3`, a symlink to
-`versions/<lockdate>-<lockhash8>/venv`.
+`versions/<lockdate>-<lockhash8>/venv`; uv's generated console scripts carry
+absolute shebangs into the versioned directory, which is never renamed.
 
 ```bash
 ./loadout install python-loaded          # explicit only; in no sweep
