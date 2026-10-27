@@ -1,5 +1,48 @@
 # Current Handoff
 
+## 2026-10-27 (3): session close -- open items for the next session
+
+**Shipped.** `74ed71f` (node RUNPATH fix, entry (2) below) is pushed to
+`origin/main`. It is not in a release yet; the next release carries it.
+
+**Open items, in priority order.**
+1. **Deployed shared tree.** `/vols/anvil_release/psg/tools/loadout-shared/latest`
+   was installed from `main` between `fb63b2d` and `74ed71f`, so its `bin/node`
+   has no RUNPATH. Repair it by reinstalling `nodejs` from current `main`, or
+   in place as described in ADDING_BINARIES' Node.js section. It is unconfirmed
+   whether this has been done.
+2. **Review plan, untracked on purpose.**
+   `docs/superpowers/plans/2026-10-27-code-and-doc-review.md` holds the
+   2026-10-27 top-to-bottom code and doc review: a findings register and 18
+   test-first tasks. This repo is PUBLIC, and the plan describes security
+   findings that are not fixed yet. Keep it out of git until those fixes land,
+   or until the user decides otherwise. It still needs the user's review,
+   decisions D-A to D-D, and a choice between subagent-driven and native
+   execution.
+3. **candelise push held.** `bcf1f50` (repowise removal) is committed in
+   `~/candelise` but NOT pushed. That remote holds only the 2026-08-31 initial
+   commit, so pushing publishes 742 commits for the first time, and candelise's
+   own AGENTS.md reserves pushing for the human. The user said "push all"; the
+   other four repos were pushed, and candelise waits for an explicit yes.
+
+**Machine state changed this session.** repowise was removed completely at the
+user's request: the four session hooks in `~/.claude/settings.json`, the
+user-scope MCP server, the uv tool, `~/.repowise`, `~/.config/repowise`, and
+the `.repowise/` indexes in five repos. Generated repowise blocks and repowise
+instructions were removed from candelise's agent docs; the `.gitignore` rules
+went from candelise, watchglass (`~/dev/keepwatch`), cachyos-config and
+janestreet-blog-serial-protocol-emulator. Do not reintroduce it.
+
+**Noted, not acted on.** `build/build-bash.sh`, `build-expect.sh` and
+`build-gtkwave.sh` hard-code `PATCHELF="${HOME}/.local/bin/patchelf"`. All three
+are `set -eu`, so they fail loudly rather than ship broken output. They fail
+everywhere today, though: on the host because the XDG default install root no
+longer populates `~/.local/bin`, and inside `build/build-shell` because the
+container sets `HOME=/tmp` and `LOADOUT_PATCHELF=/usr/bin/patchelf`, and these
+scripts honor neither. Fix them before the next rebuild of bash, expect or
+gtkwave by following the `build-fio.sh` pattern (`LOADOUT_PATCHELF`, then
+`command -v patchelf`). This is recorded as finding TOOL-6 in the review plan.
+
 ## 2026-10-27 (2): bundled node lost its RUNPATH again -- `libatomic.so.1` not found on deployed EL8
 
 **Symptom.** A deployed shared tree (`.../loadout-shared/latest`, installed from
