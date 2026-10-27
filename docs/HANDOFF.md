@@ -1,5 +1,59 @@
 # Current Handoff
 
+## 2026-10-27 (2): bundled node lost its RUNPATH again -- `libatomic.so.1` not found on deployed EL8
+
+**Symptom.** A deployed shared tree (`.../loadout-shared/latest`, installed from
+`main` after 2026-10-24) failed with `bin/node: error while loading shared
+libraries: libatomic.so.1: cannot open shared object file`. Every node-launched
+package failed with it: npm, npx, pyright, typescript-language-server, prettier,
+netlistsvg.
+
+**Cause.** The 26.12.1 bump (`fb63b2d`) was imported on the CachyOS host.
+`build/import-nodejs` probed for patchelf only in `LOADOUT_PATCHELF`,
+`~/.local/bin`, `/usr/bin` and `/usr/local/bin`. Since the default install root
+moved to `$XDG_DATA_HOME/loadout`, this host's patchelf lives in
+`~/.local/share/loadout/bin`, so the probe found nothing. The script printed
+"skipping RPATH patch" and packaged node with **no RUNPATH at all** (26.11.1 had
+`$ORIGIN/../lib64:$ORIGIN/../lib`). This is the same failure as `0eefd39`
+(26.8.2). Native gates stayed green because the host has
+`/usr/lib/libatomic.so.1`, and the last Tier 3 run (2026-10-23) predates the
+bump. **Release 2026.10.7 is not affected**: it was cut before `fb63b2d` and
+ships 26.11.1 with the RUNPATH.
+
+**Fix.**
+- `build/import-nodejs`: `find_patchelf()` probes `LOADOUT_PATCHELF`, the XDG
+  install root, `~/.local/bin`, `/usr/bin`, `/usr/local/bin` and PATH at call
+  time. `patchelf_rpath()` dies when patchelf is missing or fails, or when
+  `readelf` does not read back exactly `$ORIGIN/../lib64:$ORIGIN/../lib`.
+- node 26.12.1 was re-imported inside `build/build-shell` from the same nvm
+  prefix (staged into `/cache`), and `strip-all-elf-binaries` (sizes and
+  manifest) was run in the container.
+- New Tier 1 test `tests/nodejs-runpath` reads the payload archive directly and
+  pins the importer's refusal paths.
+- Docs: AGENTS.md (runtime-archives note, test list) and the first Node.js
+  section in `build/ADDING_BINARIES.md` (procedure, why the RUNPATH matters, and
+  the in-place repair for deployed trees).
+
+**Verified.**
+- The old binary reproduced the exact error in `almalinux:8.10`
+  (`--network=none`, `libatomic` rpm absent). Patched, it printed `v26.12.1`.
+- The new archive, unpacked as a prefix in the same container: `ldd` resolves
+  `libatomic.so.1 => /p/bin/../lib64/libatomic.so.1`, and `node --version`,
+  `npm --version` and a SharedArrayBuffer `Atomics.add` all succeed.
+- `tests/nodejs-runpath` FAILED before the re-import (RUNPATH absent) and passes
+  after.
+- `tests/run-all --container` passed: 1660 s total, Tier 3 container smoke 580 s
+  PASS. The smoke image also lacks the `libatomic` rpm, so its bin probes cover
+  node and the node-launched tools.
+
+**Deployed trees from `main` between `fb63b2d` and this fix** need either a
+reinstall of `nodejs` or the in-place repair in ADDING_BINARIES' Node.js section
+(patchelf a copy, then `mv` over `bin/node`).
+
+Also untracked: `docs/superpowers/plans/2026-10-27-code-and-doc-review.md`, the
+top-to-bottom review plan written earlier today, pending the user's review and
+four decisions (D-A to D-D).
+
 ## 2026-10-27: python-loaded `versions/` layout -- why the venv path is indirection
 
 Design Q&A only; no code change. `share/python-loaded/venv` is a symlink to

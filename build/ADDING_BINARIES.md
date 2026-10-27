@@ -5489,6 +5489,60 @@ the linker-name `libsqlite3.so` is deliberately NOT shipped -- add it only if
 an offline source build ever needs to compile against this copy.
 Registry currency scrapes `SQLite version X.Y.Z` from the download page.
 
+## Node.js 26.12.1 (nodejs) -- runtime archive via build/import-nodejs
+
+`payload/<platform>/runtime/node.tar.bz2` holds `./bin/{node,npm,npx}` and
+`./lib/node_modules/npm/`, installed to `<prefix>`. It is the official nvm
+build (max symbol `GLIBC_2.28`, audited by the importer), stripped, then
+RUNPATH-patched.
+
+Run the import INSIDE the build container. The container pins
+`LOADOUT_PATCHELF=/usr/bin/patchelf` and has the EL8 strip. The container sees
+only the repo and `/cache`, so stage the nvm prefix into the build cache first:
+
+```bash
+mkdir -p ~/.cache/loadout-build/import-nodejs
+cp -a ~/.nvm/versions/node/v26.12.1 ~/.cache/loadout-build/import-nodejs/
+build/build-shell ./build/import-nodejs /cache/import-nodejs/v26.12.1 \
+    --platform el8.x86_64.glibc2p28
+build/build-shell ./build/strip-all-elf-binaries   # also regenerates sizes + manifest
+```
+
+**The RUNPATH is load-bearing.** `bin/node` NEEDs `libatomic.so.1`. Stock EL8
+does not install the `libatomic` rpm, so the payload ships it as
+`lib64/libatomic.so.1.bz2` (claimed by `nodejs` in `libs`), and only
+`RUNPATH $ORIGIN/../lib64:$ORIGIN/../lib` lets node find it in `<prefix>/lib64`.
+Without it, node, npm, npx and every node-launched package (pyright,
+typescript-language-server, prettier, netlistsvg) die with
+`libatomic.so.1: cannot open shared object file`.
+
+This shipped broken twice, both times from a host import that could not find
+patchelf and only warned. 26.8.2 (fixed in `0eefd39`) had patchelf probed only
+in `/usr/bin` and `/usr/local/bin`. 26.12.1 (`fb63b2d`, found on a deployed
+tree 2026-10-27) had it probed in `~/.local/bin`, which the XDG default install
+root no longer populates. The importer now looks in `LOADOUT_PATCHELF`,
+`$XDG_DATA_HOME/loadout/bin`, `~/.local/bin`, `/usr/bin`, `/usr/local/bin` and
+PATH. It **refuses to package** when patchelf is missing, fails, or leaves a
+RUNPATH other than the expected one.
+
+A dev host with its own libatomic resolves the library from `/usr/lib` and hides
+the defect from every native check. `tests/nodejs-runpath` (Tier 1) therefore
+reads the payload archive directly, and also pins the importer's refusal paths.
+To prove a rebuilt archive on the floor platform, unpack it with
+`lib64/libatomic.so.1` into a scratch prefix and run `node --version` in
+`almalinux:8.10` with `--network=none`. `rpm -q libatomic` must report it is
+not installed.
+
+To repair a deployed tree in place without a reinstall, use the tree's own
+patchelf on a copy, then rename it over the original so running node processes
+keep the old inode:
+
+```bash
+cp -p bin/node bin/node.new
+bin/patchelf --set-rpath '$ORIGIN/../lib64:$ORIGIN/../lib' bin/node.new
+mv bin/node.new bin/node
+```
+
 ## pyright 1.1.411 -- Python LSP (upstream npm package, pure Node runtime archive)
 
 Date: 2026-08-22. Build: `./build/build-pyright.sh --tag 1.1.411`.

@@ -1,0 +1,209 @@
+#!/usr/bin/env python3.15
+"""
+nodejs-runpath -- the bundled node must find the bundled libatomic.so.1.
+
+node NEEDs libatomic.so.1. The loadout ships it as payload/<platform>/lib64/
+libatomic.so.1.bz2 (installed to <prefix>/lib64), because stock EL8 does not
+install the `libatomic` rpm. node lands in <prefix>/bin, so the only thing
+that connects the two is node's RUNPATH: $ORIGIN/../lib64.
+
+That RUNPATH has been lost TWICE, both times the same way: build/import-nodejs
+could not find patchelf on the build host, printed a warning, and packaged node
+with no RUNPATH at all.
+
+  * 2026-09-13 (26.8.2, fixed in 0eefd39): patchelf probed only in /usr/bin and
+    /usr/local/bin.
+  * 2026-10-24 (26.12.1, fb63b2d): patchelf probed in ~/.local/bin, which the
+    XDG default install root ($XDG_DATA_HOME/loadout) no longer populates.
+    Deployed trees died with "libatomic.so.1: cannot open shared object file"
+    on every node/npm/npx/pyright/typescript-language-server/prettier call.
+
+Native runs cannot see this: a dev host that has its own libatomic resolves the
+library from /usr/lib and every probe stays green. Only the EL8 container gate
+caught it, and that gate does not run on every change. This test reads the
+payload directly, so it fails on any host:
+
+  1. payload node has DT_RUNPATH (never DT_RPATH) $ORIGIN/../lib64:$ORIGIN/../lib,
+     and every NEEDED soname the payload ships in lib64/ is reachable through it.
+  2. import-nodejs finds patchelf under the XDG install root.
+  3. import-nodejs REFUSES to package node when patchelf is missing, fails, or
+     leaves a RUNPATH other than the expected one.
+
+Exits 0 when all checks pass, 1 otherwise.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PLATFORM_DIR = os.path.join(REPO, "payload", "el8.x86_64.glibc2p28")
+NODE_ARCHIVE = os.path.join(PLATFORM_DIR, "runtime", "node.tar.bz2")
+IMPORT_NODEJS = os.path.join(REPO, "build", "import-nodejs")
+EXPECTED_RUNPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
+
+FAILURES = []
+
+
+def fail(msg):
+    FAILURES.append(msg)
+    print(f"  FAIL  {msg}")
+
+
+def ok(msg):
+    print(f"  OK    {msg}")
+
+
+def dynamic_entries(path):
+    """[(tag, value)] from `readelf -d`, e.g. ("RUNPATH", "$ORIGIN/..")."""
+    readelf = shutil.which("readelf")
+    if not readelf:
+        raise SystemExit("nodejs-runpath: readelf not found (binutils is required)")
+    out = subprocess.run([readelf, "-d", path], capture_output=True, text=True, check=True).stdout
+    entries = []
+    for line in out.splitlines():
+        if "(" not in line or "[" not in line:
+            continue
+        tag = line.split("(", 1)[1].split(")", 1)[0]
+        value = line.split("[", 1)[1].rsplit("]", 1)[0]
+        entries.append((tag, value))
+    return entries
+
+
+def extract_node(dest):
+    """Stream ./bin/node out of the archive without decompressing the rest."""
+    with tarfile.open(NODE_ARCHIVE, "r:bz2") as tf:
+        for member in tf:
+            if member.name in ("./bin/node", "bin/node"):
+                with tf.extractfile(member) as src, open(dest, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                return True
+    return False
+
+
+def check_payload_node():
+    if not os.path.isfile(NODE_ARCHIVE):
+        fail(f"missing {os.path.relpath(NODE_ARCHIVE, REPO)}")
+        return
+    with tempfile.TemporaryDirectory(prefix=".loadout-nodejs-runpath.") as tmp:
+        node = os.path.join(tmp, "node")
+        if not extract_node(node):
+            fail("node.tar.bz2 has no ./bin/node member")
+            return
+        entries = dynamic_entries(node)
+    tags = {tag for tag, _ in entries}
+    runpaths = [value for tag, value in entries if tag == "RUNPATH"]
+    if "RPATH" in tags:
+        fail("payload node carries DT_RPATH; it must be DT_RUNPATH (never --force-rpath)")
+    if runpaths != [EXPECTED_RUNPATH]:
+        fail(f"payload node RUNPATH is {runpaths or 'absent'}; expected [{EXPECTED_RUNPATH}]")
+    else:
+        ok(f"payload node RUNPATH = {EXPECTED_RUNPATH}")
+    lib64 = os.path.join(PLATFORM_DIR, "lib64")
+    for tag, soname in entries:
+        if tag != "NEEDED" or not os.path.isfile(os.path.join(lib64, soname + ".bz2")):
+            continue
+        if runpaths and "$ORIGIN/../lib64" in runpaths[0].split(":"):
+            ok(f"NEEDED {soname} ships in lib64/ and is reachable via $ORIGIN/../lib64")
+        else:
+            fail(f"NEEDED {soname} ships in lib64/ but node's RUNPATH cannot reach <prefix>/lib64")
+
+
+def load_import_nodejs():
+    loader = importlib.machinery.SourceFileLoader("import_nodejs", IMPORT_NODEJS)
+    spec = importlib.util.spec_from_loader("import_nodejs", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def write_exec(path, body):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        fh.write(body)
+    os.chmod(path, 0o755)
+
+
+def expect_exit(label, func, *args):
+    try:
+        func(*args)
+    except SystemExit as exc:
+        if exc.code not in (0, None):
+            ok(label)
+            return
+        fail(f"{label}: exited with status {exc.code!r}")
+        return
+    fail(f"{label}: returned instead of refusing")
+
+
+def check_import_nodejs():
+    mod = load_import_nodejs()
+    with tempfile.TemporaryDirectory(prefix=".loadout-nodejs-runpath.") as tmp:
+        # (2) the XDG install root is probed, with no PATH and no override.
+        xdg = os.path.join(tmp, "xdg")
+        xdg_patchelf = os.path.join(xdg, "loadout", "bin", "patchelf")
+        write_exec(xdg_patchelf, "#!/bin/sh\nexit 0\n")
+        env = {"HOME": os.path.join(tmp, "home"), "XDG_DATA_HOME": xdg, "PATH": ""}
+        found = mod.find_patchelf(env)
+        if found == xdg_patchelf:
+            ok("find_patchelf() probes $XDG_DATA_HOME/loadout/bin/patchelf")
+        else:
+            fail(f"find_patchelf() returned {found!r}; expected the XDG install-root patchelf")
+        override = os.path.join(tmp, "override", "patchelf")
+        write_exec(override, "#!/bin/sh\nexit 0\n")
+        if mod.find_patchelf(dict(env, LOADOUT_PATCHELF=override)) == override:
+            ok("LOADOUT_PATCHELF wins over the install root")
+        else:
+            fail("LOADOUT_PATCHELF does not take precedence")
+
+        # (3) refusals: a small real ELF stands in for node.
+        true_bin = os.path.realpath(shutil.which("true") or "/bin/true")
+        target = os.path.join(tmp, "node")
+        shutil.copy(true_bin, target)
+
+        real_find = mod.find_patchelf
+        mod.find_patchelf = lambda environ=None: None
+        expect_exit("patchelf missing -> import refuses to package", mod.patchelf_rpath, target)
+
+        failing = os.path.join(tmp, "failing", "patchelf")
+        write_exec(failing, "#!/bin/sh\nexit 3\n")
+        mod.find_patchelf = lambda environ=None: failing
+        expect_exit("patchelf exits non-zero -> import refuses to package", mod.patchelf_rpath, target)
+
+        noop = os.path.join(tmp, "noop", "patchelf")
+        write_exec(noop, "#!/bin/sh\nexit 0\n")
+        mod.find_patchelf = lambda environ=None: noop
+        expect_exit("RUNPATH not present after patchelf -> import refuses", mod.patchelf_rpath, target)
+        mod.find_patchelf = real_find
+
+        # Happy path with the real patchelf, when this host has one.
+        real = real_find()
+        if real is None:
+            print("  SKIP  happy path: no patchelf on this host (checks 1-3 still apply)")
+            return
+        mod.patchelf_rpath(target)
+        runpaths = [value for tag, value in dynamic_entries(target) if tag == "RUNPATH"]
+        if runpaths == [EXPECTED_RUNPATH]:
+            ok(f"patchelf_rpath() sets and verifies RUNPATH with {real}")
+        else:
+            fail(f"patchelf_rpath() left RUNPATH {runpaths or 'absent'}")
+
+
+def main():
+    print("nodejs-runpath:")
+    check_payload_node()
+    check_import_nodejs()
+    if FAILURES:
+        print(f"nodejs-runpath: {len(FAILURES)} failure(s)")
+        return 1
+    print("nodejs-runpath: all checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -66,13 +66,35 @@ _UNAME = _find_tool("/usr/bin/uname", "/bin/uname")
 _LDD = _find_tool("/usr/bin/ldd", "/lib64/ld-linux-x86-64.so.2")
 _GETCONF = _find_tool("/usr/bin/getconf")
 _OBJDUMP = _find_tool("/usr/bin/objdump", "/usr/bin/gobjdump")
-_PATCHELF = _find_tool(
-    os.environ.get("LOADOUT_PATCHELF", ""),
-    os.path.expanduser("~/.local/bin/patchelf"),
-    "/usr/bin/patchelf",
-    "/usr/local/bin/patchelf",
-)
 _STRIP = _find_tool("/usr/bin/strip")
+
+# node lands in <prefix>/bin and NEEDs libatomic.so.1, which the payload ships
+# in <prefix>/lib64 because stock EL8 does not install the libatomic rpm.
+NODE_RUNPATH = "$ORIGIN/../lib64:$ORIGIN/../lib"
+
+
+def find_patchelf(environ=None):
+    """The patchelf to use, resolved at call time; None when there is none.
+
+    Order: LOADOUT_PATCHELF (build/build-shell pins /usr/bin/patchelf), the
+    loadout's own copy under the XDG install root, the legacy ~/.local/bin, the
+    system dirs, then PATH. The install root was missing from this list after
+    the default root moved off ~/.local, which is how 26.12.1 shipped with no
+    RUNPATH (2026-10-24).
+    """
+    env = os.environ if environ is None else environ
+    home = env.get("HOME") or os.path.expanduser("~")
+    xdg = env.get("XDG_DATA_HOME", "").strip()
+    if not os.path.isabs(xdg):
+        xdg = os.path.join(home, ".local", "share")
+    candidates = (
+        env.get("LOADOUT_PATCHELF", ""),
+        os.path.join(xdg, "loadout", "bin", "patchelf"),
+        os.path.join(home, ".local", "bin", "patchelf"),
+        "/usr/bin/patchelf",
+        "/usr/local/bin/patchelf",
+    )
+    return _find_tool(*(c for c in candidates if c)) or shutil.which("patchelf", path=env.get("PATH", ""))
 
 
 def _run_output(*cmd):
@@ -300,16 +322,39 @@ def strip_binary(path):
     print(f"strip        : bin/node {round(before / 1024 / 1024, 1)} MB -> {round(after / 1024 / 1024, 1)} MB")
 
 
+def read_runpath(path):
+    """DT_RUNPATH of an ELF, or None when it has none."""
+    readelf = shutil.which("readelf") or _find_tool("/usr/bin/readelf")
+    if not readelf:
+        die("readelf not found; cannot verify bin/node's RUNPATH")
+    for line in _run_output(readelf, "-d", path).splitlines():
+        if "(RUNPATH)" in line and "[" in line:
+            return line.split("[", 1)[1].rsplit("]", 1)[0]
+    return None
+
+
 def patchelf_rpath(path):
-    if not _PATCHELF:
-        eprint("warning: patchelf not found; skipping RPATH patch on bin/node")
-        return
-    rpath = "$ORIGIN/../lib64:$ORIGIN/../lib"
-    rc = subprocess.call([_PATCHELF, "--set-rpath", rpath, path])
+    """Set node's RUNPATH and prove it landed; refuse to package otherwise.
+
+    Without it node cannot find the bundled libatomic.so.1 on a host that lacks
+    the libatomic rpm (stock EL8) and dies with "error while loading shared
+    libraries". A missing patchelf used to be a warning, and node shipped with no
+    RUNPATH twice (0eefd39, fb63b2d): a build host with its own libatomic hides
+    the defect from every native check.
+    """
+    patchelf = find_patchelf()
+    if not patchelf:
+        die(
+            "patchelf not found (checked LOADOUT_PATCHELF, <install root>/bin, ~/.local/bin, "
+            "/usr/bin, /usr/local/bin, PATH); run this inside build/build-shell or set LOADOUT_PATCHELF"
+        )
+    rc = subprocess.call([patchelf, "--set-rpath", NODE_RUNPATH, path])
     if rc != 0:
-        eprint(f"warning: patchelf returned {rc} for {path}")
-    else:
-        print(f"patchelf     : bin/node RPATH = {rpath}")
+        die(f"patchelf returned {rc} for {path}")
+    runpath = read_runpath(path)
+    if runpath != NODE_RUNPATH:
+        die(f"bin/node RUNPATH is {runpath!r} after patchelf; expected {NODE_RUNPATH!r}")
+    print(f"patchelf     : bin/node RUNPATH = {NODE_RUNPATH}")
 
 
 # ---------------------------------------------------------------------------

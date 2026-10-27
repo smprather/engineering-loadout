@@ -486,7 +486,7 @@ tar-meta  414409  1784306281  payload/el8.x86_64.glibc2p28/runtime/meld.tar.bz2
 tar-meta  211820  1784306281  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 tar-meta  2314970  1789782049  payload/el8.x86_64.glibc2p28/runtime/netlistsvg.tar.bz2
 tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.bz2
-tar-meta  39700604  1792856712  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
+tar-meta  39679742  1793132371  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  4858563  1792856937  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2

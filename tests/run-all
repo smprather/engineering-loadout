@@ -322,6 +322,7 @@ run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
 run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
+run_test "nodejs-runpath" "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "python-suite" "$PY" tests/python-suite
 run_test "release-timings" "$PY" tests/release-timings
