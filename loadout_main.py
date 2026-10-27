@@ -1337,9 +1337,71 @@ class _TeeStream:
         return getattr(self._original, name)
 
 
+def _tmp_user():
+    """Name for per-user temp-root state. getpass.getuser() raises OSError when
+    USER/LOGNAME are unset and the uid has no passwd entry (containers, env -i),
+    and the installer must still start there, so fall back to the uid."""
+    try:
+        return getpass.getuser()
+    except OSError, KeyError:
+        return str(os.getuid())
+
+
+def _secure_private_dir(path):
+    """True when `path` is a directory only this user can write: created 0700
+    when absent, otherwise a real directory (never a symlink) owned by our uid
+    with no group/other write bit. Our own merely-readable dir is tightened to
+    0700. Anything else warns and returns False.
+
+    The temp root is shared and world-writable, and our state lives at
+    predictable names there, so a co-tenant can create the path first. Using
+    such a directory would hand them the files we write and, for the pending
+    dir, the daemon script we execute."""
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    except OSError as exc:
+        warn(f"could not create {path}: {exc}")
+        return False
+    try:
+        st = os.lstat(path)
+    except OSError as exc:
+        warn(f"could not stat {path}: {exc}")
+        return False
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+        warn(f"{path} is not private to this user (owner/mode/symlink); not using it")
+        return False
+    if stat.S_IMODE(st.st_mode) != 0o700:
+        try:
+            os.chmod(path, 0o700)
+        except OSError as exc:
+            warn(f"could not tighten {path} to 0700: {exc}")
+            return False
+    return True
+
+
+def _open_private_append(path):
+    """Open `path` for appending without following a symlink, creating it 0600.
+    Returns None when the open fails or the file belongs to someone else, so a
+    pre-planted file in the shared temp root never receives our output."""
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except OSError:
+        return None
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
+            os.close(fd)
+            return None
+        return os.fdopen(fd, "a", buffering=1)
+    except OSError:
+        os.close(fd)
+        return None
+
+
 # Per-user suffix on shared temp-root state so concurrent users on one farm node
 # don't collide on (or fail to open) each other's log/pending files.
-_TMP_USER = getpass.getuser()
+_TMP_USER = _tmp_user()
 
 _RUN_LOG_FIXED_PATH = _tmp_path(f"loadout.{_TMP_USER}.log")
 
@@ -1351,11 +1413,9 @@ def _setup_run_log(repo_dir, argv):
     if not os.path.isdir(os.path.join(repo_dir, ".git")):
         return
     _RUN_LOG_PATH = _RUN_LOG_FIXED_PATH
-    try:
-        _RUN_LOG_FILE = open(_RUN_LOG_PATH, "a", buffering=1)
-    except OSError as exc:
-        sys.stderr.write(f"Note: could not open run-log {_RUN_LOG_PATH}: {exc}\n")
-        _RUN_LOG_FILE = None
+    _RUN_LOG_FILE = _open_private_append(_RUN_LOG_PATH)
+    if _RUN_LOG_FILE is None:
+        sys.stderr.write(f"Note: not logging to {_RUN_LOG_PATH} (cannot open it, or it is a symlink/not ours)\n")
         return
     # Per-run header -- separator + metadata so successive runs are distinguishable
     # when grep-ing/tailing the rolling log.
@@ -1944,9 +2004,13 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
         return
 
     files_dir = os.path.join(_PENDING_DIR, "files")
+    if not _secure_private_dir(_PENDING_DIR):
+        warn(
+            f"pending-ops directory {_PENDING_DIR} is not private (owner/mode/symlink); "
+            "deferred binaries were not staged"
+        )
+        return
     try:
-        if not os.path.isdir(_PENDING_DIR):
-            os.makedirs(_PENDING_DIR)
         if not os.path.isdir(files_dir):
             os.makedirs(files_dir)
     except OSError as exc:
@@ -7470,7 +7534,14 @@ def cmd_clean(args):
                 except OSError as exc:
                     eprint(f"Could not remove {path}: {exc}")
     if do_pending:
-        if os.path.isdir(_PENDING_DIR):
+        try:
+            pst = os.lstat(_PENDING_DIR)
+        except OSError:
+            pst = None
+        if pst is not None and (not stat.S_ISDIR(pst.st_mode) or pst.st_uid != os.getuid()):
+            eprint(f"Refusing to clean {_PENDING_DIR}: it is a symlink or not owned by this user.")
+            return 1
+        if pst is not None:
             if _pending_daemon_alive():
                 eprint(f"Refusing to clean {_PENDING_DIR}: pending-ops daemon is running.")
                 return 1

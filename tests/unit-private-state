@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""
+unit-private-state -- the installer and the pending-ops daemon refuse temp
+state that a co-tenant could have pre-created.
+
+The pending dir (<temp-root>/loadout-pending-<user>) and the run log
+(<temp-root>/loadout.<user>.log) have predictable names in a shared,
+world-writable temp root. Whoever creates them first owns them, so the code
+must check owner, mode and symlink before it trusts either one. A foreign
+OWNER cannot be simulated without root, so these cases use the two shapes a
+single account can build: a group/other-writable directory and a symlink.
+
+Must run under the bundled Python (loadout_main.py uses PEP 758 syntax).
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import bz2
+import getpass
+import importlib.machinery
+import importlib.util
+import os
+import stat
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+PENDING_DAEMON_PATH = os.path.join(REPO, "payload", "pending-daemon", "loadout-pending-daemon")
+
+
+def _load(name, path):
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def _mode(path):
+    return stat.S_IMODE(os.lstat(path).st_mode)
+
+
+def test_private_dir_creates_0700(m, tmp):
+    path = os.path.join(tmp, "absent")
+    ok = m._secure_private_dir(path)
+    check("absent dir is created and accepted", ok is True)
+    check("created dir is 0700", os.path.isdir(path) and _mode(path) == 0o700, oct(_mode(path)))
+
+
+def test_private_dir_rejects_symlink(m, tmp):
+    real = os.path.join(tmp, "real")
+    os.mkdir(real, 0o700)
+    link = os.path.join(tmp, "link")
+    os.symlink(real, link)
+    check("symlinked dir is refused", m._secure_private_dir(link) is False)
+    check("the symlink is left untouched", os.path.islink(link) and os.readlink(link) == real)
+
+
+def test_private_dir_rejects_group_other_writable(m, tmp):
+    path = os.path.join(tmp, "open")
+    os.mkdir(path)
+    os.chmod(path, 0o777)
+    check("0777 dir is refused", m._secure_private_dir(path) is False)
+    check("a refused dir keeps its mode", _mode(path) == 0o777, oct(_mode(path)))
+
+
+def test_private_dir_tightens_readable(m, tmp):
+    path = os.path.join(tmp, "readable")
+    os.mkdir(path)
+    os.chmod(path, 0o755)
+    check("own 0755 dir is accepted", m._secure_private_dir(path) is True)
+    check("own 0755 dir is tightened to 0700", _mode(path) == 0o700, oct(_mode(path)))
+
+
+def test_stage_pending_refuses_insecure_dir(m, tmp):
+    pending = os.path.join(tmp, "pending")
+    os.mkdir(pending)
+    os.chmod(pending, 0o777)
+    bin_dir = os.path.join(tmp, "payload-bin")
+    os.mkdir(bin_dir)
+    with bz2.open(os.path.join(bin_dir, "tmux.bz2"), "wb") as fh:
+        fh.write(b"#!/bin/sh\nexit 0\n")
+    dest = os.path.join(tmp, "dest-bin")
+    os.mkdir(dest)
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(os.path.join(repo, "payload", "pending-daemon"))
+    with open(os.path.join(repo, "payload", "pending-daemon", "loadout-pending-daemon"), "w") as fh:
+        fh.write("raise SystemExit(0)\n")
+
+    def no_spawn(*_a, **_k):
+        raise AssertionError("daemon spawned from an insecure pending dir")
+
+    saved = (m._PENDING_DIR, m.subprocess.Popen)
+    m._PENDING_DIR = pending
+    m.subprocess.Popen = no_spawn
+    try:
+        try:
+            result = m.stage_pending_ops({"tmux"}, bin_dir, dest, repo)
+            raised = None
+        except AssertionError as exc:
+            result, raised = None, exc
+    finally:
+        m._PENDING_DIR, m.subprocess.Popen = saved
+    check("stage_pending_ops returns without spawning", raised is None and result is None, str(raised))
+    check("no pending.json written", not os.path.exists(os.path.join(pending, "pending.json")))
+    check("no daemon.py written", not os.path.exists(os.path.join(pending, "daemon.py")))
+    check("no staged file written", not os.path.exists(os.path.join(pending, "files", "tmux")))
+
+
+def test_run_log_nofollow(m, tmp):
+    target = os.path.join(tmp, "victim.txt")
+    with open(target, "w") as fh:
+        fh.write("keep\n")
+    link = os.path.join(tmp, "loadout.user.log")
+    os.symlink(target, link)
+    fh = m._open_private_append(link)
+    if fh is not None:
+        fh.close()
+    check("symlinked run log is not opened", fh is None)
+    check("symlink target is unchanged", os.path.getsize(target) == 5)
+
+    plain = os.path.join(tmp, "plain.log")
+    fh = m._open_private_append(plain)
+    check("a fresh run log opens", fh is not None)
+    if fh is not None:
+        fh.write("x\n")
+        fh.close()
+        check("a fresh run log is 0600", _mode(plain) == 0o600, oct(_mode(plain)))
+
+
+def test_tmp_user_fallback(m, tmp):
+    saved = getpass.getuser
+
+    def broken():
+        raise OSError("No username set in the environment")
+
+    m.getpass.getuser = broken
+    try:
+        got = m._tmp_user()
+    finally:
+        m.getpass.getuser = saved
+    check("_tmp_user falls back to the uid", got == str(os.getuid()), repr(got))
+
+
+def test_daemon_refuses_insecure_dir(d, tmp):
+    pending = os.path.join(tmp, "daemon-pending")
+    os.mkdir(pending)
+    os.chmod(pending, 0o777)
+    d.PENDING_DIR = pending
+    check("daemon refuses a 0777 pending dir", d.secure_pending_dir() is False)
+    os.chmod(pending, 0o700)
+    check("daemon accepts its own 0700 pending dir", d.secure_pending_dir() is True)
+
+
+def main():
+    mod = _load("loadout_mod", LOADOUT_PATH)
+    daemon = _load("loadout_pending_daemon", PENDING_DAEMON_PATH)
+    for fn in (
+        test_private_dir_creates_0700,
+        test_private_dir_rejects_symlink,
+        test_private_dir_rejects_group_other_writable,
+        test_private_dir_tightens_readable,
+        test_stage_pending_refuses_insecure_dir,
+        test_run_log_nofollow,
+        test_tmp_user_fallback,
+    ):
+        print(f"-- {fn.__name__}")
+        with tempfile.TemporaryDirectory(prefix=".loadout-test-private.") as tmp:
+            try:
+                fn(mod, tmp)
+            except Exception as exc:
+                check(fn.__name__, False, f"{type(exc).__name__}: {exc}")
+    print("-- test_daemon_refuses_insecure_dir")
+    with tempfile.TemporaryDirectory(prefix=".loadout-test-private.") as tmp:
+        try:
+            test_daemon_refuses_insecure_dir(daemon, tmp)
+        except Exception as exc:
+            check("test_daemon_refuses_insecure_dir", False, f"{type(exc).__name__}: {exc}")
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

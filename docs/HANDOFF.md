@@ -1,5 +1,21 @@
 # Current Handoff
 
+## 2026-10-27 (4): review plan execution, in progress
+
+Executing the 2026-10-27 code and doc review plan inline, task by task, on
+`main` (not pushed). The plan file stays untracked until its security tasks
+have all landed. Decisions D-A to D-D took the plan's recommended options.
+
+Landed:
+- **Task 1** (SEC-1, SEC-6, ROB-5): the pending-ops dir and the run log are
+  private-checked before use (`_secure_private_dir`, `_open_private_append`,
+  the daemon's `secure_pending_dir()`); `_tmp_user()` falls back to the uid.
+  Gate: `tests/unit-private-state` (T1). The plan's manual two-account check
+  (user B pre-creates `/tmp/loadout-pending-<A>` 0777, user A reinstalls with
+  a loadout binary running) was NOT run: this session had one account and no
+  root. Run it on a farm node with a second account; expected result is in
+  docs/SECURITY.md section 9.
+
 ## 2026-10-27 (3): session close -- open items for the next session
 
 **Shipped.** `74ed71f` (node RUNPATH fix, entry (2) below) is pushed to

@@ -28,14 +28,18 @@ import getpass
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 
 # Must match the per-user paths the installer builds in loadout_main.py
-# (_PENDING_DIR / _RUN_LOG_FIXED_PATH).
-_TMP_USER = getpass.getuser()
+# (_PENDING_DIR / _RUN_LOG_FIXED_PATH), including _tmp_user()'s uid fallback.
+try:
+    _TMP_USER = getpass.getuser()
+except OSError, KeyError:
+    _TMP_USER = str(os.getuid())
 
 PENDING_DIR = os.path.join(tempfile.gettempdir(), f"loadout-pending-{_TMP_USER}")
 PENDING_JSON = os.path.join(PENDING_DIR, "pending.json")
@@ -55,14 +59,22 @@ _last_heartbeat_ts = 0.0
 def _append_run_log(msg):
     """If the dev-log exists (i.e. installer was run from a repo clone),
     append one timestamped line tagged [daemon]. Never creates the file."""
-    if not os.path.exists(RUN_LOG_PATH):
+    # O_NOFOLLOW + owner check: the log sits at a predictable name in the
+    # shared temp root, so never write through a symlink or into a file a
+    # co-tenant created.
+    try:
+        fd = os.open(RUN_LOG_PATH, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
         return
     try:
-        with open(RUN_LOG_PATH, "a") as f:
-            ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            f.write(f"[{ts}] [daemon] {msg}\n")
+        if os.fstat(fd).st_uid != os.getuid():
+            return
+        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        os.write(fd, f"[{ts}] [daemon] {msg}\n".encode())
     except OSError:
         pass
+    finally:
+        os.close(fd)
 
 
 def log(msg):
@@ -252,7 +264,40 @@ def cleanup():
         pass
 
 
+def secure_pending_dir():
+    """Same rules as the installer's _secure_private_dir(): PENDING_DIR must be
+    a real directory owned by us with no group/other write bit (created 0700
+    when absent; our own readable dir is tightened). A co-tenant who created
+    the predictable path first would control pending.json, i.e. which bytes we
+    copy where, so refuse it."""
+    try:
+        os.mkdir(PENDING_DIR, 0o700)
+    except FileExistsError:
+        pass
+    except OSError as exc:
+        log(f"cannot create {PENDING_DIR}: {exc}")
+        return False
+    try:
+        st = os.lstat(PENDING_DIR)
+    except OSError as exc:
+        log(f"cannot stat {PENDING_DIR}: {exc}")
+        return False
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+        log(f"{PENDING_DIR} is not private to this user (owner/mode/symlink); refusing to run")
+        return False
+    if stat.S_IMODE(st.st_mode) != 0o700:
+        try:
+            os.chmod(PENDING_DIR, 0o700)
+        except OSError as exc:
+            log(f"cannot tighten {PENDING_DIR} to 0700: {exc}")
+            return False
+    return True
+
+
 def main():
+    if not secure_pending_dir():
+        sys.exit(1)
+
     if is_already_running():
         log("another instance is running, exiting")
         sys.exit(0)

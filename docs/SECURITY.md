@@ -227,3 +227,32 @@ Tools: gitleaks is committed (offline T1), syft and osv-scanner are fetched on
 demand and verified against pinned URL + sha256 digests in
 `build/security_tools.py` (both static; EL8-verified with `--network=none`).
 None of this enters `payload/`, the registry, or an install.
+
+## 9. Local multi-user hardening (added 2026-10-27)
+
+Farm nodes are shared: every account writes into the same world-writable temp
+root and `/dev/shm`. Any state loadout keeps at a PREDICTABLE name there can be
+created first by a co-tenant, who then owns it. Loadout therefore checks every
+such path before use and refuses one it does not privately own.
+
+- **Pending-ops directory** (`<temp-root>/loadout-pending-<user>/`). It holds
+  `pending.json` (which staged bytes the daemon copies to which destination)
+  and `daemon.py` (which the installer executes). The installer's
+  `_secure_private_dir` and the daemon's `secure_pending_dir()` accept it only
+  when it is a real directory (never a symlink), owned by the caller's uid, with
+  no group or other write bit. It is created 0700 when absent; the caller's own
+  merely-readable directory is tightened to 0700. Anything else is refused:
+  the installer warns and stages nothing, the daemon exits 1 before reading
+  `pending.json`, and `loadout clean --pending` refuses to remove it.
+- **Run log** (`<temp-root>/loadout.<user>.log`) opens with `O_NOFOLLOW`, mode
+  0600, and an owner check on the opened descriptor, so a planted symlink or a
+  co-tenant's file never receives install output.
+- **User name** for these paths comes from `getpass.getuser()`, falling back to
+  the uid when no name is available (no `USER`/`LOGNAME`, uid absent from
+  passwd), so the installer still starts in minimal containers.
+
+`tests/unit-private-state` (Tier 1) covers the shapes one account can build
+(a 0777 directory, a symlink). A foreign owner needs a second account: as user
+B, `mkdir -m 777 /tmp/loadout-pending-<A>`; as user A, reinstall while a
+loadout binary is running. Expected: the "is not private" warning, nothing
+written under B's directory.
