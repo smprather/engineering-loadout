@@ -267,3 +267,13 @@ such path before use and refuses one it does not privately own.
 B, `mkdir -m 777 /tmp/loadout-pending-<A>`; as user A, reinstall while a
 loadout binary is running. Expected: the "is not private" warning, nothing
 written under B's directory.
+
+### Content-verification coverage (2026-10-27)
+
+Install-time verification now covers every payload file an install phase uses:
+bz2 artifacts and chunks, the portable-python archive, every wheel and wheel
+chunk (before uv sees the wheelhouse), GObject typelibs, the Tree-sitter parser
+tree (native code nvim loads) and the vendored nvim-treesitter Lua, the
+python-loaded lock, and the pending-ops daemon script. A missing
+`.content-manifest` now fails closed: `loadout install` refuses unless
+`--no-verify` is given. `envs/` config sources are not covered.

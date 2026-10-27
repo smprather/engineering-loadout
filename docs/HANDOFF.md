@@ -15,6 +15,17 @@ Landed:
   a loadout binary running) was NOT run: this session had one account and no
   root. Run it on a farm node with a second account; expected result is in
   docs/SECURITY.md section 9.
+- **Task 2** (SEC-2..SEC-5): shells and nvim use per-user runtime dirs under
+  `LOADOUT_CFG_SHM_DIR` only when private (`loadout_private_dir`,
+  `helpers/private-dir`, `global.paths.private_dir`). Gate: `tests/env-private-dirs` (T2).
+- **Task 3** (SEC-7, SEC-8): every payload file a phase installs is verified;
+  a missing manifest fails closed. Gate: `tests/content-verify`. Only Tier 1 was
+  run for Task 3; the full `tests/run-all` (Tier 2 installs) is still owed.
+
+Next: Task 4 (release trust chain, D-A). Ledger with rulings:
+`.superpowers/sdd/2026-10-27-code-and-doc-review/progress.md` (gitignored).
+Run `tests/run-all` with the default TMPDIR: a long TMPDIR makes
+python-suite-install fail (uv writes a /bin/sh shebang trampoline).
 
 ## 2026-10-27 (3): session close -- open items for the next session
 

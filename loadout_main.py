@@ -882,6 +882,21 @@ def _verify_source_files(files):
             )
 
 
+def _verify_tree(src_dir):
+    """_verify_source_files over every regular file under src_dir (skipping
+    .git). For phases that copy or sync a whole payload tree rather than
+    resolving single artifacts: Tree-sitter parsers and queries, the vendored
+    nvim-treesitter Lua. Raises ContentVerificationError."""
+    files = []
+    for root, dirs, names in os.walk(src_dir):
+        dirs[:] = sorted(d for d in dirs if d != ".git")
+        for name in sorted(names):
+            path = os.path.join(root, name)
+            if os.path.isfile(path) and not os.path.islink(path):
+                files.append(path)
+    _verify_source_files(files)
+
+
 class _Bz2Store:
     """Transparent split-bz2 resolver and directory scanner.
 
@@ -973,6 +988,11 @@ def _prepare_wheels_dir(wheels_dir):
         finally:
             cleanup()
     """
+    # uv installs whatever --find-links offers, so every wheel and every chunk is
+    # hashed against the manifest before uv can see it.
+    _verify_source_files(
+        sorted(glob.glob(os.path.join(wheels_dir, "*.whl")) + glob.glob(os.path.join(wheels_dir, "*.whl.part-*")))
+    )
     chunked = glob.glob(os.path.join(wheels_dir, "*.whl.part-000"))
     if not chunked:
         return wheels_dir, lambda: None
@@ -2096,6 +2116,8 @@ def stage_pending_ops(blocked_binaries, bin_dir, dest_bin_dir, repo_dir):
     daemon_src = os.path.join(repo_dir, PAYLOAD_DIR, "pending-daemon", "loadout-pending-daemon")
     daemon_dst = os.path.join(_PENDING_DIR, "daemon.py")
     if os.path.isfile(daemon_src):
+        # Executed below with sys.executable: verify it like any payload file.
+        _verify_source_files([daemon_src])
         try:
             shutil.copy2(daemon_src, daemon_dst)
         except OSError as exc:
@@ -2389,7 +2411,9 @@ def install_portable_python(repo_dir, home, selected_tools=None):
         record_result("portable Python", "SKIP", "no archive found")
         return
 
-    archive = os.path.join(src_dir, archives[-1])
+    # Through the store so the archive is hashed against the manifest before
+    # anything extracts or runs it (its install.sh is executed below).
+    archive = _bz2.resolve(os.path.join(src_dir, archives[-1]))
     tmp_dir = tempfile.mkdtemp(prefix=".loadout-python-install.", dir=_tmp_root())
     try:
         print(f"  extracting {archive}...")
@@ -2588,6 +2612,8 @@ def install_python_suite(repo_dir, home, selected_tools, registry):
         warn(f"python-loaded lock missing: {lock_path}")
         record_result("Python suite", "FAIL", "lock missing")
         return
+    # The lock decides which wheels get installed, so it is verified like them.
+    _verify_source_files([lock_path])
     if not entry.get("wheels_dir") or not os.path.isdir(wheels_dir):
         warn(f"python-loaded wheelhouse missing: {wheels_dir}")
         record_result("Python suite", "FAIL", "private wheelhouse missing")
@@ -2738,6 +2764,7 @@ def install_typelibs(repo_dir, home, selected_tools=None):
         record_result("GObject typelibs", "SKIP", "no typelib files")
         return
 
+    _verify_source_files([os.path.join(src_dir, f) for f in typelib_files])
     dest_dir = os.path.join(_local_root(home), "lib", "girepository-1.0")
     ensure_dir(dest_dir, "GObject typelibs")
 
@@ -3109,19 +3136,22 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no wheels directory")
         return
 
+    # Verify (and rejoin any chunked wheels into a temp dir so uv can find whole
+    # files) before anything else looks at the wheelhouse.
+    effective_wheels_dir, _wheels_cleanup = _prepare_wheels_dir(wheels_dir)
+
     uv_bin = os.path.join(_local_root(home), "bin", "uv")
     python_bin = os.path.join(_local_root(home), "bin", "python3.15")
     if not os.path.isfile(uv_bin):
+        _wheels_cleanup()
         warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "uv not installed")
         return
     if not os.path.isfile(python_bin):
+        _wheels_cleanup()
         warn(f"python3.15 not found at {python_bin} -- Python tools will NOT be installed")
         record_result("Python tools", "FAIL", "python3.15 not installed")
         return
-
-    # Rejoin any chunked wheels into a temp dir so uv can find whole files.
-    effective_wheels_dir, _wheels_cleanup = _prepare_wheels_dir(wheels_dir)
 
     installed = []
     failed = []
@@ -4247,6 +4277,9 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         record_result("Tree-sitter parsers", "SKIP", f"no prebuilt parsers for {platform}")
         return
 
+    # Parsers are native code nvim dlopens: hash the whole platform tree before
+    # copying any of it.
+    _verify_tree(src_dir)
     for subdir in ("queries", "build-info", "parser-info", "registry"):
         src = os.path.join(src_dir, subdir)
         if os.path.isdir(src):
@@ -4305,6 +4338,8 @@ def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
         record_result("nvim-treesitter vendor", "SKIP", "missing payload/treesitter/vendor/")
         return
 
+    _verify_tree(os.path.join(src_root, "nvim-treesitter"))
+    _verify_tree(os.path.join(src_root, "treesitter-parser-registry"))
     ensure_dir(dest_root, "nvim-treesitter vendor")
     sync_dir(
         os.path.join(src_root, "nvim-treesitter"),
@@ -7179,7 +7214,13 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     if _VERIFY_CONTENT:
         _load_content_manifest(repo_dir)
         if not _CONTENT_MANIFEST:
-            warn("no .content-manifest found -- install-time content verification is disabled")
+            # Fail closed: with no manifest nothing can be verified, and the
+            # old warn-and-continue installed every payload file unchecked.
+            eprint(
+                "content verification: .content-manifest not found -- refusing to install "
+                "unverified payload (pass --no-verify to override)"
+            )
+            return 1
 
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))

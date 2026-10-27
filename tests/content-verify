@@ -116,8 +116,115 @@ def main():
             resolve_refused = True
         check("resolve() refuses a tampered file", resolve_refused)
 
+    test_every_payload_phase_verifies(m)
+    test_missing_manifest_fails_closed(m)
+
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
+
+
+def _raises(exc_type, fn, *args):
+    try:
+        fn(*args)
+    except exc_type:
+        return True
+    except Exception as exc:
+        print(f"    (raised {type(exc).__name__}: {exc})")
+        return False
+    return False
+
+
+def _write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fh:
+        fh.write(data)
+
+
+def _manifest_then_tamper(m, repo, files):
+    """Record every fixture file in .content-manifest, then flip one byte of
+    each -- the shape of a payload modified after the manifest was signed."""
+    with open(os.path.join(repo, ".content-manifest"), "w") as fh:
+        fh.write("# content manifest\n")
+        for f in files:
+            fh.write(f"sha256  {m._sha256_file(f)}  {os.path.relpath(f, repo)}\n")
+    for f in files:
+        with open(f, "ab") as fh:
+            fh.write(b"X")
+    m._load_content_manifest(repo)
+    m._VERIFY_CONTENT = True
+
+
+def test_every_payload_phase_verifies(m):
+    """Every phase that installs payload bytes must hash them first -- not only
+    the bz2 artifacts that go through _Bz2Store.resolve()."""
+    print("-- every payload phase verifies its sources")
+    with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as home:
+        plat = m.prebuilt_exact_platform_ids()[0]
+        pdir = os.path.join(repo, "payload", plat)
+        typelib = os.path.join(pdir, "typelibs", "Fake-1.0.typelib")
+        _write(typelib, b"typelib")
+        ts = m.treesitter_platform_id()
+        parser = os.path.join(repo, "payload", "treesitter", "prebuilt", ts, "parser", "fake.so")
+        _write(parser, b"\x7fELF-not-really")
+        query = os.path.join(repo, "payload", "treesitter", "prebuilt", ts, "queries", "fake", "highlights.scm")
+        _write(query, b"; q")
+        wheel = os.path.join(pdir, "wheels", "faketool-1.0-py3-none-any.whl")
+        _write(wheel, b"PK-not-really")
+        archive = os.path.join(pdir, "portable-python-3.15.0-test.tar.bz2")
+        _write(archive, b"BZh-not-really")
+        _manifest_then_tamper(m, repo, [typelib, parser, query, wheel, archive])
+
+        check(
+            "tampered typelib refused",
+            _raises(m.ContentVerificationError, m.install_typelibs, repo, home, None),
+        )
+        check(
+            "tampered parser refused",
+            _raises(m.ContentVerificationError, m.install_treesitter_parsers, repo, home, None),
+        )
+        check(
+            "tampered portable-python refused",
+            _raises(m.ContentVerificationError, m.install_portable_python, repo, home, None),
+        )
+
+        calls = []
+        saved_run = m.run
+        m.run = lambda *a, **k: calls.append(a) or saved_run(["true"])
+        registry = {"faketool": {"kind": "python-tool", "uv_tool": "faketool", "platforms": ["linux"]}}
+        try:
+            refused = _raises(m.ContentVerificationError, m.install_python_tools, repo, home, None, registry)
+        finally:
+            m.run = saved_run
+        check("tampered wheel refused before uv runs", refused and not calls, f"uv calls: {calls}")
+
+
+def test_missing_manifest_fails_closed(m):
+    """No .content-manifest means nothing can be verified: refuse, unless the
+    user explicitly opted out with --no-verify."""
+    print("-- a missing manifest fails closed")
+    import types
+
+    def args(no_verify):
+        return types.SimpleNamespace(
+            no_verify=no_verify,
+            install_follows_symlinks="auto",
+            allow_online_plugin_sync=False,
+            dry_run=True,
+            dest_dir=None,
+        )
+
+    with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as home:
+        os.makedirs(os.path.join(repo, "payload"))
+        saved = m.cmd_resolve
+        m.cmd_resolve = lambda *_a, **_k: 0
+        try:
+            rc = m.cmd_install(args(False), {}, None, repo, home)
+            check("missing manifest fails closed", rc == 1, f"rc={rc}")
+            rc = m.cmd_install(args(True), {}, None, repo, home)
+            check("--no-verify still gets past the manifest gate", rc == 0, f"rc={rc}")
+        finally:
+            m.cmd_resolve = saved
+            m._VERIFY_CONTENT = True
 
 
 if __name__ == "__main__":
