@@ -76,4 +76,25 @@ grep -q 'note: env bundles always install under \$HOME; ignoring dest_dir=' "$wo
 [ -f "$h4/.config/editorconfig/editorconfig" ] || fail "case 4: config missing from HOME"
 [ ! -e "$ignored" ] || fail "case 4: the ignored config dest_dir was created"
 
+# 5. every install verb honors an explicit --dest-dir the same way. reinstall
+#    and upgrade/update used to reach install through ctx.invoke, which lost the
+#    parameter source, so the typed flag was treated as config-supplied and an
+#    env-only selection was written into the real HOME.
+for verb in install reinstall upgrade update; do
+    h5="$work/home5-$verb"
+    d5="$work/dest5-$verb"
+    mkdir -p "$h5" "$d5"
+    env -i HOME="$h5" PATH="$basic_path" LANG="${LANG:-C.UTF-8}" TERM="xterm-256color" \
+        "$repo_dir/loadout" "$verb" env-editorconfig --dest-dir "$d5" --no-backup -y \
+        >"$work/case5-$verb.log" 2>&1 || fail "case 5 ($verb) failed:
+$(cat "$work/case5-$verb.log")"
+    [ -e "$d5/.editorconfig" ] || [ -L "$d5/.editorconfig" ] \
+        || fail "case 5 ($verb): --dest-dir did not stage \$D/.editorconfig"
+    [ ! -e "$h5/.editorconfig" ] && [ ! -L "$h5/.editorconfig" ] \
+        || fail "case 5 ($verb): wrote into the real HOME despite --dest-dir"
+    if grep -q 'ignoring dest_dir' "$work/case5-$verb.log"; then
+        fail "case 5 ($verb): treated a typed --dest-dir as config-supplied"
+    fi
+done
+
 echo "env-routing-dest-dir: OK"

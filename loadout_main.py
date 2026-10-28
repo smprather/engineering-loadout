@@ -7902,12 +7902,10 @@ def cli_install(
 
       LOADOUT_CFG_SHARED_PREFIX=/foo/bar/local loadout install @envs
     """
-    # A config-supplied dest_dir is a click default, not user intent: the
-    # env-only rule only stages under an explicitly typed --dest-dir.
-    dest_dir_explicit = ctx.get_parameter_source("dest_dir") == click.core.ParameterSource.COMMANDLINE
-    args = _ctx_args(
+    _cli_install_impl(
         ctx,
-        packages=list(packages),
+        _dest_dir_typed(ctx),
+        packages=packages,
         skip=skip,
         no_deps=no_deps,
         force=force,
@@ -7916,12 +7914,29 @@ def cli_install(
         no_verify=no_verify,
         allow_online_plugin_sync=allow_online_plugin_sync,
         install_follows_symlinks=install_follows_symlinks,
-        post_install_hook=list(post_install_hook),
+        post_install_hook=post_install_hook,
         assume_yes=assume_yes,
         dest_dir=dest_dir,
-        dest_dir_explicit=dest_dir_explicit,
     )
-    ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(dest_dir)))
+
+
+def _dest_dir_typed(ctx):
+    """True when --dest-dir was typed on THIS verb's command line.
+
+    A config-supplied dest_dir is a click default, not user intent: the
+    env-only rule only stages under an explicitly typed --dest-dir. Each verb
+    asks its own context -- reinstall/upgrade used to ctx.invoke(cli_install),
+    which loses the parameter source, so an explicit --dest-dir there was taken
+    for a config value and an env-only install went into the real HOME."""
+    return ctx.get_parameter_source("dest_dir") == click.core.ParameterSource.COMMANDLINE
+
+
+def _cli_install_impl(ctx, dest_dir_explicit, **params):
+    """Shared body of install / reinstall / upgrade."""
+    params["packages"] = list(params["packages"])
+    params["post_install_hook"] = list(params["post_install_hook"])
+    args = _ctx_args(ctx, dest_dir_explicit=dest_dir_explicit, **params)
+    ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(params["dest_dir"])))
 
 
 @cli.command(name="reinstall", short_help="Re-install packages (alias of install today).")
@@ -7946,8 +7961,9 @@ def cli_reinstall(
 ):
     """Re-install named packages. Today identical to `install`; will diverge once
     persisted install state lands."""
-    ctx.invoke(
-        cli_install,
+    _cli_install_impl(
+        ctx,
+        _dest_dir_typed(ctx),
         packages=packages,
         skip=skip,
         no_deps=no_deps,
@@ -7987,8 +8003,9 @@ def cli_upgrade(
 
     `update` is an alias for this command.
     """
-    ctx.invoke(
-        cli_install,
+    _cli_install_impl(
+        ctx,
+        _dest_dir_typed(ctx),
         packages=packages,
         skip=skip,
         no_deps=no_deps,
