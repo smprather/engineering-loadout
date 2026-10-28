@@ -48,8 +48,11 @@ Also: `docs/HANDOFF.md` split again -- entries 2026-10-01..11 moved to
 - `reinstall` diverges from `install` now (it ignores the stamps). Tests that
   pin HOW a rewrite happens (inode swap) run with stamps ignored.
 
-**Release 2026.10.8 (class C: installer + registry changed).** Gates per
-docs/RELEASE.md. Currency sweep run, nothing bumped (ruling: a fix release;
+**Release 2026.10.8 (class C: installer + registry changed) -- PUBLISHED and
+verified 2026-10-28** (tag on `5232eba`, Good ED25519 signature, tag binds
+`sha256sums.txt sha256 73d4c694...`, four assets, stash size matches,
+`origin/main` = tag commit; `fetch-stash --tag 2026.10.8 --from-file` passes
+the signed-tag check). Gates per docs/RELEASE.md. Currency sweep run, nothing bumped (ruling: a fix release;
 2026.10.7 swept four days earlier, and each bump needs its own build + smoke).
 `build/check-versions --outdated-only` on 2026-10-28 lists 19 behind upstream
 -- btop 1.4.8, fzf 0.74.5, gnuplot 6.0.6, gopls 0.24.0, gvim/vim 9.2.1252,
