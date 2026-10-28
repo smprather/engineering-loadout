@@ -25,7 +25,7 @@ Usage:
     ./tools/refresh-stash <stash-dir> --add-only   # only mirror plugins that are missing
 
 The stash dir is the one the installer created, e.g.
-    <shared>/local/share/nvim/loadout/vendor/plugin-stash
+    <shared-tree>/share/nvim/loadout/vendor/plugin-stash
 """
 
 import argparse
@@ -107,7 +107,7 @@ def main(argv):
     if not os.path.isdir(stash):
         eprint(f"ERROR: no stash dir at {stash}")
         eprint("  Point me at the installed stash, e.g.")
-        eprint("    <shared>/local/share/nvim/loadout/vendor/plugin-stash")
+        eprint("    <shared-tree>/share/nvim/loadout/vendor/plugin-stash")
         return 1
     if not args.dry_run and not os.access(stash, os.W_OK):
         eprint(f"ERROR: {stash} is not writable.")

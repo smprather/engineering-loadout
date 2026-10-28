@@ -28,11 +28,19 @@ source uses PEP 758 syntax (`except A, B:` without parentheses; `except (A, B) a
 still when binding) -- a pre-3.14 interpreter cannot parse the file at all, so always
 run it under the bundled interpreter or another 3.14+ build.
 
+### Disabled packages
+
+A package marked `disabled: true` in `payload/packages.json` is out of service:
+every `@group` sweep skips it, naming it directly is refused with its
+`disabled_reason`, and anything that hard-depends on it is disabled too.
+`./loadout info <pkg>` shows the status.
+
 ### Subcommands & options
 
 ```bash
 ./loadout install @shared-all                 # install every bundled tool (shared tree)
 ./loadout install @envs-all                   # install every per-user config bundle
+./loadout install @all                        # literally everything (@shared-all + @envs-all)
 ./loadout list                                # show all packages
 ./loadout list --groups                       # show all @groups
 ./loadout list --tag editor                   # filter packages by tag

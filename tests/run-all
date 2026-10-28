@@ -317,6 +317,7 @@ run_test "installed-sizes in sync" "$PY" build/gen-installed-sizes --check
 run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" "$PY" build/gen-readme-table --check
+run_test "docs-sync" "$PY" tests/docs-sync
 run_test "assurance-check" "$PY" tests/assurance-check
 run_test "env-shell-parity" "$PY" tests/env-shell-parity
 run_test "env-bash-profile-shim" "$PY" tests/env-bash-profile-shim

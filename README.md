@@ -465,7 +465,7 @@ escape sequences or stall in `wezterm set-working-directory`.
 
 [Python](https://www.python.org) **3.15.0** -- a portable Python build that
 installs under the install root (`<prefix>/bin/python3.15`, default
-`~/.local/share/loadout/bin`). Use `python3.15` and `pip3.14` to pin this build.
+`~/.local/share/loadout/bin`). Use `python3.15` and `pip3.15` to pin this build.
 
 ---
 

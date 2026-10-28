@@ -1,10 +1,10 @@
 # Full path to preferred bash binary; re-execs at startup if set
 export LOADOUT_CFG_PREFERRED_BASH=""
-# Local-root directory for a separately-installed shared/read-only loadout tree.
-# It directly contains bin/, share/, and lib64/; for `loadout install @shared
-# --dest-dir /foo/bar`, set this to /foo/bar/local. Empty means the user's own
-# ~/.local. PATH and TERMINFO_DIRS resolve against
-# ${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}.
+# Root of a separately-installed shared/read-only loadout tree: the directory
+# that directly contains bin/, share/ and lib64/. For `loadout install @shared
+# --dest-dir /foo/bar` that is /foo/bar itself (there is no `local/` level).
+# Empty means the default install root. PATH and TERMINFO_DIRS resolve against
+# ${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}.
 export LOADOUT_CFG_SHARED_PREFIX=""
 # Fast scratch root for per-user runtime state: the XDG_RUNTIME_DIR fallback
 # ($LOADOUT_CFG_SHM_DIR/<uid>), the Python bytecode cache and the eza copy

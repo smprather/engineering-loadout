@@ -255,7 +255,9 @@ def _load_tool_registry(repo_dir):
 
     Per-entry fields (all optional unless noted otherwise):
       kind         -- package type: 'bin', 'lib-bundle', 'runtime', 'typelib',
-                     'python-base', 'python-tool', 'env', 'font', 'data', 'group'.
+                     'python-base', 'python-tool', 'python-suite', 'env', 'font',
+                     'data', 'group'. 'python-suite' is a curated venv built from a
+                     private wheelhouse + lock (python-loaded; install_python_suite).
                      Defaults to 'bin' when absent.
       platforms    -- list of platforms where the entry is valid: 'linux'
                      (sole platform; the project is 100% Linux-only).
@@ -8201,12 +8203,12 @@ def cli_install(
     Environment:
 
       LOADOUT_CFG_SHARED_PREFIX -- set in the environment of an `@envs` install
-      to the local-root of a separately-installed shared/read-only tree (the dir
-      holding bin/share/lib64, e.g. /foo/bar/local for `@shared --dest-dir
-      /foo/bar`). It is baked into the user's config.sh so PATH and
+      to the root of a separately-installed shared/read-only tree (the dir
+      holding bin/share/lib64 -- for `@shared --dest-dir /foo/bar` that is
+      /foo/bar itself). It is baked into the user's config.sh so PATH and
       TERMINFO_DIRS resolve against it. Example:
 
-      LOADOUT_CFG_SHARED_PREFIX=/foo/bar/local loadout install @envs
+      LOADOUT_CFG_SHARED_PREFIX=/foo/bar loadout install @envs
     """
     _cli_install_impl(
         ctx,

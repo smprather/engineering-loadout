@@ -1,0 +1,220 @@
+#!/usr/bin/env python3.15
+"""docs-sync -- the cold-start docs describe the code that is committed.
+
+AGENTS.md's Commit Rule says docs must match committed code, and nothing
+checked it: the 2026-10-27 review found the test list 11 entries short, the
+envs/ count wrong, an undocumented registry kind, a wheel recipe for the wrong
+Python minor, help text still describing a retired `local/` level, and a 645-line
+second copy of AGENTS.md in .github/copilot-instructions.md. Each check below is
+one of those classes, so the next drift fails here instead of in a reader's head.
+
+History is exempt: docs/HANDOFF.md, docs/archive/**, docs/superpowers/**, and
+the per-package dated sections of build/ADDING_BINARIES.md record what was true
+then.
+
+Exits 0 if all checks pass, 1 otherwise.
+"""
+
+import ast
+import json
+import os
+import re
+import subprocess
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}\n        {detail}")
+
+
+def read(rel):
+    with open(os.path.join(REPO, rel), encoding="utf-8") as fh:
+        return fh.read()
+
+
+VENDORED = re.compile(
+    r"(^|/)vendor/|^installer_vendor/|github\.scop|/grc/|icecream-bash|^payload/|"
+    r"^envs/vim/pack/|^envs/tmux/(vendor|plugins)/|^build/gitleaks/"
+)
+HISTORY = re.compile(r"^docs/HANDOFF\.md$|^docs/archive/|^docs/superpowers/")
+
+
+def first_party_md():
+    out = subprocess.run(["git", "-C", REPO, "ls-files", "*.md"], capture_output=True, text=True, check=True)
+    return [p for p in out.stdout.split() if not VENDORED.search(p)]
+
+
+def current_md():
+    return [p for p in first_party_md() if not HISTORY.search(p)]
+
+
+def adding_binaries_generic():
+    """The generic (non-history) part of build/ADDING_BINARIES.md: the Build
+    Machine and Workflow sections plus the wheel recipe, minus dated status
+    notes. Per-package sections are history and keep their original commands."""
+    text = read("build/ADDING_BINARIES.md")
+    keep = []
+    for section in re.split(r"(?m)^(?=## )", text):
+        head = section.splitlines()[0] if section else ""
+        if head.startswith(("## Build Machine", "## Workflow")):
+            keep.append(section)
+        elif head.startswith("## Python wheel packaging notes"):
+            for sub in re.split(r"(?m)^(?=### )", section):
+                if "status" not in sub.splitlines()[0].lower():
+                    keep.append(sub)
+    return "\n".join(keep)
+
+
+def test_tests_listed():
+    agents = read("AGENTS.md")
+    tests_dir = os.path.join(REPO, "tests")
+    missing = []
+    for name in sorted(os.listdir(tests_dir)):
+        path = os.path.join(tests_dir, name)
+        if name == "run-all" or not os.path.isfile(path) or not os.access(path, os.X_OK):
+            continue
+        if not re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", agents):
+            missing.append(name)
+    check("every tests/* executable (except run-all) is named in AGENTS.md", not missing, ", ".join(missing))
+
+
+def test_envs_count():
+    agents = read("AGENTS.md")
+    m = re.search(r"(\d+) per-user config-source dirs", agents)
+    actual = len([d for d in os.listdir(os.path.join(REPO, "envs")) if os.path.isdir(os.path.join(REPO, "envs", d))])
+    check(
+        "AGENTS.md '<N> per-user config-source dirs' == len(envs/*/)",
+        m is not None and int(m.group(1)) == actual,
+        f"AGENTS.md says {m.group(1) if m else '(missing)'}, envs/ has {actual}",
+    )
+
+
+def test_kinds_documented():
+    with open(os.path.join(REPO, "payload", "packages.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    reg = data.get("packages", data)
+    kinds = {v.get("kind") for v in reg.values() if isinstance(v, dict) and v.get("kind")}
+    m = re.search(r"`kind` ∈ \{([^}]*)\}", read("AGENTS.md"))
+    agents_kinds = {k.strip() for k in m.group(1).split(",")} if m else set()
+    tree = ast.parse(read("loadout_main.py"))
+    doc = ""
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "_load_tool_registry":
+            doc = ast.get_docstring(node) or ""
+    missing_agents = sorted(kinds - agents_kinds)
+    missing_doc = sorted(k for k in kinds if not re.search(rf"(?<![\w-]){re.escape(k)}(?![\w-])", doc))
+    check(
+        "registry kinds are named in AGENTS.md and in the _load_tool_registry docstring",
+        not missing_agents and not missing_doc,
+        f"AGENTS.md lacks {missing_agents}; docstring lacks {missing_doc}",
+    )
+
+
+STALE = (
+    "pip3.14",
+    "--python-version 3.14",
+    "/foo/bar/local",
+    "<shared>/local/",
+    "resolve_tool_selection(args, registry)` in `loadout`",
+)
+
+
+def test_no_stale_patterns():
+    sources = {p: read(p) for p in current_md() if p != "build/ADDING_BINARIES.md"}
+    sources["build/ADDING_BINARIES.md (generic sections)"] = adding_binaries_generic()
+    for rel in ("loadout_main.py", "tools/fetch-stash", "tools/refresh-stash", "build/update"):
+        sources[rel] = read(rel)
+    for rel in ("envs/bash/global/config.sh", "envs/tcsh/global/config.csh"):
+        sources[rel] = read(rel)
+    hits = [f"{rel}: {pat!r}" for rel, text in sources.items() for pat in STALE if pat in text]
+    check("no stale pattern in current docs or help", not hits, "; ".join(hits))
+
+
+# Root-level Markdown beyond README/AGENTS breaks the "root kept minimal" rule.
+ROOT_MD_ALLOWED = {
+    "README.md",
+    "AGENTS.md",
+    "enhancement-request-permissions-management.md",  # removed by Task 18
+}
+
+
+def test_root_md():
+    extra = sorted(n for n in os.listdir(REPO) if n.endswith(".md") and n not in ROOT_MD_ALLOWED)
+    check("root-level *.md is only README.md and AGENTS.md", not extra, ", ".join(extra))
+
+
+def test_copilot_stub():
+    text = read(".github/copilot-instructions.md")
+    lines = text.count("\n")
+    check(
+        ".github/copilot-instructions.md is a <= 80-line pointer that links AGENTS.md",
+        lines <= 80 and "AGENTS.md" in text,
+        f"{lines} lines",
+    )
+
+
+def test_install_help():
+    res = subprocess.run(
+        [os.path.join(REPO, "loadout"), "install", "--help"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "COLUMNS": "200"},
+    )
+    out = res.stdout + res.stderr
+    check(
+        "`./loadout install --help` has no '/local' prefix example",
+        res.returncode == 0 and not re.search(r"/local\b", out),
+        "; ".join(ln.strip() for ln in out.splitlines() if re.search(r"/local\b", ln)) or f"rc={res.returncode}",
+    )
+
+
+LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+
+
+def test_relative_links():
+    broken = []
+    for rel in first_party_md():
+        text = read(rel)
+        # Fenced code blocks are not links.
+        text = re.sub(r"(?ms)^```.*?^```", "", text)
+        for target in LINK.findall(text):
+            if re.match(r"^[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
+                continue
+            path = target.split("#", 1)[0]
+            if not path:
+                continue
+            base = REPO if path.startswith("/") else os.path.join(REPO, os.path.dirname(rel))
+            if not os.path.exists(os.path.normpath(os.path.join(base, path.lstrip("/")))):
+                broken.append(f"{rel} -> {target}")
+    check("every relative Markdown link in first-party docs resolves", not broken, "; ".join(broken[:20]))
+
+
+def main():
+    for fn in (
+        test_tests_listed,
+        test_envs_count,
+        test_kinds_documented,
+        test_no_stale_patterns,
+        test_root_md,
+        test_copilot_stub,
+        test_install_help,
+        test_relative_links,
+    ):
+        fn()
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

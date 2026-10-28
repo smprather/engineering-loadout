@@ -44,19 +44,33 @@ There is no "default install" -- the user always names packages or groups explic
 Entries whose keys start with `@` carry a `members` list and expand recursively
 with cycle detection. Synthetic groups computed at runtime: `@shared` (every
 non-env, non-optional package), `@shared-all` (`@shared` plus the `optional:
-true` packages -- the full shared tree), `@envs` (Bash + tcsh config), and
-`@envs-all` (every env config bundle). There is no bare `all` keyword: it
+true` packages -- the full shared tree), `@envs` (Bash + tcsh config),
+`@envs-all` (every env config bundle), and `@all` (literally everything:
+`@shared-all` plus `@envs-all`). There is no bare `all` keyword: it
 meant "every non-optional package", the opposite of the `-all` suffix used by
 `@shared-all` / `@envs-all` ("+ optionals"), so it was removed. The former
 curated mega-group is retired: the resolver raises a loud error naming
 `@shared-all` (bundled tools) followed by `@envs-all` (per-user shell configs).
+
+### Disabled packages
+
+`disabled: true` (with an optional `disabled_reason`) takes a package out of
+service. It is excluded from every sweep (`@shared`, `@shared-all`,
+`@envs-all`, `@all`) and refused when named directly, with the reason printed.
+The state cascades UP hard `depends` edges only: a package that hard-depends on
+a disabled one is disabled too, while a soft `recommends` edge never propagates
+and a disabled package reached through a group is skipped with a warning.
+`loadout info` prints the status and reason. "Disabled" is never called
+"offline" -- in this project offline means "needs no network".
 
 ### Dependencies
 
 - `depends` -- hard dep. If a depender is selected and the dep is skipped, the
   resolver raises `ResolverError` (unless `--no-deps` or `--force`).
 - `recommends` -- soft dep. Auto-pulled when available; silently dropped if
-  skipped or unknown.
+  skipped, unknown or disabled. Depends and recommends are walked alternately
+  until the set stops changing, so a recommended package's own hard depends
+  are pulled in too.
 
 ---
 

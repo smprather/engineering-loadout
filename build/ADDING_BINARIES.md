@@ -802,26 +802,28 @@ exp_chan.c patcher and automatic packages.json version update).
 
 ### manylinux platform flag for pip download
 
-**Always use `--platform manylinux_2_28_x86_64`** when downloading wheels for the EL8 bundle:
+Wheels are downloaded for the bundled interpreter -- **Python 3.15, cp315** (the
+minor is `_BUNDLED_PY` in `loadout_main.py`). Pass **every** acceptable platform
+tag, exactly as `./build/update <python-tool>` prints it:
 
 ```bash
-PIP_REQUIRE_VIRTUALENV=0 pip3.14 download <pkg> \
-  --platform manylinux_2_28_x86_64 \
-  --python-version 3.14 \
-  --only-binary :all: \
+PIP_REQUIRE_VIRTUALENV=0 pip3.15 download <pkg> \
+  --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
+  --platform manylinux2010_x86_64 --platform manylinux1_x86_64 \
+  --platform any --python-version 3.15 --only-binary :all: \
   -d payload/el8.x86_64.glibc2p28/wheels/
 ```
 
-`manylinux_2_28_x86_64` accepts all wheels with minimum glibc <= 2.28:
-manylinux1 (2.5) -> manylinux2010 (2.12) -> manylinux2014/manylinux_2_17 -> ... -> manylinux_2_28.
-It does NOT pull manylinux_2_29+ wheels (those require RHEL9/glibc 2.29+, won't run on EL8).
+pip matches wheel platform tags EXACTLY; one tag does not imply the older ones
+(kaleido was once misdiagnosed as "no wheel" from a single-tag download). The
+EL8 floor is glibc 2.28: wheels tagged manylinux_2_29 or newer need RHEL9-era
+glibc and will not run on EL8, so never add those tags.
 
-**Do NOT use `--platform manylinux2014_x86_64`** -- that is equivalent to manylinux_2_17 and
-will miss wheels tagged manylinux_2_18 through manylinux_2_28 (e.g. numpy 2.x for cp314
-ships as manylinux_2_27 minimum; `--platform manylinux2014_x86_64` won't find it).
-
-If `pip download` fails even with `manylinux_2_28_x86_64 --only-binary :all:`, the package
-has no pre-built cp314 wheel compatible with EL8 and must be built from source (see below).
+A native wheel must be **cp315** (or abi3): a cp314 wheel cannot install under
+the bundled 3.15 interpreter (the cp314 leftovers are DEBT-1, HANDOFF
+2026-10-11 (1)). If `pip download` fails with every tag above, the package has
+no pre-built cp315 wheel compatible with EL8 and must be built from source
+(see below).
 
 ### duckdb cp314 status -- resolved in 1.4.2
 

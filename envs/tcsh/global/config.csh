@@ -42,7 +42,7 @@ if ( ! $?LOADOUT_CFG_ENABLE_STARSHIP )    setenv LOADOUT_CFG_ENABLE_STARSHIP 1
 
 # ---- deployment layout -------------------------------------------------------
 # Local-root of a separately-installed shared/read-only tree (the dir holding
-# bin/, share/, lib64/). Empty = use the user's own ~/.local. Mirrors the bash
+# bin/, share/, lib64/). Empty = the default install root. Mirrors the bash
 # variable exactly; loadout bakes it into this installed file when @envs is run
 # with LOADOUT_CFG_SHARED_PREFIX in the installer environment.
 if ( ! $?LOADOUT_CFG_SHARED_PREFIX )       setenv LOADOUT_CFG_SHARED_PREFIX ""
