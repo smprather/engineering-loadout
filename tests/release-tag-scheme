@@ -10,11 +10,16 @@ real release:
      release; a tag with no release, a draft, or an unreadable state must REFUSE
      (naming the exact `--tag` repair) rather than silently bump past a
      half-finished release. Explicit --tag stays the overwrite/repair path.
+  3. The stash-reuse publish checks every `gh` exit status. A failed
+     `gh release edit` used to be ignored: the release stayed a draft, the
+     self-heal re-uploaded the 328 MB stash, and the release went out with the
+     previous release's notes.
 """
 
 import datetime
 import importlib.machinery
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -114,6 +119,47 @@ def main():
             not published and detail,
             f"{published!r} {detail!r}",
         )
+
+    print("stash-reuse publish (fake gh on PATH)")
+    with tempfile.TemporaryDirectory() as tmp:
+        stash = os.path.join(tmp, rel.STASH_ASSET_NAME)
+        with open(stash, "wb") as fh:
+            fh.write(b"x" * 10)
+        sums = os.path.join(tmp, rel.SHA256SUMS_NAME)
+        with open(sums, "w") as fh:
+            fh.write("sums\n")
+        calls = os.path.join(tmp, "calls")
+        view = json.dumps({"isDraft": False, "assets": [{"name": rel.STASH_ASSET_NAME, "size": 10}]})
+
+        def publish(edit_rc, upload_rc=0):
+            if os.path.exists(calls):
+                os.unlink(calls)
+            script = (
+                f'echo "$*" >>"{calls}"\n'
+                'case "$1 $2" in\n'
+                f'  "release edit") exit {edit_rc} ;;\n'
+                f'  "release upload") exit {upload_rc} ;;\n'
+                f"  \"release view\") echo '{view}' ;;\n"
+                "esac\n"
+            )
+            old_path = _fake_gh(tmp, script)
+            try:
+                result = rel._publish_reused_release("2026.9.4", "new notes", [stash, sums], stash)
+            finally:
+                os.environ["PATH"] = old_path
+            with open(calls) as fh:
+                return result, fh.read()
+
+        (ok, detail), log = publish(edit_rc=0)
+        check("edit + upload succeed -> published", ok, f"{ok!r} {detail!r}")
+        check("the stash itself is not re-uploaded", stash not in log, log)
+
+        (ok, detail), log = publish(edit_rc=1)
+        check("a failed `gh release edit` blocks the publish", not ok and "edit" in detail, f"{ok!r} {detail!r}")
+        check("... and does not fall through to the stash self-heal", stash not in log, log)
+
+        (ok, detail), log = publish(edit_rc=0, upload_rc=1)
+        check("a failed small-asset upload blocks the publish", not ok and "upload" in detail, f"{ok!r} {detail!r}")
 
     print()
     if FAILURES:

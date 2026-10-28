@@ -1221,6 +1221,35 @@ def _verify_published_stash(tag, stash_path):
     return (False, "stash asset missing from published release")
 
 
+def _publish_reused_release(tag, notes, assets, stash):
+    """(ok, detail): publish a release whose stash asset was kept (reuse path).
+
+    Deleting the tag drafts the kept release (GitHub drafts a release whose
+    tag vanished, and recreating the tag does NOT auto-republish). Undraft
+    it, refresh the notes, and clobber only the small assets -- the stash
+    asset is left in place. Then VERIFY the release is published and still
+    carries the stash; on any doubt self-heal with a full stash upload
+    rather than ship an invisible or asset-less release.
+
+    Every gh exit status is checked. A failed edit used to be ignored: the
+    release stayed a draft, the self-heal re-uploaded the stash, and the
+    release went out with the previous release's notes."""
+    if run(["gh", "release", "edit", tag, "--draft=false", "--notes", notes]).returncode != 0:
+        return (False, "gh release edit failed (release left as a draft, notes not refreshed)")
+    small = [a for a in assets if a != stash]
+    if small and run(["gh", "release", "upload", tag, *small, "--clobber"]).returncode != 0:
+        return (False, "gh release upload failed")
+    ok, detail = _verify_published_stash(tag, stash)
+    if ok:
+        return (ok, detail)
+    print(f"  reuse verification failed ({detail}); self-healing with a full stash upload.", file=sys.stderr)
+    if run(["gh", "release", "upload", tag, stash, "--clobber"]).returncode != 0:
+        return (False, "gh release upload of the stash failed")
+    if run(["gh", "release", "edit", tag, "--draft=false"]).returncode != 0:
+        return (False, "gh release edit failed after the stash upload")
+    return _verify_published_stash(tag, stash)
+
+
 def _record_skip_scan_justification(script_dir, tag):
     """--skip-scan bypasses the malware gate; record that it happened so the
     ledger has an audit trail rather than a silent skip."""
@@ -1443,7 +1472,8 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     msg_dir = tempfile.mkdtemp(prefix=".loadout-tag-msg.", dir=tempfile.gettempdir())
     try:
         msg_path = _write_tag_message(tag, sums_path, msg_dir)
-        binding = open(msg_path).read().splitlines()[-1]
+        with open(msg_path) as fh:
+            binding = fh.read().splitlines()[-1]
         tag_cmd = ["git", "tag", "-s" if signing else "-a", "-F", msg_path, tag]
         if not signing:
             print("  WARNING: creating an UNSIGNED annotated tag (--allow-unsigned).")
@@ -1475,28 +1505,10 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
         sys.exit(1)
 
     if reuse_stash:
-        # Deleting the tag drafts the kept release (GitHub drafts a release whose
-        # tag vanished, and recreating the tag does NOT auto-republish). Undraft
-        # it, refresh the notes, and clobber only the small assets -- the stash
-        # asset is left in place. Then VERIFY the release is published and still
-        # carries the stash; on any doubt self-heal with a full stash upload
-        # rather than ship an invisible or asset-less release.
-        run(["gh", "release", "edit", tag, "--draft=false", "--notes", notes])
-        small = [a for a in assets if a != stash]
-        if small:
-            result = run(["gh", "release", "upload", tag, *small, "--clobber"])
-            if result.returncode != 0:
-                print("gh release upload failed.", file=sys.stderr)
-                sys.exit(1)
-        ok, detail = _verify_published_stash(tag, stash)
+        ok, detail = _publish_reused_release(tag, notes, assets, stash)
         if not ok:
-            print(f"  reuse verification failed ({detail}); self-healing with a full stash upload.", file=sys.stderr)
-            run(["gh", "release", "upload", tag, stash, "--clobber"])
-            run(["gh", "release", "edit", tag, "--draft=false"])
-            ok, detail = _verify_published_stash(tag, stash)
-            if not ok:
-                print(f"Release blocked: {detail}", file=sys.stderr)
-                sys.exit(1)
+            print(f"Release blocked: {detail}", file=sys.stderr)
+            sys.exit(1)
         print(f"  reuse verified: {detail}")
     else:
         result = run(["gh", "release", "create", tag, "--title", tag, "--notes", notes, *assets])
