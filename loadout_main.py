@@ -1325,6 +1325,15 @@ def run_install_step(thing, func, *args, **kwargs):
         traceback.print_exc()
         record_result(thing, "FAIL", detail)
         result = None
+    except (RuntimeError, tarfile.TarError, zipfile.BadZipFile, ValueError) as exc:
+        # A bad archive (unsafe member, corrupt tar/zip) or bad value must be
+        # one FAIL row, not a traceback that aborts every later phase and the
+        # summary. The traceback goes to the run log for diagnosis.
+        detail = f"{thing} failed: {type(exc).__name__}: {exc}"
+        warn(detail)
+        _log("".join(traceback.format_exception(exc)))
+        record_result(thing, "FAIL", detail)
+        result = None
     if _INTERRUPT_REQUESTED:
         eprint(f"Stopping after '{thing}' step due to Ctrl-C.")
         print_install_results()
@@ -2450,7 +2459,10 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
         stage_pending_ops(blocked_deferred, bin_dir, dest_bin_dir, repo_dir)
     if blocked_all:
         record_result("pre-built binaries", "FAIL", "in use: {}".format(", ".join(sorted(blocked_all))))
-    return blocked_deferred, blocked_failed
+    # The binaries this run placed (written or already current), for the
+    # end-of-install shared-library check.
+    installed_bins = {os.path.basename(f)[:-4] for f in _bin_bz2_files} - blocked_all
+    return blocked_deferred, blocked_failed, installed_bins
 
 
 def install_portable_python(repo_dir, home, selected_tools=None):
@@ -3309,7 +3321,13 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "SKIP", "no wheels available for: {}".format(", ".join(skipped_tools)))
 
 
-def check_prebuilt_binary_dependencies(dest_bin_dir):
+def check_prebuilt_binary_dependencies(dest_bin_dir, names=None):
+    """ldd the binaries this run installed (names; None = every bin there).
+
+    Checking the whole bin/ was slow and noisy: an env-only install re-checked
+    every tool installed earlier, and reported their problems as this run's."""
+    if names is not None and not names:
+        return
     if not _LDD:
         warn("ldd is not available -- shared library dependency check skipped")
         return
@@ -3319,7 +3337,10 @@ def check_prebuilt_binary_dependencies(dest_bin_dir):
         return
 
     missing = False
-    for name in sorted(os.listdir(dest_bin_dir)) if os.path.isdir(dest_bin_dir) else []:
+    candidates = sorted(os.listdir(dest_bin_dir)) if os.path.isdir(dest_bin_dir) else []
+    if names is not None:
+        candidates = [n for n in candidates if n in names]
+    for name in candidates:
         binary = os.path.join(dest_bin_dir, name)
         if not os.path.isfile(binary) or not os.access(binary, os.X_OK):
             continue
@@ -4168,76 +4189,92 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
             record_result(f"{pkg_name} runtime", "SKIP", "not in selected tools")
             continue
 
-        archive_name = entry.get("archive_name", f"{pkg_name}.tar.bz2")
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", archive_name))
-        if archive is None:
-            hint = entry.get("missing_hint", "")
-            skipped(
-                f"{pkg_name} runtime (no {archive_name} in payload/<platform>/runtime/)",
-                hint,
+        try:
+            _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, install_to_raw)
+        except (OSError, RuntimeError, tarfile.TarError, InstallRefused) as exc:
+            # One bad archive must not abort every runtime archive after it.
+            # ContentVerificationError is none of these and still propagates.
+            detail = f"{type(exc).__name__}: {exc}"
+            if isinstance(exc, OSError) and exc.errno == errno.ETXTBSY:
+                path = _os_error_path(exc)
+                record_in_use_blocker(f"{pkg_name} runtime", os.path.basename(path or pkg_name), path)
+            warn(f"{pkg_name} runtime: {detail}")
+            record_result(f"{pkg_name} runtime", "FAIL", detail)
+
+
+def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, install_to_raw):
+    """One package of install_runtime_archives: resolve, extract, relocate,
+    check the sentinel, record the row."""
+    archive_name = entry.get("archive_name", f"{pkg_name}.tar.bz2")
+    archive = _bz2.resolve(os.path.join(platform_dir, "runtime", archive_name))
+    if archive is None:
+        hint = entry.get("missing_hint", "")
+        skipped(
+            f"{pkg_name} runtime (no {archive_name} in payload/<platform>/runtime/)",
+            hint,
+        )
+        record_result(f"{pkg_name} runtime", "SKIP", f"no bundled {archive_name}")
+        return
+
+    install_to = _resolve_install_to(install_to_raw, home)
+    ensure_dir(install_to, f"{pkg_name} runtime")
+
+    rbe = entry.get("remove_before_extract")
+    if rbe:
+        if isinstance(rbe, str):
+            rbe = [rbe]
+        for rel in rbe:
+            remove_if_exists(os.path.join(install_to, rel))
+
+    pv_extract_tar(archive, install_to)
+    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+
+    if pkg_name == "pyright":
+        remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
+
+    if pkg_name == "zsh":
+        # libzsh bakes the build prefix as its default module_path/fpath
+        # (MODULE_PATH env is ignored) -- patch the placeholder the build
+        # script baked in to this deployment's prefix. Loud FAIL on any
+        # misfit: a zsh whose modules cannot load must never ship silent.
+        try:
+            relocated = _relocate_zsh_prefix(install_to)
+        except (InstallRefused, OSError, RuntimeError) as exc:
+            detail = f"prefix relocation failed: {exc}"
+            warn(f"{pkg_name} runtime: {detail}")
+            record_result(f"{pkg_name} runtime", "FAIL", detail)
+            return
+        if relocated:
+            print(f"  Relocated {pkg_name} prefix: {relocated} files")
+
+    relocate_token = entry.get("relocate_token")
+    if relocate_token is not None:
+        try:
+            relocated = relocate_runtime_token(
+                install_to,
+                pkg_name,
+                relocate_token,
+                entry.get("relocate_root"),
             )
-            record_result(f"{pkg_name} runtime", "SKIP", f"no bundled {archive_name}")
-            continue
+        except (InstallRefused, OSError, RuntimeError) as exc:
+            detail = f"relocation failed: {exc}"
+            warn(f"{pkg_name} runtime: {detail}")
+            record_result(f"{pkg_name} runtime", "FAIL", detail)
+            return
+        print(f"  Relocated {pkg_name} runtime: {relocated} text files")
 
-        install_to = _resolve_install_to(install_to_raw, home)
-        ensure_dir(install_to, f"{pkg_name} runtime")
+    sentinel = os.path.join(install_to, sentinel_rel)
+    sentinel_ok = os.path.isfile(sentinel) or os.path.isdir(sentinel)
 
-        rbe = entry.get("remove_before_extract")
-        if rbe:
-            if isinstance(rbe, str):
-                rbe = [rbe]
-            for rel in rbe:
-                remove_if_exists(os.path.join(install_to, rel))
+    if entry.get("chmod_sentinel") and os.path.isfile(sentinel):
+        os.chmod(sentinel, 0o755)
 
-        pv_extract_tar(archive, install_to)
-        _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
-
-        if pkg_name == "pyright":
-            remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
-
-        if pkg_name == "zsh":
-            # libzsh bakes the build prefix as its default module_path/fpath
-            # (MODULE_PATH env is ignored) -- patch the placeholder the build
-            # script baked in to this deployment's prefix. Loud FAIL on any
-            # misfit: a zsh whose modules cannot load must never ship silent.
-            try:
-                relocated = _relocate_zsh_prefix(install_to)
-            except (InstallRefused, OSError, RuntimeError) as exc:
-                detail = f"prefix relocation failed: {exc}"
-                warn(f"{pkg_name} runtime: {detail}")
-                record_result(f"{pkg_name} runtime", "FAIL", detail)
-                continue
-            if relocated:
-                print(f"  Relocated {pkg_name} prefix: {relocated} files")
-
-        relocate_token = entry.get("relocate_token")
-        if relocate_token is not None:
-            try:
-                relocated = relocate_runtime_token(
-                    install_to,
-                    pkg_name,
-                    relocate_token,
-                    entry.get("relocate_root"),
-                )
-            except (InstallRefused, OSError, RuntimeError) as exc:
-                detail = f"relocation failed: {exc}"
-                warn(f"{pkg_name} runtime: {detail}")
-                record_result(f"{pkg_name} runtime", "FAIL", detail)
-                continue
-            print(f"  Relocated {pkg_name} runtime: {relocated} text files")
-
-        sentinel = os.path.join(install_to, sentinel_rel)
-        sentinel_ok = os.path.isfile(sentinel) or os.path.isdir(sentinel)
-
-        if entry.get("chmod_sentinel") and os.path.isfile(sentinel):
-            os.chmod(sentinel, 0o755)
-
-        if sentinel_ok:
-            record_result(f"{pkg_name} runtime", "OK", f"{archive} -> {install_to}")
-            print(f"  Installed: {archive} -> {install_to}/")
-        else:
-            warn(f"{pkg_name} runtime: {archive_name} extracted but {sentinel} not found")
-            record_result(f"{pkg_name} runtime", "FAIL", f"sentinel not found at {sentinel}")
+    if sentinel_ok:
+        record_result(f"{pkg_name} runtime", "OK", f"{archive} -> {install_to}")
+        print(f"  Installed: {archive} -> {install_to}/")
+    else:
+        warn(f"{pkg_name} runtime: {archive_name} extracted but {sentinel} not found")
+        record_result(f"{pkg_name} runtime", "FAIL", f"sentinel not found at {sentinel}")
 
 
 def _registry_archive_name(registry, pkg_name, fallback):
@@ -4288,6 +4325,7 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
         print(f"  Installed: {archive} -> {vim92_dir}/")
     else:
         warn(f"Vim runtime archive did not install {sentinel} as expected")
+        record_result("Vim runtime", "FAIL", f"sentinel not found at {sentinel}")
 
 
 def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None):
@@ -7476,7 +7514,10 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
         backup_dir = run_install_step("backup", backup_existing, env_home, repo_dir, registry) or ""
 
     _prebuilt_result = run_install_step("pre-built binaries", install_prebuilt_binaries, repo_dir, home, selected_tools)
-    blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
+    if isinstance(_prebuilt_result, tuple):
+        blocked_deferred, blocked_failed, installed_bins = _prebuilt_result
+    else:
+        blocked_deferred, blocked_failed, installed_bins = set(), {}, set()
     add_prebuilt_binary_retry_notice(blocked_deferred, blocked_failed)
 
     run_install_step("config files", install_copy_mode, repo_dir, env_home, selected_tools, registry, silent=True)
@@ -7520,8 +7561,15 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
 
     # Shared-library (ldd) check runs LAST, after every runtime archive has extracted.
     # Doing it in the binary phase warned falsely about libs a later runtime provides
-    # (e.g. zsh's libzsh-5.9.so from the zsh runtime's lib/zsh/).
-    check_prebuilt_binary_dependencies(os.path.join(_local_root(home), "bin"))
+    # (e.g. zsh's libzsh-5.9.so from the zsh runtime's lib/zsh/). Only this run's
+    # binaries, and as a step so a failure is a row, not a traceback.
+    run_install_step(
+        "shared-library check",
+        check_prebuilt_binary_dependencies,
+        os.path.join(_local_root(home), "bin"),
+        installed_bins,
+        silent=True,
+    )
     if hooks:
         run_install_step(
             "post-install hooks", run_post_install_hooks, hooks, repo_dir, env_home, args, backup_dir, home
@@ -8512,11 +8560,16 @@ def main(argv):
     except ContentVerificationError as exc:
         # The content manifest is the tamper-evidence boundary. When it trips, say so in
         # plain words -- a Python traceback is the worst possible way to report that the
-        # bytes on disk do not match the signed release.
+        # bytes on disk do not match the signed release. Print what DID happen first:
+        # earlier phases completed, and their rows were otherwise never shown.
+        if INSTALL_RESULTS:
+            print_install_results()
+            print_install_blockers()
         print(f"\nCONTENT VERIFICATION FAILED: {exc}", file=sys.stderr)
         print(
             "  The payload on disk does not match .content-manifest (or is not listed in it).\n"
-            "  Nothing was installed from that file.\n"
+            "  Nothing was installed from that file; earlier phases completed and are in\n"
+            "  the summary above. The install stopped here.\n"
             "  If this is the nvim plugin stash: it is a release ASSET, not a git payload --\n"
             "  fetch it with ./tools/fetch-stash, which verifies it against the signed release and\n"
             "  records the hash in .content-manifest.fetched.\n"

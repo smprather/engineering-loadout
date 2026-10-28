@@ -139,11 +139,179 @@ def test_lns_on_real_dir_raises_install_refused(m, tmp):
     check("the directory is left in place", os.path.isdir(target_dir) and not os.path.islink(target_dir))
 
 
+def _rows(m, thing):
+    return [r for r in m.INSTALL_RESULTS if r[0] == thing]
+
+
+def test_runtime_error_is_fail_row(m, tmp):
+    m.INSTALL_RESULTS.clear()
+
+    def boom():
+        raise RuntimeError("unsafe tar member path: ../x")
+
+    try:
+        got = m.run_install_step("x", boom)
+        escaped = None
+    except Exception as exc:
+        got, escaped = None, exc
+    check("RuntimeError does not escape run_install_step", escaped is None, repr(escaped))
+    check("RuntimeError becomes a FAIL row", [r[1] for r in _rows(m, "x")] == ["FAIL"], repr(_rows(m, "x")))
+    check("the failed step returns None", got is None)
+
+
+def test_tar_error_is_fail_row(m, tmp):
+    import tarfile
+
+    m.INSTALL_RESULTS.clear()
+
+    def boom():
+        raise tarfile.ReadError("not a bzip2 file")
+
+    try:
+        m.run_install_step("y", boom)
+        escaped = None
+    except Exception as exc:
+        escaped = exc
+    check("tarfile.ReadError becomes a FAIL row", escaped is None and _rows(m, "y")[0][1] == "FAIL", repr(escaped))
+
+
+def _runtime_fixture(m, tmp, names_good_bad):
+    import io
+    import tarfile
+
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    rt = os.path.join(repo, "payload", m.prebuilt_exact_platform_ids()[0], "runtime")
+    os.makedirs(rt)
+    registry = {}
+    for name, good in names_good_bad:
+        archive = os.path.join(rt, f"{name}.tar.bz2")
+        if good:
+            with tarfile.open(archive, "w:bz2") as tf:
+                data = b"sentinel"
+                info = tarfile.TarInfo(f"share/{name}/sentinel")
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+        else:
+            with open(archive, "wb") as fh:
+                fh.write(b"this is not a tar archive")
+        registry[name] = {
+            "kind": "bin",
+            "platforms": ["linux"],
+            "install_to": "~/.local",
+            "sentinel": f"share/{name}/sentinel",
+        }
+    return repo, home, registry
+
+
+def test_bad_archive_does_not_block_next(m, tmp):
+    repo, home, registry = _runtime_fixture(m, tmp, [("aaa", False), ("bbb", True)])
+    m.INSTALL_RESULTS.clear()
+    m._VERIFY_CONTENT = False
+    try:
+        m.install_runtime_archives(repo, home, None, registry)
+        escaped = None
+    except Exception as exc:
+        escaped = exc
+    finally:
+        m._VERIFY_CONTENT = True
+    sentinel = os.path.join(m._local_root(home), "share", "bbb", "sentinel")
+    check("a corrupt archive does not abort the phase", escaped is None, repr(escaped))
+    check("the archive after it still installs", os.path.isfile(sentinel))
+    check(
+        "the corrupt archive is a FAIL row",
+        [r[1] for r in _rows(m, "aaa runtime")] == ["FAIL"],
+        repr(m.INSTALL_RESULTS),
+    )
+    check("the good archive is an OK row", [r[1] for r in _rows(m, "bbb runtime")] == ["OK"], repr(m.INSTALL_RESULTS))
+
+
+def test_vim_missing_sentinel_is_fail(m, tmp):
+    import io
+    import tarfile
+
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    rt = os.path.join(repo, "payload", m.prebuilt_exact_platform_ids()[0], "runtime")
+    os.makedirs(rt)
+    with tarfile.open(os.path.join(rt, "vim92.tar.bz2"), "w:bz2") as tf:
+        info = tarfile.TarInfo("runtime/syntax/x.vim")
+        info.size = 1
+        tf.addfile(info, io.BytesIO(b"x"))
+    m.INSTALL_RESULTS.clear()
+    m._VERIFY_CONTENT = False
+    try:
+        m.run_install_step("Vim runtime", m.install_vim_runtime, repo, home, None, {})
+    finally:
+        m._VERIFY_CONTENT = True
+    check(
+        "vim runtime without filetype.vim is a FAIL row",
+        [r[1] for r in _rows(m, "Vim runtime")] == ["FAIL"],
+        repr(_rows(m, "Vim runtime")),
+    )
+
+
+def test_ldd_only_checks_written_bins(m, tmp):
+    bindir = os.path.join(tmp, "bin")
+    os.makedirs(bindir)
+    for name in ("a", "b", "c"):
+        path = os.path.join(bindir, name)
+        with open(path, "w") as fh:
+            fh.write("#!/bin/sh\n")
+        os.chmod(path, 0o755)
+    calls = []
+
+    class _Proc:
+        stdout = b""
+
+    saved_run, saved_ldd = m.subprocess.run, m._LDD
+    m.subprocess.run = lambda cmd, *a, **k: calls.append(cmd) or _Proc()
+    m._LDD = "/usr/bin/ldd"
+    try:
+        m.check_prebuilt_binary_dependencies(bindir, names={"a"})
+    finally:
+        m.subprocess.run, m._LDD = saved_run, saved_ldd
+    checked = [os.path.basename(c[-1]) for c in calls]
+    check("ldd checks only the binaries this run installed", checked == ["a"], repr(checked))
+
+
+def test_verification_failure_prints_summary(m, tmp):
+    import contextlib
+    import io
+
+    m.INSTALL_RESULTS.clear()
+    saved = m.cli.main
+
+    def fake_main(*_a, **_k):
+        m.record_result("pre-built binaries", "OK", "")
+        raise m.ContentVerificationError("sha256 mismatch for payload/x")
+
+    m.cli.main = fake_main
+    out, err = io.StringIO(), io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = m.main(["install", "x", "-y"])
+    finally:
+        m.cli.main = saved
+    text = out.getvalue() + err.getvalue()
+    check("verification failure exits 1", rc == 1, f"rc={rc}")
+    check("earlier phases appear in the printed summary", "pre-built binaries" in text, text[-600:])
+    check("the message says earlier phases completed", "earlier" in text.lower(), text[-600:])
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
     test_snapshot_targets_cover_env_handlers,
     test_lns_on_real_dir_raises_install_refused,
+    test_runtime_error_is_fail_row,
+    test_tar_error_is_fail_row,
+    test_bad_archive_does_not_block_next,
+    test_vim_missing_sentinel_is_fail,
+    test_ldd_only_checks_written_bins,
+    test_verification_failure_prints_summary,
 )
 
 
