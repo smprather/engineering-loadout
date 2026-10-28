@@ -448,6 +448,37 @@ def test_disabled_packages(m):
     check("--skip on a disabled package alongside a live one works", selected == set())
 
 
+def test_resolver_fixed_point(m):
+    """depends and recommends alternate until nothing changes: a recommended
+    package's hard deps are pulled, and a recommend that is out of service
+    through the disabled CASCADE (not just an explicit flag) is dropped."""
+    reg = {
+        "a": {"kind": "bin", "platforms": ["linux"], "recommends": ["r"]},
+        "r": {"kind": "bin", "platforms": ["linux"], "depends": ["d"]},
+        "d": {"kind": "bin", "platforms": ["linux"]},
+        "x": {"kind": "bin", "platforms": ["linux"], "disabled": True},
+        "s": {"kind": "bin", "platforms": ["linux"], "depends": ["x"]},
+        "b": {"kind": "bin", "platforms": ["linux"], "recommends": ["s"]},
+    }
+
+    def resolve(names):
+        args = types.SimpleNamespace(skip=None, only=",".join(sorted(names)), add=None, no_deps=False, force=False)
+        return set(m.resolve_tool_selection(args, reg))
+
+    try:
+        got_a = resolve(["a"])
+    except Exception as exc:
+        got_a = f"{type(exc).__name__}: {exc}"
+    check("a recommended package's hard dep is pulled", got_a == {"a", "r", "d"}, repr(got_a))
+    try:
+        got_b = resolve(["b"])
+    except Exception as exc:
+        got_b = f"{type(exc).__name__}: {exc}"
+    check("a cascade-disabled recommend is dropped", got_b == {"b"}, repr(got_b))
+    if isinstance(got_a, set):
+        check("resolution is idempotent", resolve(got_a) == got_a)
+
+
 def main():
     mod = load_loadout()
     for fn in (
@@ -464,6 +495,7 @@ def main():
         test_local_root_and_install_to,
         test_tmpdir_respected_for_global_temp_state,
         test_disabled_packages,
+        test_resolver_fixed_point,
     ):
         print(f"-- {fn.__name__}")
         fn(mod)

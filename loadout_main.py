@@ -523,14 +523,18 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
     return out
 
 
-def walk_depends(names, registry, forbidden=None, force=False):
+def walk_depends(names, registry, forbidden=None, force=False, disabled=None):
     """Return names plus the transitive closure of hard 'depends'.
 
     forbidden: a set of pkg names the user has skipped. If a depended-upon pkg
                is in forbidden, raise ResolverError (unless force is True).
+    disabled:  the out-of-service set, explicit flags AND the hard-dependency
+               cascade (default: disabled_packages(registry)).
     """
     if forbidden is None:
         forbidden = set()
+    if disabled is None:
+        disabled = disabled_packages(registry)
     out = set()
     pending = list(names)
     while pending:
@@ -557,8 +561,8 @@ def walk_depends(names, registry, forbidden=None, force=False):
                 # dependency either: the install would be broken by
                 # construction. Same treatment as a --skip'd dep, but the
                 # message names the real cause.
-                if registry.get(d, {}).get("disabled"):
-                    reason = registry.get(d, {}).get("disabled_reason") or "disabled"
+                if d in disabled:
+                    reason = disabled[d] if isinstance(disabled, dict) else "disabled"
                     if force:
                         warn(f"package '{name}' hard-depends on disabled '{d}' ({reason}) (--force: continuing)")
                         continue
@@ -572,10 +576,14 @@ def walk_depends(names, registry, forbidden=None, force=False):
     return out
 
 
-def walk_recommends(names, registry, forbidden=None):
-    """Add transitive soft 'recommends'. Silently drop forbidden / unknown."""
+def walk_recommends(names, registry, forbidden=None, disabled=None):
+    """Add transitive soft 'recommends'. Silently drop forbidden / unknown /
+    out of service (disabled: explicit flags and the cascade; default
+    disabled_packages(registry))."""
     if forbidden is None:
         forbidden = set()
+    if disabled is None:
+        disabled = disabled_packages(registry)
     out = set(names)
     pending = list(names)
     while pending:
@@ -592,7 +600,7 @@ def walk_recommends(names, registry, forbidden=None):
                 # A soft dependency on a DISABLED package is dropped, exactly
                 # like a soft dependency on a --skip'd one: "recommended" never
                 # forces anything, and a disabled package cannot be installed.
-                if registry.get(r, {}).get("disabled"):
+                if r in disabled:
                     continue
                 out.add(r)
                 pending.append(r)
@@ -652,8 +660,16 @@ def resolve_tool_selection(args, registry):
     selected -= skip_set
 
     if not no_deps:
-        selected = walk_depends(selected, registry, forbidden=skip_set, force=force)
-        selected = walk_recommends(selected, registry, forbidden=skip_set)
+        # Alternate to a fixed point: a recommended package can carry hard
+        # depends of its own (and those can recommend further), so one pass of
+        # each left a recommended package without its required deps.
+        disabled = disabled_packages(registry)
+        while True:
+            grown = walk_depends(selected, registry, forbidden=skip_set, force=force, disabled=disabled)
+            grown = walk_recommends(grown, registry, forbidden=skip_set, disabled=disabled)
+            if grown == selected:
+                break
+            selected = grown
 
     selected = filter_by_platform(selected, registry, _current_platform())
 
