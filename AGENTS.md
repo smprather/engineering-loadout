@@ -70,7 +70,7 @@ Rules:
 ./loadout install ... --post-install-hook ~/hook.sh   # repeatable, arg order
 ./loadout {list [--groups|--tag T]|search|info|resolve|doctor [--verify]}
 ./loadout snapshot {create|restore PATH|list}
-./loadout clean {--logs|--pending|--all}
+./loadout clean {--logs|--pending|--all|--font-backups}
 ./loadout completion bash > envs/bash/global/completions/loadout.bash  # regen on CLI/registry change
 cp hooks/* .git/hooks/ && chmod +x .git/hooks/*       # dev hooks, manual install
 ```
@@ -111,7 +111,7 @@ The former curated mega-group is retired: `_RETIRED_GROUPS` makes the resolver r
 
 ## CLI Verbs
 
-install / reinstall (=install today) / upgrade(=update, targeted re-extract) / list [PATTERN] (--groups/--tag/--installed-stub; descriptions not searched) / search (name+description+tags substring; GROUPS column = direct + synthetic @group membership) / info=describe (metadata + reverse deps) / resolve / doctor [--verify adds sha256 vs manifest] / snapshot create|restore(dir or .tar.bz2)|list / clean --logs|--pending|--all (${TMPDIR:-/tmp}/loadout* sweep for current temp root) / completion bash (static, self-contained, shellcheck-clean; regenerate committed copy on verb/flag/registry change). `doctor` (read-only, exit unchanged) also prints an "Install layout" audit: root + mode, EL-managed names left in a legacy `~/.local/bin`, EL names ahead of the system dirs on PATH, and prefer shims with missing targets.
+install / reinstall (=install today) / upgrade(=update, targeted re-extract) / list [PATTERN] (--groups/--tag/--installed-stub; descriptions not searched) / search (name+description+tags substring; GROUPS column = direct + synthetic @group membership) / info=describe (metadata + reverse deps) / resolve / doctor [--verify adds sha256 vs manifest] / snapshot create|restore(dir or .tar.bz2)|list / clean --logs|--pending|--all (${TMPDIR:-/tmp}/loadout* sweep for current temp root) | --font-backups (explicit only, never in --all: empties the `fonts.bak[.N]` dirs pre-2026-10-27 installs left beside the fonts dir -- removes files the live fonts dir or a bundled zip has, plus generated .uuid/fonts.dir/fonts.scale, keeps and lists everything else, since the old move swept users' own fonts in too; doctor reports them, the fonts phase prints a one-line pointer; gate tests/install-fonts-rejoin) / completion bash (static, self-contained, shellcheck-clean; regenerate committed copy on verb/flag/registry change). `doctor` (read-only, exit unchanged) also prints an "Install layout" audit: root + mode, EL-managed names left in a legacy `~/.local/bin`, EL names ahead of the system dirs on PATH, and prefer shims with missing targets.
 
 Selection flags: positionals; `--skip NAMES`; `--no-deps` verbatim set; `--force` warn-and-continue past resolver errors; `--dry-run`; `-y|--assumeyes|--yes`; `--allow-online-plugin-sync` (default offline stash path); `--no-verify` (skip sha256 vs .content-manifest); `--install-follows-symlinks yes|no|auto` (auto=follows only when target writable). Bare loadout / bare install → usage + nonzero exit. `-V` prints git-describe/release stamp.
 

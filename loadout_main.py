@@ -3663,6 +3663,138 @@ def _logical_zip_name(archive):
     return b[: i + 4] if i != -1 else b
 
 
+# Installs before 2026-10-27 moved the whole fonts dir to fonts.bak[.N] on every
+# reinstall (~2 GB each, unbounded) -- and with it the user's own fonts, out of
+# fontconfig's path. The fonts phase no longer does that (decision D-B); these
+# helpers find the copies left behind and remove only what the bundle supplies.
+
+
+def _font_dirs(install_root, user_home):
+    """The live fonts dirs an install can own: the per-user one and, for a
+    shared tree, <prefix>/share/fonts. Deduplicated by realpath."""
+    dirs = []
+    for root in (user_home, install_root):
+        d = os.path.join(_local_root(root), "share", "fonts")
+        if all(os.path.realpath(d) != os.path.realpath(x) for x in dirs):
+            dirs.append(d)
+    return dirs
+
+
+def _font_backup_dirs(fonts_dirs):
+    """[(backup_dir, live_dir)]: every real `fonts.bak` / `fonts.bak.N` dir
+    beside each live fonts dir, in name order."""
+    found = []
+    for live in fonts_dirs:
+        parent, base = os.path.split(live)
+        try:
+            names = sorted(os.listdir(parent))
+        except OSError:
+            continue
+        for name in names:
+            if name != base + ".bak" and not re.fullmatch(re.escape(base) + r"\.bak\.\d+", name):
+                continue
+            path = os.path.join(parent, name)
+            if os.path.isdir(path) and not os.path.islink(path):
+                found.append((path, live))
+    return found
+
+
+def _bundled_font_names(repo_dir):
+    """Basenames of every font member in the payload's font zips (any of them
+    may sit in an old backup, nested or flat)."""
+    names = set()
+    fonts = os.path.join(repo_dir, PAYLOAD_DIR, "fonts")
+    try:
+        entries = sorted(os.listdir(fonts))
+    except OSError:
+        return names
+    logical = {os.path.join(fonts, n[: -len(".part-000")] if n.endswith(".part-000") else n) for n in entries}
+    for path in sorted(p for p in logical if p.endswith(".zip")):
+        src = _bz2.open_logical(path)
+        if src is None:
+            continue
+        try:
+            names.update(os.path.basename(m) for m in font_zip_members(src))
+        except zipfile.BadZipFile, OSError:
+            pass
+        finally:
+            src.close()
+    return names
+
+
+# Index files mkfontscale/mkfontdir/fc-cache generate in any font dir.
+_FONT_DIR_METADATA = {".uuid", "fonts.dir", "fonts.scale", "fonts.alias"}
+
+
+def _scan_font_backup(backup, live, bundle_names):
+    """(superseded, kept, superseded_bytes) for one backup dir. A file is
+    superseded when the live (flat) fonts dir has its basename, a bundled zip
+    ships it, or it is generated font-dir metadata (_FONT_DIR_METADATA).
+    Everything else may be the user's own and is kept."""
+    try:
+        live_names = set(os.listdir(live))
+    except OSError:
+        live_names = set()
+    superseded, kept, size = [], [], 0
+    for root, dirs, files in os.walk(backup):
+        dirs.sort()
+        for name in sorted(files):
+            path = os.path.join(root, name)
+            if name in live_names or name in bundle_names or name in _FONT_DIR_METADATA:
+                superseded.append(path)
+                with contextlib.suppress(OSError):
+                    size += os.lstat(path).st_size
+            else:
+                kept.append(path)
+    return superseded, kept, size
+
+
+def _clean_font_backups(fonts_dirs, bundle_names):
+    """Remove the superseded files from every font backup, then every dir left
+    empty (the backup itself included). Returns
+    [(backup_dir, removed_count, removed_bytes, kept_paths)]."""
+    rows = []
+    for backup, live in _font_backup_dirs(fonts_dirs):
+        superseded, kept, size = _scan_font_backup(backup, live, bundle_names)
+        removed = 0
+        for path in superseded:
+            try:
+                os.unlink(path)
+                removed += 1
+            except PermissionError:
+                _grant_owner_write(os.path.dirname(path))
+                with contextlib.suppress(OSError):
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                pass
+        for root, _dirs, _files in sorted(os.walk(backup, topdown=False), key=lambda t: -len(t[0])):
+            with contextlib.suppress(OSError):
+                os.rmdir(root)
+        rows.append((backup, removed, size, kept))
+    return rows
+
+
+def _doctor_font_backups(install_root, user_home, repo_dir=None):
+    """Doctor lines for old font backups; returns the number of backup dirs."""
+    backups = _font_backup_dirs(_font_dirs(install_root, user_home))
+    if not backups:
+        return 0
+    bundle_names = _bundled_font_names(repo_dir or os.path.dirname(os.path.abspath(__file__)))
+    total = 0
+    lines = []
+    for backup, live in backups:
+        superseded, kept, size = _scan_font_backup(backup, live, bundle_names)
+        total += size
+        extra = f", {len(kept)} file(s) not from the bundle" if kept else ""
+        lines.append(f"    {display_name(backup)}  {_human_size(size)} superseded{extra}")
+    print(f"  old font backups from installs before 2026-10-27 ({len(backups)}, {_human_size(total)} superseded):")
+    for line in lines:
+        print(line)
+    print("    `loadout clean --font-backups` removes the bundle copies; files not from the bundle stay")
+    return len(backups)
+
+
 def _write_fontconfig_snippet(fonts_dir, shared_root):
     """Point fontconfig at a shared fonts dir without writing anything in a $HOME.
 
@@ -3827,6 +3959,13 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
     else:
         warn(
             "fc-cache is not available -- fontconfig cache was NOT refreshed; fonts may not appear until you run fc-cache manually"
+        )
+
+    old_backups = _font_backup_dirs([fonts_dir])
+    if old_backups:
+        print(
+            f"  {len(old_backups)} old fonts.bak dir(s) from earlier installs sit beside {fonts_dir}; "
+            "`loadout clean --font-backups` removes the bundle copies (see `loadout doctor`)."
         )
 
     if is_wsl():
@@ -7096,6 +7235,7 @@ def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
         print(f"  EL-managed names ahead of system dirs on this PATH ({len(shadowed)}): {names}")
         print("    PATH order alone decides the winner; prefer/ shims are the intentional exception")
         findings += len(shadowed)
+    findings += _doctor_font_backups(install_root, user_home, repo_dir)
     print()
     return findings
 
@@ -7950,14 +8090,29 @@ def cmd_clean(args):
     --logs    -> delete <temp-root>/loadout.<user>.log
     --pending -> delete <temp-root>/loadout-pending-<user>/ (only if daemon PID is dead)
     --all     -> both, plus any stale <temp-root>/loadout-* tempdirs owned by this user
+    --font-backups -> drop the bundle copies from old fonts.bak[.N] dirs (explicit only;
+                 never part of --all: files not from the bundle stay, and are listed)
     """
     do_logs = args.logs or args.clean_all
     do_pending = args.pending or args.clean_all
     do_extra = args.clean_all
-    if not (do_logs or do_pending or do_extra):
-        eprint("Usage: loadout clean [--logs] [--pending] [--all]")
+    do_fonts = getattr(args, "font_backups", False)
+    if not (do_logs or do_pending or do_extra or do_fonts):
+        eprint("Usage: loadout clean [--logs] [--pending] [--all] [--font-backups]")
         return 1
     removed = []
+    reported = False
+    if do_fonts:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        dirs = _font_dirs(_resolve_home(None), os.path.expanduser("~"))
+        for backup, count, size, kept in _clean_font_backups(dirs, _bundled_font_names(repo_dir)):
+            reported = True
+            state = "kept" if os.path.isdir(backup) else "removed"
+            print(f"font backup {state}: {backup} ({count} bundle file(s), {_human_size(size)} freed)")
+            for path in kept[:20]:
+                print(f"  not from the bundle, kept: {path}")
+            if len(kept) > 20:
+                print(f"  ... (+{len(kept) - 20} more kept)")
     if do_logs:
         for path in (_RUN_LOG_FIXED_PATH,):
             if os.path.exists(path):
@@ -8003,7 +8158,7 @@ def cmd_clean(args):
                     eprint(f"Could not remove {full}: {exc}")
     for path in removed:
         print(f"removed: {path}")
-    if not removed:
+    if not removed and not reported:
         print("(nothing to clean)")
     return 0
 
@@ -8525,11 +8680,18 @@ def cli_snapshot_list(ctx, dest_dir):
     help="Delete <temp-root>/loadout-pending-<user>/ (only when the pending-ops daemon is dead).",
 )
 @click.option("--all", "clean_all", is_flag=True, help="Delete logs + pending + stale loadout-* tempdirs.")
+@click.option(
+    "--font-backups",
+    is_flag=True,
+    help="Remove the bundle copies from old fonts.bak[.N] dirs; files not from the bundle stay.",
+)
 @click.pass_context
-def cli_clean(ctx, logs, pending, clean_all):
+def cli_clean(ctx, logs, pending, clean_all, font_backups):
     """Remove stale loadout temp-root state. Refuses to touch ~/loadout_backups/ and
-    refuses to clean <temp-root>/loadout-pending-<user>/ while the pending-ops daemon is alive."""
-    args = _ctx_args(ctx, logs=logs, pending=pending, clean_all=clean_all)
+    refuses to clean <temp-root>/loadout-pending-<user>/ while the pending-ops daemon is alive.
+    --font-backups (explicit only) empties the fonts.bak[.N] dirs that installs before
+    2026-10-27 left beside the fonts dir, keeping any file the bundle does not ship."""
+    args = _ctx_args(ctx, logs=logs, pending=pending, clean_all=clean_all, font_backups=font_backups)
     ctx.exit(cmd_clean(args))
 
 
@@ -8632,7 +8794,7 @@ _loadout_complete() {
             mapfile -t COMPREPLY < <(compgen -W "-h --help" -- "$cur")
             ;;
         clean)
-            mapfile -t COMPREPLY < <(compgen -W "--logs --pending --all -h --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "--logs --pending --all --font-backups -h --help" -- "$cur")
             ;;
         completion)
             mapfile -t COMPREPLY < <(compgen -W "bash -h --help" -- "$cur")

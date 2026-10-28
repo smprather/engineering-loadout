@@ -6,11 +6,13 @@ backup/no-backup behavior) and the shared-tree destination (fonts + generated
 fontconfig snippet) without requiring the real vendored font archives.
 """
 
+import contextlib
 import importlib.machinery
 import importlib.util
 import io
 import os
 import shutil
+import subprocess
 import tempfile
 import zipfile
 
@@ -110,6 +112,107 @@ def test_chunked_zips_never_rejoined_to_temp():
     finally:
         install.extract_font_zip = real_extract
         tempfile.tempdir = old_tempdir
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _write(path, data=b"x"):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fh:
+        fh.write(data)
+
+
+def test_clean_font_backups():
+    """Installs before 2026-10-27 moved the whole fonts dir to fonts.bak[.N] on
+    every reinstall (~2 GB each). The cleanup drops the superseded bundle copies
+    (a name the live fonts dir has, or a bundled zip member) and keeps anything
+    else -- the old move also swept the user's own fonts in there."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        share = os.path.join(tmp, "share")
+        live = os.path.join(share, "fonts")
+        _write(os.path.join(live, "Bundle-Regular.ttf"), b"new")
+        _write(os.path.join(live, "fonts.dir"))
+        bak = os.path.join(share, "fonts.bak")
+        _write(os.path.join(bak, "Bundle-Regular.ttf"), b"old")
+        _write(os.path.join(bak, "fonts.dir"))
+        bak4 = os.path.join(share, "fonts.bak.4")
+        _write(os.path.join(bak4, "Old", "Zipmember-Bold.ttf"))
+        _write(os.path.join(bak4, "mine", "MyOwn.otf"), b"precious")
+        _write(os.path.join(bak4, "mine", ".uuid"))  # fc-cache metadata, regenerated anywhere
+        for other in ("fonts.backup", "fonts.bak.x"):
+            _write(os.path.join(share, other, "Bundle-Regular.ttf"))
+
+        found = [p for p, _ in install._font_backup_dirs([live])]
+        assert found == [bak, bak4], found
+
+        rows = install._clean_font_backups([live], {"Zipmember-Bold.ttf"})
+        assert not os.path.exists(bak), "a fully superseded backup dir must be removed"
+        assert os.path.isfile(os.path.join(bak4, "mine", "MyOwn.otf")), "the user's own font was removed"
+        assert not os.path.exists(os.path.join(bak4, "Old")), "emptied subdirs must be removed"
+        kept = {path for _, _, _, kept_paths in rows for path in kept_paths}
+        assert kept == {os.path.join(bak4, "mine", "MyOwn.otf")}, kept
+        removed = sum(n for _, n, _, _ in rows)
+        assert removed == 4, rows
+        with open(os.path.join(live, "Bundle-Regular.ttf"), "rb") as fh:
+            assert fh.read() == b"new", "the live fonts dir must not change"
+        for other in ("fonts.backup", "fonts.bak.x"):
+            assert os.path.isfile(os.path.join(share, other, "Bundle-Regular.ttf")), f"{other} is not a backup"
+        print("PASS: clean font backups drops bundle copies, keeps the user's own")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_fonts_phase_points_at_old_backups():
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        repo_dir = make_repo(tmp)
+        home = os.path.join(tmp, "home")
+        _write(os.path.join(user_fonts_dir(home) + ".bak.2", "dummy.ttf"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            install.install_fonts(repo_dir, home)
+        assert "clean --font-backups" in out.getvalue(), out.getvalue()
+        print("PASS: the fonts phase points at old fonts.bak dirs")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_clean_font_backups_cli_and_doctor():
+    """`loadout clean --font-backups` and doctor's report, against a temp HOME."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    try:
+        home = os.path.join(tmp, "home")
+        live = os.path.join(home, ".local", "share", "fonts")
+        _write(os.path.join(live, "Bundle-Regular.ttf"))
+        _write(os.path.join(home, ".local", "share", "fonts.bak", "Bundle-Regular.ttf"), b"y" * 2048)
+        _write(os.path.join(home, ".local", "share", "fonts.bak", "MyOwn.otf"))
+
+        out = io.StringIO()
+        old_home = os.environ.get("HOME")
+        os.environ["HOME"] = home
+        try:
+            with contextlib.redirect_stdout(out):
+                install._doctor_font_backups(os.path.join(home, ".local", "share", "loadout"), home)
+        finally:
+            os.environ["HOME"] = old_home
+        text = out.getvalue()
+        assert "fonts.bak" in text and "clean --font-backups" in text, text
+        assert "1 file(s) not from the bundle" in text, text
+
+        env = {"HOME": home, "PATH": "/usr/bin:/bin", "LANG": os.environ.get("LANG", "C.UTF-8")}
+        res = subprocess.run(
+            [os.path.join(REPO_DIR, "loadout"), "clean", "--font-backups"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode == 0, res.stdout + res.stderr
+        bak = os.path.join(home, ".local", "share", "fonts.bak")
+        assert not os.path.exists(os.path.join(bak, "Bundle-Regular.ttf")), res.stdout
+        assert os.path.isfile(os.path.join(bak, "MyOwn.otf")), res.stdout
+        assert "MyOwn.otf" in res.stdout, res.stdout
+        print("PASS: clean --font-backups CLI + doctor report")
+    finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -281,6 +384,9 @@ def test_existing_dir_no_backup_reused():
 if __name__ == "__main__":
     test_split_zip_rejoin()
     test_chunked_zips_never_rejoined_to_temp()
+    test_clean_font_backups()
+    test_clean_font_backups_cli_and_doctor()
+    test_fonts_phase_points_at_old_backups()
     test_foreign_symlink_preserved()
     test_repo_pointing_symlink_replaced()
     test_dangling_symlink_replaced()

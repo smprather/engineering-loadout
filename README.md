@@ -508,6 +508,11 @@ old file) and leaves every other file there, including your own fonts. It never
 moves the directory aside, with or without `--no-backup`. Font extraction uses
 the same progress bar style as other bulk install phases.
 
+Installs before 2026-10-27 did move it aside, to `fonts.bak` / `fonts.bak.N`
+(about 2 GB each, with your own fonts inside). `./loadout doctor` lists any that
+are left; `./loadout clean --font-backups` deletes the bundle's copies from them
+and keeps, and lists, every other file.
+
 On a **shared tree** -- any install root outside `$HOME`, typically a
 `--dest-dir` deployment -- the fonts install **once** into
 `<prefix>/share/fonts` (the twelve families are ~2 GB installed, so this is one

@@ -89,7 +89,7 @@ _loadout_complete() {
             mapfile -t COMPREPLY < <(compgen -W "-h --help" -- "$cur")
             ;;
         clean)
-            mapfile -t COMPREPLY < <(compgen -W "--logs --pending --all -h --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "--logs --pending --all --font-backups -h --help" -- "$cur")
             ;;
         completion)
             mapfile -t COMPREPLY < <(compgen -W "bash -h --help" -- "$cur")
