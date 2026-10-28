@@ -418,7 +418,10 @@
         "document",
         "text"
       ],
-      "description": "pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper"
+      "description": "pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper",
+      "recommends": [
+        "gui_libs"
+      ]
     },
     "p7zip": {
       "kind": "bin",
@@ -712,7 +715,10 @@
       "chmod_sentinel": true,
       "remove_before_extract": "libexec/gnuplot/6.0",
       "missing_hint": "gnuplot x11 terminal will NOT work (gnuplot_x11 driver absent); core terminals (svg/dumb/postscript) still function. x11 also needs X libs from gui_libs or the host.",
-      "description": "Command-line graphing and plotting utility"
+      "description": "Command-line graphing and plotting utility",
+      "recommends": [
+        "gui_libs"
+      ]
     },
     "glow": {
       "kind": "bin",
@@ -896,7 +902,9 @@
         "libscip.so.9.2",
         "libicudata.so.60",
         "libicui18n.so.60",
-        "libicuuc.so.60"
+        "libicuuc.so.60",
+        "libgomp.so.1",
+        "libbz2.so.1"
       ],
       "version": "26Q3",
       "pin_reason": "upstream mixes quarterly (26Q3) and semantic (2.0) tags; the build tracks the quarterly train, which is current",
@@ -1277,7 +1285,8 @@
         "rdbg"
       ],
       "libs": [
-        "libruby.so.3.3"
+        "libruby.so.3.3",
+        "libffi.so.6"
       ],
       "version": "3.3.10",
       "version_url": "https://www.ruby-lang.org/en/downloads/releases/",
@@ -1849,7 +1858,10 @@
         "gui",
         "clipboard"
       ],
-      "description": "X11 clipboard command-line access tool"
+      "description": "X11 clipboard command-line access tool",
+      "depends": [
+        "gui_libs"
+      ]
     },
     "xclip": {
       "kind": "bin",
@@ -2165,7 +2177,8 @@
       ],
       "archive": "payload/PLATFORM/runtime/octave.tar.bz2",
       "recommends": [
-        "gnuplot"
+        "gnuplot",
+        "gui_libs"
       ],
       "description": "GNU scientific computing language (MATLAB-compatible)",
       "sentinel": "share/octave/11.3.0/m",
@@ -2200,7 +2213,11 @@
       "description": "ngspice — open-source mixed-level SPICE circuit simulator (XSPICE + CIDER enabled, no-X11 headless build); relocatable wrapper loads spinit + codemodels from the install prefix",
       "sentinel": "lib/ngspice/analog.cm",
       "install_to": "~/.local",
-      "missing_hint": "ngspice spinit/code models will be missing"
+      "missing_hint": "ngspice spinit/code models will be missing",
+      "libs": [
+        "libfftw3.so.3",
+        "libgomp.so.1"
+      ]
     },
     "gtkwave": {
       "kind": "bin",
@@ -4114,7 +4131,10 @@
       "relocate_token": "/__LOADOUT_RELOC_ROOT__",
       "relocate_root": "lib/ivl",
       "missing_hint": "the Icarus Verilog code-generator tree (lib/ivl) will NOT be installed; `iverilog` starts but cannot compile anything",
-      "description": "Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design"
+      "description": "Icarus Verilog — Verilog/SystemVerilog event simulator (`iverilog` compiler driver, `vvp` runtime, `iverilog-vpi` VPI module builder). Compiles to a .vvp file that runs directly; writes VCD for gtkwave/surfer. Unlike verilator this simulates rather than generating a C++ model, so it needs no host g++ to run a design",
+      "libs": [
+        "libbz2.so.1"
+      ]
     },
     "markdown-oxide": {
       "kind": "bin",
