@@ -842,6 +842,16 @@ librelane -> klayout 0.30.12 and zstandard 0.25.0 (cp314 at most); parity-plot
 source build also needs a Rust toolchain the build image does not carry);
 pygwalker -> pins duckdb<2.0.0 and no duckdb 1.x ships cp315.
 
+**2026-10-28 security refresh.** `build/vuln-scan` blocked release 2026.10.8 on
+msgpack 1.2.2 (GHSA-j586-36cw-2gc2, unbounded memory leak in the C extension on
+a strict_map_key failure; fixed in 1.2.3). Replaced with
+`msgpack-1.2.3-cp315-cp315-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl`
+(sha256 `1f4ae8bd...ceed49`, matches PyPI) and pruned 1.2.2. Preservation
+proof: every enabled python-tool installed offline before and after, and the
+per-venv dist-info lists differ ONLY in time-plot's msgpack 1.2.2 -> 1.2.3
+(time-plot is the sole consumer; `time-plot --help` runs, msgpack round-trips).
+vuln-scan CLEAN with no baseline entries.
+
 ### duckdb cp314 status -- resolved in 1.4.2
 
 **Status (verified 2026-05-27):** duckdb added Python 3.14 support in **v1.4.2** (November 2025,

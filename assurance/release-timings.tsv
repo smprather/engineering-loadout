@@ -3413,3 +3413,13 @@
 2026-10-28T09:48:08Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	12	PASS	mode=container
 2026-10-28T09:48:09Z	test:private-state-two-users	1	PASS	mode=container
 2026-10-28T09:48:10Z	test:total	1662	PASS	flags=--container
+2026-10-28T09:48:51Z	version table	0.0	PASS	2026.10.8
+2026-10-28T09:49:04Z	checksums	12.4	PASS	2026.10.8
+2026-10-28T09:49:12Z	manifest export	20.2	PASS	2026.10.8
+2026-10-28T09:49:24Z	secret scan	32.4	PASS	2026.10.8
+2026-10-28T09:49:25Z	vulnerability scan	33.2	FAIL	2026.10.8
+2026-10-28T09:50:02Z	payload consistency	70.9	PASS	2026.10.8
+2026-10-28T09:52:50Z	binary smoke test	238.1	PASS	2026.10.8
+2026-10-28T09:54:14Z	malware scan	322.4	PASS	2026.10.8
+2026-10-28T09:55:19Z	build:shell	1	PASS	build-shell
+2026-10-28T09:55:48Z	build:shell	20	PASS	build-shell

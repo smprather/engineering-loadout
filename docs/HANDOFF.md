@@ -58,7 +58,10 @@ ruff 0.17.3, sqlite 3.54.1, strace 7.3, stylua 2.6.0, tmux-path-store
 2026.10.2, ty 0.0.93, uv 0.13.6, valgrind 3.28.0 (pdftotext pinned; ncdu
 lookup 503'd) -- the next class C sweep's worklist. `./build/update --currency`:
 only python-loaded and open-eda-file-tools are DUE (never auto-updated);
-yara-rules held (refreshed 2026-10-23). This is the first release whose signed
+yara-rules held (refreshed 2026-10-23). The first release run was BLOCKED by
+the vulnerability gate (msgpack 1.2.2, GHSA-j586-36cw-2gc2); the wheel was
+refreshed to 1.2.3 with a closure-preservation proof (ADDING_BINARIES, wheel
+notes) before the release was re-run. This is the first release whose signed
 tag binds `sha256sums.txt`, so plain `./tools/fetch-stash` works again from it
 on.
 
