@@ -6628,7 +6628,10 @@ def _system_newer_rows(registry, path_str=None, loadout_dirs=None):
             sys_ver = _probe_bin_version(sys_path)
             if sys_ver is None or _ver_cmp(sys_ver, payload_ver) <= 0:
                 continue
-            sys_dir = os.path.dirname(os.path.realpath(sys_path))
+            # The PATH directory holding the copy, not its symlink target's dir:
+            # a link into a dir off PATH (alternatives, /usr/local/bin -> /opt)
+            # is still found through this PATH entry, which path_dirs holds.
+            sys_dir = os.path.realpath(os.path.dirname(sys_path))
             # Earliest EL-managed dir on PATH decides the standing; set iteration
             # order would otherwise pick an arbitrary one when several are known.
             el_positions = [(i, d) for i, d in enumerate(path_dirs) if d in loadout_dirs]

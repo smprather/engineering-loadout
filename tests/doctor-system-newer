@@ -147,5 +147,32 @@ check(
     repr(by_bin.get("newtool")),
 )
 
+# --- test_symlinked_system_bin_outside_path -------------------------------
+# A newer system copy that is a symlink into a directory NOT on PATH
+# (alternatives, /usr/local/bin -> /opt/...). Its standing must be computed from
+# the PATH directory that holds the link, not the link target's directory --
+# that crashed doctor with "list.index(x): x not in list".
+onpath = os.path.join(tmp, "onpath")
+offpath = os.path.join(tmp, "offpath")
+os.makedirs(onpath)
+os.makedirs(offpath)
+script(os.path.join(offpath, "fd"), 'echo "fd 99.0.0"\n')
+os.symlink(os.path.join(offpath, "fd"), os.path.join(onpath, "fd"))
+try:
+    rows = mod._system_newer_rows(
+        {"fd": {"kind": "bin", "version": "10.0.0", "bins": ["fd"]}},
+        onpath + os.pathsep + loadbin,
+        LOADOUT_DIRS,
+    )
+    err = None
+except Exception as exc:
+    rows, err = [], exc
+check("symlinked system bin outside PATH does not crash", err is None, repr(err))
+check(
+    "symlinked system bin standing is system-wins",
+    len(rows) == 1 and rows[0][5] == "system-wins",
+    repr(rows),
+)
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)
