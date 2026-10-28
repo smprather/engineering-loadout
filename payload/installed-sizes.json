@@ -12,7 +12,7 @@
     "envs/bash/global/completions/_zoxide": 6150,
     "envs/bash/global/completions/bat.bash": 4347,
     "envs/bash/global/completions/hyperfine.bash": 8908,
-    "envs/bash/global/completions/loadout.bash": 7405,
+    "envs/bash/global/completions/loadout.bash": 7420,
     "envs/bash/global/completions/module.bash": 2599,
     "envs/bash/global/completions/rg.bash": 21272,
     "envs/bash/global/completions/taplo.bash": 24009,
