@@ -66,9 +66,11 @@ and `certs= 0` means the hook is missing or shadowed.
 
 Which interpreter is actually running? `./loadout` resolves, in order:
 
-1. `~/.local/bin/python3.15` (or `<prefix>/bin/python3.15` installed copy)
-2. `<repo>/.loadout-bootstrap/bin/python3.15` (warm cache)
-3. cold extraction of `payload/<platform>/portable-python-*.tar.bz2`
+1. `${XDG_DATA_HOME:-~/.local/share}/loadout/bin/python3.15` (default install root)
+2. `~/.local/bin/python3.15` (legacy HOME-mode install)
+3. `<repo>/.loadout-bootstrap/bin/python3.15` (warm cache, used only when its
+   `.complete` stamp names the current archive)
+4. cold extraction of `payload/<platform>/portable-python-*.tar.bz2`
 
 Each is a **copy**. Patching the repo archive does not update 1 or 2.
 

@@ -1,0 +1,84 @@
+#!/bin/sh
+# shim-bootstrap: ./loadout finds the right interpreter and bootstraps atomically.
+#
+# Order: the installed interpreter at the default install root
+# (${XDG_DATA_HOME:-~/.local/share}/loadout/bin), then the legacy HOME-mode
+# ~/.local/bin, then the per-clone warm cache -- accepted only when its
+# .complete stamp names the current archive -- then a cold bootstrap into a
+# temp dir that is moved into place only after the interpreter runs.
+#
+# The old shim probed only ~/.local/bin (so a default install's interpreter was
+# never used), and accepted any cache that had bin/python3.15 -- including one
+# left half-extracted by an interrupted bzip2|tar, or one from an older archive.
+#
+# Uses a copy of the shim with a stub interpreter; nothing real is extracted.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-shim.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+R="$T/repo"
+H="$T/home"
+mkdir -p "$R/payload/x" "$H"
+cp "$REPO/loadout" "$R/loadout"
+echo '# stub' >"$R/loadout_main.py"
+
+stage="$T/stage/portable-python-T/local/bin"
+mkdir -p "$stage"
+printf '#!/bin/sh\necho STUB "$0" "$@"\n' >"$stage/python3.15"
+chmod 755 "$stage/python3.15"
+(cd "$T/stage" && tar cf - portable-python-T | bzip2 >"$R/payload/x/portable-python-T.tar.bz2")
+
+shim() { env -i HOME="$H" PATH=/usr/bin:/bin "$R/loadout" "$@" 2>"$T/stderr"; }
+boot="$R/.loadout-bootstrap"
+
+# cold: extract, stamp, no temp left behind
+out=$(shim hello)
+case $out in STUB*) ;; *) fail "cold: did not run the bootstrapped interpreter: $out" ;; esac
+[ "$(cat "$boot/.complete" 2>/dev/null)" = "portable-python-T.tar.bz2" ] \
+    || fail "cold: .complete stamp is '$(cat "$boot/.complete" 2>/dev/null)'"
+if ls -d "$R"/.loadout-bootstrap.tmp.* >/dev/null 2>&1; then
+    fail "cold: a .loadout-bootstrap.tmp.* dir was left behind"
+fi
+echo "  PASS  cold bootstrap stamps the cache and leaves no temp dir"
+
+# xdg: the installed interpreter at the default root wins
+mkdir -p "$H/.local/share/loadout/bin"
+printf '#!/bin/sh\necho XDG\n' >"$H/.local/share/loadout/bin/python3.15"
+chmod 755 "$H/.local/share/loadout/bin/python3.15"
+out=$(shim)
+case $out in XDG*) ;; *) fail "xdg: the default-root interpreter was not used: $out" ;; esac
+rm -rf "$H/.local"
+echo "  PASS  the default install root's interpreter is used first"
+
+# interrupted: a cache with bin/python3.15 but no stamp is not trusted
+rm -rf "$boot"
+mkdir -p "$boot/bin"
+printf '#!/bin/sh\necho BROKEN\n' >"$boot/bin/python3.15"
+chmod 755 "$boot/bin/python3.15"
+out=$(shim)
+case $out in STUB*) ;; *) fail "interrupted: ran an unstamped cache: $out" ;; esac
+echo "  PASS  an unstamped (interrupted) cache is re-extracted"
+
+# stale: a stamp naming another archive is not trusted
+printf '#!/bin/sh\necho OLDCACHE\n' >"$boot/bin/python3.15"
+echo "portable-python-OLD.tar.bz2" >"$boot/.complete"
+out=$(shim)
+case $out in STUB*) ;; *) fail "stale: ran a cache stamped for another archive: $out" ;; esac
+[ "$(cat "$boot/.complete")" = "portable-python-T.tar.bz2" ] || fail "stale: stamp not refreshed"
+echo "  PASS  a cache stamped for another archive is re-extracted"
+
+# no-home: no HOME and nothing to extract -> clean error, not a set -u crash
+rm -rf "$boot" "$R/payload"
+rc=0
+env -i PATH=/usr/bin:/bin "$R/loadout" >/dev/null 2>"$T/stderr" || rc=$?
+[ "$rc" = 1 ] || fail "no-home: exit $rc, want 1"
+if grep -q 'parameter not set' "$T/stderr"; then
+    fail "no-home: crashed on an unset HOME: $(cat "$T/stderr")"
+fi
+echo "  PASS  no HOME and no archive: a clean error"
+
+echo "shim-bootstrap: OK"

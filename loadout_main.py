@@ -222,6 +222,13 @@ NVIM_LAYERS = ("user",)
 # historical "pre_built" in the 2026-07 reorg.
 PAYLOAD_DIR = "payload"
 
+# The bundled portable-python's minor version -- the ONE place it is spelled.
+# tests/payload-interpreter-abi fails when it stops matching the payload
+# archive, so a minor bump cannot silently FAIL the Python-tools phase.
+_BUNDLED_PY = "3.15"
+_BUNDLED_PY_BIN = f"python{_BUNDLED_PY}"
+_BUNDLED_SITE = f"lib/python{_BUNDLED_PY}/site-packages"
+
 
 SUPPORTED_SCHEMA_VERSION = 3
 
@@ -2609,7 +2616,7 @@ def _suite_python_bin(home):
     generic = os.path.join(prefix, "bin", "python3")
     if os.path.isfile(generic):
         return generic
-    return os.path.join(prefix, "bin", "python3.15")
+    return os.path.join(prefix, "bin", _BUNDLED_PY_BIN)
 
 
 def _suite_version_dir(dest, version, lock_sha):
@@ -2941,7 +2948,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
         "launcher": "librelane",
         # Relative to the tool venv root (<tools>/<dist>): every wheel's top
         # level lands here.
-        "site_packages": "lib/python3.15/site-packages",
+        "site_packages": _BUNDLED_SITE,
     },
 }
 
@@ -2984,7 +2991,7 @@ _UV_TOOL_LAUNCHER_PYTHONPATH = {
 # different layers in two separate blocks. Patching only the V branch leaves
 # half the pins mis-placed -- measured GPL HPWL 6.0e5 instead of 1.8e3, still
 # far off the reference. Both branches must be normalized.
-_LIBRELANE_IO_PLACE_REL = "lib/python3.15/site-packages/librelane/scripts/odbpy/io_place.py"
+_LIBRELANE_IO_PLACE_REL = f"{_BUNDLED_SITE}/librelane/scripts/odbpy/io_place.py"
 
 IO_PLACE_H_OLD = """\
     else:
@@ -3230,7 +3237,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     effective_wheels_dir, _wheels_cleanup = _prepare_wheels_dir(wheels_dir)
 
     uv_bin = os.path.join(_local_root(home), "bin", "uv")
-    python_bin = os.path.join(_local_root(home), "bin", "python3.15")
+    python_bin = os.path.join(_local_root(home), "bin", _BUNDLED_PY_BIN)
     if not os.path.isfile(uv_bin):
         _wheels_cleanup()
         warn(f"uv not found at {uv_bin} -- Python tools will NOT be installed")
@@ -3238,8 +3245,8 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         return
     if not os.path.isfile(python_bin):
         _wheels_cleanup()
-        warn(f"python3.15 not found at {python_bin} -- Python tools will NOT be installed")
-        record_result("Python tools", "FAIL", "python3.15 not installed")
+        warn(f"{_BUNDLED_PY_BIN} not found at {python_bin} -- Python tools will NOT be installed")
+        record_result("Python tools", "FAIL", f"{_BUNDLED_PY_BIN} not installed")
         return
 
     installed = []

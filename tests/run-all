@@ -72,7 +72,7 @@ for arg in "$@"; do
 done
 
 PY=""
-for cand in "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
+for cand in "${XDG_DATA_HOME:-$HOME/.local/share}/loadout/bin/python3.15" "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
     if command -v "$cand" > /dev/null 2>&1; then
         PY=$cand
         break
@@ -326,6 +326,7 @@ run_test "shell-typeahead" tests/shell-typeahead
 run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
 run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
+run_test "shim-bootstrap" tests/shim-bootstrap
 run_test "nodejs-runpath" "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "python-suite" "$PY" tests/python-suite

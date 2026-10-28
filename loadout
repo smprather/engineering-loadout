@@ -3,10 +3,17 @@
 #
 # Resolves a bundled Python 3.15 interpreter and execs loadout_main.py
 # under it. Search order:
-#   1. ~/.local/bin/python3.15            (already installed by loadout)
-#   2. <repo>/.loadout-bootstrap/bin/python3.15  (warm bootstrap cache)
-#   3. Decompress payload/<platform>/portable-python-*.tar.bz2 into
-#      <repo>/.loadout-bootstrap/ and use it (cold bootstrap)
+#   1. ${XDG_DATA_HOME:-~/.local/share}/loadout/bin/python3.15
+#                                         (the default install root)
+#   2. ~/.local/bin/python3.15            (legacy HOME-mode install)
+#   3. <repo>/.loadout-bootstrap/bin/python3.15  (warm bootstrap cache),
+#      trusted ONLY when <repo>/.loadout-bootstrap/.complete names the
+#      current payload archive -- an interrupted extraction or a cache
+#      from an older archive/minor is re-extracted
+#   4. Decompress payload/<platform>/portable-python-*.tar.bz2 into a temp
+#      dir beside the cache, check the interpreter runs, stamp it, then move
+#      it into place (cold bootstrap; never a half-written cache)
+# A config.toml `dest_dir` root is not probed: reading TOML needs Python.
 #
 # The bootstrap cache is per-clone (alongside this script), not in
 # $HOME, so a fresh extraction of the GitHub release tarball boots
@@ -22,34 +29,43 @@ set -eu
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 boot_dir="$repo_dir/.loadout-bootstrap"
 main="$repo_dir/loadout_main.py"
+home=${HOME:-}
 
 if [ ! -f "$main" ]; then
     echo "loadout: missing $main" >&2
     exit 1
 fi
 
-# 1. Prefer the loadout-installed interpreter at ~/.local/bin/python3.15.
-if [ -n "${HOME:-}" ] && [ -x "$HOME/.local/bin/python3.15" ]; then
-    exec "$HOME/.local/bin/python3.15" "$main" "$@"
+# 1-2. A loadout-installed interpreter: the default install root, then the
+# legacy HOME-mode location.
+if [ -n "$home" ]; then
+    for py in "${XDG_DATA_HOME:-$home/.local/share}/loadout/bin/python3.15" "$home/.local/bin/python3.15"; do
+        if [ -x "$py" ]; then
+            exec "$py" "$main" "$@"
+        fi
+    done
 fi
 
-# 2. Warm bootstrap cache from a previous run.
-if [ -x "$boot_dir/bin/python3.15" ]; then
+archive=$(ls "$repo_dir"/payload/*/portable-python-*.tar.bz2 2>/dev/null | head -1)
+archive_name=${archive##*/}
+
+# 3. Warm bootstrap cache, only when stamped for the current archive.
+if [ -x "$boot_dir/bin/python3.15" ] && [ -n "$archive_name" ] \
+    && [ "$(cat "$boot_dir/.complete" 2>/dev/null)" = "$archive_name" ]; then
     exec "$boot_dir/bin/python3.15" "$main" "$@"
 fi
 
-# 3. Cold bootstrap: decompress portable-python from payload/.
-archive=$(ls "$repo_dir"/payload/*/portable-python-*.tar.bz2 2>/dev/null | head -1)
+# 4. Cold bootstrap: decompress portable-python from payload/.
 if [ -z "$archive" ]; then
     echo "loadout: no Python 3.15 found and no bundled archive to extract." >&2
     echo "Expected one of:" >&2
-    echo "  $HOME/.local/bin/python3.15   (installed via 'loadout install portable-python')" >&2
+    echo "  ${XDG_DATA_HOME:-${home:-~}/.local/share}/loadout/bin/python3.15   (installed via 'loadout install portable-python')" >&2
     echo "  $boot_dir/bin/python3.15       (warm bootstrap cache)" >&2
     echo "  $repo_dir/payload/<platform>/portable-python-*.tar.bz2  (release tarball)" >&2
     exit 1
 fi
 
-archive_root=$(basename "$archive" .tar.bz2)
+archive_root=${archive_name%.tar.bz2}
 
 if ! command -v bzip2 >/dev/null 2>&1; then
     echo "loadout: bzip2 not found; cannot decompress $archive" >&2
@@ -60,20 +76,31 @@ if ! command -v tar >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "loadout: bootstrapping Python 3.15 from $(basename "$archive") ..." >&2
-mkdir -p "$boot_dir"
+echo "loadout: bootstrapping Python 3.15 from $archive_name ..." >&2
+# Leftovers of an interrupted earlier bootstrap.
+rm -rf "$repo_dir"/.loadout-bootstrap.tmp.*
+tmp="$boot_dir.tmp.$$"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp"
 # Extract only the "local/" subtree, strip the two leading components
-# ("portable-python-X/local/") so the result is $boot_dir/bin/python3.15
+# ("portable-python-X/local/") so the result is $tmp/bin/python3.15
 # directly. The archive's install.sh is intentionally NOT executed --
 # we use the python interpreter in-place; loadout_main.py later installs
-# the real copy into ~/.local via the existing install_portable_python
-# phase.
-bzip2 -dc "$archive" | tar xf - -C "$boot_dir" --strip-components=2 \
-    "$archive_root/local"
-
-if [ ! -x "$boot_dir/bin/python3.15" ]; then
-    echo "loadout: bootstrap extraction did not produce $boot_dir/bin/python3.15" >&2
+# the real copy via the install_portable_python phase. POSIX sh has no
+# pipefail, so bzip2's status is checked through a marker file.
+{ bzip2 -dc "$archive" || echo fail >"$tmp/.bzip2-failed"; } \
+    | tar xf - -C "$tmp" --strip-components=2 "$archive_root/local"
+if [ -e "$tmp/.bzip2-failed" ]; then
+    echo "loadout: bzip2 failed decompressing $archive" >&2
     exit 1
 fi
+if ! "$tmp/bin/python3.15" -c 'import sys' >/dev/null 2>&1; then
+    echo "loadout: bootstrap extraction did not produce a working $tmp/bin/python3.15" >&2
+    exit 1
+fi
+echo "$archive_name" >"$tmp/.complete"
+rm -rf "$boot_dir"
+mv "$tmp" "$boot_dir"
+trap - EXIT
 
 exec "$boot_dir/bin/python3.15" "$main" "$@"

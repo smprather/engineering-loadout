@@ -203,14 +203,23 @@ interactive installs offer to migrate it.
 `./loadout` is a POSIX-sh shim (~80 lines) that resolves a Python 3.15
 interpreter in this order:
 
-1. `<prefix>/bin/python3.15` -- already installed via
-   `loadout install portable-python`.
-2. `<repo>/.loadout-bootstrap/bin/python3.15` -- warm bootstrap cache from a
-   prior run.
-3. Cold bootstrap: decompresses
-   `payload/<platform>/portable-python-*.tar.bz2` into
-   `<repo>/.loadout-bootstrap/` and uses that. Requires `bzip2` + `tar` in
+1. `${XDG_DATA_HOME:-~/.local/share}/loadout/bin/python3.15` -- installed at
+   the default install root via `loadout install portable-python`.
+2. `~/.local/bin/python3.15` -- a legacy HOME-mode install.
+3. `<repo>/.loadout-bootstrap/bin/python3.15` -- warm bootstrap cache from a
+   prior run, trusted only when `.loadout-bootstrap/.complete` names the
+   current payload archive (an interrupted extraction, or a cache from an older
+   archive or minor version, is re-extracted).
+4. Cold bootstrap: decompresses
+   `payload/<platform>/portable-python-*.tar.bz2` into a temp dir beside the
+   cache, checks the interpreter runs, writes the stamp, then moves it into
+   place -- a half-written cache is never used. Requires `bzip2` + `tar` in
    `PATH` only -- both ship with every supported base system.
+
+A config.toml `dest_dir` root is not probed (reading TOML needs Python). The
+Python minor version is spelled once in `loadout_main.py` (`_BUNDLED_PY`);
+`tests/payload-interpreter-abi` fails when it stops matching the archive, and
+`tests/shim-bootstrap` pins the order above.
 
 Once an interpreter is found, the shim execs `loadout_main.py` under it
 (shebang `#!/usr/bin/env python3.15`). `loadout_main.py` enforces

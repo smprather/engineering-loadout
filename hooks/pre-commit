@@ -8,6 +8,24 @@ set -euo pipefail
 
 script_dir=$(git rev-parse --show-toplevel)
 
+# The bundled interpreter, found the way the ./loadout shim finds it: the
+# default install root, the legacy HOME-mode ~/.local/bin, then this clone's
+# bootstrap cache. The minor version comes from loadout_main.py's
+# _BUNDLED_PY, the one place it is spelled.
+_bundled_minor=$(sed -n 's/^_BUNDLED_PY = "\(.*\)"$/\1/p' "$script_dir/loadout_main.py")
+_bundled_py() {
+    local _cand
+    for _cand in "${XDG_DATA_HOME:-$HOME/.local/share}/loadout/bin/python${_bundled_minor}" \
+        "$HOME/.local/bin/python${_bundled_minor}" \
+        "$script_dir/.loadout-bootstrap/bin/python${_bundled_minor}"; do
+        if [[ -x "$_cand" ]]; then
+            echo "$_cand"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # --- 1. Embedded git repository cleanup ---
 
 echo "Pre-commit: Checking for embedded git repositories..."
@@ -48,10 +66,7 @@ if [[ -n "$staged_strip_candidates" ]]; then
         # this call, or the shebang fails with "env: 'python3.15': No such
         # file or directory" and the commit is blocked for a reason that has
         # nothing to do with the change.
-        _strip_py=""
-        for _cand in "$HOME/.local/bin/python3.15" "$script_dir/.loadout-bootstrap/bin/python3.15"; do
-            if [[ -x "$_cand" ]]; then _strip_py="$_cand"; break; fi
-        done
+        _strip_py=$(_bundled_py || true)
         if [[ -n "$_strip_py" ]]; then
             PATH="$(dirname "$_strip_py"):$PATH" "$script_dir/build/strip-all-elf-binaries"
         else
@@ -101,10 +116,7 @@ if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
     # Python 3.14 syntax check -- the installer body and all post-install
     # scripts run under bundled python3.15 (via the POSIX-sh loadout shim
     # or ~/.local/bin/python3.15 after install).
-    _py314=""
-    for _cand in "$HOME/.local/bin/python3.15" "$script_dir/.loadout-bootstrap/bin/python3.15"; do
-        if [[ -x "$_cand" ]]; then _py314="$_cand"; break; fi
-    done
+    _py314=$(_bundled_py || true)
     if [[ -n "$_py314" ]]; then
         echo "Pre-commit: Checking Python 3.14 syntax ($_py314)..."
         _py314_ok=1
