@@ -3325,3 +3325,7 @@
 2026-10-28T08:48:00Z	install:@shared-dest-noop	207	PASS	ROB-6 before: no-op reinstall over the same tree (runtime 103s, bz2 compare 47s, stash 31s)
 2026-10-28T08:48:00Z	install:@shared-dest-noop	14	PASS	ROB-6 after: install stamps (runtime archives, vim runtime, stash, bins/libs, parsers, fonts)
 2026-10-28T08:48:00Z	install:@shared-dest-reinstall	209	PASS	ROB-6 after: reinstall ignores stamps (full work)
+2026-10-28T08:52:29Z	build:shell	1	PASS	build-shell
+2026-10-28T08:54:03Z	build:shell	1	FAIL	build-shell
+2026-10-28T08:54:19Z	build:shell	3	PASS	build-shell
+2026-10-28T09:02:05Z	build:shell	19	PASS	build-shell

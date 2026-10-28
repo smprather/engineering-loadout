@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Build the cicwave wheel + bundle its PyQt6 dependency wheels for EL8 / Python 3.14.
+# Build the cicwave wheel + bundle its PyQt6 dependency wheels for EL8 / Python 3.15
+# (the bundled interpreter; the minor is _BUNDLED_PY in loadout_main.py).
 #
 # cicwave (github.com/wulffern/cicwave) is a pure-Python PyQtGraph waveform
 # viewer that imports PySide6. PySide6 has NO wheel that is both EL8-compatible
-# (glibc 2.28) AND Python-3.14-capable: 6.9.x is manylinux_2_28 but caps at
+# (glibc 2.28) AND Python-3.14+-capable: 6.9.x is manylinux_2_28 but caps at
 # python<3.14; 6.10+ added 3.14 but jumped to manylinux_2_34 (glibc 2.34,
 # RHEL9+). PyQt6, by contrast, ships an abi3 cp39 binding + a manylinux_2_28
-# Qt6 (libQt6Core floor GLIBC_2.28) + a cp314 sip -- all EL8 + 3.14.
+# Qt6 (libQt6Core floor GLIBC_2.28) + a per-version sip (cp315 since 13.13.0)
+# -- all EL8 + 3.15.
 #
 # So we carry a small fork: 0001-port-pyside6-to-pyqt6.patch rewrites the
 # PySide6 imports to PyQt6, aliases pyqtSignal->Signal, scopes every enum to
@@ -15,7 +17,7 @@
 # role), and swaps the pyproject dependency PySide6 -> PyQt6.
 #
 # This script clones the stable tag, applies the patch, `uv build`s the wheel,
-# downloads the PyQt6 + matplotlib dependency closure as EL8/3.14 wheels, and
+# downloads the PyQt6 + matplotlib dependency closure as EL8/3.15 wheels, and
 # chunks any wheel over the GitHub-safe size. numpy/pandas/click/pyyaml and
 # other already-bundled shared wheels are reused from payload/<platform>/wheels.
 #
@@ -32,7 +34,7 @@ PLATFORM="el8.x86_64.glibc2p28"
 WHEELS_DIR="$REPO/payload/$PLATFORM/wheels"
 PATCH="$REPO/build/cicwave/0001-port-pyside6-to-pyqt6.patch"
 CLONE_URL="https://github.com/wulffern/cicwave.git"
-PYVER="3.14"
+PYVER="3.15"
 PLAT_TAG="manylinux_2_28_x86_64"
 CHUNK_BYTES=$((40 * 1024 * 1024))   # 40 MiB -> stays under GitHub's 50 MB warn
 
@@ -58,7 +60,7 @@ done
 [ -n "$tag" ] || { echo "ERROR: --tag X.Y.Z is required (stable release tag)" >&2; exit 2; }
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required command: $1" >&2; exit 1; }; }
-need git; need uv; need pip3.14; need split
+need git; need uv; need "python$PYVER"; need split
 [ -r "$PATCH" ] || { echo "ERROR: patch not found: $PATCH" >&2; exit 1; }
 
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/cicwave-build.XXXXXX")"
@@ -82,10 +84,13 @@ cp "$workdir/dist"/cicwave-*.whl "$WHEELS_DIR"/
 echo "  -> $(basename "$(ls "$WHEELS_DIR"/cicwave-*.whl)")"
 
 echo "Downloading PyQt6 dependency closure (EL8 / cp$PYVER wheels)..."
-# sip is a cp314-specific (non-abi3) wheel published only for older manylinux;
+# sip is a per-version (non-abi3) wheel published only for older manylinux;
 # allow the broader platform set so pip finds it alongside the 2_28 Qt wheels.
-PIP_REQUIRE_VIRTUALENV=0 pip3.14 download "${DEP_SPECS[@]}" \
-    --platform "$PLAT_TAG" --platform manylinux2014_x86_64 --platform manylinux_2_5_x86_64 --platform any \
+# `python3.15 -m pip`, not pip3.15: the repo's bootstrap tree carries a pip3.15
+# whose shebang is the portable-python build path.
+PIP_REQUIRE_VIRTUALENV=0 "python$PYVER" -m pip download "${DEP_SPECS[@]}" \
+    --platform "$PLAT_TAG" --platform manylinux2014_x86_64 --platform manylinux1_x86_64 \
+    --platform manylinux_2_5_x86_64 --platform any \
     --python-version "$PYVER" --only-binary :all: --no-deps -d "$workdir/deps"
 cp "$workdir/deps"/*.whl "$WHEELS_DIR"/
 

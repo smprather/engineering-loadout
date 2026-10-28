@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build parity-plot + its locked Python 3.14/EL8 wheel closure.
+# Build parity-plot + its locked Python 3.15/EL8 wheel closure (the bundled
+# interpreter; the minor is _BUNDLED_PY in loadout_main.py).
 #
 # The upstream CLI is a Python package with a NiceGUI designer.  The loadout
 # ships the full runtime dependency set because an offline install cannot fetch
@@ -25,7 +26,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLATFORM="el8.x86_64.glibc2p28"
 WHEELS_DIR="$REPO/payload/$PLATFORM/wheels"
 CLONE_URL="https://github.com/smprather/parity-plot.git"
-PYVER="3.14"
+PYVER="3.15"
 CHUNK_BYTES=$((40 * 1024 * 1024))
 
 tag=""
@@ -64,7 +65,7 @@ need() {
 
 need git
 need uv
-need pip3.14
+need "python$PYVER"
 need python3
 need split
 
@@ -127,17 +128,19 @@ download_args=(
     --platform any
     --python-version "$PYVER"
     --implementation cp
-    --abi cp314
+    --abi "cp${PYVER/./}"
     --only-binary :all:
 )
 
 # Rebuilding the project wheel must work completely offline when the lock's
 # already-vendored closure is still current.  A changed lock falls back to the
 # index, where hashes still make the refresh reproducible.
-if ! PIP_REQUIRE_VIRTUALENV=0 pip3.14 download \
+# `python3.15 -m pip`, not pip3.15: the repo's bootstrap tree carries a pip3.15
+# whose shebang is the portable-python build path.
+if ! PIP_REQUIRE_VIRTUALENV=0 "python$PYVER" -m pip download \
     "${download_args[@]}" --no-index --find-links "$WHEELS_DIR"; then
     echo "Vendored wheel closure is incomplete; refreshing locked dependencies from the index." >&2
-    PIP_REQUIRE_VIRTUALENV=0 pip3.14 download "${download_args[@]}"
+    PIP_REQUIRE_VIRTUALENV=0 "python$PYVER" -m pip download "${download_args[@]}"
 fi
 
 # Only parity-plot's own wheel is safe to prune: dependency wheels are shared

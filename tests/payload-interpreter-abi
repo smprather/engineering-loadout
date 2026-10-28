@@ -35,6 +35,7 @@ Exits 0 when the payload is consistent, 1 otherwise.
 """
 
 import bz2
+import glob
 import io
 import json
 import os
@@ -206,6 +207,32 @@ def test_bundled_py_matches_archive(short):
         ok(f"loadout_main._BUNDLED_PY matches the archive ({short})")
 
 
+def test_build_scripts_target_bundled_minor(short):
+    """A build script that picks wheels for an interpreter must pick the
+    shipped one. build-cicwave.sh and build-parity-plot.sh still ran pip3.14
+    with PYVER="3.14" / --abi cp314 a fortnight after the 3.15 sweep, so a
+    rebuild would have re-bundled wheels the payload interpreter cannot
+    install (DEBT-1). Checked: `pip3.NN` invocations, PYVER="3.NN", and
+    `--abi cp3NN` in build/*.sh. (python3.NN is not checked: the build image's
+    system pythons and meld's python3.6 are legitimate.)"""
+    want = short.split(".")[1]
+    pattern = re.compile(r"\bpip3\.(\d+)\b|PYVER=\"3\.(\d+)\"|--abi\s+\"?cp3(\d+)")
+    stale = []
+    for path in sorted(glob.glob(os.path.join(REPO, "build", "*.sh"))):
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                for m in pattern.finditer(line):
+                    minor = next(g for g in m.groups() if g)
+                    if minor != want:
+                        stale.append(f"{os.path.relpath(path, REPO)}:{lineno}: {m.group(0)}")
+    if stale:
+        fail(f"build scripts target a Python other than {short}: " + "; ".join(stale))
+    else:
+        ok(f"build scripts pick wheels for the shipped Python {short} (pip3.NN / PYVER / --abi)")
+
+
 def main():
     version = shipped_python_version()
     if not version:
@@ -343,6 +370,7 @@ def main():
         ok(f"registry portable-python version matches the archive ({reg_version})")
 
     test_bundled_py_matches_archive(short)
+    test_build_scripts_target_bundled_minor(short)
 
     print()
     if FAILURES:

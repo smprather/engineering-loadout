@@ -17,9 +17,11 @@ which is a FAILED row in the install results -- seven of them
 pygwalker). The install reported the failure, but nothing STOPPED the bad
 wheelhouse from being committed, so the next install failed the same way.
 
-This gate is the pre-commit check: it walks each python-tool's dependency
-closure over the bundled wheelhouse and requires every wheel in it to be
-installable by the shipped interpreter:
+This gate is the pre-commit check: every wheel in the wheelhouse must be
+installable by the shipped interpreter (a wheel nothing can install is dead
+weight shipped in every release), and it walks each enabled python-tool's
+dependency closure over the bundled wheelhouse, so the closure resolves.
+Installable means:
 
   * an ABI tag of cp3XY where XY == the shipped interpreter's version, or
   * abi3 (stable ABI, forward compatible), or
@@ -375,6 +377,20 @@ def main():
         index.setdefault(normalize(name), []).append((filename, path, meta))
 
     ok(f"wheelhouse: {sum(len(v) for v in index.values())} wheels, {len(index)} distributions")
+
+    # A wheel the shipped interpreter cannot install is dead weight in every
+    # release: no closure can use it. The 3.15 sweep left 30 cp314 wheels
+    # (238 MB) that nothing could install; pruned 2026-10-28 (DEBT-1).
+    dead = sorted(
+        fn for entries in index.values() for fn, _p, _m in entries if not wheel_is_abi_compatible(fn, version)
+    )
+    if dead:
+        fail(
+            f"{len(dead)} wheel(s) the shipped cp{version.replace('.', '')} interpreter cannot install "
+            f"(prune them, or fetch the cp{version.replace('.', '')}/abi3 build): " + ", ".join(dead)
+        )
+    else:
+        ok(f"every bundled wheel installs under cp{version.replace('.', '')} on EL8")
 
     try:
         import json

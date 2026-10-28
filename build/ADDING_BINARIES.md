@@ -820,10 +820,27 @@ EL8 floor is glibc 2.28: wheels tagged manylinux_2_29 or newer need RHEL9-era
 glibc and will not run on EL8, so never add those tags.
 
 A native wheel must be **cp315** (or abi3): a cp314 wheel cannot install under
-the bundled 3.15 interpreter (the cp314 leftovers are DEBT-1, HANDOFF
-2026-10-11 (1)). If `pip download` fails with every tag above, the package has
-no pre-built cp315 wheel compatible with EL8 and must be built from source
-(see below).
+the bundled 3.15 interpreter. `tests/wheelhouse-closure` fails on any wheel the
+shipped interpreter cannot install, so a leftover cannot ride along. (The 30
+cp314 leftovers of the 3.15 sweep, DEBT-1 in HANDOFF 2026-10-11 (1), were pruned
+2026-10-28.) If `pip download` fails with every tag above, the package has no
+pre-built cp315 wheel compatible with EL8 and must be built from source (see
+below).
+
+In the build container use `python3.15 -m pip download ...`: the repo's
+`.loadout-bootstrap/bin/pip3.15` carries the portable-python build path as its
+shebang and fails with "bad interpreter".
+
+**2026-10-28 refresh (DEBT-1).** Fetched in `build/build-shell` with
+`--no-deps` and the platform set above, each file's sha256 checked against
+PyPI's published digest: `numpy-2.5.4`, `pandas-3.1.0`, `pyqt6_sip-13.13.0`,
+`markupsafe-3.0.4` (all cp315). That re-enabled cicwave, jupyterlab and
+time-plot (offline `./loadout install` into a scratch dest, each tool run, the
+new modules imported). Still blocked on upstream (PyPI checked 2026-10-28):
+librelane -> klayout 0.30.12 and zstandard 0.25.0 (cp314 at most); parity-plot
+-> orjson 3.13.0 and frozenlist 1.8.0 (cp314 at most; orjson is Rust, so a
+source build also needs a Rust toolchain the build image does not carry);
+pygwalker -> pins duckdb<2.0.0 and no duckdb 1.x ships cp315.
 
 ### duckdb cp314 status -- resolved in 1.4.2
 
