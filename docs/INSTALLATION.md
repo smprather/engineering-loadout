@@ -434,6 +434,15 @@ the uncompressed dir is removed. `snapshot restore` accepts either the
 uncompressed dir or the `.tar.bz2` archive. Font files are excluded from
 snapshots (large and reproducible).
 
+Backup and restore share one target table (`_env_snapshot_targets`): the
+loadout-managed shell/editor config and entrypoints (bash, tcsh, zsh, vim,
+nvim, tmux, st, helix, pip, starship, editorconfig, and every generic env file
+such as wezterm/btop). The user override layers are not in it, so a restore
+never touches them. Restore removes only the targets the snapshot actually
+holds, then copies the snapshot back; it works on a sealed (read-only) managed
+tree. `snapshot create` on a HOME with nothing to back up says
+`nothing to snapshot`, exits 1, and writes no archive.
+
 Snapshots protect per-user config, so they operate on the real `$HOME`; a
 configured `dest_dir` deliberately does **not** move them. Only an explicit
 `--dest-dir` typed on the `snapshot` command line stages the snapshot elsewhere.

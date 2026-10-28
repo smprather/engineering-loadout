@@ -1504,12 +1504,33 @@ def output(cmd, cwd=None, env=None, check=True):
     return proc.stdout.decode("utf-8", "replace")
 
 
+def _rmtree_healing(path):
+    """shutil.rmtree that can delete inside the installer's own sealed trees.
+
+    Managed env config is sealed 0555/0444 (_seal_managed), and nothing can be
+    unlinked from a directory without its write bit, so a plain rmtree died
+    with PermissionError (snapshot restore; sync_dir dropping a sealed subdir).
+    On PermissionError the failing entry's parent and the entry itself get
+    owner-write back (_grant_owner_write) and the operation is retried once;
+    any other error, or a second failure (foreign owner, read-only mount),
+    re-raises."""
+
+    def _onexc(func, failed, exc):
+        if not isinstance(exc, PermissionError):
+            raise exc
+        _grant_owner_write(os.path.dirname(failed))
+        _grant_owner_write(failed)
+        func(failed)
+
+    shutil.rmtree(path, onexc=_onexc)
+
+
 def remove_path(path):
     require_writable_parent(path, "remove")
     if os.path.islink(path) or os.path.isfile(path):
         os.unlink(path)
     elif os.path.isdir(path):
-        shutil.rmtree(path)
+        _rmtree_healing(path)
 
 
 def lns(target, link_name, unsafe=False, verbose=False):
@@ -1517,11 +1538,12 @@ def lns(target, link_name, unsafe=False, verbose=False):
     if os.path.lexists(link_name):
         if os.path.isdir(link_name) and not os.path.islink(link_name):
             if not unsafe:
-                eprint(f"Error: '{link_name}' exists as a directory and cannot be removed (use --unsafe to override)")
-                sys.exit(1)
+                # Refuse this step, not the whole process: sys.exit here skipped
+                # the results table and left the backup uncompressed.
+                raise InstallRefused(f"'{link_name}' exists as a directory; not replacing it with a symlink")
             if verbose and not _RICH:
                 eprint(f"rm -rf '{link_name}'")
-            shutil.rmtree(link_name)
+            _rmtree_healing(link_name)
         else:
             if verbose and not _RICH:
                 eprint(f"rm -f '{link_name}'")
@@ -4768,7 +4790,7 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         record_result("Neovim Lazy restore", "FAIL", f"Lazy restore rc={res.returncode}")
 
 
-def restore_backup(backup_path, home):
+def restore_backup(backup_path, home, registry=None):
     if os.path.isfile(backup_path) and backup_path.endswith(".tar.bz2"):
         tmp_dir = tempfile.mkdtemp(prefix=".loadout-restore_", dir=_tmp_root())
         try:
@@ -4782,7 +4804,7 @@ def restore_backup(backup_path, home):
                     eprint(f"Error: Backup archive is empty: {backup_path}")
                     sys.exit(1)
                 extracted = os.path.join(tmp_dir, entries[0])
-            _restore_backup_dir(extracted, home, source_display=backup_path)
+            _restore_backup_dir(extracted, home, source_display=backup_path, registry=registry)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         return
@@ -4790,50 +4812,86 @@ def restore_backup(backup_path, home):
     if not os.path.isdir(backup_path):
         eprint(f"Error: Backup not found: {backup_path}")
         sys.exit(1)
-    _restore_backup_dir(backup_path, home, source_display=backup_path)
+    _restore_backup_dir(backup_path, home, source_display=backup_path, registry=registry)
 
 
-def _restore_backup_dir(backup_dir, home, source_display=None):
+# HOME-relative paths a snapshot covers -- ONE table for backup_existing and
+# _restore_backup_dir. They used to keep separate lists, so tcsh/zsh entrypoints
+# were never backed up and restore collided with symlinks it had not removed.
+# Only loadout-managed paths: user layers under ~/.config/{bash,tcsh,zsh,st}
+# are not listed and survive a restore untouched. Retired entrypoints stay for
+# one release (W3/P4): the prune runs later in an install, so the numbered
+# backup is the safety net for files it is about to delete.
+_ENV_SNAPSHOT_STATIC = (
+    *BASH_ENTRYPOINTS,
+    BASH_PROFILE_ENTRYPOINT,
+    *BASH_ENTRYPOINTS_RETIRED,
+    *TCSH_ENTRYPOINTS,
+    *TCSH_ENTRYPOINTS_RETIRED,
+    ".zshenv",
+    ".zshrc",
+    ".zprofile",
+    ".vimrc",
+    ".vim",
+    ".tmux",
+    ".tmux.conf",
+    ".tmux.local.conf",
+    ".editorconfig",
+    ".config/vim",
+    ".config/nvim",
+    ".config/tmux",
+    ".config/starship",
+    ".config/editorconfig",
+    ".config/bash/global",
+    ".config/bash/functions.sh",
+    ".config/bash/README.md",
+    ".config/bash/bashrc",
+    ".config/bash/profile",
+    ".config/tcsh/global",
+    ".config/tcsh/tcshrc",
+    ".config/zsh/global",
+    ".config/zsh/site-functions",
+    ".config/zsh/zshrc",
+    ".config/st/global",
+    ".config/helix/config.toml",
+    ".config/helix/languages.toml",
+    ".config/pip/pip.conf",
+)
+
+
+def _env_snapshot_targets(registry=None):
+    """The static table plus every generic env package's install_to (env
+    packages with no ENV_HANDLERS entry install exactly that one path)."""
+    targets = list(_ENV_SNAPSHOT_STATIC)
+    for name, entry in sorted((registry or {}).items()):
+        if not isinstance(entry, dict) or entry.get("kind") != "env" or name in ENV_HANDLERS:
+            continue
+        install_to = entry.get("install_to", "")
+        if install_to.startswith("~/"):
+            rel = install_to[2:].rstrip("/")
+            if rel and rel not in targets:
+                targets.append(rel)
+    return targets
+
+
+def _restore_backup_dir(backup_dir, home, source_display=None, registry=None):
     display = source_display or backup_dir
     print(f"Restoring config bundles from backup: {display}")
     print("")
     print("Removing current config bundles...")
     bash_config = os.path.join(home, ".config", "bash")
-    if os.path.islink(bash_config):
+    if os.path.islink(bash_config) and os.path.lexists(os.path.join(backup_dir, ".config", "bash")):
         os.unlink(bash_config)
-    elif os.path.isdir(bash_config):
-        remove_if_exists(os.path.join(bash_config, "global"))
-        for name in ("functions.sh", "README.md", "bashrc", "profile"):
-            remove_if_exists(os.path.join(bash_config, name))
 
-    restore_targets = list(BASH_ENTRYPOINTS + (BASH_PROFILE_ENTRYPOINT,)) + [
-        ".vimrc",
-        ".tmux.conf",
-        ".editorconfig",
-        ".tmux",
-        ".vim",
-        ".config/nvim",
-        ".config/tmux",
-        ".config/editorconfig",
-        ".config/starship",
-        ".config/vim",
-    ]
-    # Snapshots created before the tmux global/user migration did not capture
-    # ~/.tmux.local.conf. Do not erase a current legacy file unless this
-    # snapshot can actually restore it. lexists() includes backed-up symlinks.
-    if os.path.lexists(os.path.join(backup_dir, ".tmux.local.conf")):
-        restore_targets.append(".tmux.local.conf")
-
-    # Retired entrypoints (W3): remove the current file only when this snapshot can
-    # actually restore it -- a user-owned ~/.bash_login must not be deleted by a
-    # restore whose backup never contained one.
-    for rel in BASH_ENTRYPOINTS_RETIRED + TCSH_ENTRYPOINTS_RETIRED:
-        if os.path.lexists(os.path.join(backup_dir, rel)):
-            restore_targets.append(rel)
-
-    for rel in restore_targets:
+    # Remove exactly what this snapshot can put back (lexists() includes
+    # backed-up symlinks): a current file the snapshot never captured -- a
+    # user-owned ~/.bash_login, a ~/.tmux.local.conf from before the tmux
+    # migration -- is left alone.
+    for rel in _env_snapshot_targets(registry):
+        if not os.path.lexists(os.path.join(backup_dir, rel)):
+            continue
         path = os.path.join(home, rel)
-        if os.path.exists(path) or os.path.islink(path):
+        if os.path.lexists(path):
             print(f"  Removing: {path}")
             remove_path(path)
 
@@ -4908,7 +4966,7 @@ def install_bash(repo_dir, home, links_mode):
     lns(".config/bash/profile", os.path.join(home, BASH_PROFILE_ENTRYPOINT), verbose=True)
 
 
-def backup_existing(home, repo_dir):
+def backup_existing(home, repo_dir, registry=None):
     global _INTERRUPT_PHASE, _ACTIVE_BACKUP_DIR
     backup_rel = mkdirn(os.path.join(home, "loadout_backups", "backup"))
     backup_dir = os.path.abspath(backup_rel)
@@ -4916,46 +4974,32 @@ def backup_existing(home, repo_dir):
     _ACTIVE_BACKUP_DIR = backup_dir
     try:
         print(f"Making backups in: {backup_dir}")
-        # Retired entrypoints stay in this list for one release (W3/P4): the prune
-        # runs later, so the numbered backup is the safety net for files the install
-        # is about to delete. The tcsh entrypoints were never listed at all.
-        for rel in list(
-            BASH_ENTRYPOINTS
-            + (BASH_PROFILE_ENTRYPOINT,)
-            + BASH_ENTRYPOINTS_RETIRED
-            + TCSH_ENTRYPOINTS
-            + TCSH_ENTRYPOINTS_RETIRED
-        ) + [
-            ".vimrc",
-            ".vim",
-            ".tmux",
-            ".tmux.conf",
-            ".tmux.local.conf",
-            ".editorconfig",
-            ".config/vim",
-            ".config/nvim",
-            ".config/bash/global",
-            ".config/bash/functions.sh",
-            ".config/bash/README.md",
-            ".config/bash/bashrc",
-            ".config/tmux",
-            ".config/starship",
-            ".config/editorconfig",
-            ".config/helix/config.toml",
-            ".config/helix/languages.toml",
-            ".config/pip/pip.conf",
-        ]:
+        home_real = os.path.realpath(home)
+        for rel in _env_snapshot_targets(registry):
             path = os.path.join(home, rel)
-            if not (os.path.exists(path) or os.path.islink(path)):
+            if not os.path.lexists(path):
                 continue
+            dest = os.path.join(backup_dir, rel)
             if os.path.islink(path):
                 link_target = os.readlink(path)
                 real = os.path.realpath(path) if os.path.exists(path) else ""
                 if link_target.startswith(repo_dir) or real.startswith(repo_dir):
                     print(f"  Skipping (points to repo): {rel}")
                     continue
+                # An absolute link into this HOME (older tcsh/zsh entrypoints)
+                # is stored relative: restore extracts archives with the
+                # tarfile "data" filter, which refuses absolute link targets.
+                if os.path.isabs(link_target) and _path_under(link_target, home_real):
+                    print(f"  Backing up: {rel}")
+                    require_writable_parent(dest, "backup")
+                    ensure_dir(os.path.dirname(dest))
+                    os.symlink(
+                        os.path.relpath(os.path.realpath(link_target), os.path.dirname(os.path.join(home_real, rel))),
+                        dest,
+                    )
+                    continue
             print(f"  Backing up: {rel}")
-            backup_item(path, os.path.join(backup_dir, rel))
+            backup_item(path, dest)
         print("")
         return backup_dir
     finally:
@@ -5780,7 +5824,9 @@ def _install_env_tcsh(repo_dir, home):
     for entrypoint in TCSH_ENTRYPOINTS:
         dest = os.path.join(home, entrypoint)
         remove_if_exists(dest)
-        lns(os.path.join(tcsh_dir, "tcshrc"), dest, verbose=True)
+        # Relative, like the bash entrypoints: the link survives a moved HOME and
+        # a snapshot archive (restore refuses absolute link targets).
+        lns(os.path.join(".config", "tcsh", "tcshrc"), dest, verbose=True)
     for entrypoint in TCSH_ENTRYPOINTS_RETIRED:
         remove_if_exists(os.path.join(home, entrypoint))
     # Managed config is read-only; the five override layers stay writable.
@@ -5819,7 +5865,7 @@ def _install_env_zsh(repo_dir, home):
     for entrypoint in (".zshenv", ".zshrc", ".zprofile"):
         dest = os.path.join(home, entrypoint)
         remove_if_exists(dest)
-        lns(os.path.join(zsh_dir, "zshrc"), dest, verbose=True)
+        lns(os.path.join(".config", "zsh", "zshrc"), dest, verbose=True)
     # Managed config is read-only; the five override layers stay writable.
     for managed in ("global", "site-functions", "zshrc"):
         _seal_managed(os.path.join(zsh_dir, managed))
@@ -7284,7 +7330,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     elif args.no_backup:
         warn("no backup taken (--no-backup): existing files will be overwritten")
     else:
-        backup_dir = run_install_step("backup", backup_existing, env_home, repo_dir) or ""
+        backup_dir = run_install_step("backup", backup_existing, env_home, repo_dir, registry) or ""
 
     _prebuilt_result = run_install_step("pre-built binaries", install_prebuilt_binaries, repo_dir, home, selected_tools)
     blocked_deferred, blocked_failed = _prebuilt_result if isinstance(_prebuilt_result, tuple) else (set(), {})
@@ -7494,8 +7540,10 @@ def cmd_snapshot(args, repo_dir, home):
     if sub == "create":
         ensure_dir(home, "snapshot destination")
         os.chdir(home)
-        backup_dir = backup_existing(home, repo_dir)
-        if not backup_dir:
+        backup_dir = backup_existing(home, repo_dir, _load_tool_registry(repo_dir))
+        if not backup_dir or not os.listdir(backup_dir):
+            if backup_dir:
+                os.rmdir(backup_dir)
             eprint("Error: nothing to snapshot (no existing files to back up).")
             return 1
         archive = compress_backup(backup_dir)
@@ -7503,7 +7551,7 @@ def cmd_snapshot(args, repo_dir, home):
             print(f"Snapshot: {archive}")
         return 0
     if sub == "restore":
-        restore_backup(args.path, home)
+        restore_backup(args.path, home, _load_tool_registry(repo_dir))
         return 0
     if sub == "list":
         backups_dir = os.path.join(home, "loadout_backups")

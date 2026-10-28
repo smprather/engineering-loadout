@@ -303,6 +303,7 @@ run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
 run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
 run_test "unit-private-state" "$PY" tests/unit-private-state
+run_test "unit-install-steps" "$PY" tests/unit-install-steps
 run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
 run_test "registry-integrity" "$PY" tests/registry-integrity
 run_test "search-groups" tests/search-groups
@@ -364,6 +365,7 @@ run_test "install-modules" --deps auto tests/install-modules
 run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
 run_test "install-env-bash" --deps auto tests/install-env-bash
 run_test "env-private-dirs" --deps auto tests/env-private-dirs
+run_test "snapshot-restore" --deps auto tests/snapshot-restore
 run_test "install-env-st" --deps auto tests/install-env-st
 run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh

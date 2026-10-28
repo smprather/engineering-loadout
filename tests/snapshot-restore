@@ -1,0 +1,86 @@
+#!/bin/sh
+# snapshot-restore: `snapshot create` then `snapshot restore` round-trips a
+# HOME whose managed config is sealed read-only.
+#
+# Managed env config is sealed after install (0444 files / 0555 dirs) so edits
+# cannot be silently lost. Restore removes the current managed trees before
+# copying the snapshot back, and a plain rmtree cannot delete inside a 0555
+# directory: restore died with a PermissionError traceback. Backup and restore
+# also used different target lists, so tcsh/zsh entrypoints were never backed
+# up and restore collided with the symlinks it had not removed.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-snapshot.XXXXXX")"
+trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+run_loadout() {
+    _home=$1
+    shift
+    env -i HOME="$_home" PATH=/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
+        "$REPO/loadout" "$@"
+}
+
+H="$T/home"
+mkdir -p "$H"
+run_loadout "$H" install -y --no-backup env-nvim env-tcsh env-zsh env-helix >"$T/install.log" 2>&1 \
+    || { tail -30 "$T/install.log" >&2; fail "install failed"; }
+
+helix="$H/.config/helix/config.toml"
+[ -f "$helix" ] || fail "install did not create $helix"
+before=$(cat "$helix")
+
+run_loadout "$H" snapshot create >"$T/create.log" 2>&1 \
+    || { cat "$T/create.log" >&2; fail "snapshot create failed"; }
+archive=$(sed -n 's/^Snapshot: //p' "$T/create.log" | tail -1)
+[ -f "$archive" ] || fail "snapshot create printed no archive:
+$(cat "$T/create.log")"
+
+chmod u+w "$helix"
+echo "# edited after the snapshot" >>"$helix"
+
+rc=0
+run_loadout "$H" snapshot restore "$archive" >"$T/restore.log" 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "snapshot restore exited $rc:
+$(tail -30 "$T/restore.log")"
+if grep -q Traceback "$T/restore.log"; then
+    fail "snapshot restore printed a traceback:
+$(cat "$T/restore.log")"
+fi
+[ "$(cat "$helix")" = "$before" ] || fail "helix config was not restored"
+[ -L "$H/.tcshrc" ] || fail ".tcshrc is no longer a symlink after restore"
+[ "$(readlink "$H/.tcshrc")" = ".config/tcsh/tcshrc" ] \
+    || fail ".tcshrc points at $(readlink "$H/.tcshrc"), want .config/tcsh/tcshrc"
+echo "  PASS  sealed HOME round-trips through snapshot create/restore"
+
+# A HOME installed before the entrypoints became relative still carries an
+# ABSOLUTE ~/.tcshrc link. Restore extracts with the tarfile "data" filter,
+# which refuses absolute link targets, so the backup must store it relative.
+ln -sfn "$H/.config/tcsh/tcshrc" "$H/.tcshrc"
+run_loadout "$H" snapshot create >"$T/create-abs.log" 2>&1 \
+    || { cat "$T/create-abs.log" >&2; fail "snapshot create (absolute .tcshrc) failed"; }
+archive_abs=$(sed -n 's/^Snapshot: //p' "$T/create-abs.log" | tail -1)
+rc=0
+run_loadout "$H" snapshot restore "$archive_abs" >"$T/restore-abs.log" 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "restore of a snapshot holding an absolute .tcshrc exited $rc:
+$(tail -20 "$T/restore-abs.log")"
+[ -L "$H/.tcshrc" ] && [ "$(cd "$H" && realpath .tcshrc)" = "$(realpath "$H/.config/tcsh/tcshrc")" ] \
+    || fail "restored .tcshrc does not resolve to .config/tcsh/tcshrc"
+echo "  PASS  an absolute in-HOME entrypoint link survives snapshot/restore"
+
+# An empty HOME has nothing to snapshot: say so and write no archive.
+E="$T/empty"
+mkdir -p "$E"
+rc=0
+run_loadout "$E" snapshot create >"$T/empty.log" 2>&1 || rc=$?
+[ "$rc" = 1 ] || fail "snapshot create on an empty HOME exited $rc, want 1:
+$(cat "$T/empty.log")"
+grep -q 'nothing to snapshot' "$T/empty.log" || fail "empty snapshot did not say 'nothing to snapshot'"
+if ls "$E"/loadout_backups/*.tar.bz2 >/dev/null 2>&1; then
+    fail "empty snapshot still wrote an archive"
+fi
+echo "  PASS  empty HOME: nothing to snapshot, no archive"
+
+echo "snapshot-restore: OK"

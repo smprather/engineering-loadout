@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""
+unit-install-steps -- unit tests for individual installer steps in
+loadout_main.py: removal on sealed trees, the snapshot target table, symlink
+placement, and (as later fixes land) atomic replacement and phase-failure
+reporting.
+
+Every case runs in its own temp dir against small fixture trees; nothing here
+touches the real HOME or payload. Must run under the bundled Python (PEP 758).
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import importlib.machinery
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def _sealed_tree(root):
+    """A managed tree after _seal_managed: dirs 0555, files 0444."""
+    os.makedirs(os.path.join(root, "a", "b"))
+    for rel in ("top.txt", "a/mid.txt", "a/b/leaf.txt"):
+        with open(os.path.join(root, rel), "w") as fh:
+            fh.write(rel)
+    for dirpath, _dirnames, filenames in os.walk(root, topdown=False):
+        for name in filenames:
+            os.chmod(os.path.join(dirpath, name), 0o444)
+        os.chmod(dirpath, 0o555)
+
+
+def _unseal(root):
+    for dirpath, _dirs, _files in os.walk(root):
+        try:
+            os.chmod(dirpath, 0o755)
+        except OSError:
+            pass
+
+
+def test_rmtree_healing_sealed_tree(m, tmp):
+    tree = os.path.join(tmp, "sealed")
+    _sealed_tree(tree)
+    try:
+        m.remove_path(tree)
+        err = None
+    except Exception as exc:
+        err = exc
+        _unseal(tree)
+    check("remove_path removes a sealed 0555/0444 tree", err is None and not os.path.lexists(tree), repr(err))
+
+
+def test_sync_dir_delete_sealed_subdir(m, tmp):
+    src = os.path.join(tmp, "src")
+    os.makedirs(os.path.join(src, "keep"))
+    with open(os.path.join(src, "keep", "k.txt"), "w") as fh:
+        fh.write("k")
+    dest = os.path.join(tmp, "dest")
+    os.makedirs(dest)
+    _sealed_tree(os.path.join(dest, "old"))
+    os.chmod(dest, 0o555)
+    try:
+        m.sync_dir(src, dest, delete=True)
+        err = None
+    except Exception as exc:
+        err = exc
+    _unseal(dest)
+    check(
+        "sync_dir(delete=True) removes a sealed subdir upstream dropped",
+        err is None and not os.path.lexists(os.path.join(dest, "old")),
+        repr(err),
+    )
+    check("sync_dir still copies the surviving tree", os.path.isfile(os.path.join(dest, "keep", "k.txt")))
+
+
+def _covered(rel, targets):
+    for t in targets:
+        if rel == t or rel.startswith(t + "/") or t.startswith(rel + "/"):
+            return True
+    return False
+
+
+def test_snapshot_targets_cover_env_handlers(m, tmp):
+    with open(os.path.join(REPO, "payload", "packages.json")) as fh:
+        data = json.load(fh)
+    reg = data.get("packages", data)
+    targets = m._env_snapshot_targets(reg)
+    missing = []
+    for name in list(m.ENV_HANDLERS) + [n for n, v in reg.items() if isinstance(v, dict) and v.get("kind") == "env"]:
+        if name == "env-xfce4-terminal":
+            continue  # seed-once, app-owned files: deliberately never backed up or restored
+        install_to = (reg.get(name) or {}).get("install_to", "")
+        if not install_to.startswith("~/"):
+            continue
+        rel = install_to[2:].rstrip("/")
+        if not _covered(rel, targets):
+            missing.append(f"{name}:{rel}")
+    check("every env package's root is in the snapshot table", not missing, ", ".join(sorted(set(missing))))
+    for rel in (".tcshrc", ".zshenv", ".zshrc", ".zprofile", ".config/bash/profile", ".config/tcsh/tcshrc"):
+        check(f"snapshot table lists {rel}", rel in targets)
+
+
+def test_lns_on_real_dir_raises_install_refused(m, tmp):
+    target_dir = os.path.join(tmp, "realdir")
+    os.makedirs(target_dir)
+    try:
+        m.lns("elsewhere", target_dir)
+        got = None
+    except SystemExit as exc:
+        got = f"SystemExit({exc.code})"
+    except m.InstallRefused:
+        got = "InstallRefused"
+    check("lns over a real directory raises InstallRefused, not SystemExit", got == "InstallRefused", str(got))
+    check("the directory is left in place", os.path.isdir(target_dir) and not os.path.islink(target_dir))
+
+
+TESTS = (
+    test_rmtree_healing_sealed_tree,
+    test_sync_dir_delete_sealed_subdir,
+    test_snapshot_targets_cover_env_handlers,
+    test_lns_on_real_dir_raises_install_refused,
+)
+
+
+def main():
+    m = load_loadout()
+    for fn in TESTS:
+        print(f"-- {fn.__name__}")
+        with tempfile.TemporaryDirectory(prefix=".loadout-test-steps.") as tmp:
+            try:
+                fn(m, tmp)
+            except Exception as exc:
+                check(fn.__name__, False, f"{type(exc).__name__}: {exc}")
+            finally:
+                _unseal(tmp)
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
