@@ -266,6 +266,11 @@ such path before use and refuses one it does not privately own.
   eza runs in place, and nvim uses `stdpath("state")`/`stdpath("log")`.
   `tests/env-private-dirs` (Tier 2) drives all three shells and nvim against a
   0777 dir with a planted eza and against symlinked dirs.
+- **Online-verdict cache** (`$XDG_RUNTIME_DIR/.loadout-net/detect-<md5>`) is
+  read and written only under a set `XDG_RUNTIME_DIR` (bash's
+  `loadout_detect_online_cached`, tcsh's `helpers/detect-online`, nvim's
+  `config.lua`). With none, the verdict is probed and not cached; the old
+  `/tmp/.loadout-net` fallback was a predictable shared dir.
 - **User name** for these paths comes from `getpass.getuser()`, falling back to
   the uid when no name is available (no `USER`/`LOGNAME`, uid absent from
   passwd), so the installer still starts in minimal containers.

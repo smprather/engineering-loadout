@@ -46,8 +46,17 @@ loadout_detect_online_cached() {
     [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
     local _ttl="${LOADOUT_ONLINE_CACHE_TTL:-86400}"
     local _hosts="${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}"
-    local _dir="${XDG_RUNTIME_DIR:-/tmp}/.loadout-net"
+    local _dir="${XDG_RUNTIME_DIR:-}/.loadout-net"
     local _key _file _verdict _now _age _result
+
+    # No runtime dir, no cache. The old /tmp fallback was a predictable shared
+    # dir that whoever creates it first owns: a co-tenant could plant the
+    # verdict, or a symlink at the temp name. The shells set a private
+    # XDG_RUNTIME_DIR before they get here.
+    if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+        loadout_detect_online "$@"
+        return
+    fi
 
     _key=$(printf '%s' "$_hosts" | md5sum | awk '{print $1}')
     _file="$_dir/detect-$_key"

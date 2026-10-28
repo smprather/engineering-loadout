@@ -5,8 +5,10 @@
 # envs/bash/functions.sh, including its default host list and timeout, plus
 # the once-per-day disk cache of loadout_detect_online_cached(): only the
 # first login of the day pays for network probes; every later shell reads the
-# verdict from ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/detect-<md5> -- the same
-# cache file a bash login shell writes, keyed on an md5 of the host list.
+# verdict from $XDG_RUNTIME_DIR/.loadout-net/detect-<md5> -- the same cache
+# file a bash login shell writes, keyed on an md5 of the host list. With no
+# XDG_RUNTIME_DIR there is no cache: the old /tmp fallback was a predictable
+# shared dir that whoever creates it first owns.
 #
 # The bash version uses /dev/tcp, which is a bash feature -- neither /bin/sh nor
 # csh has it. This shells out to bash for that one primitive when bash exists,
@@ -17,8 +19,9 @@
 timeout_s=${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}
 hosts=${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}
 
-cache_dir=${XDG_RUNTIME_DIR:-/tmp}/.loadout-net
+cache_dir=${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/.loadout-net}
 cache_ttl=${LOADOUT_ONLINE_CACHE_TTL:-86400}
+[ -n "$cache_dir" ] || cache_ttl=0
 if command -v md5sum >/dev/null 2>&1; then
     key=$(printf '%s' "$hosts" | md5sum | awk '{print $1}')
 else
@@ -69,7 +72,9 @@ if [ "$(cat "$tmp" 2>/dev/null)" = "1" ]; then
 else
     verdict=0
 fi
-mkdir -p "$cache_dir" 2>/dev/null
-printf '%s\n' "$verdict" >"$cache_dir/.detect-$key.$$" 2>/dev/null &&
-    mv -f "$cache_dir/.detect-$key.$$" "$cache_file" 2>/dev/null
+if [ -n "$cache_dir" ]; then
+    mkdir -p "$cache_dir" 2>/dev/null
+    printf '%s\n' "$verdict" >"$cache_dir/.detect-$key.$$" 2>/dev/null &&
+        mv -f "$cache_dir/.detect-$key.$$" "$cache_file" 2>/dev/null
+fi
 [ "$verdict" = "1" ]

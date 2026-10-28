@@ -225,5 +225,37 @@ else
     echo "  SKIP  nvim (no nvim on PATH)"
 fi
 
+# ---- online verdict cache: never the shared /tmp fallback --------------------
+# With no XDG_RUNTIME_DIR, bash's loadout_detect_online_cached and tcsh's
+# helpers/detect-online wrote the verdict under /tmp/.loadout-net -- a
+# predictable shared dir whoever creates first owns, so a co-tenant could plant
+# the verdict or a symlink at the temp name. No runtime dir means no cache.
+# Unique host lists give unique cache keys, so only this run's files are checked.
+had_net=0
+[ -d /tmp/.loadout-net ] && had_net=1
+bash_hosts="loadout-test-bash-$$.invalid:9"
+tcsh_hosts="loadout-test-tcsh-$$.invalid:9"
+bash_key=$(printf '%s' "$bash_hosts" | md5sum | awk '{print $1}')
+tcsh_key=$(printf '%s' "$tcsh_hosts" | md5sum | awk '{print $1}')
+env -i HOME="$H" PATH=/usr/bin:/bin LOADOUT_CFG_ONLINE_DETECT_HOSTS="$bash_hosts" \
+    bash -c ". '$REPO/envs/bash/functions.sh'; loadout_detect_online() { return 0; }; loadout_detect_online_cached" \
+    >/dev/null 2>&1 || true
+env -i HOME="$H" PATH=/usr/bin:/bin LOADOUT_CFG_ONLINE_DETECT_HOSTS="$tcsh_hosts" \
+    sh "$REPO/envs/tcsh/global/helpers/detect-online" 0.01 >/dev/null 2>&1 || true
+leaked=""
+for key in "$bash_key" "$tcsh_key"; do
+    if [ -e "/tmp/.loadout-net/detect-$key" ]; then
+        leaked="$leaked /tmp/.loadout-net/detect-$key"
+        rm -f "/tmp/.loadout-net/detect-$key"
+    fi
+done
+if [ "$had_net" = 0 ] && [ -d /tmp/.loadout-net ]; then
+    # Nothing in this run may create the shared dir at all (any shell above, too).
+    leaked="$leaked /tmp/.loadout-net (created; holds: $(ls -A /tmp/.loadout-net | tr '\n' ' '))"
+    rm -rf /tmp/.loadout-net
+fi
+[ -z "$leaked" ] || fail "online verdict cached in the shared /tmp fallback:$leaked"
+echo "  PASS  no XDG_RUNTIME_DIR: the online verdict is not cached in /tmp"
+
 [ "$have_eza" = 1 ] || echo "  NOTE  no eza on PATH; the planted-eza assertion ran without the eza branch"
 echo "env-private-dirs: OK"

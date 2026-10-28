@@ -440,7 +440,6 @@ sha256  19a0077fc542c5a552a387d074faf2cba281b9df662fb53d7b482eff8e0bef86  payloa
 sha256  19af6723cf3ed0c6cb6fb16e01594efa5f475d96d1b26f1b512d514a419566ed  payload/treesitter/vendor/nvim-treesitter/runtime/queries/blade/highlights.scm
 sha256  19c16c61dea63b3582918503e6b294193961261d9daa806d4ae2151f1ad05430  payload/el8.x86_64.glibc2p28/wheels/matplotlib-3.11.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 sha256  19de223b9a90f3be13c0a322d1a998387a9a4a795a845972bf33f981ae6367c9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ispc/highlights.scm
-sha256  19e732c4cf77b90d1134b68deba674e5626e5d13bcdfd16f366f23c7bcd3de03  payload/installed-sizes.json
 sha256  19ee3a9d516b05eb95ca68cf645d7a2afc0be6a8b88d7e5f6900223d53ed4710  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ada/highlights.scm
 sha256  19ee3a9d516b05eb95ca68cf645d7a2afc0be6a8b88d7e5f6900223d53ed4710  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ada/highlights.scm
 sha256  1a1bacb0ea4467bd8531d1fddcb0ac191361e65d9d61dd379ecdd518aca52155  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/runescript/highlights.scm
@@ -1869,6 +1868,7 @@ sha256  6a90a0bc827574aea7fb06cb1ac34f841c5b57e273a63b6102b9cafe08b9f43a  payloa
 sha256  6aa33a4c58de3f4f3a0eadeaca1c57df2ee3242d3d5c74a46d762efe5423c80b  payload/treesitter/vendor/nvim-treesitter/tests/indent/capnp_spec.lua
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/squirrel/indents.scm
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/squirrel/indents.scm
+sha256  6ac35ec7ac4844b2a98ea9971edb88718d75f441db090ffe4baa8edcefdb135b  payload/installed-sizes.json
 sha256  6adbdfc6bbf3c17c42ff5658cec6e2e80d411a6220153137a85bb7f9a8313edd  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/dockerfile.so.bz2
 sha256  6b02afb9b97f65fbca5f31db6a2a3ba21aa93030225f150fa3f249717e938fb4  payload/el8.x86_64.glibc2p28/wheels/pillow-12.3.0-cp315-cp315-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 sha256  6b1a470da0f0258a2c25fd12c8dcc2bb1ae852765b734fdb3e21cc71c6256685  payload/el8.x86_64.glibc2p28/bin/octave.bz2
