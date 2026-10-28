@@ -45,6 +45,19 @@ if ls -d "$R"/.loadout-bootstrap.tmp.* >/dev/null 2>&1; then
 fi
 echo "  PASS  cold bootstrap stamps the cache and leaves no temp dir"
 
+# concurrent: another live bootstrap's temp dir is not deleted; a dead one's is
+rm -rf "$boot"
+sleep 30 &
+live=$!
+mkdir -p "$R/.loadout-bootstrap.tmp.$live" "$R/.loadout-bootstrap.tmp.999999999"
+out=$(shim)
+kill "$live" 2>/dev/null || true
+case $out in STUB*) ;; *) fail "concurrent: cold bootstrap did not run: $out" ;; esac
+[ -d "$R/.loadout-bootstrap.tmp.$live" ] || fail "concurrent: deleted a live bootstrap's temp dir"
+[ ! -e "$R/.loadout-bootstrap.tmp.999999999" ] || fail "concurrent: left a dead bootstrap's temp dir"
+rm -rf "$R/.loadout-bootstrap.tmp.$live"
+echo "  PASS  a live concurrent bootstrap's temp dir survives; a dead one's is cleaned"
+
 # xdg: the installed interpreter at the default root wins
 mkdir -p "$H/.local/share/loadout/bin"
 printf '#!/bin/sh\necho XDG\n' >"$H/.local/share/loadout/bin/python3.15"

@@ -12,41 +12,75 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
-## 2026-10-27 (4): review plan execution, in progress
+## 2026-10-27 (4): review plan executed -- all 18 tasks committed on main (NOT pushed)
 
-Executing the 2026-10-27 code and doc review plan inline, task by task, on
-`main` (not pushed). The plan file stays untracked until its security tasks
-have all landed. Decisions D-A to D-D took the plan's recommended options.
+The 2026-10-27 code and doc review plan
+(`docs/superpowers/plans/2026-10-27-code-and-doc-review.md`, still untracked)
+was executed inline, task by task, test first, on `main`. Nothing is pushed.
+Decisions D-A to D-D took the plan's recommended options. Gates at `d1e81bb`
+(Tasks 1-18): `tests/run-all` all green, and
+`tests/prebuilt-binaries-almalinux8 --full` PASS (311 binaries OK, 23 skipped,
+583 s). The fix-pass commit after it (shim concurrency) reran `tests/run-all`.
 
-Landed:
-- **Task 1** (SEC-1, SEC-6, ROB-5): the pending-ops dir and the run log are
-  private-checked before use (`_secure_private_dir`, `_open_private_append`,
-  the daemon's `secure_pending_dir()`); `_tmp_user()` falls back to the uid.
-  Gate: `tests/unit-private-state` (T1). The plan's manual two-account check
-  (user B pre-creates `/tmp/loadout-pending-<A>` 0777, user A reinstalls with
-  a loadout binary running) was NOT run: this session had one account and no
-  root. Run it on a farm node with a second account; expected result is in
-  docs/SECURITY.md section 9.
-- **Task 2** (SEC-2..SEC-5): shells and nvim use per-user runtime dirs under
-  `LOADOUT_CFG_SHM_DIR` only when private (`loadout_private_dir`,
-  `helpers/private-dir`, `global.paths.private_dir`). Gate: `tests/env-private-dirs` (T2).
-- **Task 3** (SEC-7, SEC-8): every payload file a phase installs is verified;
-  a missing manifest fails closed. Gate: `tests/content-verify`. Only Tier 1 was
-  run for Task 3; the full `tests/run-all` (Tier 2 installs) is still owed.
+| Task | Commit | Closes |
+|---|---|---|
+| 1 private pending dir + run log | `4b61c26` | SEC-1, SEC-6, ROB-5 |
+| 2 private runtime dirs (shells, nvim) | `f7644eb` | SEC-2, SEC-3, SEC-4, SEC-5 |
+| 3 verify every payload file, fail closed | `e0bcdeb` | SEC-7, SEC-8 |
+| 4 sums bound into the signed tag | `e4ff606` | SEC-9, DOC-8 |
+| 5 reinstall/upgrade keep --dest-dir | `cbb0448` | COR-1 |
+| 6 sealed-tree snapshot/restore, one target table | `ee05354` | COR-2, COR-8, COR-9, COR-19 |
+| 7 doctor + symlinked system bins | `94cbe1f` | COR-3 |
+| 8 inode-swap extraction | `b4ca584` | COR-4, ROB-2 (partly: see below) |
+| 9 phase failures are rows | `08e8594` | COR-5, COR-6, COR-7, ROB-3 |
+| 10 nvim clone cleanup + sync timeout | `d679532` | COR-10, COR-11 |
+| 11 bash env correctness | `dd21735` | COR-12, COR-13, COR-14 |
+| 12 shim order, atomic bootstrap, one minor | `6847c33` | COR-15, COR-16, ROB-4, DOC-7 |
+| 13 fonts in place, no fonts.bak | `b78c622` | ROB-1 |
+| 14 resolver fixed point | `9835792` | COR-17 |
+| 15 pre-commit hook safety | `8253bac` | TOOL-1, TOOL-2, TOOL-3, DOC-11 |
+| 16 quoting, shell-free nvim probes, patchelf | `9067160` | SEC-10, COR-18, DOC-9, TOOL-4, TOOL-6 |
+| 17 docs sync + tests/docs-sync | `796f8f6` | DOC-1 to DOC-6 |
+| 18 archive + HANDOFF split | `d1e81bb` | DOC-10 |
+| review fix: shim concurrent bootstrap | (this commit) | -- |
 
-- Task 3's full `tests/run-all` has since run: all green.
-- **Task 4** (SEC-9, DOC-8): the signed tag message now binds
-  `sha256sums.txt sha256 <hex>`; `tools/fetch-stash` verifies it
-  (`verify_tag_binding`), `--from-file` needs `--tag`, and
-  `--allow-unverified-sums` is the HTTPS-only escape. **User-visible until the
-  next release ships:** plain `./tools/fetch-stash` refuses, because the latest
-  published release's tag binds no sums file -- add `--allow-unverified-sums`.
-  Gate: `tests/fetch-stash-trust` (T1).
+Not addressed (as the plan said): ROB-6 and TOOL-5 (noted only), DEBT-1, DEBT-2.
 
-Next: Task 5 (reinstall/upgrade --dest-dir). Ledger with rulings:
-`.superpowers/sdd/2026-10-27-code-and-doc-review/progress.md` (gitignored).
-Run `tests/run-all` with the default TMPDIR: a long TMPDIR makes
-python-suite-install fail (uv writes a /bin/sh shebang trampoline).
+**User-visible changes to know before pushing or releasing:**
+- **fetch-stash refuses until the next release.** The latest published
+  release's tag binds no sums file, so plain `./tools/fetch-stash` now fails
+  the trust check; add `--allow-unverified-sums` (HTTPS-only trust) until a
+  release made by the new `build/release` exists. `--from-file` now needs
+  `--tag`.
+- **A missing `.content-manifest` refuses the install** unless `--no-verify`.
+- **Fonts are no longer moved to `fonts.bak*`.** Existing `fonts.bak*` dirs from
+  earlier installs are not cleaned up; delete them by hand to get the space back.
+- **tcsh/zsh entrypoints are relative symlinks now**, like bash's.
+- **The local `.git/hooks/pre-commit` was updated** to the fixed hook.
+- **The repo's `.loadout-bootstrap/` was re-extracted once** (no stamp); the old
+  3.14 tree in it is gone.
+
+**Open:**
+1. The Task 1 manual two-account check (user B pre-creates
+   `/tmp/loadout-pending-<A>` 0777; user A reinstalls with a loadout binary
+   running) was not run: one account, no root here. Expected result:
+   docs/SECURITY.md section 9.
+2. Deployed trees (e.g. the shared tree in the deployed-shared-tree note) still
+   run the old code until reinstalled from `main`.
+3. The plan file is still untracked. Its security findings are fixed in these
+   commits, but deployed trees are not yet updated; decide whether to commit
+   it before or after redeploying.
+4. Final review was a self-review (no fresh reviewer agent). A fresh
+   `/code-review` of `e85fd11..HEAD` before pushing is recommended.
+5. Deferred minors: `build/release` reads the tag message without `with`;
+   `envs/nvim/init.lua` prints E475 when no git exists anywhere (pre-existing);
+   all font zips are still rejoined before the fonts phase extracts (ROB-2 peak
+   tmpfs unchanged there); HANDOFF is 2261 lines after the split;
+   `build/build-cicwave.sh` and `build/build-parity-plot.sh` still run pip3.14
+   (DEBT-1).
+
+Ledger with every ruling: `.superpowers/sdd/2026-10-27-code-and-doc-review/progress.md`
+(gitignored).
 
 ## 2026-10-27 (3): session close -- open items for the next session
 
@@ -59,7 +93,7 @@ python-suite-install fail (uv writes a /bin/sh shebang trampoline).
    has no RUNPATH. Repair it by reinstalling `nodejs` from current `main`, or
    in place as described in ADDING_BINARIES' Node.js section. It is unconfirmed
    whether this has been done.
-2. **Review plan, untracked on purpose.**
+2. **Review plan, untracked on purpose.** (Executed since: see entry (4) above.)
    `docs/superpowers/plans/2026-10-27-code-and-doc-review.md` holds the
    2026-10-27 top-to-bottom code and doc review: a findings register and 18
    test-first tasks. This repo is PUBLIC, and the plan describes security

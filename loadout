@@ -77,8 +77,12 @@ if ! command -v tar >/dev/null 2>&1; then
 fi
 
 echo "loadout: bootstrapping Python 3.15 from $archive_name ..." >&2
-# Leftovers of an interrupted earlier bootstrap.
-rm -rf "$repo_dir"/.loadout-bootstrap.tmp.*
+# Leftovers of an interrupted earlier bootstrap -- never a LIVE one's: two
+# first runs on a fresh clone can bootstrap at the same time.
+for stale in "$repo_dir"/.loadout-bootstrap.tmp.*; do
+    [ -d "$stale" ] || continue
+    kill -0 "${stale##*.}" 2>/dev/null || rm -rf "$stale"
+done
 tmp="$boot_dir.tmp.$$"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp"
@@ -99,8 +103,17 @@ if ! "$tmp/bin/python3.15" -c 'import sys' >/dev/null 2>&1; then
     exit 1
 fi
 echo "$archive_name" >"$tmp/.complete"
-rm -rf "$boot_dir"
-mv "$tmp" "$boot_dir"
+# A concurrent bootstrap that finished first produced the same thing: use it.
+if [ "$(cat "$boot_dir/.complete" 2>/dev/null)" != "$archive_name" ]; then
+    rm -rf "$boot_dir"
+    # -T: never move INTO a boot_dir a racing bootstrap just created.
+    if ! mv -T "$tmp" "$boot_dir" 2>/dev/null \
+        && [ "$(cat "$boot_dir/.complete" 2>/dev/null)" != "$archive_name" ]; then
+        echo "loadout: could not move the bootstrapped interpreter into $boot_dir" >&2
+        exit 1
+    fi
+fi
+rm -rf "$tmp"
 trap - EXIT
 
 exec "$boot_dir/bin/python3.15" "$main" "$@"
