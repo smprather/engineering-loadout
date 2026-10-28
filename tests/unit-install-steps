@@ -395,6 +395,112 @@ def test_run_timeout_kills_group(m, tmp):
     check("no process of the timed-out group survives", not any(_alive(p) for p in pids), repr(pids))
 
 
+def test_generated_wrappers_quote_paths(m, tmp):
+    """Generated sh embeds paths with shlex.quote: an install root holding
+    spaces, $, quotes or backticks must still exec the right target."""
+    import subprocess
+
+    root = os.path.join(tmp, 'a b$c"d`e')
+    bindir = os.path.join(m._local_root(root), "bin")
+    os.makedirs(bindir)
+    target = _stub(os.path.join(bindir, "tool"), 'echo "TARGET|${PYTHONPATH:-}|$*"\n')
+    shim = os.path.join(tmp, "shim")
+    with open(shim, "w") as fh:
+        fh.write(m._prefer_shim_body(root, "tool"))
+    os.chmod(shim, 0o755)
+    site = os.path.join(root, "lib", "site packages")
+    wrapper = os.path.join(tmp, "wrapper")
+    try:
+        text = m._pythonpath_wrapper_text(site, target)
+    except AttributeError as exc:
+        text = None
+        check("_pythonpath_wrapper_text exists", False, str(exc))
+    for label, path in (("prefer shim", shim), ("PYTHONPATH wrapper", wrapper)):
+        if path == wrapper:
+            if text is None:
+                continue
+            with open(wrapper, "w") as fh:
+                fh.write(text)
+            os.chmod(wrapper, 0o755)
+        syntax = subprocess.run(["sh", "-n", path], capture_output=True, text=True)
+        check(f"{label} parses under sh -n", syntax.returncode == 0, syntax.stderr)
+        res = subprocess.run([path, "x y", "z"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+        check(f"{label} reaches its target", res.stdout.startswith("TARGET|"), res.stdout + res.stderr)
+        check(f"{label} passes arguments intact", res.stdout.rstrip("\n").endswith("|x y z"), res.stdout)
+        if path == wrapper:
+            check("wrapper puts the quoted site-packages first", res.stdout.startswith(f"TARGET|{site}"), res.stdout)
+
+
+def test_describe_python_suite_uses_install_root(m, tmp):
+    import contextlib
+    import io
+    import types
+
+    saved = {k: os.environ.get(k) for k in ("HOME", "XDG_DATA_HOME")}
+    os.environ["HOME"] = os.path.join(tmp, "home")
+    os.environ["XDG_DATA_HOME"] = os.path.join(tmp, "xdg")
+    os.makedirs(os.environ["HOME"])
+    try:
+        root = m._resolve_home(None)
+        stamp = m._suite_stamp_path(m._resolve_install_to(m._SUITE_INSTALL_TO, root))
+        os.makedirs(os.path.dirname(stamp), exist_ok=True)
+        with open(stamp, "w") as fh:
+            json.dump({"python": "3.15.0", "abi": "cpython-315"}, fh)
+        reg = m._load_tool_registry(REPO)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            m.cmd_describe(types.SimpleNamespace(positional=["python-loaded"]), reg)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check(
+        "info python-loaded finds the stamp at the install root",
+        "installed:   3.15.0" in out.getvalue(),
+        out.getvalue()[-400:],
+    )
+
+
+def test_disabled_messages_use_out_of_service_wording(m, tmp):
+    reg = {
+        "x": {"kind": "bin", "platforms": ["linux"], "disabled": True, "disabled_reason": "broken build"},
+        "y": {"kind": "bin", "platforms": ["linux"], "depends": ["x"]},
+    }
+    msgs = []
+    for call in (lambda: m.expand_groups(["x"], reg), lambda: m.walk_depends(["y"], reg)):
+        try:
+            call()
+        except m.ResolverError as exc:
+            msgs.append(str(exc))
+    check("both disabled paths raise ResolverError", len(msgs) == 2, repr(msgs))
+    bad = [msg for msg in msgs if "online" in msg.lower() or "offline" in msg.lower()]
+    check("disabled messages never say online/offline", not bad, repr(bad))
+
+
+def test_build_scripts_honor_loadout_patchelf(m, tmp):
+    """build/build-shell exports LOADOUT_PATCHELF=/usr/bin/patchelf and sets
+    HOME=/tmp, so a script that only knows ~/.local/bin/patchelf fails there."""
+    import glob
+
+    offenders = []
+    for path in sorted(glob.glob(os.path.join(REPO, "build", "build-*.sh"))):
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        assigns = [
+            ln for ln in text.splitlines() if ln.lstrip().startswith("PATCHELF=") and ".local/bin/patchelf" in ln
+        ]
+        fallback = "LOADOUT_PATCHELF" in text or "command -v patchelf" in text or 'command -v "$PATCHELF"' in text
+        if assigns and not fallback:
+            offenders.append(os.path.basename(path))
+    check(
+        "every build script that names ~/.local/bin/patchelf honors LOADOUT_PATCHELF",
+        not offenders,
+        ", ".join(offenders),
+    )
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
@@ -409,6 +515,10 @@ TESTS = (
     test_failed_checkout_removes_clone,
     test_headless_sync_times_out,
     test_run_timeout_kills_group,
+    test_generated_wrappers_quote_paths,
+    test_describe_python_suite_uses_install_root,
+    test_disabled_messages_use_out_of_service_wording,
+    test_build_scripts_honor_loadout_patchelf,
 )
 
 

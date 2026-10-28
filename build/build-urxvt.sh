@@ -33,6 +33,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$REPO/payload/el8.x86_64.glibc2p28/bin"
 LIB_DIR="$REPO/payload/el8.x86_64.glibc2p28/lib64"
 PATCHELF="${HOME}/.local/bin/patchelf"
+# LOADOUT_PATCHELF (exported by build/build-shell) wins: the container runs
+# with HOME=/tmp, where a bare $HOME/.local/bin path does not exist, and
+# patchelf lives at /usr/bin there.
+PATCHELF="${LOADOUT_PATCHELF:-$PATCHELF}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
 DIST_URL_BASE="http://dist.schmorp.de/rxvt-unicode"
 LIBPTYTTY_VERSION="2.0"
 LIBPTYTTY_URL="http://dist.schmorp.de/libptytty/libptytty-${LIBPTYTTY_VERSION}.tar.gz"

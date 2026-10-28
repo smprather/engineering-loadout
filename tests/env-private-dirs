@@ -204,6 +204,23 @@ if [ "$have_nvim" = 1 ]; then
     done
     [ -z "$(ls -A "$T/elsewhere")" ] || fail "nvim symlink-dir: wrote through the symlink"
     echo "  PASS  nvim"
+
+    # The online probe must not build shell strings from env values: a host
+    # list carrying shell syntax must not run it. PATH holds the probe tools and
+    # touch (so a shell-built command WOULD succeed) but no git. An empty
+    # XDG_RUNTIME_DIR means no cached verdict, so the live probe runs.
+    mkdir -p "$T/probe-bin" "$T/rt"
+    ln -sf "$(PATH=/usr/bin:/bin command -v nvim)" "$T/probe-bin/nvim"
+    for tool in sh bash timeout nc curl touch findmnt; do
+        p=$(PATH=/usr/bin:/bin command -v "$tool" 2>/dev/null) && ln -sf "$p" "$T/probe-bin/$tool"
+    done
+    rm -f "$T/pwned"
+    env -i HOME="$H" USER="$ME" LOGNAME="$ME" PATH="$T/probe-bin" TERM=xterm-256color \
+        LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="$T/rt" \
+        LOADOUT_CFG_ONLINE_DETECT_HOSTS="x;touch\${IFS}$T/pwned;x:443" \
+        "$T/probe-bin/nvim" --headless -n +qa >/dev/null 2>&1 </dev/null || true
+    [ ! -e "$T/pwned" ] || fail "nvim's online probe ran shell syntax from LOADOUT_CFG_ONLINE_DETECT_HOSTS"
+    echo "  PASS  nvim online probe is shell-free"
 else
     echo "  SKIP  nvim (no nvim on PATH)"
 fi

@@ -64,6 +64,11 @@ PLATFORM_DIR="$REPO/payload/el8.x86_64.glibc2p28"
 BIN_DIR="$PLATFORM_DIR/bin"
 RUNTIME_DIR="$PLATFORM_DIR/runtime"
 PATCHELF="${HOME}/.local/bin/patchelf"
+# LOADOUT_PATCHELF (exported by build/build-shell) wins: the container runs
+# with HOME=/tmp, where a bare $HOME/.local/bin path does not exist, and
+# patchelf lives at /usr/bin there.
+PATCHELF="${LOADOUT_PATCHELF:-$PATCHELF}"
+[ -x "$PATCHELF" ] || PATCHELF="$(command -v patchelf || true)"
 TAG=""
 
 while [ "$#" -gt 0 ]; do

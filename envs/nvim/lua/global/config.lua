@@ -40,7 +40,12 @@ vim.g.cfg_nvim_plugin_stash_dir =
 --   4. Offline. The safe default: plugins never attempt network, so no
 --      timeout delays on air-gapped boxes.
 local function _cached_online_verdict()
-    local dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/.loadout-net"
+    -- Only from a real runtime dir: the shells always set a private one, and
+    -- a GUI session gets one from systemd. The old /tmp fallback read a
+    -- predictable shared path any co-tenant could plant a verdict in.
+    local runtime = os.getenv("XDG_RUNTIME_DIR")
+    if runtime == nil or runtime == "" then return nil end
+    local dir = runtime .. "/.loadout-net"
     local files = vim.fn.glob(dir .. "/detect-*", false, true)
     local newest, newest_mtime = nil, -1
     for _, f in ipairs(files) do
@@ -63,25 +68,26 @@ local function _live_online_probe()
     local t = os.getenv("LOADOUT_CFG_ONLINE_DETECT_TIMEOUT") or "0.15"
     local nc = vim.fn.executable("nc") == 1
     local curl = vim.fn.executable("curl") == 1
+    -- Argument lists, never a shell string: host and timeout come from the
+    -- environment, and a string.format'd command line ran whatever shell
+    -- syntax they carried. vim.system's own timeout replaces `timeout`.
+    local ms = math.floor((tonumber(t) or 0.15) * 1000 + 0.5)
     for hp in hosts:gmatch("%S+") do
-        local host, port = hp:match("([^:]+):(%d+)")
+        local host, port = hp:match("^([%w%.%-]+):(%d+)$")
         if host and port then
-            local ok = false
+            local cmd
             if nc then
-                vim.fn.system(string.format(
-                    "timeout %s nc -z -w %s %s %s 2>/dev/null", t, t, host, port))
-                ok = vim.v.shell_error == 0
+                cmd = { "nc", "-z", "-w", t, host, port }
             elseif curl then
-                vim.fn.system(string.format(
-                    "timeout %s curl -s -o /dev/null --max-time %s https://%s:%s/ 2>/dev/null",
-                    t, t, host, port))
-                ok = vim.v.shell_error == 0
+                cmd = { "curl", "-s", "-o", "/dev/null", "--max-time", t, "https://" .. host .. ":" .. port .. "/" }
             else
-                vim.fn.system(string.format(
-                    "timeout %s bash -c 'echo >/dev/tcp/%s/%s' 2>/dev/null", t, host, port))
-                ok = vim.v.shell_error == 0
+                -- host/port are bash's positional args, not spliced into the script.
+                cmd = { "bash", "-c", 'echo >"/dev/tcp/$1/$2"', "_", host, port }
             end
-            if ok then return true end
+            local ok, res = pcall(function()
+                return vim.system(cmd, { text = true, timeout = ms }):wait()
+            end)
+            if ok and res and res.code == 0 then return true end
         end
     end
     return false
@@ -103,9 +109,11 @@ end)()
 local function _is_readonly_mount(path)
     if not path or path == "" then return false end
     local real = vim.fn.resolve(path)
-    local out = vim.fn.system(string.format(
-        "findmnt -rn -o OPTIONS --target %q 2>/dev/null", real))
-    if vim.v.shell_error == 0 and out ~= "" then
+    if vim.fn.executable("findmnt") ~= 1 then return false end
+    -- An argument list: Lua's %q is not shell quoting.
+    local res = vim.system({ "findmnt", "-rn", "-o", "OPTIONS", "--target", real }, { text = true }):wait()
+    local out = res.stdout or ""
+    if res.code == 0 and out ~= "" then
         for opt in out:gmatch("[^,]+") do
             if opt == "ro" then return true end
         end

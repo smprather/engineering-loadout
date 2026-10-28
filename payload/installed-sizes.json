@@ -1628,7 +1628,7 @@
     "envs/nvim/lsp/ziggy_schema.lua": 284,
     "envs/nvim/lsp/zk.lua": 1904,
     "envs/nvim/lsp/zls.lua": 270,
-    "envs/nvim/lua/global/config.lua": 6600,
+    "envs/nvim/lua/global/config.lua": 7252,
     "envs/nvim/lua/global/init.lua": 19766,
     "envs/nvim/lua/global/paths.lua": 8137,
     "envs/nvim/lua/global/plugins/blink_cmp.lua": 895,

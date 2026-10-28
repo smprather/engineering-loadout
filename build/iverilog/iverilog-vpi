@@ -78,9 +78,9 @@ for s in $srcs; do
     objs="$objs $o"
 done
 
+# -lveriuser/-lvpi are only present when the build shipped them; the modern
+# module ABI does not need them, so retry without. (One directive, above the
+# whole command: a directive between `||` and its continuation is a parse error.)
 # shellcheck disable=SC2086
 $CC $mflag -shared -o "${name}.vpi" $objs -L"$IVL_LIB" $LDFLAGS -lveriuser -lvpi 2>/dev/null ||
-    # -lveriuser/-lvpi are only present when the build shipped them; the
-    # modern module ABI does not need them, so retry without.
-    # shellcheck disable=SC2086
     $CC $mflag -shared -o "${name}.vpi" $objs -L"$IVL_LIB" $LDFLAGS
