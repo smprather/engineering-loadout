@@ -257,6 +257,16 @@ soon as they are extracted (`_Bz2Store.release`), not held until exit; chunked
 font zips are read in place from their parts (`_PartsReader`) and never
 rejoined.
 
+**Install stamps:** A step that placed files records them in
+`<prefix>/.loadout-stamps/` (`_InstallStamps`): per single file (bins, libs,
+parsers, font members) the source digest and the installed file's size, mtime,
+inode and mode; per multi-file step (runtime archives, the vim runtime, the plugin
+stash) a key over the source hashes, the destination, the registry entry and the
+installer's own sha256, plus the state of every placed entry after relocation.
+`install` skips a step whose stamp still matches, so a no-op `install @shared`
+takes about 14 s instead of 207 s. Anything that differs redoes the step, and
+`reinstall` ignores the stamps.
+
 **Per-phase gating:** Each install phase (`install_prebuilt_binaries`, `install_fonts`,
 etc.) receives `selected_tools` and short-circuits with a `SKIP`
 row when its package(s) are not in the resolved set.

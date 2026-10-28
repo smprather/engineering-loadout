@@ -348,7 +348,13 @@ def test_reinstall_never_moves_fonts_dir_aside():
         mine = os.path.join(ufd, "MyOwn.ttf")
         open(mine, "w").close()
 
-        install.install_fonts(repo_dir, home)
+        # `reinstall` (stamps ignored): an unchanged font is rewritten, by inode
+        # swap. A plain install skips it (tests/install-noop-stamps).
+        install._IGNORE_INSTALL_STAMPS = True
+        try:
+            install.install_fonts(repo_dir, home)
+        finally:
+            install._IGNORE_INSTALL_STAMPS = False
 
         siblings = [n for n in os.listdir(os.path.dirname(ufd)) if n.startswith("fonts.bak")]
         assert not siblings, f"reinstall must not move the fonts dir aside: {siblings}"

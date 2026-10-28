@@ -329,6 +329,7 @@ run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
 run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
 run_test "shim-bootstrap" tests/shim-bootstrap
 run_test "env-nvim-no-git" tests/env-nvim-no-git
+run_test "install-noop-stamps" "$PY" tests/install-noop-stamps
 run_test "nodejs-runpath" "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
 run_test "python-suite" "$PY" tests/python-suite

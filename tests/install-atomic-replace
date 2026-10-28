@@ -146,10 +146,14 @@ def test_parser_reinstall_swaps_inode(m, tmp):
         m.install_treesitter_parsers(repo, home, None)
         dest = os.path.join(m._local_root(home), "share", "nvim", "tree-sitter-parsers", "parser", "fake.so")
         ino = os.stat(dest).st_ino
+        # `reinstall` (stamps ignored) rewrites an unchanged parser; a plain
+        # install skips it (tests/install-noop-stamps).
+        m._IGNORE_INSTALL_STAMPS = True
         m.install_treesitter_parsers(repo, home, None)
         check("parser reinstall swaps the inode", os.stat(dest).st_ino != ino)
     finally:
         m._VERIFY_CONTENT = True
+        m._IGNORE_INSTALL_STAMPS = False
 
 
 def test_bz2store_release_removes_temp(m, tmp):

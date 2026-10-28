@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""
+install-noop-stamps -- an `install` over an up-to-date tree skips the work.
+
+Measured 2026-10-28 (ROB-6): a no-op `install @shared --dest-dir` over a tree it
+had just installed took 207 s against 202 s for the fresh install. Every
+runtime archive was re-extracted (103 s), every bin/lib bz2 was DECOMPRESSED
+to compare it with the installed copy (47 s), and the plugin stash was
+re-extracted (31 s).
+
+Each of those steps now leaves an install stamp: the source bytes' sha256 and,
+for every file it placed, the size / mtime / inode (a symlink: its target)
+after the step finished. A later install whose stamp still matches skips the
+step. Anything else -- a changed payload, an edited, deleted or replaced file,
+a new installer -- falls back to the full step. `reinstall` ignores stamps.
+
+Every case runs in its own temp dir; nothing touches the real HOME or payload.
+Must run under the bundled Python (PEP 758). Exits 0 if all cases pass.
+"""
+
+import bz2
+import importlib.machinery
+import importlib.util
+import io
+import os
+import sys
+import tarfile
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}\n        {detail}")
+
+
+def write_tar_bz2(path, files, links=None):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with tarfile.open(path, "w:bz2") as tf:
+        for rel, data in files.items():
+            info = tarfile.TarInfo(rel)
+            info.size = len(data)
+            info.mode = 0o644
+            info.mtime = 1700000000
+            tf.addfile(info, io.BytesIO(data))
+        for rel, target in (links or {}).items():
+            info = tarfile.TarInfo(rel)
+            info.type = tarfile.SYMTYPE
+            info.linkname = target
+            tf.addfile(info)
+
+
+def read(path):
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+class Spy:
+    """Counts calls to mod.name; with `only`, just the calls whose args it accepts."""
+
+    def __init__(self, mod, name, only=None):
+        self.mod, self.name, self.real, self.calls = mod, name, getattr(mod, name), 0
+
+        def wrapper(*args, **kwargs):
+            if only is None or only(*args):
+                self.calls += 1
+            return self.real(*args, **kwargs)
+
+        setattr(mod, name, wrapper)
+
+    def restore(self):
+        setattr(self.mod, self.name, self.real)
+
+
+def last_row(m, thing):
+    rows = [r for r in m.INSTALL_RESULTS if r[0] == thing]
+    return rows[-1] if rows else None
+
+
+def test_runtime_archive(m):
+    print("runtime archive")
+    with tempfile.TemporaryDirectory() as tmp:
+        platform_dir = os.path.join(tmp, "payload", "el8")
+        archive = os.path.join(platform_dir, "runtime", "demo.tar.bz2")
+        files = {"share/demo/sentinel": b"s", "share/demo/a.txt": b"alpha", "bin/demo": b"#!/bin/sh\n"}
+        write_tar_bz2(archive, files, links={"share/demo/link": "a.txt"})
+        root = os.path.join(tmp, "root")
+        os.makedirs(root)
+        entry = {"archive_name": "demo.tar.bz2"}
+        spy = Spy(m, "pv_extract_tar")
+
+        def install():
+            m._install_runtime_archive("demo", entry, platform_dir, root, "share/demo/sentinel", "~/.local")
+            return last_row(m, "demo runtime")
+
+        try:
+            install()
+            check("first install extracts", spy.calls == 1, spy.calls)
+            row = install()
+            check("an unchanged tree is not re-extracted", spy.calls == 1, spy.calls)
+            check("... and still records OK", row and row[1] == "OK" and "unchanged" in row[2], row)
+
+            target = os.path.join(root, "share", "demo", "a.txt")
+            with open(target, "wb") as fh:
+                fh.write(b"edited by hand")
+            install()
+            check("an edited file forces the extract", spy.calls == 2 and read(target) == b"alpha", spy.calls)
+
+            os.unlink(os.path.join(root, "bin", "demo"))
+            install()
+            check(
+                "a deleted file forces the extract",
+                spy.calls == 3 and os.path.isfile(os.path.join(root, "bin", "demo")),
+                spy.calls,
+            )
+
+            # The installer owns its tree's modes: `chmod a-w` by hand must not
+            # survive an install just because the bytes are unchanged.
+            os.chmod(target, 0o444)
+            install()
+            check(
+                "a chmod'ed file forces the extract (modes are the installer's)",
+                spy.calls == 4 and os.stat(target).st_mode & 0o200,
+                spy.calls,
+            )
+            spy.calls -= 1  # keep the later counts as they were
+
+            link = os.path.join(root, "share", "demo", "link")
+            os.unlink(link)
+            os.symlink("elsewhere", link)
+            install()
+            check("a retargeted symlink forces the extract", spy.calls == 4 and os.readlink(link) == "a.txt", spy.calls)
+
+            write_tar_bz2(archive, {**files, "share/demo/a.txt": b"alpha v2"})
+            install()
+            check("a changed archive forces the extract", spy.calls == 5 and read(target) == b"alpha v2", spy.calls)
+
+            m._IGNORE_INSTALL_STAMPS = True
+            install()
+            check("reinstall (stamps ignored) always extracts", spy.calls == 6, spy.calls)
+        finally:
+            m._IGNORE_INSTALL_STAMPS = False
+            spy.restore()
+
+
+def test_binary(m):
+    print("bin/lib bz2")
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "tool.bz2")
+        with open(src, "wb") as fh:
+            fh.write(bz2.compress(b"\x7fELF fake tool"))
+        dest = os.path.join(tmp, "prefix", "bin", "tool")
+        os.makedirs(os.path.dirname(dest))
+        stamps = m._InstallStamps(os.path.join(tmp, "prefix"))
+        spy = Spy(m, "_bz2_matches_dest")
+        try:
+            check("a missing dest is not current", not m._dest_current(src, dest, stamps))
+            m.write_bz2_atomic(src, dest, 0o755)
+            stamps.record_file(dest, m._sha256_file(src))
+            stamps.save()
+            calls = spy.calls
+            fresh = m._InstallStamps(os.path.join(tmp, "prefix"))
+            check("a stamped dest is current", m._dest_current(src, dest, fresh))
+            check("... without decompressing the bz2", spy.calls == calls, spy.calls - calls)
+
+            with open(dest, "ab") as fh:
+                fh.write(b"x")
+            check("an edited dest is not current", not m._dest_current(src, dest, fresh))
+
+            m.write_bz2_atomic(src, dest, 0o755)
+            unstamped = m._InstallStamps(os.path.join(tmp, "elsewhere"))
+            check("no stamp: the byte compare still answers", m._dest_current(src, dest, unstamped))
+            calls = spy.calls
+            check("... and seeds the stamp", m._dest_current(src, dest, unstamped) and spy.calls == calls)
+
+            m._IGNORE_INSTALL_STAMPS = True
+            calls = spy.calls
+            m._dest_current(src, dest, unstamped)
+            check("reinstall (stamps ignored) byte-compares", spy.calls == calls + 1)
+        finally:
+            m._IGNORE_INSTALL_STAMPS = False
+            spy.restore()
+
+
+def test_parsers(m):
+    print("tree-sitter parsers")
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        parser_src = os.path.join(repo, "payload", "treesitter", "prebuilt", m.treesitter_platform_id(), "parser")
+        os.makedirs(parser_src)
+        with open(os.path.join(parser_src, "lua.so.bz2"), "wb") as fh:
+            fh.write(bz2.compress(b"\x7fELF lua parser"))
+        with open(os.path.join(parser_src, "c.so"), "wb") as fh:
+            fh.write(b"\x7fELF c parser")
+        root = os.path.join(tmp, "root")
+        os.makedirs(root)
+        bz = Spy(m, "write_bz2_atomic")
+        cp = Spy(m, "_copy_atomic")
+        try:
+            m.install_treesitter_parsers(repo, root)
+            check("first install writes both parsers", (bz.calls, cp.calls) == (1, 1), (bz.calls, cp.calls))
+            m.install_treesitter_parsers(repo, root)
+            check("unchanged parsers are not rewritten", (bz.calls, cp.calls) == (1, 1), (bz.calls, cp.calls))
+            dest = os.path.join(root, "share", "nvim", "tree-sitter-parsers", "parser", "lua.so")
+            os.unlink(dest)
+            m.install_treesitter_parsers(repo, root)
+            check("a deleted parser is rewritten", bz.calls == 2 and os.path.isfile(dest), bz.calls)
+        finally:
+            bz.restore()
+            cp.restore()
+
+
+def test_fonts(m):
+    print("fonts")
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        fonts = os.path.join(repo, "payload", "fonts")
+        os.makedirs(fonts)
+        import zipfile
+
+        with zipfile.ZipFile(os.path.join(fonts, "Demo.zip"), "w") as zf:
+            zf.writestr("Demo-Regular.ttf", b"regular")
+            zf.writestr("Demo-Bold.ttf", b"bold")
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+        spy = Spy(m, "_write_stream_atomic", only=lambda _src, dest, *_: dest.endswith(".ttf"))
+        try:
+            m.install_fonts(repo, home)
+            first = spy.calls
+            check("first install writes every font", first == 2, first)
+            m.install_fonts(repo, home)
+            check("unchanged fonts are not rewritten", spy.calls == first, spy.calls - first)
+            bold = os.path.join(m._local_root(home), "share", "fonts", "Demo-Bold.ttf")
+            with open(bold, "wb") as fh:
+                fh.write(b"user edit")
+            m.install_fonts(repo, home)
+            check("an edited font is rewritten", spy.calls == first + 1 and read(bold) == b"bold", spy.calls - first)
+        finally:
+            spy.restore()
+
+
+def test_vim_runtime(m):
+    print("vim runtime")
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        archive = os.path.join(repo, "payload", "el8.x86_64.glibc2p28", "runtime", "vim92.tar.bz2")
+        write_tar_bz2(archive, {"runtime/filetype.vim": b"ft", "runtime/syntax/c.vim": b"syn"})
+        root = os.path.join(tmp, "root")
+        os.makedirs(root)
+        spy = Spy(m, "pv_extract_tar")
+        try:
+            m.install_vim_runtime(repo, root)
+            check("first install extracts the vim runtime", spy.calls == 1, spy.calls)
+            m.install_vim_runtime(repo, root)
+            check("an unchanged vim runtime is not re-extracted", spy.calls == 1, spy.calls)
+            syn = os.path.join(m._local_root(root), "share", "vim", "vim92", "syntax", "c.vim")
+            os.unlink(syn)
+            m.install_vim_runtime(repo, root)
+            check("a deleted runtime file forces the extract", spy.calls == 2 and os.path.isfile(syn), spy.calls)
+        finally:
+            spy.restore()
+
+
+def test_plugin_stash(m):
+    print("nvim plugin stash")
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = os.path.join(tmp, "repo")
+        stash = os.path.join(repo, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+        write_tar_bz2(stash, {"folke/lazy.nvim.git/HEAD": b"ref: refs/heads/main\n"})
+        root = os.path.join(tmp, "root")
+        os.makedirs(root)
+        spy = Spy(m, "safe_extract_tar")
+        try:
+            m.install_nvim_plugin_stash(repo, root)
+            check("first install extracts the stash", spy.calls == 1, spy.calls)
+            m.install_nvim_plugin_stash(repo, root)
+            row = last_row(m, "nvim plugin stash")
+            check("an unchanged stash is not re-extracted", spy.calls == 1, spy.calls)
+            check("... and still records OK", row and row[1] == "OK" and "unchanged" in row[2], row)
+            head = os.path.join(
+                root, "share", "nvim", "loadout", "vendor", "plugin-stash", "folke", "lazy.nvim.git", "HEAD"
+            )
+            with open(head, "w") as fh:
+                fh.write("ref: refs/heads/other\n")
+            m.install_nvim_plugin_stash(repo, root)
+            check("a changed mirror forces the extract", spy.calls == 2, spy.calls)
+        finally:
+            spy.restore()
+
+
+def main():
+    m = load_loadout()
+    test_runtime_archive(m)
+    test_binary(m)
+    test_parsers(m)
+    test_fonts(m)
+    test_vim_runtime(m)
+    test_plugin_stash(m)
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

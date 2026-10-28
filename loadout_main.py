@@ -811,6 +811,146 @@ def _bz2_matches_dest(bz2_file, dest_file):
         return False
 
 
+# --- install stamps (ROB-6) --------------------------------------------------
+# A no-op `install @shared --dest-dir` over a tree it had just installed took
+# 207 s (2026-10-28; the fresh install took 202 s): every runtime archive was
+# re-extracted, every bin/lib bz2 decompressed just to compare it with the
+# installed copy, and the plugin stash re-extracted. A step that placed files
+# now leaves a stamp, and a later install whose stamp still matches skips it.
+_IGNORE_INSTALL_STAMPS = False  # set by `reinstall`: every step does its full work
+_STAMP_VERSION = 1
+_INSTALLER_DIGEST = None
+
+
+def _stamp_key(*parts):
+    """Key for a multi-file step: the parts (source hashes, destination,
+    registry entry) plus this installer's own sha256, so a stamp written by
+    any other installer version -- whose extraction or relocation logic may
+    differ -- never matches."""
+    global _INSTALLER_DIGEST
+    if _INSTALLER_DIGEST is None:
+        _INSTALLER_DIGEST = _sha256_file(os.path.abspath(__file__))
+    blob = json.dumps([_STAMP_VERSION, _INSTALLER_DIGEST, *parts], sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def _file_state(path):
+    """Comparable state of an installed entry: a regular file's
+    [size, mtime_ns, inode, mode] (any rewrite or inode swap changes it; the
+    mode because the installer owns its tree's modes, so a hand `chmod a-w`
+    must not survive an install), a symlink's target; None when absent or
+    anything else."""
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return None
+    if stat.S_ISLNK(st.st_mode):
+        return ["l", os.readlink(path)]
+    if stat.S_ISREG(st.st_mode):
+        return ["f", st.st_size, st.st_mtime_ns, st.st_ino, stat.S_IMODE(st.st_mode)]
+    return None
+
+
+class _InstallStamps:
+    """Install stamps under <prefix>/.loadout-stamps/: proof that this
+    installer already placed exactly these source bytes, and that nothing has
+    touched them since.
+
+    files.json maps each single installed file (bins, libs, parsers, fonts) to
+    a digest of its source (the bz2's sha256; for a font, the zip's plus the
+    member name) and the dest's _file_state() right after it was written. <group>/<name>.json
+    covers one multi-file step (a runtime archive, the plugin stash): a
+    _stamp_key() plus every placed entry's state once the step finished
+    (relocation included). A stamp is only a shortcut -- missing, unreadable
+    or mismatched means do the full step -- and `reinstall` ignores them all
+    (_IGNORE_INSTALL_STAMPS)."""
+
+    def __init__(self, prefix):
+        self.dir = os.path.join(prefix, ".loadout-stamps")
+        self._files = None
+        self._dirty = False
+
+    @staticmethod
+    def _load(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except OSError, ValueError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _store(path, data):
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            _write_stream_atomic(io.BytesIO(json.dumps(data, sort_keys=True).encode()), path, 0o644)
+        except OSError:
+            pass  # a lost stamp only costs the next install a full step
+
+    def _file_map(self):
+        if self._files is None:
+            self._files = self._load(os.path.join(self.dir, "files.json"))
+        return self._files
+
+    def file_current(self, dest, src_digest):
+        """dest is untouched since record_file(dest, src_digest) saw it."""
+        if _IGNORE_INSTALL_STAMPS:
+            return False
+        entry = self._file_map().get(os.path.abspath(dest))
+        return isinstance(entry, dict) and entry.get("src") == src_digest and entry.get("state") == _file_state(dest)
+
+    def record_file(self, dest, src_digest):
+        state = _file_state(dest)
+        if state is not None:
+            self._file_map()[os.path.abspath(dest)] = {"src": src_digest, "state": state}
+            self._dirty = True
+
+    def save(self):
+        if self._dirty:
+            self._store(os.path.join(self.dir, "files.json"), self._files)
+            self._dirty = False
+
+    def _step_path(self, group, name):
+        return os.path.join(self.dir, group, name + ".json")
+
+    def step_current(self, group, name, key, root):
+        if _IGNORE_INSTALL_STAMPS:
+            return False
+        data = self._load(self._step_path(group, name))
+        entries = data.get("files")
+        if data.get("key") != key or not isinstance(entries, dict) or not entries:
+            return False
+        return all(_file_state(os.path.join(root, rel)) == state for rel, state in entries.items())
+
+    def forget_step(self, group, name):
+        """Drop a step's stamp before redoing the step, so an interrupted
+        step can never leave a stamp that vouches for a half-placed tree."""
+        with contextlib.suppress(OSError):
+            os.unlink(self._step_path(group, name))
+
+    def record_step(self, group, name, key, root, rels):
+        entries = {}
+        for rel in rels:
+            state = _file_state(os.path.join(root, rel))
+            if state is not None:
+                entries[rel] = state
+        if entries:
+            self._store(self._step_path(group, name), {"key": key, "files": entries})
+
+
+def _dest_current(bz2_src, dest_file, stamps):
+    """True iff dest_file already holds bz2_src's decompressed bytes. A stamp
+    answers without decompressing; a miss falls back to the byte compare and,
+    on a match, seeds the stamp for next time."""
+    digest = _sha256_file(bz2_src)
+    if stamps.file_current(dest_file, digest):
+        return True
+    if _bz2_matches_dest(bz2_src, dest_file):
+        stamps.record_file(dest_file, digest)
+        return True
+    return False
+
+
 def write_bz2_atomic(bz2_file, dest_file, mode):
     """Decompress bz2_file into dest_file via an atomic rename.
 
@@ -877,12 +1017,23 @@ _CONTENT_MANIFEST = None  # {repo-rel-path: sha256}; lazy-loaded
 _CONTENT_MANIFEST_REPO = None
 
 
+_SHA256_MEMO = {}
+
+
 def _sha256_file(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    """sha256 of a file, hashed once per run: verification, install stamps and
+    pending-op pruning all ask for the same payload files. Keyed on the file's
+    identity and (size, mtime_ns), so a file rewritten mid-run is re-hashed."""
+    st = os.stat(path)
+    memo_key = (os.path.abspath(path), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+    digest = _SHA256_MEMO.get(memo_key)
+    if digest is None:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                h.update(chunk)
+        digest = _SHA256_MEMO[memo_key] = h.hexdigest()
+    return digest
 
 
 def _load_content_manifest(repo_dir):
@@ -1060,6 +1211,16 @@ class _Bz2Store:
                 with open(p, "rb") as inp:
                     shutil.copyfileobj(inp, out)
         return tmp
+
+    def sources(self, path):
+        """The on-disk files behind a logical payload path: [path] itself, its
+        sorted .part-NNN chunks, or None when neither exists. Nothing is
+        verified or rejoined -- for callers that hash before deciding."""
+        if os.path.isfile(path):
+            return [path]
+        if os.path.isfile(path + ".part-000"):
+            return glob_paths_glob(path + ".part-*")
+        return None
 
     def open_logical(self, path):
         """Open a logical payload path for reading, verified, WITHOUT rejoining.
@@ -2411,6 +2572,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     _lib64_bz2_files = []
     _bins_unchanged = 0
     _libs_unchanged = 0
+    stamps = _InstallStamps(_local_root(home))
     if os.path.isdir(bin_dir):
         ensure_dir(dest_bin_dir, "pre-built binaries")
         remove_stale_openssh_clients(dest_bin_dir)
@@ -2459,7 +2621,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     # Only defer if the bundled bz2 actually differs from what's
                     # already installed. Otherwise a no-op rerun would needlessly
                     # spawn a daemon + ask the user to restart their tmux server.
-                    if _bz2_matches_dest(bz2_src, dest_file):
+                    if _dest_current(bz2_src, dest_file, stamps):
                         print(f"  {name} already current, skipping")
                         _bp.advance()
                         continue
@@ -2476,7 +2638,8 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             # Skip no-op installs: when dest already byte-identical to the bundled
             # bz2, avoid the decompress + atomic-rename + chmod + fsync. Cuts disk
             # churn on re-runs (matters for restic/rsync delta noise downstream).
-            if _bz2_matches_dest(bz2_src, dest_file):
+            # A stamp answers without decompressing (_dest_current).
+            if _dest_current(bz2_src, dest_file, stamps):
                 _bins_unchanged += 1
                 _vprint(f"  unchanged: {name}")
                 _bp.advance()
@@ -2515,6 +2678,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                     warn(f"could not replace {dest_file} after 10s: in use (PIDs: {pid_str})")
                     _bp.advance()
                     continue
+            stamps.record_file(dest_file, _sha256_file(bz2_src))
             if not _bp.active:
                 print(f"  bzip2: {bz2_file} -> {dest_file}")
             _bp.advance()
@@ -2543,13 +2707,14 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
                 continue
             _lp.step(os.path.basename(dest_file))
             # Skip no-op installs: dest already byte-identical to bundled bz2.
-            if _bz2_matches_dest(bz2_src, dest_file):
+            if _dest_current(bz2_src, dest_file, stamps):
                 _libs_unchanged += 1
                 _vprint(f"  unchanged: {os.path.basename(dest_file)}")
                 _lp.advance()
                 continue
             require_writable_parent(dest_file, "pre-built libraries")
             write_bz2_atomic(bz2_src, dest_file, 0o644)
+            stamps.record_file(dest_file, _sha256_file(bz2_src))
             _vprint(f"  bzip2: {bz2_file} -> {dest_file}")
             _lp.advance()
         _lp.stop()
@@ -2560,6 +2725,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
     # phase. Running ldd now produced false "this binary may not run" warnings on every
     # @shared install. The check now runs once at the end of the whole install, after
     # every runtime archive has extracted (see the main install flow).
+    stamps.save()
     # Test-only dep capture: the ACTUAL bin/lib files this phase processed,
     # including unclaimed lib stems no package declares. See _record_install_deps.
     _dep_capture_add(_bin_bz2_files + _lib64_bz2_files, repo_dir)
@@ -3638,9 +3804,11 @@ def font_zip_members(zip_src):
         return [member for member in zf.namelist() if font_member(member) and os.path.basename(member)]
 
 
-def extract_font_zip(zip_src, user_fonts_dir, members=None, progress=None):
+def extract_font_zip(zip_src, user_fonts_dir, members=None, progress=None, stamps=None, zip_digest=None):
     """Extract the font members of `zip_src` (a path or a seekable file
-    object, e.g. _Bz2Store.open_logical()) flat into user_fonts_dir."""
+    object, e.g. _Bz2Store.open_logical()) flat into user_fonts_dir. With
+    `stamps` and the zip's `zip_digest`, a member whose installed copy is
+    untouched since this installer wrote it is not decompressed again."""
     if progress is None:
         print(f"  Extracting: {getattr(zip_src, 'name', zip_src)} -> {user_fonts_dir}/")
     members = members if members is not None else font_zip_members(zip_src)
@@ -3649,9 +3817,13 @@ def extract_font_zip(zip_src, user_fonts_dir, members=None, progress=None):
             dest = os.path.join(user_fonts_dir, os.path.basename(member))
             if progress is not None:
                 progress.step(os.path.basename(member))
-            require_writable_parent(dest, "fonts")
-            with zf.open(member) as src:
-                _write_stream_atomic(src, dest, 0o644)
+            digest = f"{zip_digest}:{member}" if zip_digest else None
+            if stamps is None or digest is None or not stamps.file_current(dest, digest):
+                require_writable_parent(dest, "fonts")
+                with zf.open(member) as src:
+                    _write_stream_atomic(src, dest, 0o644)
+                if stamps is not None and digest is not None:
+                    stamps.record_file(dest, digest)
             if progress is not None:
                 progress.advance()
 
@@ -3908,6 +4080,7 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
     seen_zips = set()
     zip_jobs = []
     _p = None
+    stamps = _InstallStamps(_local_root(fonts_root))
     try:
         for name in sorted(os.listdir(vendor_fonts_dir)):
             if name.endswith(".zip"):
@@ -3924,19 +4097,24 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
             zip_src = _bz2.open_logical(zip_logical)
             if zip_src is None:
                 continue
-            zip_jobs.append((zip_src, font_zip_members(zip_src)))
+            # open_logical verified the sources, so these hashes are memoized.
+            zip_digest = hashlib.sha256(
+                "".join(_sha256_file(p) for p in _bz2.sources(zip_logical)).encode()
+            ).hexdigest()
+            zip_jobs.append((zip_src, font_zip_members(zip_src), zip_digest))
 
-        _font_names = [os.path.basename(member) for _, members in zip_jobs for member in members]
+        _font_names = [os.path.basename(member) for _, members, _ in zip_jobs for member in members]
         _p = _ItemProgress("Installing fonts", _font_names) if _font_names else None
-        for zip_src, members in zip_jobs:
+        for zip_src, members, zip_digest in zip_jobs:
             if members:
-                extract_font_zip(zip_src, fonts_dir, members, _p)
+                extract_font_zip(zip_src, fonts_dir, members, _p, stamps=stamps, zip_digest=zip_digest)
             zip_src.close()
     finally:
-        for zip_src, _ in zip_jobs:
+        for zip_src, _, _ in zip_jobs:
             zip_src.close()
         if _p is not None:
             _p.stop()
+        stamps.save()
 
     if shared_root is not None:
         conf_path = _write_fontconfig_snippet(fonts_dir, shared_root)
@@ -4101,7 +4279,8 @@ def extract_tar_replacing(archive_path, dest_dir):
     are renames -- and then placed by _place_staged_tree. A running process
     with an old library mmap'd keeps the old inode. The staging dir is always
     removed, so a refused or interrupted archive leaves dest_dir unchanged
-    except for entries already placed. Returns the entries placed."""
+    except for entries already placed. Returns the archive's non-directory
+    entries (relative paths) -- what an install stamp snapshots."""
     require_writable_dir(dest_dir, "archive extraction")
     dest_real = os.path.realpath(dest_dir)
     with tarfile.open(archive_path, "r:*") as tf:
@@ -4117,7 +4296,7 @@ def extract_tar_replacing(archive_path, dest_dir):
                 tf.extract(member, stage, filter="data")
                 if p is not None:
                     p.advance()
-            placed = _place_staged_tree(stage, dest_dir)
+            _place_staged_tree(stage, dest_dir)
             if p is not None:
                 p.advance()
         finally:
@@ -4125,7 +4304,7 @@ def extract_tar_replacing(archive_path, dest_dir):
                 p.stop()
             if os.path.lexists(stage):
                 _rmtree_healing(stage)
-    return placed
+    return [os.path.normpath(mb.name) for mb in members if not mb.isdir()]
 
 
 def pv_extract_tar(archive_path, dest_dir, fresh=False):
@@ -4136,8 +4315,7 @@ def pv_extract_tar(archive_path, dest_dir, fresh=False):
     install.sh staging), where nothing can be mapped and a direct extract is
     enough."""
     if not fresh:
-        extract_tar_replacing(archive_path, dest_dir)
-        return
+        return extract_tar_replacing(archive_path, dest_dir)
     require_writable_dir(dest_dir, "archive extraction")
     dest_real = os.path.realpath(dest_dir)
 
@@ -4470,8 +4648,9 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
     """One package of install_runtime_archives: resolve, extract, relocate,
     check the sentinel, record the row."""
     archive_name = entry.get("archive_name", f"{pkg_name}.tar.bz2")
-    archive = _bz2.resolve(os.path.join(platform_dir, "runtime", archive_name))
-    if archive is None:
+    archive_logical = os.path.join(platform_dir, "runtime", archive_name)
+    sources = _bz2.sources(archive_logical)
+    if sources is None:
         hint = entry.get("missing_hint", "")
         skipped(
             f"{pkg_name} runtime (no {archive_name} in payload/<platform>/runtime/)",
@@ -4481,6 +4660,15 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
         return
 
     install_to = _resolve_install_to(install_to_raw, home)
+    _verify_source_files(sources)
+    stamps = _InstallStamps(_local_root(home))
+    key = _stamp_key("runtime", pkg_name, [_sha256_file(p) for p in sources], os.path.realpath(install_to), entry)
+    if stamps.step_current("runtime", pkg_name, key, install_to):
+        record_result(f"{pkg_name} runtime", "OK", f"unchanged ({archive_name} already in {install_to})")
+        _vprint(f"  unchanged: {pkg_name} runtime")
+        return
+    stamps.forget_step("runtime", pkg_name)
+    archive = _bz2.resolve(archive_logical)
     ensure_dir(install_to, f"{pkg_name} runtime")
 
     rbe = entry.get("remove_before_extract")
@@ -4490,7 +4678,7 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
         for rel in rbe:
             remove_if_exists(os.path.join(install_to, rel))
 
-    pv_extract_tar(archive, install_to)
+    placed = pv_extract_tar(archive, install_to)
     _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     if pkg_name == "pyright":
@@ -4534,6 +4722,7 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
         os.chmod(sentinel, 0o755)
 
     if sentinel_ok:
+        stamps.record_step("runtime", pkg_name, key, install_to, placed or [])
         record_result(f"{pkg_name} runtime", "OK", f"{archive} -> {install_to}")
         print(f"  Installed: {archive} -> {install_to}/")
     else:
@@ -4559,11 +4748,12 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
         record_result("Vim runtime", "SKIP", "vim/gvim not in selected tools")
         return
     archive_name = _registry_archive_name(registry, "vim", "vim92.tar.bz2")
-    archive = None
+    sources = None
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
     if platform_dir:
-        archive = _bz2.resolve(os.path.join(platform_dir, "runtime", archive_name))
-    if archive is None:
+        archive_logical = os.path.join(platform_dir, "runtime", archive_name)
+        sources = _bz2.sources(archive_logical)
+    if sources is None:
         skipped(
             f"Vim runtime (no {archive_name} in payload/<platform>/runtime/)",
             "vim will NOT have the vendored runtime at ~/.local/share/vim/vim92",
@@ -4574,6 +4764,14 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
     vim_share_dir = os.path.join(_local_root(home), "share", "vim")
     runtime_dir = os.path.join(vim_share_dir, "runtime")
     vim92_dir = os.path.join(vim_share_dir, "vim92")
+    _verify_source_files(sources)
+    stamps = _InstallStamps(_local_root(home))
+    key = _stamp_key("vim-runtime", [_sha256_file(p) for p in sources], os.path.realpath(vim92_dir))
+    if stamps.step_current("runtime", "vim", key, vim92_dir):
+        _vprint("  unchanged: Vim runtime")
+        return
+    stamps.forget_step("runtime", "vim")
+    archive = _bz2.resolve(archive_logical)
     ensure_dir(vim_share_dir, "Vim runtime")
     remove_if_exists(runtime_dir)
     remove_if_exists(vim92_dir)
@@ -4586,6 +4784,8 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
 
     sentinel = os.path.join(vim92_dir, "filetype.vim")
     if os.path.isfile(sentinel):
+        placed = [os.path.relpath(os.path.join(r, f), vim92_dir) for r, _d, files in os.walk(vim92_dir) for f in files]
+        stamps.record_step("runtime", "vim", key, vim92_dir, placed)
         print(f"  Installed: {archive} -> {vim92_dir}/")
     else:
         warn(f"Vim runtime archive did not install {sentinel} as expected")
@@ -4764,23 +4964,31 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         "Tree-sitter parsers",
         (n.replace(".so.bz2", "").replace(".so", "") for n in parser_files),
     )
+    stamps = _InstallStamps(_local_root(home))
+    unchanged = 0
     for name in parser_files:
         src = os.path.join(parser_src, name)
         _p.step(name.replace(".so.bz2", "").replace(".so", ""))
-        if name.endswith(".so.bz2"):
-            dest = os.path.join(parser_dest, name[:-4])
+        dest = os.path.join(parser_dest, name[:-4] if name.endswith(".so.bz2") else name)
+        digest = _sha256_file(src)  # hashed once by _verify_tree above
+        if stamps.file_current(dest, digest):
+            unchanged += 1
+        elif name.endswith(".so.bz2"):
             require_writable_parent(dest, "Tree-sitter parsers")
             # Inode swap: a running nvim keeps its mmap of the old parser.
             write_bz2_atomic(src, dest, 0o644)
+            stamps.record_file(dest, digest)
             _vprint(f"  bzip2: {src} -> {dest}")
-        elif name.endswith(".so"):
-            dest = os.path.join(parser_dest, name)
+        else:
             require_writable_parent(dest, "Tree-sitter parsers")
             _copy_atomic(src, dest, 0o644)
+            stamps.record_file(dest, digest)
             _vprint(f"  cp: {src} -> {dest}")
         _p.advance()
     _p.stop()
-    print(f"  Installed {len(parser_files)} parsers -> {parser_dest}/")
+    stamps.save()
+    note = f" ({unchanged} already current)" if unchanged else ""
+    print(f"  Installed {len(parser_files)} parsers -> {parser_dest}/{note}")
 
 
 def install_nvim_treesitter_vendor(repo_dir, home, selected_tools=None):
@@ -4960,13 +5168,24 @@ def install_nvim_plugin_stash(repo_dir, home, selected_tools=None):
         skipped("nvim plugin stash (nvim-plugin-stash not selected)", "")
         record_result("nvim plugin stash", "SKIP", "nvim-plugin-stash not in selected packages")
         return
-    archive = _bz2.resolve(os.path.join(repo_dir, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2"))
-    if archive is None:
+    stash_logical = os.path.join(repo_dir, "envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+    sources = _bz2.sources(stash_logical)
+    if sources is None:
         skipped("nvim plugin stash (no stash archive in envs/nvim/vendor/plugins/)", "")
         record_result("nvim plugin stash", "SKIP", "no stash archive")
         return
 
     dest = os.path.join(_local_root(home), "share", "nvim", "loadout", "vendor", "plugin-stash")
+    _verify_source_files(sources)
+    stamps = _InstallStamps(_local_root(home))
+    key = _stamp_key("nvim-plugin-stash", [_sha256_file(p) for p in sources], os.path.realpath(dest))
+    if stamps.step_current("data", "nvim-plugin-stash", key, dest):
+        mirrors = sum(len([d for d in dirs if d.endswith(".git")]) for _r, dirs, _f in os.walk(dest))
+        record_result("nvim plugin stash", "OK", f"unchanged ({mirrors} bare mirrors in {dest})")
+        _vprint("  unchanged: nvim plugin stash")
+        return
+    stamps.forget_step("data", "nvim-plugin-stash")
+    archive = _bz2.resolve(stash_logical)
     require_writable_parent(dest, "nvim plugin stash")
     ensure_dir(os.path.dirname(dest), "nvim plugin stash")
     staging = dest + ".new"
@@ -4981,6 +5200,8 @@ def install_nvim_plugin_stash(repo_dir, home, selected_tools=None):
         _bz2.release(archive)
         remove_if_exists(staging)
 
+    placed = [os.path.relpath(os.path.join(r, f), dest) for r, _dirs, files in os.walk(dest) for f in files]
+    stamps.record_step("data", "nvim-plugin-stash", key, dest, placed)
     mirrors = sum(len([d for d in dirs if d.endswith(".git")]) for _r, dirs, _f in os.walk(dest))
     record_result("nvim plugin stash", "OK", f"{mirrors} bare mirrors -> {dest}")
     print(f"  Installed nvim plugin stash: {mirrors} bare git mirrors -> {dest}/")
@@ -7723,9 +7944,12 @@ def confirm_transaction(assume_yes):
 
 def cmd_install(args, registry, selected_tools, repo_dir, home):
     """The default install verb."""
-    global _FOLLOW_SYMLINKS, _VERIFY_CONTENT, _ALLOW_ONLINE_PLUGIN_SYNC
+    global _FOLLOW_SYMLINKS, _VERIFY_CONTENT, _ALLOW_ONLINE_PLUGIN_SYNC, _IGNORE_INSTALL_STAMPS
     _FOLLOW_SYMLINKS = getattr(args, "install_follows_symlinks", "auto") or "auto"
     _ALLOW_ONLINE_PLUGIN_SYNC = bool(getattr(args, "allow_online_plugin_sync", False))
+    # `reinstall` redoes every step; install/upgrade skip steps an install
+    # stamp proves are already done (_InstallStamps).
+    _IGNORE_INSTALL_STAMPS = bool(getattr(args, "reinstall", False))
 
     # Content verification: hash every payload archive against the committed,
     # signed .content-manifest before extracting it. Default-on; --no-verify
@@ -8486,7 +8710,7 @@ def _cli_install_impl(ctx, dest_dir_explicit, **params):
     ctx.exit(cmd_install_v2(args, ctx.obj["registry"], ctx.obj["repo_dir"], _resolve_home(params["dest_dir"])))
 
 
-@cli.command(name="reinstall", short_help="Re-install packages (alias of install today).")
+@cli.command(name="reinstall", short_help="Re-install packages, redoing every step.")
 @_selection_options
 @_install_options
 @_dest_dir_option
@@ -8506,11 +8730,14 @@ def cli_reinstall(
     assume_yes,
     dest_dir,
 ):
-    """Re-install named packages. Today identical to `install`; will diverge once
-    persisted install state lands."""
+    """Re-install named packages, redoing every step. `install` skips a step
+    whose install stamp shows its files are already in place and untouched
+    (an up-to-date @shared tree: seconds instead of minutes); `reinstall`
+    ignores the stamps and re-extracts, rewrites and re-relocates everything."""
     _cli_install_impl(
         ctx,
         _dest_dir_typed(ctx),
+        reinstall=True,
         packages=packages,
         skip=skip,
         no_deps=no_deps,

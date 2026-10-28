@@ -3321,3 +3321,7 @@
 2026-10-28T02:06:02Z	test:install-nvim-shared-stash	38	PASS	mode=auto
 2026-10-28T02:06:02Z	test:completion in sync	0	PASS	mode=all
 2026-10-28T02:06:03Z	test:total	1058	PASS	flags=
+2026-10-28T08:48:00Z	install:@shared-dest-fresh	202	PASS	ROB-6 baseline at 1f3e197; TMPDIR+dest on /var/tmp
+2026-10-28T08:48:00Z	install:@shared-dest-noop	207	PASS	ROB-6 before: no-op reinstall over the same tree (runtime 103s, bz2 compare 47s, stash 31s)
+2026-10-28T08:48:00Z	install:@shared-dest-noop	14	PASS	ROB-6 after: install stamps (runtime archives, vim runtime, stash, bins/libs, parsers, fonts)
+2026-10-28T08:48:00Z	install:@shared-dest-reinstall	209	PASS	ROB-6 after: reinstall ignores stamps (full work)

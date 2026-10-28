@@ -120,7 +120,15 @@ Name packages or groups the same way `dnf` or `apt` works:
 ./loadout search vim                                      # substring search (shows @groups)
 ./loadout info gvim                                       # details for one package
 ./loadout install octave --dry-run                        # preview only
+./loadout reinstall octave                                # redo every step, even if current
 ```
+
+`install` over an up-to-date tree is fast: each step that placed files left an
+install stamp (`<prefix>/.loadout-stamps/`), and a step whose source bytes are
+unchanged and whose files are untouched (same size, mtime, inode and mode) is
+skipped. A no-op `install @shared` takes about 14 s instead of 3.5 minutes. An
+edited, deleted, chmod'ed or replaced file, a new payload or a new installer
+version redoes the step. `reinstall` ignores the stamps.
 
 ---
 
