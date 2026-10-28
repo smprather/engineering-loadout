@@ -1,7 +1,7 @@
 # Proposal: XDG-compliant default `--dest-dir`, and retire `@engineering-loadout`
 
 > **Status: superseded for implementation** by
-> [`docs/superpowers/specs/2026-10-05-dest-default-and-group-removal-design.md`](superpowers/specs/2026-10-05-dest-default-and-group-removal-design.md),
+> [`docs/superpowers/specs/2026-10-05-dest-default-and-group-removal-design.md`](../superpowers/specs/2026-10-05-dest-default-and-group-removal-design.md),
 > which carries the full ask set plus the `prefer/` mechanism, resolves two internal
 > inconsistencies (§5.2 vs §7 on the `local/` level; §3 vs §5.4 on config routing),
 > and supersedes the stale "pending upstream merge" note in §6 (config.toml is merged

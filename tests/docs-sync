@@ -145,7 +145,6 @@ def test_no_stale_patterns():
 ROOT_MD_ALLOWED = {
     "README.md",
     "AGENTS.md",
-    "enhancement-request-permissions-management.md",  # removed by Task 18
 }
 
 

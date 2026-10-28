@@ -302,4 +302,6 @@ ty is advisory (5 known false positives documented in ty.toml — unresolved cli
 
 ## Docs Sync Targets
 
+`docs/archive/` is HISTORY (superseded docs, handoff entries before 2026-10-01): never a sync target, never edited to match current code. `tests/docs-sync` (T1) exempts it along with docs/HANDOFF.md and docs/superpowers/.
+
 README.md (user-facing), docs/INSTALLATION.md (layout/config/migration), docs/ARCHITECTURE.md, AGENTS.md (this), .github/copilot-instructions.md, docs/HANDOFF.md, docs/BASH.md (prompt rationale), docs/STARSHIP.md (measured starship behavior -- STARSHIP_SHELL per env, marker syntax, no config-time env substitution), docs/TMUX.md (tmux layers, theme, FFM, plugins), envs/bash/global/README.md (shell integration + PATH rationale). rg for renamed commands/retired flags/new envvars/changed install behavior before every commit.

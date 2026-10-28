@@ -2,7 +2,7 @@
 
 Date: 2026-10-05
 Status: draft for review
-Evidence base: `docs/PROPOSAL-2026-10-05-dest-default-and-group-removal.md`
+Evidence base: `docs/archive/PROPOSAL-2026-10-05-dest-default-and-group-removal.md`
 Scope: proposal asks 1–8. Uninstall is explicitly out of scope (separate spec).
 Release class: **C** (installer / registry / repo-layout change) per `docs/RELEASE.md`.
 
