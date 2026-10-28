@@ -301,6 +301,100 @@ def test_verification_failure_prints_summary(m, tmp):
     check("the message says earlier phases completed", "earlier" in text.lower(), text[-600:])
 
 
+def _stub(path, body):
+    with open(path, "w") as fh:
+        fh.write("#!/bin/sh\n" + body)
+    os.chmod(path, 0o755)
+    return path
+
+
+def _alive(pid):
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return False
+
+
+def test_failed_checkout_removes_clone(m, tmp):
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "home")
+    os.makedirs(os.path.join(repo, "envs", "nvim"))
+    with open(os.path.join(repo, "envs", "nvim", "lazy-lock.json"), "w") as fh:
+        json.dump({"plug": {"branch": "main", "commit": "0123456789abcdef"}}, fh)
+    os.makedirs(os.path.join(home, ".config", "nvim"))
+    with open(os.path.join(home, ".config", "nvim", "init.lua"), "w") as fh:
+        fh.write("-- fixture\n")
+    stash = os.path.join(tmp, "stash")
+    os.makedirs(os.path.join(stash, "owner", "plug.git"))
+    # clone succeeds (creates the dir), the pin checkout fails.
+    git = _stub(
+        os.path.join(tmp, "git"),
+        'if [ "$1" = clone ]; then for a; do last=$a; done; mkdir -p "$last"; exit 0; fi\nexit 1\n',
+    )
+    saved = (m._resolve_git, m._resolve_nvim_stash)
+    m._resolve_git = lambda _home: git
+    m._resolve_nvim_stash = lambda _home: stash
+    try:
+        dst = os.path.join(m._local_root(home), "share", "nvim", "lazy", "plug")
+        m.INSTALL_RESULTS.clear()
+        m.install_nvim_plugin_bundle(repo, home, None)
+        first = [r[1] for r in m.INSTALL_RESULTS if r[0] == "nvim plugins"]
+        gone = not os.path.lexists(dst)
+        m.INSTALL_RESULTS.clear()
+        m.install_nvim_plugin_bundle(repo, home, None)
+        second = [r[1] for r in m.INSTALL_RESULTS if r[0] == "nvim plugins"]
+    finally:
+        m._resolve_git, m._resolve_nvim_stash = saved
+    check("a failed pin checkout is a FAIL row", first == ["FAIL"], repr(first))
+    check("a failed pin checkout removes the half-made clone", gone)
+    check("the next install fails again instead of counting it as kept", second == ["FAIL"], repr(second))
+
+
+def test_headless_sync_times_out(m, tmp):
+    home = os.path.join(tmp, "home")
+    os.makedirs(os.path.join(home, ".config", "nvim"))
+    with open(os.path.join(home, ".config", "nvim", "init.lua"), "w") as fh:
+        fh.write("-- fixture\n")
+    pidfile = os.path.join(tmp, "nvim.pid")
+    nvim = _stub(os.path.join(tmp, "nvim"), f'echo $$ > "{pidfile}"\nexec sleep 30\n')
+    saved = (m._resolve_loadout_nvim_bin, m._resolve_nvim_stash, m._nvim_headless_env, m._NVIM_HEADLESS_TIMEOUT)
+    m._resolve_loadout_nvim_bin = lambda _home: nvim
+    m._resolve_nvim_stash = lambda _home: tmp
+    m._nvim_headless_env = lambda _home: dict(os.environ)
+    m._NVIM_HEADLESS_TIMEOUT = 1
+    try:
+        m.INSTALL_RESULTS.clear()
+        m.install_nvim_lazy_update(tmp, home, None)
+    finally:
+        (m._resolve_loadout_nvim_bin, m._resolve_nvim_stash, m._nvim_headless_env, m._NVIM_HEADLESS_TIMEOUT) = saved
+    rows = [r for r in m.INSTALL_RESULTS if r[0] == "Neovim Lazy sync"]
+    check("a hung headless sync is a FAIL row", [r[1] for r in rows] == ["FAIL"], repr(rows))
+    check("the FAIL row says it timed out", bool(rows) and "timed out" in rows[0][2], repr(rows))
+    with open(pidfile) as fh:
+        pid = int(fh.read())
+    check("the hung nvim was killed", not _alive(pid))
+
+
+def test_run_timeout_kills_group(m, tmp):
+    import subprocess
+    import time
+
+    pidfile = os.path.join(tmp, "pids")
+    try:
+        m.run(["sh", "-c", f'echo $$ > "{pidfile}"; sleep 30 & echo $! >> "{pidfile}"; sleep 30'], timeout=1)
+        raised = False
+    except subprocess.TimeoutExpired:
+        raised = True
+    check("run() raises TimeoutExpired", raised)
+    with open(pidfile) as fh:
+        pids = [int(x) for x in fh.read().split()]
+    deadline = time.time() + 5
+    while time.time() < deadline and any(_alive(p) for p in pids):
+        time.sleep(0.1)
+    check("no process of the timed-out group survives", not any(_alive(p) for p in pids), repr(pids))
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
@@ -312,6 +406,9 @@ TESTS = (
     test_vim_missing_sentinel_is_fail,
     test_ldd_only_checks_written_bins,
     test_verification_failure_prints_summary,
+    test_failed_checkout_removes_clone,
+    test_headless_sync_times_out,
+    test_run_timeout_kills_group,
 )
 
 

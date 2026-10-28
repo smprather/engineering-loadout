@@ -2991,3 +2991,4 @@
 2026-10-28T00:41:16Z	test:security-pipeline	1	PASS	mode=all
 2026-10-28T00:41:16Z	test:check-versions-contract	0	PASS	mode=all
 2026-10-28T00:41:16Z	test:total	132	PASS	flags=--fast
+2026-10-28T00:48:48Z	tier3:prebuilt-binaries-almalinux8-full	580	PASS	task8 inode-swap extraction (b4ca584), run from worktree

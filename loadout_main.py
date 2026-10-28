@@ -1522,7 +1522,10 @@ def _close_run_log(exit_code):
     _RUN_LOG_FILE = None
 
 
-def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
+def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None, timeout=None):
+    """Run cmd in its own session. On timeout the WHOLE session is killed
+    (os.killpg: the child may have spawned helpers, e.g. nvim's git jobs),
+    reaped, and subprocess.TimeoutExpired is re-raised."""
     global _ACTIVE_SUBPROCESS
     # start_new_session=True isolates the child from the terminal's process group
     # so a Ctrl-C at the keyboard only reaches the installer, not child processes.
@@ -1534,7 +1537,16 @@ def run(cmd, cwd=None, env=None, check=True, stdout=None, stderr=None):
     proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=stdout, stderr=stderr, start_new_session=True)
     _ACTIVE_SUBPROCESS = proc
     try:
-        out, err = proc.communicate()
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        proc.communicate()
+        if _RUN_LOG_FILE is not None:
+            _log(f"subprocess.timeout after {timeout}s cmd={cmd[0] if cmd else ''}")
+        raise
     finally:
         _ACTIVE_SUBPROCESS = None
     if _RUN_LOG_FILE is not None:
@@ -4861,6 +4873,9 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
             text=True,
         )
         if res.returncode != 0:
+            # A failed clone can leave a partial dir; the next install would
+            # count it as "kept" and report OK forever, unpinned.
+            shutil.rmtree(dst, ignore_errors=True)
             failed.append(f"{name}: {res.stderr.strip().splitlines()[-1] if res.stderr.strip() else 'clone failed'}")
             continue
         pin = (lock.get(name) or {}).get("commit")
@@ -4871,6 +4886,7 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
                 text=True,
             )
             if co.returncode != 0:
+                shutil.rmtree(dst, ignore_errors=True)
                 failed.append(f"{name}: pinned commit {pin[:10]} not in the stash mirror")
                 continue
         cloned.append(name)
@@ -4886,6 +4902,31 @@ def install_nvim_plugin_bundle(repo_dir, home, selected_tools=None):
         detail += f"; {len(kept)} already present, kept"
     record_result("nvim plugins", "OK", detail)
     print(f"  Cloned {len(cloned)} plugin(s) from the offline stash -> {lazy_dir}/ ({len(kept)} kept)")
+
+
+# Upper bound on a headless `Lazy! sync` / `Lazy! restore`. A partial clone
+# from a shallow local mirror hangs forever (the documented hang class); the
+# installer must report that as a FAIL row, not hang with it.
+_NVIM_HEADLESS_TIMEOUT = 600
+
+
+def _run_nvim_headless(cmd, env, thing, label):
+    """run() a headless nvim under _NVIM_HEADLESS_TIMEOUT. Returns the
+    CompletedProcess, or None after recording a timed-out FAIL row."""
+    try:
+        return run(
+            cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=_NVIM_HEADLESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        detail = f"timed out after {_NVIM_HEADLESS_TIMEOUT}s"
+        warn(f"{label} {detail}; the nvim process was killed. Run it by hand to see where it stops.")
+        record_result(thing, "FAIL", detail)
+        return None
 
 
 def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
@@ -4915,13 +4956,11 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
     stash = _resolve_nvim_stash(home)
     if stash:
         print("  Running nvim --headless '+Lazy! sync' (offline plugin stash) ...")
-        res = run(
-            [nvim_bin, "--headless", "-n", "+Lazy! sync", "+qa"],
-            env=_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
+        res = _run_nvim_headless(
+            [nvim_bin, "--headless", "-n", "+Lazy! sync", "+qa"], _env, "Neovim Lazy sync", "Neovim Lazy sync"
         )
+        if res is None:
+            return
         if res.returncode == 0:
             record_result("Neovim Lazy sync", "OK", "headless Lazy sync completed from offline stash")
         else:
@@ -4952,13 +4991,11 @@ def install_nvim_lazy_update(repo_dir, home, selected_tools=None):
         record_result("Neovim Lazy restore", "SKIP", "no committed lazy-lock.json")
         return
     print("  Running nvim --headless '+Lazy! restore' (network opt-in, pinned to lazy-lock.json) ...")
-    res = run(
-        [nvim_bin, "--headless", "-n", "+Lazy! restore", "+qa"],
-        env=_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
+    res = _run_nvim_headless(
+        [nvim_bin, "--headless", "-n", "+Lazy! restore", "+qa"], _env, "Neovim Lazy restore", "Neovim Lazy restore"
     )
+    if res is None:
+        return
     if res.returncode == 0:
         record_result("Neovim Lazy restore", "OK", "plugins restored to lazy-lock.json pins")
     else:
