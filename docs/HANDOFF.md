@@ -48,6 +48,20 @@ Also: `docs/HANDOFF.md` split again -- entries 2026-10-01..11 moved to
 - `reinstall` diverges from `install` now (it ignores the stamps). Tests that
   pin HOW a rewrite happens (inode swap) run with stamps ignored.
 
+**Release 2026.10.8 (class C: installer + registry changed).** Gates per
+docs/RELEASE.md. Currency sweep run, nothing bumped (ruling: a fix release;
+2026.10.7 swept four days earlier, and each bump needs its own build + smoke).
+`build/check-versions --outdated-only` on 2026-10-28 lists 19 behind upstream
+-- btop 1.4.8, fzf 0.74.5, gnuplot 6.0.6, gopls 0.24.0, gvim/vim 9.2.1252,
+just 1.59.0, lazygit 0.66.2, librelane 3.0.17, marktext 0.23.0, numr 0.9.0,
+ruff 0.17.3, sqlite 3.54.1, strace 7.3, stylua 2.6.0, tmux-path-store
+2026.10.2, ty 0.0.93, uv 0.13.6, valgrind 3.28.0 (pdftotext pinned; ncdu
+lookup 503'd) -- the next class C sweep's worklist. `./build/update --currency`:
+only python-loaded and open-eda-file-tools are DUE (never auto-updated);
+yara-rules held (refreshed 2026-10-23). This is the first release whose signed
+tag binds `sha256sums.txt`, so plain `./tools/fetch-stash` works again from it
+on.
+
 **Still open (outside this repo or the user's call):**
 1. The deployed shared tree (entry (3) item 1) still runs pre-review code;
    reinstall it from `main`.

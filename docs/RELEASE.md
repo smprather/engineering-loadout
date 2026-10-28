@@ -273,7 +273,7 @@ Expected Tier 3 skips, all host-contract and all fine: `cloc` (host perl),
 `meld` (host `/usr/bin/python3.6`), the GL GUI apps (`flameshot`, `nedit-ng`,
 `nvim-qt` — host OpenGL dispatcher), and — since 2026-08-09 — `firefox` (needs
 user namespaces; its sandbox calls `clone(CLONE_NEWUSER)` before it will print
-`--version`, and Docker blocks that) plus `idle3`/`idle3.14` (need a loadable
+`--version`, and Docker blocks that) plus `idle3`/`idle3.15` (need a loadable
 Tk; IDLE imports Tkinter before it parses arguments). Those last three are
 skipped via a PROBE, not a hardcoded exception, so on a host that has the
 capability they must still exit 0.
@@ -285,8 +285,10 @@ been absent.
 
 ## 7. Commit
 
-The pre-commit hook runs `git add -A` in its embedded-git branch, so it sweeps
-the whole tree. Make sure the tree contains only what you intend to ship.
+The pre-commit hook re-stages only paths the commit already stages (it never
+runs `git add -A` since 2026-10-27; hooks/README.md), so what you `git add` is
+what ships. Still check `git status` before committing: an untracked payload
+file is covered by a regenerated `.content-manifest` only if you add it too.
 
 The hook also runs `ruff format` **before** `ruff check`, so formatting can move
 a `# noqa` off the line it was suppressing and fail its own lint step. Prefer a
