@@ -42,7 +42,7 @@ done
 # A caller's exported LOADOUT_CFG_SHARED_PREFIX wins over this temp HOME in the
 # installer (the baked shell prefix), so a dev shell with a
 # stale value fails this test for the wrong reason. The test measures a
-# self-contained temp install -- clear it. See HANDOFF 2026-10-08 (6) follow-up.
+# self-contained temp install -- clear it. See docs/archive/HANDOFF-2026-10-01-to-11.md, 2026-10-08 (6).
 unset LOADOUT_CFG_SHARED_PREFIX
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

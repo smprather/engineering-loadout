@@ -822,7 +822,7 @@ glibc and will not run on EL8, so never add those tags.
 A native wheel must be **cp315** (or abi3): a cp314 wheel cannot install under
 the bundled 3.15 interpreter. `tests/wheelhouse-closure` fails on any wheel the
 shipped interpreter cannot install, so a leftover cannot ride along. (The 30
-cp314 leftovers of the 3.15 sweep, DEBT-1 in HANDOFF 2026-10-11 (1), were pruned
+cp314 leftovers of the 3.15 sweep, DEBT-1 in docs/archive/HANDOFF-2026-10-01-to-11.md entry 2026-10-11 (1), were pruned
 2026-10-28.) If `pip download` fails with every tag above, the package has no
 pre-built cp315 wheel compatible with EL8 and must be built from source (see
 below).
