@@ -33,26 +33,32 @@ end
 -- stash, this is the stock upstream bootstrap and online installs behave as before.
 local loadout_paths = require("global.paths")
 local loadout_stash = loadout_paths.stash()
-loadout_paths.ensure_git()   -- private git for nvim only; never on the user's PATH
+local have_git = loadout_paths.ensure_git()   -- private git for nvim only; never on the user's PATH
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 local loadout_plugins_enabled = true
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
-    local lazy_url = loadout_stash
-        and (loadout_stash .. "/folke/lazy.nvim.git")
-        or "https://github.com/folke/lazy.nvim.git"
-    local clone = { "git", "clone", "--filter=blob:none", lazy_url, lazypath }
-    if not loadout_stash then
-        table.insert(clone, 4, "--branch=stable")   -- upstream only; a local mirror has no such branch
+    local out
+    if have_git then
+        local lazy_url = loadout_stash
+            and (loadout_stash .. "/folke/lazy.nvim.git")
+            or "https://github.com/folke/lazy.nvim.git"
+        local clone = { "git", "clone", "--filter=blob:none", lazy_url, lazypath }
+        if not loadout_stash then
+            table.insert(clone, 4, "--branch=stable")   -- upstream only; a local mirror has no such branch
+        end
+        out = vim.fn.system(clone)
     end
-    local out = vim.fn.system(clone)
-    if vim.v.shell_error ~= 0 then
+    -- No git at all: vim.fn.system() would raise E475 and abort this file, so
+    -- options, keymaps and LSP (Phase 4) would never load. Skip plugins instead.
+    if not have_git or vim.v.shell_error ~= 0 then
         loadout_plugins_enabled = false
-        vim.g.loadout_lazy_bootstrap_error = out
+        vim.g.loadout_lazy_bootstrap_error = out or "no git found (system or loadout git-nvim)"
+        local why = have_git and "" or " (no git found)"
         vim.api.nvim_create_autocmd("VimEnter", {
             once     = true,
             callback = function()
-                vim.notify("lazy.nvim unavailable; plugin setup skipped", vim.log.levels.WARN)
+                vim.notify("lazy.nvim unavailable" .. why .. "; plugin setup skipped", vim.log.levels.WARN)
             end,
         })
     end

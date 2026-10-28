@@ -28,7 +28,7 @@ vim.g.cfg_nvim_plugin_stash_dir =
 --   1. LOADOUT_ONLINE env var -- set once per login by the bash/zsh/tcsh
 --      configs (loadout_detect_online_cached), inherited by nvim launched
 --      from any loadout shell.
---   2. The shared verdict cache ${XDG_RUNTIME_DIR:-/tmp}/.loadout-net/
+--   2. The verdict cache $XDG_RUNTIME_DIR/.loadout-net/
 --      detect-<md5> -- written by the same shell configs; covers nvim
 --      launched from a GUI where no shell rc ran. Newest file wins (host
 --      lists can differ per user override).

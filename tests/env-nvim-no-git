@@ -1,0 +1,46 @@
+#!/bin/sh
+# env-nvim-no-git: with no git anywhere, nvim still loads the core config.
+#
+# lazy.nvim is bootstrapped with `git clone`. With no system git and no private
+# loadout git, vim.fn.system() raised E475 ("'git' is not executable") out of
+# init.lua, so every later phase -- options, keymaps, LSP -- was skipped and the
+# user got an error instead of the documented "plugin setup skipped" warning.
+# The plugin layer must turn off cleanly and the rest of the config must load.
+#
+# Runs the repo's envs/nvim directly (no install) with PATH holding only nvim.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-nvim-nogit.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+nvim_bin=$(PATH=/usr/local/bin:/usr/bin:/bin command -v nvim || true)
+if [ -z "$nvim_bin" ]; then
+    echo "  SKIP  no nvim on this host"
+    echo "env-nvim-no-git: SKIP"
+    exit 0
+fi
+
+mkdir -p "$T/bin" "$T/cfg" "$T/home"
+ln -s "$nvim_bin" "$T/bin/nvim"
+ln -s "$REPO/envs/nvim" "$T/cfg/nvim"
+env -i HOME="$T/home" PATH="$T/bin" TERM=xterm-256color \
+    XDG_CONFIG_HOME="$T/cfg" XDG_DATA_HOME="$T/data" XDG_STATE_HOME="$T/state" XDG_CACHE_HOME="$T/cache" \
+    "$T/bin/nvim" --headless -n \
+    +"lua vim.fn.writefile({tostring(vim.g.loadout_plugins_enabled), tostring(vim.o.confirm)}, '$T/out')" \
+    +qa >"$T/log" 2>&1 </dev/null || true
+
+if grep -q -e 'E475' -e 'Error detected while processing' "$T/log"; then
+    fail "nvim startup raised an error with no git: $(head -5 "$T/log")"
+fi
+echo "  PASS  no startup error without git"
+
+[ -f "$T/out" ] || fail "nvim did not run the probe command: $(head -5 "$T/log")"
+[ "$(sed -n 1p "$T/out")" = "false" ] || fail "loadout_plugins_enabled is '$(sed -n 1p "$T/out")', want false"
+echo "  PASS  the plugin layer is turned off"
+[ "$(sed -n 2p "$T/out")" = "true" ] || fail "global init.lua did not run (vim.o.confirm is '$(sed -n 2p "$T/out")')"
+echo "  PASS  the core config (Phase 4) still loads"
+
+echo "env-nvim-no-git: OK"

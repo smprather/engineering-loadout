@@ -20,7 +20,7 @@ Phases (in order, see `init.lua`):
 1. **Config variables.** Source `lua/<layer>/config.lua` for each layer.
    Sets `vim.g.cfg_*` defaults — colorscheme, feature toggles, `offline`
    (offline mode), `online` (network verdict), `swap_dir`, etc. `cfg_online`
-   resolves `LOADOUT_ONLINE` → the shared `.loadout-net` verdict cache → a
+   resolves `LOADOUT_ONLINE` → the `$XDG_RUNTIME_DIR/.loadout-net` verdict cache → a
    live 0.15s TCP probe → offline (plugins never stall on timeouts).
 2. **Bootstrap lazy.nvim** (offline-safe — if `lazy.nvim` is missing and
    `git` cannot clone it, sets `vim.g.loadout_plugins_enabled = false`
