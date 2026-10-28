@@ -1,0 +1,114 @@
+#!/bin/sh
+# private-state-two-users: a temp-root dir another ACCOUNT created first is refused.
+#
+# The pending-ops dir (<temp-root>/loadout-pending-<user>) and the run log
+# (<temp-root>/loadout.<user>.log) live at predictable names in a shared,
+# world-writable temp root, so whoever creates them first owns them. A
+# co-tenant who owns the pending dir controls pending.json -- which bytes the
+# daemon copies where -- and the daemon script the installer executes.
+# tests/unit-private-state covers what one account can build (a 0777 dir, a
+# symlink); a FOREIGN OWNER needs a second account, so this runs two real users
+# in a stock almalinux:8.10 container (--network=none):
+#
+#   bob   pre-creates /tmp/loadout-pending-alice (0777), /tmp/loadout.alice.log
+#         (0666) and a pending.json aimed at alice's files;
+#   alice reinstalls tmux while her tmux is running (the deferral path that
+#         stages pending ops), runs `clean --pending`, and runs the daemon.
+#
+# Expected: alice warns "is not private", stages nothing, writes nothing to
+# bob's log, spawns no daemon; clean refuses; the daemon exits 1 untouched.
+# A control run without bob's dir must stage (else the assertions are vacuous).
+#
+# Usage: tests/private-state-two-users        (host: runs the container)
+#        tests/private-state-two-users --inside (container, as root)
+set -eu
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+inside() {
+    useradd --create-home --uid 2001 alice
+    useradd --create-home --uid 2002 bob
+    as() {
+        _u=$1
+        shift
+        runuser -u "$_u" -- env -i HOME="/home/$_u" USER="$_u" LOGNAME="$_u" \
+            PATH=/usr/bin:/bin LANG=en_US.UTF-8 "$@"
+    }
+    D=/home/alice/t
+    PEND=/tmp/loadout-pending-alice
+    RLOG=/tmp/loadout.alice.log
+
+    as alice /src/loadout install tmux --dest-dir "$D" -y --no-backup >/tmp/i1.log 2>&1 \
+        || { tail -20 /tmp/i1.log >&2; fail "first install of tmux failed"; }
+    rm -rf "$PEND" "$RLOG"
+
+    # The installed tmux must differ from the payload (else the reinstall is a
+    # no-op), and must be running from that path.
+    as alice sh -c "cp '$D/bin/tmux' '$D/bin/tmux.new' && printf x >>'$D/bin/tmux.new' && mv '$D/bin/tmux.new' '$D/bin/tmux'"
+    as alice "$D/bin/tmux" -S /tmp/alice-tmux new-session -d -s held 'sleep 600' \
+        || fail "could not start alice's tmux"
+
+    as bob sh -c "mkdir -m 777 '$PEND' && : >'$RLOG' && chmod 666 '$RLOG'
+        printf 'bob' >'$PEND/planted'
+        printf '{\"ops\": [{\"type\": \"install_binary\", \"dest\": \"/home/alice/victim\", \"staged\": \"$PEND/planted\", \"mode\": 493}]}' >'$PEND/pending.json'"
+    as alice sh -c 'echo alice >/home/alice/victim'
+
+    as alice /src/loadout install tmux --dest-dir "$D" -y --no-backup >/tmp/i2.log 2>&1 || true
+    grep -q "skipping tmux -- running at" /tmp/i2.log \
+        || { tail -20 /tmp/i2.log >&2; fail "the reinstall never reached the deferral path"; }
+    grep -q "is not private" /tmp/i2.log \
+        || { tail -20 /tmp/i2.log >&2; fail "no 'is not private' warning for bob's pending dir"; }
+    extra=$(find "$PEND" -mindepth 1 ! -name planted ! -name pending.json)
+    [ -z "$extra" ] || fail "alice wrote into bob's pending dir: $extra"
+    [ ! -s "$RLOG" ] || fail "alice's run output went into bob's log file"
+    for proc in /proc/[0-9]*; do
+        if [ "$(stat -c %U "$proc" 2>/dev/null)" = alice ] \
+            && tr '\0' ' ' <"$proc/cmdline" 2>/dev/null | grep -q loadout-pending-daemon; then
+            fail "a pending-ops daemon was spawned against bob's dir"
+        fi
+    done
+    echo "  PASS  install: bob's pending dir and run log are refused; nothing staged, no daemon"
+
+    rc=0
+    as alice /src/loadout clean --pending >/tmp/c.log 2>&1 || rc=$?
+    if [ "$rc" != 1 ] || ! grep -q "Refusing to clean" /tmp/c.log; then
+        cat /tmp/c.log >&2
+        fail "clean --pending did not refuse bob's dir (rc=$rc)"
+    fi
+    [ -d "$PEND" ] || fail "clean --pending removed bob's dir"
+    echo "  PASS  clean --pending refuses a dir another user owns"
+
+    rc=0
+    as alice /src/.loadout-bootstrap/bin/python3.15 /src/payload/pending-daemon/loadout-pending-daemon \
+        >/tmp/d.log 2>&1 || rc=$?
+    [ "$rc" = 1 ] || { cat /tmp/d.log >&2; fail "daemon exit $rc against bob's dir, want 1"; }
+    [ "$(cat /home/alice/victim)" = alice ] || fail "daemon applied bob's planted op"
+    echo "  PASS  the daemon exits 1 before reading bob's pending.json"
+
+    # Control: with no hostile dir, the same reinstall DOES stage.
+    rm -rf "$PEND" "$RLOG"
+    as alice /src/loadout install tmux --dest-dir "$D" -y --no-backup >/tmp/i3.log 2>&1 || true
+    grep -q "staged pending op" /tmp/i3.log \
+        || { tail -20 /tmp/i3.log >&2; fail "control: the reinstall did not stage (assertions above vacuous)"; }
+    [ "$(stat -c '%U %a' "$PEND")" = "alice 700" ] || fail "control: pending dir is $(stat -c '%U %a' "$PEND")"
+    echo "  PASS  control: without bob's dir the reinstall stages into a 0700 dir alice owns"
+    echo "private-state-two-users: OK"
+}
+
+if [ "${1:-}" = "--inside" ]; then
+    inside
+    exit 0
+fi
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+IMAGE=loadout-smoke:almalinux8.10
+if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "  SKIP  docker or the $IMAGE image is unavailable (tests/prebuilt-binaries-almalinux8 builds it)"
+    echo "private-state-two-users: SKIP"
+    exit 0
+fi
+# The container mounts the repo read-only, so it cannot cold-bootstrap: warm
+# the per-clone interpreter cache on the host first.
+"$REPO/loadout" -V >/dev/null 2>&1 || fail "the host shim could not bootstrap Python"
+exec docker run --rm --network=none --user root --entrypoint /bin/sh \
+    -v "$REPO:/src:ro" "$IMAGE" /src/tests/private-state-two-users --inside

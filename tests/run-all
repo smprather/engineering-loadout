@@ -398,6 +398,7 @@ if [ "$CONTAINER" -eq 1 ]; then
         tests/prebuilt-binaries-almalinux8 --full
     run_test "almalinux8.10 dynamic analysis (--dynamic, network isolated)" --deps container \
         tests/prebuilt-binaries-almalinux8 --no-build --dynamic
+    run_test "private-state-two-users" --deps container tests/private-state-two-users
 fi
 
 echo

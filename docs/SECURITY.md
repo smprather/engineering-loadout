@@ -276,10 +276,16 @@ such path before use and refuses one it does not privately own.
   passwd), so the installer still starts in minimal containers.
 
 `tests/unit-private-state` (Tier 1) covers the shapes one account can build
-(a 0777 directory, a symlink). A foreign owner needs a second account: as user
-B, `mkdir -m 777 /tmp/loadout-pending-<A>`; as user A, reinstall while a
-loadout binary is running. Expected: the "is not private" warning, nothing
-written under B's directory.
+(a 0777 directory, a symlink). A foreign owner needs a second account, so
+`tests/private-state-two-users` (Tier 3, `tests/run-all --container`) creates
+two in a `--network=none` almalinux:8.10 container: bob pre-creates
+`/tmp/loadout-pending-alice` (0777), `/tmp/loadout.alice.log` (0666) and a
+`pending.json` aimed at alice's files; alice reinstalls tmux while her tmux
+runs. Result: the "is not private" warning, nothing written under bob's
+directory or into his log, no daemon; `clean --pending` refuses; the daemon
+exits 1 before reading `pending.json`. A control run without bob's directory
+stages normally. Run against the pre-2026-10-27 installer, the same test
+fails.
 
 ### Content-verification coverage (2026-10-27)
 
