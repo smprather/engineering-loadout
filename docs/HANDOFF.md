@@ -22,7 +22,16 @@ Landed:
   a missing manifest fails closed. Gate: `tests/content-verify`. Only Tier 1 was
   run for Task 3; the full `tests/run-all` (Tier 2 installs) is still owed.
 
-Next: Task 4 (release trust chain, D-A). Ledger with rulings:
+- Task 3's full `tests/run-all` has since run: all green.
+- **Task 4** (SEC-9, DOC-8): the signed tag message now binds
+  `sha256sums.txt sha256 <hex>`; `tools/fetch-stash` verifies it
+  (`verify_tag_binding`), `--from-file` needs `--tag`, and
+  `--allow-unverified-sums` is the HTTPS-only escape. **User-visible until the
+  next release ships:** plain `./tools/fetch-stash` refuses, because the latest
+  published release's tag binds no sums file -- add `--allow-unverified-sums`.
+  Gate: `tests/fetch-stash-trust` (T1).
+
+Next: Task 5 (reinstall/upgrade --dest-dir). Ledger with rulings:
 `.superpowers/sdd/2026-10-27-code-and-doc-review/progress.md` (gitignored).
 Run `tests/run-all` with the default TMPDIR: a long TMPDIR makes
 python-suite-install fail (uv writes a /bin/sh shebang trampoline).

@@ -371,6 +371,7 @@ Never trust the publish exit code. Re-read the release:
 ```bash
 gh release view <tag> --json tagName,isDraft,publishedAt,assets
 git tag -v <tag>          # must print a Good signature
+git cat-file -p <tag> | grep '^sha256sums.txt sha256 '   # the binding fetch-stash checks
 ```
 
 Confirm `isDraft=false` — deleting a tag drafts its release, and a draft is

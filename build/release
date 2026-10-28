@@ -331,6 +331,21 @@ def _version_table_from_registry(registry_path):
     return "\n".join(lines), len(rows)
 
 
+def _write_tag_message(tag, sums_path, out_dir):
+    """Write the release tag's message file and return its path.
+
+    Line 1 is the tag; then `sha256sums.txt sha256 <hex>`, the hash of the sums
+    file this release attaches. Signing the tag therefore signs the sums file,
+    which hashes every asset -- the link tools/fetch-stash checks
+    (verify_tag_binding) before it trusts a downloaded or hand-carried sums
+    file. Without the line the signature covered only the tag name, and the
+    sums file was an unsigned asset."""
+    path = os.path.join(out_dir, f".loadout-tag-message.{tag}")
+    with open(path, "w") as fh:
+        fh.write(f"{tag}\n\n{SHA256SUMS_NAME} sha256 {_sha256_file(sums_path)}\n")
+    return path
+
+
 def _print_heading(title):
     print("=" * 60)
     print(title)
@@ -893,12 +908,16 @@ def _stash_section_md():
             "tar xzf engineering-loadout-*.tar.gz",
             "cd engineering-loadout-*/",
             "",
-            "# online: fetches + verifies the stash from this release",
+            "# from a git clone holding this tag: checks the sums file against the signed tag",
             "./tools/fetch-stash",
+            "",
+            "# from this tarball (no .git, so the tag cannot be checked): HTTPS-only trust",
+            "./tools/fetch-stash --allow-unverified-sums",
             "",
             "# air-gapped: stash + sha256sums.txt downloaded elsewhere and copied over",
             f"./tools/fetch-stash --from-file /path/to/{STASH_ASSET_NAME} \\",
-            f"              --sums     /path/to/{SHA256SUMS_NAME}",
+            f"              --sums     /path/to/{SHA256SUMS_NAME} \\",
+            "              --tag      <this release's tag>",
             "",
             "./loadout install @shared-all      # bundled tools",
             "./loadout install @envs-all        # per-user shell configs",
@@ -907,9 +926,10 @@ def _stash_section_md():
             "Run `fetch-stash` **from inside the extracted directory**; it places the stash at",
             f"`{STASH_REL}` and records it in `.content-manifest.fetched`.",
             "",
-            f"`--sums` is required with `--from-file`: without the `{SHA256SUMS_NAME}` from this",
-            "same release there is nothing to verify against, and a stash that fails its hash is",
-            "deleted rather than left on disk. Do **not** copy the asset into place by hand --",
+            "`--sums` and `--tag` are required with `--from-file`: this release's signed tag carries",
+            f"the sha256 of its `{SHA256SUMS_NAME}`, and `fetch-stash` checks the sums file against it",
+            "(`git verify-tag`; needs the release signer in `gpg.ssh.allowedSignersFile`). A stash",
+            "that fails its hash is refused and never installed. Do **not** copy the asset into place by hand --",
             "`.content-manifest` is a strict allowlist and the installer refuses any payload file",
             "with no manifest entry, so a hand-placed stash is rejected, not silently trusted.",
             "",
@@ -1420,13 +1440,24 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
     else:
         _replace_existing_release(tag)
 
-    tag_cmd = ["git", "tag", "-s" if signing else "-a", tag, "-m", tag]
-    if not signing:
-        print("  WARNING: creating an UNSIGNED annotated tag (--allow-unsigned).")
-        print("  The content-manifest trust chain is NOT tamper-evident (docs/SECURITY.md).")
-    result = run(tag_cmd)
+    msg_dir = tempfile.mkdtemp(prefix=".loadout-tag-msg.", dir=tempfile.gettempdir())
+    try:
+        msg_path = _write_tag_message(tag, sums_path, msg_dir)
+        binding = open(msg_path).read().splitlines()[-1]
+        tag_cmd = ["git", "tag", "-s" if signing else "-a", "-F", msg_path, tag]
+        if not signing:
+            print("  WARNING: creating an UNSIGNED annotated tag (--allow-unsigned).")
+            print("  The content-manifest trust chain is NOT tamper-evident (docs/SECURITY.md).")
+        result = run(tag_cmd)
+    finally:
+        shutil.rmtree(msg_dir, ignore_errors=True)
     if result.returncode != 0:
         print("git tag failed.", file=sys.stderr)
+        sys.exit(1)
+    obj = subprocess.run(["git", "cat-file", "-p", tag], capture_output=True, text=True)
+    if binding not in obj.stdout.splitlines():
+        print(f"Release blocked: tag does not carry the binding line '{binding}'.", file=sys.stderr)
+        subprocess.run(["git", "tag", "-d", tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         sys.exit(1)
 
     # Never take the signer's exit status as proof. Confirm the object really

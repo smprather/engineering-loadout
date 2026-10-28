@@ -10,6 +10,15 @@ TRUST CHAIN -- do not shortcut any link:
     signed tag  ->  sha256sums.txt (release asset)  ->  stash bytes
                 ->  .content-manifest.fetched  ->  the installer will use it
 
+The first link is real, not nominal: build/release writes the sums file's own
+sha256 into the signed tag's message (`sha256sums.txt sha256 <hex>`), and
+verify_tag_binding() requires `git verify-tag <tag>` to pass and that line to
+match the sums file before anything else is trusted. That needs a git checkout
+holding the tag and the release signer in gpg.ssh.allowedSignersFile. Releases
+made before 2026-10-27 carry no such line; for them (or from a release tarball
+with no .git) pass --allow-unverified-sums, which trusts GitHub-over-HTTPS only
+and says so.
+
 .content-manifest is a strict allowlist: loadout_main.py hard-errors on any payload file
 that is not in a manifest, on purpose. This tool is the ONLY thing that may add the stash
 to .content-manifest.fetched, and it does so only after the downloaded bytes match the
@@ -20,7 +29,7 @@ Two paths, because the network policy keeps moving:
   online   fetch-stash                    # from the latest release
            fetch-stash --tag v2026.07.14  # from a specific one
   offline  fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \\
-                       --sums /path/to/sha256sums.txt
+                       --sums /path/to/sha256sums.txt --tag <the release tag>
            # the file was downloaded elsewhere (any machine with github
            # access) and scp'd over. It is still verified.
 
@@ -32,6 +41,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -112,6 +122,47 @@ def expected_hash(sums_text, name):
     return None
 
 
+def verify_tag_binding(repo, tag, sums_bytes):
+    """Prove sums_bytes is the sha256sums.txt the signed release tag TAG binds.
+
+    Two links, each named in its own failure: `git verify-tag TAG` must pass
+    (signed, and by a signer git trusts), and the tag's message must carry
+    `sha256sums.txt sha256 <hex>` equal to sha256(sums_bytes). Raises
+    SystemExit otherwise."""
+    if not os.path.isdir(os.path.join(repo, ".git")):
+        raise SystemExit(
+            f"ERROR: {repo} is not a git checkout, so release tag {tag} cannot be verified.\n"
+            "  Use a clone holding the tag, or pass --allow-unverified-sums to trust\n"
+            "  GitHub-over-HTTPS only."
+        )
+    res = subprocess.run(["git", "-C", repo, "verify-tag", tag], capture_output=True, text=True)
+    if res.returncode != 0:
+        raise SystemExit(
+            f"ERROR: git verify-tag {tag} failed -- the tag is unsigned, missing here, or its\n"
+            "  signer is not in gpg.ssh.allowedSignersFile (git fetch --tags if it is missing).\n"
+            f"  {res.stderr.strip()}"
+        )
+    obj = subprocess.run(["git", "-C", repo, "cat-file", "-p", tag], capture_output=True, text=True).stdout
+    bound = None
+    for line in obj.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == SUMS_NAME and parts[1] == "sha256":
+            bound = parts[2]
+            break
+    if bound is None:
+        raise SystemExit(
+            f"ERROR: tag {tag} binds no {SUMS_NAME} (releases before 2026-10-27 do not).\n"
+            "  Re-run with --allow-unverified-sums to trust GitHub-over-HTTPS only."
+        )
+    got = hashlib.sha256(sums_bytes).hexdigest()
+    if got != bound:
+        raise SystemExit(
+            f"ERROR: {SUMS_NAME} does not match signed tag {tag}: the tag binds {bound[:12]}..,\n"
+            f"  this sums file is {got[:12]}... Refusing the sums file."
+        )
+    print(f"  {SUMS_NAME} matches signed tag {tag}")
+
+
 def record_fetched(rel_path, digest):
     """Add (or replace) this file's verified hash in .content-manifest.fetched."""
     lines = []
@@ -123,15 +174,24 @@ def record_fetched(rel_path, digest):
     header2 = "# Written ONLY by ./tools/fetch-stash, after the bytes matched sha256sums.txt."
     body = [ln for ln in lines if not ln.startswith("#")]
     body.append(f"sha256  {digest}  {rel_path}")
-    with open(FETCHED_MANIFEST, "w") as f:
+    # Same-dir temp + rename: an interrupted write never leaves a truncated
+    # allowlist for the installer to read.
+    tmp = f"{FETCHED_MANIFEST}.tmp.{os.getpid()}"
+    with open(tmp, "w") as f:
         f.write(header + "\n" + header2 + "\n" + "\n".join(sorted(body)) + "\n")
+    os.replace(tmp, FETCHED_MANIFEST)
 
 
 def main(argv):
     ap = argparse.ArgumentParser(description="Fetch + verify the nvim plugin stash.")
-    ap.add_argument("--tag", help="release tag (default: latest)")
+    ap.add_argument("--tag", help="release tag (default: latest; required with --from-file)")
     ap.add_argument("--from-file", help="a stash file already copied here (skips the download)")
     ap.add_argument("--sums", help=f"path to {SUMS_NAME} (required with --from-file)")
+    ap.add_argument(
+        "--allow-unverified-sums",
+        action="store_true",
+        help=f"trust {SUMS_NAME} without the signed-tag binding (pre-2026-10-27 releases, no .git)",
+    )
     ap.add_argument("--force", action="store_true", help="re-fetch even if the stash is present")
     args = ap.parse_args(argv)
 
@@ -150,7 +210,18 @@ def main(argv):
             eprint("  Without it there is nothing to verify against, and an unverified stash")
             eprint("  is exactly what the content manifest exists to refuse.")
             return 2
-        sums_text = open(args.sums).read()
+        if not args.tag and not args.allow_unverified_sums:
+            eprint("ERROR: --from-file needs --tag (the release the files came from), so the")
+            eprint(f"  {SUMS_NAME} can be checked against that signed tag. Pass")
+            eprint("  --allow-unverified-sums only if you accept GitHub-over-HTTPS as the trust.")
+            return 2
+        with open(args.sums, "rb") as fh:
+            sums_bytes = fh.read()
+        if args.allow_unverified_sums:
+            print("trust: GitHub-over-HTTPS only (sums not bound to a signed tag)")
+        else:
+            verify_tag_binding(REPO, args.tag, sums_bytes)
+        sums_text = sums_bytes.decode()
         src = args.from_file
     else:
         tag, assets = release_assets(args.tag, token)
@@ -162,7 +233,13 @@ def main(argv):
             eprint("  Releases before the stash moved out of git do not carry it.")
             return 1
         print(f"release: {tag}")
-        sums_text = http_get(assets[SUMS_NAME], token=token).decode()
+        sums_bytes = http_get(assets[SUMS_NAME], token=token)
+        # Bind the sums file to the signed tag BEFORE the 328 MB download.
+        if args.allow_unverified_sums:
+            print("trust: GitHub-over-HTTPS only (sums not bound to a signed tag)")
+        else:
+            verify_tag_binding(REPO, tag, sums_bytes)
+        sums_text = sums_bytes.decode()
         tmp = STASH_PATH + ".part"
         http_get(assets[STASH_NAME], dest=tmp, token=token)
         src = tmp
@@ -181,9 +258,11 @@ def main(argv):
         eprint("ERROR: sha256 MISMATCH -- the stash does not match the signed release.")
         eprint(f"  expected {want}")
         eprint(f"  got      {got}")
-        eprint("  The file is being deleted. Do not use it.")
         if src.endswith(".part"):
             os.unlink(src)
+            eprint("  The download was deleted. Do not use it.")
+        else:
+            eprint(f"  {src} was NOT installed and is left as it is. Do not use it.")
         return 1
 
     # Compare REAL paths: --from-file may name the stash's own location (relative vs

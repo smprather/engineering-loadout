@@ -146,9 +146,17 @@ per-package assurance record instead.
 
 `./build/release` runs the malware scan, binary smoke, version table, and checksum
 generation as independent parallel gates, then signs the tag with `git tag -s`
-and attaches `sha256sums.txt` plus the `.content-manifest` asset. The trust
-chain (manifest in git -> signed tag) is tamper-evident. Verify with
-`git tag -v <tag>`; GitHub shows the tag as **Verified**. The notes carry an
+and attaches `sha256sums.txt` plus the `.content-manifest` asset. The tag
+message carries `sha256sums.txt sha256 <hex>` (written by `_write_tag_message`,
+re-read from the tag object before publishing), so the signature covers the sums
+file and, through it, every asset -- the stash and `sbom.cdx.json` included.
+`./tools/fetch-stash` enforces that link (`verify_tag_binding`: `git verify-tag`
+must pass and the bound hash must match the sums file) before it trusts any
+stash; `--from-file` therefore needs `--tag`. Releases before 2026-10-27 carry
+no binding line: for them, or from a release tarball with no `.git`,
+`--allow-unverified-sums` trusts GitHub-over-HTTPS only and prints that. Verify
+by hand with `git tag -v <tag>` and `git cat-file -p <tag>`; GitHub shows the
+tag as **Verified**. The notes carry an
 on-page SHA-256 table of the integrity-critical files (§1) for at-a-glance
 checking without a download.
 

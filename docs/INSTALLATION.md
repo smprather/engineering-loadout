@@ -276,6 +276,12 @@ into the checkout before staging the shared tree:
 ./loadout install @shared-all --dest-dir /opt/engineering-loadout/releases/...
 ```
 
+`fetch-stash` checks the release's `sha256sums.txt` against the signed tag
+(`git verify-tag`, so the checkout must hold the tag and the release signer
+must be in `gpg.ssh.allowedSignersFile`). Releases made before 2026-10-27 do not
+bind their sums file, and a tarball has no `.git`; in either case add
+`--allow-unverified-sums`, which trusts GitHub-over-HTTPS only and says so.
+
 Refresh plugins later without a new loadout release with `./tools/refresh-stash`, and
 override the stash location with `LOADOUT_CFG_NVIM_PLUGIN_STASH_DIR` if needed.
 Neovim itself needs `git` to clone from the stash; `git-nvim` (in `@shared-all`)

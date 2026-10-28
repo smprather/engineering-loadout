@@ -74,11 +74,17 @@ both over, and pair them by hand:
 
 ```bash
 ./tools/fetch-stash --from-file /path/to/nvim-plugin-stash.tar.bz2 \
-              --sums     /path/to/sha256sums.txt
+              --sums     /path/to/sha256sums.txt \
+              --tag      <release tag>
 ```
 
-`--sums` is required: without it there is nothing to verify against, and a
-stash that fails its hash is deleted rather than left on disk. Do **not** copy
+`--sums` and `--tag` are required: the release's signed tag carries the sha256
+of its `sha256sums.txt`, and `fetch-stash` checks the sums file against it
+(`git verify-tag`, so this needs a clone holding the tag and the release
+signer in `gpg.ssh.allowedSignersFile`). Releases before 2026-10-27 do not bind
+their sums file; for those, or from a tarball with no `.git`, add
+`--allow-unverified-sums`, which trusts GitHub-over-HTTPS only. A stash that
+fails its hash is refused and never installed. Do **not** copy
 the asset into place manually -- `.content-manifest` is a strict allowlist, so
 a hand-placed stash is refused, not silently trusted.
 

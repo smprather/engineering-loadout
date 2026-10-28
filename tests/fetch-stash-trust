@@ -1,0 +1,181 @@
+#!/usr/bin/env python3.15
+"""fetch-stash-trust -- the stash trust chain is enforced, not just documented.
+
+The chain is: signed tag -> sha256sums.txt -> stash bytes -> .content-manifest.fetched.
+build/release writes the sums file's own sha256 into the signed tag's message
+(`sha256sums.txt sha256 <hex>`), and tools/fetch-stash refuses a sums file whose
+hash is not the one the signed tag carries. Before this, the tag message was
+just the tag name and fetch-stash trusted whatever sums file it was handed.
+
+Builds a throwaway git repo holding a copy of tools/fetch-stash (so its REPO
+resolves there), a throwaway SSH signing key, and a fixture stash + sums file.
+The tag message comes from build/release's own helper, so the writer and the
+reader are tested against each other. No network.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STASH_REL = os.path.join("envs", "nvim", "vendor", "plugins", "nvim-plugin-stash.tar.bz2")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def load_release():
+    loader = importlib.machinery.SourceFileLoader("release_mod", os.path.join(REPO, "build", "release"))
+    spec = importlib.util.spec_from_loader("release_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def sha256(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+class Fixture:
+    def __init__(self, root):
+        self.root = root
+        self.repo = os.path.join(root, "repo")
+        self.home = os.path.join(root, "home")
+        os.makedirs(os.path.join(self.repo, "tools"))
+        os.makedirs(self.home)
+        shutil.copy2(os.path.join(REPO, "tools", "fetch-stash"), os.path.join(self.repo, "tools", "fetch-stash"))
+        self.env = {
+            "HOME": self.home,
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "LANG": "C.UTF-8",
+        }
+        key = os.path.join(root, "signing_key")
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "t@example.com", "-f", key], check=True)
+        with open(key + ".pub") as fh:
+            pub = fh.read().strip()
+        allowed = os.path.join(root, "allowed_signers")
+        with open(allowed, "w") as fh:
+            fh.write(f't@example.com namespaces="git" {pub}\n')
+        self.git("init", "-q")
+        for k, v in (
+            ("user.name", "Test"),
+            ("user.email", "t@example.com"),
+            ("gpg.format", "ssh"),
+            ("user.signingkey", key),
+            ("gpg.ssh.allowedSignersFile", allowed),
+            ("tag.gpgSign", "false"),
+        ):
+            self.git("config", k, v)
+        self.git("add", "tools/fetch-stash")
+        self.git("commit", "-q", "-m", "fixture")
+
+        self.stash = os.path.join(root, "nvim-plugin-stash.tar.bz2")
+        with open(self.stash, "wb") as fh:
+            fh.write(b"fixture stash bytes")
+        self.sums = os.path.join(root, "sha256sums.txt")
+        with open(self.sums, "w") as fh:
+            fh.write(f"{sha256(self.stash)}  {STASH_REL}\n")
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", self.repo, *args], env=self.env, check=True, capture_output=True, text=True)
+
+    def tag(self, name, signed, msg_path):
+        self.git("tag", "-s" if signed else "-a", "-F", msg_path, name)
+
+    def fetch(self, *args):
+        proc = subprocess.run(
+            [sys.executable, os.path.join(self.repo, "tools", "fetch-stash"), *args],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def fetched(self):
+        path = os.path.join(self.repo, ".content-manifest.fetched")
+        if not os.path.isfile(path):
+            return ""
+        with open(path) as fh:
+            return fh.read()
+
+
+def main():
+    release = load_release()
+    with tempfile.TemporaryDirectory(prefix=".loadout-test-trust.") as root:
+        fx = Fixture(root)
+        msg = release._write_tag_message("vTEST", fx.sums, root)
+        with open(msg) as fh:
+            body = fh.read()
+        check("tag message starts with the tag", body.splitlines()[0] == "vTEST", body)
+        check(
+            "tag message binds sha256(sums)",
+            f"sha256sums.txt sha256 {sha256(fx.sums)}" in body.splitlines(),
+            body,
+        )
+        fx.tag("vTEST", True, msg)
+        fx.tag("vUNSIGNED", False, msg)
+
+        print("-- good: signed tag binding the sums")
+        rc, out = fx.fetch("--from-file", fx.stash, "--sums", fx.sums, "--tag", "vTEST")
+        check("signed binding accepted", rc == 0, out)
+        check("stash recorded in .content-manifest.fetched", STASH_REL in fx.fetched(), fx.fetched())
+
+        print("-- sums altered after tagging")
+        before = fx.fetched()
+        altered = os.path.join(root, "altered-sums.txt")
+        with open(altered, "w") as fh:
+            fh.write(open(fx.sums).read() + f"{'0' * 64}  extra-file\n")
+        rc, out = fx.fetch("--from-file", fx.stash, "--sums", altered, "--tag", "vTEST")
+        check("altered sums refused", rc != 0, out)
+        check("message names the sums link", "sums" in out.lower(), out)
+        check("fetched manifest unchanged", fx.fetched() == before)
+
+        print("-- unsigned annotated tag")
+        rc, out = fx.fetch("--from-file", fx.stash, "--sums", fx.sums, "--tag", "vUNSIGNED")
+        check("unsigned tag refused", rc != 0, out)
+        check("message names verify-tag", "verify-tag" in out, out)
+
+        print("-- --from-file needs --tag")
+        rc, out = fx.fetch("--from-file", fx.stash, "--sums", fx.sums)
+        check("--from-file without --tag is a usage error", rc == 2, f"rc={rc} {out}")
+
+        print("-- explicit opt-out")
+        rc, out = fx.fetch("--from-file", fx.stash, "--sums", fx.sums, "--allow-unverified-sums")
+        check("--allow-unverified-sums proceeds", rc == 0, out)
+        check("opt-out says trust is HTTPS only", "HTTPS only" in out, out)
+
+        print("-- stash mismatch with --from-file")
+        bad = os.path.join(root, "bad-stash.tar.bz2")
+        with open(bad, "wb") as fh:
+            fh.write(b"not the stash")
+        rc, out = fx.fetch("--from-file", bad, "--sums", fx.sums, "--tag", "vTEST")
+        check("mismatched stash refused", rc != 0, out)
+        check("the user's file is not deleted", os.path.isfile(bad))
+        check("the message does not claim a deletion", "being deleted" not in out, out)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
