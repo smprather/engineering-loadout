@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# pre-commit-hook: hooks/pre-commit only touches what is being committed.
+#
+# The hook strips .git dirs from embedded repositories so vendored copies can be
+# committed as plain files. It used to `find .` the WHOLE worktree -- ignored
+# dirs included, deleting local clones kept there -- and then `git add -A`,
+# which swept every untracked file into the commit. Its chunking step also ran
+# strip-all-elf-binaries with `2>/dev/null || true`, so a failure was silent and
+# a >40 MiB payload file was committed unchunked.
+#
+# Runs the real hook in a throwaway repo with a stub strip-all-elf-binaries.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-precommit-test.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+R="$T/repo"
+mkdir -p "$R/build"
+cd "$R"
+git init -q
+git config user.name Test
+git config user.email t@example.com
+cp "$REPO/hooks/pre-commit" .git/hooks/pre-commit
+chmod 755 .git/hooks/pre-commit
+echo '_BUNDLED_PY = "3.15"' >loadout_main.py
+printf '#!/bin/sh\n[ -f "%s/strip-fails" ] && exit 1\nexit 0\n' "$T" >build/strip-all-elf-binaries
+chmod 755 build/strip-all-elf-binaries
+echo 'cache/' >.gitignore
+git add -A
+git commit -q -m init --no-verify
+
+# 1 + 2: an ignored local clone and an untracked file, next to an unrelated commit.
+mkdir -p cache/clone
+git -C cache/clone init -q
+echo notes >notes.txt
+echo one >tracked.txt
+git add tracked.txt
+git commit -q -m "add tracked" >"$T/c1.log" 2>&1 || fail "commit 1 failed: $(cat "$T/c1.log")"
+[ -d cache/clone/.git ] || fail "the hook deleted .git inside an ignored dir (a local clone)"
+echo "  PASS  ignored local clones are left alone"
+if git show --name-only --format= HEAD | grep -qx notes.txt; then
+    fail "the hook swept the untracked notes.txt into the commit"
+fi
+git show --name-only --format= HEAD | grep -qx tracked.txt || fail "commit 1 lost its own file"
+echo "  PASS  untracked files stay out of the commit"
+
+# 3: a staged vendored copy that still carries its .git is committed as files.
+mkdir -p vendor/p
+git -C vendor/p init -q
+echo plugin >vendor/p/plugin.lua
+git -C vendor/p add plugin.lua
+git -C vendor/p -c user.name=T -c user.email=t@e commit -q -m p
+git add vendor/p 2>/dev/null
+git commit -q -m "vendor p" >"$T/c3.log" 2>&1 || fail "commit 3 failed: $(cat "$T/c3.log")"
+[ ! -e vendor/p/.git ] || fail "the staged vendor/p/.git was not removed"
+git show --name-only --format= HEAD | grep -qx vendor/p/plugin.lua \
+    || fail "vendor/p was not committed as files: $(git show --name-only --format= HEAD)"
+echo "  PASS  a staged embedded repo is committed as plain files"
+
+# 4: chunking that fails must block the commit, not pass silently.
+mkdir -p payload
+truncate -s 41M payload/big.bin
+touch "$T/strip-fails"
+git add payload/big.bin
+rc=0
+git commit -q -m "big" >"$T/c4.log" 2>&1 || rc=$?
+[ "$rc" != 0 ] || fail "a 41 MiB payload file was committed although chunking failed"
+echo "  PASS  failed chunking blocks the commit"
+
+echo "pre-commit-hook: OK"

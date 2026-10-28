@@ -1,8 +1,13 @@
 #!/bin/bash
-# Pre-commit hook:
-#   1. Remove .git directories from embedded repositories.
+# Pre-commit hook (hooks/README.md documents each step):
+#   1. Remove .git from embedded repositories THIS COMMIT STAGES, so vendored
+#      copies commit as plain files. Nothing else in the worktree is touched.
 #   2. Strip repo ELF payloads when staged binary/archive candidates change.
-#   3. Ruff-format and isort staged Python files (.py and extensionless python shebangs).
+#   3. Syntax-check (bundled interpreter) and ruff-format staged Python files
+#      (.py and extensionless python shebangs).
+#   4. Chunk staged payload/ files over 40 MiB; a failure blocks the commit.
+#
+# Never `git add -A`: every re-stage names the paths it means.
 
 set -euo pipefail
 
@@ -30,20 +35,41 @@ _bundled_py() {
 
 echo "Pre-commit: Checking for embedded git repositories..."
 
-embedded_gits=$(find . -mindepth 2 -path './.git/*' -prune -o -type d -name ".git" -print 2>/dev/null)
+# Only paths this commit stages: a staged embedded repo shows up as a gitlink
+# entry naming its directory. The old `find .` walked the whole worktree --
+# ignored dirs too, deleting local clones kept there -- and then `git add -A`
+# swept every untracked file into the commit.
+_embedded=()
+while IFS= read -r _p; do
+    [[ -z "$_p" ]] && continue
+    if [[ -d "$_p" && -e "$_p/.git" ]]; then
+        _embedded+=("$_p")
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACM)
 
-if [[ -n "$embedded_gits" ]]; then
-    echo "Found embedded git repositories, removing .git directories:"
-    while IFS= read -r git_dir; do
-        echo "  Removing: $git_dir"
-        rm -rf "$git_dir"
-    done <<< "$embedded_gits"
-    echo "Re-staging affected files..."
-    git add -A
+if [[ ${#_embedded[@]} -gt 0 ]]; then
+    echo "Found embedded git repositories in this commit, removing their .git:"
+    for _p in "${_embedded[@]}"; do
+        echo "  Removing: $_p/.git"
+        rm -rf "${_p:?}/.git"
+        # Replace the gitlink entry with the directory's files.
+        git rm --cached -q -r -f -- "$_p" >/dev/null
+        git add -- "$_p"
+    done
     echo "OK Cleaned up embedded git repositories"
 else
     echo "OK No embedded git repositories found"
 fi
+
+# Untracked (not ignored) repositories are not part of this commit: say so,
+# leave them alone. `git add` on one later would record a gitlink.
+while IFS= read -r _u; do
+    [[ -z "$_u" ]] && continue
+    _u=${_u%/}
+    if [[ -e "$_u/.git" ]]; then
+        echo "  NOTE: untracked $_u is a git repository; not touched (not in this commit)"
+    fi
+done < <(git ls-files --others --exclude-standard --directory)
 
 # --- 2. Strip repo binaries and binary archives ---
 
@@ -113,28 +139,30 @@ while IFS= read -r _f; do
 done <<< "$_staged_all"
 
 if [[ ${#_staged_py_files[@]} -gt 0 ]]; then
-    # Python 3.14 syntax check -- the installer body and all post-install
-    # scripts run under bundled python3.15 (via the POSIX-sh loadout shim
-    # or ~/.local/bin/python3.15 after install).
-    _py314=$(_bundled_py || true)
-    if [[ -n "$_py314" ]]; then
-        echo "Pre-commit: Checking Python 3.14 syntax ($_py314)..."
-        _py314_ok=1
+    # Syntax check under the bundled interpreter -- the installer body and all
+    # post-install scripts run under it (PEP 758 forms older parsers reject).
+    _syntax_py=$(_bundled_py || true)
+    if [[ -n "$_syntax_py" ]]; then
+        _syntax_ver=$("$_syntax_py" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+        _syntax_err=$(mktemp "${TMPDIR:-/tmp}/loadout-precommit.XXXXXX")
+        trap 'rm -f "$_syntax_err"' EXIT
+        echo "Pre-commit: Checking Python $_syntax_ver syntax ($_syntax_py)..."
+        _syntax_ok=1
         for _f in "${_staged_py_files[@]}"; do
-            if ! "$_py314" -m py_compile "$_f" 2>/tmp/py314-check-err; then
-                echo "  SYNTAX ERROR under $_py314: $_f" >&2
-                cat /tmp/py314-check-err >&2
-                _py314_ok=0
+            if ! "$_syntax_py" -m py_compile "$_f" 2>"$_syntax_err"; then
+                echo "  SYNTAX ERROR under $_syntax_py: $_f" >&2
+                cat "$_syntax_err" >&2
+                _syntax_ok=0
             fi
         done
-        if [[ "$_py314_ok" == "1" ]]; then
-            echo "OK Python 3.14 syntax OK"
+        if [[ "$_syntax_ok" == "1" ]]; then
+            echo "OK Python $_syntax_ver syntax OK"
         else
             echo "ERROR: Fix syntax errors above before committing." >&2
             exit 1
         fi
     else
-        echo "Pre-commit: skipping py3.15 syntax check (no python3.15 found)"
+        echo "Pre-commit: skipping the syntax check (no bundled python${_bundled_minor} found)"
     fi
 
     echo "Pre-commit: Formatting Python files with ruff..."
@@ -166,13 +194,18 @@ _staged_large_prebuilt=$(
 if [[ -n "$_staged_large_prebuilt" ]]; then
     echo "Pre-commit: Chunking large payload/ files (>40 MiB)..."
     while IFS= read -r _lf; do
-        [[ -z "$_lf" ]] && continue
-        echo "  Chunking: $_lf"
-        "$script_dir/build/strip-all-elf-binaries" --chunk-only 2>/dev/null || true
-        # strip-all-elf-binaries --chunk-only processes all of payload/ at once;
-        # run once then break -- the loop is just to print which file triggered it.
-        break
+        [[ -n "$_lf" ]] && echo "  Chunking: $_lf"
     done <<< "$_staged_large_prebuilt"
+    # Same interpreter PATH fix as step 2 (the script is `env python3.15`), and
+    # no `2>/dev/null || true`: a failure here used to be silent and the large
+    # file was committed unchunked. --chunk-only processes all of payload/.
+    _chunk_py=$(_bundled_py || true)
+    _chunk_path=$PATH
+    [[ -n "$_chunk_py" ]] && _chunk_path="$(dirname "$_chunk_py"):$PATH"
+    if ! PATH="$_chunk_path" "$script_dir/build/strip-all-elf-binaries" --chunk-only; then
+        echo "ERROR: build/strip-all-elf-binaries --chunk-only failed; payload files over 40 MiB were not chunked." >&2
+        exit 1
+    fi
     # Re-stage: remove original large files, add new chunk files.
     while IFS= read -r _lf; do
         [[ -z "$_lf" ]] && continue
@@ -181,6 +214,15 @@ if [[ -n "$_staged_large_prebuilt" ]]; then
             git add -- "${_lf}.part-"* 2>/dev/null || true
         fi
     done <<< "$_staged_large_prebuilt"
+    _still_large=0
+    while IFS= read -r _lf; do
+        [[ -z "$_lf" || ! -f "$_lf" ]] && continue
+        if [[ "$(stat -c%s "$_lf")" -gt $((40 * 1024 * 1024)) ]]; then
+            echo "ERROR: $_lf is still over 40 MiB and unchunked (GitHub warns at 50 MB)." >&2
+            _still_large=1
+        fi
+    done <<< "$_staged_large_prebuilt"
+    [[ "$_still_large" == "0" ]] || exit 1
     echo "OK Large files chunked and re-staged"
 fi
 
