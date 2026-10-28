@@ -501,11 +501,12 @@ Twelve font families bundled and installed to `~/.local/share/fonts`:
 | [Ubuntu Mono](https://design.ubuntu.com/font) | Ubuntu monospace family |
 
 Use `./loadout install ... --skip @fonts-all` to skip every font, or
-`--skip font-firacode` to skip a single family. By default, an existing
-`~/.local/share/fonts` directory is moved aside to `fonts.bak*` before the
-vendored fonts are extracted. With `--no-backup`, the installer reuses the
-existing fonts directory in place and overwrites only matching font files. Font
-extraction uses the same progress bar style as other bulk install phases.
+`--skip font-firacode` to skip a single family. An existing
+`~/.local/share/fonts` directory is used in place: the installer replaces only
+the bundled font files (by an atomic rename, so running applications keep the
+old file) and leaves every other file there, including your own fonts. It never
+moves the directory aside, with or without `--no-backup`. Font extraction uses
+the same progress bar style as other bulk install phases.
 
 On a **shared tree** -- any install root outside `$HOME`, typically a
 `--dest-dir` deployment -- the fonts install **once** into

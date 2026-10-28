@@ -184,44 +184,32 @@ def test_shared_tree_symlink_skips_snippet():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_existing_dir_backed_up():
+def test_reinstall_never_moves_fonts_dir_aside():
+    """Decision D-B: a reinstall replaces the bundle's own files in place and
+    never renames the fonts dir. The old move-aside cost ~2 GB per run (one
+    fonts.bak.N per reinstall, unbounded) and took the user's own fonts out of
+    fontconfig's path."""
     tmp = tempfile.mkdtemp(prefix="test-fonts.")
     try:
         repo_dir = make_repo(tmp)
         home = os.path.join(tmp, "home")
         ufd = user_fonts_dir(home)
-        os.makedirs(ufd)
 
-        # Pre-populate fonts dir with a sentinel file
-        sentinel = os.path.join(ufd, "old-font.ttf")
-        open(sentinel, "w").close()
+        install.install_fonts(repo_dir, home)
+        bundled = os.path.join(ufd, "dummy.ttf")
+        assert os.path.isfile(bundled), "dummy.ttf should be installed"
+        ino = os.stat(bundled).st_ino
+        mine = os.path.join(ufd, "MyOwn.ttf")
+        open(mine, "w").close()
 
         install.install_fonts(repo_dir, home)
 
-        backup = ufd + ".bak"
-        assert os.path.isdir(backup), f"Old fonts dir should be backed up to {backup}"
-        assert os.path.exists(os.path.join(backup, "old-font.ttf")), "Sentinel file should be in backup"
-        assert os.path.isdir(ufd), "Fresh fonts dir should exist"
-        assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
-        print("PASS: existing fonts dir backed up, new dir populated")
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-def test_existing_dir_backup_numbering():
-    tmp = tempfile.mkdtemp(prefix="test-fonts.")
-    try:
-        repo_dir = make_repo(tmp)
-        home = os.path.join(tmp, "home")
-        ufd = user_fonts_dir(home)
-        os.makedirs(ufd)
-        # Pre-create .bak so numbering kicks in
-        os.makedirs(ufd + ".bak")
-
-        install.install_fonts(repo_dir, home)
-
-        assert os.path.isdir(ufd + ".bak.1"), "Second backup should use .bak.1 when .bak already exists"
-        print("PASS: backup numbering works when .bak already exists")
+        siblings = [n for n in os.listdir(os.path.dirname(ufd)) if n.startswith("fonts.bak")]
+        assert not siblings, f"reinstall must not move the fonts dir aside: {siblings}"
+        assert os.path.exists(mine), "the user's own font must survive a reinstall"
+        assert os.path.isfile(bundled), "dummy.ttf should still be installed"
+        assert os.stat(bundled).st_ino != ino, "bundle font files are replaced by inode swap"
+        print("PASS: reinstall replaces bundle fonts in place, keeps the user's own, no fonts.bak")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -239,7 +227,7 @@ def test_existing_dir_no_backup_reused():
 
         install.install_fonts(repo_dir, home, no_backup=True)
 
-        assert not os.path.exists(ufd + ".bak"), "no_backup should not create a fonts backup"
+        assert not os.path.exists(ufd + ".bak"), "no fonts backup is ever created"
         assert os.path.exists(sentinel), "Existing font files should remain when reusing the dir"
         assert "dummy.ttf" in os.listdir(ufd), "dummy.ttf should be installed"
         print("PASS: existing fonts dir reused with no_backup")
@@ -254,7 +242,6 @@ if __name__ == "__main__":
     test_dangling_symlink_replaced()
     test_shared_tree_fonts_and_snippet()
     test_shared_tree_symlink_skips_snippet()
-    test_existing_dir_backed_up()
-    test_existing_dir_backup_numbering()
+    test_reinstall_never_moves_fonts_dir_aside()
     test_existing_dir_no_backup_reused()
     print("All font tests passed.")

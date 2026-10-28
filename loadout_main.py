@@ -3541,8 +3541,8 @@ def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None):
             if progress is not None:
                 progress.step(os.path.basename(member))
             require_writable_parent(dest, "fonts")
-            with zf.open(member) as src, open(dest, "wb") as out:
-                shutil.copyfileobj(src, out)
+            with zf.open(member) as src:
+                _write_stream_atomic(src, dest, 0o644)
             if progress is not None:
                 progress.advance()
 
@@ -3607,6 +3607,9 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
     then installed ONCE into <shared_root>/share/fonts and a fontconfig snippet is
     written for the shell layer, keeping ~2 GB of fonts off every user's home
     directory and its disk quota.
+
+    `no_backup` is accepted for the caller's uniform signature but no longer
+    changes anything: the fonts dir is never moved aside (decision D-B).
     """
     # Which specific font archives to install. selected_tools=None -> install all
     # (non-selective). When a selection is given, map each selected font-* package
@@ -3649,18 +3652,11 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
         print(f"  Removing stale symlink: {fonts_dir} -> {os.readlink(fonts_dir)}")
         os.unlink(fonts_dir)
     elif os.path.isdir(fonts_dir):
-        require_writable_parent(fonts_dir, "fonts")
+        # Never moved aside: that cost ~2 GB per reinstall (an unbounded
+        # fonts.bak.N series) and took the user's own fonts out of fontconfig's
+        # path. The bundle's files are replaced in place by inode swap
+        # (extract_font_zip); every other file in the dir is left alone.
         require_writable_dir(fonts_dir, "fonts")
-        if no_backup:
-            print(f"  Reusing existing fonts dir (--no-backup): {fonts_dir}")
-        else:
-            backup_path = fonts_dir + ".bak"
-            counter = 1
-            while os.path.exists(backup_path):
-                backup_path = f"{fonts_dir}.bak.{counter}"
-                counter += 1
-            print(f"  Backing up existing fonts dir: {fonts_dir} -> {backup_path}")
-            shutil.move(fonts_dir, backup_path)
     ensure_dir(fonts_dir, "fonts")
 
     # Handles whole zips and chunked zips (.zip.part-000 sentinel, rejoined
