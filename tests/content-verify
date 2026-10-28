@@ -116,6 +116,29 @@ def main():
             resolve_refused = True
         check("resolve() refuses a tampered file", resolve_refused)
 
+        # 6. open_logical() (chunked font zips, read in place) verifies every part
+        fonts = os.path.join(repo, "payload", "fonts")
+        os.makedirs(fonts)
+        parts = []
+        for i, chunk in enumerate((b"PK-part-zero", b"part-one")):
+            part = os.path.join(fonts, f"Font.zip.part-{i:03d}")
+            with open(part, "wb") as fh:
+                fh.write(chunk)
+            parts.append(part)
+        with open(manifest, "a") as fh:
+            for part in parts:
+                fh.write(f"sha256  {m._sha256_file(part)}  {os.path.relpath(part, repo)}\n")
+        m._load_content_manifest(repo)
+        src = store.open_logical(os.path.join(fonts, "Font.zip"))
+        check("open_logical() reads verified parts as one file", src.read() == b"PK-part-zeropart-one")
+        src.close()
+        with open(parts[1], "ab") as fh:
+            fh.write(b"X")
+        check(
+            "open_logical() refuses a tampered part",
+            _raises(m.ContentVerificationError, store.open_logical, os.path.join(fonts, "Font.zip")),
+        )
+
     test_every_payload_phase_verifies(m)
     test_missing_manifest_fails_closed(m)
 

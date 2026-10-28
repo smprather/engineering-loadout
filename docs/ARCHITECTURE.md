@@ -253,7 +253,9 @@ entry by entry (`extract_tar_replacing`); Tree-sitter parsers, typelibs and the
 nvim-qt shim use `_copy_atomic`/`write_bz2_atomic`. A running process that has a
 library mmap'd keeps the old inode (no SIGBUS, no mixed pages), and a running
 executable is replaced without ETXTBSY. Rejoined chunked archives are deleted as
-soon as they are extracted (`_Bz2Store.release`), not held until exit.
+soon as they are extracted (`_Bz2Store.release`), not held until exit; chunked
+font zips are read in place from their parts (`_PartsReader`) and never
+rejoined.
 
 **Per-phase gating:** Each install phase (`install_prebuilt_binaries`, `install_fonts`,
 etc.) receives `selected_tools` and short-circuits with a `SKIP`

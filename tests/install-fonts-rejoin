@@ -22,11 +22,11 @@ install = importlib.util.module_from_spec(SPEC)
 LOADER.exec_module(install)
 
 
-def make_split_font_zip(fonts_dir, base_name, chunk_size=20):
+def make_split_font_zip(fonts_dir, base_name, chunk_size=20, member="dummy.ttf"):
     """Write a valid zip with one .ttf entry, split into chunk_size-byte parts."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
-        zf.writestr("dummy.ttf", b"FAKE TTF DATA " * 10)
+        zf.writestr(member, b"FAKE TTF DATA " * 10)
     data = buf.getvalue()
 
     i = 0
@@ -67,6 +67,49 @@ def test_split_zip_rejoin():
         assert "dummy.ttf" in installed, f"Expected dummy.ttf in {ufd}; got: {installed}"
         print("PASS: split-zip rejoin -> dummy.ttf")
     finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_chunked_zips_never_rejoined_to_temp():
+    """ROB-2: a chunked font zip is read straight from its parts. The fonts
+    phase used to rejoin EVERY selected zip into the temp root before
+    extracting any of them (~1 GB of IosevkaTerm alone on a tmpfs /tmp)."""
+    tmp = tempfile.mkdtemp(prefix="test-fonts.")
+    scratch = os.path.join(tmp, "scratch")
+    os.makedirs(scratch)
+    old_tempdir = tempfile.tempdir
+    tempfile.tempdir = scratch
+    real_extract = install.extract_font_zip
+    seen = []
+
+    def spy(zip_src, *args, **kwargs):
+        seen.append(sorted(n for n in os.listdir(scratch) if n.startswith(".loadout-rejoin.")))
+        return real_extract(zip_src, *args, **kwargs)
+
+    install.extract_font_zip = spy
+    try:
+        repo_dir = os.path.join(tmp, "repo")
+        fonts_dir = os.path.join(repo_dir, "payload", "fonts")
+        os.makedirs(fonts_dir)
+        make_split_font_zip(fonts_dir, "AlphaFont.zip", chunk_size=20, member="alpha.ttf")
+        make_split_font_zip(fonts_dir, "BetaFont.zip", chunk_size=33, member="beta.ttf")
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+
+        install.install_fonts(repo_dir, home)
+
+        installed = sorted(os.listdir(user_fonts_dir(home)))
+        assert installed == ["alpha.ttf", "beta.ttf"], installed
+        with open(os.path.join(user_fonts_dir(home), "beta.ttf"), "rb") as fh:
+            assert fh.read() == b"FAKE TTF DATA " * 10, "beta.ttf content differs from the zip member"
+        assert len(seen) == 2, f"expected one extract per zip, got {seen}"
+        assert all(not names for names in seen), f"rejoined temp copies present during extraction: {seen}"
+        leftover = [n for n in os.listdir(scratch) if n.startswith(".loadout-rejoin.")]
+        assert not leftover, f"rejoined temp copies left behind: {leftover}"
+        print("PASS: chunked font zips are read from their parts, no temp copy")
+    finally:
+        install.extract_font_zip = real_extract
+        tempfile.tempdir = old_tempdir
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -237,6 +280,7 @@ def test_existing_dir_no_backup_reused():
 
 if __name__ == "__main__":
     test_split_zip_rejoin()
+    test_chunked_zips_never_rejoined_to_temp()
     test_foreign_symlink_preserved()
     test_repo_pointing_symlink_replaced()
     test_dangling_symlink_replaced()

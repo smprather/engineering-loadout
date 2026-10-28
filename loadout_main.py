@@ -166,6 +166,7 @@ import fnmatch
 import getpass
 import glob
 import hashlib
+import io
 import json
 import types
 
@@ -952,6 +953,69 @@ def _verify_tree(src_dir):
     _verify_source_files(files)
 
 
+class _PartsReader(io.RawIOBase):
+    """Read-only, seekable view of chunk files (`<name>.part-000`, `-001`, ...)
+    as one file, so zipfile can read a chunked font zip in place -- no rejoined
+    copy is ever written to the temp root. `name` is the logical path."""
+
+    def __init__(self, logical, parts):
+        super().__init__()
+        self.name = logical
+        self._files = []
+        self._starts = []
+        size = 0
+        try:
+            for part in parts:
+                fh = open(part, "rb")
+                self._files.append(fh)
+                self._starts.append(size)
+                size += os.fstat(fh.fileno()).st_size
+        except OSError:
+            self.close()
+            raise
+        self._size = size
+        self._pos = 0
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self._pos
+
+    def seek(self, offset, whence=os.SEEK_SET):
+        base = {os.SEEK_SET: 0, os.SEEK_CUR: self._pos, os.SEEK_END: self._size}[whence]
+        self._pos = max(0, base + offset)
+        return self._pos
+
+    def readinto(self, buf):
+        # Fill buf completely unless EOF: zipfile treats a short header read as
+        # a truncated file, and a read can straddle a part boundary.
+        view = memoryview(buf).cast("B")
+        done = 0
+        while done < len(view) and self._pos < self._size:
+            i = 0
+            while i + 1 < len(self._starts) and self._starts[i + 1] <= self._pos:
+                i += 1
+            fh = self._files[i]
+            end = self._starts[i + 1] if i + 1 < len(self._starts) else self._size
+            fh.seek(self._pos - self._starts[i])
+            got = fh.readinto(view[done : done + min(len(view) - done, end - self._pos)])
+            if not got:
+                break
+            done += got
+            self._pos += got
+        return done
+
+    def close(self):
+        for fh in self._files:
+            fh.close()
+        self._files = []
+        super().close()
+
+
 class _Bz2Store:
     """Transparent split-bz2 resolver and directory scanner.
 
@@ -996,6 +1060,22 @@ class _Bz2Store:
                 with open(p, "rb") as inp:
                     shutil.copyfileobj(inp, out)
         return tmp
+
+    def open_logical(self, path):
+        """Open a logical payload path for reading, verified, WITHOUT rejoining.
+
+        A plain file is opened directly; a chunked one (``path + ".part-000"``)
+        is read through _PartsReader over its parts in order. For readers that
+        take a file object (zipfile): nothing lands in the temp root. Returns
+        ``None`` when neither the file nor its parts are present."""
+        if os.path.isfile(path):
+            _verify_source_files([path])
+            return open(path, "rb")
+        if not os.path.isfile(path + ".part-000"):
+            return None
+        parts = glob_paths_glob(path + ".part-*")
+        _verify_source_files(parts)
+        return _PartsReader(path, parts)
 
     def release(self, path):
         """Delete a rejoined temp file as soon as its caller is done with it.
@@ -3552,16 +3632,19 @@ def font_member(name):
     return lower.endswith((".ttf", ".otf", ".pcf", ".bdf", ".pcf.gz", ".bdf.gz"))
 
 
-def font_zip_members(zip_path):
-    with zipfile.ZipFile(zip_path, "r") as zf:
+def font_zip_members(zip_src):
+    """Font members of a zip; `zip_src` is a path or a seekable file object."""
+    with zipfile.ZipFile(zip_src, "r") as zf:
         return [member for member in zf.namelist() if font_member(member) and os.path.basename(member)]
 
 
-def extract_font_zip(zip_path, user_fonts_dir, members=None, progress=None):
+def extract_font_zip(zip_src, user_fonts_dir, members=None, progress=None):
+    """Extract the font members of `zip_src` (a path or a seekable file
+    object, e.g. _Bz2Store.open_logical()) flat into user_fonts_dir."""
     if progress is None:
-        print(f"  Extracting: {zip_path} -> {user_fonts_dir}/")
-    members = members if members is not None else font_zip_members(zip_path)
-    with zipfile.ZipFile(zip_path, "r") as zf:
+        print(f"  Extracting: {getattr(zip_src, 'name', zip_src)} -> {user_fonts_dir}/")
+    members = members if members is not None else font_zip_members(zip_src)
+    with zipfile.ZipFile(zip_src, "r") as zf:
         for member in members:
             dest = os.path.join(user_fonts_dir, os.path.basename(member))
             if progress is not None:
@@ -3685,40 +3768,41 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
         require_writable_dir(fonts_dir, "fonts")
     ensure_dir(fonts_dir, "fonts")
 
-    # Handles whole zips and chunked zips (.zip.part-000 sentinel, rejoined
-    # transparently by _bz2.resolve). Filter to the selected font archives when
-    # a selection was given.
+    # Handles whole zips and chunked zips (.zip.part-000 sentinel). A chunked
+    # zip is read in place through _bz2.open_logical() -- never rejoined into
+    # the temp root (the zips run to ~1 GB on what is often a tmpfs /tmp).
+    # Each archive is verified once, when opened. Filter to the selected font
+    # archives when a selection was given.
     seen_zips = set()
     zip_jobs = []
-    for name in sorted(os.listdir(vendor_fonts_dir)):
-        if name.endswith(".zip"):
-            zip_logical = os.path.join(vendor_fonts_dir, name)
-        elif name.endswith(".zip.part-000"):
-            zip_logical = os.path.join(vendor_fonts_dir, name[: -len(".part-000")])
-        else:
-            continue
-        if zip_logical in seen_zips:
-            continue
-        seen_zips.add(zip_logical)
-        if selected_zip_names is not None and os.path.basename(zip_logical) not in selected_zip_names:
-            continue
-        # _bz2.resolve() transparently rejoins chunks to a temp file if needed.
-        zip_path = _bz2.resolve(zip_logical)
-        if zip_path is None:
-            continue
-        if zip_logical != zip_path:
-            print(f"  Rejoining: {zip_logical}.part-* -> (temp)")
-        members = font_zip_members(zip_path)
-        if members:
-            zip_jobs.append((zip_path, members))
-
-    _font_names = [os.path.basename(member) for _, members in zip_jobs for member in members]
-    _p = _ItemProgress("Installing fonts", _font_names) if _font_names else None
+    _p = None
     try:
-        for zip_path, members in zip_jobs:
-            extract_font_zip(zip_path, fonts_dir, members, _p)
-            _bz2.release(zip_path)
+        for name in sorted(os.listdir(vendor_fonts_dir)):
+            if name.endswith(".zip"):
+                zip_logical = os.path.join(vendor_fonts_dir, name)
+            elif name.endswith(".zip.part-000"):
+                zip_logical = os.path.join(vendor_fonts_dir, name[: -len(".part-000")])
+            else:
+                continue
+            if zip_logical in seen_zips:
+                continue
+            seen_zips.add(zip_logical)
+            if selected_zip_names is not None and os.path.basename(zip_logical) not in selected_zip_names:
+                continue
+            zip_src = _bz2.open_logical(zip_logical)
+            if zip_src is None:
+                continue
+            zip_jobs.append((zip_src, font_zip_members(zip_src)))
+
+        _font_names = [os.path.basename(member) for _, members in zip_jobs for member in members]
+        _p = _ItemProgress("Installing fonts", _font_names) if _font_names else None
+        for zip_src, members in zip_jobs:
+            if members:
+                extract_font_zip(zip_src, fonts_dir, members, _p)
+            zip_src.close()
     finally:
+        for zip_src, _ in zip_jobs:
+            zip_src.close()
         if _p is not None:
             _p.stop()
 
