@@ -809,6 +809,35 @@ def write_bz2_atomic(bz2_file, dest_file, mode):
                 pass
 
 
+def _write_stream_atomic(fileobj, dest, mode):
+    """Write fileobj's bytes to dest by inode swap: a same-directory temp file,
+    then os.replace. The write_bz2_atomic rule for every installed file: a
+    process holding the old file mmap'd keeps the old inode (no SIGBUS, no
+    mixed pages), and a running executable is replaced without ETXTBSY. A
+    directory in the way is removed first."""
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest) or ".", prefix=".loadout-tmp.")
+    try:
+        with os.fdopen(fd, "wb") as out:
+            shutil.copyfileobj(fileobj, out)
+        os.chmod(tmp, mode)
+        if os.path.isdir(dest) and not os.path.islink(dest):
+            remove_path(dest)
+        os.replace(tmp, dest)
+        tmp = None
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def _copy_atomic(src, dest, mode):
+    """_write_stream_atomic from a source file."""
+    with open(src, "rb") as fh:
+        _write_stream_atomic(fh, dest, mode)
+
+
 class ContentVerificationError(Exception):
     """A payload file's sha256 does not match the committed .content-manifest."""
 
@@ -941,6 +970,20 @@ class _Bz2Store:
                 with open(p, "rb") as inp:
                     shutil.copyfileobj(inp, out)
         return tmp
+
+    def release(self, path):
+        """Delete a rejoined temp file as soon as its caller is done with it.
+
+        Without this every rejoined runtime archive and font zip stayed in the
+        temp root until process exit, so an @shared-all install accumulated
+        them all on tmpfs at once. A no-op for anything resolve() did not
+        create (a plain payload path)."""
+        if path in self._tmpfiles:
+            self._tmpfiles.remove(path)
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
     def find(self, dir_path):
         """Return sorted list of logical .bz2 paths in *dir_path*.
@@ -2439,7 +2482,7 @@ def install_portable_python(repo_dir, home, selected_tools=None):
     tmp_dir = tempfile.mkdtemp(prefix=".loadout-python-install.", dir=_tmp_root())
     try:
         print(f"  extracting {archive}...")
-        pv_extract_tar(archive, tmp_dir)
+        pv_extract_tar(archive, tmp_dir, fresh=True)
 
         extracted_dirs = [
             os.path.join(tmp_dir, d) for d in os.listdir(tmp_dir) if os.path.isdir(os.path.join(tmp_dir, d))
@@ -2796,7 +2839,7 @@ def install_typelibs(repo_dir, home, selected_tools=None):
         dest = os.path.join(dest_dir, name)
         _p.step(name)
         require_writable_parent(dest, "GObject typelibs")
-        shutil.copy2(src, dest)
+        _copy_atomic(src, dest, 0o644)
         _vprint(f"  cp: {src} -> {dest}")
         _p.advance()
     _p.stop()
@@ -3612,6 +3655,7 @@ def install_fonts(repo_dir, home, selected_tools=None, registry=None, no_backup=
     try:
         for zip_path, members in zip_jobs:
             extract_font_zip(zip_path, fonts_dir, members, _p)
+            _bz2.release(zip_path)
     finally:
         if _p is not None:
             _p.stop()
@@ -3714,8 +3758,101 @@ def safe_extract_tar(tf, dest_dir):
     tf.extractall(dest_dir, filter="data")
 
 
-def pv_extract_tar(archive_path, dest_dir):
-    """Extract tar archive with Rich member-count progress bar; falls back to plain extractall."""
+def _place_staged_tree(stage, dest_dir):
+    """Move an extracted staging tree into dest_dir entry by entry.
+
+    Directories are created (or kept, including a symlinked dir that
+    _remove_symlinks_blocking_dirs chose to follow); files and symlinks move
+    into place with os.replace -- an inode swap -- and a non-directory that
+    replaces a directory removes it first. Directory modes are applied
+    deepest-first after their children are placed, so a read-only archive
+    directory cannot block its own contents. Returns the entries placed."""
+    placed = 0
+    dir_modes = []
+    for root, dirs, files in os.walk(stage):
+        rel = os.path.relpath(root, stage)
+        target_root = dest_dir if rel == "." else os.path.join(dest_dir, rel)
+        descend = []
+        for name in dirs:
+            src = os.path.join(root, name)
+            tgt = os.path.join(target_root, name)
+            if os.path.islink(src):
+                files.append(name)  # a symlink to a dir is placed like a file
+                continue
+            if not os.path.isdir(tgt):
+                if os.path.lexists(tgt):
+                    remove_path(tgt)
+                os.mkdir(tgt)
+            dir_modes.append((tgt, stat.S_IMODE(os.lstat(src).st_mode)))
+            descend.append(name)
+            placed += 1
+        dirs[:] = descend
+        for name in files:
+            src = os.path.join(root, name)
+            tgt = os.path.join(target_root, name)
+            if os.path.isdir(tgt) and not os.path.islink(tgt):
+                remove_path(tgt)
+            try:
+                os.replace(src, tgt)
+            except OSError as exc:
+                # A followed symlinked dir can sit on another filesystem.
+                if exc.errno != errno.EXDEV or os.path.islink(src):
+                    raise
+                _copy_atomic(src, tgt, stat.S_IMODE(os.lstat(src).st_mode))
+            placed += 1
+    for tgt, mode in reversed(dir_modes):
+        try:
+            os.chmod(tgt, mode | stat.S_IWUSR | stat.S_IXUSR)
+        except OSError:
+            pass
+    return placed
+
+
+def extract_tar_replacing(archive_path, dest_dir):
+    """Extract into dest_dir by inode swap, never by truncating files in place.
+
+    Members are validated as before, extracted (filter="data") into a
+    dot-hidden staging dir inside dest_dir -- same filesystem, so the moves
+    are renames -- and then placed by _place_staged_tree. A running process
+    with an old library mmap'd keeps the old inode. The staging dir is always
+    removed, so a refused or interrupted archive leaves dest_dir unchanged
+    except for entries already placed. Returns the entries placed."""
+    require_writable_dir(dest_dir, "archive extraction")
+    dest_real = os.path.realpath(dest_dir)
+    with tarfile.open(archive_path, "r:*") as tf:
+        members = tf.getmembers()
+        _validate_tar_members(members, dest_real)
+        _remove_symlinks_blocking_dirs(members, dest_dir)
+        stage = tempfile.mkdtemp(prefix=".loadout-stage.", dir=dest_dir)
+        p = _ItemProgress("  " + os.path.basename(archive_path), (), total=len(members)) if _RICH else None
+        # try/finally: a raised tf.extract must still stop the Progress, else its
+        # cursor-hide (ESC[?25l) is never restored and the terminal cursor vanishes.
+        try:
+            for member in members:
+                tf.extract(member, stage, filter="data")
+                if p is not None:
+                    p.advance()
+            placed = _place_staged_tree(stage, dest_dir)
+            if p is not None:
+                p.advance()
+        finally:
+            if p is not None:
+                p.stop()
+            if os.path.lexists(stage):
+                _rmtree_healing(stage)
+    return placed
+
+
+def pv_extract_tar(archive_path, dest_dir, fresh=False):
+    """Extract a tar archive with a Rich member-count progress bar.
+
+    Install destinations go through extract_tar_replacing (inode swap).
+    fresh=True is for a brand-new private temp dir (portable-python's
+    install.sh staging), where nothing can be mapped and a direct extract is
+    enough."""
+    if not fresh:
+        extract_tar_replacing(archive_path, dest_dir)
+        return
     require_writable_dir(dest_dir, "archive extraction")
     dest_real = os.path.realpath(dest_dir)
 
@@ -4053,6 +4190,7 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
                 remove_if_exists(os.path.join(install_to, rel))
 
         pv_extract_tar(archive, install_to)
+        _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
         if pkg_name == "pyright":
             remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
@@ -4140,6 +4278,7 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
     remove_if_exists(vim92_dir)
 
     pv_extract_tar(archive, vim_share_dir)
+    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     if os.path.isdir(runtime_dir):
         os.rename(runtime_dir, vim92_dir)
@@ -4198,6 +4337,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None)
         remove_if_exists(stale)
 
     pv_extract_tar(archive, local_dir)
+    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     # Ensure launcher is executable.
     mt_launcher = os.path.join(local_dir, "bin", "mate-terminal")
@@ -4266,6 +4406,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
     remove_if_exists(runtime_dir)
 
     pv_extract_tar(archive, nvim_qt_share)
+    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     shim_src = os.path.join(runtime_dir, "plugin", "nvim_gui_shim.vim")
     if not os.path.isfile(shim_src):
@@ -4277,7 +4418,7 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
     site_plugin_dir = os.path.join(_local_root(home), "share", "nvim", "site", "plugin")
     ensure_dir(site_plugin_dir, "nvim-qt runtime (site plugin)")
     shim_dest = os.path.join(site_plugin_dir, "nvim_gui_shim.vim")
-    shutil.copy2(shim_src, shim_dest)
+    _copy_atomic(shim_src, shim_dest, 0o644)
     record_result("nvim-qt runtime", "OK", f"shim -> {shim_dest}")
     print(f"  Installed: {shim_src} -> {shim_dest}")
 
@@ -4327,15 +4468,13 @@ def install_treesitter_parsers(repo_dir, home, selected_tools=None):
         if name.endswith(".so.bz2"):
             dest = os.path.join(parser_dest, name[:-4])
             require_writable_parent(dest, "Tree-sitter parsers")
-            with bz2.open(src, "rb") as src_fh, open(dest, "wb") as dest_fh:
-                shutil.copyfileobj(src_fh, dest_fh)
-            os.chmod(dest, 0o644)
+            # Inode swap: a running nvim keeps its mmap of the old parser.
+            write_bz2_atomic(src, dest, 0o644)
             _vprint(f"  bzip2: {src} -> {dest}")
         elif name.endswith(".so"):
             dest = os.path.join(parser_dest, name)
             require_writable_parent(dest, "Tree-sitter parsers")
-            shutil.copy2(src, dest)
-            os.chmod(dest, 0o644)
+            _copy_atomic(src, dest, 0o644)
             _vprint(f"  cp: {src} -> {dest}")
         _p.advance()
     _p.stop()
@@ -4537,6 +4676,7 @@ def install_nvim_plugin_stash(repo_dir, home, selected_tools=None):
         remove_if_exists(dest)
         os.rename(staging, dest)
     finally:
+        _bz2.release(archive)
         remove_if_exists(staging)
 
     mirrors = sum(len([d for d in dirs if d.endswith(".git")]) for _r, dirs, _f in os.walk(dest))

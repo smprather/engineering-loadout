@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""
+install-atomic-replace -- every extracted or copied install file is replaced
+by an inode swap (write a sibling, then rename), never truncated in place.
+
+A running process that has a library mmap'd (a GUI holding mesa or firefox
+libs, nvim holding parsers) keeps the OLD inode across a rename. Truncating
+and rewriting the same inode instead gives that process SIGBUS or a mix of old
+and new pages, and a running executable fails with ETXTBSY. write_bz2_atomic
+already did this for bin/ and lib64/; runtime archives, Tree-sitter parsers
+and typelibs did not.
+
+Synthetic fixtures only. Must run under the bundled Python (PEP 758).
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import bz2
+import importlib.machinery
+import importlib.util
+import io
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+import textwrap
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOADOUT_PATH = os.path.join(REPO, "loadout_main.py")
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def load_loadout():
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", LOADOUT_PATH)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+PAGE = 4096
+OLD = b"A" * (PAGE * 8)
+NEW = b"B" * (PAGE * 8)
+
+
+def make_tar(path, members):
+    """members: [(name, bytes)] -> a .tar.bz2 at path."""
+    with tarfile.open(path, "w:bz2") as tf:
+        for name, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            info.mode = 0o644
+            tf.addfile(info, io.BytesIO(data))
+
+
+def seed(dest):
+    os.makedirs(os.path.join(dest, "lib"))
+    lib = os.path.join(dest, "lib", "libx.so")
+    with open(lib, "wb") as fh:
+        fh.write(OLD)
+    return lib
+
+
+def test_extract_replaces_inode(m, tmp):
+    dest = os.path.join(tmp, "dest")
+    lib = seed(dest)
+    ino = os.stat(lib).st_ino
+    archive = os.path.join(tmp, "rt.tar.bz2")
+    make_tar(archive, [("lib/libx.so", NEW)])
+    m.extract_tar_replacing(archive, dest)
+    with open(lib, "rb") as fh:
+        content = fh.read()
+    check("extracted file has the new bytes", content == NEW)
+    check("extracted file is a new inode", os.stat(lib).st_ino != ino)
+
+
+def test_extract_mapped_reader_survives(m, tmp):
+    dest = os.path.join(tmp, "dest")
+    lib = seed(dest)
+    archive = os.path.join(tmp, "rt.tar.bz2")
+    make_tar(archive, [("lib/libx.so", NEW)])
+    child_src = textwrap.dedent(
+        """
+        import mmap, sys
+        with open(sys.argv[1], "rb") as fh:
+            mm = mmap.mmap(fh.fileno(), 0, prot=mmap.PROT_READ)
+        sys.stdout.write("ready\\n"); sys.stdout.flush()
+        sys.stdin.readline()
+        data = bytes(mm[:])
+        sys.stdout.write("old\\n" if data == b"A" * len(data) else "changed\\n")
+        """
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", child_src, lib], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    ready = child.stdout.readline().strip()
+    try:
+        m.extract_tar_replacing(archive, dest)
+    finally:
+        out, _ = child.communicate("go\n", timeout=30)
+    check("child mapped the library", ready == "ready", ready)
+    check("mapped reader exits cleanly (no SIGBUS)", child.returncode == 0, f"rc={child.returncode}")
+    check("mapped reader still sees the old bytes", out.strip() == "old", out.strip())
+
+
+def test_extract_unsafe_member_leaves_no_stage(m, tmp):
+    dest = os.path.join(tmp, "dest")
+    lib = seed(dest)
+    archive = os.path.join(tmp, "evil.tar.bz2")
+    make_tar(archive, [("lib/libx.so", NEW), ("../evil", b"x")])
+    try:
+        m.extract_tar_replacing(archive, dest)
+        raised = False
+    except RuntimeError:
+        raised = True
+    with open(lib, "rb") as fh:
+        content = fh.read()
+    check("unsafe member raises", raised)
+    check("destination unchanged after a refused archive", content == OLD)
+    check("no staging dir left behind", not [n for n in os.listdir(dest) if n.startswith(".loadout-stage.")])
+    check("nothing escaped the destination", not os.path.exists(os.path.join(tmp, "evil")))
+
+
+def test_parser_reinstall_swaps_inode(m, tmp):
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    pdir = os.path.join(repo, "payload", "treesitter", "prebuilt", m.treesitter_platform_id(), "parser")
+    os.makedirs(pdir)
+    with bz2.open(os.path.join(pdir, "fake.so.bz2"), "wb") as fh:
+        fh.write(b"\x7fELF-parser")
+    m._VERIFY_CONTENT = False
+    try:
+        m.install_treesitter_parsers(repo, home, None)
+        dest = os.path.join(m._local_root(home), "share", "nvim", "tree-sitter-parsers", "parser", "fake.so")
+        ino = os.stat(dest).st_ino
+        m.install_treesitter_parsers(repo, home, None)
+        check("parser reinstall swaps the inode", os.stat(dest).st_ino != ino)
+    finally:
+        m._VERIFY_CONTENT = True
+
+
+def test_bz2store_release_removes_temp(m, tmp):
+    logical = os.path.join(tmp, "big.tar.bz2")
+    for i, chunk in enumerate((b"part-one-", b"part-two")):
+        with open(f"{logical}.part-{i:03d}", "wb") as fh:
+            fh.write(chunk)
+    m._VERIFY_CONTENT = False
+    try:
+        store = m._Bz2Store()
+        joined = store.resolve(logical)
+        existed = os.path.isfile(joined)
+        store.release(joined)
+        check("rejoined temp exists after resolve", existed)
+        check("release removes the rejoined temp", not os.path.exists(joined))
+        store.release(logical + ".part-000")
+        check("release is a no-op for a payload path", os.path.isfile(logical + ".part-000"))
+    finally:
+        m._VERIFY_CONTENT = True
+
+
+TESTS = (
+    test_extract_replaces_inode,
+    test_extract_mapped_reader_survives,
+    test_extract_unsafe_member_leaves_no_stage,
+    test_parser_reinstall_swaps_inode,
+    test_bz2store_release_removes_temp,
+)
+
+
+def main():
+    m = load_loadout()
+    for fn in TESTS:
+        print(f"-- {fn.__name__}")
+        with tempfile.TemporaryDirectory(prefix=".loadout-test-atomic.") as tmp:
+            try:
+                fn(m, tmp)
+            except Exception as exc:
+                check(fn.__name__, False, f"{type(exc).__name__}: {exc}")
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

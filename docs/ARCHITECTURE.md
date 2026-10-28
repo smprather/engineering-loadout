@@ -222,9 +222,15 @@ All subprocess calls use absolute paths resolved at startup (`_LDD`,
 `_UNAME`, `_GETCONF` via `_find_tool()`) to avoid accidentally picking up
 binaries being installed.
 
-**Atomic writes:** All bz2 decompression uses `write_bz2_atomic` (write to temp file
-in same directory + `os.rename`). Prevents SIGBUS when a running Python process has
-memory-mapped a shared lib being overwritten.
+**Atomic writes:** Every installed file is replaced by an inode swap -- a temp file
+in the same directory, then `os.rename`/`os.replace` -- never truncated in place.
+bz2 artifacts use `write_bz2_atomic`; runtime archives are extracted into a
+dot-hidden `.loadout-stage.*` dir inside the destination and moved into place
+entry by entry (`extract_tar_replacing`); Tree-sitter parsers, typelibs and the
+nvim-qt shim use `_copy_atomic`/`write_bz2_atomic`. A running process that has a
+library mmap'd keeps the old inode (no SIGBUS, no mixed pages), and a running
+executable is replaced without ETXTBSY. Rejoined chunked archives are deleted as
+soon as they are extracted (`_Bz2Store.release`), not held until exit.
 
 **Per-phase gating:** Each install phase (`install_prebuilt_binaries`, `install_fonts`,
 etc.) receives `selected_tools` and short-circuits with a `SKIP`
