@@ -1,0 +1,64 @@
+#!/bin/sh
+# env-bash-runtime: run-time behavior of envs/bash that a syntax check cannot see.
+#
+#   1. A non-interactive shell (`ssh host cmd`, `bash -l` jobs) must keep
+#      EXPORTED variables whose names start with `_`. The early return used
+#      `unset ${!_@}`, which also removed Environment Modules' `_LMFILES_` and
+#      `_JAVA_OPTIONS` from every such job.
+#   2. The plain-ls fallback (LOADOUT_CFG_PREFERRED_LS=ls) is built with eval;
+#      its option variables must be escaped so they expand per call, not to
+#      nothing at definition time, and arguments must pass through as "$@".
+#   3. The ERR trap's file branch ran `cd` inside a subshell -- dead code.
+#
+# Sources the repo copy directly (BASH_CONFIG_ROOT_DIR=$REPO/envs/bash); the
+# user layer comes from a temp HOME.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-bash-runtime.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+clean_bash() {
+    env -i HOME="$T" PATH=/usr/bin:/bin TERM=xterm-256color LANG="${LANG:-C.UTF-8}" \
+        BASH_CONFIG_ROOT_DIR="$REPO/envs/bash" "$@"
+}
+
+# 1. exported _vars survive the non-interactive early return
+out=$(clean_bash _LMFILES_=/m/a _JAVA_OPTIONS=-Xmx1g \
+    bash -c '. "$BASH_CONFIG_ROOT_DIR/bashrc"; printf "%s|%s" "$_LMFILES_" "$_JAVA_OPTIONS"')
+[ "$out" = "/m/a|-Xmx1g" ] || fail "exported _vars wiped by non-interactive startup: '$out'"
+echo "  PASS  exported _vars survive non-interactive startup"
+
+# 2 + 3 need an interactive shell; the PTY keeps bash from warning about job control.
+mkdir -p "$T/.config/bash/user"
+echo 'export LOADOUT_CFG_PREFERRED_LS=ls' >"$T/.config/bash/user/config.sh"
+# shellcheck disable=SC2016  # expanded by the interactive bash, not here
+echo '. "$BASH_CONFIG_ROOT_DIR/bashrc"' >"$T/.bashrc"
+interactive() {
+    clean_bash script -qec "bash -i -c '$1'" /dev/null </dev/null | tr -d '\r'
+}
+
+ls_def=$(interactive 'declare -f ls')
+printf '%s\n' "$ls_def" | grep -q '/bin/ls --color' \
+    || fail "the plain-ls fallback was not selected:
+$ls_def"
+printf '%s\n' "$ls_def" | grep -q '\$option_a' \
+    || fail "ls fallback options were expanded (to nothing) at definition time:
+$ls_def"
+printf '%s\n' "$ls_def" | grep -q '"\$@"' \
+    || fail "ls fallback does not pass its arguments as \"\$@\":
+$ls_def"
+echo "  PASS  ls fallback expands its options per call"
+
+err_trap=$(interactive 'trap -p ERR')
+printf '%s\n' "$err_trap" | grep -q 'ERR' || fail "no ERR trap installed:
+$err_trap"
+if printf '%s\n' "$err_trap" | grep -q 'dirname'; then
+    fail "dead ERR-trap subshell branch still present:
+$err_trap"
+fi
+echo "  PASS  ERR trap keeps only the directory branch"
+
+echo "env-bash-runtime: OK"

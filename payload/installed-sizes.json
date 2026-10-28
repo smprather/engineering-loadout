@@ -6,7 +6,7 @@
     "envs/bash/functions.sh": 29244,
     "envs/bash/global/README.md": 9801,
     "envs/bash/global/aliases.sh": 12989,
-    "envs/bash/global/bashrc": 26382,
+    "envs/bash/global/bashrc": 26679,
     "envs/bash/global/build_scop_bash_completions": 434,
     "envs/bash/global/completions/README.md": 1239,
     "envs/bash/global/completions/_zoxide": 6150,

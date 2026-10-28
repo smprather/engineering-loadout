@@ -2328,7 +2328,6 @@ sha256  838e25fd0a922320e5f6ca5bc74be9daf0e816e52a1c84520d61e852a9b83b68  payloa
 sha256  838e25fd0a922320e5f6ca5bc74be9daf0e816e52a1c84520d61e852a9b83b68  payload/treesitter/vendor/nvim-treesitter/runtime/queries/faust/highlights.scm
 sha256  8397e46407d0ada29b00ef9f0e6d0174119b3d4ae95b8ffc435cac0978d8c870  payload/treesitter/vendor/nvim-treesitter/tests/indent/terraform/no-indent-after-brace.tf
 sha256  83ade5992bfa297fb02d179b62418be87e65855b871e4769c09e4e02e2f74c59  payload/el8.x86_64.glibc2p28/lib64/libxcb-xf86dri.so.0.bz2
-sha256  83d32d02e05f14fe9e9ed16fcd6ca4065ea60a7cad4b2a06f6510a3ea3326a72  payload/installed-sizes.json
 sha256  83dca4ae909cdfacd01b00d7ed7cd26f4a81bd51f9577a4aade9104c2596e4e9  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/cue.lua
 sha256  83dcacd97b1d279fd96c2e3ab49d4c42ac16e678901d45d15a8401c0131b1ce3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/commonlisp.so.bz2
 sha256  83f19adebe6fcdf6719e9a9c90c056358fc303edc15ce5e63abfe1547b5df61f  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/sflog/highlights.scm
@@ -4300,6 +4299,7 @@ sha256  ee04b262bd0b81a9cecb76a73d18631186fd881f02cd6ec53a2f4579fa436ae5  payloa
 sha256  ee2d8c86ebdf1104e138e6b329bf9ba3924a4b3ec3b0baf4d27f53f75f4dc963  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/problog.lua
 sha256  ee75b5a355e65feeda859afdf6802856e0d9b9669ca00593cdea66bad0b21b48  payload/el8.x86_64.glibc2p28/wheels/lln_libparse-0.56.0-cp315-cp315-manylinux_2_28_x86_64.whl
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payload/el8.x86_64.glibc2p28/bin/whoami.bz2
+sha256  ee8cc29c4afd190c2781644bd26fc32fd2ce7165bb083658c32f51a190f95893  payload/installed-sizes.json
 sha256  eea27b01841909316f2cc739807acea1c623df2be8c5cfad7583286397bb8315  payload/el8.x86_64.glibc2p28/wheels/async_lru-2.3.0-py3-none-any.whl
 sha256  eea29643d1e8776f97cdde622343e5a1a4f68db918e138bd193b5d1811151eb0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/bicep/indents.scm
 sha256  eea29643d1e8776f97cdde622343e5a1a4f68db918e138bd193b5d1811151eb0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/bicep/indents.scm

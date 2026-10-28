@@ -25,6 +25,17 @@ export LOADOUT_CFG_ENABLE_FZF=1
 export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/share/loadout/bin/bash   # an installed loadout bash
 ```
 
+## Non-interactive shells
+
+`envs/bash/global/bashrc` exports everything scripts need (PATH, the config
+variables, the GUI/runtime variables) and then returns early when the shell is
+not interactive (`ssh host cmd`, `bash -l` jobs, cron). That return clears only
+this file's own `_`-prefixed locals through `unset_bashrc_local_vars`, which
+skips exported names, so inherited exports such as Environment Modules'
+`_LMFILES_` or `_JAVA_OPTIONS` reach the job intact. `tests/env-bash-runtime`
+pins it, along with the plain-`ls` fallback's per-call option expansion and the
+ERR trap (a failed command naming a directory cds into it; nothing else).
+
 ## Private runtime dirs
 
 `LOADOUT_CFG_SHM_DIR` (default `/dev/shm`) is the fast scratch root for the

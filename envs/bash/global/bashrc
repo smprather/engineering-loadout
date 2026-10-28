@@ -63,8 +63,10 @@ fi
 
 # Exit here if not interactive
 if [[ $- != *i* ]]; then
-    # Unset all bashrc local variables
-    unset ${!_@}
+    # Unset this file's _-prefixed locals, but NOT exported _vars: `unset ${!_@}`
+    # also removed Environment Modules' _LMFILES_ and _JAVA_OPTIONS from every
+    # `ssh host cmd` and `bash -l` job. unset_bashrc_local_vars skips exports.
+    unset_bashrc_local_vars
     return
 fi
 ####################################################################################################
@@ -479,12 +481,12 @@ if fpcmp $_glibc -gt 2.17; then
         eval "
         ls() {
             if [[ \$1 == '-1' ]]; then
-                command ls \$*
+                command ls \"\$@\"
                 return
             fi
             local option_size=\$([[ \$human_readable == 1 ]] && echo -n short || echo -n bytes)
             # Careful, the ^[ in the sd search string is acually [ESC] ie typed with <ctrl-v>ESC
-            $(realpath $(which lsd)) --size \$option_size \$LSD_ARGS --date '+%D %H:%M:%S' \$LSD_ARGS \$*
+            $(realpath $(which lsd)) --size \$option_size \$LSD_ARGS --date '+%D %H:%M:%S' \$LSD_ARGS \"\$@\"
         }"
     elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
         # Run eza from a copy in the fast scratch root, but only from a dir
@@ -502,13 +504,13 @@ if fpcmp $_glibc -gt 2.17; then
         eval "
         ls() {
             if [[ \$1 == '-1' ]]; then
-                /bin/ls -1 \$*
+                /bin/ls -1 \"\$@\"
                 return
             fi
             local option_a=\$([[ \$list_all == 1 ]] && echo -n -a || echo -n '')
             local option_B=\$([[ \$human_readable == 1 ]] && echo -n '' || echo -n -B)
             local option_g=\$([[ \$show_group == 1 ]] && echo -n '-g' || echo -n '')
-            $_eza_bin --time-style '+%D %H:%M:%S' \$option_a \$option_B \$option_g \$EZA_ARGS \$*
+            $_eza_bin --time-style '+%D %H:%M:%S' \$option_a \$option_B \$option_g \$EZA_ARGS \"\$@\"
         }"
         unset _eza_src _eza_bin _eza_dir
     elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "ls" ]]; then
@@ -517,7 +519,7 @@ if fpcmp $_glibc -gt 2.17; then
             local option_a=\$([[ \$list_all == 1 ]] && echo -n '-a' || echo -n '')
             local option_h=\$([[ \$human_readable == 1 ]] && echo -n '' || echo -n '--human-readable')
             local option_g=\$([[ \$show_group == 1 ]] && echo -n '' || echo -n '--no-group')
-            /bin/ls --color -lrt $option_g $option_h $option_a \$*
+            /bin/ls --color -lrt \$option_g \$option_h \$option_a \"\$@\"
         }"
     fi
 fi
@@ -579,7 +581,9 @@ zhead() {
 
 # Executing a directory will cd to that directory. Makes it so that you can
 # paste a directory to the cmd line w/o a cd first.
-trap 'last_cmd=$BASH_COMMAND; [[ -r $last_cmd && -d $last_cmd ]] && cd $last_cmd || ( [[ -r $last_cmd && ! -x $last_cmd ]] && cd $(/bin/dirname $last_cmd) )' ERR
+# A failed command that names a directory cds into it. (The old file branch ran
+# `cd` inside a subshell, so it never changed anything; it is gone.)
+trap 'last_cmd=$BASH_COMMAND; [[ -d $last_cmd ]] && cd -- "$last_cmd"' ERR
 
 # If this terminal supports extended keys, then set this var for the tmux config to query
 if check_extended_keys; then
