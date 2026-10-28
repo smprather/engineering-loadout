@@ -73,12 +73,20 @@ on.
    reinstall it from `main`.
 2. The review plan file stays untracked (memory: project-review-plan-untracked).
 3. candelise push still held (entry (3) item 3).
+4. The dev host's `~/.local/share/fonts.bak` (1.9 GB, all superseded) and
+   `fonts.bak.4` (2.3 GB; 50 files not from the bundle, e.g. MapleMono and
+   licenses, would be KEPT) are still there: `./loadout clean --font-backups`
+   frees about 4 GB. Not run -- it deletes the user's files; their call.
+5. Both review passes (entry (4) and this one) were self-reviewed by the
+   author. An independent `/code-review` over `e85fd11..HEAD` is still
+   worth running.
 
 ## 2026-10-27 (4): review plan executed -- all 18 tasks committed on main (pushed 2026-10-28)
 
 The 2026-10-27 code and doc review plan
 (`docs/superpowers/plans/2026-10-27-code-and-doc-review.md`, still untracked)
-was executed inline, task by task, test first, on `main`. Nothing is pushed.
+was executed inline, task by task, test first, on `main` (pushed 2026-10-28 as
+`e85fd11..eab6ed3`).
 Decisions D-A to D-D took the plan's recommended options. Gates at `d1e81bb`
 (Tasks 1-18): `tests/run-all` all green, and
 `tests/prebuilt-binaries-almalinux8 --full` PASS (311 binaries OK, 23 skipped,
