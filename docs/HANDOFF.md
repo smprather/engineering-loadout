@@ -87,7 +87,14 @@ users' login shell is the system one):
    `loadout-smoke:almalinux8.10` container.
 4. Draft (do NOT post without the user's OK) an issue for tcsh-org/tcsh: prompt
    `\n` is emitted as padding + autowrap, which breaks under reflowing
-   terminals; minimal repro above.
+   terminals; minimal repro above. DRAFTED, not posted:
+   `docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`
+   (untracked); waiting on the user's OK.
+
+**Result:** steps 1-3 committed (`02fb075`, `6fcace1`, `57a1844`); full T1+T2
+on the final tree passed (81 tests, 1164 s, both new tests included). Nothing
+pushed. Open: the upstream issue (item 4 above) and, from entry (3), the
+remaining tcsh audit gaps.
 
 **Per-step gates:** T1 (`TMPDIR=/var/tmp tests/run-all --fast`) plus the
 touched T2 tests; regenerate `payload/installed-sizes.json` then
