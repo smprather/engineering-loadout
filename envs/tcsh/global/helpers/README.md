@@ -25,5 +25,14 @@ Two constraints every helper here obeys:
   environment, and several of these run from `precmd`. Errors that the user
   cannot act on go to `/dev/null`, not to stderr.
 
+One deliberate exception: **`check-extended-keys`** is a POSIX wrapper, but the
+Secondary-DA probe it performs needs a non-consuming readiness test
+(`read -t 0`) and a timed delimited read (`read -d c -t 0.1`), which POSIX sh
+does not have. That code lives inside an explicit `bash -c` child; the wrapper
+itself contains no bashisms. bash is present on every supported EL/Suse target
+(and is what `/bin/sh` is there anyway); if it is missing, the helper exits 1
+without probing so type-ahead is never eaten. `tests/install-env-tcsh` runs the
+wrapper under `dash` when available as well as `/bin/sh`.
+
 `git-branch.sh` predates this directory and stays where it is (the prompt in
 `global/tcshrc` references it by path).

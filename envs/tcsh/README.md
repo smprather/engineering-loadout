@@ -141,7 +141,9 @@ Behaviour:
   `helpers/check-extended-keys` logic as bash: kitty/alacritty and an existing
   tmux server with `extended-keys on` are answered cheaply, otherwise a
   Secondary-DA probe. Pending type-ahead is never consumed; a probe that cannot
-  run exports `0`, exactly what bash does.
+  run exports `0`, exactly what bash does. The helper is a POSIX wrapper; only
+  the timed readiness/read pair runs in an explicit `bash -c` child (see
+  `global/helpers/README.md`).
 - **Prompt** — cwd, git branch, optional hostname, the username when it is
   highlighted or differs from `$USER`, and the red farm colour under `$LSB_JOBID`.
 - **Every directory change lists**, via csh's native `cwdcmd`. It also carries

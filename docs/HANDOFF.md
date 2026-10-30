@@ -50,7 +50,10 @@ reproduced on a PTY) before the fix.
 - **Extended keys** (gap 15): `helpers/check-extended-keys` ports bash's
   Secondary-DA probe (cheap TERM/TMUX answers; never consumes pending input;
   exports 0 when it cannot tell). tmux now sees the same value from tcsh as
-  from bash.
+  from bash. The helper is a POSIX wrapper: the bash-only `read -t 0` /
+  `read -d c -t 0.1` pair lives inside an explicit `bash -c` probe, with the
+  exception documented in `global/helpers/README.md`; without bash it exits 1
+  without probing rather than eating type-ahead.
 - **Minor** (gap 17): `LESS_TERMCAP_*` captures one ESC byte instead of seven
   `/usr/bin/printf` forks; the starship block's inner `if` was re-indented.
 

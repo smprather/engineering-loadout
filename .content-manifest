@@ -435,6 +435,7 @@ sha256  196e51e766ca16d1f95ec1425ebd059e95151050978adee0503dde937e4b399b  payloa
 sha256  1999726ae941673f5485815996d2182afb782ab9696160091705a84729b510d3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/devicetree.so.bz2
 sha256  19a0077fc542c5a552a387d074faf2cba281b9df662fb53d7b482eff8e0bef86  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/java/indents.scm
 sha256  19a0077fc542c5a552a387d074faf2cba281b9df662fb53d7b482eff8e0bef86  payload/treesitter/vendor/nvim-treesitter/runtime/queries/java/indents.scm
+sha256  19ac673a4e82c801577d8b66b7b1f1886b4e56daa603308e0c30d09d8b7bae38  payload/installed-sizes.json
 sha256  19af6723cf3ed0c6cb6fb16e01594efa5f475d96d1b26f1b512d514a419566ed  payload/treesitter/vendor/nvim-treesitter/runtime/queries/blade/highlights.scm
 sha256  19de223b9a90f3be13c0a322d1a998387a9a4a795a845972bf33f981ae6367c9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ispc/highlights.scm
 sha256  19ee3a9d516b05eb95ca68cf645d7a2afc0be6a8b88d7e5f6900223d53ed4710  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ada/highlights.scm
@@ -1745,7 +1746,6 @@ sha256  64af7f4e30c97681af9db94452e58c5e2a3ad43678b1644738eb8da21f8e778a  payloa
 sha256  64af7f4e30c97681af9db94452e58c5e2a3ad43678b1644738eb8da21f8e778a  payload/treesitter/vendor/nvim-treesitter/runtime/queries/markdown_inline/highlights.scm
 sha256  64d100e2affdd0a5e3658898ed033262d6843578b27bd968a5e8bf6846043d08  payload/el8.x86_64.glibc2p28/lib64/libXcomposite.so.1.bz2
 sha256  64ded7692ad94ff19a35800f08fb12d8520b8895ce8dce0e6b4169223b96600e  envs/tmux/vendor/plugins/tmux-persist/tests/run.sh
-sha256  64df62cad0774665becdcf7134aa4afe049d630f600c463bd1432b04f5452de7  payload/installed-sizes.json
 sha256  64efdd986ffe59e843b8679cd7ecbfe87e39193e4da5c2ee3b99959d965bcc8a  payload/el8.x86_64.glibc2p28/runtime/sby.tar.bz2
 sha256  6516f7f80396d6b2be8a1fc1f36646d43cbfa1b4ed69f1894a26f4ce57d181a0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/scss/indents.scm
 sha256  6528de82912af25d5d16837f84c87a95985cfa4104c00ce939074dee89beedf4  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/jsonnet/locals.scm

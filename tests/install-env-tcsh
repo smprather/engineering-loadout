@@ -238,6 +238,14 @@ done
 "$HELPERS/is-truthy" 0        && fail "is-truthy: 0 should be false"
 "$HELPERS/is-truthy" ""       && fail "is-truthy: empty should be false"
 "$HELPERS/is-truthy" anything || fail "is-truthy: non-empty string should be true"
+# check-extended-keys must be a POSIX wrapper: the bash-only timed read lives
+# inside its `bash -c` probe, not in the script /bin/sh parses.
+TERM=kitty /bin/sh "$HELPERS/check-extended-keys" || fail "check-extended-keys: cheap kitty path failed under /bin/sh"
+TERM=xterm-256color /bin/sh "$HELPERS/check-extended-keys" </dev/null && fail "check-extended-keys: non-tty probe should fail"
+if command -v dash >/dev/null 2>&1; then
+    TERM=kitty dash "$HELPERS/check-extended-keys" || fail "check-extended-keys is not POSIX (dash rejected it)"
+    dash -n "$HELPERS/check-extended-keys" || fail "check-extended-keys has a POSIX syntax error"
+fi
 # Numeric, not lexical: 2.9 < 2.10. A string compare gets this backwards.
 "$HELPERS/vercmp" 2.9 -lt 2.10 || fail "vercmp: 2.9 should be < 2.10"
 "$HELPERS/vercmp" 1.2 -eq 1.2.0 || fail "vercmp: 1.2 should equal 1.2.0"
