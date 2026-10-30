@@ -13,6 +13,63 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-30: independent `/code-review high` of `e85fd11..HEAD`
+
+Closes entry (2026-10-28) item 5. The review (unverified by design at that
+level) reported 10 findings; the user asked to fix 1-3, each confirmed and
+fixed test first (RED observed, tests/unit-install-steps):
+
+1. The end-of-install ldd check saw only payload `bin/*.bz2` names, so ELFs a
+   runtime archive puts in `<prefix>/bin` (node -- the libatomic.so.1 class)
+   were never checked; an install of only runtime packages skipped the check
+   entirely. `install_runtime_archives` and `install_mate_terminal_runtime`
+   now return their `<prefix>/bin` names (also on the unchanged-stamp path,
+   via `_InstallStamps.step_rels`), unioned into the check. End to end:
+   `install nodejs --dest-dir` under strace now runs ldd on node/npm/npx;
+   HEAD ran nothing.
+2. `_rmtree_healing` retried `func(path)` for any failing func; on 3.15's
+   fd-based rmtree that can be `os.open` (TypeError: missing flags) for a
+   hardened unreadable dir, a traceback instead of a FAIL row. Unreadable
+   dirs now get u+rwx and a nested rmtree (once per path).
+3. `_bz2.release` ran only after a successful extraction; a failed one left
+   the rejoined chunked archive in the temp root while the runtime phase
+   moved on. Now in a `finally` at all four sites (generic runtime, vim,
+   mate-terminal, nvim-qt).
+
+**Open -- validated 2026-10-30, fixed in entry (2) above:**
+4. CONFIRMED. `loadout_private_dir` and its four twins refuse the user's OWN
+   0775 dir instead of tightening it (reproduced: 0755 -> tightened to 700,
+   0775 -> rc=1, left 0775). Pre-`f7644eb` bashrc made `/dev/shm/$(id -u)`
+   with a bare `mkdir -p` and Python made `/dev/shm/$USER/pycache`, both 0775
+   under RHEL's UPG umask 002 -- where the group is the user's own, so the
+   refusal guards nothing. Self-heals at reboot (/dev/shm) or tmp cleanup;
+   until then shells fall back silently and the installer refuses to stage.
+5. CONFIRMED by reading (not raced in practice). Two first runs that both
+   read `.complete` before either `mv`: the second `rm -rf` deletes the tree
+   the first already exec'd from; window is milliseconds. Separately, the
+   stale-tmp sweep's `kill -0 <pid>` deletes a LIVE bootstrap from another
+   host sharing an NFS clone.
+6. CONFIRMED, latent. `_place_staged_tree` rmtrees a real dir where an archive
+   has a file/symlink (deliberate per its docstring; `b4ca584` did not call
+   out that `extractall` used to fail loudly). A scan of all 40 runtime
+   archives plus payload bin/lib64 found 0 file/dir clashes today; the
+   exposure is user or foreign content in the prefix.
+7. CONFIRMED, latent. `install A --skip N` with A recommends R, R depends N:
+   HEAD raises ResolverError. (The review misdescribed the old behaviour:
+   `e85fd11` installed R WITHOUT N, not "dropped R".) Expected: drop R. No
+   registry entry today has a recommend whose target has depends.
+8. CONFIRMED, plus a parity gap: bash sets PYTHONPYCACHEPREFIX AFTER its
+   non-interactive return (bashrc:65-70, 126), tcsh (`tcshrc:147`) and zsh
+   (`zshrc:95`) on EVERY startup. Measured: the tcsh helper is ~3 ms per
+   startup vs ~52 ms for a whole non-interactive `tcsh -c true`.
+9. CONFIRMED (reproduced): with `~/.config` symlinked out of HOME, the backup
+   stores `.tcshrc` absolute and a `filter="data"` extract raises
+   AbsoluteLinkError. The realpath-based rewrite cannot fix it (the relative
+   link would escape the backup); the relpath must be lexical, from the link
+   text.
+10. CONFIRMED. `paths.lua`: `M.data`'s doc block (lines 65-67) runs into
+    `M.private_dir`'s; `M.data` (line 94) has none.
+
 ## 2026-10-28: review follow-ups -- every open item fixed or ruled on
 
 The user asked to "fix everything, including deferred items" left by entry (4)
@@ -77,9 +134,8 @@ on.
    `fonts.bak.4` (2.3 GB; 50 files not from the bundle, e.g. MapleMono and
    licenses, would be KEPT) are still there: `./loadout clean --font-backups`
    frees about 4 GB. Not run -- it deletes the user's files; their call.
-5. Both review passes (entry (4) and this one) were self-reviewed by the
-   author. An independent `/code-review` over `e85fd11..HEAD` is still
-   worth running.
+5. DONE 2026-10-30 (entry above): an independent `/code-review high` of
+   `e85fd11..HEAD` ran; findings 1-3 fixed, 4-10 listed there as open.
 
 ## 2026-10-27 (4): review plan executed -- all 18 tasks committed on main (pushed 2026-10-28)
 

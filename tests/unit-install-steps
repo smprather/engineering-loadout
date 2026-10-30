@@ -277,6 +277,101 @@ def test_ldd_only_checks_written_bins(m, tmp):
     check("ldd checks only the binaries this run installed", checked == ["a"], repr(checked))
 
 
+def test_runtime_archives_report_placed_bins(m, tmp):
+    """A runtime archive's <prefix>/bin entries (node from node.tar.bz2) must
+    reach the end-of-install ldd check -- on the extract path and on the
+    unchanged-stamp path, like prebuilt bins that are already current."""
+    import io
+    import tarfile
+
+    repo, home, registry = _runtime_fixture(m, tmp, [("tool", True)])
+    archive = os.path.join(repo, "payload", m.prebuilt_exact_platform_ids()[0], "runtime", "tool.tar.bz2")
+    with tarfile.open(archive, "w:bz2") as tf:
+        for name in ("share/tool/sentinel", "bin/tool", "lib/tool/helper"):
+            info = tarfile.TarInfo(name)
+            info.size = 1
+            info.mode = 0o755
+            tf.addfile(info, io.BytesIO(b"x"))
+    m.INSTALL_RESULTS.clear()
+    m._VERIFY_CONTENT = False
+    try:
+        first = m.install_runtime_archives(repo, home, None, registry)
+        second = m.install_runtime_archives(repo, home, None, registry)
+    finally:
+        m._VERIFY_CONTENT = True
+    details = [r[2] for r in _rows(m, "tool runtime")]
+    check("an extracted runtime archive reports its bin/ entries", first == {"tool"}, repr(first))
+    check(
+        "the second install is the unchanged-stamp path",
+        details[-1:] and details[-1].startswith("unchanged"),
+        repr(details),
+    )
+    check("an unchanged runtime archive still reports its bin/ entries", second == {"tool"}, repr(second))
+
+
+def test_rmtree_healing_unreadable_dir(m, tmp):
+    """A hardened dir rmtree cannot read: onexc then gets os.open/os.scandir,
+    and retrying those with only a path raised TypeError (not a FAIL row)."""
+    tree = os.path.join(tmp, "tree")
+    for mode in (0o000, 0o100, 0o300):
+        sub = os.path.join(tree, f"d{mode:03o}")
+        os.makedirs(os.path.join(sub, "inner"))
+        with open(os.path.join(sub, "inner", "f"), "w") as fh:
+            fh.write("f")
+        os.chmod(sub, mode)
+    top = os.path.join(tmp, "top")
+    os.makedirs(top)
+    with open(os.path.join(top, "f"), "w") as fh:
+        fh.write("f")
+    os.chmod(top, 0o000)
+    for path in (tree, top):
+        try:
+            m._rmtree_healing(path)
+            err = None
+        except Exception as exc:
+            err = exc
+        check(
+            f"_rmtree_healing removes {os.path.basename(path)} with unreadable hardened dirs",
+            err is None and not os.path.lexists(path),
+            repr(err),
+        )
+
+
+def test_failed_extract_releases_rejoined_archive(m, tmp):
+    """A chunked runtime archive is rejoined into the temp root; a failed
+    extraction must still delete that copy, not leave it until exit."""
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    rt = os.path.join(repo, "payload", m.prebuilt_exact_platform_ids()[0], "runtime")
+    os.makedirs(rt)
+    for name in ("bad.tar.bz2", "vim92.tar.bz2", "mate-terminal.tar.bz2", "nvim-qt-runtime.tar.bz2"):
+        with open(os.path.join(rt, name + ".part-000"), "wb") as fh:
+            fh.write(b"this is not a tar archive")
+    registry = {"bad": {"kind": "bin", "platforms": ["linux"], "install_to": "~/.local", "sentinel": "bin/bad"}}
+    scratch = os.path.join(tmp, "scratch")
+    os.makedirs(scratch)
+    saved_tempdir = m.tempfile.tempdir
+    m.tempfile.tempdir = scratch
+    m._VERIFY_CONTENT = False
+    try:
+        for label, func in (
+            ("runtime archives", m.install_runtime_archives),
+            ("Vim runtime", m.install_vim_runtime),
+            ("mate-terminal runtime", m.install_mate_terminal_runtime),
+            ("nvim-qt runtime", m.install_nvim_qt_runtime),
+        ):
+            m.INSTALL_RESULTS.clear()
+            m.run_install_step(label, func, repo, home, None, registry)
+            failed = [r for r in m.INSTALL_RESULTS if r[1] == "FAIL"]
+            left = sorted(n for n in os.listdir(scratch) if n.startswith(".loadout-rejoin."))
+            check(f"{label}: the bad archive is a FAIL row", bool(failed), repr(m.INSTALL_RESULTS))
+            check(f"{label}: a failed extraction releases the rejoined archive", not left, repr(left))
+    finally:
+        m.tempfile.tempdir = saved_tempdir
+        m._VERIFY_CONTENT = True
+
+
 def test_verification_failure_prints_summary(m, tmp):
     import contextlib
     import io
@@ -511,6 +606,9 @@ TESTS = (
     test_bad_archive_does_not_block_next,
     test_vim_missing_sentinel_is_fail,
     test_ldd_only_checks_written_bins,
+    test_runtime_archives_report_placed_bins,
+    test_rmtree_healing_unreadable_dir,
+    test_failed_extract_releases_rejoined_archive,
     test_verification_failure_prints_summary,
     test_failed_checkout_removes_clone,
     test_headless_sync_times_out,

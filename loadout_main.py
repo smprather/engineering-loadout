@@ -922,6 +922,11 @@ class _InstallStamps:
             return False
         return all(_file_state(os.path.join(root, rel)) == state for rel, state in entries.items())
 
+    def step_rels(self, group, name):
+        """The entries (relative to the step's root) a recorded step placed."""
+        entries = self._load(self._step_path(group, name)).get("files")
+        return list(entries) if isinstance(entries, dict) else []
+
     def forget_step(self, group, name):
         """Drop a step's stamp before redoing the step, so an interrupted
         step can never leave a stamp that vouches for a half-placed tree."""
@@ -1844,14 +1849,26 @@ def _rmtree_healing(path):
     On PermissionError the failing entry's parent and the entry itself get
     owner-write back (_grant_owner_write) and the operation is retried once;
     any other error, or a second failure (foreign owner, read-only mount),
-    re-raises."""
+    re-raises.
+
+    A directory rmtree cannot READ (a hardened 000/0100/0300 dir) fails in
+    os.open/os.scandir, which take more than a path, and rmtree abandons that
+    subtree -- so it gets u+rwx and is removed by a nested rmtree instead."""
+    retried = set()
 
     def _onexc(func, failed, exc):
         if not isinstance(exc, PermissionError):
             raise exc
         _grant_owner_write(os.path.dirname(failed))
         _grant_owner_write(failed)
-        func(failed)
+        if func in (os.unlink, os.rmdir):
+            func(failed)
+        elif os.path.isdir(failed) and not os.path.islink(failed) and failed not in retried:
+            retried.add(failed)
+            os.chmod(failed, os.stat(failed).st_mode | stat.S_IRWXU)
+            shutil.rmtree(failed, onexc=_onexc)
+        else:
+            raise exc
 
     shutil.rmtree(path, onexc=_onexc)
 
@@ -4613,11 +4630,15 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
 
     Packages with non-trivial post-extract logic stay in dedicated functions:
       vim (rename step), mate-terminal (glib-compile-schemas), nvim-qt (shim copy).
+
+    Returns the names the archives placed (or found current) in <prefix>/bin,
+    for the end-of-install ldd check.
     """
+    bins = set()
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
     if not platform_dir:
         warn("No pre-built platform directory found; skipping runtime archives")
-        return
+        return bins
 
     for pkg_name, entry in registry.items():
         if pkg_name.startswith("@"):
@@ -4632,7 +4653,7 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
             continue
 
         try:
-            _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, install_to_raw)
+            bins |= _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, install_to_raw) or set()
         except (OSError, RuntimeError, tarfile.TarError, InstallRefused) as exc:
             # One bad archive must not abort every runtime archive after it.
             # ContentVerificationError is none of these and still propagates.
@@ -4642,11 +4663,12 @@ def install_runtime_archives(repo_dir, home, selected_tools, registry):
                 record_in_use_blocker(f"{pkg_name} runtime", os.path.basename(path or pkg_name), path)
             warn(f"{pkg_name} runtime: {detail}")
             record_result(f"{pkg_name} runtime", "FAIL", detail)
+    return bins
 
 
 def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, install_to_raw):
     """One package of install_runtime_archives: resolve, extract, relocate,
-    check the sentinel, record the row."""
+    check the sentinel, record the row. Returns its <prefix>/bin names."""
     archive_name = entry.get("archive_name", f"{pkg_name}.tar.bz2")
     archive_logical = os.path.join(platform_dir, "runtime", archive_name)
     sources = _bz2.sources(archive_logical)
@@ -4666,20 +4688,25 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
     if stamps.step_current("runtime", pkg_name, key, install_to):
         record_result(f"{pkg_name} runtime", "OK", f"unchanged ({archive_name} already in {install_to})")
         _vprint(f"  unchanged: {pkg_name} runtime")
-        return
+        return _prefix_bin_names(home, install_to, stamps.step_rels("runtime", pkg_name))
     stamps.forget_step("runtime", pkg_name)
     archive = _bz2.resolve(archive_logical)
-    ensure_dir(install_to, f"{pkg_name} runtime")
+    # finally: a rejoined chunked archive is not kept until exit, even when
+    # extraction fails and the phase moves on to the next archive.
+    try:
+        ensure_dir(install_to, f"{pkg_name} runtime")
 
-    rbe = entry.get("remove_before_extract")
-    if rbe:
-        if isinstance(rbe, str):
-            rbe = [rbe]
-        for rel in rbe:
-            remove_if_exists(os.path.join(install_to, rel))
+        rbe = entry.get("remove_before_extract")
+        if rbe:
+            if isinstance(rbe, str):
+                rbe = [rbe]
+            for rel in rbe:
+                remove_if_exists(os.path.join(install_to, rel))
 
-    placed = pv_extract_tar(archive, install_to)
-    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+        placed = pv_extract_tar(archive, install_to)
+    finally:
+        _bz2.release(archive)
+    bins = _prefix_bin_names(home, install_to, placed)
 
     if pkg_name == "pyright":
         remove_stale_pyright_python_shims(os.path.join(install_to, "bin"))
@@ -4695,7 +4722,7 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
             detail = f"prefix relocation failed: {exc}"
             warn(f"{pkg_name} runtime: {detail}")
             record_result(f"{pkg_name} runtime", "FAIL", detail)
-            return
+            return bins
         if relocated:
             print(f"  Relocated {pkg_name} prefix: {relocated} files")
 
@@ -4712,7 +4739,7 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
             detail = f"relocation failed: {exc}"
             warn(f"{pkg_name} runtime: {detail}")
             record_result(f"{pkg_name} runtime", "FAIL", detail)
-            return
+            return bins
         print(f"  Relocated {pkg_name} runtime: {relocated} text files")
 
     sentinel = os.path.join(install_to, sentinel_rel)
@@ -4728,6 +4755,17 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
     else:
         warn(f"{pkg_name} runtime: {archive_name} extracted but {sentinel} not found")
         record_result(f"{pkg_name} runtime", "FAIL", f"sentinel not found at {sentinel}")
+    return bins
+
+
+def _prefix_bin_names(home, root, rels):
+    """Names of the entries in rels (relative to root) that sit directly in
+    <prefix>/bin: a runtime archive's share of the end-of-install ldd check
+    (node from node.tar.bz2 is the libatomic.so.1 case)."""
+    bin_dir = os.path.normpath(os.path.join(_local_root(home), "bin"))
+    return {
+        os.path.basename(rel) for rel in rels if os.path.dirname(os.path.normpath(os.path.join(root, rel))) == bin_dir
+    }
 
 
 def _registry_archive_name(registry, pkg_name, fallback):
@@ -4772,12 +4810,14 @@ def install_vim_runtime(repo_dir, home, selected_tools=None, registry=None):
         return
     stamps.forget_step("runtime", "vim")
     archive = _bz2.resolve(archive_logical)
-    ensure_dir(vim_share_dir, "Vim runtime")
-    remove_if_exists(runtime_dir)
-    remove_if_exists(vim92_dir)
+    try:
+        ensure_dir(vim_share_dir, "Vim runtime")
+        remove_if_exists(runtime_dir)
+        remove_if_exists(vim92_dir)
 
-    pv_extract_tar(archive, vim_share_dir)
-    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+        pv_extract_tar(archive, vim_share_dir)
+    finally:
+        _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     if os.path.isdir(runtime_dir):
         os.rename(runtime_dir, vim92_dir)
@@ -4827,19 +4867,22 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None)
         return
 
     local_dir = _local_root(home)
-    ensure_dir(local_dir, "mate-terminal runtime")
+    try:
+        ensure_dir(local_dir, "mate-terminal runtime")
 
-    # Remove stale bundle paths before re-extracting.
-    for stale in (
-        os.path.join(local_dir, "bin", "mate-terminal"),
-        os.path.join(local_dir, "bin", "mate-terminal.bin"),
-        os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.interface.gschema.xml"),
-        os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.terminal.gschema.xml"),
-    ):
-        remove_if_exists(stale)
+        # Remove stale bundle paths before re-extracting.
+        for stale in (
+            os.path.join(local_dir, "bin", "mate-terminal"),
+            os.path.join(local_dir, "bin", "mate-terminal.bin"),
+            os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.interface.gschema.xml"),
+            os.path.join(local_dir, "share", "glib-2.0", "schemas", "org.mate.terminal.gschema.xml"),
+        ):
+            remove_if_exists(stale)
 
-    pv_extract_tar(archive, local_dir)
-    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+        placed = pv_extract_tar(archive, local_dir)
+    finally:
+        _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+    bins = _prefix_bin_names(home, local_dir, placed)  # mate-terminal.bin, for the ldd check
 
     # Ensure launcher is executable.
     mt_launcher = os.path.join(local_dir, "bin", "mate-terminal")
@@ -4869,7 +4912,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None)
         )
         warn(f"mate-terminal will not start: {detail}")
         record_result("mate-terminal runtime", "FAIL", detail)
-        return
+        return bins
 
     sentinel = os.path.join(local_dir, "bin", "mate-terminal.bin")
     if os.path.isfile(sentinel):
@@ -4878,6 +4921,7 @@ def install_mate_terminal_runtime(repo_dir, home, selected_tools, registry=None)
     else:
         warn(f"mate-terminal runtime archive did not install {local_dir}/bin/mate-terminal.bin as expected")
         record_result("mate-terminal runtime", "FAIL", "archive extracted but mate-terminal.bin not found")
+    return bins
 
 
 def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
@@ -4903,12 +4947,14 @@ def install_nvim_qt_runtime(repo_dir, home, selected_tools, registry=None):
     # ~/.local/share/nvim/site/plugin/ -- that dir is on nvim's default runtimepath
     # unconditionally, which is more reliable than the NVIM_QT_RUNTIME_PATH env var.
     nvim_qt_share = os.path.join(_local_root(home), "share", "nvim-qt")
-    ensure_dir(nvim_qt_share, "nvim-qt runtime")
     runtime_dir = os.path.join(nvim_qt_share, "runtime")
-    remove_if_exists(runtime_dir)
+    try:
+        ensure_dir(nvim_qt_share, "nvim-qt runtime")
+        remove_if_exists(runtime_dir)
 
-    pv_extract_tar(archive, nvim_qt_share)
-    _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
+        pv_extract_tar(archive, nvim_qt_share)
+    finally:
+        _bz2.release(archive)  # a rejoined chunked archive is not kept until exit
 
     shim_src = os.path.join(runtime_dir, "plugin", "nvim_gui_shim.vim")
     if not os.path.isfile(shim_src):
@@ -8058,11 +8104,11 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     run_install_step("Python suite", install_python_suite, repo_dir, home, selected_tools, registry)
     run_install_step("GObject typelibs", install_typelibs, repo_dir, home, selected_tools)
     run_install_step("Python tools", install_python_tools, repo_dir, home, selected_tools, registry)
-    run_install_step(
+    runtime_bins = run_install_step(
         "runtime archives", install_runtime_archives, repo_dir, home, selected_tools, registry, silent=True
     )
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, registry, silent=True)
-    run_install_step(
+    mate_terminal_bins = run_install_step(
         "mate-terminal runtime", install_mate_terminal_runtime, repo_dir, home, selected_tools, registry, silent=True
     )
     run_install_step("nvim-qt runtime", install_nvim_qt_runtime, repo_dir, home, selected_tools, registry, silent=True)
@@ -8079,12 +8125,14 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     # Shared-library (ldd) check runs LAST, after every runtime archive has extracted.
     # Doing it in the binary phase warned falsely about libs a later runtime provides
     # (e.g. zsh's libzsh-5.9.so from the zsh runtime's lib/zsh/). Only this run's
-    # binaries, and as a step so a failure is a row, not a traceback.
+    # binaries -- payload bin/*.bz2 plus what runtime archives put in bin/ (node,
+    # whose libatomic.so.1 RUNPATH was lost twice) -- and as a step so a failure
+    # is a row, not a traceback.
     run_install_step(
         "shared-library check",
         check_prebuilt_binary_dependencies,
         os.path.join(_local_root(home), "bin"),
-        installed_bins,
+        installed_bins | (runtime_bins or set()) | (mate_terminal_bins or set()),
         silent=True,
     )
     if hooks:
