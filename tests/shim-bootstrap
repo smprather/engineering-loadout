@@ -43,20 +43,121 @@ case $out in STUB*) ;; *) fail "cold: did not run the bootstrapped interpreter: 
 if ls -d "$R"/.loadout-bootstrap.tmp.* >/dev/null 2>&1; then
     fail "cold: a .loadout-bootstrap.tmp.* dir was left behind"
 fi
+[ ! -e "$R/.loadout-bootstrap.lock" ] || fail "cold: the bootstrap lock was left behind"
 echo "  PASS  cold bootstrap stamps the cache and leaves no temp dir"
 
-# concurrent: another live bootstrap's temp dir is not deleted; a dead one's is
+host=$(hostname 2>/dev/null || uname -n)
+other_host=loadout-other-host
+# concurrent: this host's live bootstrap temp survives; this host's dead one is
+# cleaned. A temp named for another host is never kill-checked -- its PID space
+# is not ours, and killing it would delete a live bootstrap on an NFS clone.
 rm -rf "$boot"
 sleep 30 &
 live=$!
-mkdir -p "$R/.loadout-bootstrap.tmp.$live" "$R/.loadout-bootstrap.tmp.999999999"
+mkdir -p "$R/.loadout-bootstrap.tmp.$host.$live" \
+    "$R/.loadout-bootstrap.tmp.$host.999999999" \
+    "$R/.loadout-bootstrap.tmp.$other_host.$live" \
+    "$R/.loadout-bootstrap.tmp.$other_host.999999999" \
+    "$R/.loadout-bootstrap.tmp.$host.lab.999999999" \
+    "$R/.loadout-bootstrap.tmp.999999999"
 out=$(shim)
 kill "$live" 2>/dev/null || true
 case $out in STUB*) ;; *) fail "concurrent: cold bootstrap did not run: $out" ;; esac
-[ -d "$R/.loadout-bootstrap.tmp.$live" ] || fail "concurrent: deleted a live bootstrap's temp dir"
-[ ! -e "$R/.loadout-bootstrap.tmp.999999999" ] || fail "concurrent: left a dead bootstrap's temp dir"
-rm -rf "$R/.loadout-bootstrap.tmp.$live"
-echo "  PASS  a live concurrent bootstrap's temp dir survives; a dead one's is cleaned"
+[ -d "$R/.loadout-bootstrap.tmp.$host.$live" ] || fail "concurrent: deleted this host's live temp dir"
+[ ! -e "$R/.loadout-bootstrap.tmp.$host.999999999" ] || fail "concurrent: left this host's dead temp dir"
+[ -d "$R/.loadout-bootstrap.tmp.$other_host.$live" ] || fail "concurrent: deleted another host's live temp dir"
+[ -d "$R/.loadout-bootstrap.tmp.$other_host.999999999" ] \
+    || fail "concurrent: deleted another host's temp dir on a local PID check"
+[ -d "$R/.loadout-bootstrap.tmp.999999999" ] || fail "concurrent: deleted a temp dir with no host identity"
+# A host whose name extends ours ("$host.lab") is another host, not ours.
+[ -d "$R/.loadout-bootstrap.tmp.$host.lab.999999999" ] \
+    || fail "concurrent: deleted the temp dir of host $host.lab as if it were this host's"
+rm -rf "$R/.loadout-bootstrap.tmp.$host.$live" "$R/.loadout-bootstrap.tmp.$other_host.$live" \
+    "$R/.loadout-bootstrap.tmp.$other_host.999999999" "$R/.loadout-bootstrap.tmp.999999999" \
+    "$R/.loadout-bootstrap.tmp.$host.lab.999999999"
+echo "  PASS  live temps survive; dead ones are only cleaned when the PID is ours"
+
+# claim: a held bootstrap lock makes a second first run wait for the published
+# stamp instead of extracting and replacing the tree the first run is using.
+rm -rf "$boot"
+mkdir -p "$R/.loadout-bootstrap.lock"
+printf '%s\n%s\n' "$host" "$$" >"$R/.loadout-bootstrap.lock/owner"
+rc=0
+shim >"$T/waiter.out" 2>"$T/waiter.err" &
+waiter=$!
+sleep 1
+if ls -d "$R"/.loadout-bootstrap.tmp.* >/dev/null 2>&1; then
+    fail "claim: a waiter extracted while another run held the claim"
+fi
+mkdir -p "$boot/bin"
+printf '#!/bin/sh\necho WINNER\n' >"$boot/bin/python3.15"
+chmod 755 "$boot/bin/python3.15"
+echo portable-python-T.tar.bz2 >"$boot/.complete"
+wait "$waiter" || rc=$?
+[ "$rc" = 0 ] || fail "claim: the waiter exited $rc: $(cat "$T/waiter.err")"
+[ "$(cat "$T/waiter.out")" = WINNER ] || fail "claim: the waiter did not exec the published cache: $(cat "$T/waiter.out")"
+rm -rf "$R/.loadout-bootstrap.lock"
+echo "  PASS  a held claim makes a concurrent first run wait for the stamp"
+
+# stale claim: an owner on this host whose PID is gone is reclaimed
+rm -rf "$boot"
+mkdir -p "$R/.loadout-bootstrap.lock"
+false &
+dead=$!
+wait "$dead" 2>/dev/null || true
+printf '%s\n%s\n' "$host" "$dead" >"$R/.loadout-bootstrap.lock/owner"
+out=$(shim)
+case $out in STUB*) ;; *) fail "stale claim: cold bootstrap did not run: $out" ;; esac
+[ ! -e "$R/.loadout-bootstrap.lock" ] || fail "stale claim: the lock was not reclaimed"
+echo "  PASS  a stale same-host claim is reclaimed"
+
+# two waiters, one stale claim: reclamation must be serialized. Without a
+# recovery claim, both read the dead owner, A removes it and re-acquires, and
+# B's delayed rm deletes A's fresh lock -- both then extract and can repeat the
+# delete-the-running-tree race. Slow this exact window: the slow rm holds one
+# waiter between read and delete, and the slow tar keeps the first winner's
+# claim live while the second waiter wakes.
+rm -rf "$boot" "$R/.loadout-bootstrap.lock" "$R/.loadout-bootstrap.lock.reclaim"
+mkdir -p "$R/.loadout-bootstrap.lock"
+false &
+dead=$!
+wait "$dead" 2>/dev/null || true
+printf '%s\n%s\n' "$host" "$dead" >"$R/.loadout-bootstrap.lock/owner"
+mkdir -p "$T/slowbin"
+cat >"$T/slowbin/rm" <<EOF
+#!/bin/sh
+case "\$*" in
+    *loadout-bootstrap.lock*) if [ \$(( \$\$ % 2 )) -eq 0 ]; then sleep 3; else sleep 0.2; fi ;;
+esac
+exec /bin/rm "\$@"
+EOF
+cat >"$T/slowbin/tar" <<EOF
+#!/bin/sh
+echo "\$\$" >>"$T/tar.log"
+sleep 5
+exec /usr/bin/tar "\$@"
+EOF
+chmod 755 "$T/slowbin/rm" "$T/slowbin/tar"
+: >"$T/tar.log"
+slow_shim() {
+    env -i HOME="$H" PATH="$T/slowbin:/usr/bin:/bin" "$R/loadout" "$@" 2>"$T/slow.err"
+}
+rc_a=0 rc_b=0
+slow_shim >"$T/slow.a" 2>/dev/null & pa=$!
+slow_shim >"$T/slow.b" 2>/dev/null & pb=$!
+wait "$pa" || rc_a=$?
+wait "$pb" || rc_b=$?
+[ "$rc_a" = 0 ] && [ "$rc_b" = 0 ] || fail "stale-race: waiters exited $rc_a/$rc_b: $(cat "$T/slow.err")"
+case $(cat "$T/slow.a") in STUB*) ;; *) fail "stale-race: waiter A did not exec the cache: $(cat "$T/slow.a")" ;; esac
+case $(cat "$T/slow.b") in STUB*) ;; *) fail "stale-race: waiter B did not exec the cache: $(cat "$T/slow.b")" ;; esac
+extractions=$(wc -l <"$T/tar.log")
+[ "$extractions" = 1 ] || fail "stale-race: $extractions extractions, want exactly 1"
+[ ! -e "$R/.loadout-bootstrap.lock" ] || fail "stale-race: a lock was left behind"
+[ ! -e "$R/.loadout-bootstrap.lock.reclaim" ] || fail "stale-race: a recovery claim was left behind"
+if ls -d "$R"/.loadout-bootstrap.tmp.* >/dev/null 2>&1; then
+    fail "stale-race: a temp dir was left behind"
+fi
+echo "  PASS  two waiters reclaim a stale claim only once"
 
 # xdg: the installed interpreter at the default root wins
 mkdir -p "$H/.local/share/loadout/bin"

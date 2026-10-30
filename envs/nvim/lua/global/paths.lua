@@ -62,16 +62,15 @@ local function shared_roots()
     return roots
 end
 
---- Resolve a path under nvim's data dir, preferring $HOME then the shared tree.
---- @param rel string  e.g. "tree-sitter-parsers" or "loadout/vendor/nvim-treesitter"
---- @return string     absolute path (the $HOME one when neither exists)
 --- Return `path` when it is a directory only this user can write, else nil.
 --- Created 0700 when absent; otherwise it must be a real directory (never a
---- symlink) owned by us with no group/other write bit, and our own merely
---- readable dir is tightened to 0700. Same rule as loadout_private_dir in
---- envs/bash/functions.sh: the temp root and /dev/shm are world-writable and
---- the per-user names under them are predictable, so a co-tenant can create
---- them first and would then receive swap files (buffer contents) and logs.
+--- symlink) owned by us that no one else could have written, tightened to
+--- 0700. Group write with our PRIVATE group (RHEL UPG umask 002 leaves 0775)
+--- is ours to remove; other write, or group write with a shared group, is
+--- refused and left alone. Same rule as loadout_private_dir in envs/bash/functions.sh:
+--- the temp root and /dev/shm are world-writable and the per-user names under
+--- them are predictable, so a co-tenant can create them first and would then
+--- receive swap files (buffer contents) and logs.
 --- @param path string
 --- @return string|nil
 function M.private_dir(path)
@@ -83,14 +82,29 @@ function M.private_dir(path)
     local st = uv.fs_lstat(path)
     if not st or st.type ~= "directory" or st.uid ~= uv.getuid() then return nil end
     local perm = st.mode % 512
+    if perm == tonumber("700", 8) then return path end
     local group, other = math.floor(perm / 8) % 8, perm % 8
-    if math.floor(group / 2) % 2 == 1 or math.floor(other / 2) % 2 == 1 then return nil end
-    if group ~= 0 or other ~= 0 then
-        if not uv.fs_chmod(path, tonumber("700", 8)) then return nil end
+    -- Other write: anyone could have planted content -> refuse, leave it alone.
+    if math.floor(other / 2) % 2 == 1 then return nil end
+    -- Group write is ours to remove only with our private (UPG) group.
+    -- luv has no group lookup, so ask coreutils stat by absolute path (PATH
+    -- may hold nvim alone); no stat, or any failure, refuses.
+    if math.floor(group / 2) % 2 == 1 then
+        local pw = uv.os_get_passwd()
+        local stat_bin = vim.fn.executable("/usr/bin/stat") == 1 and "/usr/bin/stat"
+            or vim.fn.executable("/bin/stat") == 1 and "/bin/stat"
+            or nil
+        if not pw or not stat_bin then return nil end
+        local ok, out = pcall(vim.fn.systemlist, { stat_bin, "-c", "%G", path })
+        if not ok or vim.v.shell_error ~= 0 or (out or {})[1] ~= pw.username then return nil end
     end
+    if not uv.fs_chmod(path, tonumber("700", 8)) then return nil end
     return path
 end
 
+--- Resolve a path under nvim's data dir, preferring $HOME then the shared tree.
+--- @param rel string  e.g. "tree-sitter-parsers" or "loadout/vendor/nvim-treesitter"
+--- @return string     absolute path (the $HOME one when neither exists)
 function M.data(rel)
     local home_path = vim.fn.stdpath("data") .. "/" .. rel
     if vim.fn.isdirectory(home_path) == 1 then

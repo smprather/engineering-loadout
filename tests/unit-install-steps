@@ -309,6 +309,43 @@ def test_runtime_archives_report_placed_bins(m, tmp):
     check("an unchanged runtime archive still reports its bin/ entries", second == {"tool"}, repr(second))
 
 
+def test_extract_refuses_non_directory_over_real_dir(m, tmp):
+    """extractall used to fail loudly when an archive file replaced an existing
+    directory; the inode-swap placer must not silently rmtree user/foreign
+    content in the install prefix instead."""
+    import io
+    import tarfile
+
+    dest = os.path.join(tmp, "dest")
+    keep = os.path.join(dest, "clash", "keep.txt")
+    os.makedirs(os.path.dirname(keep))
+    with open(keep, "w") as fh:
+        fh.write("user data")
+
+    for kind in ("file", "symlink"):
+        archive = os.path.join(tmp, f"clash-{kind}.tar.bz2")
+        with tarfile.open(archive, "w:bz2") as tf:
+            info = tarfile.TarInfo("clash")
+            if kind == "file":
+                info.size = 1
+                tf.addfile(info, io.BytesIO(b"x"))
+            else:
+                info.type = tarfile.SYMTYPE
+                info.linkname = "somewhere"
+                tf.addfile(info)
+        got = None
+        try:
+            m.extract_tar_replacing(archive, dest)
+        except m.InstallRefused as exc:
+            got = str(exc)
+        except Exception as exc:
+            got = f"{type(exc).__name__}: {exc}"
+        check(f"a {kind} over an existing directory is refused", got is not None, repr(got))
+        check(f"the {kind} case leaves the real directory and its file", os.path.isfile(keep))
+        stages = [n for n in os.listdir(dest) if n.startswith(".loadout-stage.")]
+        check(f"the {kind} case leaves no staging dir", not stages, repr(stages))
+
+
 def test_rmtree_healing_unreadable_dir(m, tmp):
     """A hardened dir rmtree cannot read: onexc then gets os.open/os.scandir,
     and retrying those with only a path raised TypeError (not a FAIL row)."""
@@ -370,6 +407,37 @@ def test_failed_extract_releases_rejoined_archive(m, tmp):
     finally:
         m.tempfile.tempdir = saved_tempdir
         m._VERIFY_CONTENT = True
+
+
+def test_backup_keeps_relative_links_from_any_cwd(m, tmp):
+    """cmd_install chdirs to the install root before the backup, and the
+    default root (~/.local/share/loadout) is inside HOME. A relative entrypoint
+    link (~/.bashrc -> .config/bash/bashrc) must be stored verbatim -- resolving
+    its text against the CWD stored .local/share/loadout/.config/bash/bashrc,
+    which dangles after restore."""
+    import contextlib
+    import io
+
+    home = os.path.join(tmp, "home")
+    os.makedirs(os.path.join(home, ".config", "bash"))
+    with open(os.path.join(home, ".config", "bash", "bashrc"), "w") as fh:
+        fh.write("x")
+    os.symlink(".config/bash/bashrc", os.path.join(home, ".bashrc"))
+    work_root = os.path.join(home, ".local", "share", "loadout")
+    os.makedirs(work_root)
+    saved_cwd = os.getcwd()
+    os.chdir(work_root)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            backup = m.backup_existing(home, REPO, m._load_tool_registry(REPO))
+    finally:
+        os.chdir(saved_cwd)
+    stored = os.readlink(os.path.join(backup, ".bashrc"))
+    check(
+        "a relative entrypoint link is backed up verbatim from the install root",
+        stored == ".config/bash/bashrc",
+        stored,
+    )
 
 
 def test_verification_failure_prints_summary(m, tmp):
@@ -607,8 +675,10 @@ TESTS = (
     test_vim_missing_sentinel_is_fail,
     test_ldd_only_checks_written_bins,
     test_runtime_archives_report_placed_bins,
+    test_extract_refuses_non_directory_over_real_dir,
     test_rmtree_healing_unreadable_dir,
     test_failed_extract_releases_rejoined_archive,
+    test_backup_keeps_relative_links_from_any_cwd,
     test_verification_failure_prints_summary,
     test_failed_checkout_removes_clone,
     test_headless_sync_times_out,

@@ -8,11 +8,16 @@
 # co-tenant can create those names first. A planted eza runs on every `ls`, and
 # a planted pycache prefix serves .pyc files to every Python the user runs. So
 # each use checks that the directory is a real dir (not a symlink) owned by the
-# user with no group/other write bit, and falls back to a HOME path otherwise.
+# user that no one else could have written, and falls back to a HOME path
+# otherwise.
 #
 # LOADOUT_CFG_SHM_DIR points the scratch root at a temp dir, so nothing here
-# touches the real /dev/shm. A foreign OWNER needs a second account; the two
-# shapes one account can build are a 0777 dir and a symlink.
+# touches the real /dev/shm. A foreign OWNER needs a second account (the
+# installer's check is unit-tested with a symlink); the shape one account can
+# build is a symlink. The user's own group-writable dir (UPG umask 002 leaves
+# 0775) is tightened, not refused, when its group is the user's private group;
+# an other-writable dir, or a group-writable one whose group is shared, is
+# refused and left alone -- tightening it would trust what is already inside.
 #
 # Harness rules (AGENTS.md "Shell-config test harness traps"): real PTY via
 # script(1), env -i, and output scanned for shell error vocabulary (the PTY
@@ -89,14 +94,27 @@ reset_shm() {
     mkdir -p "$SHM"
 }
 
-plant_hostile() {
-    mkdir -m 777 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
-    chmod 777 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
-    printf '#!/bin/sh\ntouch "%s"\n' "$T/pwned" >"$SHM/$ME/bin/eza"
-    chmod 755 "$SHM/$ME/bin/eza"
-    # Newer than any real eza, so a copy-if-newer check would keep it.
-    touch -d '+1 day' "$SHM/$ME/bin/eza" 2>/dev/null || true
+plant_loose() {
+    mkdir -p "$SHM/$ME/bin" "$SHM/$UID_NUM"
+    chmod 775 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
 }
+
+plant_open() {
+    mkdir -p "$SHM/$ME/bin" "$SHM/$UID_NUM"
+    chmod 777 "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
+}
+
+# A supplementary group that is not our private group: group members can write
+# a dir chgrp'd to it. Empty when this account has none (the case then skips).
+shared_grp=
+for _g in $(id -G); do
+    [ "$_g" = "$(id -g)" ] && continue
+    _n=$(getent group "$_g" 2>/dev/null | cut -d: -f1)
+    if [ -n "$_n" ] && [ "$_n" != "$ME" ]; then
+        shared_grp=$_g
+        break
+    fi
+done
 
 plant_symlinks() {
     mkdir -m 700 "$T/elsewhere" "$T/elsewhere-uid"
@@ -144,16 +162,81 @@ $out"
     echo "  PASS  clean/$sh"
 done
 
-# ---- hostile-dir: a co-tenant pre-created 0777 dirs and planted an eza -------
+# ---- non-interactive: every shell must export the same base environment -----
+# bash used to set PYTHONPYCACHEPREFIX (and the other Python guards) after its
+# non-interactive return, while zsh/tcsh set them on every startup. The tcsh
+# comment asserts the bash env exports these before the return, so scripts get
+# them from an `ssh host cmd`/`bash -l` job too.
 for sh in bash zsh tcsh; do
     reset_shm
-    plant_hostile
-    out=$(shell_out "$sh")
-    assert_refused hostile-dir "$sh" "$out"
-    [ ! -e "$T/pwned" ] || fail "hostile-dir/$sh: the planted eza ran"
-    [ "$(mode_of "$SHM/$ME")" = 777 ] || fail "hostile-dir/$sh: a refused dir had its mode changed"
-    echo "  PASS  hostile-dir/$sh"
+    case $sh in
+        bash) out=$(run_env bash -l -c '/usr/bin/env' 2>&1) ;;
+        zsh) out=$(run_env zsh -c '/usr/bin/env' 2>&1) ;;
+        tcsh) out=$(run_env tcsh -c '/usr/bin/env' 2>&1) ;;
+    esac
+    assert_quiet "non-interactive/$sh" "$out"
+    [ "$(envval PYTHONPYCACHEPREFIX "$out")" = "$SHM/$ME/pycache" ] \
+        || fail "non-interactive/$sh: PYTHONPYCACHEPREFIX=$(envval PYTHONPYCACHEPREFIX "$out")"
+    [ "$(envval PIP_REQUIRE_VIRTUALENV "$out")" = 1 ] \
+        || fail "non-interactive/$sh: PIP_REQUIRE_VIRTUALENV missing"
+    [ "$(envval PYTHON_KEYRING_BACKEND "$out")" = keyring.backends.null.Keyring ] \
+        || fail "non-interactive/$sh: PYTHON_KEYRING_BACKEND missing"
+    [ "$(envval EGL_LOG_LEVEL "$out")" = fatal ] \
+        || fail "non-interactive/$sh: EGL_LOG_LEVEL=$(envval EGL_LOG_LEVEL "$out")"
+    echo "  PASS  non-interactive/$sh"
 done
+
+# ---- loose-dir: the user's own dirs are 0775 (UPG umask 002) -> tighten -----
+# The old code refused these, so every shell silently fell back and the
+# installer refused to stage until reboot/tmp cleanup. Group write is ours to
+# remove when the group is our private group: nobody else could have written.
+for sh in bash zsh tcsh; do
+    reset_shm
+    plant_loose
+    out=$(shell_out "$sh")
+    assert_quiet "loose-dir/$sh" "$out"
+    [ "$(mode_of "$SHM/$ME")" = 700 ] || fail "loose-dir/$sh: $SHM/$ME is $(mode_of "$SHM/$ME"), want 700"
+    [ "$(mode_of "$SHM/$UID_NUM")" = 700 ] || fail "loose-dir/$sh: $SHM/$UID_NUM was not tightened"
+    [ "$(envval PYTHONPYCACHEPREFIX "$out")" = "$SHM/$ME/pycache" ] \
+        || fail "loose-dir/$sh: PYTHONPYCACHEPREFIX=$(envval PYTHONPYCACHEPREFIX "$out")"
+    [ "$(envval XDG_RUNTIME_DIR "$out")" = "$SHM/$UID_NUM" ] \
+        || fail "loose-dir/$sh: XDG_RUNTIME_DIR=$(envval XDG_RUNTIME_DIR "$out")"
+    if [ "$sh" = bash ]; then
+        [ "$(mode_of "$SHM/$ME/bin")" = 700 ] || fail "loose-dir/bash: $SHM/$ME/bin was not tightened"
+        if [ "$have_eza" = 1 ]; then
+            [ -x "$SHM/$ME/bin/eza" ] || fail "loose-dir/bash: eza was not copied into the tightened dir"
+        fi
+    fi
+    echo "  PASS  loose-dir/$sh"
+done
+
+# ---- open-dir: our own dirs are other-writable -> refuse, leave alone -------
+# Anyone could have planted content there (a newer bin/eza the bash wrapper
+# keeps reusing, .pyc files); tightening afterwards would trust it.
+for sh in bash zsh tcsh; do
+    reset_shm
+    plant_open
+    out=$(shell_out "$sh")
+    assert_refused open-dir "$sh" "$out"
+    [ "$(mode_of "$SHM/$ME")" = 777 ] || fail "open-dir/$sh: $SHM/$ME was changed to $(mode_of "$SHM/$ME")"
+    [ ! -e "$SHM/$ME/bin/eza" ] || fail "open-dir/$sh: eza was copied into an other-writable dir"
+    echo "  PASS  open-dir/$sh"
+done
+
+# ---- shared-group: 0775 with a group other than ours -> refuse --------------
+if [ -n "$shared_grp" ]; then
+    for sh in bash zsh tcsh; do
+        reset_shm
+        plant_loose
+        chgrp "$shared_grp" "$SHM/$ME" "$SHM/$ME/bin" "$SHM/$UID_NUM"
+        out=$(shell_out "$sh")
+        assert_refused shared-group "$sh" "$out"
+        [ "$(mode_of "$SHM/$ME")" = 775 ] || fail "shared-group/$sh: $SHM/$ME was changed to $(mode_of "$SHM/$ME")"
+        echo "  PASS  shared-group/$sh"
+    done
+else
+    echo "  SKIP  shared-group: this account has no supplementary group to chgrp to"
+fi
 
 # ---- symlink-dir: the per-user names are symlinks to somewhere else ---------
 for sh in bash zsh tcsh; do
@@ -186,14 +269,31 @@ if [ "$have_nvim" = 1 ]; then
     swap=$(printf '%s\n' "$got" | sed -n 1p)
     [ "$swap" = "$SHM/$ME/vim" ] || fail "nvim clean: cfg_swap_dir=$swap, want $SHM/$ME/vim"
     reset_shm
-    plant_hostile
+    plant_loose
+    got=$(nvim_swap)
+    swap=$(printf '%s\n' "$got" | sed -n 1p)
+    [ "$swap" = "$SHM/$ME/vim" ] || fail "nvim loose-dir: cfg_swap_dir=$swap, want $SHM/$ME/vim"
+    [ "$(mode_of "$SHM/$ME")" = 700 ] || fail "nvim loose-dir: $SHM/$ME was not tightened"
+    reset_shm
+    plant_open
     got=$(nvim_swap)
     for p in $got; do
         case $p in
-            "$SHM"/*) fail "nvim hostile-dir: $p is under the untrusted scratch root" ;;
+            "$SHM"/*) fail "nvim open-dir: $p is under an other-writable dir" ;;
         esac
     done
-    [ -n "$got" ] || fail "nvim hostile-dir: printed nothing"
+    [ "$(mode_of "$SHM/$ME")" = 777 ] || fail "nvim open-dir: $SHM/$ME was changed to $(mode_of "$SHM/$ME")"
+    if [ -n "$shared_grp" ]; then
+        reset_shm
+        plant_loose
+        chgrp "$shared_grp" "$SHM/$ME"
+        got=$(nvim_swap)
+        for p in $got; do
+            case $p in
+                "$SHM"/*) fail "nvim shared-group: $p is under a shared-group dir" ;;
+            esac
+        done
+    fi
     reset_shm
     plant_symlinks
     got=$(nvim_swap)

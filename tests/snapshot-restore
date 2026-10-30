@@ -70,6 +70,36 @@ $(tail -20 "$T/restore-abs.log")"
     || fail "restored .tcshrc does not resolve to .config/tcsh/tcshrc"
 echo "  PASS  an absolute in-HOME entrypoint link survives snapshot/restore"
 
+# ~/.config itself a symlink to another filesystem: an absolute ~/.tcshrc
+# still points INTO HOME lexically, but realpath lands outside it. Resolving
+# the target before making it relative produced either an absolute entry (data
+# filter raises AbsoluteLinkError) or ../<outside> (escapes the backup). The
+# relpath must be lexical, from the link text.
+S="$T/symlinked-config"
+X="$T/xdg-outside"
+mkdir -p "$S" "$X"
+ln -s "$X" "$S/.config"
+run_loadout "$S" install -y --no-backup env-tcsh >"$T/install-symlink.log" 2>&1 \
+    || { tail -30 "$T/install-symlink.log" >&2; fail "install with symlinked ~/.config failed"; }
+ln -sfn "$S/.config/tcsh/tcshrc" "$S/.tcshrc"
+run_loadout "$S" snapshot create >"$T/create-symlink.log" 2>&1 \
+    || { cat "$T/create-symlink.log" >&2; fail "snapshot create (symlinked ~/.config) failed"; }
+archive_symlink=$(sed -n 's/^Snapshot: //p' "$T/create-symlink.log" | tail -1)
+rc=0
+run_loadout "$S" snapshot restore "$archive_symlink" >"$T/restore-symlink.log" 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "restore with symlinked ~/.config exited $rc:
+$(tail -20 "$T/restore-symlink.log")"
+if grep -q 'AbsoluteLinkError\|LinkOutsideDestinationError' "$T/restore-symlink.log"; then
+    fail "restore rejected the entrypoint link:
+$(cat "$T/restore-symlink.log")"
+fi
+[ -L "$S/.tcshrc" ] || fail "symlinked ~/.config: .tcshrc is not a symlink after restore"
+[ "$(readlink "$S/.tcshrc")" = ".config/tcsh/tcshrc" ] \
+    || fail "symlinked ~/.config: .tcshrc -> $(readlink "$S/.tcshrc"), want .config/tcsh/tcshrc"
+[ "$(cd "$S" && realpath .tcshrc)" = "$(realpath "$X/tcsh/tcshrc")" ] \
+    || fail "symlinked ~/.config: restored .tcshrc does not resolve into the xdg tree"
+echo "  PASS  a symlinked ~/.config keeps the entrypoint link lexical"
+
 # An empty HOME has nothing to snapshot: say so and write no archive.
 E="$T/empty"
 mkdir -p "$E"

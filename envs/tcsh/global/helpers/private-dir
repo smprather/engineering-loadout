@@ -3,8 +3,10 @@
 #
 # The tcsh twin of loadout_private_dir in envs/bash/functions.sh -- same rule,
 # same exit status: create DIR 0700 when absent; then require a real directory
-# (never a symlink) owned by us with no group/other write bit. Our own merely
-# group/other-readable dir is tightened to 0700. Prints nothing.
+# (never a symlink) owned by us that no one else could have written, and
+# tighten it to 0700. Group write with our PRIVATE (UPG umask 002) group is
+# ours to remove; other write, or group write with a shared group, is refused
+# and left alone. Prints nothing.
 #
 # /dev/shm is world-writable and the per-user names under it are predictable,
 # so a co-tenant can create them first; whoever owns the directory controls the
@@ -19,15 +21,17 @@ if [ ! -e "$d" ] && [ ! -L "$d" ]; then
 fi
 [ -d "$d" ] && [ ! -L "$d" ] || exit 1
 # Owner via stat, not `test -O`: -O is not POSIX and /bin/sh may be dash.
-owner_mode=$(stat -c '%u %a' "$d" 2>/dev/null) || exit 1
-[ "${owner_mode%% *}" = "$(id -u)" ] || exit 1
-mode=${owner_mode#* }
-# Group or other write bit (the last two octal digits) -> refuse.
+st=$(stat -c '%u %a %G' "$d" 2>/dev/null) || exit 1
+[ "${st%% *}" = "$(id -u)" ] || exit 1
+st=${st#* }
+mode=${st%% *}
+group=${st#* }
 case $mode in
-    *[2367]? | *[2367]) exit 1 ;;
+    700) exit 0 ;;
+    # Other write bit (last octal digit): refuse, leave it alone.
+    *[2367]) exit 1 ;;
+    # Group write bit: ours to remove only with our private (UPG) group.
+    *[2367]?) [ "$group" = "$(id -un)" ] || exit 1 ;;
 esac
-case $mode in
-    *00) ;;
-    *) chmod 700 "$d" 2>/dev/null || exit 1 ;;
-esac
+chmod 700 "$d" 2>/dev/null || exit 1
 exit 0

@@ -165,9 +165,11 @@ import fcntl
 import fnmatch
 import getpass
 import glob
+import grp
 import hashlib
 import io
 import json
+import pwd
 import types
 
 try:
@@ -582,7 +584,9 @@ def walk_depends(names, registry, forbidden=None, force=False, disabled=None):
 def walk_recommends(names, registry, forbidden=None, disabled=None):
     """Add transitive soft 'recommends'. Silently drop forbidden / unknown /
     out of service (disabled: explicit flags and the cascade; default
-    disabled_packages(registry))."""
+    disabled_packages(registry)), and a recommend whose own hard deps are
+    forbidden or disabled: adding it would make the next walk_depends raise
+    for a package the user never asked for."""
     if forbidden is None:
         forbidden = set()
     if disabled is None:
@@ -604,6 +608,10 @@ def walk_recommends(names, registry, forbidden=None, disabled=None):
                 # like a soft dependency on a --skip'd one: "recommended" never
                 # forces anything, and a disabled package cannot be installed.
                 if r in disabled:
+                    continue
+                try:
+                    walk_depends({r}, registry, forbidden=forbidden, disabled=disabled)
+                except ResolverError:
                     continue
                 out.add(r)
                 pending.append(r)
@@ -1374,6 +1382,20 @@ def _path_under(path, root):
         return False
 
 
+def _path_under_lexical(path, root):
+    """True when `path` is `root` or below it WITHOUT resolving symlinks.
+
+    _path_under resolves the whole path, so a symlinked ~/.config makes an
+    entrypoint link appear to land outside HOME even when its text points
+    inside it."""
+    try:
+        path = os.path.normpath(os.path.abspath(path))
+        root = os.path.normpath(os.path.abspath(root))
+        return os.path.commonpath([path, root]) == root
+    except ValueError:
+        return False
+
+
 def _local_root(home):
     """Tree holding bin/lib/share under an install root.
 
@@ -1691,11 +1713,27 @@ def _tmp_user():
         return str(os.getuid())
 
 
+def _group_is_private(gid):
+    """True when gid is this user's private group (UPG: a group named after
+    the user), so its group write bit lets nobody else in."""
+    try:
+        return grp.getgrgid(gid).gr_name == pwd.getpwuid(os.getuid()).pw_name
+    except KeyError:
+        return False
+
+
 def _secure_private_dir(path):
     """True when `path` is a directory only this user can write: created 0700
     when absent, otherwise a real directory (never a symlink) owned by our uid
-    with no group/other write bit. Our own merely-readable dir is tightened to
-    0700. Anything else warns and returns False.
+    that no one else could have written, tightened to 0700. Anything else
+    warns and returns False.
+
+    RHEL's UPG umask 002 leaves our own dirs 0775 with our PRIVATE group, so
+    that group write bit is ours to remove. Other write, or group write with a
+    shared group (a site umask 002 with a team primary group), is refused and
+    left alone: tightening would trust content a co-tenant may already have
+    planted (a newer bin/eza the bash wrapper keeps reusing, .pyc files,
+    pending.json).
 
     The temp root is shared and world-writable, and our state lives at
     predictable names there, so a co-tenant can create the path first. Using
@@ -1713,7 +1751,12 @@ def _secure_private_dir(path):
     except OSError as exc:
         warn(f"could not stat {path}: {exc}")
         return False
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+    if (
+        not stat.S_ISDIR(st.st_mode)
+        or st.st_uid != os.getuid()
+        or st.st_mode & stat.S_IWOTH
+        or (st.st_mode & stat.S_IWGRP and not _group_is_private(st.st_gid))
+    ):
         warn(f"{path} is not private to this user (owner/mode/symlink); not using it")
         return False
     if stat.S_IMODE(st.st_mode) != 0o700:
@@ -4243,10 +4286,12 @@ def _place_staged_tree(stage, dest_dir):
 
     Directories are created (or kept, including a symlinked dir that
     _remove_symlinks_blocking_dirs chose to follow); files and symlinks move
-    into place with os.replace -- an inode swap -- and a non-directory that
-    replaces a directory removes it first. Directory modes are applied
-    deepest-first after their children are placed, so a read-only archive
-    directory cannot block its own contents. Returns the entries placed."""
+    into place with os.replace -- an inode swap. A non-directory that would
+    replace a real directory is refused, never rmtree'd: extractall failed
+    loudly on that clash, and the directory may hold user or foreign content in
+    the prefix. Directory modes are applied deepest-first after their children
+    are placed, so a read-only archive directory cannot block its own contents.
+    Returns the entries placed."""
     placed = 0
     dir_modes = []
     for root, dirs, files in os.walk(stage):
@@ -4271,7 +4316,10 @@ def _place_staged_tree(stage, dest_dir):
             src = os.path.join(root, name)
             tgt = os.path.join(target_root, name)
             if os.path.isdir(tgt) and not os.path.islink(tgt):
-                remove_path(tgt)
+                raise InstallRefused(
+                    f"archive entry '{os.path.relpath(tgt, dest_dir)}' would replace an existing directory; "
+                    "move it aside and re-run"
+                )
             try:
                 os.replace(src, tgt)
             except OSError as exc:
@@ -5631,10 +5679,21 @@ def _restore_backup_dir(backup_dir, home, source_display=None, registry=None):
 
     print("")
     print("Restoring files from backup...")
-    if not os.listdir(backup_dir):
+    entries = os.listdir(backup_dir)
+    if not entries:
         eprint("Error: Backup directory is empty")
         sys.exit(1)
-    run([_CP, "-rPp", ".", home], cwd=backup_dir)
+    # cp -rPp . home refuses when a top-level backup directory lands on a
+    # symlink to one (a symlinked ~/.config): "cannot overwrite non-directory
+    # with directory". Copy source/. into dest/ for that shape; every other
+    # entry keeps the plain cp form.
+    for name in sorted(entries):
+        src = os.path.join(backup_dir, name)
+        dest = os.path.join(home, name)
+        if os.path.isdir(src) and not os.path.islink(src) and os.path.islink(dest) and os.path.isdir(dest):
+            run([_CP, "-rPp", os.path.join(src, "."), dest + os.sep])
+        else:
+            run([_CP, "-rPp", src, home])
     print("")
     print("Backup restored successfully!")
     print("")
@@ -5700,6 +5759,33 @@ def install_bash(repo_dir, home, links_mode):
     lns(".config/bash/profile", os.path.join(home, BASH_PROFILE_ENTRYPOINT), verbose=True)
 
 
+def _backup_symlink_target(link_target, home, rel):
+    """The link text to store in a backup for `home/rel`.
+
+    Absolute links that live in HOME are stored relative, because restore
+    extracts with the tarfile "data" filter, which refuses absolute link
+    targets. The relpath is computed LEXICALLY from the link text: resolving
+    first follows a symlinked ~/.config to a directory outside HOME, so the
+    relative form either escaped the backup or could not be produced at all.
+    Only a target that we can map back into HOME is rewritten; anything else
+    keeps its original text. A relative text is already what the filter
+    accepts, and resolving it here would go against the CWD (cmd_install's is
+    the install root, inside HOME by default), not the link's directory."""
+    if not os.path.isabs(link_target):
+        return link_target
+    home_abs = os.path.abspath(home)
+    link_dir = os.path.dirname(os.path.join(home_abs, rel))
+    target = os.path.normpath(link_target)
+    if _path_under_lexical(target, home_abs):
+        return os.path.relpath(target, link_dir)
+    home_real = os.path.realpath(home)
+    real_target = os.path.realpath(link_target)
+    if _path_under(real_target, home_real):
+        mapped = os.path.join(home_abs, os.path.relpath(real_target, home_real))
+        return os.path.relpath(mapped, link_dir)
+    return link_target
+
+
 def backup_existing(home, repo_dir, registry=None):
     global _INTERRUPT_PHASE, _ACTIVE_BACKUP_DIR
     backup_rel = mkdirn(os.path.join(home, "loadout_backups", "backup"))
@@ -5708,7 +5794,6 @@ def backup_existing(home, repo_dir, registry=None):
     _ACTIVE_BACKUP_DIR = backup_dir
     try:
         print(f"Making backups in: {backup_dir}")
-        home_real = os.path.realpath(home)
         for rel in _env_snapshot_targets(registry):
             path = os.path.join(home, rel)
             if not os.path.lexists(path):
@@ -5725,14 +5810,12 @@ def backup_existing(home, repo_dir, registry=None):
                 # An absolute link into this HOME (older tcsh/zsh entrypoints)
                 # is stored relative: restore extracts archives with the
                 # tarfile "data" filter, which refuses absolute link targets.
-                if os.path.isabs(link_target) and _path_under(link_target, home_real):
+                stored_target = _backup_symlink_target(link_target, home, rel)
+                if stored_target != link_target:
                     print(f"  Backing up: {rel}")
                     require_writable_parent(dest, "backup")
                     ensure_dir(os.path.dirname(dest))
-                    os.symlink(
-                        os.path.relpath(os.path.realpath(link_target), os.path.dirname(os.path.join(home_real, rel))),
-                        dest,
-                    )
+                    os.symlink(stored_target, dest)
                     continue
             print(f"  Backing up: {rel}")
             backup_item(path, dest)

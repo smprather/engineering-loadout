@@ -41,8 +41,10 @@ ERR trap (a failed command naming a directory cds into it; nothing else).
 `LOADOUT_CFG_SHM_DIR` (default `/dev/shm`) is the fast scratch root for the
 `XDG_RUNTIME_DIR` fallback, `PYTHONPYCACHEPREFIX` and the eza copy `ls` runs.
 Each per-user directory there is used only when `loadout_private_dir` says it
-is private to you; otherwise loadout falls back to a HOME path. The table of
-fallbacks is in `envs/bash/global/README.md` ("Private runtime dirs").
+is private to you (you own it, no one else could have written it, and it is
+tightened to 0700);
+otherwise loadout falls back to a HOME path. The table of fallbacks is in
+`envs/bash/global/README.md` ("Private runtime dirs").
 
 ## Hook injection points
 

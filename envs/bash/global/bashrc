@@ -61,6 +61,26 @@ if [[ -x $_loadout_local_prefix/libexec/gnuplot/6.0/gnuplot_x11 ]]; then
     export GNUPLOT_DRIVER_DIR=$_loadout_local_prefix/libexec/gnuplot/6.0
 fi
 
+# Environment shared by interactive and non-interactive shells. zsh and tcsh
+# export these before their interactive-only section, and `ssh host cmd` /
+# `bash -l` jobs need them: keep this block above the non-interactive return.
+export PIP_REQUIRE_VIRTUALENV=1
+# When using Python Poetry, it tries to access the desktop keyring which for some reason causes a hang
+# This var disables keyring
+export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
+# Compile python bytecode cache to fast /dev/shm filesystem -- only into a dir
+# private to us: whoever owns the prefix can plant .pyc files every Python run
+# imports. Otherwise Python keeps its default __pycache__ next to the sources.
+if loadout_private_dir "${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER"; then
+    export PYTHONPYCACHEPREFIX=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER/pycache
+else
+    unset PYTHONPYCACHEPREFIX
+fi
+# Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
+# on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
+# zsh/tcsh export this before their interactive-only section too.
+export EGL_LOG_LEVEL=fatal
+
 # Exit here if not interactive
 if [[ $- != *i* ]]; then
     # Unset this file's _-prefixed locals, but NOT exported _vars: `unset ${!_@}`
@@ -121,27 +141,10 @@ fi
 
 export COLORTERM=truecolor
 
-# Compile python bytecode cache to fast /dev/shm filesystem -- only into a dir
-# private to us: whoever owns the prefix can plant .pyc files every Python run
-# imports. Otherwise Python keeps its default __pycache__ next to the sources.
-if loadout_private_dir "${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER"; then
-    export PYTHONPYCACHEPREFIX=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$USER/pycache
-else
-    unset PYTHONPYCACHEPREFIX
-fi
-# When using Python Poetry, it tries to access the desktop keyring which for some reason causes a hang
-# This var disables keyring
-export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
-
 export PAGER='less --incsearch --use-color --no-init --ignore-case --mouse'
 export EDITOR="${LOADOUT_CFG_PREFERRED_VI}"
 export VISUAL=$EDITOR
 export GIT_EDITOR=$EDITOR
-export PIP_REQUIRE_VIRTUALENV=1
-
-# Silence Mesa EGL loader "failed to get driver name" warnings -- harmless noise
-# on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
-export EGL_LOG_LEVEL=fatal
 
 ### Online connectivity detection ###
 # Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells / tmux panes.

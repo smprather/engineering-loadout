@@ -70,12 +70,64 @@ def test_private_dir_rejects_symlink(m, tmp):
     check("the symlink is left untouched", os.path.islink(link) and os.readlink(link) == real)
 
 
-def test_private_dir_rejects_group_other_writable(m, tmp):
-    path = os.path.join(tmp, "open")
+def _shared_group():
+    """A supplementary group of ours that is NOT our private (UPG) group, or
+    None. chgrp to it builds a group-writable dir co-tenants can write."""
+    import grp
+    import pwd
+
+    me = pwd.getpwuid(os.getuid()).pw_name
+    for gid in os.getgroups():
+        try:
+            name = grp.getgrgid(gid).gr_name
+        except KeyError:
+            continue
+        if gid != os.getgid() and name != me:
+            return gid
+    return None
+
+
+def test_private_dir_refuses_other_writable(m, tmp):
+    """Anyone could have planted content in a dir others can write (a newer
+    bin/eza the bash wrapper keeps reusing, .pyc files, pending.json);
+    tightening it afterwards would trust that content."""
+    for mode in (0o777, 0o757):
+        path = os.path.join(tmp, f"open{mode:o}")
+        os.mkdir(path)
+        os.chmod(path, mode)
+        check(f"own {mode:o} dir is refused", m._secure_private_dir(path) is False)
+        check(f"a refused {mode:o} dir keeps its mode", _mode(path) == mode, oct(_mode(path)))
+
+
+def test_private_dir_tightens_own_group_writable(m, tmp):
+    """RHEL's UPG umask 002 leaves our own dirs 0775 with our private group:
+    nobody else can write them, so the stale mode is ours to remove."""
+    import grp
+    import pwd
+
+    path = os.path.join(tmp, "upg")
     os.mkdir(path)
-    os.chmod(path, 0o777)
-    check("0777 dir is refused", m._secure_private_dir(path) is False)
-    check("a refused dir keeps its mode", _mode(path) == 0o777, oct(_mode(path)))
+    os.chmod(path, 0o775)
+    if grp.getgrgid(os.stat(path).st_gid).gr_name != pwd.getpwuid(os.getuid()).pw_name:
+        print("  SKIP  own-group 0775 case: our primary group is not a private (UPG) group")
+        return
+    check("own 0775 dir with our private group is accepted", m._secure_private_dir(path) is True)
+    check("own 0775 dir with our private group is tightened to 0700", _mode(path) == 0o700, oct(_mode(path)))
+
+
+def test_private_dir_refuses_shared_group_writable(m, tmp):
+    """A 0775 dir whose group is shared (site umask 002 with a team primary
+    group) is writable by every group member."""
+    gid = _shared_group()
+    if gid is None:
+        print("  SKIP  shared-group case: no supplementary group to chgrp to")
+        return
+    path = os.path.join(tmp, "team")
+    os.mkdir(path)
+    os.chown(path, -1, gid)
+    os.chmod(path, 0o775)
+    check("own 0775 dir with a shared group is refused", m._secure_private_dir(path) is False)
+    check("a refused shared-group dir keeps its mode", _mode(path) == 0o775, oct(_mode(path)))
 
 
 def test_private_dir_tightens_readable(m, tmp):
@@ -87,9 +139,12 @@ def test_private_dir_tightens_readable(m, tmp):
 
 
 def test_stage_pending_refuses_insecure_dir(m, tmp):
+    # A foreign owner cannot be simulated without a second account; a symlink
+    # at the predictable name is the substitution shape one user can build.
+    real = os.path.join(tmp, "pending-real")
+    os.mkdir(real, 0o700)
     pending = os.path.join(tmp, "pending")
-    os.mkdir(pending)
-    os.chmod(pending, 0o777)
+    os.symlink(real, pending)
     bin_dir = os.path.join(tmp, "payload-bin")
     os.mkdir(bin_dir)
     with bz2.open(os.path.join(bin_dir, "tmux.bz2"), "wb") as fh:
@@ -157,12 +212,20 @@ def test_tmp_user_fallback(m, tmp):
 
 
 def test_daemon_refuses_insecure_dir(d, tmp):
+    real = os.path.join(tmp, "daemon-pending-real")
+    os.mkdir(real, 0o700)
     pending = os.path.join(tmp, "daemon-pending")
+    os.symlink(real, pending)
+    d.PENDING_DIR = pending
+    check("daemon refuses a symlinked pending dir", d.secure_pending_dir() is False)
+    os.unlink(pending)
     os.mkdir(pending)
     os.chmod(pending, 0o777)
-    d.PENDING_DIR = pending
-    check("daemon refuses a 0777 pending dir", d.secure_pending_dir() is False)
-    os.chmod(pending, 0o700)
+    check("daemon refuses its own other-writable pending dir", d.secure_pending_dir() is False)
+    check("daemon left the refused pending dir alone", _mode(pending) == 0o777, oct(_mode(pending)))
+    os.chmod(pending, 0o775)
+    check("daemon accepts and tightens its own 0775 pending dir", d.secure_pending_dir() is True)
+    check("daemon tightened its own 0775 pending dir", _mode(pending) == 0o700, oct(_mode(pending)))
     check("daemon accepts its own 0700 pending dir", d.secure_pending_dir() is True)
 
 
@@ -172,7 +235,9 @@ def main():
     for fn in (
         test_private_dir_creates_0700,
         test_private_dir_rejects_symlink,
-        test_private_dir_rejects_group_other_writable,
+        test_private_dir_refuses_other_writable,
+        test_private_dir_tightens_own_group_writable,
+        test_private_dir_refuses_shared_group_writable,
         test_private_dir_tightens_readable,
         test_stage_pending_refuses_insecure_dir,
         test_run_log_nofollow,

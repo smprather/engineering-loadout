@@ -39,8 +39,12 @@ that is private to you. The names are predictable (`$LOADOUT_CFG_SHM_DIR/$USER`,
 `$LOADOUT_CFG_SHM_DIR/<uid>`), so a co-tenant could create them first and then
 swap what is kept there. `loadout_private_dir DIR` (envs/bash/functions.sh,
 shared with zsh) creates DIR 0700 when absent and succeeds only for a real
-directory (never a symlink) you own with no group/other write bit; your own
-merely-readable dir is tightened to 0700. It prints nothing.
+directory (never a symlink) you own that no one else could have written,
+tightened to 0700. An own 0775 dir from RHEL's UPG umask 002 is fixed: its
+group is your private group. Other write, or group write with a shared group
+(a site umask 002 with a team primary group), is refused and the dir left
+alone -- tightening it would trust whatever a co-tenant already planted there
+(the eza copy, .pyc files). It prints nothing.
 
 | state | used when private | fallback |
 |---|---|---|

@@ -25,8 +25,10 @@ import datetime
 import errno
 import fcntl
 import getpass
+import grp
 import json
 import os
+import pwd
 import shutil
 import stat
 import subprocess
@@ -266,10 +268,11 @@ def cleanup():
 
 def secure_pending_dir():
     """Same rules as the installer's _secure_private_dir(): PENDING_DIR must be
-    a real directory owned by us with no group/other write bit (created 0700
-    when absent; our own readable dir is tightened). A co-tenant who created
-    the predictable path first would control pending.json, i.e. which bytes we
-    copy where, so refuse it."""
+    a real directory owned by us that no one else could have written, tightened
+    to 0700 (created 0700 when absent). A foreign owner, a symlink, other
+    write, or group write with a shared group is refused: whoever could write
+    the dir controls pending.json, i.e. which bytes we copy where. Group write
+    with our private (UPG) group is ours to remove."""
     try:
         os.mkdir(PENDING_DIR, 0o700)
     except FileExistsError:
@@ -282,7 +285,16 @@ def secure_pending_dir():
     except OSError as exc:
         log(f"cannot stat {PENDING_DIR}: {exc}")
         return False
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+    try:
+        private_group = grp.getgrgid(st.st_gid).gr_name == pwd.getpwuid(os.getuid()).pw_name
+    except KeyError:
+        private_group = False
+    if (
+        not stat.S_ISDIR(st.st_mode)
+        or st.st_uid != os.getuid()
+        or st.st_mode & stat.S_IWOTH
+        or (st.st_mode & stat.S_IWGRP and not private_group)
+    ):
         log(f"{PENDING_DIR} is not private to this user (owner/mode/symlink); refusing to run")
         return False
     if stat.S_IMODE(st.st_mode) != 0o700:

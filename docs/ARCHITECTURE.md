@@ -68,9 +68,11 @@ and a disabled package reached through a group is skipped with a warning.
 - `depends` -- hard dep. If a depender is selected and the dep is skipped, the
   resolver raises `ResolverError` (unless `--no-deps` or `--force`).
 - `recommends` -- soft dep. Auto-pulled when available; silently dropped if
-  skipped, unknown or disabled. Depends and recommends are walked alternately
-  until the set stops changing, so a recommended package's own hard depends
-  are pulled in too.
+  skipped, unknown or disabled, or if its own hard deps would make the next
+  `walk_depends` raise (the recommendation is soft, so the package is dropped
+  rather than the whole resolution failing). Depends and recommends are walked
+  alternately until the set stops changing, so a recommended package's own
+  hard depends are pulled in too.
 
 ---
 
@@ -85,7 +87,8 @@ and a disabled package reached through a group is skipped with a warning.
 3. Subtract `--skip`.
 4. Walk hard `depends` -- raise `ResolverError` on skipped hard dep
    (unless `--no-deps` or `--force`).
-5. Walk soft `recommends` -- silently drop skipped/unknown.
+5. Walk soft `recommends` -- silently drop skipped/unknown, and a recommend
+   whose own hard deps are skipped/disabled.
 6. Filter by current platform.
 
 ### CLI surface
@@ -224,10 +227,15 @@ interpreter in this order:
    prior run, trusted only when `.loadout-bootstrap/.complete` names the
    current payload archive (an interrupted extraction, or a cache from an older
    archive or minor version, is re-extracted).
-4. Cold bootstrap: decompresses
-   `payload/<platform>/portable-python-*.tar.bz2` into a temp dir beside the
-   cache, checks the interpreter runs, writes the stamp, then moves it into
-   place -- a half-written cache is never used. Requires `bzip2` + `tar` in
+4. Cold bootstrap: takes an atomic `mkdir .loadout-bootstrap.lock` claim,
+   decompresses `payload/<platform>/portable-python-*.tar.bz2` into a
+   `.loadout-bootstrap.tmp.<host>.<pid>` dir beside the cache, checks the
+   interpreter runs, writes the stamp, then moves it into place -- a
+   half-written cache is never used, and a concurrent first run waits for the
+   published stamp instead of racing the move. A stale claim is reclaimed under
+   a separate `.loadout-bootstrap.lock.reclaim` claim that re-reads the owner
+   after acquisition, so two waiters cannot both delete (and one cannot remove
+   the fresh lock the other just re-acquired). Requires `bzip2` + `tar` in
    `PATH` only -- both ship with every supported base system.
 
 A config.toml `dest_dir` root is not probed (reading TOML needs Python). The
@@ -239,7 +247,8 @@ Once an interpreter is found, the shim execs `loadout_main.py` under it
 (shebang `#!/usr/bin/env python3.15`). `loadout_main.py` enforces
 Python >= 3.14 via a `sys.version_info` gate. The bootstrap cache is
 per-clone (alongside the script, not in `$HOME`), so the boot path never
-depends on `~/.local` existing yet. `.loadout-bootstrap/` is gitignored.
+depends on `~/.local` existing yet. `.loadout-bootstrap/` and its transient
+`.loadout-bootstrap.lock/` are gitignored.
 
 All subprocess calls use absolute paths resolved at startup (`_LDD`,
 `_UNAME`, `_GETCONF` via `_find_tool()`) to avoid accidentally picking up

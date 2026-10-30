@@ -165,6 +165,26 @@ def test_walk_recommends(m):
     check("forbidden recommends dropped", wr({"gvim"}, REGISTRY, forbidden={"bat"}) == {"gvim"})
     check("recommends of unknown pkg ignored", wr({"rg"}, REGISTRY) == {"rg"})
 
+    # A recommended package is SOFT: when its own hard dep is skipped or out
+    # of service, drop the recommendation instead of adding a package whose
+    # dependency walk will then raise.
+    soft = {
+        "app": {"kind": "bin", "recommends": ["rec"]},
+        "rec": {"kind": "bin", "depends": ["must-skip"]},
+        "must-skip": {"kind": "bin"},
+        "app2": {"kind": "bin", "recommends": ["rec-disabled"]},
+        "rec-disabled": {"kind": "bin", "depends": ["out-of-service"]},
+        "out-of-service": {"kind": "bin", "disabled": True, "disabled_reason": "broken"},
+    }
+    check(
+        "a recommend whose hard dep is skipped is dropped",
+        wr({"app"}, soft, forbidden={"must-skip"}) == {"app"},
+    )
+    check(
+        "a recommend whose hard dep is disabled is dropped",
+        wr({"app2"}, soft) == {"app2"},
+    )
+
 
 def test_filter_by_platform(m):
     fp = m.filter_by_platform
@@ -207,6 +227,23 @@ def test_resolve_tool_selection(m):
 
     sel = rts(_args(only="gvim", skip="gui_libs", force=True), REGISTRY)
     check("--force downgrade to warning", sel == {"gvim", "bat"})
+
+    soft = {
+        "app": {"kind": "bin", "recommends": ["rec"]},
+        "rec": {"kind": "bin", "depends": ["must-skip"]},
+        "must-skip": {"kind": "bin"},
+    }
+    try:
+        sel = rts(_args(only="app", skip="must-skip"), soft)
+        check("a blocked recommend does not abort resolution", sel == {"app"}, repr(sel))
+    except m.ResolverError as exc:
+        check("a blocked recommend does not abort resolution", False, str(exc))
+
+    # --force applies to explicitly selected dependers (warn + continue). A
+    # recommendation is still soft, so it stays dropped rather than pulling in
+    # a package whose hard dep the user skipped.
+    sel = rts(_args(only="app", skip="must-skip", force=True), soft)
+    check("--force does not resurrect a blocked recommend", sel == {"app"}, repr(sel))
 
     sel = rts(_args(only="rg,winonly"), REGISTRY)
     check("platform filter drops non-linux pkg from selection", sel == {"rg"})

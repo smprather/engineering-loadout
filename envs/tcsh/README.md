@@ -142,8 +142,10 @@ Two of them are worth knowing about specifically:
   `$PPID`**. Naming `$PPID` in the rc file makes every interactive shell print
   `PPID: Undefined variable.` on startup.
 - **`private-dir`** — the tcsh twin of bash's `loadout_private_dir`: succeeds only
-  for a directory private to you (created 0700; never a symlink; your uid; no
-  group/other write bit). `PYTHONPYCACHEPREFIX` and the `XDG_RUNTIME_DIR` fallback
+  for a directory private to you (created 0700; never a symlink; your uid;
+  tightened to 0700 — an own 0775 from UPG umask 002, whose group is your
+  private group, is fixed; other write, or group write with a shared group, is
+  refused and left alone). `PYTHONPYCACHEPREFIX` and the `XDG_RUNTIME_DIR` fallback
   under `$LOADOUT_CFG_SHM_DIR` (default `/dev/shm`) are used only when it passes;
   otherwise the pycache prefix stays unset and the runtime dir falls back to
   `~/.cache/loadout/runtime`. `seed-history` applies the same chain. See the

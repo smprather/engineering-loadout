@@ -13,6 +13,89 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-30 (2): independent review items 4-10 fixed
+
+User asked to fix the seven items left open by the entry below. Test first, RED
+observed per item:
+
+4. Own group-writable private dirs (0775 from RHEL's UPG umask 002) are now
+   tightened to 0700 instead of refused, in `loadout_private_dir` (bash/zsh),
+   the tcsh `private-dir` helper, `global.paths.private_dir` and both Python
+   checks. A foreign owner or a symlink is still refused; the group of one's
+   own dir is one's own group, so the stale mode is ours to remove.
+   `tests/unit-private-state`, `tests/env-private-dirs` (loose-dir cases; the
+   symlink case remains the hostile one). NARROWED at integration (review:
+   `docs/superpowers/plans/2026-10-30-items-4-10-fix-report-review.md`,
+   untracked): accepting ANY own dir
+   trusted content a co-tenant could have planted while it was writable (the
+   eza copy the bash wrapper reuses, .pyc files, pending.json). Now other
+   write is refused, and group write is accepted only when the dir's group is
+   the user's private group (name == user); both left untouched when refused.
+   Tests: own 0777/0757 refused, shared-group 0775 refused (chgrp to a
+   supplementary group; skips without one), UPG 0775 tightened.
+5. Cold bootstrap takes an atomic `mkdir .loadout-bootstrap.lock` claim; a
+   second first run waits for the published `.complete` instead of racing the
+   `rm -rf`/`mv` (the loser used to delete the tree the winner exec'd from).
+   Temp dirs are `.loadout-bootstrap.tmp.<host>.<pid>`; the sweep PID-checks
+   only this host and removes a foreign/legacy temp only after a day, so an
+   NFS clone's live bootstrap is never killed by a local `kill -0`. Reclaiming
+   a stale claim is itself serialized by `.loadout-bootstrap.lock.reclaim`;
+   the reclaimer re-reads the owner after acquiring it, so two waiters cannot
+   both decide the same lock is stale and one cannot delete the fresh claim the
+   other just re-acquired. A same-host live PID is never stale regardless of
+   age; a foreign/ownerless claim is stale after 5 minutes. A crashed reclaimer
+   fails closed after 2 minutes with a removal hint. `tests/shim-bootstrap`
+   covers the held claim, stale claim, host-aware sweep, and a two-waiter
+   stale-claim race (slow rm/tar widen the old delete-fresh-lock window).
+   Integration fix: the sweep matched this host's temps by PREFIX, so a temp
+   from host `<host>.lab` was PID-checked locally; everything after `<host>.`
+   must now be digits (shim-bootstrap case).
+6. `_place_staged_tree` refuses a file/symlink that would replace an existing
+   real directory (`InstallRefused`) instead of rmtree'ing it, matching the
+   loud failure `extractall` produced. `tests/unit-install-steps`.
+7. `walk_recommends` drops a recommended package whose own hard deps are
+   skipped or disabled, instead of adding it and letting the next
+   `walk_depends` raise for a package the user never named.
+   `tests/unit-resolver`.
+8. `bashrc` exports `PIP_REQUIRE_VIRTUALENV`, `PYTHON_KEYRING_BACKEND`,
+   `PYTHONPYCACHEPREFIX` and `EGL_LOG_LEVEL` before its non-interactive
+   return, matching zsh/tcsh
+   for `ssh host cmd` and `bash -l` jobs. `tests/env-private-dirs`
+   non-interactive cases. Follow-up (not done): the finding was the COST --
+   the tcsh `private-dir` helper still forks `sh` (~3 ms measured) on every
+   startup, non-interactive `tcsh -c` included; tcsh builtins (`-d`, `-l`,
+   `-o`, `-P`, `$user`/`$group`) could do the same check fork-free.
+9. Backup stores an absolute in-HOME symlink relative using the LEXICAL link
+   text, so a `~/.config` symlinked outside HOME no longer yields an absolute
+   entry (`AbsoluteLinkError`) or `../outside`; restore copies top-level
+   entries individually so a backup dir can land on a symlinked `~/.config`.
+   Reproduced the extraction failure on HEAD. `tests/snapshot-restore`.
+   Integration fix: the new helper dropped the `isabs` guard, so a RELATIVE
+   link text was resolved against the CWD -- `cmd_install` chdirs to the
+   install root (inside HOME by default), and a full install stored
+   `~/.bashrc -> .local/share/loadout/.config/bash/bashrc`, dangling after
+   restore. Relative texts are stored verbatim again
+   (`tests/unit-install-steps`, backup run from the install root).
+10. `paths.lua`: `M.data`'s doc block is back on `M.data`; `private_dir` has
+    its own. Comments only; the nvim case in `tests/env-private-dirs` loads
+    the file.
+
+Docs synced: AGENTS.md (shim, backup, resolver, shell startup, private dir,
+atomicity, gitignore), docs/ARCHITECTURE.md, docs/BASH.md,
+envs/{bash,tcsh}/README.md, `.gitignore` (`.loadout-bootstrap.lock/`). The
+daemon script is payload, so `build/gen-installed-sizes` and
+`build/gen-content-manifest` were rerun (the first `run-all --fast` correctly
+failed both sync gates before that).
+Verification: the focused tests above, `tests/env-shell-parity`,
+`tests/install-env-{bash,tcsh}`, `tests/prompt-no-rc`, a 10-way concurrent
+cold-bootstrap stress run (10/10 STUB, one cache, no temp/lock left),
+`tests/run-all --fast`, `ruff check`, `sh -n loadout`, bundled `py_compile`.
+Working tree only; nothing committed in this session. Per-item RED/GREEN
+evidence, changed symbols, residual risks and the advisory race analysis are
+recorded for external review in
+`docs/superpowers/plans/2026-10-30-items-4-10-fix-report.md` (untracked, like
+the review plan).
+
 ## 2026-10-30: independent `/code-review high` of `e85fd11..HEAD`
 
 Closes entry (2026-10-28) item 5. The review (unverified by design at that

@@ -762,8 +762,11 @@ array_slice() {
 alias array.slice="array_slice"
 
 # Succeed only when DIR is a directory only this user can write: created 0700
-# when absent, never a symlink, owned by us, no group/other write bit. Our own
-# merely group/other-readable dir is tightened to 0700. Prints nothing.
+# when absent, never a symlink, owned by us, no one else could have written it,
+# tightened to 0700. RHEL's UPG umask 002 leaves our own dirs 0775 with our
+# PRIVATE group, so that group write bit is ours to remove. Other write, or
+# group write with a shared group, is refused and left alone: tightening would
+# trust what a co-tenant may already have planted inside. Prints nothing.
 #
 # /dev/shm and the temp root are world-writable and the per-user names under
 # them are predictable, so a co-tenant can create them first -- and whoever
@@ -773,21 +776,23 @@ alias array.slice="array_slice"
 # private-dir is the same rule for tcsh, and global.paths.private_dir for nvim.
 # Usage: loadout_private_dir DIR
 loadout_private_dir() {
-    local _d=$1 _mode
+    local _d=$1 _st _mode _group
     [ -n "$_d" ] || return 1
     if [ ! -e "$_d" ] && [ ! -L "$_d" ]; then
         (umask 077 && mkdir -p "$_d") 2>/dev/null
     fi
     [ -d "$_d" ] && [ ! -L "$_d" ] && [ -O "$_d" ] || return 1
-    _mode=$(stat -c %a "$_d" 2>/dev/null) || return 1
-    # Group or other write bit (the last two octal digits) -> refuse.
+    _st=$(stat -c '%a %G' "$_d" 2>/dev/null) || return 1
+    _mode=${_st%% *}
+    _group=${_st#* }
     case $_mode in
-    *[2367]? | *[2367]) return 1 ;;
+    700) return 0 ;;
+    # Other write bit (last octal digit): refuse, leave it alone.
+    *[2367]) return 1 ;;
+    # Group write bit: ours to remove only with our private (UPG) group.
+    *[2367]?) [ "$_group" = "$(id -un)" ] || return 1 ;;
     esac
-    case $_mode in
-    *00) ;;
-    *) chmod 700 "$_d" 2>/dev/null || return 1 ;;
-    esac
+    chmod 700 "$_d" 2>/dev/null || return 1
     return 0
 }
 

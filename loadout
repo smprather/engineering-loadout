@@ -76,15 +76,124 @@ if ! command -v tar >/dev/null 2>&1; then
     exit 1
 fi
 
+# Cold bootstraps serialize on an atomic mkdir claim: two first runs used to
+# read the same missing/undone .complete, both extract, and the loser's
+# `rm -rf $boot_dir` deleted the tree the winner had already exec'd from.
+# Waiters poll the published stamp; a claim is reclaimed only when its owner
+# PID is provably dead ON THIS HOST (an NFS-shared clone's other hosts have
+# their own PID spaces), or when it is old enough to be dead.
+host=$(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)
+lock_dir="$boot_dir.lock"
+reclaim_dir="$lock_dir.reclaim"
+
+# Read the current claim owner into owner_host/owner_pid (empty when absent).
+read_owner() {
+    owner_host= owner_pid=
+    if [ -r "$lock_dir/owner" ]; then
+        owner_host=$(sed -n '1p' "$lock_dir/owner" 2>/dev/null)
+        owner_pid=$(sed -n '2p' "$lock_dir/owner" 2>/dev/null)
+    fi
+    case $owner_pid in
+    '' | *[!0-9]*) owner_pid= ;;
+    esac
+}
+
+# True only when the claim is provably stale. A same-host live PID is never
+# stale regardless of age: a slow extraction is not a crash.
+lock_is_stale() {
+    read_owner
+    if [ -n "$owner_pid" ] && [ "$owner_host" = "$host" ]; then
+        [ ! -d "/proc/$owner_pid" ]
+        return
+    fi
+    # A foreign host's PID cannot be checked. A bootstrap takes seconds; one
+    # older than this is dead, and leaving it would wedge the clone.
+    [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +5 2>/dev/null)" ]
+}
+
+waited=0
+while :; do
+    if mkdir "$lock_dir" 2>/dev/null; then
+        break
+    fi
+    if [ ! -d "$lock_dir" ]; then
+        echo "loadout: could not create the bootstrap claim $lock_dir" >&2
+        exit 1
+    fi
+    if [ -x "$boot_dir/bin/python3.15" ] \
+        && [ "$(cat "$boot_dir/.complete" 2>/dev/null)" = "$archive_name" ]; then
+        exec "$boot_dir/bin/python3.15" "$main" "$@"
+    fi
+    if lock_is_stale; then
+        # Serialize reclamation. Only the recovery-claim holder may delete the
+        # lock, and it re-reads the owner AFTER claiming: a second waiter that
+        # also saw a dead owner must never rm the fresh lock the first waiter
+        # re-acquired (that reopened extract/delete-while-running).
+        if mkdir "$reclaim_dir" 2>/dev/null; then
+            trap 'rmdir "$reclaim_dir" 2>/dev/null; exit 1' HUP INT TERM
+            if lock_is_stale; then
+                rm -rf "$lock_dir"
+            fi
+            rmdir "$reclaim_dir" 2>/dev/null || true
+            trap - HUP INT TERM
+            continue
+        fi
+        # Another waiter is reclaiming. Never touch the lock; wait and re-read.
+    fi
+    waited=$((waited + 1))
+    if [ "$waited" -ge 120 ]; then
+        echo "loadout: timed out waiting for a concurrent bootstrap to publish $boot_dir" >&2
+        echo "  (if no bootstrap is running, remove $lock_dir and $reclaim_dir)" >&2
+        exit 1
+    fi
+    sleep 1
+done
+
 echo "loadout: bootstrapping Python 3.15 from $archive_name ..." >&2
-# Leftovers of an interrupted earlier bootstrap -- never a LIVE one's: two
-# first runs on a fresh clone can bootstrap at the same time.
+tmp=
+cleanup() {
+    [ -z "$tmp" ] || rm -rf "$tmp"
+    rm -rf "$lock_dir"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s\n%s\n' "$host" "$$" >"$lock_dir/owner" 2>/dev/null || true
+
+# Re-check under the claim: a run that held it may have published while this
+# one was between the warm-cache probe and mkdir.
+if [ -x "$boot_dir/bin/python3.15" ] \
+    && [ "$(cat "$boot_dir/.complete" 2>/dev/null)" = "$archive_name" ]; then
+    trap - EXIT HUP INT TERM
+    rm -rf "$lock_dir"
+    exec "$boot_dir/bin/python3.15" "$main" "$@"
+fi
+
+# Leftovers: this host's dead temp dirs, and any temp dir old enough that no
+# bootstrap can still be running it. A fresh temp named for another host is
+# left alone -- kill -0 there tests OUR PID namespace, not that host's.
 for stale in "$repo_dir"/.loadout-bootstrap.tmp.*; do
     [ -d "$stale" ] || continue
-    kill -0 "${stale##*.}" 2>/dev/null || rm -rf "$stale"
+    base=${stale##*/}
+    # Ours only when everything after "$host." is a PID: a host whose name
+    # extends ours ("$host.lab") must not be PID-checked here.
+    stale_pid=${base#".loadout-bootstrap.tmp.$host."}
+    case $stale_pid in
+    "$base" | '' | *[!0-9]*) stale_pid= ;;
+    esac
+    case $stale_pid in
+    ?*)
+        if [ ! -d "/proc/$stale_pid" ]; then
+            rm -rf "$stale"
+        fi
+        ;;
+    *)
+        if [ -n "$(find "$stale" -maxdepth 0 -mmin +1440 2>/dev/null)" ]; then
+            rm -rf "$stale"
+        fi
+        ;;
+    esac
 done
-tmp="$boot_dir.tmp.$$"
-trap 'rm -rf "$tmp"' EXIT
+tmp="$boot_dir.tmp.$host.$$"
 mkdir -p "$tmp"
 # Extract only the "local/" subtree, strip the two leading components
 # ("portable-python-X/local/") so the result is $tmp/bin/python3.15
@@ -114,6 +223,8 @@ if [ "$(cat "$boot_dir/.complete" 2>/dev/null)" != "$archive_name" ]; then
     fi
 fi
 rm -rf "$tmp"
-trap - EXIT
+tmp=
+rm -rf "$lock_dir"
+trap - EXIT HUP INT TERM
 
 exec "$boot_dir/bin/python3.15" "$main" "$@"
