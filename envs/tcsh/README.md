@@ -145,6 +145,9 @@ Two of them are worth knowing about specifically:
   *bash* prompt string wrapped in readline's `\[` / `\]` zero-width markers. tcsh
   prints those literally. This strips them and turns a literal `\033`/`\e` into a
   real ESC byte; `%{…%}` in the prompt is tcsh's own zero-width wrapper.
+- **`prompt-markers` / `prompt-redraw`** — the starship prompt's tcsh adapter
+  (markers, path colour, python label, the line split) and the Ctrl-L redraw
+  that reprints the upper prompt lines. See the prompt section below.
 - **`seed-history`** — derives the parent pid from `/proc` because **tcsh has no
   `$PPID`**. Naming `$PPID` in the rc file makes every interactive shell print
   `PPID: Undefined variable.` on startup.
@@ -233,8 +236,14 @@ the explicit shell, 1.52 s with it — and 1.52 s even with
 `STARSHIP_SHELL=sh` pin is missing, changed, or placed above the init.
 
 `global/helpers/prompt-markers` still exists: with `sh` the prompt carries no
-markers, so it is a no-op passthrough, kept as the belt for a prompt that
-arrives carrying them anyway.
+markers of its own, so the helper wraps the colour sequences in `%{ %}` itself.
+It also SPLITS the prompt: tcsh draws a `\n` inside `$prompt` as padding up to a
+soft wrap, which tmux zoom/resize (and any terminal that reflows on resize)
+re-wraps into one merged row. So every line but the last is printed as real
+output above the prompt, and only the last line (`❯`) is `$prompt`. tcsh
+redraws only `$prompt`, so Ctrl-L is bound to `global/helpers/prompt-redraw`,
+which clears and reprints the upper lines from a per-tty cache before tcsh
+redraws the prompt and your typed input. Details: `docs/STARSHIP.md` §5c.
 
 The full measurements — the marker table for every value, the `init`-exports-
 `tcsh` trap, why there is no config-time env-var substitution, and the

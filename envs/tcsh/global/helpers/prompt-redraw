@@ -1,0 +1,16 @@
+#!/bin/sh
+# Ctrl-L under the starship prompt: clear the screen, then reprint the upper
+# prompt lines.
+#
+# helpers/prompt-markers prints every prompt line but the last itself (tcsh's
+# `\n` in $prompt is a soft wrap that tmux zoom and resize reflow), so tcsh's
+# own clear-screen would redraw only the last line. global/tcshrc binds Ctrl-L
+# to this script with `bindkey -c`; tcsh redraws the prompt and the typed input
+# after it returns. The lines come from the cache prompt-markers wrote for the
+# current prompt ($LOADOUT_TCSH_PROMPT_CACHE).
+
+tput clear 2>/dev/null || printf '\033[H\033[2J'
+if [ -n "${LOADOUT_TCSH_PROMPT_CACHE:-}" ] && [ -r "$LOADOUT_TCSH_PROMPT_CACHE" ]; then
+    cat "$LOADOUT_TCSH_PROMPT_CACHE"
+fi
+exit 0

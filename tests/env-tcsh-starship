@@ -170,6 +170,51 @@ def main():
             "prompt-markers must be executable -- precmd runs it directly",
         )
 
+    print("-- the helper splits the prompt: upper lines printed, last line is $prompt")
+    # tcsh renders a `\n` inside $prompt by padding the row until the terminal
+    # autowraps -- a SOFT wrap. tmux zoom/resize (and every terminal that
+    # reflows on resize) then re-wraps those rows, merging the prompt lines.
+    # So the helper prints every line but the last as real output on STDERR
+    # (a hard newline), caches them for the Ctrl-L redraw, and hands tcsh only
+    # the last line.
+    if os.path.isfile(HELPER):
+        import subprocess
+        import tempfile
+
+        esc = "\x1b"
+        three = f"{esc}[1;35mL1{esc}[0m \n{esc}[1;36m~/proj{esc}[0m \n{esc}[1;32m\u276f{esc}[0m "
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = os.path.join(tmp, "prompt-cache")
+            with open(cache, "w") as fh:
+                fh.write("stale\n")
+            env = {"PATH": "/usr/bin:/bin", "LOADOUT_TCSH_PROMPT_CACHE": cache}
+            res = subprocess.run([HELPER], input=three.encode(), capture_output=True, env=env)
+            out, err = res.stdout.decode(), res.stderr.decode()
+            upper = f"{esc}[1;35mL1{esc}[0m \n{esc}[1;33m~/proj{esc}[0m \n"
+            check(
+                "only the last line reaches $prompt, with markers and no newline",
+                out == f"%{{{esc}[1;32m%}}\u276f%{{{esc}[0m%}} ",
+                repr(out),
+            )
+            check("the upper lines are printed on stderr, recoloured, without markers", err == upper, repr(err))
+            with open(cache) as fh:
+                cached = fh.read()
+            check("the upper lines are cached for the Ctrl-L redraw", cached == upper, repr(cached))
+            res = subprocess.run([HELPER], input=b"X ", capture_output=True, env=env)
+            with open(cache) as fh:
+                cached = fh.read()
+            check(
+                "a one-line prompt prints nothing above and empties the cache",
+                res.stdout == b"X " and res.stderr == b"" and cached == "",
+                repr((res.stdout, res.stderr, cached)),
+            )
+            res = subprocess.run([HELPER], input=three.encode(), capture_output=True, env={"PATH": "/usr/bin:/bin"})
+            check(
+                "without a cache path the helper still splits (and writes no file)",
+                res.returncode == 0 and res.stderr.decode() == upper and sorted(os.listdir(tmp)) == ["prompt-cache"],
+                repr((res.returncode, res.stderr)),
+            )
+
     print("-- the prompt honors the host switch")
     # LOADOUT_CFG_PROMPT_INCLUDE_HOST is exported by every shell env and
     # honored by the hand-rolled prompts. The STARSHIP prompt is the default
@@ -364,9 +409,10 @@ def main():
         # stdout. The earlier version compared the helper's output, which is
         # one stage before `set prompt = "`...`"`, and csh collapses newlines
         # right there: the prompt rendered with the path on the branch's line
-        # while the test passed. tcsh also renders its line break as
-        # ESC[80G<2 spaces>CR, so the expectation carries that too (fixed
-        # 80-column PTY).
+        # while the test passed. The upper lines must arrive as HARD line ends
+        # (the helper prints them; the PTY turns LF into CRLF). tcsh's own `\n`
+        # in $prompt was ESC[80G<2 spaces>CR -- padding to a soft wrap, which
+        # tmux zoom and resize reflowed into one merged, scrambled row.
         import fcntl
         import pty
         import select
@@ -446,12 +492,12 @@ def main():
 
         # Exact expectation, stated as what the TERMINAL receives:
         #   line 1  git_branch's default "on " prefix + styled branch (bold blue)
-        #   break   tcsh's ESC[80G<2 spaces>CR
+        #   break   a hard line end (CRLF), printed by the helper
         #   line 2  the path, CYAN in the config, recoloured to YELLOW by the helper
         #   break   again
         #   line 3  the character prompt (bold green)
         branch = "\x1b[1;34m\ue0a0 main\x1b[0m "
-        brk = "\x1b[80G  \r"
+        brk = "\r\n"
         path = "\x1b[1;33m~/proj\x1b[0m "
         char = "\x1b[1;32m\u276f\x1b[0m "
         body = "on " + branch + brk + path + brk + char

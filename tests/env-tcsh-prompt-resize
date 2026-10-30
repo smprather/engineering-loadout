@@ -1,0 +1,113 @@
+#!/bin/sh
+# env-tcsh-prompt-resize: the tcsh starship prompt survives tmux zoom/resize.
+#
+# Starship's prompt is multi-line (status, path, character). tcsh draws a `\n`
+# inside $prompt by padding the row until the terminal autowraps -- a SOFT
+# wrap -- and tmux re-wraps soft-wrapped rows when a pane's width changes, so
+# zooming merged the prompt lines into one row (`~/proj ... ❯`) and scrambled
+# them on unzoom. helpers/prompt-markers now prints the upper lines as real
+# output and leaves only the last line in $prompt; Ctrl-L (bindkey -c ->
+# helpers/prompt-redraw) clears and reprints them, since tcsh redraws only
+# $prompt.
+#
+# Asserted on a PRIVATE tmux server (-L): `capture-pane -J` joins only
+# soft-wrapped rows, so a prompt row that starts with anything but `❯` is the
+# bug. Never touches the default tmux server.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-tcsh-resize.XXXXXX")"
+SOCK="lo-test-tcsh-resize-$$"
+
+TMUX_BIN=$(command -v tmux || true)
+STARSHIP_BIN=$(command -v starship || true)
+cleanup() {
+    [ -z "$TMUX_BIN" ] || "$TMUX_BIN" -L "$SOCK" kill-server 2>/dev/null || true
+    chmod -R u+w "$T" 2>/dev/null
+    rm -rf "$T"
+}
+trap cleanup EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+if [ -z "$TMUX_BIN" ] || [ -z "$STARSHIP_BIN" ] || ! command -v tcsh >/dev/null 2>&1; then
+    echo "  SKIP  needs tmux, starship and tcsh on PATH (tmux=${TMUX_BIN:-none} starship=${STARSHIP_BIN:-none})"
+    echo "env-tcsh-prompt-resize: OK (skipped)"
+    exit 0
+fi
+
+ME=$(id -un)
+H="$T/home"
+mkdir -p "$H"
+env -i HOME="$H" PATH=/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TMPDIR="${TMPDIR:-/tmp}" \
+    "$REPO/loadout" install -y --no-backup @envs >"$T/install.log" 2>&1 \
+    || { tail -30 "$T/install.log" >&2; fail "install of @envs failed"; }
+mkdir -p "$H/work/proj" "$H/.config/tcsh/user"
+# A host line makes the prompt three lines deep.
+printf 'setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST 1\n' >"$H/.config/tcsh/user/config.csh"
+
+tm() { "$TMUX_BIN" -L "$SOCK" -f /dev/null "$@"; }
+SHELL_CMD="env -i HOME=$H USER=$ME LOGNAME=$ME TERM=tmux-256color LANG=${LANG:-C.UTF-8} \
+LOADOUT_ONLINE=0 PATH=$(dirname "$STARSHIP_BIN"):/usr/bin:/bin tcsh -i"
+
+tm new-session -d -s t -x 160 -y 40 -c "$H/work/proj" "$SHELL_CMD"
+tm split-window -h -t t -c "$H/work/proj" "$SHELL_CMD"
+PANE=t:0.1
+
+wait_for_prompt() {
+    _i=0
+    while [ $_i -lt 50 ]; do
+        tm capture-pane -p -t "$PANE" | grep -q '❯' && return 0
+        sleep 0.2
+        _i=$((_i + 1))
+    done
+    fail "no starship prompt appeared:
+$(tm capture-pane -p -t "$PANE")"
+}
+
+# Every row holding the prompt character must START with it: a joined row
+# (path ... ❯) is the soft-wrap bug.
+assert_rows() {
+    _label=$1
+    _cap=$(tm capture-pane -J -p -t "$PANE")
+    for _pat in 'Command not found' 'Faulty alias' 'Undefined variable' 'Unmatched'; do
+        case $_cap in *"$_pat"*) fail "$_label: shell printed '$_pat':
+$_cap" ;; esac
+    done
+    printf '%s\n' "$_cap" | grep -q '❯' || fail "$_label: no prompt row:
+$_cap"
+    if printf '%s\n' "$_cap" | grep '❯' | grep -qv '^ *❯'; then
+        fail "$_label: a prompt row was merged with the line above it:
+$_cap"
+    fi
+    echo "  PASS  $_label"
+}
+
+wait_for_prompt
+tm send-keys -t "$PANE" Enter
+sleep 0.6
+tm send-keys -t "$PANE" -l 'echo half-typed'
+sleep 0.4
+assert_rows "split pane: prompt rows are hard lines"
+tm resize-pane -Z -t "$PANE"
+sleep 1
+assert_rows "zoomed: prompt rows stay separate"
+tm resize-pane -Z -t "$PANE"
+sleep 1
+assert_rows "unzoomed: prompt rows stay separate"
+
+tm send-keys -t "$PANE" C-l
+sleep 0.8
+cap=$(tm capture-pane -p -t "$PANE" | sed '/^ *$/d')
+printf '%s\n' "$cap" | grep -q 'work/proj' \
+    || fail "Ctrl-L did not reprint the path line:
+$cap"
+printf '%s\n' "$cap" | tail -1 | grep -q '^ *❯ echo half-typed' \
+    || fail "Ctrl-L lost the prompt or the typed input:
+$cap"
+[ "$(printf '%s\n' "$cap" | grep -c '❯')" -eq 1 ] \
+    || fail "Ctrl-L did not clear the screen:
+$cap"
+echo "  PASS  Ctrl-L clears and reprints the full prompt with the typed input"
+
+echo "env-tcsh-prompt-resize: OK"

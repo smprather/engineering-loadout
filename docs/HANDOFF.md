@@ -45,7 +45,15 @@ guarantees eza is installed when the value is eza). RED first: in
 `for sh in bash zsh tcsh` -- `prefer-ls/tcsh` must fail before the fix.
 Then mark entry (3) item 2 CLOSED.
 
-**Step 3 -- TODO: tcsh multi-line starship prompt survives tmux zoom/resize.**
+**Step 3 -- DONE except the upstream issue draft (item 4 below): tcsh
+multi-line starship prompt survives tmux zoom/resize.** Landed as designed, with
+two refinements: the cache path is an env var (`LOADOUT_TCSH_PROMPT_CACHE`, set
+once by tcshrc) instead of a helper argument -- csh cannot nest the quotes an
+argument inside the precmd's backticks would need -- and it is named per tty
+(`loadout-tcsh-prompt.pts-N`, `$$` only without a tty) so the runtime dir holds
+one file per terminal, not one per shell. Verified on tcsh 6.24 and on EL8's
+tcsh 6.20 (`loadout-smoke:almalinux8.10`, payload starship, no tmux/tput there:
+prompt-redraw's printf clear fallback is what runs). Original plan:
 Root cause (verified on a private tmux socket): tcsh renders `\n` inside
 `prompt` by padding the row with spaces until the terminal autowraps, i.e. a
 SOFT wrap. tmux (and any terminal that reflows on resize: WezTerm, kitty, VTE,

@@ -49,25 +49,46 @@
 #    tcsh-only, which is why it belongs here and not in the shared config.
 #    tests/env-tcsh-starship ties this to `[python] symbol` in the config.
 #
-# 4. NEWLINES. csh collapses newlines inside a quoted command substitution,
-#    and the precmd alias is `set prompt = "`helper`"` -- so a MULTI-LINE
-#    prompt arrives as ONE line, putting the path on the same line as the
-#    branch/status block. tcsh DOES interpret `\n` in `prompt` (verified:
-#    `set prompt = "AAA\nBBB"` renders on two lines), so emit the two-character
-#    escape and let tcsh do the line break.
-#
-#    awk, not `sed ':a;N;$!ba'`: that idiom appends a `\n` even to a
-#    single-line prompt (GNU sed's N at EOF), which would break the line after
-#    the prompt.
+# 4. NEWLINES. Starship renders up to three lines (status, path, character).
+#    tcsh cannot take them in $prompt: csh collapses newlines in a quoted
+#    command substitution, and tcsh's own `\n` prompt escape is drawn by
+#    PADDING the row until the terminal autowraps -- a SOFT wrap. tmux zoom
+#    and resize (and every terminal that reflows on resize: WezTerm, kitty,
+#    VTE, Windows Terminal) re-wrap soft-wrapped rows, so the prompt lines
+#    merged into one row and scrambled. So the prompt is split:
+#      - every line but the LAST is printed here, on STDERR, as real output
+#        with real newlines (raw SGR, no %{ %} -- they are not in $prompt).
+#        The precmd's command substitution captures stdout only, so stderr
+#        reaches the terminal just before tcsh draws the prompt;
+#      - those lines are also cached in $LOADOUT_TCSH_PROMPT_CACHE (a file in
+#        the private runtime dir, set by global/tcshrc), which the Ctrl-L
+#        binding reprints after clearing -- tcsh redraws only $prompt;
+#      - only the LAST line goes to stdout, i.e. into $prompt.
+#    The cache is emptied first, so a one-line prompt cannot leave stale lines;
+#    if it cannot be written, caching is skipped and the prompt still renders.
 # Reads STDIN: the precmd pipes `starship prompt` straight into this script.
-# THAT is what preserves the newlines -- csh collapses them only when the
-# starship output passes through a bare command substitution
-# (`set prompt = "`starship prompt`"`). A pipe inside the backticks keeps the
-# line structure, so the newline->`\n` step below still has something to do.
-awk 'BEGIN { ORS = "" } NR > 1 { printf "\\n" } { print }' \
+# A pipe inside the backticks keeps the line structure for the split below.
+
+cache=${LOADOUT_TCSH_PROMPT_CACHE:-}
+if [ -n "$cache" ] && ! { : >"$cache"; } 2>/dev/null; then
+    cache=
+fi
+
+sed \
+    -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
+    -e 's/\xf0\x9f\x90\x8d/python /g' \
+    | awk -v cache="$cache" '
+        { line[NR] = $0 }
+        END {
+            for (i = 1; i < NR; i++) {
+                l = line[i]
+                gsub(/\\\[|\\\]/, "", l)
+                print l > "/dev/stderr"
+                if (cache != "") print l >> cache
+            }
+            if (NR > 0) printf "%s", line[NR]
+        }' \
     | sed \
         -e 's/\\\[/%{/g' \
         -e 's/\\\]/%}/g' \
-        -e 's/\x1b\[1;36m/\x1b[1;33m/g' \
-        -e 's/\x1b\[[0-9;]*m/%{&%}/g' \
-        -e 's/\xf0\x9f\x90\x8d/python /g'
+        -e 's/\x1b\[[0-9;]*m/%{&%}/g'

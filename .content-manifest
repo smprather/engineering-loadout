@@ -72,7 +72,6 @@ sha256  049c4dfcb6bba62f71f2ebd62ddc0f8c0ff5433b89a95add40a278233e9d104b  payloa
 sha256  049d4106af32438f364f868888b3858f368c56e5e9a02eea00c1e67c6f8e82dc  payload/el8.x86_64.glibc2p28/lib64/libOsi.so.0.bz2
 sha256  04a931684013f402860983632ce5d970bbef2f54d1798eeb2dacd6719cb56fed  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/meson/indents.scm
 sha256  04a931684013f402860983632ce5d970bbef2f54d1798eeb2dacd6719cb56fed  payload/treesitter/vendor/nvim-treesitter/runtime/queries/meson/indents.scm
-sha256  04aedf16b70c477901818d2e85901b8f4750d61bfbd004bdc7bbadcce22c6912  payload/installed-sizes.json
 sha256  04bca352b6c8e3a3c90be8599b1dec0d5dbdde8ba582bebd396bfa715d8c57c5  payload/el8.x86_64.glibc2p28/bin/ptx.bz2
 sha256  04cfb609f5dd4b56ff07306f046eb17c3398a939c7e7d5e3c4f04d9f7d32ba74  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/elsa.so.bz2
 sha256  04ff8b529d8a05c64b5c2a228ccec7cad98e34726fa6463d513e8c8b721010d6  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/rst/locals.scm
@@ -2988,6 +2987,7 @@ sha256  ac9f5d1957c19533c1ee49e3cdd14614c5b0f92c818455afcc47edb78a1bec23  payloa
 sha256  acb34aa118c0fe6f135e6f9880390aca60a84bf57bbf6b6a7501526d7fe4d911  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/passwd.lua
 sha256  acbfd40fe03b8c5ef848312546c22b573fa70735cd79e801aca22dfa1a7ae511  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/yaml/promql-on-prometheus-rules.yaml
 sha256  acc222879ec117dd1e986c84e6a38486de9bf79a79e564f2036c5e757ffb9471  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/bpftrace.lua
+sha256  acca19c19389df291726d672d868752cf930f0725da93d4a9a222de9decca055  payload/installed-sizes.json
 sha256  accfc5a28b551b9f8613f0cb8308766f6b2b4302ff04f3e0fa024fe509c2f4b1  envs/tmux/vendor/plugins/tmux-persist/tests/test_skip_unchanged.sh
 sha256  ad01617ec01c3627094a25b8d3ffac62e7f484fbb1db47d65ca466b396f3e72c  payload/treesitter/vendor/nvim-treesitter/tests/indent/python/aligned_indent_2.py
 sha256  ad21142e29fd7dc26b51e0f2b8322098f475da2791e1abbde0ac438c3437f39e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/c3/folds.scm

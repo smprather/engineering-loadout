@@ -487,6 +487,20 @@ if ( $?prompt ) then
             # The flag the hand-rolled prompt below checks: with starship
             # driving, that path must not touch `prompt` or `precmd`.
             set loadout_prompt_starship = 1
+            # The upper prompt lines are printed by helpers/prompt-markers, not
+            # held in $prompt (tcsh's `\n` is a soft wrap that tmux zoom and
+            # resize reflow), so tcsh's own redraws show only the last line.
+            # The helper caches the upper lines here -- one file per terminal,
+            # in the private runtime dir -- and Ctrl-L clears and reprints
+            # them before tcsh redraws the prompt and the typed input.
+            if ( $?XDG_RUNTIME_DIR ) then
+                if ( "$tty" != "" ) then
+                    setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$tty:gs#/#-#"
+                else
+                    setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$$"
+                endif
+            endif
+            bindkey -c ^L "${_loadout_helpers}/prompt-redraw"
             endif
             unset _lo_starship_status _lo_starship_alias
         endif

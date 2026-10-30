@@ -271,12 +271,28 @@ set prompt = "`printf 'A\nB' | cat`"  # a PIPE inside the backticks keeps the ne
 ```
 
 So the tcsh env does NOT read `$prompt`: its precmd renders the prompt itself
-and pipes it straight into `helpers/prompt-markers`, which turns newlines into
-tcsh's `\n` escape (tcsh interprets it: `set prompt = "AAA\nBBB"` renders two
-lines). Cost: a second `starship prompt` render, measured at ~4 ms.
+and pipes it straight into `helpers/prompt-markers`. Cost: a second
+`starship prompt` render, measured at ~4 ms.
 
-tcsh renders a prompt newline as `ESC[80G<2 spaces>CR`, which is what an
-exact-match expectation has to contain.
+**The upper lines must NOT go into `$prompt` either.** tcsh does interpret
+`\n` in a prompt, but it draws it as `ESC[80G<2 spaces>CR` -- padding the row
+until the terminal autowraps, a SOFT wrap. tmux re-wraps soft-wrapped rows when
+a pane's width changes (zoom, split, resize), as does every terminal that
+reflows on resize (WezTerm, kitty, VTE, Windows Terminal), so the prompt lines
+merged into one row (`~/proj ... ❯`) and scrambled on unzoom. Minimal repro on
+a private tmux socket: `set prompt = "AAA\nBBB> "`, then `tmux capture-pane -J`
+shows `AAA ... BBB>` joined. bash is unaffected (a PS1 newline is a real LF).
+
+So `prompt-markers` SPLITS the render: every line but the last is printed on
+stderr as real output (hard line ends; the precmd's command substitution
+captures stdout only), and only the last line becomes `$prompt`. tcsh redraws
+only `$prompt` (Ctrl-L, completion lists), so the helper also caches the upper
+lines in `$LOADOUT_TCSH_PROMPT_CACHE` (one file per tty in the private runtime
+dir) and Ctrl-L is bound (`bindkey -c`) to `helpers/prompt-redraw`, which clears
+and reprints them before tcsh redraws the prompt and the typed input. Verified
+on tcsh 6.24 and EL8's 6.20. Gates: `tests/env-tcsh-starship` (helper split and
+the exact bytes the terminal receives: CRLF, no `ESC[80G` padding) and
+`tests/env-tcsh-prompt-resize` (T2: zoom on a private tmux server, Ctrl-L).
 
 **Locale matters:** without a UTF-8 locale tcsh drops the first byte of every
 multi-byte glyph in the prompt (`\xee\x82\xa0` renders as `\x82\xa0`). Not a
