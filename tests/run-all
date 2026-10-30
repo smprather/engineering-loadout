@@ -377,6 +377,7 @@ run_test "snapshot-restore" --deps auto tests/snapshot-restore
 run_test "install-env-st" --deps auto tests/install-env-st
 run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh
+run_test "env-ls-choice" --deps auto tests/env-ls-choice
 run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-terminal
 run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
 run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers

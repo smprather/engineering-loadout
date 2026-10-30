@@ -261,7 +261,9 @@ if [[ -n ${_bat_exec:-} ]]; then
     export BAT_PAGER="$PAGER -RF"
 fi
 
-# Fall back if the preferred ls tool is not installed.
+# eza (the default) or ls. Any other value -- a retired `lsd`, a typo -- means
+# eza; then fall back to plain ls when eza is not installed.
+[[ ${LOADOUT_CFG_PREFERRED_LS} == ls ]] || LOADOUT_CFG_PREFERRED_LS=eza
 if ! command -v "${LOADOUT_CFG_PREFERRED_LS}" >/dev/null 2>&1; then
     LOADOUT_CFG_PREFERRED_LS="ls"
 fi
@@ -409,18 +411,7 @@ loadout_add_zsh_hook precmd loadout_restore_echo
 # function is worth more than the microseconds.
 if fpcmp "$_glibc" -gt 2.17; then
     export EZA_ARGS="--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
-    export LSD_ARGS="--sort time --long --reverse --date '+%D %H:%M:%S'"
-    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "lsd" ]]; then
-        ls() {
-            if [[ $1 == '-1' ]]; then
-                command ls "$@"
-                return
-            fi
-            local option_size
-            [[ ${human_readable:-} == 1 ]] && option_size=short || option_size=bytes
-            command lsd --size $option_size ${=LSD_ARGS} --date '+%D %H:%M:%S' "$@"
-        }
-    elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
+    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
         ls() {
             if [[ $1 == '-1' ]]; then
                 /bin/ls -1 "$@"

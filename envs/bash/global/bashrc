@@ -219,7 +219,9 @@ if [[ -n $_bat_exec ]]; then
     export BAT_PAGER="$PAGER -RF"
 fi
 
-# Fall back if preferred ls tool is not installed
+# eza (the default) or ls. Any other value -- a retired `lsd`, a typo -- means
+# eza; then fall back to plain ls when eza is not installed.
+[[ ${LOADOUT_CFG_PREFERRED_LS} == ls ]] || LOADOUT_CFG_PREFERRED_LS=eza
 if ! command -v "${LOADOUT_CFG_PREFERRED_LS}" >/dev/null; then
     LOADOUT_CFG_PREFERRED_LS="ls"
 fi
@@ -479,19 +481,7 @@ done
 #   * Doesn't have to test for preferred ls tool everytime
 if fpcmp $_glibc -gt 2.17; then
     export EZA_ARGS="--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
-    export LSD_ARGS="--sort time --long --reverse --date '+%D %H:%M:%S'"
-    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "lsd" ]]; then
-        eval "
-        ls() {
-            if [[ \$1 == '-1' ]]; then
-                command ls \"\$@\"
-                return
-            fi
-            local option_size=\$([[ \$human_readable == 1 ]] && echo -n short || echo -n bytes)
-            # Careful, the ^[ in the sd search string is acually [ESC] ie typed with <ctrl-v>ESC
-            $(realpath $(which lsd)) --size \$option_size \$LSD_ARGS --date '+%D %H:%M:%S' \$LSD_ARGS \"\$@\"
-        }"
-    elif [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
+    if [[ ${LOADOUT_CFG_PREFERRED_LS} == "eza" ]]; then
         # Run eza from a copy in the fast scratch root, but only from a dir
         # private to us (every `ls` executes it). Otherwise run it in place.
         _eza_src=$(realpath $(which eza) 2>/dev/null)

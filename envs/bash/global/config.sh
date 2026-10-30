@@ -12,7 +12,8 @@ export LOADOUT_CFG_SHARED_PREFIX=""
 # must be private to you (loadout_private_dir) or it is not used. Mainly a test
 # seam; leave it at /dev/shm.
 export LOADOUT_CFG_SHM_DIR="/dev/shm"
-# Valid values for LOADOUT_CFG_PREFERRED_LS: eza, lsd, ls
+# LOADOUT_CFG_PREFERRED_LS: eza (the default) or ls. Any other value means eza;
+# eza falls back to plain ls when it is not installed.
 export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"
 export LOADOUT_CFG_ATTACH_TO_TMUX="0"

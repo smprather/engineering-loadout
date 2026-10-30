@@ -171,10 +171,11 @@ if ( $?LOADOUT_CFG_PREFERRED_VI ) then
     setenv GIT_EDITOR "$LOADOUT_CFG_PREFERRED_VI"
 endif
 
-# Fall back when the preferred ls tool is not installed.
-if ( $?LOADOUT_CFG_PREFERRED_LS ) then
-    if ( ! -X "$LOADOUT_CFG_PREFERRED_LS" ) setenv LOADOUT_CFG_PREFERRED_LS ls
-endif
+# eza (the default) or ls. Any other value -- a retired `lsd`, a typo -- means
+# eza; then fall back to plain ls when eza is not installed.
+if ( ! $?LOADOUT_CFG_PREFERRED_LS ) setenv LOADOUT_CFG_PREFERRED_LS eza
+if ( "$LOADOUT_CFG_PREFERRED_LS" != "ls" ) setenv LOADOUT_CFG_PREFERRED_LS eza
+if ( ! -X "$LOADOUT_CFG_PREFERRED_LS" ) setenv LOADOUT_CFG_PREFERRED_LS ls
 
 # ---- everything below is interactive-only ------------------------------------
 if ( $?prompt ) then
@@ -294,7 +295,6 @@ if ( $?prompt ) then
     # Same variable names and same values as envs/bash/global/bashrc, so both
     # shells list identically and a user override applies to both.
     setenv EZA_ARGS "--classify=always --color=always --icons=always --long --sort date --time modified --time-style relative"
-    setenv LSD_ARGS "--sort time --long --reverse"
 
     # ---- online connectivity detection ---------------------------------------
     # Sets LOADOUT_ONLINE=1/0 once per login; inherited by child shells and tmux

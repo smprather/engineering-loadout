@@ -60,11 +60,15 @@ alias lha='lah'
 alias lsg='lg'
 tree() {
     case ${LOADOUT_CFG_PREFERRED_LS:-} in
-    eza | lsd)
+    eza)
         ls -T "$@"
         ;;
     *)
-        if command -v tree >/dev/null 2>&1; then
+        # A PATH search: `command -v tree` finds THIS function, so a host with
+        # no tree binary ran `command tree` and failed instead of falling back.
+        local _tree
+        if [ -n "${ZSH_VERSION:-}" ]; then _tree=$(whence -p tree); else _tree=$(type -P tree); fi
+        if [ -n "$_tree" ]; then
             command tree "$@"
         else
             /bin/ls -R "$@"

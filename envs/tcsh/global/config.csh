@@ -55,6 +55,7 @@ if ( ! $?LOADOUT_CFG_SHM_DIR )             setenv LOADOUT_CFG_SHM_DIR /dev/shm
 # ---- preferred tools ---------------------------------------------------------
 # The aliases in aliases.csh fall back automatically when the preferred binary is
 # not installed, so these are safe to leave as-is.
+# LOADOUT_CFG_PREFERRED_LS: eza (the default) or ls; any other value means eza.
 if ( ! $?LOADOUT_CFG_PREFERRED_LS )        setenv LOADOUT_CFG_PREFERRED_LS  eza
 if ( ! $?LOADOUT_CFG_PREFERRED_VI )        setenv LOADOUT_CFG_PREFERRED_VI  nvim
 

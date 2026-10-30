@@ -13,6 +13,81 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-30 (4): follow-ups in progress -- lsd retired; next tcsh PREFERRED_LS, tcsh prompt vs tmux zoom
+
+The review integration (items 1-10, tcsh audit) is committed and passed T1+T2
+and Tier 3 (`92f9a6b`, `3447c5c`, `4bcf866`, `cae2787`). Then the user asked
+for three changes, each its own commit, test first. Written so any agent can
+finish if this session stops (rate limits).
+
+**Step 1 -- DONE (this commit): lsd retired, `LOADOUT_CFG_PREFERRED_LS` takes
+`eza` or `ls`.** lsd was never a loadout package (not in packages.json, no
+payload binary); only the envs fell back to it. bash/zsh/tcsh now treat any
+value other than `ls` as `eza` (silently -- startup must stay quiet), then fall
+back to plain ls when eza is not installed. `LSD_ARGS` and every lsd branch are
+gone. Found on the way: the shared `tree()` (envs/bash/global/aliases.sh) used
+`command -v tree`, which finds the function itself, so a host without a tree
+binary ran `command tree` and failed instead of `/bin/ls -R`; it now does a
+real PATH search (`type -P` / zsh `whence -p`). New T2 test
+`tests/env-ls-choice` (fake eza/lsd print markers; PATH is a symlink copy of
+/usr/bin minus the real eza/lsd). Harness trap found: this host's
+/etc/csh.cshrc appends /usr/bin to tcsh's path BEFORE ~/.tcshrc, putting the
+real eza back -- the test's tcsh user config.csh re-pins PATH, and the plain
+case requires GNU long format (`-rw-...`; eza prints `.rw-...`).
+
+**Step 2 -- TODO: tcsh honors `LOADOUT_CFG_PREFERRED_LS`** (closes entry (3)
+item 2). tcsh normalizes the variable at `envs/tcsh/global/tcshrc:176-178` and
+sources `aliases.csh` later (`tcshrc:377`), but the listing block in
+`envs/tcsh/global/aliases.csh` (`if ( -X eza ) ... else ...`) ignores it. Fix:
+`if ( "$LOADOUT_CFG_PREFERRED_LS" == "eza" ) then` (the normalization already
+guarantees eza is installed when the value is eza). RED first: in
+`tests/env-ls-choice` change the final loop `for sh in bash zsh` to
+`for sh in bash zsh tcsh` -- `prefer-ls/tcsh` must fail before the fix.
+Then mark entry (3) item 2 CLOSED.
+
+**Step 3 -- TODO: tcsh multi-line starship prompt survives tmux zoom/resize.**
+Root cause (verified on a private tmux socket): tcsh renders `\n` inside
+`prompt` by padding the row with spaces until the terminal autowraps, i.e. a
+SOFT wrap. tmux (and any terminal that reflows on resize: WezTerm, kitty, VTE,
+Windows Terminal) re-wraps soft-wrapped lines when the width changes, so the
+two/three prompt lines merge (`~ ... ❯` on one row) and scramble on unzoom.
+Minimal repro: `set prompt = "AAA\nBBB> "`, then `tmux capture-pane -J` shows
+`AAA ... BBB>` joined. bash is unaffected (PS1 newline is a real LF); the
+hand-rolled tcsh fallback prompt is single-line. Chosen design (user approved
+"option a" + Ctrl-L binding; NOT vendoring tcsh -- loadout ships no tcsh and
+users' login shell is the system one):
+1. `envs/tcsh/global/helpers/prompt-markers`: split starship's output --
+   every line but the LAST goes to STDERR as real output (raw SGR, real
+   newlines, same path-colour and python-symbol rewrites, NO `%{ %}`) and is
+   also written to a cache file named by its first argument; only the LAST
+   line goes to STDOUT with `%{ %}` markers and no `\n`. The precmd alias in
+   `global/tcshrc` (~line 454) passes the cache path, e.g.
+   `"$XDG_RUNTIME_DIR/loadout-tcsh-prompt.$$"` (XDG_RUNTIME_DIR is already a
+   private dir by then, tcshrc ~262-269).
+2. In the starship-claimed branch of `global/tcshrc`, bind Ctrl-L:
+   `bindkey -c ^L 'clear; cat "<cache>"'` (verified: `bindkey -c` runs the
+   command, then tcsh redraws the prompt with the typed input intact).
+   Check that `$$`/`$XDG_RUNTIME_DIR` in the bound command expand at key press.
+3. Tests: T1 in `tests/env-tcsh-starship` -- feed a fake 3-line starship
+   output to prompt-markers; assert stdout is one line with markers, stderr
+   holds the two upper lines, the cache file matches. T2 in
+   `tests/install-env-tcsh` (or a new test) -- a PRIVATE tmux socket
+   (`tmux -L <name>`, NEVER the default server; see ~/.claude/CLAUDE.md), tcsh
+   with starship, resize/zoom the pane, `capture-pane -J` must never join the
+   prompt lines; Ctrl-L must bring the upper lines back. Verified manually so
+   far on tcsh 6.24 only -- also check EL8's tcsh 6.20 in the
+   `loadout-smoke:almalinux8.10` container.
+4. Draft (do NOT post without the user's OK) an issue for tcsh-org/tcsh: prompt
+   `\n` is emitted as padding + autowrap, which breaks under reflowing
+   terminals; minimal repro above.
+
+**Per-step gates:** T1 (`TMPDIR=/var/tmp tests/run-all --fast`) plus the
+touched T2 tests; regenerate `payload/installed-sizes.json` then
+`.content-manifest` whenever envs/ or payload/ change; full T1+T2 once after
+step 3. Never run two `tests/run-all` in this repo at once (they share
+`.loadout-deps.log`). Timing rows run-all appends to
+`assurance/release-timings.tsv` go in a final `chore:` commit.
+
 ## 2026-10-30 (3): tcsh env audit -- recommended fixes landed; remaining gaps recorded
 
 Operator report: an obvious tcsh support problem in `envs/`. Read-only scan
@@ -94,7 +169,8 @@ Per operator instruction, no Tier-2 test was run after the interjection;
    `rm *` no longer asks for confirmation. Fix by dropping `-f` or wrapping
    confirmation.
 2. `aliases.csh:76-82` / `tcshrc:175-176`: `LOADOUT_CFG_PREFERRED_LS` is ignored;
-   eza wins whenever installed, else lsd, else ls. `tree` ignores it too.
+   eza wins whenever installed, else ls. `tree` ignores it too. (lsd support
+   was retired 2026-10-30.)
 3. `aliases.csh:77-82`: `ls -1` is not special-cased to `/bin/ls -1`; it emits a
    colored long listing and can be empty on a non-tty.
 4. `tcshrc:316-322` + `grc-aliases.csh:20-21`: GRC is enabled by default but
@@ -110,8 +186,8 @@ Per operator instruction, no Tier-2 test was run after the interjection;
 7. `tcshrc:141-177`: non-interactive tcsh exports `EDITOR`/`VISUAL`/
    `GIT_EDITOR`; non-interactive bash does not. Align with bash or update the
    "same here" comment.
-8. `tcshrc:275` / `aliases.csh:73-88`: `LSD_ARGS` omits bash's `--date` (tcsh
-   hardcodes it per alias), so a user override behaves differently.
+8. CLOSED 2026-10-30: lsd support was retired from every env, so `LSD_ARGS` is
+   gone.
 9. `loadout_main.py` `_install_env_tcsh`: `remove_if_exists` deletes a **regular**
    `~/.cshrc`, not only a loadout link; docs say links are pruned. Backups cover
    it, but `--no-backup` makes the deletion permanent. Remove only symlinks or

@@ -71,9 +71,9 @@ alias latest    'eval `'"$_lo_helpers"'/latest-link \!*`'
 # per-call variables (`human_readable=1 ls`). csh has no functions and no
 # per-command variable prefix, so each variant is its own alias built from the
 # same arg sets that global/tcshrc exported. Same output, different mechanism.
-# $EZA_ARGS / $LSD_ARGS are the SAME variables the bash ls() function uses, set
-# to the same values by global/tcshrc -- so the two shells produce identical
-# listings and a user who overrides one variable changes both.
+# $EZA_ARGS is the SAME variable the bash ls() function uses, set to the same
+# value by global/tcshrc -- so the two shells produce identical listings and a
+# user who overrides it changes both.
 if ( -X eza ) then
     alias ls    'eza --time-style "+%D %H:%M:%S" -B $EZA_ARGS'
     alias lh    'eza --time-style "+%D %H:%M:%S" $EZA_ARGS'
@@ -81,13 +81,6 @@ if ( -X eza ) then
     alias lg    'eza --time-style "+%D %H:%M:%S" -g -B $EZA_ARGS'
     alias lah   'eza --time-style "+%D %H:%M:%S" -a $EZA_ARGS'
     alias tree  'eza -T'
-else if ( -X lsd ) then
-    alias ls    'lsd --size bytes --date "+%D %H:%M:%S" $LSD_ARGS'
-    alias lh    'lsd --size short --date "+%D %H:%M:%S" $LSD_ARGS'
-    alias la    'lsd --size bytes --date "+%D %H:%M:%S" -a $LSD_ARGS'
-    alias lg    'lsd --size bytes --date "+%D %H:%M:%S" -g $LSD_ARGS'
-    alias lah   'lsd --size short --date "+%D %H:%M:%S" -a $LSD_ARGS'
-    alias tree  'lsd -T'
 else
     alias ls    'ls --color -lrt --no-group --human-readable'
     alias lh    'ls --color -lrt --no-group'

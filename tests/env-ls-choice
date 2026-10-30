@@ -1,0 +1,133 @@
+#!/bin/sh
+# env-ls-choice: which listing tool `ls` and `tree` run, in bash, zsh and tcsh.
+#
+# eza is the one enhanced ls loadout ships; lsd support is retired.
+# LOADOUT_CFG_PREFERRED_LS accepts `eza` (the default) or `ls`. Any other value
+# -- a leftover `lsd`, a typo -- means eza, silently (startup stays quiet), and
+# eza falls back to plain ls when it is not installed.
+#
+# Fake eza/lsd scripts print a marker, and PATH is a symlink copy of /usr/bin
+# WITHOUT the real eza/lsd, so every case is deterministic on any host.
+#
+# Harness rules (AGENTS.md "Shell-config test harness traps"): real PTY via
+# script(1), env -i, and output scanned for shell error vocabulary.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-ls.XXXXXX")"
+trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+ME=$(id -un)
+H="$T/home"
+mkdir -p "$H"
+
+env -i HOME="$H" PATH=/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TMPDIR="${TMPDIR:-/tmp}" \
+    "$REPO/loadout" install -y --no-backup @envs env-zsh >"$T/install.log" 2>&1 \
+    || { tail -30 "$T/install.log" >&2; fail "install of @envs env-zsh failed"; }
+
+# /usr/bin minus any real eza/lsd (on usrmerge hosts /bin is /usr/bin).
+mkdir -p "$T/sysbin" "$T/with-eza" "$T/lsd-only"
+for f in /usr/bin/*; do
+    case ${f##*/} in eza | lsd) continue ;; esac
+    ln -s "$f" "$T/sysbin/${f##*/}"
+done
+printf '#!/bin/sh\necho FAKE-EZA\n' >"$T/with-eza/eza"
+printf '#!/bin/sh\necho FAKE-LSD\n' >"$T/with-eza/lsd"
+cp "$T/with-eza/lsd" "$T/lsd-only/lsd"
+chmod +x "$T/with-eza/eza" "$T/with-eza/lsd" "$T/lsd-only/lsd"
+
+mkdir -p "$H/.config/bash/user" "$H/.config/tcsh/user" "$T/cwd"
+touch "$T/cwd/plain-listing-marker"
+
+# Set (or with no argument, clear) the preference in the user layer: zsh reads
+# the bash layers' config.sh too, tcsh its own config.csh. The tcsh layer also
+# re-pins PATH: a host's /etc/csh.cshrc runs BEFORE ~/.tcshrc and may append
+# /usr/bin (CachyOS does), which would put the host's real eza back on path
+# before aliases.csh picks the listing tool.
+set_pref() {
+    printf 'export LOADOUT_CFG_SHM_DIR="%s"\n' "$T/shm" >"$H/.config/bash/user/config.sh"
+    printf 'setenv LOADOUT_CFG_SHM_DIR "%s"\nsetenv PATH "$LO_TEST_PATH"\n' "$T/shm" >"$H/.config/tcsh/user/config.csh"
+    if [ $# -gt 0 ]; then
+        printf 'export LOADOUT_CFG_PREFERRED_LS="%s"\n' "$1" >>"$H/.config/bash/user/config.sh"
+        printf 'setenv LOADOUT_CFG_PREFERRED_LS "%s"\n' "$1" >>"$H/.config/tcsh/user/config.csh"
+    fi
+    rm -rf "$T/shm"
+}
+
+strip_escapes() {
+    sed -e 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g' \
+        -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+        -e 's/\x1b[()][A-Za-z0-9]//g' \
+        | tr -d '\r'
+}
+
+# Run `ls` then `tree` in an interactive shell with FAKEDIR ahead of sysbin.
+listing() {
+    _sh=$1
+    _fake=$2
+    cd "$T/cwd"
+    case $_sh in
+        bash) env -i HOME="$H" USER="$ME" LOGNAME="$ME" PATH="$_fake:$T/sysbin" TERM=xterm-256color \
+            LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 script -qec 'bash -i -c "ls; tree"' /dev/null </dev/null ;;
+        zsh | tcsh) printf 'ls\ntree\nexit\n' | env -i HOME="$H" USER="$ME" LOGNAME="$ME" \
+            PATH="$_fake:$T/sysbin" LO_TEST_PATH="$_fake:$T/sysbin" TERM=xterm-256color \
+            LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 script -qec "$_sh -i" /dev/null ;;
+    esac 2>&1 | strip_escapes
+    cd "$REPO"
+}
+
+assert_quiet() {
+    for _pat in 'command not found' 'Command not found' 'syntax error' 'No such file or directory' \
+                'not a valid identifier' 'Faulty alias' 'Undefined variable' 'Unmatched' \
+                'parse error' 'bad substitution'; do
+        case $2 in
+            *"$_pat"*) fail "$1: shell printed '$_pat':
+$2" ;;
+        esac
+    done
+}
+
+# want=eza: both `ls` and `tree` ran eza (two markers) and lsd never ran.
+# want=plain: neither fake ran, and GNU ls listed the directory in long format
+# (`-rw-...`; eza prints `.rw-...`, so a real eza that leaked onto PATH fails).
+expect() {
+    _label=$1
+    _want=$2
+    _out=$3
+    assert_quiet "$_label" "$_out"
+    case $_out in *FAKE-LSD*) fail "$_label: ran lsd (support is retired):
+$_out" ;; esac
+    _n=$(printf '%s\n' "$_out" | grep -c FAKE-EZA || true)
+    case $_want in
+        eza) [ "$_n" -eq 2 ] || fail "$_label: want eza for ls and tree, got $_n eza run(s):
+$_out" ;;
+        plain)
+            [ "$_n" -eq 0 ] || fail "$_label: want plain ls, but eza ran:
+$_out"
+            printf '%s\n' "$_out" | grep -q '^-.*plain-listing-marker' \
+                || fail "$_label: plain GNU ls did not list the directory:
+$_out"
+            ;;
+    esac
+    echo "  PASS  $_label"
+}
+
+for sh in bash zsh tcsh; do
+    set_pref
+    expect "default/$sh" eza "$(listing "$sh" "$T/with-eza")"
+    set_pref lsd
+    expect "lsd-means-eza/$sh" eza "$(listing "$sh" "$T/with-eza")"
+    set_pref bogus
+    expect "invalid-means-eza/$sh" eza "$(listing "$sh" "$T/with-eza")"
+    set_pref
+    expect "no-eza-is-plain/$sh" plain "$(listing "$sh" "$T/lsd-only")"
+done
+
+for sh in bash zsh; do
+    set_pref ls
+    expect "prefer-ls/$sh" plain "$(listing "$sh" "$T/with-eza")"
+done
+
+echo "env-ls-choice: OK"
