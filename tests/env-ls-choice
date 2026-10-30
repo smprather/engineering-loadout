@@ -125,7 +125,7 @@ for sh in bash zsh tcsh; do
     expect "no-eza-is-plain/$sh" plain "$(listing "$sh" "$T/lsd-only")"
 done
 
-for sh in bash zsh; do
+for sh in bash zsh tcsh; do
     set_pref ls
     expect "prefer-ls/$sh" plain "$(listing "$sh" "$T/with-eza")"
 done

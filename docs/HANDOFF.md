@@ -35,7 +35,7 @@ real PATH search (`type -P` / zsh `whence -p`). New T2 test
 real eza back -- the test's tcsh user config.csh re-pins PATH, and the plain
 case requires GNU long format (`-rw-...`; eza prints `.rw-...`).
 
-**Step 2 -- TODO: tcsh honors `LOADOUT_CFG_PREFERRED_LS`** (closes entry (3)
+**Step 2 -- DONE: tcsh honors `LOADOUT_CFG_PREFERRED_LS`** (closes entry (3)
 item 2). tcsh normalizes the variable at `envs/tcsh/global/tcshrc:176-178` and
 sources `aliases.csh` later (`tcshrc:377`), but the listing block in
 `envs/tcsh/global/aliases.csh` (`if ( -X eza ) ... else ...`) ignores it. Fix:
@@ -168,9 +168,8 @@ Per operator instruction, no Tier-2 test was run after the interjection;
 1. `aliases.csh:179` `alias rm 'rm -f'` defeats `set rmstar` in `tcshrc:191`:
    `rm *` no longer asks for confirmation. Fix by dropping `-f` or wrapping
    confirmation.
-2. `aliases.csh:76-82` / `tcshrc:175-176`: `LOADOUT_CFG_PREFERRED_LS` is ignored;
-   eza wins whenever installed, else ls. `tree` ignores it too. (lsd support
-   was retired 2026-10-30.)
+2. CLOSED 2026-10-30 (entry (4) step 2): the tcsh listing aliases (and `tree`)
+   follow `LOADOUT_CFG_PREFERRED_LS` like bash.
 3. `aliases.csh:77-82`: `ls -1` is not special-cased to `/bin/ls -1`; it emits a
    colored long listing and can be empty on a non-tty.
 4. `tcshrc:316-322` + `grc-aliases.csh:20-21`: GRC is enabled by default but

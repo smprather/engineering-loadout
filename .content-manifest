@@ -72,6 +72,7 @@ sha256  049c4dfcb6bba62f71f2ebd62ddc0f8c0ff5433b89a95add40a278233e9d104b  payloa
 sha256  049d4106af32438f364f868888b3858f368c56e5e9a02eea00c1e67c6f8e82dc  payload/el8.x86_64.glibc2p28/lib64/libOsi.so.0.bz2
 sha256  04a931684013f402860983632ce5d970bbef2f54d1798eeb2dacd6719cb56fed  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/meson/indents.scm
 sha256  04a931684013f402860983632ce5d970bbef2f54d1798eeb2dacd6719cb56fed  payload/treesitter/vendor/nvim-treesitter/runtime/queries/meson/indents.scm
+sha256  04aedf16b70c477901818d2e85901b8f4750d61bfbd004bdc7bbadcce22c6912  payload/installed-sizes.json
 sha256  04bca352b6c8e3a3c90be8599b1dec0d5dbdde8ba582bebd396bfa715d8c57c5  payload/el8.x86_64.glibc2p28/bin/ptx.bz2
 sha256  04cfb609f5dd4b56ff07306f046eb17c3398a939c7e7d5e3c4f04d9f7d32ba74  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/elsa.so.bz2
 sha256  04ff8b529d8a05c64b5c2a228ccec7cad98e34726fa6463d513e8c8b721010d6  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/rst/locals.scm
@@ -1430,7 +1431,6 @@ sha256  52897bfa8d97ca515e65b8f51ca00e6c5910e6a4f3db574316a52eb470d9cf20  payloa
 sha256  528e6508f127cf583b2d8770e171f884b39fbcb31fe9b59b24daaf04248b7112  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/dockerfile/injections.scm
 sha256  528e6508f127cf583b2d8770e171f884b39fbcb31fe9b59b24daaf04248b7112  payload/treesitter/vendor/nvim-treesitter/runtime/queries/dockerfile/injections.scm
 sha256  528fa3cc297b65349d21ed362ac48afe4e1a2c0b009d4289bc4e9eda4297c92a  payload/treesitter/vendor/nvim-treesitter/tests/indent/snakemake/blocks.smk
-sha256  52bb33f1fe398b7a9eed1e3b7876f30e02244cff10cc115e963d33675c26a31e  payload/installed-sizes.json
 sha256  52ca5b03ba16caf08c5f1d42e119aa0aa406c557f843673fa4a11dfebd146b4e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/proto/highlights.scm
 sha256  52ca5b03ba16caf08c5f1d42e119aa0aa406c557f843673fa4a11dfebd146b4e  payload/treesitter/vendor/nvim-treesitter/runtime/queries/proto/highlights.scm
 sha256  52cf1d8fd2d89db536118fc20966a8b8cb025d7df12af6412938d91caf6907d9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/usd/indents.scm

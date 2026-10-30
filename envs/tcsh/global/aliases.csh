@@ -73,8 +73,10 @@ alias latest    'eval `'"$_lo_helpers"'/latest-link \!*`'
 # same arg sets that global/tcshrc exported. Same output, different mechanism.
 # $EZA_ARGS is the SAME variable the bash ls() function uses, set to the same
 # value by global/tcshrc -- so the two shells produce identical listings and a
-# user who overrides it changes both.
-if ( -X eza ) then
+# user who overrides it changes both. LOADOUT_CFG_PREFERRED_LS picks the tool,
+# exactly as in bash: global/tcshrc has already normalized it to `eza` or `ls`
+# (eza only when it is installed) before this file is sourced.
+if ( "$LOADOUT_CFG_PREFERRED_LS" == "eza" ) then
     alias ls    'eza --time-style "+%D %H:%M:%S" -B $EZA_ARGS'
     alias lh    'eza --time-style "+%D %H:%M:%S" $EZA_ARGS'
     alias la    'eza --time-style "+%D %H:%M:%S" -a -B $EZA_ARGS'
