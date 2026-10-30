@@ -231,12 +231,31 @@ alias c='clear'
 alias w='type -a'
 alias ho='hostname -s'
 alias d='date'
-alias rm='rm -f'
+# No `rm -f` alias: it hides rm's own prompts (tcsh's `set rmstar` in
+# particular) and a wrapper must not silently change destructive semantics.
 alias mkdir='mkdir -p'
 alias mdkir='mkdir'
 alias rs='rsync --archive --info=progress2 --info=name0 --no-inc-recursive --exclude="*/.snapshot/"'
-alias du='du --block-size=G -s * | sort -r -n -k 1'
-alias dum='/bin/du --block-size=M -s * | sort -r -n -k 1'
+# Functions, not aliases: `alias du='du ... | sort'` put an argument typed after
+# `du` on sort's side of the pipe, so `du DIR` failed with "read failed: ...: Is
+# a directory". command keeps the function from recursing. GRC may have defined
+# `du`/`dum` aliases earlier, and an alias is expanded while the function line is
+# parsed -- unalias first (the df() function below does the same).
+unalias du dum 2>/dev/null || true
+du() {
+    if [[ $# -eq 0 ]]; then
+        command du --block-size=G -s -- * | sort -r -n -k 1
+    else
+        command du --block-size=G -s -- "$@" | sort -r -n -k 1
+    fi
+}
+dum() {
+    if [[ $# -eq 0 ]]; then
+        command du --block-size=M -s -- * | sort -r -n -k 1
+    else
+        command du --block-size=M -s -- "$@" | sort -r -n -k 1
+    fi
+}
 unalias df 2>/dev/null || true
 df() {
     if command -v colourify >/dev/null 2>&1; then
@@ -303,8 +322,8 @@ a() {
 alias clean_bash='echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME USER=$(/bin/whoami) /bin/bash --rcfile ~/.clean.bashrc"'
 alias vman="MANPAGER='nvim +Man\!' man"
 str() { strace -o "$(loadout_tmp_root)/strace.${USER:-user}" -f -v -s 1000000 "$@"; }
-alias sp1="set_prompt"
-alias sp2="LOADOUT_CFG_PROMPT_INCLUDE_HOST=1 set_prompt"
+alias sp1="export LOADOUT_CFG_PROMPT_INCLUDE_HOST=0; set_prompt"
+alias sp2="export LOADOUT_CFG_PROMPT_INCLUDE_HOST=1; set_prompt"
 alias fsbm='fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test; rm ./fio_test'
 # I was getting a weird completion failure for `x <tab>`. This is the work-around.
 # `complete` is a bash builtin with no zsh equivalent, and this file is sourced

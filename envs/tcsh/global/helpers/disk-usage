@@ -1,0 +1,15 @@
+#!/bin/sh
+# Print disk usage for the given paths, largest first. Backs `du` and `dum`.
+#
+# The alias form `du ... -s * | sort ...` appended the user's operand AFTER the
+# pipe, so `du DIR` became a sort input file and failed with
+# "read failed: DIR: Is a directory". With no operands the historical `*`
+# expansion is kept.
+#
+# Usage: disk-usage G|M [PATH...]
+
+block=${1:-G}
+[ "$#" -gt 0 ] && shift
+[ "$#" -gt 0 ] || set -- *
+
+du --block-size="$block" -s -- "$@" | sort -r -n -k 1

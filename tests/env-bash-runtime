@@ -61,4 +61,24 @@ $err_trap"
 fi
 echo "  PASS  ERR trap keeps only the directory branch"
 
+# 4. `du DIR` must keep DIR on du's side of the pipe; the alias form appended it
+#    to sort, which failed with "read failed: ...: Is a directory".
+mkdir -p "$T/dutest/sub"
+dd if=/dev/zero of="$T/dutest/sub/file" bs=1024 count=4 2>/dev/null
+out=$(interactive "du '$T/dutest'")
+case $out in
+    *'sort:'*) fail "du DIR sent DIR to sort: [$out]" ;;
+esac
+printf '%s\n' "$out" | grep -q "$T/dutest" || fail "du DIR did not report DIR: [$out]"
+echo "  PASS  du DIR keeps DIR out of the sort pipe"
+
+# 5. sp1/sp2 must EXPORT the switch: starship's modules run in a child shell,
+#    so a shell-local assignment drives only the fallback prompt.
+out=$(interactive 'sp2; printf "H=%s\n" "$LOADOUT_CFG_PROMPT_INCLUDE_HOST"; sh -c "echo C=\$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
+printf '%s\n' "$out" | grep -q '^H=1$' || fail "sp2 did not set the host switch: [$out]"
+printf '%s\n' "$out" | grep -q '^C=1$' || fail "sp2 did not export the host switch: [$out]"
+out=$(interactive 'sp2; sp1; printf "H=%s\n" "$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
+printf '%s\n' "$out" | grep -q '^H=0$' || fail "sp1 did not clear the host switch: [$out]"
+echo "  PASS  sp1/sp2 export the host prompt switch"
+
 echo "env-bash-runtime: OK"

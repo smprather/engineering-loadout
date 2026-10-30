@@ -1,0 +1,45 @@
+#!/bin/sh
+# Exit 0 when the terminal supports extended keys, 1 otherwise.
+#
+# Port of check_extended_keys() in envs/bash/functions.sh: cheap TERM/TMUX
+# answers first, then a Secondary Device Attributes query. tmux answers with
+# vendor id 84 when extended-keys is on; a plain xterm does not.
+#
+# The pending-input guard and the timed read need bash's `read -t`. /bin/sh is
+# bash on every supported EL (7/8/9) and Suse, and both are skipped when the
+# shell does not support them, so the probe never eats type-ahead.
+
+case ${TERM:-} in
+    *kitty*|*alacritty*) exit 0 ;;
+esac
+
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+    if tmux show-options -s extended-keys 2>/dev/null | grep -q 'on'; then
+        exit 0
+    fi
+fi
+
+[ -t 0 ] && [ -t 1 ] || exit 1
+
+# Non-consuming readability test. bash returns 0 for pending input, 1 for none,
+# 2 for an unsupported -t; a shell without it skips the probe.
+read -t 0 2>/dev/null
+rc=$?
+[ "$rc" -eq 0 ] && exit 1
+[ "$rc" -gt 1 ] && exit 1
+
+old_stty=$(stty -g 2>/dev/null) || exit 1
+trap 'stty "$old_stty" 2>/dev/null' EXIT HUP INT TERM
+stty -echo 2>/dev/null || exit 1
+
+printf '\033[>c'
+response=
+read -r -d c -t 0.1 response 2>/dev/null
+
+stty "$old_stty" 2>/dev/null
+trap - EXIT HUP INT TERM
+
+case $response in
+    *'>84;'*) exit 0 ;;
+    *) exit 1 ;;
+esac

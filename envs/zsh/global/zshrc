@@ -383,8 +383,8 @@ if (( _loadout_starship_ok )); then
 else
     set_prompt
 fi
-alias sp1="set_prompt"
-alias sp2="LOADOUT_CFG_PROMPT_INCLUDE_HOST=1 set_prompt"
+alias sp1="export LOADOUT_CFG_PROMPT_INCLUDE_HOST=0; set_prompt"
+alias sp2="export LOADOUT_CFG_PROMPT_INCLUDE_HOST=1; set_prompt"
 
 # WezTerm / OSC 133 semantic zones + OSC 7 cwd. The vendored wezterm.sh is the
 # BASH-PREEXEC variant and has no zsh path at all, so this is implemented on

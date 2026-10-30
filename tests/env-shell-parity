@@ -455,11 +455,53 @@ def main():
         'set path = ( $path:q "$_loadout_dir" )' in tcsh_rc and "${_loadout_prefix}/prefer" in tcsh_rc,
         "tcsh PATH block drifted from bash",
     )
-    tcsh_prepend_line = re.search(r"foreach _loadout_dir \( /usr/local/bin[^\n]*\)", tcsh_rc)
+    tcsh_prepend_line = re.search(r"foreach _loadout_dir \( [^\n]*\)", tcsh_rc)
     check(
         "tcsh prepend list no longer carries the shared bin",
         bool(tcsh_prepend_line) and "${_loadout_prefix}/bin" not in tcsh_prepend_line.group(0),
         tcsh_prepend_line.group(0) if tcsh_prepend_line else "foreach line not found",
+    )
+    check(
+        "tcsh prepend list resolves NVM_BIN and matches bash's order",
+        bool(tcsh_prepend_line)
+        and "$_loadout_nvm_bin" in tcsh_prepend_line.group(0)
+        and "/usr/local/bin" in tcsh_prepend_line.group(0),
+        tcsh_prepend_line.group(0) if tcsh_prepend_line else "foreach line not found",
+    )
+    check(
+        "tcsh terminfo prepend order matches bash (prefix first)",
+        re.search(
+            r"foreach _loadout_ti \( \"\$HOME/\.local/share/terminfo\" \"\$\{_loadout_prefix\}/share/terminfo\" \)",
+            tcsh_rc,
+        )
+        is not None,
+        "tcsh prepends home terminfo last, visible order becomes home:prefix",
+    )
+    check(
+        "tcsh listing/new/du aliases use helpers",
+        all(name in read(TCSH_ALIASES) for name in ("ls-command", "new-file", "extract-rpm", "disk-usage")),
+        "an inline csh alias cannot branch on arguments (ls -1, du DIR, arity)",
+    )
+    check(
+        "tcsh extended-keys probe is the shared helper",
+        "check-extended-keys" in read(TCSH_TCSHRC),
+        "the cheap TERM/TMUX check leaves a bare xterm login unset",
+    )
+    check(
+        "tcsh GRC falls back to the bash env's vendored grc",
+        ".config/bash/global/grc/bin" in read(TCSH_TCSHRC),
+        "env-tcsh ships no grc binary; a direct login never found one",
+    )
+    check(
+        "no shell defeats rmstar with an rm -f alias",
+        "alias rm" not in read(TCSH_ALIASES) and "alias rm" not in read(BASH_ALIASES),
+        "rm * must still ask for confirmation",
+    )
+    check(
+        "sp1/sp2 export the host prompt switch",
+        "setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST" in read(TCSH_ALIASES)
+        and "export LOADOUT_CFG_PROMPT_INCLUDE_HOST" in read(BASH_ALIASES),
+        "a shell-local assignment is invisible to the starship module",
     )
 
     # ---- tcsh syntax traps ---------------------------------------------------

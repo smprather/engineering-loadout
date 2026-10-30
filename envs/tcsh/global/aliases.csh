@@ -77,14 +77,14 @@ alias latest    'eval `'"$_lo_helpers"'/latest-link \!*`'
 # exactly as in bash: global/tcshrc has already normalized it to `eza` or `ls`
 # (eza only when it is installed) before this file is sourced.
 if ( "$LOADOUT_CFG_PREFERRED_LS" == "eza" ) then
-    alias ls    'eza --time-style "+%D %H:%M:%S" -B $EZA_ARGS'
+    alias ls    "$_lo_helpers/ls-command"
     alias lh    'eza --time-style "+%D %H:%M:%S" $EZA_ARGS'
     alias la    'eza --time-style "+%D %H:%M:%S" -a -B $EZA_ARGS'
     alias lg    'eza --time-style "+%D %H:%M:%S" -g -B $EZA_ARGS'
     alias lah   'eza --time-style "+%D %H:%M:%S" -a $EZA_ARGS'
     alias tree  'eza -T'
 else
-    alias ls    'ls --color -lrt --no-group --human-readable'
+    alias ls    "$_lo_helpers/ls-command"
     alias lh    'ls --color -lrt --no-group'
     alias la    'ls --color -lrt --no-group --human-readable -a'
     alias lg    'ls --color -lrt --human-readable'
@@ -114,7 +114,7 @@ alias vii       'set _lo_f = "`'"$_lo_helpers"'/recent-file`" ; if ( "$_lo_f" !=
 alias ovi       '\vim'
 alias v         'nvim -n -R -'
 alias wip       '$LOADOUT_CFG_PREFERRED_VI $HOME/wip.txt'
-alias new       'touch \!:1 && chmod +x \!:1 && $LOADOUT_CFG_PREFERRED_VI \!:1'
+alias new       "$_lo_helpers/new-file"
 alias test_nvim 'env NVIM_APPNAME=test_nvim nvim'
 if ( -X fzf ) then
     alias fvi   'set _lo_f = "`fzf`" ; if ( "$_lo_f" != "" ) $LOADOUT_CFG_PREFERRED_VI "$_lo_f" ; unset _lo_f'
@@ -172,12 +172,13 @@ alias c         'clear'
 alias w         'where'
 alias ho        'hostname -s'
 alias d         'date'
-alias rm        'rm -f'
+# No `rm -f` alias: it suppressed tcsh's `set rmstar` confirmation. Keep the
+# shell's own rm; the audit found `rm *` deleting files without asking.
 alias mkdir     'mkdir -p'
 alias mdkir     'mkdir -p'
 alias rs        'rsync --archive --info=progress2 --info=name0 --no-inc-recursive --exclude="*/.snapshot/"'
-alias du        'du --block-size=G -s * | sort -r -n -k 1'
-alias dum       '/bin/du --block-size=M -s * | sort -r -n -k 1'
+alias du        "$_lo_helpers/disk-usage G"
+alias dum       "$_lo_helpers/disk-usage M"
 alias pl        "$_lo_helpers/path-list"
 alias tx        'tar -xvf'
 alias tt        'tar -tvf'
@@ -188,7 +189,7 @@ alias gmw       'chmod -R g-w'
 alias x         'chmod +x'
 alias rp        'realpath'
 alias lns       "$_lo_helpers/safe-symlink"
-alias extract_rpm 'rpm2cpio \!:1 | cpio -idmv'
+alias extract_rpm "$_lo_helpers/extract-rpm"
 alias zhead     "$_lo_helpers/zhead"
 alias vman      'env MANPAGER="nvim +Man\!" man'
 alias clean_bash 'echo "/usr/bin/env --ignore-environment PATH=/bin HOME=$HOME USER=`/bin/whoami` /bin/bash --rcfile ~/.clean.bashrc"'
@@ -204,8 +205,17 @@ alias str       'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; strace -o "$_lo_t
 # set_prompt function; csh has no functions, so these reassign the prompt lead
 # that global/tcshrc left in place for exactly this purpose (and that precmd
 # re-reads on the next prompt).
-alias sp1       'set loadout_prompt_lead = "$loadout_prompt_lead_nohost" ; set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
-alias sp2       'set loadout_prompt_lead = "$loadout_prompt_lead_host" ; set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
+#
+# Under starship, `prompt` and the lead are overwritten on the next precmd, so
+# the switch starship actually reads is the EXPORTED config variable -- the
+# custom.host module runs in a child shell. Those aliases therefore setenv only.
+if ( $?loadout_prompt_starship ) then
+    alias sp1   'setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST 0'
+    alias sp2   'setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST 1'
+else
+    alias sp1   'setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST 0 ; set loadout_prompt_lead = "$loadout_prompt_lead_nohost" ; set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
+    alias sp2   'setenv LOADOUT_CFG_PROMPT_INCLUDE_HOST 1 ; set loadout_prompt_lead = "$loadout_prompt_lead_host" ; set prompt = "${loadout_prompt_lead}%B%~%b %#${loadout_prompt_tail}"'
+endif
 alias fsbm      'fio --randrepeat=1 --ioengine=libaio --direct=0 --gtod_reduce=1 --name=test --bs=4k --iodepth=64 --readwrite=randrw --rwmixread=75 --size=4G --filename=./fio_test ; rm ./fio_test'
 
 if ( -X rp ) then

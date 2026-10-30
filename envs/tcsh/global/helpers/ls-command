@@ -1,0 +1,20 @@
+#!/bin/sh
+# The `ls` alias target. Mirrors the bash env's ls() function:
+#
+#   * `ls -1` ALWAYS goes to /bin/ls. eza has no -1, and a long listing on a
+#     non-tty can be empty, so scripts and pipes need the real one.
+#   * everything else follows LOADOUT_CFG_PREFERRED_LS, already normalized by
+#     global/tcshrc to `eza` (only when installed) or `ls`.
+#
+# A csh alias cannot branch on its arguments, which is why this is a helper.
+
+if [ "${1:-}" = "-1" ]; then
+    exec /bin/ls -1 "$@"
+fi
+
+if [ "${LOADOUT_CFG_PREFERRED_LS:-}" = "eza" ] && command -v eza >/dev/null 2>&1; then
+    # shellcheck disable=SC2086  # EZA_ARGS is a deliberately split flag list
+    exec eza --time-style '+%D %H:%M:%S' -B ${EZA_ARGS:-} "$@"
+fi
+
+exec /bin/ls --color -lrt --no-group --human-readable "$@"

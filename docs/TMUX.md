@@ -181,12 +181,15 @@ and panes use tmux's normal `$SHELL`/passwd default, so a tcsh login gets tcsh
 panes. Helpers that need bash (`tmux-popout`, the layout/state scripts) invoke
 it explicitly.
 
-`EXTENDED_KEYS_SUPPORTED` is exported by bash/zsh after their Terminal-DA
-probe. tcsh exports `1` for kitty/alacritty and for an existing tmux server
-whose `extended-keys` is already on, and otherwise leaves it unset. The config
-only forces `extended-keys off` when the variable is explicitly `0`; an unset
-value leaves the default `extended-keys on` alone, so a tcsh login no longer
-disables extended keys server-wide.
+`EXTENDED_KEYS_SUPPORTED` is exported by bash/zsh/tcsh from the same
+`check_extended_keys` logic: kitty/alacritty and an existing tmux server whose
+`extended-keys` is already on are answered cheaply; otherwise a Secondary-DA
+probe runs, refusing to consume pending type-ahead. tcsh runs the probe through
+`envs/tcsh/global/helpers/check-extended-keys`, so a bare xterm login now
+exports `0` like bash instead of leaving the variable unset. The config only
+forces `extended-keys off` when the variable is explicitly `0`; an unset value
+leaves the default `extended-keys on` alone, so a tcsh login never disables
+extended keys server-wide.
 
 ## Focus follows mouse (FFM)
 

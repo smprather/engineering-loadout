@@ -47,8 +47,10 @@ is now the floor rather than the goal.
 
 ## The layer chain
 
-Same shape as bash. `~/.tcshrc` links to `~/.config/tcsh/tcshrc` (the retired
-`~/.cshrc` is pruned on install — only plain csh reads it), which sources, lowest first:
+Same shape as bash. `~/.tcshrc` links to `~/.config/tcsh/tcshrc`. The retired
+`~/.cshrc` is pruned **only when it is a loadout link** — a regular user file is
+left alone (tcsh ignores it while `~/.tcshrc` exists, and `--no-backup` must not
+make its deletion permanent). The entrypoint sources, lowest first:
 
 ```
 global -> corp -> site -> team -> project -> user
@@ -66,7 +68,10 @@ after the shared root, so personal overrides survive shared config deployments.
 
 Only `global/` and the top-level `tcshrc` entrypoint are loadout-owned. Put your
 own settings in `~/.config/tcsh/user/config.csh` and
-`~/.config/tcsh/user/tcshrc`; a reinstall never touches them.
+`~/.config/tcsh/user/tcshrc`; a reinstall never touches them. If
+`~/.config/tcsh` is a symlink into a shared tree, the installer materializes it
+and moves every existing `corp/site/team/project/user` layer across first — the
+same preservation the bash env has (zsh shares it).
 
 Site/system aliases loaded by `/etc/csh.cshrc` before this file (Environment
 Modules' `module`/`_module_raw`/`ml`, gawk path helpers, site tooling) are
@@ -96,23 +101,47 @@ Files under `global/` (plus the top-level `tcshrc` entrypoint):
 Behaviour:
 
 - **PATH** — the loadout's `bin` (honoring `LOADOUT_CFG_SHARED_PREFIX`), plus
-  `/usr/local/bin`, `~/.cargo/bin`, `~/go/bin`, `~/.venv/bin`, `~/.opencode/bin`,
-  `~/node_modules/.bin` and NVM's `$NVM_BIN` (when the parent shell exported it;
-  `nvm.sh` is bash-only), each added only when it exists.
-- **Environment** — `EDITOR`/`VISUAL`/`GIT_EDITOR`, `PAGER`, `MANPAGER`, the
-  `LESS_TERMCAP_*` colours (real ESC bytes, like bash), `PIP_REQUIRE_VIRTUALENV`,
-  `PYTHONPYCACHEPREFIX`, `COLORTERM`, `EGL_LOG_LEVEL`, `TERMINFO_DIRS`,
-  `GI_TYPELIB_PATH`, `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`,
-  `FONTCONFIG_FILE` (only when the tree carries `etc/fonts/loadout-fonts.conf`),
-  `GNUPLOT_DRIVER_DIR` — the shared values the bash env exports.
+  `/usr/local/bin`, `~/.cargo/bin`, `~/.venv/bin`, `~/.opencode/bin`,
+  `~/node_modules/.bin`, `~/go/bin` and `~/.local/bin`, each added only when it
+  exists. The final order matches bash's: `~/.local/bin`, `~/go/bin`,
+  `~/node_modules/.bin`, `~/.opencode/bin`, `~/.venv/bin`, `~/.cargo/bin`, then
+  `/usr/local/bin`. NVM comes after those user dirs (bash's `nvm.sh`-then-prepend
+  order). A parent bash's exported `NVM_BIN` wins; a direct tcsh login resolves
+  `~/.nvm/alias/default`, or the newest installed version, via
+  `helpers/nvm-bin` — `nvm.sh` itself is bash-only.
+- **Environment** — `EDITOR`/`VISUAL`/`GIT_EDITOR` (interactive only, like bash;
+  `ssh host cmd` gets the same environment in both shells), `PAGER`, `MANPAGER`,
+  the `LESS_TERMCAP_*` colours (real ESC bytes, like bash),
+  `PIP_REQUIRE_VIRTUALENV`, `PYTHONPYCACHEPREFIX`, `COLORTERM`, `EGL_LOG_LEVEL`,
+  `TERMINFO_DIRS` (loadout prefix first, then `~/.local/share/terminfo`, matching
+  bash), `GI_TYPELIB_PATH`, `QT_QPA_PLATFORM_PLUGIN_PATH`,
+  `NVIM_QT_RUNTIME_PATH`, `FONTCONFIG_FILE` (only when the tree carries
+  `etc/fonts/loadout-fonts.conf`), `GNUPLOT_DRIVER_DIR` — the shared values the
+  bash env exports. With `HOME` unset, the entrypoint recovers it from the passwd
+  entry instead of aborting on `HOME: Undefined variable.`
 - **Aliases** — the bash alias set: navigation (`b`…`bbbbbbbbbb`, `cdd`…`cdddddd`,
   `p`/`cdp`, `latest`), listing (`ls`/`ll`/`la`/`lh`/`lg`/`lah`/`tree`), editing
   (`vi`/`vim`/`vic`/`vid`/`vii`/`v`/`new`), search (`g`/`sg`/`gv`/`gf`/`gpy`/`gtcl`/
   `f`/`fc`/`h`/`hg`/`gah`), git (`gs`/`gc`/`gp`/`gd`/`ga`/`gr`/`gsp`), LSF/EDA
   (`bq`/`bjobsv`/`bkillall`/`mli`/`ms`/`ma`/`pg`/`pk`/`ipy`…), VNC (`vnc`/`killvnc`…)
-  and the utility set. Aliases for optional tools are defined only when the tool
-  is installed; site-specific EDA/LSF aliases are defined unconditionally because
-  they are expected on the target farm.
+  and the utility set. `ls -1` always runs `/bin/ls -1` (eza has no `-1`), and
+  `du`/`dum` keep their operands on du's side of the pipe, both via helpers — a
+  csh alias cannot branch on its arguments. `new`/`extract_rpm` report a usage
+  error when called with no argument instead of failing alias expansion. There is
+  no `rm -f` alias: it suppressed `set rmstar`, so `rm *` deleted without asking.
+  Aliases for optional tools are defined only when the tool is installed;
+  site-specific EDA/LSF aliases are defined unconditionally because they are
+  expected on the target farm.
+- **GRC** — `LOADOUT_CFG_ENABLE_GRC=1` defines the same alias set as bash. The
+  tcsh env ships no `grc` binary, so it uses `${TCSH_CONFIG_ROOT_DIR}/global/grc/bin`
+  if present, otherwise the copy vendored by env-bash at
+  `~/.config/bash/global/grc/bin` (the normal `@envs` install). Without either,
+  `grc-aliases.csh`'s `-X grc` guard stays silent.
+- **Extended keys** — `EXTENDED_KEYS_SUPPORTED` comes from the same
+  `helpers/check-extended-keys` logic as bash: kitty/alacritty and an existing
+  tmux server with `extended-keys on` are answered cheaply, otherwise a
+  Secondary-DA probe. Pending type-ahead is never consumed; a probe that cannot
+  run exports `0`, exactly what bash does.
 - **Prompt** — cwd, git branch, optional hostname, the username when it is
   highlighted or differs from `$USER`, and the red farm colour under `$LSB_JOBID`.
 - **Every directory change lists**, via csh's native `cwdcmd`. It also carries

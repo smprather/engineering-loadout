@@ -1,0 +1,15 @@
+#!/bin/sh
+# `new FILE`: create FILE, make it executable, open it in the preferred editor.
+#
+# Backs the `new` alias. An inline `touch \!:1` alias is only expanded when an
+# argument exists; without one csh reports "Bad ! arg selector" and never runs
+# the command. This is also the arity check the audit asked for.
+
+[ "$#" -ge 1 ] || {
+    echo "usage: new FILE" >&2
+    exit 2
+}
+
+touch -- "$1" || exit
+chmod +x -- "$1" || exit
+exec "${LOADOUT_CFG_PREFERRED_VI:-vi}" "$1"

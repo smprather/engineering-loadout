@@ -13,6 +13,78 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-30 (5): remaining tcsh audit gaps closed
+
+Every item in entry (3)'s "Still to do" list except 16 is now closed. Test-first
+per item; the new assertions were observed failing (or the behaviour was
+reproduced on a PTY) before the fix.
+
+**Shell config (`envs/tcsh`):**
+
+- **`rm`** (gap 1): the `rm -f` alias is gone from both bash and tcsh.
+  `set rmstar` now asks before `rm *` (RT: three files survive `rm *` + `n`).
+  `du`/`dum` moved to functions (bash) / `helpers/disk-usage` (tcsh), so
+  `du DIR` no longer sends DIR to `sort` (gap 14).
+- **Listing** (gap 3): `ls` is `helpers/ls-command`; `ls -1` always execs
+  `/bin/ls -1`, everything else follows `LOADOUT_CFG_PREFERRED_LS`. eza has no
+  `-1` and could print nothing on a non-tty.
+- **Arity** (gap 11): `new`/`extract_rpm` are `helpers/new-file` /
+  `helpers/extract-rpm`; no argument prints usage instead of csh's
+  `Bad ! arg selector`.
+- **Prompt switches** (gap 13): `sp1`/`sp2` EXPORT
+  `LOADOUT_CFG_PROMPT_INCLUDE_HOST` in bash, zsh and tcsh. Under starship tcsh
+  touches only the env var (starship overwrites `prompt`); without starship it
+  also reassigns the lead/prompt. The custom.host module runs in a child shell,
+  which is why the old shell-local assignment was inert.
+- **PATH/NVM/TERMINFO** (gaps 5, 6): the prepend list now matches bash's final
+  order, NVM_BIN included after the user dirs. A direct tcsh login resolves
+  `$HOME/.nvm/alias/default` (or the newest installed version) through
+  `helpers/nvm-bin` when no parent exported NVM_BIN. `TERMINFO_DIRS` is
+  prefix:home, matching bash. `HOME` unset is recovered from passwd (gap 12)
+  before anything uses it.
+- **Interactive-only env** (gap 7): `EDITOR`/`VISUAL`/`GIT_EDITOR` moved inside
+  the `$?prompt` block, matching bash's non-interactive environment.
+- **GRC** (gap 4): the tcsh config uses its own `global/grc/bin` if one exists,
+  else env-bash's `~/.config/bash/global/grc/bin`; the default enablement is no
+  longer dead on a direct login.
+- **Extended keys** (gap 15): `helpers/check-extended-keys` ports bash's
+  Secondary-DA probe (cheap TERM/TMUX answers; never consumes pending input;
+  exports 0 when it cannot tell). tmux now sees the same value from tcsh as
+  from bash.
+- **Minor** (gap 17): `LESS_TERMCAP_*` captures one ESC byte instead of seven
+  `/usr/bin/printf` forks; the starship block's inner `if` was re-indented.
+
+**Installer (`loadout_main.py`):**
+
+- `preserve_layers_from_symlink()` is now shared by bash, tcsh and zsh (gap 10).
+  A symlinked `~/.config/{bash,tcsh,zsh}` is materialized with every
+  corp/site/team/project/user layer copied across first.
+- The retired `~/.cshrc` is pruned only when it is a symlink (gap 9). A regular
+  user file is left alone; `--no-backup` can no longer make its deletion
+  permanent.
+
+**Tests:** `tests/install-env-tcsh` gains PTY assertions for rmstar, `ls -1`,
+GRC, PATH/NVM/TERMINFO order, interactive-only EDITOR, HOME-unset startup,
+`new`/`extract_rpm` arity, exported sp2, `du DIR`, the extended-keys probe
+value, regular-`.cshrc` preservation and symlinked-layer preservation.
+`tests/env-shell-parity` pins the new structure; `tests/env-bash-runtime` and
+`tests/install-env-zsh` cover the shared `du`/`sp1`/`sp2` and zsh layer
+preservation. `tests/env-tcsh-starship` strips the DA query from its raw PTY
+capture (a real terminal consumes it; `script(1)` does not).
+
+**Gates:** full T1 (`tests/run-all --fast`) passed in 173.9 s; full T1+T2
+(`tests/run-all`) passed in 1168.5 s, including the new T2 assertions. The
+changed shell paths were also smoked against EL8's tcsh 6.20 / bash 4.4 /
+coreutils 8.30 in `loadout-smoke:almalinux8.10` (startup, PATH/NVM/TERMINFO,
+`ls -1`, `du DIR`, sp2, `new` arity, rmstar, HOME-unset, extended-keys
+cheap + probe paths). Targeted suites passed: `install-env-tcsh`,
+`install-env-zsh`, `install-env-bash`, `env-tcsh-starship`,
+`env-tcsh-prompt-resize`, `env-bash-runtime`, `env-shell-parity` (42/42),
+`unit-install-steps` (64/64), `docs-sync`.
+
+Open: the upstream tcsh issue draft (entry (4) item 4) still awaits the user's
+OK.
+
 ## 2026-10-30 (4): follow-ups in progress -- lsd retired; next tcsh PREFERRED_LS, tcsh prompt vs tmux zoom
 
 The review integration (items 1-10, tcsh audit) is committed and passed T1+T2
@@ -178,7 +250,9 @@ all three `--check` gates pass. Manual PTY/tmux smokes cover the fixed paths.
 Per operator instruction, no Tier-2 test was run after the interjection;
 `tests/install-env-tcsh` had passed earlier with the new assertions.
 
-**Still to do (not in the recommended fix set):**
+**Still to do (not in the recommended fix set):** ALL CLOSED 2026-10-30 in
+entry (5) above, except 16 (integration bookkeeping). The list is kept as the
+audit record.
 
 1. `aliases.csh:179` `alias rm 'rm -f'` defeats `set rmstar` in `tcshrc:191`:
    `rm *` no longer asks for confirmation. Fix by dropping `-f` or wrapping

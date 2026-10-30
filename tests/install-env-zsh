@@ -170,4 +170,26 @@ HOME="$TMPHOME" "$REPO/loadout" install -y env-zsh --no-backup >/dev/null
 out=$(zsh_i 'echo "KEEP=$LOADOUT_TEST_KEEPME"')
 echo "$out" | grep -q 'KEEP=1' || fail "user layer is not sourced: [$out]"
 
+# --- A symlinked ~/.config/zsh must be materialized WITHOUT losing the layers
+# --- stored at the link target (bash preserves them; zsh did not).
+chmod -R u+w "$TMPHOME/.config/zsh"
+mv "$TMPHOME/.config/zsh" "$TMPHOME/zsh-external"
+mkdir -p "$TMPHOME/zsh-external/user"
+echo 'export LOADOUT_TEST_ZSH_LAYER=1' > "$TMPHOME/zsh-external/user/zshrc"
+ln -s ../zsh-external "$TMPHOME/.config/zsh"
+HOME="$TMPHOME" "$REPO/loadout" install -y env-zsh --no-backup >/dev/null
+[ ! -L "$TMPHOME/.config/zsh" ] || fail "symlinked ~/.config/zsh was not materialized"
+[ -f "$TMPHOME/.config/zsh/user/zshrc" ] || fail "install lost layers from a symlinked ~/.config/zsh"
+out=$(zsh_i 'echo "SYM=$LOADOUT_TEST_ZSH_LAYER"')
+assert_no_zsh_noise "symlinked config layers" "$out"
+echo "$out" | grep -q 'SYM=1' || fail "preserved layer was not sourced: [$out]"
+
+# --- sp1/sp2 must EXPORT the host switch: starship's modules run in a child
+# --- shell, so a shell-local assignment drives only the fallback prompt.
+out=$(zsh_i 'sp2; print -r -- "H=$LOADOUT_CFG_PROMPT_INCLUDE_HOST"; sh -c "echo C=\$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
+echo "$out" | grep -q 'H=1' || fail "sp2 did not set the host switch: [$out]"
+echo "$out" | grep -q 'C=1' || fail "sp2 did not export the host switch: [$out]"
+out=$(zsh_i 'sp2; sp1; print -r -- "H=$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
+echo "$out" | grep -q 'H=0' || fail "sp1 did not clear the host switch: [$out]"
+
 echo "install-env-zsh: OK"

@@ -201,7 +201,7 @@ FONT_EXCLUDES = (
     "*.woff2",
 )
 
-BASH_LAYERS = ("corp", "site", "team", "project", "user")
+CONFIG_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile")
 # ~/.profile is NOT a link to the bash-only bashrc. RHEL-family X sessions read it
 # -- /etc/X11/xinit/Xsession (#!/bin/bash) sources xinitrc-common, which runs
@@ -5715,24 +5715,35 @@ def ensure_dir(path, thing="directory"):
     os.makedirs(path, exist_ok=True)
 
 
-def preserve_bash_layers_from_symlink(home):
-    bash_config = os.path.join(home, ".config", "bash")
+def preserve_layers_from_symlink(home, config_name, layers, label):
+    """Materialize ~/.config/<config_name> without losing user layers.
+
+    A managed config directory may be a symlink into a shared tree. Unlinking it
+    and creating a fresh directory used to discard every layer the user kept at
+    the link target (corp/site/team/project/user). Copy those layers aside
+    first, then replace the link with a real directory and move them back.
+    """
+    config = os.path.join(home, ".config", config_name)
     saved = {}
-    if os.path.islink(bash_config):
-        for layer in BASH_LAYERS:
-            src = os.path.join(bash_config, layer)
+    if os.path.islink(config):
+        for layer in layers:
+            src = os.path.join(config, layer)
             if os.path.isdir(src):
                 tmp = tempfile.mkdtemp(prefix=f".loadout-layer-{layer}-", dir=_tmp_root())
                 shutil.rmtree(tmp)
                 shutil.copytree(src, tmp, symlinks=True)
                 saved[layer] = tmp
-        require_writable_parent(bash_config, "bash config")
-        os.unlink(bash_config)
-        ensure_dir(bash_config, "bash config")
+        require_writable_parent(config, label)
+        os.unlink(config)
+        ensure_dir(config, label)
         for layer, tmp in saved.items():
-            shutil.move(tmp, os.path.join(bash_config, layer))
+            shutil.move(tmp, os.path.join(config, layer))
     else:
-        ensure_dir(bash_config, "bash config")
+        ensure_dir(config, label)
+
+
+def preserve_bash_layers_from_symlink(home):
+    preserve_layers_from_symlink(home, "bash", CONFIG_LAYERS, "bash config")
 
 
 def install_bash(repo_dir, home, links_mode):
@@ -5752,7 +5763,7 @@ def install_bash(repo_dir, home, links_mode):
     # the shipped bashrc sources them unconditionally, and a post-install
     # hardening step (psg-env) makes ~/.config/bash read-only, after which the
     # user can no longer create ~/.config/bash/user for their overrides.
-    for layer in BASH_LAYERS:
+    for layer in CONFIG_LAYERS:
         ensure_dir(os.path.join(bash_config, layer), "bash config layer")
     for entrypoint in BASH_ENTRYPOINTS:
         lns(".config/bash/bashrc", os.path.join(home, entrypoint), verbose=True)
@@ -6632,13 +6643,11 @@ def _install_env_tcsh(repo_dir, home):
     if not os.path.isdir(src):
         return
     tcsh_dir = os.path.join(home, ".config", "tcsh")
-    if os.path.islink(tcsh_dir):
-        os.unlink(tcsh_dir)
-    ensure_dir(tcsh_dir, "tcsh config")
+    preserve_layers_from_symlink(home, "tcsh", CONFIG_LAYERS, "tcsh config")
     install_path(os.path.join(src, "global"), os.path.join(tcsh_dir, "global"), False)
     install_path(os.path.join(src, "tcshrc"), os.path.join(tcsh_dir, "tcshrc"), False)
     _mirror_shared_prefix(home, ("tcsh",))
-    for layer in ("corp", "site", "team", "project", "user"):
+    for layer in CONFIG_LAYERS:
         ensure_dir(os.path.join(tcsh_dir, layer), "tcsh config layer")
     for entrypoint in TCSH_ENTRYPOINTS:
         dest = os.path.join(home, entrypoint)
@@ -6647,7 +6656,12 @@ def _install_env_tcsh(repo_dir, home):
         # a snapshot archive (restore refuses absolute link targets).
         lns(os.path.join(".config", "tcsh", "tcshrc"), dest, verbose=True)
     for entrypoint in TCSH_ENTRYPOINTS_RETIRED:
-        remove_if_exists(os.path.join(home, entrypoint))
+        # Prune the retired LINK only. A regular ~/.cshrc is the user's file
+        # (tcsh ignores it while ~/.tcshrc exists), and --no-backup must not
+        # make deleting it permanent.
+        dest = os.path.join(home, entrypoint)
+        if os.path.islink(dest):
+            os.unlink(dest)
     # Managed config is read-only; the five override layers stay writable.
     for managed in ("global", "tcshrc"):
         _seal_managed(os.path.join(tcsh_dir, managed))
@@ -6668,13 +6682,11 @@ def _install_env_zsh(repo_dir, home):
     if not os.path.isdir(src):
         return
     zsh_dir = os.path.join(home, ".config", "zsh")
-    if os.path.islink(zsh_dir):
-        os.unlink(zsh_dir)
-    ensure_dir(zsh_dir, "zsh config")
+    preserve_layers_from_symlink(home, "zsh", CONFIG_LAYERS, "zsh config")
     install_path(os.path.join(src, "global"), os.path.join(zsh_dir, "global"), False)
     install_path(os.path.join(src, "site-functions"), os.path.join(zsh_dir, "site-functions"), False)
     install_path(os.path.join(src, "zshrc"), os.path.join(zsh_dir, "zshrc"), False)
-    for layer in ("corp", "site", "team", "project", "user"):
+    for layer in CONFIG_LAYERS:
         ensure_dir(os.path.join(zsh_dir, layer), "zsh config layer")
     # .zshenv is the one zsh reads for NON-interactive shells (a plain
     # `zsh script.zsh` reads it and nothing else), so a script gets PATH and
@@ -6881,7 +6893,7 @@ def run_post_install_hooks(hooks, repo_dir, home, args, backup_dir, install_root
 
 def run_layer_install_scripts(home):
     ran = []
-    for layer in BASH_LAYERS:
+    for layer in CONFIG_LAYERS:
         install_script = os.path.join(home, ".config", "bash", layer, "install.sh")
         if os.path.isfile(install_script) and os.access(install_script, os.R_OK):
             print(f"Sourcing '{install_script}' ...")

@@ -1,0 +1,37 @@
+#!/bin/sh
+# Print the bin directory of the node version nvm would use, without sourcing
+# nvm.sh (a bash-only script csh cannot read).
+#
+# global/tcshrc calls this only when ~/.nvm exists and NVM_BIN is not already
+# exported by a parent shell (which is the normal case under bash). The exact
+# default alias wins when it names an installed version; otherwise the newest
+# installed version is used, matching nvm's own "latest" fallback closely
+# enough for the toolchain on PATH.
+
+nvm_dir=${NVM_DIR:-$HOME/.nvm}
+root=$nvm_dir/versions/node
+[ -d "$root" ] || exit 1
+
+default=
+[ -r "$nvm_dir/alias/default" ] && default=$(cat "$nvm_dir/alias/default" 2>/dev/null)
+if [ -n "$default" ]; then
+    case $default in
+        v*)
+            [ -d "$root/$default/bin" ] && {
+                printf '%s\n' "$root/$default/bin"
+                exit 0
+            }
+            ;;
+        *)
+            for candidate in "$root"/v"$default" "$root"/v"$default".*; do
+                [ -d "$candidate/bin" ] && {
+                    printf '%s\n' "$candidate/bin"
+                    exit 0
+                }
+            done
+            ;;
+    esac
+fi
+
+latest=$(ls -1 "$root" 2>/dev/null | sort -V | tail -1)
+[ -n "$latest" ] && [ -d "$root/$latest/bin" ] && printf '%s\n' "$root/$latest/bin"

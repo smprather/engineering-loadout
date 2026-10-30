@@ -1,0 +1,12 @@
+#!/bin/sh
+# `extract_rpm RPM`: unpack an rpm into the current directory.
+#
+# The inline alias used `\!:1`; with no argument csh failed with "Bad ! arg
+# selector" instead of reporting the missing operand.
+
+[ "$#" -ge 1 ] || {
+    echo "usage: extract_rpm RPM" >&2
+    exit 2
+}
+
+rpm2cpio "$1" | cpio -idmv

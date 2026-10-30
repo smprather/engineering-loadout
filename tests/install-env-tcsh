@@ -78,6 +78,21 @@ tcsh_i_env() {
         | tr -d '\r'
 }
 
+# tcsh_i_unset HOME CMD -- like tcsh_i_env, but guarantees the startup-only
+# variables are absent (the path test must not inherit the caller's NVM_BIN or
+# TERMINFO_DIRS). env parses -u before the assignments, so this cannot be
+# expressed through tcsh_i_env.
+tcsh_i_unset() {
+    _home=$1
+    _cmd=$2
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmd" \
+        | env -u TMUX -u NVM_BIN -u TERMINFO_DIRS -u LOADOUT_CFG_SHARED_PREFIX \
+            HOME="$_home" TERM=xterm-256color \
+            script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+
 # tcsh_i_raw HOME PATH CMD -- tcsh -f with a controlled PATH, no system rc.
 # Used to simulate a farm node with no starship binary without depending on
 # the host's /usr/bin (which may have one).
@@ -121,7 +136,7 @@ $_text" ;;
 # W3: a pre-W3 install left a ~/.cshrc link behind; the install must prune it.
 ln -s .config/tcsh/tcshrc "$TMPHOME/.cshrc"
 
-HOME="$TMPHOME" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+HOME="$TMPHOME" LOADOUT_CFG_SHARED_PREFIX= "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
 
 [ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked"
 if [ -e "$TMPHOME/.cshrc" ] || [ -L "$TMPHOME/.cshrc" ]; then
@@ -164,10 +179,20 @@ esac
 # --- non-interactive shells too, so an `exit` in the rc file would kill every
 # --- script the user runs -- a spectacular way to break a farm.
 : > "$ERRFILE"
-echo 'echo script-ran' > "$TMPHOME/s.csh"
-out=$(HOME="$TMPHOME" tcsh "$TMPHOME/s.csh" 2>"$ERRFILE") \
+cat > "$TMPHOME/s.csh" <<'EOF'
+echo script-ran
+if ( $?EDITOR ) then
+    echo EDITOR_SET
+else
+    echo EDITOR_UNSET
+endif
+EOF
+out=$(env -u EDITOR -u VISUAL -u GIT_EDITOR HOME="$TMPHOME" tcsh "$TMPHOME/s.csh" 2>"$ERRFILE") \
     || fail "non-interactive tcsh script exited non-zero"
-[ "$out" = "script-ran" ] || fail "non-interactive tcsh script did not run: [$out]"
+echo "$out" | grep -q '^script-ran$' || fail "non-interactive tcsh script did not run: [$out]"
+# bash exports EDITOR/VISUAL/GIT_EDITOR only inside its interactive block;
+# tcsh must not hand scripts a different environment.
+echo "$out" | grep -qx 'EDITOR_UNSET' || fail "non-interactive tcsh still exports EDITOR: [$out]"
 [ ! -s "$ERRFILE" ] || fail "non-interactive tcsh wrote to stderr:
 $(cat "$ERRFILE")"
 
@@ -199,7 +224,8 @@ for h in is-truthy vercmp recent-dir recent-file recent-files path-list \
          grep-all-history git-stash-pull safe-symlink latest-link seed-history \
          prompt-color find-count zhead total-cpu lsf-queues vnc-start \
          vnc-kill-newest detect-online tmp-root path-remove path-trim \
-         cd-command git-branches loadout-packages just-recipes; do
+         cd-command git-branches loadout-packages just-recipes \
+         ls-command new-file extract-rpm disk-usage check-extended-keys nvm-bin; do
     [ -x "$HELPERS/$h" ] || fail "helper not installed executable: $h"
 done
 
@@ -282,6 +308,123 @@ assert_no_csh_noise "environment" "$out"
 echo "$out" | grep -qE 'O=[01]'  || fail "LOADOUT_ONLINE not set to 0/1: [$out]"
 echo "$out" | grep -q  'PIP=1'   || fail "PIP_REQUIRE_VIRTUALENV not exported: [$out]"
 echo "$out" | grep -q  'ED=nvim' || fail "EDITOR not derived from LOADOUT_CFG_PREFERRED_VI: [$out]"
+
+# --- PATH order must match bash's final order. Both shells prepend, so the
+# --- iteration list is reversed relative to the visible PATH: NVM_BIN comes
+# --- last (bash sources nvm.sh first, then every user dir prepends ahead of it).
+mkdir -p "$TMPHOME/.cargo/bin" "$TMPHOME/.venv/bin" "$TMPHOME/.opencode/bin" \
+         "$TMPHOME/node_modules/.bin" "$TMPHOME/go/bin" "$TMPHOME/.local/bin" \
+         "$TMPHOME/.nvm/versions/node/v20.1.0/bin" \
+         "$TMPHOME/.local/share/terminfo" "$TMPHOME/.local/share/loadout/share/terminfo"
+out=$(tcsh_i_unset "$TMPHOME" \
+    'echo "PATH_SEQ=$path" ; echo "NVM_BIN=$NVM_BIN" ; echo "TI=$TERMINFO_DIRS"')
+assert_no_csh_noise "path order" "$out"
+path_seq=$(printf '%s\n' "$out" | sed -n 's/^PATH_SEQ=//p' | tail -1)
+[ -n "$path_seq" ] || fail "could not read PATH from tcsh: [$out]"
+path_index() {
+    printf '%s\n' "$path_seq" | tr ' ' '\n' | grep -n -F -- "$1" | cut -d: -f1 | head -1
+}
+i_local=$(path_index "$TMPHOME/.local/bin")
+i_go=$(path_index "$TMPHOME/go/bin")
+i_nm=$(path_index "$TMPHOME/node_modules/.bin")
+i_op=$(path_index "$TMPHOME/.opencode/bin")
+i_venv=$(path_index "$TMPHOME/.venv/bin")
+i_cargo=$(path_index "$TMPHOME/.cargo/bin")
+i_nvm=$(path_index "$TMPHOME/.nvm/versions/node/v20.1.0/bin")
+# NVM_BIN comes after every newly prepended user dir, exactly as bash's
+# nvm.sh-then-prepend sequence leaves it. /usr/local/bin may already be in the
+# inherited PATH; bash does not move an existing entry either, so its absolute
+# position is not part of the contract.
+for _pair in "$i_local:$i_go" "$i_go:$i_nm" "$i_nm:$i_op" "$i_op:$i_venv" \
+             "$i_venv:$i_cargo" "$i_cargo:$i_nvm"; do
+    _a=${_pair%%:*}
+    _b=${_pair#*:}
+    [ -n "$_a" ] && [ -n "$_b" ] && [ "$_a" -lt "$_b" ] || fail "PATH order differs from bash:
+$path_seq"
+done
+echo "$out" | grep -qx "NVM_BIN=$TMPHOME/.nvm/versions/node/v20.1.0/bin" \
+    || fail "NVM_BIN was not resolved without an nvm.sh source: [$out]"
+echo "$out" | grep -qx "TI=$TMPHOME/.local/share/loadout/share/terminfo:$TMPHOME/.local/share/terminfo" \
+    || fail "TERMINFO_DIRS order differs from bash (prefix first): [$out]"
+
+# --- `ls -1` must bypass eza: eza has no -1 and can print nothing on a non-tty.
+cat > "$TMPHOME/.local/bin/eza" <<'EOF'
+#!/bin/sh
+echo EZA_MARK
+EOF
+chmod +x "$TMPHOME/.local/bin/eza"
+out=$(tcsh_i "ls -1 '$TMPHOME/.local/bin/eza'")
+assert_no_csh_noise "ls -1" "$out"
+case $out in
+    *EZA_MARK*) fail "ls -1 was routed through eza: [$out]" ;;
+esac
+echo "$out" | grep -q '\.local/bin/eza' || fail "ls -1 printed no filename: [$out]"
+out=$(tcsh_i "ls '$TMPHOME/.local/bin/eza'")
+echo "$out" | grep -q 'EZA_MARK' || fail "plain ls no longer uses eza: [$out]"
+rm -f "$TMPHOME/.local/bin/eza"
+
+# --- sp1/sp2 must change what starship reads, not just the shell-local prompt.
+out=$(tcsh_i_env "$TMPHOME" \
+    'sp2 ; echo "H=$LOADOUT_CFG_PROMPT_INCLUDE_HOST" ; /bin/sh -c "echo C=\$LOADOUT_CFG_PROMPT_INCLUDE_HOST"' \
+    LOADOUT_CFG_ENABLE_STARSHIP=0)
+assert_no_csh_noise "sp2" "$out"
+echo "$out" | grep -q 'H=1' || fail "sp2 did not set LOADOUT_CFG_PROMPT_INCLUDE_HOST: [$out]"
+echo "$out" | grep -q 'C=1' || fail "sp2 did not EXPORT the prompt switch: [$out]"
+out=$(tcsh_i_env "$TMPHOME" \
+    'sp2 ; sp1 ; echo "H=$LOADOUT_CFG_PROMPT_INCLUDE_HOST"' \
+    LOADOUT_CFG_ENABLE_STARSHIP=0)
+echo "$out" | grep -q 'H=0' || fail "sp1 did not clear LOADOUT_CFG_PROMPT_INCLUDE_HOST: [$out]"
+
+# --- new/extract_rpm with no argument must be an arity error, not a command
+# --- lookup ("Bad ! arg selector" is the csh alias-expansion failure).
+out=$(tcsh_i 'new ; echo "ST=$status"')
+case $out in
+    *'Bad ! arg selector'*|*'Command not found'*) fail "bare new fell through to command lookup: [$out]" ;;
+esac
+echo "$out" | grep -qi 'usage' || fail "bare new printed no usage: [$out]"
+out=$(tcsh_i 'extract_rpm ; echo "ST=$status"')
+case $out in
+    *'Bad ! arg selector'*|*'Command not found'*) fail "bare extract_rpm fell through to command lookup: [$out]" ;;
+esac
+echo "$out" | grep -qi 'usage' || fail "bare extract_rpm printed no usage: [$out]"
+out=$(tcsh_i_env "$TMPHOME" \
+    "new '$TMPHOME/newfile' ; if ( -x '$TMPHOME/newfile' ) echo NEW_OK" \
+    LOADOUT_CFG_PREFERRED_VI=true)
+echo "$out" | grep -q 'NEW_OK' || fail "new FILE did not create an executable file: [$out]"
+
+# --- `du DIR` must keep DIR on du's side of the pipe. The alias form appended
+# --- it to sort, which errored with "read failed: ...: Is a directory".
+mkdir -p "$TMPHOME/dutest/sub"
+dd if=/dev/zero of="$TMPHOME/dutest/sub/file" bs=1024 count=4 2>/dev/null
+out=$(tcsh_i "du '$TMPHOME/dutest'")
+case $out in
+    *'sort:'*) fail "du DIR sent DIR to sort: [$out]" ;;
+esac
+echo "$out" | grep -q "$TMPHOME/dutest" || fail "du DIR did not report DIR: [$out]"
+
+# --- set rmstar must actually ask: `alias rm 'rm -f'` suppressed the prompt.
+mkdir -p "$TMPHOME/rmtest"
+touch "$TMPHOME/rmtest/a" "$TMPHOME/rmtest/b" "$TMPHOME/rmtest/c"
+out=$(cd "$TMPHOME" && tcsh_i "cd '$TMPHOME/rmtest'
+rm *
+n
+if ( -f a ) echo A_KEPT
+if ( -f b ) echo B_KEPT
+if ( -f c ) echo C_KEPT")
+assert_no_csh_noise "rmstar" "$out"
+for _mark in A_KEPT B_KEPT C_KEPT; do
+    echo "$out" | grep -q "$_mark" || fail "rm * removed files without asking (rmstar defeated): [$out]"
+done
+tmphome_rm=$(cd "$TMPHOME/rmtest" && tcsh_i 'touch single ; rm single ; if ( ! -e single ) echo RM_OK')
+echo "$tmphome_rm" | grep -q 'RM_OK' || fail "plain rm stopped working: [$tmphome_rm]"
+
+# --- Extended keys: with no cheap TERM answer and type-ahead pending, the DA
+# --- probe must refuse to eat the input and still export the 0 tmux expects.
+out=$(tcsh_i_env "$TMPHOME" \
+    'if ( $?EXTENDED_KEYS_SUPPORTED ) echo "E=$EXTENDED_KEYS_SUPPORTED" ; if ( ! $?EXTENDED_KEYS_SUPPORTED ) echo E=unset' \
+    TERM=xterm-256color)
+assert_no_csh_noise "extended keys probe" "$out"
+echo "$out" | grep -q 'E=0' || fail "probe path did not export EXTENDED_KEYS_SUPPORTED=0: [$out]"
 
 # --- Completions and key bindings loaded (they are separate sourced files, so a
 # --- syntax error in either is silent unless something asserts they took).
@@ -369,13 +512,41 @@ FAKEBIN="$TMPHOME/faithful-bin"
 mkdir -p "$FAKEBIN"
 for _c in tcsh sh ls whoami stty id sed cut ps cp dirname printf od git grep awk \
           tr head tail sort wc cat rm mkdir chmod stat realpath basename date \
-          hostname env uname md5sum timeout find xargs touch readlink; do
+          hostname env uname md5sum timeout find xargs touch readlink tty; do
     _p=$(command -v "$_c" 2>/dev/null) && ln -sf "$_p" "$FAKEBIN/$_c"
 done
 out=$(tcsh_i_raw "$TMPHOME" "$FAKEBIN" \
     "setenv LOADOUT_ONLINE 0; source '$TMPHOME/.tcshrc'; echo \"P=[\$prompt]\"")
 assert_no_csh_noise "missing starship" "$out"
 echo "$out" | grep -q 'P=\[.*%B' || fail "missing starship did not fall back to the hand-rolled prompt: [$out]"
+
+# --- GRC on a direct tcsh login: env-tcsh ships no grc binary, so the aliases
+# --- must find the copy the bash env vendors (a standard @envs install has it).
+# --- FAKEBIN deliberately contains no grc, so only the added path can supply it.
+mkdir -p "$TMPHOME/.config/bash/global/grc/bin"
+printf '#!/bin/sh\nexit 0\n' > "$TMPHOME/.config/bash/global/grc/bin/grc"
+chmod +x "$TMPHOME/.config/bash/global/grc/bin/grc"
+out=$(tcsh_i_raw "$TMPHOME" "$FAKEBIN" \
+    "source '$TMPHOME/.tcshrc'; alias colourify")
+assert_no_csh_noise "grc aliases" "$out"
+echo "$out" | grep -q 'grc -es' || fail "GRC aliases are still dead on a direct tcsh login: [$out]"
+
+# --- HOME unset: every non-interactive tcsh printed "HOME: Undefined variable."
+# --- and the entry point aborted before defining anything. The guard must
+# --- recover HOME from the passwd entry and keep going, silently.
+out=$(
+    printf 'source "$TCSH_CONFIG_ROOT_DIR/tcshrc"\necho "H=$HOME"\necho AFTER=ok\nexit\n' \
+        | env -i PATH="$FAKEBIN" TCSH_CONFIG_ROOT_DIR="$TMPHOME/.config/tcsh" \
+            TERM=xterm-256color /usr/bin/script -qec "tcsh -f -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+)
+[ ! -s "$ERRFILE" ] || fail "HOME-unset startup wrote to stderr:
+$(cat "$ERRFILE")"
+case $out in
+    *'Undefined variable'*) fail "HOME-unset startup still aborts: [$out]" ;;
+esac
+echo "$out" | grep -q 'H=/' || fail "HOME was not recovered from passwd: [$out]"
+echo "$out" | grep -q 'AFTER=ok' || fail "entry point aborted with HOME unset: [$out]"
 
 # --- Dynamic completions: /dev/null inside a complete wordlist is parsed as a
 # --- spec delimiter by tcsh; 2>&1| is an ambiguous csh redirect. Both made
@@ -394,7 +565,31 @@ echo "$out" | grep -q 'EXT=1' || fail "tcsh did not export EXTENDED_KEYS_SUPPORT
 
 # --- Reinstall must not clobber a user-created layer (the env-st lesson).
 echo 'setenv LOADOUT_TEST_KEEPME 1' > "$TMPHOME/.config/tcsh/user/config.csh"
-HOME="$TMPHOME" "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+HOME="$TMPHOME" LOADOUT_CFG_SHARED_PREFIX= "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
 [ -f "$TMPHOME/.config/tcsh/user/config.csh" ] || fail "reinstall deleted the user layer"
+
+# --- ~/.cshrc is RETIRED and pruned only when it is a loadout link. A regular
+# --- user file is not ours to delete, and tcsh ignores it while ~/.tcshrc
+# --- exists, so it is harmless to leave in place.
+printf 'setenv LOADOUT_USER_CSHRC 1\n' > "$TMPHOME/.cshrc"
+HOME="$TMPHOME" LOADOUT_CFG_SHARED_PREFIX= "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+[ -f "$TMPHOME/.cshrc" ] || fail "install deleted a regular ~/.cshrc"
+grep -q 'LOADOUT_USER_CSHRC' "$TMPHOME/.cshrc" || fail "install rewrote a regular ~/.cshrc"
+[ -e "$TMPHOME/.tcshrc" ] || fail ".tcshrc not linked after the .cshrc install"
+
+# --- A symlinked ~/.config/tcsh must be materialized WITHOUT losing the
+# --- corp/site/team/project/user layers stored at the link target (the bash
+# --- handler has preserve_bash_layers_from_symlink; tcsh/zsh did not).
+chmod -R u+w "$TMPHOME/.config/tcsh"
+mv "$TMPHOME/.config/tcsh" "$TMPHOME/tcsh-external"
+mkdir -p "$TMPHOME/tcsh-external/user"
+echo 'setenv LOADOUT_TEST_SYMLAYER 1' > "$TMPHOME/tcsh-external/user/config.csh"
+ln -s ../tcsh-external "$TMPHOME/.config/tcsh"
+HOME="$TMPHOME" LOADOUT_CFG_SHARED_PREFIX= "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+[ ! -L "$TMPHOME/.config/tcsh" ] || fail "symlinked ~/.config/tcsh was not materialized"
+[ -f "$TMPHOME/.config/tcsh/user/config.csh" ] || fail "install lost layers from a symlinked ~/.config/tcsh"
+out=$(tcsh_i 'echo "SYM=$LOADOUT_TEST_SYMLAYER"')
+assert_no_csh_noise "symlinked config layers" "$out"
+echo "$out" | grep -q 'SYM=1' || fail "preserved layer was not sourced: [$out]"
 
 echo "install-env-tcsh: OK"

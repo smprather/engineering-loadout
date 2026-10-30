@@ -21,6 +21,18 @@ else if ( "$USER" == "" ) then
     setenv USER "`/bin/whoami`"
 endif
 
+# HOME may be unset in a cron/CI/non-interactive environment. csh expands `~`
+# from the passwd entry, so sh can recover it without root or getent; without
+# this every later "$HOME/..." printed "HOME: Undefined variable." and the
+# assignment aborted. Nested rather than `else if`: csh substitutes variables
+# on an else-if line even while skipping it.
+if ( ! $?HOME ) then
+    setenv HOME "`/bin/sh -c 'cd ~ && pwd'`"
+endif
+if ( "$HOME" == "" ) then
+    setenv HOME "`/bin/sh -c 'cd ~ && pwd'`"
+endif
+
 # Do NOT `unalias *` here. The system csh rc (/etc/csh.cshrc and
 # /etc/profile.d/*.csh) runs BEFORE ~/.tcshrc, and Environment Modules plus
 # site tooling define `module`/`_module_raw`/`ml` and other aliases there.

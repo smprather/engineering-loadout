@@ -46,10 +46,28 @@ if ( $?LOADOUT_CFG_SHARED_PREFIX ) then
 endif
 
 # ---- PATH: prepend the dirs that exist, without duplicating -------------------
+# Resolve NVM's node bin first. nvm.sh is a bash-only script csh cannot source,
+# so a direct tcsh login used to get no node/npm at all. A parent bash exports
+# NVM_BIN; otherwise helpers/nvm-bin resolves nvm's default (or newest) version.
+set _loadout_nvm_bin = ""
+if ( $?NVM_BIN ) then
+    if ( -d "$NVM_BIN" ) set _loadout_nvm_bin = "$NVM_BIN"
+endif
+if ( -d "$HOME/.nvm" ) then
+    setenv NVM_DIR "$HOME/.nvm"
+    if ( "$_loadout_nvm_bin" == "" && -x "${_loadout_helpers}/nvm-bin" ) then
+        set _loadout_nvm_bin = "`"${_loadout_helpers}/nvm-bin"`"
+    endif
+endif
+if ( "$_loadout_nvm_bin" != "" ) setenv NVM_BIN "$_loadout_nvm_bin"
+
 # Same list and same order as envs/bash/global/bashrc. Reversed relative to that
 # file because each iteration prepends, and the bash loop prepends too -- so the
-# LAST entry here ends up first on PATH, matching bash's final ordering.
-foreach _loadout_dir ( /usr/local/bin "$HOME/node_modules/.bin" "$HOME/.opencode/bin" "$HOME/.venv/bin" "$HOME/go/bin" "$HOME/.cargo/bin" "$HOME/.local/bin" )
+# LAST entry here ends up first on PATH, matching bash's final ordering. bash
+# sources nvm.sh BEFORE its loop and does not reorder an entry already present,
+# which leaves NVM_BIN after /usr/local/bin; listing it first reproduces that
+# (visible: ~/.local/bin ... ~/.cargo/bin /usr/local/bin $NVM_BIN).
+foreach _loadout_dir ( "$_loadout_nvm_bin" /usr/local/bin "$HOME/.cargo/bin" "$HOME/.venv/bin" "$HOME/.opencode/bin" "$HOME/node_modules/.bin" "$HOME/go/bin" "$HOME/.local/bin" )
     if ( -d "$_loadout_dir" ) then
         set _loadout_seen = 0
         foreach _loadout_p ( $path:q )
@@ -61,6 +79,7 @@ foreach _loadout_dir ( /usr/local/bin "$HOME/node_modules/.bin" "$HOME/.opencode
     endif
 end
 unset _loadout_dir
+unset _loadout_nvm_bin
 
 # EL's own tree: prefer/ shims are PREPENDED (the explicit per-tool exception),
 # the shared bin is APPENDED so a system copy keeps priority.
@@ -83,18 +102,9 @@ foreach _loadout_dir ( "${_loadout_prefix}/prefer" "${_loadout_prefix}/bin" )
 end
 unset _loadout_dir
 
-# NVM (Node Version Manager): nvm.sh is a bash/sh script and cannot be sourced by
-# csh, so the shell function is unavailable -- but the toolchain on PATH is the
-# part that matters for running node/npm, and that needs no shell support.
-if ( -d "$HOME/.nvm" ) then
-    setenv NVM_DIR "$HOME/.nvm"
-    if ( $?NVM_BIN ) then
-        if ( -d "$NVM_BIN" ) set path = ( "$NVM_BIN" $path:q )
-    endif
-endif
-
 # ---- terminfo: ncurses does not search ~/.local/share/terminfo by default -----
-foreach _loadout_ti ( "${_loadout_prefix}/share/terminfo" "$HOME/.local/share/terminfo" )
+# Prepended in bash's order: each iteration prepends, so prefix ends up first.
+foreach _loadout_ti ( "$HOME/.local/share/terminfo" "${_loadout_prefix}/share/terminfo" )
     if ( -d "$_loadout_ti" ) then
         if ( $?TERMINFO_DIRS ) then
             setenv TERMINFO_DIRS "${_loadout_ti}:${TERMINFO_DIRS}"
@@ -154,33 +164,35 @@ endif
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 setenv EGL_LOG_LEVEL fatal
 
-# Fall back when the preferred editor is not installed, so every `vi`/`vim`/`new`
-# alias below points at something real.
-if ( $?LOADOUT_CFG_PREFERRED_VI ) then
-    if ( ! -X "$LOADOUT_CFG_PREFERRED_VI" ) then
-        if ( -X nvim ) then
-            setenv LOADOUT_CFG_PREFERRED_VI nvim
-        else if ( -X vim ) then
-            setenv LOADOUT_CFG_PREFERRED_VI vim
-        else
-            setenv LOADOUT_CFG_PREFERRED_VI vi
-        endif
-    endif
-    setenv EDITOR   "$LOADOUT_CFG_PREFERRED_VI"
-    setenv VISUAL   "$LOADOUT_CFG_PREFERRED_VI"
-    setenv GIT_EDITOR "$LOADOUT_CFG_PREFERRED_VI"
-endif
-
-# eza (the default) or ls. Any other value -- a retired `lsd`, a typo -- means
-# eza; then fall back to plain ls when eza is not installed.
-if ( ! $?LOADOUT_CFG_PREFERRED_LS ) setenv LOADOUT_CFG_PREFERRED_LS eza
-if ( "$LOADOUT_CFG_PREFERRED_LS" != "ls" ) setenv LOADOUT_CFG_PREFERRED_LS eza
-if ( ! -X "$LOADOUT_CFG_PREFERRED_LS" ) setenv LOADOUT_CFG_PREFERRED_LS ls
-
 # ---- everything below is interactive-only ------------------------------------
 if ( $?prompt ) then
 
-    # ---- shell options --------------------------------------------------------
+    # ---- preferred editor -----------------------------------------------------
+    # bash exports EDITOR/VISUAL/GIT_EDITOR only in its interactive block, so a
+    # non-interactive tcsh must not hand scripts a different environment.
+    # Fall back when the preferred editor is not installed, so every `vi`/`vim`/
+    # `new` alias below points at something real.
+    if ( $?LOADOUT_CFG_PREFERRED_VI ) then
+        if ( ! -X "$LOADOUT_CFG_PREFERRED_VI" ) then
+            if ( -X nvim ) then
+                setenv LOADOUT_CFG_PREFERRED_VI nvim
+            else if ( -X vim ) then
+                setenv LOADOUT_CFG_PREFERRED_VI vim
+            else
+                setenv LOADOUT_CFG_PREFERRED_VI vi
+            endif
+        endif
+        setenv EDITOR   "$LOADOUT_CFG_PREFERRED_VI"
+        setenv VISUAL   "$LOADOUT_CFG_PREFERRED_VI"
+        setenv GIT_EDITOR "$LOADOUT_CFG_PREFERRED_VI"
+    endif
+
+    # eza (the default) or ls. Any other value -- a retired `lsd`, a typo --
+    # means eza; then fall back to plain ls when eza is not installed.
+    if ( ! $?LOADOUT_CFG_PREFERRED_LS ) setenv LOADOUT_CFG_PREFERRED_LS eza
+    if ( "$LOADOUT_CFG_PREFERRED_LS" != "ls" ) setenv LOADOUT_CFG_PREFERRED_LS eza
+    if ( ! -X "$LOADOUT_CFG_PREFERRED_LS" ) setenv LOADOUT_CFG_PREFERRED_LS ls
+
     set autolist                    # list completions on ambiguous TAB
     set autoexpand                  # expand history/completions in place
     set nobeep
@@ -229,24 +241,17 @@ if ( $?prompt ) then
 
     # ---- terminal -------------------------------------------------------------
     setenv COLORTERM truecolor
-    # tmux reads EXTENDED_KEYS_SUPPORTED (envs/tmux/tmux-global.conf). bash/zsh
-    # export 0/1 after a Terminal-DA probe; tcsh uses the cheap, stdin-safe
-    # answers and leaves the variable UNSET when unknown, so tmux keeps its
-    # default instead of forcing extended-keys off server-wide.
-    switch ( "$TERM" )
-        case *kitty*:
-        case *alacritty*:
+    # tmux reads EXTENDED_KEYS_SUPPORTED (envs/tmux/tmux-global.conf). Port the
+    # full bash/zsh check_extended_keys: cheap TERM/TMUX answers, then the
+    # Secondary-DA probe for a bare xterm login. The helper refuses the probe
+    # when type-ahead is already pending, and exports 0 when it cannot tell --
+    # the same value bash exports, so tmux behaves identically.
+    if ( -x "${_loadout_helpers}/check-extended-keys" ) then
+        if ( { "${_loadout_helpers}/check-extended-keys" } ) then
             setenv EXTENDED_KEYS_SUPPORTED 1
-            breaksw
-    endsw
-    if ( $?TMUX && -X tmux ) then
-        set _lo_ek = "`tmux show-options -s -v extended-keys`"
-        if ( "$_lo_ek" == "on" ) then
-            setenv EXTENDED_KEYS_SUPPORTED 1
-        else if ( "$_lo_ek" == "off" ) then
+        else
             setenv EXTENDED_KEYS_SUPPORTED 0
         endif
-        unset _lo_ek
     endif
     # Disable ctrl-s terminal pausing; leave the tty in a known-good state.
     /bin/stty sane >& /dev/null
@@ -277,14 +282,17 @@ if ( $?prompt ) then
     setenv MANROFFOPT -c
     # `setenv` does NOT interpret backslash escapes (csh has no $'...'), and
     # less does NOT process escapes in LESS_TERMCAP_*: the bytes must be real
-    # ESC. Capture printf's output instead of storing the literal text `\033`.
-    setenv LESS_TERMCAP_mb "`/usr/bin/printf '\033[1;32m'`"
-    setenv LESS_TERMCAP_md "`/usr/bin/printf '\033[1;32m'`"
-    setenv LESS_TERMCAP_me "`/usr/bin/printf '\033[0m'`"
-    setenv LESS_TERMCAP_se "`/usr/bin/printf '\033[0m'`"
-    setenv LESS_TERMCAP_so "`/usr/bin/printf '\033[01;33m'`"
-    setenv LESS_TERMCAP_ue "`/usr/bin/printf '\033[0m'`"
-    setenv LESS_TERMCAP_us "`/usr/bin/printf '\033[1;4;31m'`"
+    # ESC. Capture the single ESC byte once -- seven /usr/bin/printf forks on
+    # every interactive startup bought nothing.
+    set _loadout_esc = "`/usr/bin/printf '\033'`"
+    setenv LESS_TERMCAP_mb "${_loadout_esc}[1;32m"
+    setenv LESS_TERMCAP_md "${_loadout_esc}[1;32m"
+    setenv LESS_TERMCAP_me "${_loadout_esc}[0m"
+    setenv LESS_TERMCAP_se "${_loadout_esc}[0m"
+    setenv LESS_TERMCAP_so "${_loadout_esc}[01;33m"
+    setenv LESS_TERMCAP_ue "${_loadout_esc}[0m"
+    setenv LESS_TERMCAP_us "${_loadout_esc}[1;4;31m"
+    unset _loadout_esc
     if ( -X bat ) then
         setenv BAT_PAGER "$PAGER -RF"
     else if ( -X batcat ) then
@@ -335,11 +343,29 @@ if ( $?prompt ) then
     # ---- GRC (Generic Colorizer) ---------------------------------------------
     # The vendored grc.sh is sh syntax and cannot be sourced by csh, so
     # grc-aliases.csh defines the same alias set natively.
+    #
+    # env-tcsh ships no grc binary of its own (grc-aliases.csh guards on
+    # `-X grc`). Prefer a tcsh-owned copy if one ever lands, then the vendored
+    # copy under env-bash -- the standard @envs install has both envs, and
+    # without this path the default ENABLE_GRC=1 was dead on a direct login.
     if ( $?LOADOUT_CFG_ENABLE_GRC ) then
         if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_GRC" } ) then
+            set _loadout_grc_bin = ""
             if ( -d "${_loadout_global}/grc/bin" ) then
-                set path = ( "${_loadout_global}/grc/bin" $path:q )
+                set _loadout_grc_bin = "${_loadout_global}/grc/bin"
+            else if ( -d "$HOME/.config/bash/global/grc/bin" ) then
+                set _loadout_grc_bin = "$HOME/.config/bash/global/grc/bin"
             endif
+            if ( "$_loadout_grc_bin" != "" ) then
+                set _loadout_seen = 0
+                foreach _loadout_p ( $path:q )
+                    if ( "$_loadout_p" == "$_loadout_grc_bin" ) set _loadout_seen = 1
+                end
+                if ( $_loadout_seen == 0 ) set path = ( "$_loadout_grc_bin" $path:q )
+                unset _loadout_seen
+                unset _loadout_p
+            endif
+            unset _loadout_grc_bin
             setenv GRC_ALIASES true
             if ( -r "${_loadout_global}/grc-aliases.csh" ) source "${_loadout_global}/grc-aliases.csh"
         endif
@@ -464,43 +490,43 @@ if ( $?prompt ) then
             set _lo_starship_status = $status
             set _lo_starship_alias = "`alias precmd`"
             if ( $_lo_starship_status == 0 && "$_lo_starship_alias" =~ *STARSHIP_PATH* ) then
-            # STARSHIP_SHELL=sh, and it must be set HERE -- after the init
-            # above, which exports STARSHIP_SHELL=tcsh itself.
-            #
-            # It controls two things, and tcsh needs a value that is right
-            # for both:
-            #
-            #   1. the shell each module's `when` runs under. `sh` is POSIX,
-            #      which every expression in the shared config is. `tcsh`
-            #      cannot parse custom.username's `for u in $VAR; do ... done`
-            #      at all, so that module silently never appears.
-            #   2. the zero-width marker syntax starship emits. `sh` emits
-            #      NONE. `bash` emits readline's `\[ \]` -- which tcsh prints
-            #      literally, because tcsh has no readline -- and `tcsh`
-            #      emits zsh's `%{ %}`, which tcsh happens to understand but
-            #      which is not what the helper below expects.
-            #
-            # So `sh` is the one value that both renders cleanly and keeps
-            # every module. This env used to pin `bash`, which is what made
-            # helpers/prompt-markers necessary in the first place.
-            setenv STARSHIP_SHELL sh
-            # The flag the hand-rolled prompt below checks: with starship
-            # driving, that path must not touch `prompt` or `precmd`.
-            set loadout_prompt_starship = 1
-            # The upper prompt lines are printed by helpers/prompt-markers, not
-            # held in $prompt (tcsh's `\n` is a soft wrap that tmux zoom and
-            # resize reflow), so tcsh's own redraws show only the last line.
-            # The helper caches the upper lines here -- one file per terminal,
-            # in the private runtime dir -- and Ctrl-L clears and reprints
-            # them before tcsh redraws the prompt and the typed input.
-            if ( $?XDG_RUNTIME_DIR ) then
-                if ( "$tty" != "" ) then
-                    setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$tty:gs#/#-#"
-                else
-                    setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$$"
+                # STARSHIP_SHELL=sh, and it must be set HERE -- after the init
+                # above, which exports STARSHIP_SHELL=tcsh itself.
+                #
+                # It controls two things, and tcsh needs a value that is right
+                # for both:
+                #
+                #   1. the shell each module's `when` runs under. `sh` is POSIX,
+                #      which every expression in the shared config is. `tcsh`
+                #      cannot parse custom.username's `for u in $VAR; do ... done`
+                #      at all, so that module silently never appears.
+                #   2. the zero-width marker syntax starship emits. `sh` emits
+                #      NONE. `bash` emits readline's `\[ \]` -- which tcsh prints
+                #      literally, because tcsh has no readline -- and `tcsh`
+                #      emits zsh's `%{ %}`, which tcsh happens to understand but
+                #      which is not what the helper below expects.
+                #
+                # So `sh` is the one value that both renders cleanly and keeps
+                # every module. This env used to pin `bash`, which is what made
+                # helpers/prompt-markers necessary in the first place.
+                setenv STARSHIP_SHELL sh
+                # The flag the hand-rolled prompt below checks: with starship
+                # driving, that path must not touch `prompt` or `precmd`.
+                set loadout_prompt_starship = 1
+                # The upper prompt lines are printed by helpers/prompt-markers,
+                # not held in $prompt (tcsh's `\n` is a soft wrap that tmux zoom
+                # and resize reflow), so tcsh's own redraws show only the last
+                # line. The helper caches the upper lines here -- one file per
+                # terminal, in the private runtime dir -- and Ctrl-L clears and
+                # reprints them before tcsh redraws the prompt and typed input.
+                if ( $?XDG_RUNTIME_DIR ) then
+                    if ( "$tty" != "" ) then
+                        setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$tty:gs#/#-#"
+                    else
+                        setenv LOADOUT_TCSH_PROMPT_CACHE "${XDG_RUNTIME_DIR}/loadout-tcsh-prompt.$$"
+                    endif
                 endif
-            endif
-            bindkey -c ^L "${_loadout_helpers}/prompt-redraw"
+                bindkey -c ^L "${_loadout_helpers}/prompt-redraw"
             endif
             unset _lo_starship_status _lo_starship_alias
         endif

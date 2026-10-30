@@ -486,7 +486,11 @@ def main():
                     os.waitpid(pid, 0)
                 except Exception:  # noqa: BLE001 -- the child is gone either way
                     pass
-                return buf.decode()
+                # The extended-keys Secondary-DA query is written to the tty and
+                # consumed by a real terminal emulator; script(1) has none, so
+                # the raw query lands in the capture. Strip it before comparing
+                # what the user would see.
+                return buf.decode().replace("\x1b[>c", "")
             finally:
                 shutil.rmtree(home, ignore_errors=True)
 
