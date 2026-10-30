@@ -1,0 +1,42 @@
+#!/bin/sh
+# Print a csh command that removes DIR from the caller's $path.
+#
+# Backs the `path_remove` alias. A csh alias cannot run a multi-iteration
+# `foreach` reliably (only the first iteration executes), and a child process
+# cannot mutate the parent shell's path, so this prints `set path = (...)` and
+# the alias runs it through eval.
+#
+# Usage: path-remove DIR
+
+[ $# -eq 1 ] || {
+    echo "usage: path-remove DIR" >&2
+    exit 2
+}
+
+target=$1
+
+# Print a csh double-quoted word. Paths may contain spaces, quotes, $, ` and !;
+# escape the characters csh would otherwise expand. `\!` prevents history
+# expansion inside the double quotes.
+# shellcheck disable=SC2016  # sed expressions intentionally use single quotes
+csh_quote() {
+    printf '"%s"' "$(printf '%s' "$1" | sed \
+        -e 's/\\/\\\\/g' \
+        -e 's/"/\\"/g' \
+        -e 's/\$/\\$/g' \
+        -e 's/`/\\`/g' \
+        -e 's/!/\\!/g')"
+}
+
+out=
+# No globbing: PATH entries are literal directory names.
+set -f
+old_ifs=$IFS
+IFS=:
+for entry in $PATH; do
+    [ "$entry" = "$target" ] && continue
+    out="$out $(csh_quote "$entry")"
+done
+IFS=$old_ifs
+
+printf 'set path = ( %s )\n' "$out"

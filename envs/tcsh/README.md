@@ -64,9 +64,13 @@ loadout-owned tcsh config root. When it differs from the user's home config root
 the entrypoint still sources the home-local `corp/site/team/project/user` layers
 after the shared root, so personal overrides survive shared config deployments.
 
-Only `global/` is loadout-owned. Put your own settings in
-`~/.config/tcsh/user/config.csh` and `~/.config/tcsh/user/tcshrc`; a reinstall never
-touches them.
+Only `global/` and the top-level `tcshrc` entrypoint are loadout-owned. Put your
+own settings in `~/.config/tcsh/user/config.csh` and
+`~/.config/tcsh/user/tcshrc`; a reinstall never touches them.
+
+Site/system aliases loaded by `/etc/csh.cshrc` before this file (Environment
+Modules' `module`/`_module_raw`/`ml`, gawk path helpers, site tooling) are
+preserved. The loadout only overrides aliases it defines itself.
 
 For split installs, `loadout install @envs` bakes
 `LOADOUT_CFG_SHARED_PREFIX=<shared>/local` into both bash and tcsh global config
@@ -76,7 +80,7 @@ parent process to export the prefix.
 
 ## What you get
 
-Files, all under `global/`:
+Files under `global/` (plus the top-level `tcshrc` entrypoint):
 
 | file | what it does |
 |---|---|
@@ -93,19 +97,22 @@ Behaviour:
 
 - **PATH** — the loadout's `bin` (honoring `LOADOUT_CFG_SHARED_PREFIX`), plus
   `/usr/local/bin`, `~/.cargo/bin`, `~/go/bin`, `~/.venv/bin`, `~/.opencode/bin`,
-  `~/node_modules/.bin` and NVM's `$NVM_BIN`, each added only when it exists.
+  `~/node_modules/.bin` and NVM's `$NVM_BIN` (when the parent shell exported it;
+  `nvm.sh` is bash-only), each added only when it exists.
 - **Environment** — `EDITOR`/`VISUAL`/`GIT_EDITOR`, `PAGER`, `MANPAGER`, the
-  `LESS_TERMCAP_*` colours, `PIP_REQUIRE_VIRTUALENV`, `PYTHONPYCACHEPREFIX`,
-  `COLORTERM`, `EGL_LOG_LEVEL`, `TERMINFO_DIRS`, `GI_TYPELIB_PATH`,
-  `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`, `FONTCONFIG_FILE` (only
-  when the tree carries `etc/fonts/loadout-fonts.conf`), `GNUPLOT_DRIVER_DIR` —
-  the same values the bash env exports.
+  `LESS_TERMCAP_*` colours (real ESC bytes, like bash), `PIP_REQUIRE_VIRTUALENV`,
+  `PYTHONPYCACHEPREFIX`, `COLORTERM`, `EGL_LOG_LEVEL`, `TERMINFO_DIRS`,
+  `GI_TYPELIB_PATH`, `QT_QPA_PLATFORM_PLUGIN_PATH`, `NVIM_QT_RUNTIME_PATH`,
+  `FONTCONFIG_FILE` (only when the tree carries `etc/fonts/loadout-fonts.conf`),
+  `GNUPLOT_DRIVER_DIR` — the shared values the bash env exports.
 - **Aliases** — the bash alias set: navigation (`b`…`bbbbbbbbbb`, `cdd`…`cdddddd`,
   `p`/`cdp`, `latest`), listing (`ls`/`ll`/`la`/`lh`/`lg`/`lah`/`tree`), editing
   (`vi`/`vim`/`vic`/`vid`/`vii`/`v`/`new`), search (`g`/`sg`/`gv`/`gf`/`gpy`/`gtcl`/
   `f`/`fc`/`h`/`hg`/`gah`), git (`gs`/`gc`/`gp`/`gd`/`ga`/`gr`/`gsp`), LSF/EDA
   (`bq`/`bjobsv`/`bkillall`/`mli`/`ms`/`ma`/`pg`/`pk`/`ipy`…), VNC (`vnc`/`killvnc`…)
-  and the utility set. Each tool alias is defined **only if the tool is installed**.
+  and the utility set. Aliases for optional tools are defined only when the tool
+  is installed; site-specific EDA/LSF aliases are defined unconditionally because
+  they are expected on the target farm.
 - **Prompt** — cwd, git branch, optional hostname, the username when it is
   highlighted or differs from `$USER`, and the red farm colour under `$LSB_JOBID`.
 - **Every directory change lists**, via csh's native `cwdcmd`. It also carries
@@ -161,7 +168,7 @@ that only exists for bash/zsh/fish.
 |---|---|
 | fzf keybindings (`Ctrl+T`, `Ctrl+R`, `Alt+C`) | `fzf --bash` / `--zsh` / `--fish` only. fzf itself works fine as a command. |
 | zoxide (`z` / `zi`) | `zoxide init` has no tcsh target. |
-| OSC 133 semantic zones / OSC 7 cwd | Needs a preexec framework (bash-preexec). tcsh's `precmd`/`postcmd` can carry OSC 7, which the prompt block does; full 133 zoning needs per-command hooks csh does not expose. |
+| OSC 133 semantic zones | Needs a preexec framework (bash-preexec), which csh does not expose. OSC 7 cwd reporting IS carried, by `cwdcmd` (see above). |
 | IceCream-Bash (`ic`/`icp`/`ict`/`ictp`) | A bash function library that relies on `${!var}` indirect expansion and `export -f`. |
 
 **Starship IS supported.** The tcsh prompt used to be hand-rolled because

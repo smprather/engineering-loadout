@@ -1,0 +1,41 @@
+#!/bin/sh
+# Print a csh command that removes duplicate entries from the caller's $path.
+#
+# Backs the `path_trim` alias. Mirrors bash's path_trim(): keep the first
+# occurrence of each entry, in order. A csh alias cannot run the nested
+# `foreach` loops this needs, and a child process cannot mutate the parent
+# shell's path, so this prints `set path = (...)` and the alias evals it.
+#
+# Usage: path-trim
+
+# See path-remove: one csh-safe double-quoted word.
+# shellcheck disable=SC2016  # sed expressions intentionally use single quotes
+csh_quote() {
+    printf '"%s"' "$(printf '%s' "$1" | sed \
+        -e 's/\\/\\\\/g' \
+        -e 's/"/\\"/g' \
+        -e 's/\$/\\$/g' \
+        -e 's/`/\\`/g' \
+        -e 's/!/\\!/g')"
+}
+
+out=
+# No globbing: PATH entries are literal directory names.
+set -f
+seen='
+'
+old_ifs=$IFS
+IFS=:
+for entry in $PATH; do
+    case $seen in
+        *"
+$entry
+"*) continue ;;
+    esac
+    seen="$seen$entry
+"
+    out="$out $(csh_quote "$entry")"
+done
+IFS=$old_ifs
+
+printf 'set path = ( %s )\n' "$out"

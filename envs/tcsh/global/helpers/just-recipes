@@ -1,0 +1,8 @@
+#!/bin/sh
+# Print the recipes in the current justfile, silently when there is none.
+#
+# Backs the `just` completion. The completion wordlist cannot contain a slash,
+# so it calls an alias that runs this helper rather than
+# `just --summary 2>/dev/null`.
+
+just --summary 2>/dev/null

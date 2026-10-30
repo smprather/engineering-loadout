@@ -176,6 +176,18 @@ TERM. The layer also sets `allow-passthrough on`, and marker-guards the
 `terminal-overrides` / `terminal-features` array appends so a reload cannot
 grow them.
 
+The managed layer deliberately does **not** pin `default-shell`: new windows
+and panes use tmux's normal `$SHELL`/passwd default, so a tcsh login gets tcsh
+panes. Helpers that need bash (`tmux-popout`, the layout/state scripts) invoke
+it explicitly.
+
+`EXTENDED_KEYS_SUPPORTED` is exported by bash/zsh after their Terminal-DA
+probe. tcsh exports `1` for kitty/alacritty and for an existing tmux server
+whose `extended-keys` is already on, and otherwise leaves it unset. The config
+only forces `extended-keys off` when the variable is explicitly `0`; an unset
+value leaves the default `extended-keys on` alone, so a tcsh login no longer
+disables extended keys server-wide.
+
 ## Focus follows mouse (FFM)
 
 `focus-follows-mouse` (tmux >= 3.7, and the bundled tmux is 3.8) focuses the

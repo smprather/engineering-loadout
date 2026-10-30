@@ -13,6 +13,134 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-30 (3): tcsh env audit -- recommended fixes landed; remaining gaps recorded
+
+Operator report: an obvious tcsh support problem in `envs/`. Read-only scan
+(TcshEnvAudit / CrossEnvAudit / InstallerDocsAudit scouts + native PTY/tmux
+repros) found the completion file using POSIX fd redirection, the `g` alias
+family unusable, `unalias *` deleting site aliases, and a starship fallback
+that could not be reached. Operator then asked for the recommended fixes only.
+
+**Landed (uncommitted; working tree):**
+
+- **Completions** (`envs/tcsh/global/completions.csh`): a `/` inside a
+  `complete` list command terminates the spec, and `2>&1 |` is an "Ambiguous
+  output redirect". Removed all `2>` from wordlists; added slash-free helper
+  aliases `_lo_complete_{git_branches,loadout_packages,just_recipes}` backed by
+  new `helpers/{git-branches,loadout-packages,just-recipes}`; module/`ml` use
+  csh `|&`. `loadout-packages` also skips wrapped `loadout list` rows, which
+  otherwise emitted a literal `+` completion.
+- **`g` family** (`aliases.csh`): `g`/`sg`/`gpy`/`gtcl` now store
+  `--glob='\\!*.snapshot*'`. The old single `\!` stored `!*`, which alias
+  expansion consumed as the argument list, so rg never received a pattern;
+  `gv`/`gf` failed with it. Verified with real rg and a fake-rg argv log.
+- **Site aliases** (`envs/tcsh/tcshrc`): removed `unalias *`. `/etc/csh.cshrc`
+  runs first and defines Environment Modules' `module`/`_module_raw`/`ml`,
+  gawk helpers and site `precmd`; the blanket unalias deleted them. Loadout
+  aliases still override same-name site aliases. Verified gawk aliases and a
+  synthetic `module` survive.
+- **Starship** (`global/tcshrc`): `LOADOUT_CFG_ENABLE_STARSHIP` is checked with
+  `is-truthy`; the binary with `-X` (missing `which` writes its not-found text
+  to STDOUT and was eval'd); the flag is set only after `starship init tcsh`
+  succeeded and installed a `precmd` containing `STARSHIP_PATH`. This makes
+  `ENABLE_STARSHIP=0` and a starship-less host reach the hand-rolled prompt
+  silently instead of printing `Unmatched '`'`/`STARSHIP_PATH`/`Faulty alias`.
+- **`LESS_TERMCAP_*`** (`global/tcshrc`): store real ESC bytes via
+  `/usr/bin/printf`; csh `setenv` does not interpret `\033` and less does not
+  process escapes, so the old values rendered as literal text.
+- **`path_remove`/`path_trim`** (`aliases.csh` + new `helpers/path-remove`,
+  `helpers/path-trim`): a csh alias executes only the first iteration of an
+  inline `foreach`, so `path_remove /bin` dropped three of four entries and
+  removing the first entry emptied PATH; `path_trim` aborted. The helpers print
+  `set path = (...)` and are eval'd; both handle spaces.
+- **`cd`/`latest`** (`aliases.csh` + new `helpers/cd-command`): `\!*` inside a
+  double-quoted backtick nested quotes, so `cd "dir with space"`/`latest "dir
+  with space"` failed with `Unmatched '`'`. `cd` now evals a helper that prints
+  `chdir "<quoted>"`; `latest` evals unquoted. `cd -`, no-arg `cd`, `cd FILE`,
+  `cdd`/`cdp`, and `cwdcmd` listing still work.
+- **tmux** (`envs/tmux/tmux-global.conf`, `global/tcshrc`): removed the
+  unconditional `set -g default-shell /bin/bash` (tcsh logins got bash panes
+  with `SHELL=/bin/bash`). tcsh now exports `EXTENDED_KEYS_SUPPORTED=1` for
+  kitty/alacritty or when an existing tmux server has `extended-keys on` (and
+  mirrors an explicit `off`); the config forces `extended-keys off` only on an
+  explicit `0`. Unset no longer disables it server-wide. Live tmux 3.8 verified.
+- **Docs**: `AGENTS.md` tcsh paragraph (starship pin, absent list, `!` rule,
+  site-alias preservation), `envs/tcsh/README.md` (ownership/entrypoint, site
+  aliases, ESC values, OSC 7 table, alias caveat), `global/config.csh` (stale
+  `starship-tcsh.toml`), `docs/TMUX.md` (shell/extended-keys policy).
+
+**Regression coverage added:**
+
+- `tests/env-shell-parity` (T1): no POSIX fd redirection in csh-syntax files;
+  no entrypoint `unalias *`; `EXTENDED_KEYS_SUPPORTED` present; starship switch
+  tested by value; rg glob double-escaped; path helpers used; tmux does not pin
+  bash and only disables on explicit 0.
+- `tests/install-env-tcsh` (T2): site-alias survival; `g` argv; path helpers;
+  quoted `cd`/`latest`; real `LESS_TERMCAP` ESC bytes; `ENABLE_STARSHIP=0`;
+  starship-less startup; git/module TAB parse; extended-keys value.
+- New helpers added to the helper-executable assertion.
+
+**Verification:** `tests/run-all --fast` -> Tier 1 passed (status 0, ~174 s:
+`env-shell-parity` 35/35, `env-tcsh-starship` 31/31, `docs-sync`,
+`content-manifest`, `installed-sizes`, `verify-manifest-export`). Regenerated
+`payload/installed-sizes.json` and `.content-manifest` in `build/build-shell`;
+all three `--check` gates pass. Manual PTY/tmux smokes cover the fixed paths.
+Per operator instruction, no Tier-2 test was run after the interjection;
+`tests/install-env-tcsh` had passed earlier with the new assertions.
+
+**Still to do (not in the recommended fix set):**
+
+1. `aliases.csh:179` `alias rm 'rm -f'` defeats `set rmstar` in `tcshrc:191`:
+   `rm *` no longer asks for confirmation. Fix by dropping `-f` or wrapping
+   confirmation.
+2. `aliases.csh:76-82` / `tcshrc:175-176`: `LOADOUT_CFG_PREFERRED_LS` is ignored;
+   eza wins whenever installed, else lsd, else ls. `tree` ignores it too.
+3. `aliases.csh:77-82`: `ls -1` is not special-cased to `/bin/ls -1`; it emits a
+   colored long listing and can be empty on a non-tty.
+4. `tcshrc:316-322` + `grc-aliases.csh:20-21`: GRC is enabled by default but
+   dead on a direct tcsh login -- `envs/tcsh/global` ships no `grc/bin`, and
+   the bash env's `~/.config/bash/global/grc/bin` is not added. Ship a copy or
+   add the bash path when present.
+5. `tcshrc:52,86-103`: PATH order differs from bash (`NVM_BIN` first vs eighth;
+   cargo/go/venv/opencode/node_modules order) and `TERMINFO_DIRS` is
+   `home:prefix` vs bash's `prefix:home`. The comment claiming a match is false.
+6. `tcshrc:86-93`: `NVM_BIN` is only added when already exported; a direct tcsh
+   login never sources `nvm.sh`, so nvm node/npm are absent. Resolve
+   `~/.nvm/versions/node/*` or document the gap.
+7. `tcshrc:141-177`: non-interactive tcsh exports `EDITOR`/`VISUAL`/
+   `GIT_EDITOR`; non-interactive bash does not. Align with bash or update the
+   "same here" comment.
+8. `tcshrc:275` / `aliases.csh:73-88`: `LSD_ARGS` omits bash's `--date` (tcsh
+   hardcodes it per alias), so a user override behaves differently.
+9. `loadout_main.py` `_install_env_tcsh`: `remove_if_exists` deletes a **regular**
+   `~/.cshrc`, not only a loadout link; docs say links are pruned. Backups cover
+   it, but `--no-backup` makes the deletion permanent. Remove only symlinks or
+   update the docs.
+10. `loadout_main.py` `_install_env_tcsh`: a symlinked `~/.config/tcsh` is
+    unlinked and recreated without preserving corp/site/team/project/user
+    layers. Bash has `preserve_bash_layers_from_symlink`; tcsh does not. Port it
+    (zsh has the same gap).
+11. `aliases.csh:121,195`: `new`/`extract_rpm` with no argument fall through to
+    command lookup (`...: Command not found.`) instead of an arity error.
+12. `tcshrc:29`: with `HOME` unset, every non-interactive tcsh prints
+    `HOME: Undefined variable.` and the assignment aborts.
+13. `aliases.csh:211-212`: under starship, `sp1`/`sp2` set `prompt`/
+    `loadout_prompt_lead`, which starship overwrites; `sp2` does not export
+    `LOADOUT_CFG_PROMPT_INCLUDE_HOST`, so the host module never sees it. Bash's
+    pair is similarly inert.
+14. `aliases.csh:183-184`: `du DIR` puts `DIR` after the pipe, so it becomes a
+    `sort` operand; shared with bash (`envs/bash/global/aliases.sh:234`).
+15. Extended-keys coverage is cheap-check only: a bare xterm tcsh login leaves
+    `EXTENDED_KEYS_SUPPORTED` unset, so tmux leaves `extended-keys on` but does
+    not add `terminal-features xterm*:extkeys`. A full port of bash's
+    `check_extended_keys` DA probe is the remaining parity step.
+16. DONE at integration: the new helpers are committed with this change and
+    both manifests regenerated; the concurrent items 1-10 work went in as its
+    own commits.
+17. From the integration review (minor): the interactive startup now spends
+    seven `/usr/bin/printf` forks on `LESS_TERMCAP_*`; one captured ESC would
+    do. The starship block's new inner `if` was not re-indented (cosmetic).
+
 ## 2026-10-30 (2): independent review items 4-10 fixed
 
 User asked to fix the seven items left open by the entry below. Test first, RED

@@ -1,0 +1,32 @@
+#!/bin/sh
+# Print the csh command that changes to the directory `cd` would choose.
+#
+# Backs the `cd` alias. The old alias embedded `\!*` inside a double-quoted
+# backtick, so `cd "dir with space"` nested quotes and csh reported
+# `Unmatched '`'.` -- the user's argument never reached cd-target intact.
+# A helper that PRINTS `chdir '<dir>'` and an eval without the surrounding
+# double quotes keeps the argument quoting intact.
+#
+# `chdir` (not `cd`) is deliberate: it is csh's builtin, it still fires
+# cwdcmd, and it cannot recurse into this alias.
+
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
+
+target=$("$here/cd-target" "$@") || exit $?
+[ -n "$target" ] || exit 1
+
+# `chdir -` is csh's previous-directory special case; quoting it ("-") makes it
+# a literal directory name. Keep it unquoted.
+if [ "$target" = "-" ]; then
+    printf 'chdir -\n'
+    exit 0
+fi
+
+# csh-safe double-quoted word: see path-remove.
+# shellcheck disable=SC2016  # sed expressions intentionally use single quotes
+printf 'chdir "%s"\n' "$(printf '%s' "$target" | sed \
+    -e 's/\\/\\\\/g' \
+    -e 's/"/\\"/g' \
+    -e 's/\$/\\$/g' \
+    -e 's/`/\\`/g' \
+    -e 's/!/\\!/g')"

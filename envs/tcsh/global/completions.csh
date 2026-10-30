@@ -15,6 +15,19 @@
 #   p@N@`cmd`@     -- position N completes from a command's output
 # `--` at the end means "otherwise complete filenames".
 
+# A completion wordlist is delimited by `/`, so the command inside the
+# backticks cannot contain a slash -- `2>/dev/null` and any helper PATH break
+# the spec with `Unmatched '`'.`. These aliases are slash-free names whose
+# bodies carry the helper path; the wordlist only names the alias.
+if ( $?TCSH_CONFIG_ROOT_DIR ) then
+    set _lo_helpers = "${TCSH_CONFIG_ROOT_DIR}/global/helpers"
+else
+    set _lo_helpers = "$HOME/.config/tcsh/global/helpers"
+endif
+alias _lo_complete_git_branches "$_lo_helpers/git-branches"
+alias _lo_complete_loadout_packages "$_lo_helpers/loadout-packages"
+alias _lo_complete_just_recipes "$_lo_helpers/just-recipes"
+
 # ---- loadout itself ----------------------------------------------------------
 # Verbs come from `loadout completion bash`'s subcommand list; package and group
 # names are resolved live so they never go stale against packages.json.
@@ -23,16 +36,16 @@ complete loadout \
     'n/snapshot/(create restore list)/' \
     'n/completion/(bash)/' \
     'c/--/(help version dry-run no-deps force skip dest-dir no-backup no-verify groups tag installed verify logs pending all allow-online-plugin-sync post-install-hook install-follows-symlinks)/' \
-    'n/*/`loadout list 2>/dev/null | awk "NR>2 {print \$1}"`/'
+    'n/*/`_lo_complete_loadout_packages`/'
 
 # ---- git ---------------------------------------------------------------------
 complete git \
     'p@1@(add branch checkout cherry-pick clone commit diff fetch grep init log merge mv pull push rebase remote reset restore revert rm show stash status switch tag worktree)@' \
-    'n/checkout/`git branch --format="%(refname:short)" 2>/dev/null`/' \
-    'n/switch/`git branch --format="%(refname:short)" 2>/dev/null`/' \
-    'n/merge/`git branch --format="%(refname:short)" 2>/dev/null`/' \
-    'n/rebase/`git branch --format="%(refname:short)" 2>/dev/null`/' \
-    'n/branch/`git branch --format="%(refname:short)" 2>/dev/null`/'
+    'n/checkout/`_lo_complete_git_branches`/' \
+    'n/switch/`_lo_complete_git_branches`/' \
+    'n/merge/`_lo_complete_git_branches`/' \
+    'n/rebase/`_lo_complete_git_branches`/' \
+    'n/branch/`_lo_complete_git_branches`/'
 
 # ---- bundled CLI tools -------------------------------------------------------
 complete bat      'c/--/(paging style theme language list-themes plain number color decorations)/' 'n/*/f/'
@@ -46,7 +59,7 @@ complete zoxide   'p@1@(add query remove init import edit)@'
 complete uv       'p@1@(run add remove sync lock export tree venv build publish pip tool python init cache version)@'
 complete ruff     'p@1@(check format rule config linter clean version server analyze)@'
 complete taplo    'p@1@(lint check validate format fmt lsp config get toml-test completions)@' 'n/{lsp}/(tcp stdio)/' 'n/{config}/(default schema)/' 'n/*/f/'
-complete just     'p@1@()@' 'n/*/`just --summary 2>/dev/null`/'
+complete just     'p@1@()@' 'n/*/`_lo_complete_just_recipes`/'
 complete lazygit  'c/--/(version path filter work-tree git-dir)/'
 
 # ---- module (Environment Modules) -------------------------------------------
@@ -54,9 +67,9 @@ complete lazygit  'c/--/(version path filter work-tree git-dir)/'
 # whatever the site provides and its own tcsh_completion may already be loaded.
 complete module \
     'p@1@(add load unload swap switch list avail show display help use unuse purge reload whatis apropos)@' \
-    'n/{load,add,show,display,whatis,help}/`module -t avail 2>&1 | grep -v ":$" | grep -v "^$"`/' \
+    'n/{load,add,show,display,whatis,help}/`module -t avail |& grep -v ":$" | grep -v "^$"`/' \
     'n/{unload,rm}/`echo $LOADEDMODULES | tr ":" " "`/'
-complete ml 'p@*@`module -t avail 2>&1 | grep -v ":$" | grep -v "^$"`@'
+complete ml 'p@*@`module -t avail |& grep -v ":$" | grep -v "^$"`@'
 
 # ---- shell builtins that take specific things -------------------------------
 complete cd     'p@1@d@'
@@ -70,3 +83,5 @@ complete unsetenv 'n/*/e/'
 complete setenv   'p@1@e@'
 complete unalias  'p@1@a@'
 complete alias    'p@1@a@'
+
+unset _lo_helpers

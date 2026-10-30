@@ -1,0 +1,8 @@
+#!/bin/sh
+# Print local git branch names, one per line, silently outside a repository.
+#
+# Backs the git branch completions. The completion wordlist cannot contain a
+# slash (tcsh treats it as the spec delimiter), so it calls an alias that runs
+# this helper rather than `git branch ... 2>/dev/null`.
+
+git branch --format='%(refname:short)' 2>/dev/null

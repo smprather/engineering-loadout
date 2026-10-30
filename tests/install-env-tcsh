@@ -67,6 +67,31 @@ tcsh_i_clean_home() {
         | tr -d '\r'
 }
 
+# tcsh_i_env HOME CMD [VAR=value ...] -- pass extra environment to the shell.
+tcsh_i_env() {
+    _home=$1
+    _cmd=$2
+    shift 2
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmd" \
+        | env -u TMUX HOME="$_home" TERM=xterm-256color "$@" script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+
+# tcsh_i_raw HOME PATH CMD -- tcsh -f with a controlled PATH, no system rc.
+# Used to simulate a farm node with no starship binary without depending on
+# the host's /usr/bin (which may have one).
+tcsh_i_raw() {
+    _home=$1
+    _path=$2
+    _cmd=$3
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmd" \
+        | env -i HOME="$_home" PATH="$_path" LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
+            /usr/bin/script -qec "tcsh -f -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r'
+}
+
 # THE THIRD HARNESS TRAP, and the nastiest: `script` gives the child a PTY, so
 # tcsh's OWN diagnostics come back on the PTY -- i.e. in stdout -- and $ERRFILE
 # stays EMPTY. The headline "empty stderr" assertion below therefore cannot see
@@ -85,7 +110,7 @@ assert_no_csh_noise() {
     for _pat in 'Undefined variable' 'Event not found' 'Badly placed ()' \
                 'Missing }' 'Missing ]' 'Too many arguments' 'Expression Syntax' \
                 'Variable syntax' 'Unmatched' 'No match' 'if: Expression Syntax' \
-                'alias: Too dangerous' 'Command not found'; do
+                'alias: Too dangerous' 'Ambiguous output redirect' 'Command not found'; do
         case $_text in
             *"$_pat"*) fail "$_label: tcsh printed '$_pat':
 $_text" ;;
@@ -173,7 +198,8 @@ HELPERS="$TMPHOME/.config/tcsh/global/helpers"
 for h in is-truthy vercmp recent-dir recent-file recent-files path-list \
          grep-all-history git-stash-pull safe-symlink latest-link seed-history \
          prompt-color find-count zhead total-cpu lsf-queues vnc-start \
-         vnc-kill-newest detect-online tmp-root; do
+         vnc-kill-newest detect-online tmp-root path-remove path-trim \
+         cd-command git-branches loadout-packages just-recipes; do
     [ -x "$HELPERS/$h" ] || fail "helper not installed executable: $h"
 done
 
@@ -285,6 +311,86 @@ echo "$out" | grep -q 'complete-word-fwd' || fail "keybinds.csh did not bind TAB
 out=$(tcsh_i 'echo "HF=$histfile"')
 assert_no_csh_noise "history" "$out"
 echo "$out" | grep -q 'HF=.*tcsh_history\.' || fail "per-PID histfile not set: [$out]"
+
+# --- Site aliases loaded by the system csh rc (Environment Modules, gawk,
+# --- site tooling) run BEFORE ~/.tcshrc. They must survive the entrypoint.
+out=$(tcsh_i "alias site_probe 'echo site'; source '$TMPHOME/.tcshrc'; alias site_probe")
+assert_no_csh_noise "site alias survival" "$out"
+echo "$out" | grep -q 'echo site' || fail "re-sourcing the tcsh entrypoint wiped a site alias: [$out]"
+
+# --- rg aliases: the literal !* glob must reach rg, and the user's arguments
+# --- must be appended, not substituted into the glob (csh alias semantics).
+mkdir -p "$TMPHOME/.local/bin"
+cat > "$TMPHOME/.local/bin/rg" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$TMPHOME/rg-args"
+EOF
+chmod +x "$TMPHOME/.local/bin/rg"
+out=$(tcsh_i 'g probe')
+assert_no_csh_noise "rg alias" "$out"
+grep -Fxq -- 'probe' "$TMPHOME/rg-args" || fail "g did not pass its pattern to rg: [$(cat "$TMPHOME/rg-args")]"
+grep -Fq -- '!*.snapshot*' "$TMPHOME/rg-args" || fail "g lost the literal !*.snapshot* glob: [$(cat "$TMPHOME/rg-args")]"
+if grep -Fq -- 'probe.snapshot*' "$TMPHOME/rg-args"; then
+    fail "g substituted the pattern into the glob: [$(cat "$TMPHOME/rg-args")]"
+fi
+
+# --- path_remove / path_trim: a csh alias executes only the first iteration
+# --- of an inline foreach, so these must be helpers.
+out=$(tcsh_i 'set path = ( /usr/bin /bin /usr/bin /tmp/x ); path_remove /bin; echo "R=$path N=$#path"; set path = ( /usr/bin /bin /usr/bin ); path_trim; echo "T=$path N=$#path"')
+assert_no_csh_noise "path aliases" "$out"
+echo "$out" | grep -q 'R=/usr/bin /usr/bin /tmp/x N=3' || fail "path_remove did not remove exactly /bin: [$out]"
+echo "$out" | grep -q 'T=/usr/bin /bin N=2' || fail "path_trim did not dedupe: [$out]"
+
+# --- Quoted directory arguments must survive the helper round-trip.
+mkdir -p "$TMPHOME/space dir" "$TMPHOME/latest dir"
+out=$(cd "$TMPHOME" && tcsh_i "cd '$TMPHOME/space dir'; echo \"MARK=\$cwd\"")
+assert_no_csh_noise "cd with spaces" "$out"
+echo "$out" | grep -q "MARK=.*space dir" || fail "cd did not handle a quoted path with spaces: [$out]"
+out=$(cd "$TMPHOME" && tcsh_i "latest '$TMPHOME/latest dir'; echo \"MARK=\$cwd\"")
+assert_no_csh_noise "latest with spaces" "$out"
+echo "$out" | grep -q "MARK=.*latest dir" || fail "latest did not handle a quoted path with spaces: [$out]"
+
+# --- LESS_TERMCAP_* must be real ESC bytes. less does NOT process backslash
+# --- escapes in these variables, so a literal \033 renders as text.
+out=$(tcsh_i 'printf "%s" "$LESS_TERMCAP_md" | od -An -tx1')
+assert_no_csh_noise "LESS_TERMCAP" "$out"
+echo "$out" | grep -q '1b 5b 31 3b 33 32 6d' || fail "LESS_TERMCAP_md is not a real ESC sequence: [$out]"
+
+# --- LOADOUT_CFG_ENABLE_STARSHIP=0 must select the hand-rolled fallback.
+out=$(tcsh_i_env "$TMPHOME" \
+    'echo "P=[$prompt]"' LOADOUT_CFG_ENABLE_STARSHIP=0)
+assert_no_csh_noise "starship switch off" "$out"
+echo "$out" | grep -q 'P=\[.*%B' || fail "hand-rolled prompt was not selected: [$out]"
+
+# --- A host with NO starship binary (the env-only farm case) must still start
+# --- silently and use the hand-rolled prompt. Build a PATH without starship:
+# --- tcsh itself, the helpers' POSIX tools, and nothing else.
+FAKEBIN="$TMPHOME/faithful-bin"
+mkdir -p "$FAKEBIN"
+for _c in tcsh sh ls whoami stty id sed cut ps cp dirname printf od git grep awk \
+          tr head tail sort wc cat rm mkdir chmod stat realpath basename date \
+          hostname env uname md5sum timeout find xargs touch readlink; do
+    _p=$(command -v "$_c" 2>/dev/null) && ln -sf "$_p" "$FAKEBIN/$_c"
+done
+out=$(tcsh_i_raw "$TMPHOME" "$FAKEBIN" \
+    "setenv LOADOUT_ONLINE 0; source '$TMPHOME/.tcshrc'; echo \"P=[\$prompt]\"")
+assert_no_csh_noise "missing starship" "$out"
+echo "$out" | grep -q 'P=\[.*%B' || fail "missing starship did not fall back to the hand-rolled prompt: [$out]"
+
+# --- Dynamic completions: /dev/null inside a complete wordlist is parsed as a
+# --- spec delimiter by tcsh; 2>&1| is an ambiguous csh redirect. Both made
+# --- every git/module completion die at TAB.
+out=$(tcsh_i 'git checkout \t')
+assert_no_csh_noise "git completion" "$out"
+out=$(tcsh_i "alias module 'echo site'
+module load \t")
+assert_no_csh_noise "module completion" "$out"
+
+# --- tmux reads EXTENDED_KEYS_SUPPORTED; tcsh must provide it for terminals
+# --- where the cheap check applies (no stdin probe needed for alacritty).
+out=$(tcsh_i_env "$TMPHOME" 'echo "EXT=$EXTENDED_KEYS_SUPPORTED"' TERM=alacritty)
+assert_no_csh_noise "extended keys" "$out"
+echo "$out" | grep -q 'EXT=1' || fail "tcsh did not export EXTENDED_KEYS_SUPPORTED: [$out]"
 
 # --- Reinstall must not clobber a user-created layer (the env-st lesson).
 echo 'setenv LOADOUT_TEST_KEEPME 1' > "$TMPHOME/.config/tcsh/user/config.csh"

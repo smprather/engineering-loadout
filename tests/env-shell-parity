@@ -44,6 +44,7 @@ BASH_KEYBINDS = os.path.join(REPO, "envs", "bash", "global", "keybinds.sh")
 BASH_ICECREAM = os.path.join(REPO, "envs", "bash", "global", "icecream-ext.sh")
 BASH_MODULES_INIT = os.path.join(REPO, "envs", "bash", "global", "modules-init.bash")
 TCSH_GLOBAL = os.path.join(REPO, "envs", "tcsh", "global")
+TCSH_ENTRY = os.path.join(REPO, "envs", "tcsh", "tcshrc")
 TCSH_HELPERS = os.path.join(TCSH_GLOBAL, "helpers")
 TCSH_ALIASES = os.path.join(TCSH_GLOBAL, "aliases.csh")
 TCSH_TCSHRC = os.path.join(TCSH_GLOBAL, "tcshrc")
@@ -459,6 +460,65 @@ def main():
         "tcsh prepend list no longer carries the shared bin",
         bool(tcsh_prepend_line) and "${_loadout_prefix}/bin" not in tcsh_prepend_line.group(0),
         tcsh_prepend_line.group(0) if tcsh_prepend_line else "foreach line not found",
+    )
+
+    # ---- tcsh syntax traps ---------------------------------------------------
+    # `2>/dev/null` and `2>&1` are POSIX-shell redirections, not csh ones. In csh
+    # the leading 2 is an ARGUMENT and stdout is redirected; `2>&1 |` is an
+    # "Ambiguous output redirect". This is checked only on files tcsh actually
+    # parses -- the helpers under global/helpers are POSIX sh, where 2> is right.
+    tcsh_syntax_files = [TCSH_ENTRY, TCSH_TCSHRC, TCSH_ALIASES, TCSH_CONFIG]
+    tcsh_syntax_files += [os.path.join(TCSH_GLOBAL, n) for n in sorted(os.listdir(TCSH_GLOBAL)) if n.endswith(".csh")]
+    bad_redirects = []
+    for path in tcsh_syntax_files:
+        with open(path, encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                if re.search(r"(?<![\w])2>", line):
+                    bad_redirects.append(f"{os.path.relpath(path, REPO)}:{lineno}")
+    check(
+        "tcsh-syntax files never use POSIX fd redirection",
+        not bad_redirects,
+        "2> found in csh-syntax files: " + ", ".join(bad_redirects),
+    )
+
+    check(
+        "tcsh entrypoint does not wipe every inherited alias",
+        "unalias *" not in read(TCSH_ENTRY),
+        "unalias * removes site aliases loaded by /etc/csh.cshrc (module, gawk, ...)",
+    )
+    check(
+        "tcsh exports EXTENDED_KEYS_SUPPORTED for the tmux config",
+        "EXTENDED_KEYS_SUPPORTED" in read(TCSH_TCSHRC),
+        "tmux-global.conf turns extended-keys off when the variable is absent",
+    )
+    check(
+        "tcsh starship switch is tested by value, not existence",
+        "is-truthy" in tcsh_rc and "$?LOADOUT_CFG_ENABLE_STARSHIP &&" not in tcsh_rc,
+        "LOADOUT_CFG_ENABLE_STARSHIP=0 is ignored by a $? test",
+    )
+    check(
+        "tcsh rg aliases double-escape the literal !* glob",
+        "\\\\!*.snapshot*" in read(TCSH_ALIASES),
+        "stored !* is consumed as alias-argument substitution, so rg never gets a pattern",
+    )
+    check(
+        "tcsh path_remove/path_trim use helpers, not one-line foreach aliases",
+        "path-remove" in read(TCSH_ALIASES) and "path-trim" in read(TCSH_ALIASES) and "eval" in read(TCSH_ALIASES),
+        "a csh alias executes only the first iteration of an inline foreach",
+    )
+
+    tmux_global = read(os.path.join(REPO, "envs", "tmux", "tmux-global.conf"))
+    check(
+        "tmux does not pin default-shell to bash",
+        "set -g default-shell /bin/bash" not in tmux_global,
+        "tcsh logins would get bash panes (SHELL rewritten by tmux)",
+    )
+    check(
+        "tmux only disables extended-keys for an explicit 0",
+        '%if "#{==:#{EXTENDED_KEYS_SUPPORTED},0}"' in tmux_global,
+        "an unset variable (tcsh) must not force extended-keys off server-wide",
     )
 
     print()

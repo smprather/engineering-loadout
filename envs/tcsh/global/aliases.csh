@@ -5,9 +5,10 @@
 #
 # Three csh rules this file lives by:
 #
-#   1. `!` MUST be escaped as `\!`. Unescaped it triggers history expansion at
-#      alias-definition time, so `alias foo 'bar !:1'` expands the !:1 against
-#      YOUR history right now and stores the result. `\!:1` is what gets stored.
+#   1. `!` MUST be escaped as `\!` at definition time, or csh expands it against
+#      YOUR history right now. For a LITERAL `!*` inside a double-quoted alias
+#      body you need `\\!*`: the single form stores `!*`, which alias expansion
+#      then consumes as the alias's argument list (the rg globs below).
 #   2. An alias with NO `\!` reference gets its arguments appended automatically,
 #      which is what you want for a plain wrapper (`alias gs 'git status'` then
 #      `gs -s` runs `git status -s`). Use `\!:1` / `\!*` / `\!:2-` only when the
@@ -37,7 +38,7 @@ alias loadout_tmp_root "$_lo_helpers/tmp-root"
 # without it a typo'd path would silently move you home. `chdir` is csh's own
 # builtin name for cd and is the escape hatch (aliased as bcd, matching bash's
 # `bcd` for `builtin cd`).
-alias cd        'set _lo_t = "`'"$_lo_helpers"'/cd-target \!*`" ; if ( "$_lo_t" != "" ) chdir "$_lo_t" ; unset _lo_t'
+alias cd        'eval `'"$_lo_helpers"'/cd-command \!*`'
 alias cd-       'chdir -'
 alias bcd       'chdir'
 alias b         'cd ..'
@@ -63,7 +64,7 @@ alias cdddddd   'set _lo_d = "`'"$_lo_helpers"'/recent-dir 5`" ; if ( "$_lo_d" !
 
 alias p         'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; pwd | tee "$_lo_tmp/p_dir.$USER" ; unset _lo_tmp'
 alias cdp       'set _lo_tmp = "`'"$_lo_helpers"'/tmp-root`" ; set _lo_d = "`cat "$_lo_tmp/p_dir.$USER"`" ; if ( "$_lo_d" != "" ) cd "$_lo_d" ; unset _lo_d _lo_tmp'
-alias latest    'eval "`'"$_lo_helpers"'/latest-link \!*`"'
+alias latest    'eval `'"$_lo_helpers"'/latest-link \!*`'
 
 # ---- listing -----------------------------------------------------------------
 # The bash env drives every listing variant through ONE ls() function that reads
@@ -129,10 +130,10 @@ endif
 
 # ---- search ------------------------------------------------------------------
 if ( -X rg ) then
-    alias g     "rg --smart-case --search-zip --hidden --no-ignore --glob='\!*.snapshot*'"
-    alias sg    "rg --smart-case --search-zip --hidden --no-ignore --glob='\!*.snapshot*' --max-filesize=100K"
-    alias gpy   "rg --smart-case --search-zip --hidden --no-ignore --glob='*.py' --glob='\!*.snapshot*'"
-    alias gtcl  "rg --smart-case --search-zip --hidden --no-ignore --glob='*.tcl' --glob='\!*.snapshot*'"
+    alias g     "rg --smart-case --search-zip --hidden --no-ignore --glob='\\!*.snapshot*'"
+    alias sg    "rg --smart-case --search-zip --hidden --no-ignore --glob='\\!*.snapshot*' --max-filesize=100K"
+    alias gpy   "rg --smart-case --search-zip --hidden --no-ignore --glob='*.py' --glob='\\!*.snapshot*'"
+    alias gtcl  "rg --smart-case --search-zip --hidden --no-ignore --glob='*.tcl' --glob='\\!*.snapshot*'"
 else
     alias g     "grep -r -i --color=auto --exclude-dir='.snapshot'"
     alias sg    "grep -r -i -l --color=auto --exclude-dir='.snapshot'"
@@ -309,8 +310,8 @@ alias path_prepend 'set path = ( \!:1 $path:q )'
 alias path_append  'set path = ( $path:q \!:1 )'
 alias path_prepend_if_dir 'if ( -d \!:1 ) set path = ( \!:1 $path:q )'
 alias path_append_if_dir  'if ( -d \!:1 ) set path = ( $path:q \!:1 )'
-alias path_remove  'set _lo_np = ( ) ; foreach _lo_pe ( $path:q ) ; if ( "$_lo_pe" != "\!:1" ) set _lo_np = ( $_lo_np:q "$_lo_pe" ) ; end ; set path = ( $_lo_np:q ) ; unset _lo_np _lo_pe'
-alias path_trim    'set _lo_np = ( ) ; foreach _lo_pe ( $path:q ) ; set _lo_dup = 0 ; foreach _lo_pk ( $_lo_np:q ) ; if ( "$_lo_pk" == "$_lo_pe" ) set _lo_dup = 1 ; end ; if ( $_lo_dup == 0 && -d "$_lo_pe" ) set _lo_np = ( $_lo_np:q "$_lo_pe" ) ; end ; set path = ( $_lo_np:q ) ; unset _lo_np _lo_pe _lo_pk _lo_dup'
+alias path_remove  'eval `'"$_lo_helpers"'/path-remove \!*`'
+alias path_trim    'eval `'"$_lo_helpers"'/path-trim`'
 alias source_if_exists 'if ( -r \!:1 ) source \!:1'
 # Exit-status helpers: use them as `if ( { is_truthy "$VAR" } ) then ... endif`.
 alias is_truthy    "$_lo_helpers/is-truthy"

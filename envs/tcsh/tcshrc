@@ -21,10 +21,15 @@ else if ( "$USER" == "" ) then
     setenv USER "`/bin/whoami`"
 endif
 
-# Match bash's clean-slate startup: aliases are rebuilt from the layered files
-# below, so stale aliases removed from global/ cannot survive an `exec tcsh` or
-# manual re-source.
-unalias *
+# Do NOT `unalias *` here. The system csh rc (/etc/csh.cshrc and
+# /etc/profile.d/*.csh) runs BEFORE ~/.tcshrc, and Environment Modules plus
+# site tooling define `module`/`_module_raw`/`ml` and other aliases there.
+# A blanket unalias deletes them before the loadout layers run -- bash preserves
+# the equivalent module functions via LOADOUT_CFG_PRESERVE_FUNCTIONS. Aliases
+# are not inherited by a new tcsh (exec tcsh re-runs the system rc, then this
+# file), so the only cost of keeping them is that a loadout alias deleted from
+# global/ can linger until the shell exits after a manual re-source. Loadout
+# aliases later in the chain still override site aliases of the same name.
 
 set _loadout_tcsh_home_dir = "$HOME/.config/tcsh"
 if ( ! $?TCSH_CONFIG_ROOT_DIR ) then

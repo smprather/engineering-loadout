@@ -33,9 +33,9 @@
 if ( ! $?LOADOUT_CFG_PREFERRED_TCSH )      setenv LOADOUT_CFG_PREFERRED_TCSH ""
 
 # ---- prompt ------------------------------------------------------------------
-# Starship drives the tcsh prompt, same as the bash env. The tcsh prompt uses
-# its OWN config (global/starship-tcsh.toml: the shared one with a yellow
-# path), so the two shells are distinguishable at a glance.
+# Starship drives the tcsh prompt, same as the bash env. All three shells use
+# ONE shared config (envs/starship/starship.toml); the tcsh-only yellow path is
+# applied after starship renders, by global/helpers/prompt-markers.
 #
 # Set to 0 for the hand-rolled fallback prompt (no starship binary needed).
 if ( ! $?LOADOUT_CFG_ENABLE_STARSHIP )    setenv LOADOUT_CFG_ENABLE_STARSHIP 1

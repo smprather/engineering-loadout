@@ -1,0 +1,8 @@
+#!/bin/sh
+# Print package and group names for `loadout` completion, one per line.
+#
+# Backs the loadout completions. The completion wordlist cannot contain a
+# slash, so it calls an alias that runs this helper rather than
+# `loadout list 2>/dev/null | awk ...`.
+
+loadout list 2>/dev/null | awk 'NR > 2 && $0 !~ /^[[:space:]]/ { print $1 }'
