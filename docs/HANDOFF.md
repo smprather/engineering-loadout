@@ -15,6 +15,14 @@ a sync target:
 
 ## 2026-10-31 (3): release 2026.10.9 -- tornado + pyasn1 security refresh
 
+**PUBLISHED and verified 2026-10-31** (tag on `b2d4a49`, Good ED25519
+signature, tag binds `sha256sums.txt sha256 a0f333f0...`, which matches the
+published asset; four assets, not a draft; stash 344538464 bytes, sha256 equal
+to the local one; `origin/main` = tag commit). Gates on `b2d4a49`:
+`tests/run-all --container` `All tests passed.` (1480 s; Tier 3 smoke 315
+binaries OK, 23 skipped); `build/release` 422 s (malware scan CLEAN across
+65902 files, YARA-Forge 20261026 + ClamAV; vuln-scan CLEAN).
+
 Class C (installer + registry changed since 2026.10.8: linelight, lsd
 retired, `delete`'s `SHARED_ENV_HELPERS`, the review fixes). Currency sweep run,
 nothing bumped (same ruling as 2026.10.8: a fix release, three days after the
