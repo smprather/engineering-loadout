@@ -128,6 +128,19 @@ def main():
                     bad.append(f"{name}.{field} -> {ref}")
     check("all depends/recommends/members resolve", not bad, "; ".join(bad))
 
+    # 1b. a kind:bin package without an archive installs its `bins` from
+    # payload/<platform>/bin/<name>.bz2 (or its chunks). A registry entry
+    # whose file never landed installs nothing and no other gate noticed.
+    no_payload = []
+    for name, entry in registry.items():
+        if name.startswith("@") or entry.get("kind") != "bin" or "archive" in entry:
+            continue
+        for b in entry.get("bins", []):
+            base = os.path.join(REPO, "payload", "*", "bin", b + ".bz2")
+            if not glob.glob(base) and not glob.glob(base + ".part-*"):
+                no_payload.append(f"{name}: bin/{b}.bz2")
+    check("every bin package's bins have a payload file", not no_payload, "; ".join(no_payload))
+
     # 2. no group cycles
     try:
         for g in groups:

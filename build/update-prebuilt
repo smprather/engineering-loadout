@@ -132,6 +132,17 @@ TOOLS = {
         "https://github.com/sharkdp/hyperfine/releases/download/v{ver}/hyperfine-v{ver}-x86_64-unknown-linux-musl.tar.gz",
         "hyperfine",
     ),
+    "linelight": (
+        "https://github.com/smprather/linelight/releases/download/v{ver}/linelight-{ver}-x86_64-unknown-linux-gnu.tar.gz",
+        "linelight",
+    ),
+}
+
+# Tools whose release publishes a sha256 sidecar for the asset ({url} is the
+# asset URL). The archive is checked against it before anything is extracted;
+# a mismatch or an empty sidecar aborts the update.
+SHA256_SIDECARS = {
+    "linelight": "{url}.sha256",
 }
 
 
@@ -152,15 +163,30 @@ def download(url, dest):
     log_download(url, dest)
 
 
-def log_download(url, dest):
-    """Append to the assurance ledger's append-only fetch log."""
+def sha256_file(path):
     h = hashlib.sha256()
-    with open(dest, "rb") as f:
+    with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
+    return h.hexdigest()
+
+
+def log_download(url, dest):
+    """Append to the assurance ledger's append-only fetch log."""
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(os.path.join(REPO, "assurance", "downloads.log"), "a", encoding="utf-8") as f:
-        f.write(f"{stamp}\t{url}\t{h.hexdigest()}\n")
+        f.write(f"{stamp}\t{url}\t{sha256_file(dest)}\n")
+
+
+def verify_sidecar(archive, sidecar, tool):
+    """Exit unless `archive` hashes to the first field of the `sidecar` file."""
+    with open(sidecar, encoding="utf-8", errors="replace") as f:
+        fields = f.read().split()
+    want = fields[0].lower() if fields else ""
+    got = sha256_file(archive)
+    if want != got:
+        sys.exit(f"{tool}: sha256 mismatch: asset {got}, published {want or '(empty sidecar)'}")
+    print(f"   sha256 OK (published sidecar): {got}")
 
 
 def extract(archive, want, destdir):
@@ -250,13 +276,16 @@ def main():
             url = url_tpl.format(ver=ver)
             print(f"== {tool} -> {ver}")
             archive = os.path.join(tmp, tool + ".archive")
+            download(url, archive)
+            if tool in SHA256_SIDECARS:
+                sidecar = os.path.join(tmp, tool + ".sha256")
+                download(SHA256_SIDECARS[tool].format(url=url), sidecar)
+                verify_sidecar(archive, sidecar, tool)
             if kind == "raw":
-                download(url, archive)
                 binpath = os.path.join(tmp, stem)
                 shutil.copyfile(archive, binpath)
                 os.chmod(binpath, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
             else:
-                download(url, archive)
                 # extract() always lands the file at tmp/<basename(member)>.
                 binpath = extract(archive, member, tmp)
             subprocess.run(["/usr/bin/strip", binpath], capture_output=True)

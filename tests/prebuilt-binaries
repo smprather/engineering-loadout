@@ -2154,6 +2154,49 @@ def smoke_runtime_layout(tmpdir, env):
             else:
                 print("  OK   (solve):        bitwuzla  sat model + unsat proof")
 
+    if has_bin("linelight"):
+        # The shells wrap df/ps/ping/... in `linelight run`, so a linelight that
+        # prints a version but cannot colour, rewrites bytes, swallows the
+        # command's exit status or pipes when stdout is not a terminal breaks
+        # every one of those commands. Assert each directly.
+        ll = os.path.join(bin_dir, "linelight")
+        df_in = b"Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/sda1 100 50 50 50% /\n"
+
+        def ll_run(args, data=None):
+            return subprocess.run(
+                [ll, *args],
+                input=data,
+                cwd=tmpdir,
+                env=env,
+                capture_output=True,
+                timeout=30,
+            )
+
+        problems = []
+        try:
+            filt = ll_run(["filter", "--profile", "df", "--color", "always"], df_in)
+            if filt.returncode != 0 or b"\x1b[" not in filt.stdout:
+                problems.append(f"filter added no colour: {output_excerpt(filt.stdout + filt.stderr)}")
+            elif re.sub(rb"\x1b\[[0-9;]*m", b"", filt.stdout) != df_in:
+                problems.append("filter changed the bytes it coloured")
+            chk = ll_run(["check"])
+            if chk.returncode != 0:
+                problems.append(f"check exit {chk.returncode}: {output_excerpt(chk.stdout + chk.stderr)}")
+            direct = ll_run(["run", "--profile", "df", "--", "printf", "x\\n"])
+            if direct.returncode != 0 or direct.stdout != b"x\n":
+                problems.append(f"run into a pipe was not a direct exec: {direct.stdout!r}")
+            status = ll_run(["run", "--profile", "df", "--", "sh", "-c", "exit 3"])
+            if status.returncode != 3:
+                problems.append(f"run returned {status.returncode}, not the command's 3")
+        except Exception as exc:
+            problems.append(str(exc))
+        if problems:
+            detail = "; ".join(problems)
+            print(f"  FAIL (colour):       linelight {detail}")
+            failures.append(("linelight", detail))
+        else:
+            print("  OK   (colour):       linelight filter bytes + run status/direct exec")
+
     if has_bin("iverilog"):
         # `iverilog -V` prints a version banner from an install whose lib/ivl is
         # dead, and `vvp file.vvp` bypasses the generated shebang entirely --

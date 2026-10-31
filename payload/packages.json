@@ -1031,6 +1031,22 @@
       ],
       "description": "less pager — the standard terminal file viewer; EL8 ships less 530 from 2017, so this bundles the current upstream release (POSIX regex backend, no gui_libs coupling)"
     },
+    "linelight": {
+      "kind": "bin",
+      "bins": [
+        "linelight"
+      ],
+      "version": "2026.10.31",
+      "version_url": "https://github.com/smprather/linelight/tags",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "core",
+        "color"
+      ],
+      "description": "Output colorizer: filter, command runner and shell adapters with embedded profiles; replaces GRC"
+    },
     "llvm-bolt": {
       "kind": "bin",
       "bins": [
@@ -3646,7 +3662,8 @@
         "keyb",
         "gocheat",
         "models",
-        "less"
+        "less",
+        "linelight"
       ],
       "description": "Small, fast, daily-use CLI tools"
     },

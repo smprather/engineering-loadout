@@ -94,6 +94,7 @@ sha256  dddc64fa845ffb69a621d182e5601a53fd775c30afa4abbba4beb3e222670b3f  payloa
 sha256  b8351832eb449b07852a3a1cf498652b80c5ca2437ddf8d9e1fd2462ac7a58f8  payload/el8.x86_64.glibc2p28/bin/less.bz2
 sha256  8a7d138b678894dec4da1bdd49bd2c0f9ad34bbe7129bf2ae2f3e818e8e8052d  payload/el8.x86_64.glibc2p28/bin/lessecho.bz2
 sha256  017fa921c470f6a616753ef179aa343811e47997d7997b81416bd8bde3bcfbb8  payload/el8.x86_64.glibc2p28/bin/liberty-filter.bz2
+sha256  5461ef340f7e726cb61404772df6d653885a9a6b8ab56d03c15145d75c102b76  payload/el8.x86_64.glibc2p28/bin/linelight.bz2
 sha256  7c7e32b41dfa78894edea565ff33dabbcd425dddf2dcbda16441564cc10cb2b5  payload/el8.x86_64.glibc2p28/bin/link.bz2
 sha256  30e6e28149d99d6fc2fe00a24d314d0145699fcc1f5d75cd00f30c67d60000a7  payload/el8.x86_64.glibc2p28/bin/lld.bz2
 sha256  b8d9f943a59c836e40c12e0f4f7d63f7ac3432d9551f00bb5e97776ba742877f  payload/el8.x86_64.glibc2p28/bin/llvm-ar.bz2

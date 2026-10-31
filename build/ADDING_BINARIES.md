@@ -7152,3 +7152,47 @@ via the default `--version` probe (no `PROBE_FLAGS` needed).
 
 **Debt:** extra colour schemes are not shipped; `WM_CLASS` is
 `Xfce4-terminal.bin` (cosmetic, same as mate-terminal).
+
+---
+
+## linelight 2026.10.31 -- output colorizer, replaces GRC (upstream glibc-2.28 prebuilt, added 2026-10-31)
+
+First-party (smprather/linelight, MIT, Rust). One executable with embedded
+profiles (`df diff dig free log ls lsblk ping ps sensors ss`): `filter` (stdin
+-> coloured stdout), `run --profile ID -- CMD` (the command runner the shells
+use), `init bash|zsh|tcsh|fish` (wrapper generator), `check`, `explain`,
+`profiles`. Upstream's release workflow builds in `almalinux:8`, rejects any
+`GLIBC_` version above 2.28, checks NEEDED and smoke-tests on AlmaLinux 8, so
+the asset is imported as-is; no EL8 source build. (The first 2026.10.31 asset
+was linked on the CI runner's glibc 2.39; linelight#6 fixed that.)
+
+```bash
+build/build-shell ./build/update-prebuilt linelight=2026.10.31
+build/build-shell ./build/verify-binaries linelight     # PASS = payload == upstream asset after strip+patchelf
+```
+
+- Source: `https://github.com/smprather/linelight/releases/download/v2026.10.31/linelight-2026.10.31-x86_64-unknown-linux-gnu.tar.gz`,
+  sha256 `2a8b876da8c0950152bcdd2b9621747b3b9bdd8830a32b1c49427bae072c8eb1`.
+  `update-prebuilt` checks the archive against the published `<asset>.sha256`
+  sidecar before extracting (`SHA256_SIDECARS`; a mismatch or empty sidecar
+  aborts). Only `bin/linelight` is taken from the tarball; the profiles are
+  compiled in.
+- **Moved tag:** upstream re-pointed `v2026.10.31` (3bcc76d -> 71e5e7b) and
+  replaced the asset in place when fixing #6, so the version string alone does
+  not identify the bytes. The hash above does.
+- NEEDED `libgcc_s.so.1 libpthread.so.0 libdl.so.2 libc.so.6`; max symbol
+  version `GLIBC_2.28`; RUNPATH `$ORIGIN/../lib64:$ORIGIN/../lib` (the standard
+  patchelf, harmless). Verified on stock `almalinux:8.10 --network=none`:
+  `--version`, `check`, `filter`, `run` (status, 128+N, 127, direct exec when
+  not a tty) and `run --pty` (posix_openpt).
+- packages.json `kind: bin`, `tags: [core,color]`, member of `@core-cli`.
+- `linelight --version` prints `linelight 2026.10.31` -> farm-versions strategy
+  `r"linelight ([0-9][0-9.]*[0-9])"` (calendar versions, possibly 4 fields).
+- Smoke: tests/prebuilt-binaries colours a df fixture and requires the bytes
+  back after stripping SGR, `check` exit 0, `run` into a pipe = direct exec,
+  and `run` returning the command's own status.
+- Shell use: bash/zsh/tcsh run `linelight init <shell>` at interactive startup
+  behind `LOADOUT_CFG_ENABLE_LINELIGHT` (see envs/bash/global/README.md). tcsh
+  sources the output from a private file because upstream's documented
+  `eval "`linelight init tcsh`"` defines nothing (csh joins the substitution
+  into one line).

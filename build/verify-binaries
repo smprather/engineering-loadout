@@ -116,6 +116,10 @@ _REGISTRY = {
         "url": "https://github.com/tree-sitter/tree-sitter/releases/download/v{ver}/tree-sitter-linux-x64.gz",
         "bin": "tree-sitter",
     },
+    "linelight": {
+        "url": "https://github.com/smprather/linelight/releases/download/v{ver}/linelight-{ver}-x86_64-unknown-linux-gnu.tar.gz",
+        "bin": "linelight",
+    },
     "ty": {
         "url": "https://github.com/astral-sh/ty/releases/download/{ver}/ty-x86_64-unknown-linux-gnu.tar.gz",
         "bin": "ty",

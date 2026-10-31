@@ -320,6 +320,12 @@ TOOLS = [
         strategy_flag(["--version"], r"less ([0-9]+)"),
     ),
     (
+        "linelight",
+        "linelight",
+        "https://github.com/smprather/linelight",
+        strategy_flag(["--version"], r"linelight ([0-9][0-9.]*[0-9])"),
+    ),
+    (
         "gopls",
         "gopls",
         "https://github.com/golang/tools",
