@@ -13,6 +13,34 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-31 (3): release 2026.10.9 -- tornado + pyasn1 security refresh
+
+Class C (installer + registry changed since 2026.10.8: linelight, lsd
+retired, `delete`'s `SHARED_ENV_HELPERS`, the review fixes). Currency sweep run,
+nothing bumped (same ruling as 2026.10.8: a fix release, three days after the
+last sweep). `build/check-versions --outdated-only` on 2026-10-31 lists 25
+behind upstream -- the 2026-10-28 worklist (btop, fzf, gnuplot, gopls,
+gvim/vim, just, lazygit, librelane, marktext, numr, ruff, sqlite, strace,
+stylua, ty, uv, valgrind) plus biome 2.6.4, ipython 9.18.0, jupyterlab 4.6.5,
+nodejs 26.13.0, visidata 3.5, tmux-path-store 2026.10.5 and linelight
+2026.10.31-1 (upstream's fix for linelight#7, the tcsh `eval` form; loadout
+sources the adapter from a file, so it does not need it). pdftotext pinned;
+ncdu lookup 503'd. YARA-Forge rules refreshed 20261018 -> 20261026; ClamAV
+daily DB from 2026-10-31.
+
+The first `build/release` run was BLOCKED by the vulnerability gate, before any
+tag: tornado 6.5.10 (jupyterlab) and pyasn1 0.6.4 (python-loaded) had new
+advisories. Both wheels were refreshed with a closure-preservation proof
+(build/ADDING_BINARIES.md, "2026-10-31 security refresh"); pyasn1's lock line
+was re-pinned by hand rather than re-resolving the suite. Gates before the
+refresh: `tests/run-all --container` `All tests passed.` (1817 s; Tier 3
+smoke 315 binaries OK, 23 skipped). Release gates re-run after it.
+
+`build/release` and `build/check-versions` need `python3.15` on PATH. This dev
+host has none there (the default root has no portable Python installed), so
+both died `env: 'python3.15': No such file or directory` until run with
+`PATH="$PWD/.loadout-bootstrap/bin:$PATH"`.
+
 ## 2026-10-31 (2): `delete` -- rm -rf through read-only modes, and NFS .nfs* holders
 
 The user supplied a bash `delete [-f] PATH...` (chmod -R u+w, then rm -rf) to

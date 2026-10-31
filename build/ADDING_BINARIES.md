@@ -852,6 +852,24 @@ per-venv dist-info lists differ ONLY in time-plot's msgpack 1.2.2 -> 1.2.3
 (time-plot is the sole consumer; `time-plot --help` runs, msgpack round-trips).
 vuln-scan CLEAN with no baseline entries.
 
+**2026-10-31 security refresh.** `build/vuln-scan` blocked release 2026.10.9 on
+tornado 6.5.10 (GHSA-pcg2-g6cj-q92c, GHSA-pw9p-v7r6-gx4p, GHSA-r4j5-9xpp-3985;
+fixed in 6.6) and pyasn1 0.6.4 (GHSA-2qm8-x737-gmw5, GHSA-9m75-vc3g-4x39,
+GHSA-fm9c-5rcf-2q5p, GHSA-mm57-4v3p-rchx; fixed in 0.6.5). Fetched in
+`build/build-shell` with `--no-deps` and the platform set above, sha256 checked
+against PyPI: `tornado-6.6-cp311-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl`
+(`11bb97c0...70236a`) into the main wheelhouse, and `pyasn1-0.6.5-py3-none-any.whl`
+(`4017b0fc...e66587`) into python-loaded's private wheelhouse; the superseded
+wheels were pruned. pyasn1 is a python-loaded lock member, so its one
+`requirements.lock.txt` line was re-pinned by hand (version + hash) rather than
+re-running `build-python-loaded.sh`, which re-resolves the whole suite; the lock
+sha256 changed, so existing suite installs rebuild. Preservation proof: all 12
+enabled python-tools + python-loaded installed offline before and after, 363
+dist-infos each, differing ONLY in jupyterlab's tornado and python-loaded's
+pyasn1; `jupyter-lab` served `/api` and `/api/kernelspecs` on tornado 6.6, and
+pyasn1 DER round-trips with `pyasn1_modules` importing. vuln-scan CLEAN with no
+baseline entries.
+
 ### duckdb cp314 status -- resolved in 1.4.2
 
 **Status (verified 2026-05-27):** duckdb added Python 3.14 support in **v1.4.2** (November 2025,
