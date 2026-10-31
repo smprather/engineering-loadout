@@ -2,10 +2,10 @@
 # Build the tmux-path-store wheel from a stable upstream tag and bundle it.
 #
 # First-party (github.com/smprather/tmux-path-store): a tmux window-name-keyed
-# directory/file path store, driven by the shell aliases in
-# envs/bash/global/bashrc (`p` / `cdp`). Pure Python, single runtime dependency
-# (`rich`), so there is no compiled artifact and no per-platform wheel -- the
-# wheel is `py3-none-any`.
+# directory/file path store. The shells eval its own hook (`--bash`, `--zsh`,
+# `--csh`), which defines the cd0..cd9 / sd0..sd9 / f0..f9 / tps shortcuts.
+# Pure Python with no runtime dependencies, so there is no compiled artifact and
+# no per-platform wheel -- the wheel is `py3-none-any`.
 #
 # WHY THIS SCRIPT EXISTS: like liberty-filter, this package was bundled with no
 # build script and no ADDING_BINARIES.md note, so nothing recorded where its wheel

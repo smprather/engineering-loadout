@@ -3495,12 +3495,29 @@ roundtrip on the INSTALLED binary.
 **Usage:** `restic init --repo /path/repo`; `restic -r /path/repo backup ~/work`;
 `restic -r /path/repo snapshots`; `restic -r /path/repo restore latest --target DIR`.
 
-## tmux-path-store 1.1.0 -- tmux window-name-keyed path store (first-party python-tool)
+## tmux-path-store 2026.10.4 -- tmux window-name-keyed path store (first-party python-tool)
 
 First-party (github.com/smprather/tmux-path-store). Stores a directory or file path
-keyed by the current tmux window name, which is what the `p` / `cdp` aliases in
-`envs/bash/global/bashrc` drive. Pure Python, one runtime dependency (`rich`), so
+keyed by the current tmux window name. The shells eval its own hook (`--bash`,
+`--zsh`, `--csh`), which defines the `cd0..cd9`, `sd0..sd9`, `f0..f9`, ... and
+`tps` shortcuts. (Loadout's `p` / `cdp` aliases are unrelated: they keep one
+directory in a temp-root file.) Pure Python with no runtime dependencies
+(`Requires-Dist` is empty; the registry still lists `rich`, which is harmless), so
 the wheel is `py3-none-any` -- no compiled artifact, nothing platform-specific.
+
+**Current: 2026.10.4** (2026-10-31; was 2026.8.26). Upstream dropped the `v`
+from its tags at 2026.10.3, so the tag is the bare version. The hook output is
+still one line per shell (loadout's bashrc uses an UNQUOTED `eval $(...)`, which
+would mangle a multi-line hook), and the shortcut set is identical to 2026.8.26
+apart from bash's internal `_tps_cd` helper function. The build image has no
+`uv`, so the payload's own is extracted for the build:
+
+```sh
+build/build-shell sh -c 'mkdir -p /tmp/uvbin \
+    && bzip2 -dc payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2 >/tmp/uvbin/uv \
+    && chmod +x /tmp/uvbin/uv \
+    && PATH=/tmp/uvbin:$PATH build/build-tmux-path-store.sh --tag 2026.10.4'
+```
 
 **This note exists because the package had none.** Like liberty-filter, it was
 bundled with no build script and no entry here, so nothing recorded where its wheel
