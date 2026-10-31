@@ -218,6 +218,10 @@ BASH_PROFILE_ENTRYPOINT = ".profile"
 BASH_ENTRYPOINTS_RETIRED = (".bash_login",)
 TCSH_ENTRYPOINTS = (".tcshrc",)
 TCSH_ENTRYPOINTS_RETIRED = (".cshrc",)
+# Helper scripts written once, in the bash env (envs/bash/global/helpers), and
+# run by every shell env. The tcsh installer COPIES each one into its own
+# global/helpers -- not a link: env-tcsh installs without env-bash.
+SHARED_ENV_HELPERS = ("delete",)
 NVIM_LAYERS = ("user",)
 
 # Repo-relative payload home: platform dirs, packages.json, fonts,
@@ -6645,6 +6649,12 @@ def _install_env_tcsh(repo_dir, home):
     tcsh_dir = os.path.join(home, ".config", "tcsh")
     preserve_layers_from_symlink(home, "tcsh", CONFIG_LAYERS, "tcsh config")
     install_path(os.path.join(src, "global"), os.path.join(tcsh_dir, "global"), False)
+    for name in SHARED_ENV_HELPERS:
+        install_path(
+            os.path.join(repo_dir, "envs", "bash", "global", "helpers", name),
+            os.path.join(tcsh_dir, "global", "helpers", name),
+            False,
+        )
     install_path(os.path.join(src, "tcshrc"), os.path.join(tcsh_dir, "tcshrc"), False)
     _mirror_shared_prefix(home, ("tcsh",))
     for layer in CONFIG_LAYERS:

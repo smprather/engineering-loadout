@@ -228,6 +228,15 @@ for h in is-truthy vercmp recent-dir recent-file recent-files path-list \
          ls-command new-file extract-rpm disk-usage check-extended-keys nvm-bin; do
     [ -x "$HELPERS/$h" ] || fail "helper not installed executable: $h"
 done
+# Shared helpers live once, in the bash env (envs/bash/global/helpers), and the
+# tcsh installer copies them in: a real file (env-tcsh installs without
+# env-bash, so a link could dangle), executable, the same bytes.
+for h in delete; do
+    [ -x "$HELPERS/$h" ] && [ ! -L "$HELPERS/$h" ] \
+        || fail "shared helper not installed as an executable file: $h"
+    cmp -s "$HELPERS/$h" "$REPO/envs/bash/global/helpers/$h" \
+        || fail "shared helper differs from envs/bash/global/helpers/$h"
+done
 
 # --- The helpers are POSIX sh and run as separate processes, so their behaviour
 # --- is testable directly. is_truthy in particular MUST agree with the bash

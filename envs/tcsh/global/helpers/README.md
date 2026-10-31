@@ -34,5 +34,14 @@ itself contains no bashisms. bash is present on every supported EL/Suse target
 without probing so type-ahead is never eaten. `tests/install-env-tcsh` runs the
 wrapper under `dash` when available as well as `/bin/sh`.
 
+A second kind of exception is not in this directory at all in the repo:
+**shared helpers**, bash scripts written once in the bash env
+(`envs/bash/global/helpers/`) and run by every shell env. The installer copies
+each one into the installed tcsh `global/helpers/` (`SHARED_ENV_HELPERS` in
+`loadout_main.py`): a copy, never a link, because env-tcsh installs without
+env-bash. Today that is **`delete`** (rm -rf through read-only modes, plus the
+NFS `.nfs*` holder handling); `alias delete` in `aliases.csh` runs it.
+`tests/install-env-tcsh` checks the copy is installed, executable and identical.
+
 `git-branch.sh` predates this directory and stays where it is (the prompt in
 `global/tcshrc` references it by path).

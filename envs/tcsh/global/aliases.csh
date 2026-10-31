@@ -189,6 +189,7 @@ alias gmw       'chmod -R g-w'
 alias x         'chmod +x'
 alias rp        'realpath'
 alias lns       "$_lo_helpers/safe-symlink"
+alias delete    "$_lo_helpers/delete"
 alias extract_rpm "$_lo_helpers/extract-rpm"
 alias zhead     "$_lo_helpers/zhead"
 alias vman      'env MANPAGER="nvim +Man\!" man'

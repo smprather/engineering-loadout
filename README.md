@@ -549,6 +549,10 @@ six-layer override chain (`global -> corp -> site -> team -> project -> user`),
 - `vi` / `vim` -- your preferred editor (`nvim` by default)
 - `catp` -- `bat` (paged, syntax-highlighted reader; `cat` itself is untouched)
 - `ll` / `la` / `lh` -- `ls` variants (sizes, all files, human-readable)
+- `delete [-f] PATH...` -- `rm -rf` that gets through read-only directories;
+  on NFS, when a process still has a file open (NFS keeps it as `.nfs*` and the
+  directory cannot go), it names the processes holding it and offers to kill
+  them, then retries
 
 tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,
 and keeps home-local override layers active even when `TCSH_CONFIG_ROOT_DIR`

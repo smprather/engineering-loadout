@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""delete-nfs-check: `delete` against a REAL kernel NFS mount.
+
+A MANUAL dev check for envs/bash/global/helpers/delete, not part of
+tests/run-all: run it when changing that script's NFS handling.
+    TMPDIR=/var/tmp build/delete-nfs-check   (needs docker, privileged)
+
+tests/env-delete proves delete's logic in bash, zsh and tcsh with NFS emulated
+by a fake rm. This test proves the kernel behaviour that emulation copies, then
+runs the same flows for real:
+  - unlinking a file a process still has open renames it to .nfsXXXX;
+  - `rm -rf` of its directory fails "Device or resource busy";
+  - /proc/PID/fd and /proc/PID/exe show the .nfs path, which is how delete
+    finds the holder;
+  - once the holder is gone the client drops the .nfs file, so a retry works.
+
+Two privileged containers from build/docker/almalinux8.10-nfs.Dockerfile, both
+--network=none:
+  server -- kernel nfsd (NFSv4.2 only) exporting a tmpfs on 127.0.0.1
+  client -- joins the server's network namespace, mounts the export, and runs
+            THIS FILE again (`--in-container`) under the image's Python 3.6,
+            as the invoking uid, against envs installed here on the host.
+The in-container half imports tests/env-delete for its harness (argv
+building, PTY answering, holders), so both files must stay Python 3.6 syntax.
+
+TEARDOWN ORDER IS LOAD-BEARING. A hard NFS mount whose server has gone cannot
+be unmounted: the unmount's DESTROY_SESSION call retries forever in
+uninterruptible sleep and the container never exits (seen 2026-10-31 with one
+container playing both roles; only a reboot clears it). So the client
+unmounts before it exits, and this driver removes the client container before
+the server one -- a dead client is harmless, a dead server is not.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+# tests/ on the host; mounted at /lo-tests in the client container.
+TESTS = os.environ.get("LO_TESTS", os.path.join(REPO, "tests"))
+IMAGE = "loadout-nfs:almalinux8.10"
+DOCKERFILE = os.path.join(REPO, "build", "docker", "almalinux8.10-nfs.Dockerfile")
+PLATFORM_PYTHON = "/usr/libexec/platform-python"
+
+SERVER_SH = r"""set -e
+mount -t nfsd nfsd /proc/fs/nfsd
+# Short lease and grace periods: a fresh server refuses new opens during grace.
+echo 10 > /proc/fs/nfsd/nfsv4leasetime
+echo 10 > /proc/fs/nfsd/nfsv4gracetime
+# The container's own root is overlayfs, which NFS cannot export; tmpfs can.
+mkdir -p /export
+mount -t tmpfs tmpfs /export
+mkdir /export/data
+chown "$LO_UID:$LO_GID" /export/data
+echo '/export 127.0.0.1(rw,fsid=0,no_subtree_check,insecure,no_root_squash)' > /etc/exports
+exportfs -ra
+rpc.mountd -N 2 -N 3 --no-udp
+rpc.nfsd -N 2 -N 3 -U 4
+touch /tmp/ready
+exec sleep infinity
+"""
+
+CLIENT_SH = r"""mkdir -p /mnt/nfs
+if ! timeout 60 mount -t nfs4 -o vers=4.2,proto=tcp 127.0.0.1:/ /mnt/nfs; then
+    echo "  FAIL  NFS mount failed (does the host kernel provide the nfs and nfsd modules?)"
+    exit 1
+fi
+cleanup() {
+    # Every holder must be gone before the unmount, and the unmount must
+    # happen while the server is still up (see the test's header).
+    pkill -9 -u "$LO_UID" 2>/dev/null
+    sleep 1
+    umount /mnt/nfs || umount -f /mnt/nfs
+}
+trap cleanup EXIT
+setpriv --reuid="$LO_UID" --regid="$LO_GID" --clear-groups \
+    env -i HOME="$LO_HOME" PATH=/usr/bin:/bin LANG=C.UTF-8 TERM=dumb \
+    BASH_CONFIG_ROOT_DIR="$LO_HOME/.config/bash" TCSH_CONFIG_ROOT_DIR="$LO_HOME/.config/tcsh" \
+    LO_TESTS=/lo-tests "$LO_PYTHON" -I /lo-tool/delete-nfs-check --in-container /mnt/nfs/data
+"""
+
+
+def load_env_delete():
+    path = os.path.join(TESTS, "env-delete")
+    loader = importlib.machinery.SourceFileLoader("env_delete", path)
+    spec = importlib.util.spec_from_loader("env_delete", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+# --- in the client container (Python 3.6, the invoking uid) ----------------
+
+
+def in_container(base):
+    ed = load_env_delete()
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "LO_TEST_PATH": "/usr/bin:/bin",
+        "HOME": os.environ["HOME"],
+        "LANG": "C.UTF-8",
+        "TERM": "dumb",
+        "BASH_CONFIG_ROOT_DIR": os.environ["BASH_CONFIG_ROOT_DIR"],
+        "TCSH_CONFIG_ROOT_DIR": os.environ["TCSH_CONFIG_ROOT_DIR"],
+    }
+
+    def nfs_files(d):
+        return [n for n in os.listdir(d) if n.startswith(".nfs")]
+
+    # The kernel facts delete stands on, once.
+    t = tempfile.mkdtemp(dir=base)
+    sub = os.path.join(t, "sub")
+    os.makedirs(sub)
+    held = os.path.join(sub, "held")
+    with open(held, "w") as f:
+        f.write("held\n")
+    h = ed.holder(held)
+    os.unlink(held)
+    silly = nfs_files(sub)
+    ed.check("kernel: unlinking an open file leaves a .nfs* rename", len(silly) == 1, str(os.listdir(sub)))
+    link = os.readlink(f"/proc/{h.pid}/fd/3")
+    ed.check("kernel: /proc/PID/fd shows the .nfs path", silly != [] and link == os.path.join(sub, silly[0]), link)
+    p = subprocess.run(["rm", "-rf", t], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = p.stdout.decode(errors="replace")
+    ed.check(
+        "kernel: rm -rf fails 'Device or resource busy'", p.returncode != 0 and "Device or resource busy" in out, out
+    )
+    ed.reap(h)
+    ed.check("kernel: the .nfs file goes when the holder exits", ed.wait_for(lambda: nfs_files(sub) == [], 5.0))
+    shutil.rmtree(t, ignore_errors=True)
+
+    for shell in ("bash", "zsh", "tcsh"):
+        print(f"--- {shell}")
+
+        # An fd holder: reported without a terminal, killed from one.
+        t = tempfile.mkdtemp(dir=base)
+        d = os.path.join(t, "fd")
+        os.makedirs(os.path.join(d, "sub"))
+        held = os.path.join(d, "sub", "held")
+        with open(held, "w") as f:
+            f.write("held\n")
+        h = ed.holder(held)
+        os.unlink(held)
+        try:
+            rc, out = ed.run(shell, [d], env, t)
+            ed.check(
+                f"{shell}: real NFS, no terminal: rc 1, the holder named, nothing killed",
+                rc == 1 and str(h.pid) in out and h.poll() is None and os.path.isdir(d),
+                f"rc={rc!r} out={out!r}",
+            )
+            rc, out = ed.run_pty(shell, [d], env, t, answers=[(ed.PROMPT, "y")])
+            ed.check(
+                f"{shell}: real NFS, answer y: holder killed, directory removed",
+                ed.dead(h) and rc == 0 and not os.path.lexists(d),
+                f"rc={rc!r} out={out!r}",
+            )
+        finally:
+            ed.reap(h)
+
+        # A running binary: held by its mapping (/proc/PID/exe), no fd.
+        d = os.path.join(t, "exe")
+        os.makedirs(d)
+        exe = os.path.join(d, "mybash")
+        shutil.copy2("/usr/bin/bash", exe)
+        b = subprocess.Popen([exe, "-c", "sleep 300; :"], stdin=subprocess.DEVNULL, start_new_session=True)
+        try:
+            ed.wait_for(lambda b=b, exe=exe: os.readlink(f"/proc/{b.pid}/exe") == exe)
+            os.unlink(exe)
+            rc, out = ed.run_pty(shell, [d], env, t, answers=[(ed.PROMPT, "y")])
+            ed.check(
+                f"{shell}: real NFS, a running binary from the tree: found, killed, removed",
+                ed.dead(b) and rc == 0 and not os.path.lexists(d),
+                f"rc={rc!r} out={out!r}",
+            )
+        finally:
+            ed.reap(b)
+
+        # The holder ends on its own: "run delete again then" is true.
+        d = os.path.join(t, "later")
+        os.makedirs(d)
+        held = os.path.join(d, "held")
+        with open(held, "w") as f:
+            f.write("held\n")
+        h = ed.holder(held)
+        os.unlink(held)
+        rc1, _ = ed.run(shell, [d], env, t)
+        ed.reap(h)
+        ed.wait_for(lambda d=d: nfs_files(d) == [], 5.0)
+        rc2, out = ed.run(shell, [d], env, t)
+        ed.check(
+            f"{shell}: real NFS, after the holder exits a second delete succeeds",
+            rc1 == 1 and rc2 == 0 and not os.path.lexists(d),
+            f"rc1={rc1!r} rc2={rc2!r} out={out!r}",
+        )
+
+        # Read-only modes on NFS.
+        d = os.path.join(t, "ro")
+        os.makedirs(os.path.join(d, "a"))
+        with open(os.path.join(d, "a", "f"), "w") as f:
+            f.write("x\n")
+        os.chmod(os.path.join(d, "a", "f"), 0o444)
+        os.chmod(os.path.join(d, "a"), 0o555)
+        os.chmod(d, 0o555)
+        rc, out = ed.run(shell, [d], env, t)
+        ed.check(
+            f"{shell}: real NFS, a read-only tree is removed",
+            rc == 0 and not os.path.lexists(d),
+            f"rc={rc!r} out={out!r}",
+        )
+        ed.heal_rmtree(t)
+
+    print(f"delete-nfs-check (in container): {ed.PASSED} passed, {len(ed.FAILURES)} failed")
+    return 1 if ed.FAILURES else 0
+
+
+# --- on the host --------------------------------------------------------------
+
+
+def docker(*args, **kw):
+    return subprocess.run(["docker", *args], stdin=subprocess.DEVNULL, **kw)
+
+
+def host():
+    if shutil.which("docker") is None:
+        print("  SKIP  docker is unavailable")
+        return 0
+    b = docker(
+        "build",
+        "-q",
+        "-t",
+        IMAGE,
+        "-f",
+        DOCKERFILE,
+        os.path.dirname(DOCKERFILE),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if b.returncode != 0:
+        print(b.stdout.decode(errors="replace")[-3000:])
+        print(f"FAIL: could not build {IMAGE}")
+        return 1
+
+    ed = load_env_delete()
+    root = tempfile.mkdtemp(prefix="loadout-delete-nfs-check.", dir=os.environ.get("TMPDIR", "/tmp"))
+    srv = f"loadout-delete-nfs-srv-{os.getpid()}"
+    cli = f"loadout-delete-nfs-cli-{os.getpid()}"
+    ids = ["-e", f"LO_UID={os.getuid()}", "-e", f"LO_GID={os.getgid()}"]
+    try:
+        env = ed.install_envs(root)
+        for name, text in (("server.sh", SERVER_SH), ("client.sh", CLIENT_SH)):
+            with open(os.path.join(root, name), "w") as f:
+                f.write(text)
+        s = docker(
+            "run", "-d", "--name", srv, "--privileged", "--network=none",
+            "-v", f"{root}:{root}:ro", *ids, IMAGE, "sh", os.path.join(root, "server.sh"),
+            stdout=subprocess.DEVNULL,
+        )  # fmt: skip
+        if s.returncode != 0:
+            print("FAIL: could not start the NFS server container")
+            return 1
+        for _ in range(60):
+            if docker("exec", srv, "test", "-f", "/tmp/ready", stderr=subprocess.DEVNULL).returncode == 0:
+                break
+            subprocess.run(["sleep", "0.5"])
+        else:
+            print(docker("logs", srv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode(errors="replace"))
+            print("FAIL: the NFS server never became ready")
+            return 1
+        try:
+            c = docker(
+                "run", "--rm", "--name", cli, "--privileged", f"--network=container:{srv}",
+                "-v", f"{root}:{root}", "-v", f"{TESTS}:/lo-tests:ro", "-v", f"{HERE}:/lo-tool:ro",
+                *ids, "-e", f"LO_HOME={env['HOME']}", "-e", f"LO_PYTHON={PLATFORM_PYTHON}",
+                IMAGE, "sh", os.path.join(root, "client.sh"),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=900,
+            )  # fmt: skip
+        except subprocess.TimeoutExpired:
+            print("FAIL: the client container timed out")
+            return 1
+        print(c.stdout.decode(errors="replace"), end="")
+        return c.returncode
+    finally:
+        # Client first, then server: see the header.
+        docker("rm", "-f", cli, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        docker("rm", "-f", srv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ed.heal_rmtree(root)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["--in-container"]:
+        sys.exit(in_container(sys.argv[2]))
+    sys.exit(host())

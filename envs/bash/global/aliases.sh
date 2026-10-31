@@ -392,6 +392,14 @@ latest() {
     cd "$latest" || return
 }
 
+### delete ###
+# delete [-f] [--] PATH...: rm -rf that forces through read-only modes, and on
+# NFS finds the processes holding the .nfs* files that keep a directory alive
+# and offers to kill them. The work is global/helpers/delete, one bash script
+# that every shell env runs (the tcsh env installs its own copy of it).
+unalias delete 2>/dev/null || true
+delete() { "$BASH_CONFIG_ROOT_DIR/global/helpers/delete" "$@"; }
+
 ### Tmux ###
 alias tl='tmux list-sessions'
 alias ta='resize; tmux attach -d || tmux'

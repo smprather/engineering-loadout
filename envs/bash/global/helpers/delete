@@ -1,0 +1,215 @@
+#!/bin/bash
+# delete [-f] [--] PATH... -- rm -rf that forces through read-only modes, and on
+# NFS deals with files a process still has open.
+#   -f  a missing PATH is no error and prints nothing (rm -f's meaning)
+#
+# ONE script for every shell env: bash and zsh run it from delete() in
+# global/aliases.sh, tcsh from its `delete` alias. The bash env installs it
+# with its global/ tree; the tcsh installer copies this same file into tcsh's
+# global/helpers (SHARED_ENV_HELPERS in loadout_main.py) -- a copy, not a link,
+# because either env installs without the other.
+#
+# Only DIRECTORIES are chmod'ed (u+rwx where unlistable, else u+w): removing an
+# entry needs write on its directory, never on the file -- and a file's mode is
+# shared by its hard links elsewhere. A symlink is removed as itself (chmod -R
+# would follow it and unseal the tree it points at). The directory a PATH sits
+# in is never changed, so a PATH inside a read-only directory is reported.
+#
+# NFS: a file a process has open -- an fd, or a mapping (a running binary, a
+# loaded library) -- is not removed but renamed to .nfsXXXX until the last
+# close, and keeps its directory alive (rm: "Device or resource busy"). delete
+# finds the processes on THIS host holding such files, offers to kill each one
+# from a terminal (SIGTERM; SIGKILL only if asked again), and retries. Holders
+# it cannot see, on another host or another user's, are reported, never
+# guessed at. "This shell" is $PPID: every caller runs this as a direct child
+# of the interactive shell, which is never offered for killing.
+#
+# tests/env-delete runs it through all three shells (NFS emulated);
+# build/delete-nfs-check (manual) runs it against a real kernel NFS mount.
+
+usage() {
+    printf 'usage: delete [-f] [--] PATH...\n' >&2
+    exit 2
+}
+
+# scan PATH -- who holds PATH's .nfs* files open, as lines:
+#   N <count>        .nfs* files under PATH
+#   H <pid> <count>  a process holding <count> of them (an fd or a mapping)
+#   R <file>         held by no process visible here: /proc shows only our own
+scan() {
+    local files
+    files=$(command find "$1" -name '.nfs*' ! -type d -print0 2>/dev/null | command xargs -0r realpath -m --)
+    [[ -n $files ]] || return 0
+    {
+        printf '%s\n' "$files" --
+        {
+            command find /proc/[0-9]*/fd -mindepth 1 -maxdepth 1 -lname '*/.nfs*' -printf '%h %l\n'
+            command grep -s -H -F '/.nfs' /proc/[0-9]*/maps
+        } 2>/dev/null | command sed -n -e 's#^/proc/\([0-9]*\)/fd #\1 #p' \
+            -e 's#^/proc/\([0-9]*\)/maps:[^/]*\(/.*\)$#\1 \2#p'
+    } | command awk '
+        !sep { if ($0 == "--") sep = 1; else { want[$0] = 1; total++ }; next }
+        {
+            pid = $1
+            f = substr($0, length(pid) + 2)
+            if (!(f in want) || ((pid, f) in seen)) next
+            seen[pid, f] = 1
+            held[f] = 1
+            if (!(pid in n)) order[++k] = pid
+            n[pid]++
+        }
+        END {
+            print "N", total
+            for (i = 1; i <= k; i++) print "H", order[i], n[order[i]]
+            for (f in want) if (!(f in held)) print "R", f
+        }'
+}
+
+# busy TARGET ERR -- the NFS step, after rm -rf left TARGET behind saying ERR.
+# Returns 0 once TARGET is gone.
+busy() {
+    local target=$1 err=$2 pass result line pid n etime args entry ans sig st i tries
+    local total self all=0 gone killed=0
+    local -a live=() remote=()
+
+    for pass in 1 2; do
+        result=$(scan "$target")
+        total=0
+        self=0
+        live=()
+        remote=()
+        while IFS= read -r line; do
+            case $line in
+            N\ *) total=${line#N } ;;
+            R\ *) remote+=("${line#R }") ;;
+            H\ *)
+                read -r pid n <<<"${line#H }"
+                # This script inherited the shell's fds; the shell is the holder.
+                [[ $pid == "$$" ]] && continue
+                if [[ $pid == "$PPID" ]]; then
+                    self=$n
+                    continue
+                fi
+                # Gone already (it exited, or it was short-lived): nothing to offer.
+                line=$(command ps -o etime=,args= -p "$pid" 2>/dev/null) || continue
+                read -r etime args <<<"$line"
+                [[ $n == 1 ]] && n="1 file" || n="$n files"
+                live+=("$pid"$'\t'"${args:0:72}; running $etime; holds $n")
+                ;;
+            esac
+        done <<<"$result"
+        if ((total == 0)); then
+            # Not the NFS case (or no longer): rm's own words.
+            [[ -n $err ]] && printf '%s\n' "$err" >&2
+            return 1
+        fi
+        [[ $total == 1 ]] && n="1 file is" || n="$total files are"
+
+        if ((pass == 1 && ${#live[@]} > 0)) && [[ -t 0 && -t 2 ]]; then
+            printf "delete: '%s': %s still open; NFS keeps an open file as .nfs* until it is closed\n" \
+                "$target" "$n" >&2
+            for entry in "${live[@]}"; do
+                pid=${entry%%$'\t'*}
+                if ((!all)); then
+                    printf '  kill PID %s (%s)? [y/N/a/q] ' "$pid" "${entry#*$'\t'}" >&2
+                    read -r ans || ans=q
+                    case $ans in
+                    [aA]*) all=1 ;;
+                    [yY]*) ;;
+                    [qQ]*) break ;;
+                    *) continue ;;
+                    esac
+                fi
+                gone=0
+                for sig in TERM KILL; do
+                    if [[ $sig == KILL ]] && ((!all)); then
+                        printf '  PID %s is still running after SIGTERM; send SIGKILL? [y/N] ' "$pid" >&2
+                        read -r ans || ans=n
+                        [[ $ans == [yY]* ]] || break
+                    fi
+                    kill -s "$sig" "$pid" 2>/dev/null
+                    for i in {1..30}; do
+                        st=$(command ps -o stat= -p "$pid" 2>/dev/null)
+                        if [[ -z $st || $st == Z* ]]; then
+                            gone=1
+                            break 2
+                        fi
+                        command sleep 0.1
+                    done
+                done
+                ((gone)) && killed=$((killed + 1))
+            done
+            # The client drops a .nfs file on its last close; give it a moment.
+            tries=1
+            ((killed)) && tries=25
+            for ((i = 0; i < tries; i++)); do
+                err=$(command rm -rf -- "$target" 2>&1)
+                if [[ ! -e $target && ! -L $target ]]; then
+                    printf "delete: removed '%s'\n" "$target" >&2
+                    return 0
+                fi
+                command sleep 0.2
+            done
+            continue
+        fi
+
+        printf "delete: cannot remove '%s': %s still open; NFS keeps an open file as .nfs* until it is closed\n" \
+            "$target" "$n" >&2
+        for entry in "${live[@]}"; do
+            printf '  PID %s (%s)\n' "${entry%%$'\t'*}" "${entry#*$'\t'}" >&2
+        done
+        if ((self)); then
+            printf '  this shell (PID %s) holds %s of them: close that file descriptor\n' "$PPID" "$self" >&2
+        fi
+        if ((${#remote[@]} > 0)); then
+            printf '  open in no process of yours on this host -- another host (a farm job, another\n' >&2
+            printf '  login) or another user holds it; NFS removes it when that process exits:\n' >&2
+            printf '    %s\n' "${remote[@]}" >&2
+        fi
+        if ((pass == 1 && ${#live[@]} > 0)); then
+            printf '  (run delete from a terminal to be offered to kill them)\n' >&2
+        fi
+        return 1
+    done
+}
+
+force=0
+targets=()
+while (($# > 0)); do
+    case $1 in
+    -f) force=1 ;;
+    --)
+        shift
+        targets+=("$@")
+        break
+        ;;
+    -?*)
+        printf 'delete: unrecognized option: %s\n' "$1" >&2
+        usage
+        ;;
+    *) targets+=("$1") ;;
+    esac
+    shift
+done
+((${#targets[@]} > 0)) || usage
+
+rc=0
+for target in "${targets[@]}"; do
+    if [[ ! -e $target && ! -L $target ]]; then
+        if ((!force)); then
+            printf "delete: cannot remove '%s': No such file or directory\n" "$target" >&2
+            rc=1
+        fi
+        continue
+    fi
+    command rm -rf -- "$target" 2>/dev/null && continue
+    if [[ ! -L $target ]]; then
+        # -exec ... \; runs before find descends, so an unlistable directory is
+        # opened up in time to be walked.
+        command find "$target" -type d \( ! -perm -u=rx -exec chmod u+rwx {} \; \
+            -o ! -perm -u=w -exec chmod u+w {} + \) 2>/dev/null
+    fi
+    err=$(command rm -rf -- "$target" 2>&1) && continue
+    busy "$target" "$err" || rc=1
+done
+exit "$rc"

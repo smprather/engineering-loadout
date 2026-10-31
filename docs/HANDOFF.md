@@ -13,6 +13,70 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-31 (2): `delete` -- rm -rf through read-only modes, and NFS .nfs* holders
+
+The user supplied a bash `delete [-f] PATH...` (chmod -R u+w, then rm -rf) to
+add to the shell envs, asked for it to detect `.nfs*` files that block a
+delete and interactively offer to kill the processes holding them, and then
+asked for ONE bash script that every shell runs, copied into each installed
+env rather than linked.
+
+**Shape.** `envs/bash/global/helpers/delete` (bash). bash/zsh: `delete()` in
+global/aliases.sh runs `"$BASH_CONFIG_ROOT_DIR/global/helpers/delete"`. tcsh:
+`alias delete "$_lo_helpers/delete"`, and `_install_env_tcsh` copies the file
+into tcsh's global/helpers (`SHARED_ENV_HELPERS`; a copy, since env-tcsh
+installs without env-bash). The name `delete` was free everywhere checked:
+bash/zsh/tcsh builtins and reserved words, host PATH, almalinux:8.10, payload
+bins, wheel console scripts, the installed tree.
+
+**Defects in the pasted function, fixed:** (1) zsh -- `local path` is zsh's
+tied `$PATH` array, so the loop variable replaced PATH; `rm` was "command not
+found", nothing was deleted, exit 127. (2) `chmod -R u+w LINK` follows the
+link: deleting a symlink unsealed the tree it pointed at. (3) `--` was
+rejected. (4) a missing PATH returned 0 unless it was the last argument.
+Changed on purpose: only DIRECTORIES are chmod'ed (u+rwx where unlistable,
+else u+w) -- unlink needs write on the directory only, and chmod'ing files
+changes every hard link's mode; usage errors return 2.
+
+**NFS behaviour.** After rm -rf (plus the directory heal) still fails, delete
+looks for `.nfs*` under the PATH, finds holders from /proc/PID/fd links and
+/proc/PID/maps (a running binary or loaded library has no fd), and from a
+terminal asks `kill PID n (cmd; running t; holds k files)? [y/N/a/q]`: TERM,
+then KILL only after a second yes (`a` = yes to all, including KILL). Never
+offered: the calling shell ($PPID: reported as "this shell ... close that file
+descriptor") and the script itself (it inherits the shell's fds -- the first
+version offered to kill itself; tests caught it). Holders it cannot see are
+reported as another host's or another user's. Without a terminal it reports
+and returns 1. After kills it retries for up to 5 s (the client drops a .nfs
+file on its last close).
+
+**Gates.** `tests/env-delete` (T2, 86 checks): installs @envs + env-zsh into a
+temp HOME and runs every case in bash, zsh and tcsh from the INSTALLED trees,
+with NFS emulated by a fake rm (EBUSY for an open .nfs*), real holder
+processes and a real PTY. `build/delete-nfs-check` (MANUAL, outside run-all
+at the user's request -- kept to support work on the script; 19 checks): a real
+kernel NFSv4.2 mount between two privileged containers
+(`build/docker/almalinux8.10-nfs.Dockerfile`), EL8's bash 4.4 / zsh 5.5 /
+tcsh 6.20; it first proves the kernel facts (rename, EBUSY, /proc paths, the
+.nfs file going on close). Negative control: with the maps scan disabled the
+running-binary case fails in all three shells. `tests/install-env-tcsh` checks
+the copy is installed, executable and identical.
+
+**Teardown trap, left behind once.** The first NFS probe ran server and client
+in ONE container. On exit, the client's unmount (DESTROY_SESSION, hard mount)
+lost its server and retries forever in D state: container `c27cacb6931b`
+(image almalinux:8.10) stays "Up" with a D-state `rpc.mountd` until the host
+reboots. Harmless otherwise; `docker rm -f` will not clear it. The real test
+uses two containers and removes the client first (AGENTS.md, Testing tiers).
+
+**Verification:** a full `run-all --container` was stopped at the user's
+request after T1 and most of T2 -- 72 tests, 0 failures, including docs-sync,
+env-shell-parity, env-bash-runtime, install-env-bash/-tcsh/-zsh and
+env-delete. After moving the real-NFS check out of the suite: env-delete
+86/86, docs-sync, env-shell-parity, installed-sizes/content-manifest --check,
+and build/delete-nfs-check 19/19. Tier 3 was not run for this change (the
+installer change is the tcsh copy only).
+
 ## 2026-10-31: GRC retired; linelight 2026.10.31 colours the shells
 
 The user asked to remove GRC from the shells, add their own project

@@ -1,0 +1,691 @@
+#!/usr/bin/env python3
+"""env-delete: `delete` in bash, zsh and tcsh.
+
+    delete [-f] [--] PATH...
+
+is `rm -rf` that forces through read-only modes, and on NFS deals with the one
+thing `rm -rf` cannot: a file some process still has open. The NFS client does
+not remove an open file; it renames it to `.nfsXXXXXXXXXXXXXXXXXXXXXXXX` and
+keeps it until the last close (a "silly rename"), so its directory cannot be
+removed either -- `rm` says "Device or resource busy". delete finds the
+processes on this host holding those files, shows each one, offers to kill it,
+and retries.
+
+The work is ONE bash script, envs/bash/global/helpers/delete. The bash env
+installs it with its global/ tree (zsh runs on that tree too) and the tcsh
+installer copies the same file into tcsh's global/helpers, since either env
+installs without the other. So this test installs @envs + env-zsh into a temp
+HOME and runs `delete` from the INSTALLED trees: bash and zsh through delete()
+in global/aliases.sh, tcsh through its alias. Every case runs in all three.
+
+NFS is EMULATED here so the test runs on any host: a fake `rm` first on PATH
+refuses to unlink a `.nfs*` file that a process still has open (fd or mmap),
+which is exactly the client's EBUSY, and hands everything else to the real
+rm. The holders and the kills are real processes, and the prompts are answered
+over a real PTY. build/delete-nfs-check (a manual dev check, not in run-all)
+runs the same flows against a real kernel NFS mount, which is where the kernel facts this relies on are
+proven: the rename, the EBUSY, and /proc showing the .nfs path.
+"""
+
+import os
+import pty
+import re
+import select
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROMPT = r"\[y/N/a/q\]"
+KILL_PROMPT = r"SIGKILL\? \[y/N\]"
+
+FAILURES = []
+PASSED = 0
+
+
+def check(label, ok, detail=""):
+    global PASSED
+    if ok:
+        PASSED += 1
+        print(f"  PASS  {label}")
+    else:
+        print(f"  FAIL  {label}  {detail}")
+        FAILURES.append((label, detail))
+
+
+FAKE_RM = r'''#!{python} -I
+"""rm, as the Linux NFS client sees it: unlinking a .nfs* file that a process
+still has open (an fd or a mapping) fails with EBUSY, and the directory holding
+it cannot be removed. FAKE_NFS_REMOTE_HELD (colon-separated paths) marks files
+held on "another host": busy, with no local holder. Everything else goes to the
+real rm."""
+import os
+import sys
+
+REAL = "{real_rm}"
+args = sys.argv[1:]
+operands = []
+done = False
+for a in args:
+    if not done and a == "--":
+        done = True
+    elif not done and a.startswith("-") and a != "-":
+        pass
+    else:
+        operands.append(a)
+
+
+def held():
+    out = set(p for p in os.environ.get("FAKE_NFS_REMOTE_HELD", "").split(":") if p)
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            for fd in os.listdir(f"/proc/{{pid}}/fd"):
+                try:
+                    t = os.readlink(f"/proc/{{pid}}/fd/{{fd}}")
+                except OSError:
+                    continue
+                if "/.nfs" in t:
+                    out.add(t)
+        except OSError:
+            pass
+        try:
+            with open(f"/proc/{{pid}}/maps") as f:
+                for line in f:
+                    i = line.find("/")
+                    if i >= 0 and "/.nfs" in line:
+                        out.add(line[i:].rstrip("\n"))
+        except OSError:
+            pass
+    return out
+
+
+HELD = held()
+roots = [os.path.realpath(o) for o in operands]
+if not any(h == r or h.startswith(r + "/") for h in HELD for r in roots):
+    os.execv(REAL, [REAL] + args)
+
+rc = 0
+
+
+def remove(p):
+    """Remove P bottom-up; return False when something under it survived."""
+    global rc
+    if os.path.isdir(p) and not os.path.islink(p):
+        try:
+            names = os.listdir(p)
+        except OSError as e:
+            print(f"rm: cannot remove '{{p}}': {{e.strerror}}", file=sys.stderr)
+            rc = 1
+            return False
+        ok = all([remove(os.path.join(p, n)) for n in names])
+        if not ok:
+            return False  # like rm: no second message for the parent
+        try:
+            os.rmdir(p)
+        except OSError as e:
+            print(f"rm: cannot remove '{{p}}': {{e.strerror}}", file=sys.stderr)
+            rc = 1
+            return False
+        return True
+    if os.path.realpath(p) in HELD:
+        print(f"rm: cannot remove '{{p}}': Device or resource busy", file=sys.stderr)
+        rc = 1
+        return False
+    try:
+        os.unlink(p)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        print(f"rm: cannot remove '{{p}}': {{e.strerror}}", file=sys.stderr)
+        rc = 1
+        return False
+    return True
+
+
+for o in operands:
+    if os.path.lexists(o):
+        remove(o)
+sys.exit(rc)
+'''
+
+
+def install_envs(root):
+    """Install @envs + env-zsh into ROOT/home; return the shells' env."""
+    home = os.path.join(root, "home")
+    os.makedirs(home)
+    tmp = os.environ.get("TMPDIR", "/tmp")
+    log = os.path.join(root, "install.log")
+    with open(log, "w") as fh:
+        p = subprocess.run(
+            [os.path.join(REPO, "loadout"), "install", "-y", "--no-backup", "@envs", "env-zsh"],
+            env={"HOME": home, "PATH": "/usr/bin:/bin", "LANG": os.environ.get("LANG", "C.UTF-8"), "TMPDIR": tmp},
+            stdin=subprocess.DEVNULL,
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            timeout=900,
+        )
+    if p.returncode != 0:
+        with open(log) as fh:
+            sys.stdout.write(fh.read()[-3000:])
+        raise RuntimeError("install of @envs env-zsh failed")
+    fakebin = os.path.join(root, "fakebin")
+    os.makedirs(fakebin)
+    real_rm = shutil.which("rm", path="/usr/bin:/bin")
+    with open(os.path.join(fakebin, "rm"), "w") as f:
+        f.write(FAKE_RM.format(python=sys.executable, real_rm=real_rm))
+    os.chmod(os.path.join(fakebin, "rm"), 0o755)
+    path = f"{fakebin}:/usr/bin:/bin"
+    return {
+        "PATH": path,
+        "LO_TEST_PATH": path,
+        "HOME": home,
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "TERM": "dumb",
+        "BASH_CONFIG_ROOT_DIR": os.path.join(home, ".config", "bash"),
+        "TCSH_CONFIG_ROOT_DIR": os.path.join(home, ".config", "tcsh"),
+    }
+
+
+def scratch(root):
+    return tempfile.mkdtemp(prefix="case.", dir=root)
+
+
+def heal_rmtree(path):
+    for root, dirs, _ in os.walk(path):
+        for d in dirs:
+            try:
+                os.chmod(os.path.join(root, d), 0o700)
+            except OSError:
+                pass
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def argv(shell, args, prelude=""):
+    """Run `delete ARGS` in SHELL from the installed env, then print
+    DELETE-RC=<status>. Returns (argv, extra environment)."""
+    if shell in ("bash", "zsh"):
+        body = f'source "$BASH_CONFIG_ROOT_DIR/global/aliases.sh"; {prelude} delete "$@"; echo "DELETE-RC=$?"'
+        base = ["bash", "--norc", "--noprofile", "-c"] if shell == "bash" else ["zsh", "-f", "-c"]
+        return base + [body, "env-delete", *args], {}
+    # tcsh -c parses a following `--` or `-x` as ITS option, so the arguments
+    # travel in the environment, each expanded as one quoted word. The call is
+    # on its own LINE: csh parses a whole line before running any of it, so an
+    # alias sourced earlier on the same line does not exist yet.
+    words = " ".join(f'"$DELETE_ARG{i}"' for i in range(len(args)))
+    body = (
+        'setenv PATH "$LO_TEST_PATH"; '
+        'source "$TCSH_CONFIG_ROOT_DIR/global/config.csh"; '
+        'source "$TCSH_CONFIG_ROOT_DIR/global/aliases.csh"\n'
+        f'{prelude} delete {words}; echo "DELETE-RC=$status"'
+    )
+    return ["tcsh", "-f", "-c", body], {f"DELETE_ARG{i}": a for i, a in enumerate(args)}
+
+
+def rc_of(out):
+    m = re.search(r"DELETE-RC=(\d+)", out)
+    return int(m.group(1)) if m else None
+
+
+def run(shell, args, env, cwd, prelude="", extra_env=None):
+    """Non-interactive: stdin is /dev/null, output captured."""
+    cmd, argenv = argv(shell, args, prelude)
+    e = dict(env, **argenv, **(extra_env or {}))
+    p = subprocess.run(
+        cmd,
+        env=e,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+    )
+    out = p.stdout.decode(errors="replace")
+    return rc_of(out), out
+
+
+def run_pty(shell, args, env, cwd, answers=(), prelude="", extra_env=None, timeout=60):
+    """Interactive: stdin/stdout/stderr on a real PTY. ANSWERS is a list of
+    (regex, reply): each reply is typed once its prompt has appeared."""
+    cmd, argenv = argv(shell, args, prelude)
+    e = dict(env, **argenv, **(extra_env or {}))
+    master, slave = pty.openpty()
+    p = subprocess.Popen(
+        cmd,
+        env=e,
+        cwd=cwd,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        start_new_session=True,
+    )
+    os.close(slave)
+    out = b""
+    seen = 0
+    pending = list(answers)
+    deadline = time.time() + timeout
+    while True:
+        r, _, _ = select.select([master], [], [], 0.1)
+        if r:
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:
+                chunk = b""
+            if not chunk:
+                break
+            out += chunk
+            text = out.decode(errors="replace")
+            if pending and re.search(pending[0][0], text[seen:]):
+                os.write(master, pending[0][1].encode() + b"\n")
+                seen = len(text)
+                pending.pop(0)
+        elif p.poll() is not None:
+            break
+        if time.time() > deadline:
+            os.killpg(p.pid, signal.SIGKILL)
+            break
+    p.wait()
+    os.close(master)
+    text = out.decode(errors="replace").replace("\r\n", "\n")
+    return rc_of(text), text
+
+
+# --- holders ---------------------------------------------------------------
+
+
+def wait_for(cond, timeout=10.0):
+    end = time.time() + timeout
+    while time.time() < end:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def holds(pid, path):
+    real = os.path.realpath(path)
+    try:
+        for fd in os.listdir(f"/proc/{pid}/fd"):
+            try:
+                if os.readlink(f"/proc/{pid}/fd/{fd}") == real:
+                    return True
+            except OSError:
+                pass
+        with open(f"/proc/{pid}/maps") as f:
+            return any(line.rstrip("\n").endswith(" " + real) for line in f)
+    except OSError:
+        return False
+
+
+def holder(path, kind="fd"):
+    """A real process holding PATH open: `fd` (sleep with fd 3 on it),
+    `stubborn` (the same, ignoring SIGTERM), `mmap` (mapped, fd closed)."""
+    if kind == "mmap":
+        code = (
+            "import mmap,sys,time\n"
+            "f=open(sys.argv[1],'rb')\n"
+            "m=mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ)\n"
+            "f.close()\n"
+            "time.sleep(300)\n"
+        )
+        argv_ = [sys.executable, "-I", "-c", code, path]
+    else:
+        trap = 'trap "" TERM; ' if kind == "stubborn" else ""
+        argv_ = ["sh", "-c", trap + 'exec 3<"$1"; exec sleep 300', "holder", path]
+    p = subprocess.Popen(argv_, stdin=subprocess.DEVNULL, start_new_session=True)
+    if not wait_for(lambda: holds(p.pid, path)):
+        p.kill()
+        raise RuntimeError(f"holder never opened {path}")
+    return p
+
+
+def dead(p, timeout=5.0):
+    """True once P has exited (reaped here: a zombie holds no files)."""
+    return wait_for(lambda: p.poll() is not None, timeout)
+
+
+def reap(*procs):
+    for p in procs:
+        if p.poll() is None:
+            p.kill()
+        p.wait()
+
+
+def nfs_tree(base, n=1):
+    """BASE/sub/.nfsXXXX... files with content (mmap needs a non-empty file)."""
+    sub = os.path.join(base, "sub")
+    os.makedirs(sub)
+    with open(os.path.join(base, "plain"), "w") as f:
+        f.write("plain\n")
+    files = []
+    for i in range(1, n + 1):
+        p = os.path.join(sub, f".nfs{i:016x}00000001")
+        with open(p, "w") as f:
+            f.write("held\n")
+        files.append(p)
+    return files
+
+
+# --- cases -----------------------------------------------------------------
+
+
+def case_readonly_tree(shell, t, env):
+    d = os.path.join(t, "ro tree")  # a space: quoting through every layer
+    os.makedirs(os.path.join(d, "a"))
+    os.makedirs(os.path.join(d, "locked"))
+    for p in (os.path.join(d, "a", "f"), os.path.join(d, "locked", "g"), os.path.join(d, "file")):
+        with open(p, "w") as f:
+            f.write("x\n")
+        os.chmod(p, 0o444)
+    os.chmod(os.path.join(d, "locked"), 0o000)  # not even listable
+    os.chmod(os.path.join(d, "a"), 0o555)
+    os.chmod(d, 0o555)
+    rc, out = run(shell, [d], env, t)
+    check(
+        f"{shell}: read-only tree (0555 dirs, 0444 files, a 0000 dir) removed",
+        rc == 0 and not os.path.lexists(d),
+        f"rc={rc} out={out!r}",
+    )
+    check(f"{shell}: read-only tree removal prints nothing", out.strip() == "DELETE-RC=0", repr(out))
+
+
+def case_hardlink_untouched(shell, t, env):
+    outside = os.path.join(t, "outside")
+    with open(outside, "w") as f:
+        f.write("keep\n")
+    os.chmod(outside, 0o444)
+    d = os.path.join(t, "hl")
+    os.makedirs(d)
+    os.link(outside, os.path.join(d, "same-inode"))
+    os.chmod(d, 0o555)
+    rc, out = run(shell, [d], env, t)
+    mode = stat.S_IMODE(os.stat(outside).st_mode) if os.path.exists(outside) else None
+    check(
+        f"{shell}: a hard link's other name keeps its mode (only dirs are chmod'ed)",
+        rc == 0 and not os.path.lexists(d) and mode == 0o444,
+        f"rc={rc} mode={mode and oct(mode)} out={out!r}",
+    )
+
+
+def case_symlink_untouched(shell, t, env):
+    sealed = os.path.join(t, "sealed")
+    os.makedirs(os.path.join(sealed, "inner"))
+    with open(os.path.join(sealed, "inner", "f"), "w") as f:
+        f.write("x\n")
+    for p, m in ((os.path.join(sealed, "inner", "f"), 0o444), (os.path.join(sealed, "inner"), 0o555), (sealed, 0o555)):
+        os.chmod(p, m)
+    link = os.path.join(t, "lnk")
+    os.symlink(sealed, link)
+    rc, out = run(shell, [link], env, t)
+    modes = [
+        oct(stat.S_IMODE(os.stat(p).st_mode))
+        for p in (sealed, os.path.join(sealed, "inner"), os.path.join(sealed, "inner", "f"))
+    ]
+    check(
+        f"{shell}: a symlink is removed as itself",
+        rc == 0 and not os.path.lexists(link) and os.path.isdir(sealed),
+        f"rc={rc} out={out!r}",
+    )
+    check(
+        f"{shell}: the tree a symlink points at keeps its read-only modes",
+        modes == ["0o555", "0o555", "0o444"],
+        str(modes),
+    )
+
+
+def case_options(shell, t, env):
+    for name in ("-x", "-y"):
+        with open(os.path.join(t, name), "w") as f:
+            f.write("x\n")
+    rc, out = run(shell, ["--", "-x"], env, t)
+    check(
+        f"{shell}: `delete -- -x` removes a dash-named file",
+        rc == 0 and not os.path.exists(os.path.join(t, "-x")),
+        f"rc={rc} out={out!r}",
+    )
+    rc, out = run(shell, ["-y"], env, t)
+    check(
+        f"{shell}: an unknown option is a usage error (rc 2), nothing removed",
+        rc == 2 and os.path.exists(os.path.join(t, "-y")) and "unrecognized option" in out,
+        f"rc={rc} out={out!r}",
+    )
+    rc, out = run(shell, [], env, t)
+    check(f"{shell}: no PATH is a usage error (rc 2)", rc == 2 and "usage: delete" in out, f"rc={rc} out={out!r}")
+
+
+def case_missing(shell, t, env):
+    rc, out = run(shell, ["nosuch"], env, t)
+    check(
+        f"{shell}: a missing PATH is reported, rc 1",
+        rc == 1 and "nosuch" in out and "No such file or directory" in out,
+        f"rc={rc} out={out!r}",
+    )
+    rc, out = run(shell, ["-f", "nosuch"], env, t)
+    check(
+        f"{shell}: -f: a missing PATH is silent, rc 0", rc == 0 and out.strip() == "DELETE-RC=0", f"rc={rc} out={out!r}"
+    )
+    keep = os.path.join(t, "exists")
+    os.makedirs(keep)
+    rc, out = run(shell, ["nosuch", keep], env, t)
+    check(
+        f"{shell}: the other PATHs are still removed, and the status stays 1",
+        rc == 1 and not os.path.exists(keep),
+        f"rc={rc} out={out!r}",
+    )
+
+
+def case_nfs_noninteractive(shell, t, env):
+    d = os.path.join(t, "nfs-ni")
+    (f,) = nfs_tree(d)
+    h = holder(f)
+    try:
+        rc, out = run(shell, [d], env, t)
+        check(
+            f"{shell}: NFS, no terminal: rc 1, the directory stays",
+            rc == 1 and os.path.isdir(d),
+            f"rc={rc} out={out!r}",
+        )
+        check(
+            f"{shell}: NFS, no terminal: names the holder's PID and why (.nfs, still open)",
+            str(h.pid) in out and ".nfs" in out and "still open" in out,
+            repr(out),
+        )
+        check(
+            f"{shell}: NFS, no terminal: kills nothing, asks nothing", h.poll() is None and "[y/N" not in out, repr(out)
+        )
+        check(
+            f"{shell}: NFS: rm's raw 'Device or resource busy' is replaced by the report",
+            "Device or resource busy" not in out,
+            repr(out),
+        )
+    finally:
+        reap(h)
+
+
+def case_nfs_yes(shell, t, env):
+    d = os.path.join(t, "nfs-yes")
+    (f,) = nfs_tree(d)
+    h = holder(f)
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "y")])
+        check(f"{shell}: NFS, answer y: the holder is killed", dead(h), repr(out))
+        check(
+            f"{shell}: NFS, answer y: the directory is removed, rc 0",
+            rc == 0 and not os.path.lexists(d),
+            f"rc={rc} out={out!r}",
+        )
+        check(
+            f"{shell}: NFS: the prompt shows the holder's PID and command",
+            re.search(rf"{h.pid}\b.*sleep 300", out) is not None,
+            repr(out),
+        )
+    finally:
+        reap(h)
+
+
+def case_nfs_no(shell, t, env):
+    d = os.path.join(t, "nfs-no")
+    (f,) = nfs_tree(d)
+    h = holder(f)
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "n")])
+        check(
+            f"{shell}: NFS, answer n: the holder lives, the directory stays, rc 1",
+            h.poll() is None and os.path.isdir(d) and rc == 1,
+            f"rc={rc} out={out!r}",
+        )
+        check(f"{shell}: NFS, answer n: the final report names the PID it kept", out.count(str(h.pid)) >= 2, repr(out))
+    finally:
+        reap(h)
+
+
+def case_nfs_stubborn(shell, t, env):
+    d = os.path.join(t, "nfs-stubborn")
+    (f,) = nfs_tree(d)
+    h = holder(f, "stubborn")
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "y"), (KILL_PROMPT, "y")])
+        check(f"{shell}: NFS, SIGTERM ignored: asks before SIGKILL", re.search(KILL_PROMPT, out) is not None, repr(out))
+        check(
+            f"{shell}: NFS, SIGTERM ignored: SIGKILL ends it, the directory goes",
+            dead(h) and rc == 0 and not os.path.lexists(d),
+            f"rc={rc} out={out!r}",
+        )
+    finally:
+        reap(h)
+
+
+def case_nfs_mmap(shell, t, env):
+    d = os.path.join(t, "nfs-mmap")
+    (f,) = nfs_tree(d)
+    h = holder(f, "mmap")
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "y")])
+        check(
+            f"{shell}: NFS: a mapping with no fd (a running binary's case) is found and killed",
+            dead(h) and rc == 0 and not os.path.lexists(d),
+            f"rc={rc} out={out!r}",
+        )
+    finally:
+        reap(h)
+
+
+def case_nfs_all(shell, t, env):
+    d = os.path.join(t, "nfs-all")
+    f1, f2 = nfs_tree(d, 2)
+    h1, h2 = holder(f1), holder(f2)
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "a")])
+        check(
+            f"{shell}: NFS, answer a: every holder is killed after ONE prompt",
+            dead(h1) and dead(h2) and len(re.findall(PROMPT, out)) == 1,
+            repr(out),
+        )
+        check(
+            f"{shell}: NFS, answer a: the directory is removed, rc 0",
+            rc == 0 and not os.path.lexists(d),
+            f"rc={rc} out={out!r}",
+        )
+    finally:
+        reap(h1, h2)
+
+
+def case_nfs_quit(shell, t, env):
+    d = os.path.join(t, "nfs-quit")
+    f1, f2 = nfs_tree(d, 2)
+    h1, h2 = holder(f1), holder(f2)
+    try:
+        rc, out = run_pty(shell, [d], env, t, answers=[(PROMPT, "q")])
+        check(
+            f"{shell}: NFS, answer q: nothing killed, no second prompt, rc 1",
+            h1.poll() is None and h2.poll() is None and len(re.findall(PROMPT, out)) == 1 and rc == 1,
+            f"rc={rc} out={out!r}",
+        )
+    finally:
+        reap(h1, h2)
+
+
+def case_nfs_remote(shell, t, env):
+    d = os.path.join(t, "nfs-remote")
+    (f,) = nfs_tree(d)
+    rc, out = run_pty(shell, [d], env, t, extra_env={"FAKE_NFS_REMOTE_HELD": os.path.realpath(f)})
+    check(
+        f"{shell}: NFS, held on another host: no prompt, rc 1, says where to look",
+        rc == 1 and "[y/N" not in out and "another host" in out and os.path.isdir(d),
+        f"rc={rc} out={out!r}",
+    )
+
+
+def case_nfs_this_shell(shell, t, env):
+    d = os.path.join(t, "nfs-self")
+    (f,) = nfs_tree(d)
+    rc, out = run_pty(shell, [d], env, t, prelude=f'exec 3<"{f}";')
+    check(
+        f"{shell}: NFS, held by this shell: never offered for killing, the shell lives",
+        rc == 1 and "[y/N" not in out and "this shell" in out,
+        f"rc={rc} out={out!r}",
+    )
+
+
+CASES = [
+    case_readonly_tree,
+    case_hardlink_untouched,
+    case_symlink_untouched,
+    case_options,
+    case_missing,
+    case_nfs_noninteractive,
+    case_nfs_yes,
+    case_nfs_no,
+    case_nfs_stubborn,
+    case_nfs_mmap,
+    case_nfs_all,
+    case_nfs_quit,
+    case_nfs_remote,
+]
+# tcsh cannot hold an fd open on a file of its choosing (no `exec 3<`).
+SHELL_ONLY = {case_nfs_this_shell: ("bash", "zsh")}
+
+
+def main():
+    missing = [s for s in ("bash", "zsh", "tcsh") if shutil.which(s) is None]
+    if missing:
+        print(f"FAIL: env-delete needs {', '.join(missing)} on PATH")
+        return 1
+    root = tempfile.mkdtemp(prefix="loadout-env-delete.", dir=os.environ.get("TMPDIR", "/tmp"))
+    try:
+        env = install_envs(root)
+        bash_copy = os.path.join(env["BASH_CONFIG_ROOT_DIR"], "global", "helpers", "delete")
+        tcsh_copy = os.path.join(env["TCSH_CONFIG_ROOT_DIR"], "global", "helpers", "delete")
+        check("install: the bash env ships helpers/delete, executable", os.access(bash_copy, os.X_OK))
+        check(
+            "install: the tcsh env gets its own copy, executable (not a link)",
+            os.access(tcsh_copy, os.X_OK) and not os.path.islink(tcsh_copy),
+        )
+        if os.path.isfile(bash_copy) and os.path.isfile(tcsh_copy):
+            with open(bash_copy, "rb") as a, open(tcsh_copy, "rb") as b:
+                check("install: the two copies are the same script", a.read() == b.read())
+        for shell in ("bash", "zsh", "tcsh"):
+            print(f"--- {shell}")
+            for case in CASES + list(SHELL_ONLY):
+                if shell not in SHELL_ONLY.get(case, (shell,)):
+                    continue
+                t = scratch(root)
+                try:
+                    case(shell, t, env)
+                except Exception as e:  # a broken case is a failure, not a crash
+                    check(f"{shell}: {case.__name__} ran", False, repr(e))
+                finally:
+                    heal_rmtree(t)
+    finally:
+        heal_rmtree(root)
+    print(f"env-delete: {PASSED} passed, {len(FAILURES)} failed")
+    return 1 if FAILURES else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

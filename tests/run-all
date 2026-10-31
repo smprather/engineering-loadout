@@ -379,6 +379,7 @@ run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
 run_test "install-env-zsh" --deps auto tests/install-env-zsh
 run_test "env-ls-choice" --deps auto tests/env-ls-choice
 run_test "env-linelight" --deps auto tests/env-linelight
+run_test "env-delete" --deps auto tests/env-delete
 run_test "env-tcsh-prompt-resize" --deps auto tests/env-tcsh-prompt-resize
 run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-terminal
 run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
