@@ -487,10 +487,21 @@ def main():
         "check-extended-keys" in read(TCSH_TCSHRC),
         "the cheap TERM/TMUX check leaves a bare xterm login unset",
     )
+    retired_grc = ("ENABLE_GRC", "colourify", "grc -es", "grc.sh", "grc/bin", "grc-aliases")
+    grc_left = [
+        os.path.relpath(p, REPO)
+        for p in sorted(set(tcsh_env_files() + bash_env_files() + [BASH_CONFIG, ZSH_ZSHRC]))
+        if any(tok in read(p) for tok in retired_grc)
+    ]
+    grc_left += [
+        os.path.relpath(p, REPO)
+        for p in (os.path.join(REPO, "envs", "bash", "global", "grc"), os.path.join(TCSH_GLOBAL, "grc-aliases.csh"))
+        if os.path.exists(p)
+    ]
     check(
-        "tcsh GRC falls back to the bash env's vendored grc",
-        ".config/bash/global/grc/bin" in read(TCSH_TCSHRC),
-        "env-tcsh ships no grc binary; a direct login never found one",
+        "no GRC left in any shell env",
+        not grc_left,
+        "GRC is retired (linelight replaces it): " + ", ".join(grc_left),
     )
     check(
         "no shell defeats rmstar with an rm -f alias",

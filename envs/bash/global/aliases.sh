@@ -238,9 +238,9 @@ alias mdkir='mkdir'
 alias rs='rsync --archive --info=progress2 --info=name0 --no-inc-recursive --exclude="*/.snapshot/"'
 # Functions, not aliases: `alias du='du ... | sort'` put an argument typed after
 # `du` on sort's side of the pipe, so `du DIR` failed with "read failed: ...: Is
-# a directory". command keeps the function from recursing. GRC may have defined
-# `du`/`dum` aliases earlier, and an alias is expanded while the function line is
-# parsed -- unalias first (the df() function below does the same).
+# a directory". command keeps the function from recursing. A distro or layer may
+# have defined `du`/`dum` aliases earlier, and an alias is expanded while the
+# function line is parsed -- unalias first (the df() function below does the same).
 unalias du dum 2>/dev/null || true
 du() {
     if [[ $# -eq 0 ]]; then
@@ -258,11 +258,7 @@ dum() {
 }
 unalias df 2>/dev/null || true
 df() {
-    if command -v colourify >/dev/null 2>&1; then
-        colourify df --block-size=G "$@"
-    else
-        command df --block-size=G "$@"
-    fi
+    command df --block-size=G "$@"
 }
 pl() {
     if [[ $# -eq 0 ]]; then

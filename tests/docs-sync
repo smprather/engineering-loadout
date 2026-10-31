@@ -44,7 +44,7 @@ def read(rel):
 
 
 VENDORED = re.compile(
-    r"(^|/)vendor/|^installer_vendor/|github\.scop|/grc/|icecream-bash|^payload/|"
+    r"(^|/)vendor/|^installer_vendor/|github\.scop|icecream-bash|^payload/|"
     r"^envs/vim/pack/|^envs/tmux/(vendor|plugins)/|^build/gitleaks/"
 )
 HISTORY = re.compile(r"^docs/HANDOFF\.md$|^docs/archive/|^docs/superpowers/")

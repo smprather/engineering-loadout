@@ -528,16 +528,21 @@ out=$(tcsh_i_raw "$TMPHOME" "$FAKEBIN" \
 assert_no_csh_noise "missing starship" "$out"
 echo "$out" | grep -q 'P=\[.*%B' || fail "missing starship did not fall back to the hand-rolled prompt: [$out]"
 
-# --- GRC on a direct tcsh login: env-tcsh ships no grc binary, so the aliases
-# --- must find the copy the bash env vendors (a standard @envs install has it).
-# --- FAKEBIN deliberately contains no grc, so only the added path can supply it.
-mkdir -p "$TMPHOME/.config/bash/global/grc/bin"
-printf '#!/bin/sh\nexit 0\n' > "$TMPHOME/.config/bash/global/grc/bin/grc"
-chmod +x "$TMPHOME/.config/bash/global/grc/bin/grc"
+# --- GRC is retired (linelight replaces it): a reinstall over a GRC-era tree
+# --- removes the sealed grc-aliases.csh it left in global/, and the login stays
+# --- silent with no colourify alias.
+tg="$TMPHOME/.config/tcsh/global"
+chmod u+w "$tg"
+rm -f "$tg/grc-aliases.csh"
+printf 'alias colourify "grc -es"\n' > "$tg/grc-aliases.csh"
+chmod 0444 "$tg/grc-aliases.csh"
+chmod 0555 "$tg"
+HOME="$TMPHOME" LOADOUT_CFG_SHARED_PREFIX= "$REPO/loadout" install -y env-tcsh --no-backup >/dev/null
+[ ! -e "$tg/grc-aliases.csh" ] || fail "reinstall left the retired ~/.config/tcsh/global/grc-aliases.csh"
 out=$(tcsh_i_raw "$TMPHOME" "$FAKEBIN" \
-    "source '$TMPHOME/.tcshrc'; alias colourify")
-assert_no_csh_noise "grc aliases" "$out"
-echo "$out" | grep -q 'grc -es' || fail "GRC aliases are still dead on a direct tcsh login: [$out]"
+    "source '$TMPHOME/.tcshrc'; alias colourify; echo done")
+assert_no_csh_noise "no grc" "$out"
+case $out in *grc*) fail "a GRC alias survived on a tcsh login: [$out]" ;; esac
 
 # --- HOME unset: every non-interactive tcsh printed "HOME: Undefined variable."
 # --- and the entry point aborted before defining anything. The guard must

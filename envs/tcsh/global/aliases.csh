@@ -234,11 +234,7 @@ if ( -X pigz ) then
     alias gzip  'pigz'
     alias gz    'pigz'
 endif
-if ( -X colourify ) then
-    alias df    'colourify df --block-size=G'
-else
-    alias df    'df --block-size=G'
-endif
+alias df    'df --block-size=G'
 if ( -X bat ) then
     # `cat` is deliberately NOT replaced -- see the note in the bash env's
     # aliases.sh: bat decorates its output, so anything piping or parsing

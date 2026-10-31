@@ -16,7 +16,6 @@ paths = [
     '''^payload/''',                       # shipped third-party content (wheels, plugins, fonts, ...)
     '''^envs/[^/]+/vendor/''',             # nvim/tmux plugin mirrors
     '''^envs/bash/global/github\.scop\.bash-completion/''',
-    '''^envs/bash/global/grc/''',
     '''^assurance/treesitter-parser-locks\.json$''',  # generated parser commit-hash lock
     '''^assurance/records/''',             # generated provenance records (commit + artifact hashes)
     '''^build/yara/''',                    # YARA rule data

@@ -3859,6 +3859,7 @@ sha256  e353c0e1c4838ad2b14810c7358007c825e740313922032917e2dcfc43cd46ae  payloa
 sha256  e353c0e1c4838ad2b14810c7358007c825e740313922032917e2dcfc43cd46ae  payload/treesitter/vendor/nvim-treesitter/runtime/queries/dart/locals.scm
 sha256  e36b7bb61a7dcd2cf0aa872c6a0ff09a75b630252cea2aaa37ef4d38095de7d0  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/bpftrace/injections.scm
 sha256  e36b7bb61a7dcd2cf0aa872c6a0ff09a75b630252cea2aaa37ef4d38095de7d0  payload/treesitter/vendor/nvim-treesitter/runtime/queries/bpftrace/injections.scm
+sha256  e38b2e1641759b678294fcc32d1589cf4698d6317f8f011a1d437ef1e0e49015  payload/installed-sizes.json
 sha256  e3988fbb17f2db21e4fadf2a2bd0d627630161d593335d02ae6e37f2da2bbcbb  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/make.lua
 sha256  e39dd7ed3d2bef8a1247e9f5fb2d97430a283f8821bf1e69eca76afdc24bd758  payload/treesitter/vendor/nvim-treesitter/runtime/queries/psv/highlights.scm
 sha256  e3a3672922fdd9e1b8ae99816e802e384bd34f3375a830c3fe4cc814ee2c318d  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/usd/highlights.scm
@@ -4439,7 +4440,6 @@ sha256  f6df4cf77c9971a34a828779a713035cb727628d450a35ee3edbb208cb7dd51c  payloa
 sha256  f6df4cf77c9971a34a828779a713035cb727628d450a35ee3edbb208cb7dd51c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/prolog/folds.scm
 sha256  f6e788be286525fcb73d0722e4c4c2085bb71c94a2cd0c6ea4eaf9fea2d373b9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/dtd/locals.scm
 sha256  f6e788be286525fcb73d0722e4c4c2085bb71c94a2cd0c6ea4eaf9fea2d373b9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/dtd/locals.scm
-sha256  f71e0d70c1e5b222d13e78615044299151b190fcafcda76aeb04fca7abbf48c6  payload/installed-sizes.json
 sha256  f7404de989e7d13705c1a9bf9491097f777362b011331e5d97530cf1e129f8ce  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/html_tags/injections.scm
 sha256  f7404de989e7d13705c1a9bf9491097f777362b011331e5d97530cf1e129f8ce  payload/treesitter/vendor/nvim-treesitter/runtime/queries/html_tags/injections.scm
 sha256  f754c3281712c81b46bae38484cca48c2a494771b0340e2d5c3e139b02a40ca1  payload/el8.x86_64.glibc2p28/lib64/libpcap.so.1.bz2

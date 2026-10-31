@@ -17,10 +17,9 @@ bash/
   global/         - Canonical upstream config. Don't edit locally -- changes here
                     should be upstreamed to the repo.
     config.sh     - LOADOUT_CFG_* preference defaults
-    bashrc        - PATH, colors, history, GRC, aliases, prompt, completions
+    bashrc        - PATH, colors, history, aliases, prompt, completions
     completions/  - Bundled bash completions (bat, rg, zoxide, hyperfine, watchexec)
     github.scop.bash-completion/  - Bundled bash-completion library (offline)
-    grc/          - Generic Colorizer binaries and configs
     wezterm/      - Vendored WezTerm shell integration (wezterm.sh + PROVENANCE);
                     sourced from user-writable space, never /etc. See
                     global/README.md "Prompt & shell integration".

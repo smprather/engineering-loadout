@@ -42,4 +42,17 @@ for layer in corp site team project user; do
     [ -d "$TMPHOME/.config/bash/$layer" ] || fail "reinstall deleted ~/.config/bash/$layer"
 done
 
+# An upgrade from a GRC-era tree must not leave GRC behind. global/ is sealed
+# read-only after an install, so plant the retired tree the way an old install
+# left it (sealed too) and require the reinstall to remove it.
+g="$TMPHOME/.config/bash/global"
+chmod u+w "$g"
+chmod -R u+w "$g/grc" 2>/dev/null || true
+rm -rf "$g/grc"
+mkdir -p "$g/grc/bin"
+printf '#!/bin/sh\nexit 0\n' >"$g/grc/bin/grc"
+chmod 0555 "$g/grc/bin/grc" "$g/grc/bin" "$g/grc" "$g"
+HOME="$TMPHOME" "$REPO/loadout" install -y env-bash --no-backup >/dev/null
+[ ! -e "$g/grc" ] || fail "reinstall left the retired GRC tree at ~/.config/bash/global/grc"
+
 echo "install-env-bash: OK"

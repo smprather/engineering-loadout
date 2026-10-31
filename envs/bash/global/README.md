@@ -58,17 +58,6 @@ alone -- tightening it would trust whatever a co-tenant already planted there
 through `envs/tcsh/global/helpers/private-dir`, nvim through
 `require("global.paths").private_dir`.
 
-## GRC (Generic Colorizer)
-
-The `grc/` directory contains a patched GRC binary with hardcoded config paths
-baked in so it works without system installation:
-
-- `grc/bin/grc` -- hardcoded: `conffilenames = [home + '/.config/bash/global/grc/etc/grc.conf']`
-- `grc/bin/grcat` -- hardcoded: `conffilepath += [home + '/.config/bash/global/grc/share/grc/']`
-
-If you rebuild GRC from source, patch these paths accordingly.
-Enabled via `LOADOUT_CFG_ENABLE_GRC=1` in `config.sh`.
-
 ## Alias-Safe Function Definitions
 
 Interactive bash expands aliases while parsing sourced files. If `aliases.sh`

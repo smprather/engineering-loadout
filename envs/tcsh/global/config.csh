@@ -60,8 +60,6 @@ if ( ! $?LOADOUT_CFG_PREFERRED_LS )        setenv LOADOUT_CFG_PREFERRED_LS  eza
 if ( ! $?LOADOUT_CFG_PREFERRED_VI )        setenv LOADOUT_CFG_PREFERRED_VI  nvim
 
 # ---- optional integrations ---------------------------------------------------
-# Generic Colorizer.
-if ( ! $?LOADOUT_CFG_ENABLE_GRC )          setenv LOADOUT_CFG_ENABLE_GRC 1
 # Fast nvim mode (read by the nvim config, not by the shell).
 if ( ! $?LOADOUT_CFG_ENABLE_FASTNVIM )     setenv LOADOUT_CFG_ENABLE_FASTNVIM 0
 # Source modules-init.csh at startup to select the loadout-bundled Environment

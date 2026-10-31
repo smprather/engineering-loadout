@@ -29,7 +29,6 @@ export LOADOUT_CFG_PROMPT_COLOR_FARM="$PROMPT_RED"
 export LOADOUT_CFG_ENABLE_FASTNVIM="0"
 export LOADOUT_CFG_ENABLE_FZF="0"
 export LOADOUT_CFG_ENABLE_ZOXIDE="0"
-export LOADOUT_CFG_ENABLE_GRC="1"
 # Fixed-socket ssh-agent (~/.ssh/loadout-agent.sock) started on demand if not
 # already running, instead of `eval "$(ssh-agent -s)"`'s random per-shell
 # socket that nothing outside that one shell can find. Does NOT auto-run

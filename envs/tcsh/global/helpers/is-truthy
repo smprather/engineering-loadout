@@ -6,7 +6,7 @@
 #
 # csh has no functions and no way to return a status from an alias, so callers
 # in csh use the command-status form:
-#     if ( { is_truthy "$LOADOUT_CFG_ENABLE_GRC" } ) then ... endif
+#     if ( { is_truthy "$LOADOUT_CFG_ENABLE_STARSHIP" } ) then ... endif
 
 case "$1" in
     true|1|yes|on|enabled)          exit 0 ;;

@@ -94,7 +94,6 @@ Files under `global/` (plus the top-level `tcshrc` entrypoint):
 | `aliases.csh` | the alias set |
 | `completions.csh` | hand-written `complete` rules |
 | `keybinds.csh` | `bindkey` bindings |
-| `grc-aliases.csh` | Generic Colorizer aliases, csh form |
 | `modules-init.csh` | Environment Modules selector |
 | `git-branch.sh`, `helpers/` | the sh helpers behind the aliases |
 
@@ -132,11 +131,6 @@ Behaviour:
   Aliases for optional tools are defined only when the tool is installed;
   site-specific EDA/LSF aliases are defined unconditionally because they are
   expected on the target farm.
-- **GRC** — `LOADOUT_CFG_ENABLE_GRC=1` defines the same alias set as bash. The
-  tcsh env ships no `grc` binary, so it uses `${TCSH_CONFIG_ROOT_DIR}/global/grc/bin`
-  if present, otherwise the copy vendored by env-bash at
-  `~/.config/bash/global/grc/bin` (the normal `@envs` install). Without either,
-  `grc-aliases.csh`'s `-X grc` guard stays silent.
 - **Extended keys** — `EXTENDED_KEYS_SUPPORTED` comes from the same
   `helpers/check-extended-keys` logic as bash: kitty/alacritty and an existing
   tmux server with `extended-keys on` are answered cheaply, otherwise a

@@ -340,37 +340,6 @@ if ( $?prompt ) then
         unset _loadout_mode
     endif
 
-    # ---- GRC (Generic Colorizer) ---------------------------------------------
-    # The vendored grc.sh is sh syntax and cannot be sourced by csh, so
-    # grc-aliases.csh defines the same alias set natively.
-    #
-    # env-tcsh ships no grc binary of its own (grc-aliases.csh guards on
-    # `-X grc`). Prefer a tcsh-owned copy if one ever lands, then the vendored
-    # copy under env-bash -- the standard @envs install has both envs, and
-    # without this path the default ENABLE_GRC=1 was dead on a direct login.
-    if ( $?LOADOUT_CFG_ENABLE_GRC ) then
-        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_GRC" } ) then
-            set _loadout_grc_bin = ""
-            if ( -d "${_loadout_global}/grc/bin" ) then
-                set _loadout_grc_bin = "${_loadout_global}/grc/bin"
-            else if ( -d "$HOME/.config/bash/global/grc/bin" ) then
-                set _loadout_grc_bin = "$HOME/.config/bash/global/grc/bin"
-            endif
-            if ( "$_loadout_grc_bin" != "" ) then
-                set _loadout_seen = 0
-                foreach _loadout_p ( $path:q )
-                    if ( "$_loadout_p" == "$_loadout_grc_bin" ) set _loadout_seen = 1
-                end
-                if ( $_loadout_seen == 0 ) set path = ( "$_loadout_grc_bin" $path:q )
-                unset _loadout_seen
-                unset _loadout_p
-            endif
-            unset _loadout_grc_bin
-            setenv GRC_ALIASES true
-            if ( -r "${_loadout_global}/grc-aliases.csh" ) source "${_loadout_global}/grc-aliases.csh"
-        endif
-    endif
-
     # ---- tmux-path-store ------------------------------------------------------
     # Per-tmux-window directory/file bookmarks. Upstream gained --csh/--tcsh in
     # v1.1.0; before that it emitted --bash only and this was a recorded gap.
