@@ -84,7 +84,7 @@ drive() {
             LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 \
             script -qec "bash -i -c '. $T/cmds.bash'" /dev/null </dev/null ;;
         zsh | tcsh) { cat "$T/cmds.$_sh"; echo exit; } | env -i HOME="$H" USER="$ME" LOGNAME="$ME" \
-            PATH="$T/sysbin" LO_TEST_PATH="$T/sysbin" TERM=xterm-256color \
+            ${LO_XDG:+"XDG_RUNTIME_DIR=$LO_XDG"} PATH="$T/sysbin" LO_TEST_PATH="$T/sysbin" TERM=xterm-256color \
             LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 script -qec "$_sh -i" /dev/null ;;
     esac 2>&1 | tr -d '\r' | sed 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g'
     cd "$REPO"
@@ -168,5 +168,15 @@ for sh in bash zsh tcsh; do
     expect "absent/$sh" no "$(drive "$sh")"
     mv "$LL.away" "$LL"
 done
+
+# tcsh SOURCES the adapter's output, so the file must live in a fresh private
+# directory -- never in $XDG_RUNTIME_DIR, which tcshrc leaves pointing at a
+# non-private dir when both of its private-dir checks fail. A read-only
+# runtime dir (ours, 0555, trusted as-is by tcshrc) makes the dependence
+# observable: colour must still work.
+mkdir -p "$T/ro-runtime"
+chmod 0555 "$T/ro-runtime"
+set_cfg
+expect "ro-runtime/tcsh" yes "$(LO_XDG="$T/ro-runtime" drive tcsh)"
 
 echo "env-linelight: OK"

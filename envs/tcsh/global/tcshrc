@@ -345,19 +345,24 @@ if ( $?prompt ) then
     # ping, ps, sensors, ss), as in bash/zsh. `linelight init tcsh` aliases only
     # profiled commands on path, skips names already aliased, and honors
     # LINELIGHT_INIT=0 and ~/.config/linelight/adapters.toml; `linelight run`
-    # colours only a terminal. The adapter is SOURCED from a private file:
-    # upstream's documented eval "`linelight init tcsh`" defines nothing,
-    # because csh joins a quoted substitution into one line and the adapter's
-    # if/endif blocks fall apart. XDG_RUNTIME_DIR is private by here (above).
+    # colours only a terminal. The adapter is SOURCED from a file: upstream's
+    # documented eval "`linelight init tcsh`" defines nothing, because csh
+    # joins a quoted substitution into one line and the adapter's if/endif
+    # blocks fall apart. The file is code this shell runs, so it goes into a
+    # fresh 0700 mktemp directory -- not $XDG_RUNTIME_DIR, which the block
+    # above leaves pointing at a non-private dir when both private-dir checks
+    # fail. Dot-hidden: `loadout clean --all` sweeps loadout-* in the temp root.
     # aliases.csh's df (--block-size=G) keeps the colour only when df was
     # wrapped, so every opt-out reaches it too.
-    if ( $?LOADOUT_CFG_ENABLE_LINELIGHT && $?XDG_RUNTIME_DIR ) then
+    if ( $?LOADOUT_CFG_ENABLE_LINELIGHT ) then
         if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ENABLE_LINELIGHT" } && -X linelight ) then
-            set _loadout_ll_init = "${XDG_RUNTIME_DIR}/loadout-linelight-init.$$.csh"
-            ( linelight init tcsh >! "$_loadout_ll_init" ) >& /dev/null
-            if ( -s "$_loadout_ll_init" ) source "$_loadout_ll_init"
-            \rm -f "$_loadout_ll_init"
-            unset _loadout_ll_init
+            set _loadout_ll_dir = "`mktemp -d -t .loadout-linelight.XXXXXX |& cat`"
+            if ( -d "$_loadout_ll_dir" && -o "$_loadout_ll_dir" ) then
+                ( linelight init tcsh >! "$_loadout_ll_dir/init.csh" ) >& /dev/null
+                if ( -s "$_loadout_ll_dir/init.csh" ) source "$_loadout_ll_dir/init.csh"
+                \rm -rf "$_loadout_ll_dir"
+            endif
+            unset _loadout_ll_dir
             set _loadout_ll_df = "`alias df`"
             if ( "$_loadout_ll_df" =~ *linelight* ) set _loadout_linelight_df
             unset _loadout_ll_df

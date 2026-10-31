@@ -134,7 +134,7 @@ Behaviour:
 - **Colour (linelight)** — the same commands and switches as bash
   (`LOADOUT_CFG_ENABLE_LINELIGHT`, `LINELIGHT_INIT=0`,
   `~/.config/linelight/adapters.toml`; see envs/bash/global/README.md). tcshrc
-  writes `linelight init tcsh` to a private file under `$XDG_RUNTIME_DIR` and
+  writes `linelight init tcsh` into a fresh private `mktemp -d` directory and
   sources it: upstream's `eval "`linelight init tcsh`"` defines nothing in
   csh. `alias df` goes through `linelight run` only when the adapter wrapped
   `df`. Bypass one call with `\ps`.

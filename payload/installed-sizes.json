@@ -1617,7 +1617,7 @@
     "envs/tcsh/global/helpers/zhead": 612,
     "envs/tcsh/global/keybinds.csh": 2341,
     "envs/tcsh/global/modules-init.csh": 3510,
-    "envs/tcsh/global/tcshrc": 34331,
+    "envs/tcsh/global/tcshrc": 34666,
     "envs/tcsh/tcshrc": 3833,
     "envs/tmux/scripts/shell-state-export.sh": 6617,
     "envs/tmux/scripts/tmux-3col-layout.sh": 5087,
