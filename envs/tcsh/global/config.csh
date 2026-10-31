@@ -60,6 +60,9 @@ if ( ! $?LOADOUT_CFG_PREFERRED_LS )        setenv LOADOUT_CFG_PREFERRED_LS  eza
 if ( ! $?LOADOUT_CFG_PREFERRED_VI )        setenv LOADOUT_CFG_PREFERRED_VI  nvim
 
 # ---- optional integrations ---------------------------------------------------
+# linelight colour for df/diff/dig/free/lsblk/ping/ps/sensors/ss (needs the
+# linelight package; per-command opt-out: ~/.config/linelight/adapters.toml).
+if ( ! $?LOADOUT_CFG_ENABLE_LINELIGHT )    setenv LOADOUT_CFG_ENABLE_LINELIGHT 1
 # Fast nvim mode (read by the nvim config, not by the shell).
 if ( ! $?LOADOUT_CFG_ENABLE_FASTNVIM )     setenv LOADOUT_CFG_ENABLE_FASTNVIM 0
 # Source modules-init.csh at startup to select the loadout-bundled Environment

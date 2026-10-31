@@ -58,6 +58,26 @@ alone -- tightening it would trust whatever a co-tenant already planted there
 through `envs/tcsh/global/helpers/private-dir`, nvim through
 `require("global.paths").private_dir`.
 
+## Colour (linelight)
+
+`linelight` (a loadout package, in `@core-cli`) colours the commands it has
+profiles for: `df diff dig free lsblk ping ps sensors ss`. bashrc/zshrc run
+`linelight init` at interactive startup, which defines a wrapper per command
+that calls `linelight run`. A wrapper colours only output going to a terminal;
+in a pipe or a redirect it runs the command directly, so `ps aux | grep x` and
+`df > f` are byte-identical to the bare command and the exit status is always
+the command's.
+
+- Off for everyone: `export LOADOUT_CFG_ENABLE_LINELIGHT=0` in a layer's
+  `config.sh`. Off for one shell session: `LINELIGHT_INIT=0`.
+- Off for some commands: `~/.config/linelight/adapters.toml` with
+  `schema = 1` and `disable = ["ps", "diff"]`.
+- Bypass once: `command ps ...` (or `\ps` in tcsh).
+
+Loadout's own `df` adds `--block-size=G` and keeps the colour only when the
+adapter wrapped `df`, so the opt-outs above apply to it too. GRC and
+`colourify` were retired on 2026-10-31.
+
 ## Alias-Safe Function Definitions
 
 Interactive bash expands aliases while parsing sourced files. If `aliases.sh`

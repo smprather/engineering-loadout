@@ -227,6 +227,22 @@ if ! command -v "${LOADOUT_CFG_PREFERRED_LS}" >/dev/null; then
 fi
 
 ### Optional integrations ###
+# linelight: colour for commands that print plain tables (df, diff, dig, free,
+# lsblk, ping, ps, sensors, ss). `linelight init` wraps only profiled commands
+# on PATH, skips names that are already defined, and honors LINELIGHT_INIT=0
+# and ~/.config/linelight/adapters.toml. The wrappers call `linelight run`,
+# which colours only a terminal and otherwise execs the command untouched.
+# This runs before aliases.sh, whose own df (--block-size=G) keeps the colour
+# only when the adapter wrapped df -- so every opt-out reaches it too.
+if is_truthy "${LOADOUT_CFG_ENABLE_LINELIGHT}" && command -v linelight >/dev/null 2>&1; then
+    _loadout_linelight_init=$(linelight init bash 2>/dev/null)
+    eval "$_loadout_linelight_init"
+    if [[ $_loadout_linelight_init == *'--profile df '* ]] && declare -F df >/dev/null; then
+        _loadout_linelight_df=1
+    fi
+    unset _loadout_linelight_init
+fi
+
 # Fixed-socket ssh-agent: export SSH_AUTH_SOCK at a stable path and start an
 # agent there if none is reachable yet. exit 2 from `ssh-add -l` means no
 # agent is listening at this socket (dead or never started); exit 0/1 (has

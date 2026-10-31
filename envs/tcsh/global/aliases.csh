@@ -234,7 +234,14 @@ if ( -X pigz ) then
     alias gzip  'pigz'
     alias gz    'pigz'
 endif
-alias df    'df --block-size=G'
+# Sizes in GB. When the linelight adapter (tcshrc, run before this file)
+# wrapped df, keep its colour: `linelight run` colours only a terminal.
+if ( $?_loadout_linelight_df ) then
+    alias df    'linelight run --profile df -- df --block-size=G'
+else
+    alias df    'df --block-size=G'
+endif
+unset _loadout_linelight_df
 if ( -X bat ) then
     # `cat` is deliberately NOT replaced -- see the note in the bash env's
     # aliases.sh: bat decorates its output, so anything piping or parsing

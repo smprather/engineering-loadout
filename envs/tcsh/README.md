@@ -131,6 +131,13 @@ Behaviour:
   Aliases for optional tools are defined only when the tool is installed;
   site-specific EDA/LSF aliases are defined unconditionally because they are
   expected on the target farm.
+- **Colour (linelight)** — the same commands and switches as bash
+  (`LOADOUT_CFG_ENABLE_LINELIGHT`, `LINELIGHT_INIT=0`,
+  `~/.config/linelight/adapters.toml`; see envs/bash/global/README.md). tcshrc
+  writes `linelight init tcsh` to a private file under `$XDG_RUNTIME_DIR` and
+  sources it: upstream's `eval "`linelight init tcsh`"` defines nothing in
+  csh. `alias df` goes through `linelight run` only when the adapter wrapped
+  `df`. Bypass one call with `\ps`.
 - **Extended keys** — `EXTENDED_KEYS_SUPPORTED` comes from the same
   `helpers/check-extended-keys` logic as bash: kitty/alacritty and an existing
   tmux server with `extended-keys on` are answered cheaply, otherwise a

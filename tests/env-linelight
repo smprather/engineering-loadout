@@ -1,0 +1,172 @@
+#!/bin/sh
+# env-linelight: linelight colours the commands it has profiles for (df, diff,
+# dig, free, lsblk, ping, ps, sensors, ss) in bash, zsh and tcsh.
+#
+# Each shell runs `linelight init <shell>` at interactive startup when
+# LOADOUT_CFG_ENABLE_LINELIGHT is truthy and linelight is on PATH. The wrappers
+# call `linelight run`, which colours only a terminal and otherwise execs the
+# command directly. Loadout's own `df` (it adds --block-size=G) is the one name
+# init cannot wrap, so it calls `linelight run` itself -- only when the adapter
+# chose to wrap df, which carries every opt-out over to it.
+#
+# tcsh sources the adapter from a private file: upstream's documented
+# eval "`linelight init tcsh`" defines nothing (csh joins the substitution into
+# one line), so only a real tcsh login proves the wrappers exist.
+#
+# Uses the REAL payload linelight (installed into the temp HOME's default
+# root), real df/ps/diff, and a real PTY via script(1). Each command's output is
+# bracketed by marker lines so prompt escapes never count as colour; OSC
+# sequences (zsh's OSC 133 marks land at the start of a marker line) are
+# stripped, SGR is kept.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-linelight.XXXXXX")"
+trap 'chmod -R u+w "$T" 2>/dev/null; rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+ME=$(id -un)
+H="$T/home"
+mkdir -p "$H"
+
+env -i HOME="$H" PATH=/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TMPDIR="${TMPDIR:-/tmp}" \
+    "$REPO/loadout" install -y --no-backup @envs env-zsh linelight >"$T/install.log" 2>&1 \
+    || { tail -30 "$T/install.log" >&2; fail "install of @envs env-zsh linelight failed"; }
+LL="$H/.local/share/loadout/bin/linelight"
+[ -x "$LL" ] || fail "linelight was not installed at $LL"
+
+# /usr/bin minus any host linelight (on usrmerge hosts /bin is /usr/bin), so
+# the only linelight is the payload copy the shells append to PATH.
+mkdir -p "$T/sysbin"
+for f in /usr/bin/*; do
+    case ${f##*/} in linelight) continue ;; esac
+    ln -s "$f" "$T/sysbin/${f##*/}"
+done
+
+mkdir -p "$H/.config/bash/user" "$H/.config/tcsh/user" "$T/cwd"
+printf 'a\n' >"$T/cwd/a"
+printf 'b\n' >"$T/cwd/b"
+
+# User layer: private scratch root, tcsh re-pins PATH (a host /etc/csh.cshrc
+# runs before ~/.tcshrc and may append /usr/bin), and an optional switch value.
+set_cfg() {
+    printf 'export LOADOUT_CFG_SHM_DIR="%s"\n' "$T/shm" >"$H/.config/bash/user/config.sh"
+    printf 'setenv LOADOUT_CFG_SHM_DIR "%s"\nsetenv PATH "$LO_TEST_PATH"\n' "$T/shm" >"$H/.config/tcsh/user/config.csh"
+    if [ $# -gt 0 ]; then
+        printf 'export LOADOUT_CFG_ENABLE_LINELIGHT="%s"\n' "$1" >>"$H/.config/bash/user/config.sh"
+        printf 'setenv LOADOUT_CFG_ENABLE_LINELIGHT "%s"\n' "$1" >>"$H/.config/tcsh/user/config.csh"
+    fi
+    rm -rf "$T/shm"
+}
+
+# The same steps in each shell's syntax.
+cmds() {
+    case $1 in
+        tcsh) st='$status'; ty='alias df; alias ps; alias diff' ;;
+        zsh) st='$?'; ty='whence -f df ps diff' ;;
+        bash) st='$?'; ty='type df ps diff' ;;
+    esac
+    printf '%s\n' \
+        'echo B-DF; df /; echo E-DF' \
+        'echo B-PS; ps -o user,pid,args; echo E-PS' \
+        'echo B-PIPE; df / | cat; ps -o user,pid,args | cat; echo E-PIPE' \
+        "diff a b; echo rc=$st" \
+        "echo B-TYPE; $ty; echo E-TYPE"
+}
+
+drive() {
+    _sh=$1
+    cmds "$_sh" >"$T/cmds.$_sh"
+    cd "$T/cwd"
+    case $_sh in
+        bash) env -i HOME="$H" USER="$ME" LOGNAME="$ME" PATH="$T/sysbin" TERM=xterm-256color \
+            LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 \
+            script -qec "bash -i -c '. $T/cmds.bash'" /dev/null </dev/null ;;
+        zsh | tcsh) { cat "$T/cmds.$_sh"; echo exit; } | env -i HOME="$H" USER="$ME" LOGNAME="$ME" \
+            PATH="$T/sysbin" LO_TEST_PATH="$T/sysbin" TERM=xterm-256color \
+            LANG="${LANG:-C.UTF-8}" LOADOUT_ONLINE=0 script -qec "$_sh -i" /dev/null ;;
+    esac 2>&1 | tr -d '\r' | sed 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g'
+    cd "$REPO"
+}
+
+block() { printf '%s\n' "$2" | sed -n "/^B-$1\$/,/^E-$1\$/p"; }
+has_sgr() { printf '%s\n' "$1" | grep -q "$(printf '\033')\["; }
+
+assert_quiet() {
+    for _pat in 'command not found' 'Command not found' 'syntax error' 'not a valid identifier' \
+                'Faulty alias' 'Undefined variable' 'Unmatched' 'Badly placed' 'parse error' \
+                'bad substitution' 'linelight:'; do
+        case $2 in
+            *"$_pat"*) fail "$1: shell printed '$_pat':
+$2" ;;
+        esac
+    done
+}
+
+# colour=yes: df and ps coloured on the terminal, both wrapped. colour=no: both
+# plain and neither wrapped. Always: df keeps --block-size=G, pipes carry no
+# colour, diff's exit status survives.
+expect() {
+    _label=$1
+    _want=$2
+    _out=$3
+    assert_quiet "$_label" "$_out"
+    _df=$(block DF "$_out")
+    _ps=$(block PS "$_out")
+    _type=$(block TYPE "$_out")
+    [ -n "$_df" ] && [ -n "$_ps" ] && [ -n "$_type" ] || fail "$_label: a marker block is missing:
+$_out"
+    printf '%s\n' "$_df" | sed 's/\x1b\[[0-9;]*m//g' | grep -q '1G-blocks' || fail "$_label: df lost --block-size=G:
+$_df"
+    ! has_sgr "$(block PIPE "$_out")" || fail "$_label: colour leaked into a pipe:
+$(block PIPE "$_out" | cat -v)"
+    printf '%s\n' "$_out" | grep -q '^rc=1$' || fail "$_label: diff's exit status 1 was lost:
+$_out"
+    case $_want in
+        yes)
+            has_sgr "$_df" || fail "$_label: df was not coloured:
+$_df"
+            has_sgr "$_ps" || fail "$_label: ps was not coloured:
+$_ps"
+            [ "$(printf '%s\n' "$_type" | grep -c 'linelight run')" -ge 3 ] \
+                || fail "$_label: df, ps and diff are not all linelight wrappers:
+$_type"
+            ;;
+        df-ps-off)
+            ! has_sgr "$_df" || fail "$_label: df coloured despite the opt-out"
+            ! has_sgr "$_ps" || fail "$_label: ps coloured despite the opt-out"
+            [ "$(printf '%s\n' "$_type" | grep -c 'linelight run')" -eq 1 ] \
+                || fail "$_label: want only diff wrapped:
+$_type"
+            ;;
+        no)
+            ! has_sgr "$_df" || fail "$_label: df coloured:
+$(printf '%s\n' "$_df" | cat -v)"
+            ! has_sgr "$_ps" || fail "$_label: ps coloured"
+            case $_type in *'linelight run'*) fail "$_label: a linelight wrapper is defined:
+$_type" ;; esac
+            ;;
+    esac
+    echo "  PASS  $_label"
+}
+
+for sh in bash zsh tcsh; do
+    set_cfg
+    expect "tty/$sh" yes "$(drive "$sh")"
+
+    mkdir -p "$H/.config/linelight"
+    printf 'schema = 1\ndisable = ["df", "ps"]\n' >"$H/.config/linelight/adapters.toml"
+    expect "optout/$sh" df-ps-off "$(drive "$sh")"
+    rm -f "$H/.config/linelight/adapters.toml"
+
+    set_cfg 0
+    expect "off/$sh" no "$(drive "$sh")"
+
+    set_cfg
+    mv "$LL" "$LL.away"
+    expect "absent/$sh" no "$(drive "$sh")"
+    mv "$LL.away" "$LL"
+done
+
+echo "env-linelight: OK"

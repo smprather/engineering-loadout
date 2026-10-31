@@ -257,9 +257,19 @@ dum() {
     fi
 }
 unalias df 2>/dev/null || true
-df() {
-    command df --block-size=G "$@"
-}
+# Sizes in GB. When the linelight adapter (bashrc/zshrc, run before this file)
+# wrapped df, keep its colour: `linelight run` colours only a terminal and
+# otherwise execs df untouched.
+if [[ ${_loadout_linelight_df:-0} == 1 ]]; then
+    df() {
+        command linelight run --profile df -- df --block-size=G "$@"
+    }
+else
+    df() {
+        command df --block-size=G "$@"
+    }
+fi
+unset _loadout_linelight_df
 pl() {
     if [[ $# -eq 0 ]]; then
         echo "$PATH" | tr ":" "\n" | nl
