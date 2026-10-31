@@ -13,6 +13,82 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-10-31: GRC retired; linelight 2026.10.31 colours the shells
+
+The user asked to remove GRC from the shells, add their own project
+[smprather/linelight](https://github.com/smprather/linelight), and integrate it.
+Plan: `docs/superpowers/plans/2026-10-30-linelight-replaces-grc.md` (untracked,
+like the other plan files). Executed inline on main, four commits:
+
+1. `3d8a1bc` **package** -- `linelight` 2026.10.31 (`kind: bin`, `@core-cli`),
+   imported from the upstream release asset with `build/update-prebuilt` inside
+   `build/build-shell`. No EL8 source build: upstream's release workflow now
+   links against glibc 2.28 in almalinux:8, checks NEEDED and smoke-tests there
+   (linelight#6). Asset sha256 `2a8b876d...c8eb1` (full hash in
+   build/ADDING_BINARIES.md). **Upstream moved tag v2026.10.31** (3bcc76d ->
+   71e5e7b) and replaced the asset in place when fixing #6, so the version
+   string alone does not identify the bytes -- the hash does. New generic
+   guards found on the way: `update-prebuilt` `SHA256_SIDECARS` (checks an
+   asset against its published `.sha256` before extracting; the tool verified
+   nothing before) and registry-integrity "every bin package's bins have a
+   payload file" (a registry entry whose file never landed passed every gate).
+2. `4933581` **GRC removed** -- the vendored `envs/bash/global/grc/` tree,
+   tcsh's `grc-aliases.csh`, the rc blocks, `LOADOUT_CFG_ENABLE_GRC`,
+   `colourify`, and the grc exclusions in ruff/gitleaks/docs-sync. A reinstall
+   prunes the sealed GRC files an old install left (install-env-bash/-tcsh).
+3. `dee66b0` **shells** -- bash/zsh/tcsh run `linelight init <shell>` at
+   interactive startup behind `LOADOUT_CFG_ENABLE_LINELIGHT` (default 1).
+   Wrapped: `df diff dig free lsblk ping ps sensors ss` (those on PATH; `ls`
+   off, `log` never). Opt-outs: `LINELIGHT_INIT=0`,
+   `~/.config/linelight/adapters.toml` (`disable = [...]`). Loadout's own `df`
+   (--block-size=G) goes through `linelight run` only when the adapter wrapped
+   df, so every opt-out reaches it. Gate: `tests/env-linelight` (T2).
+4. `aa48027` **tcsh review fix** -- the adapter output is code the shell
+   SOURCES; the first version wrote it to a predictable name in
+   `$XDG_RUNTIME_DIR`, which tcshrc leaves pointing at a non-private dir when
+   both private-dir checks fail (and a read-only runtime dir silently disabled
+   colour). It now goes into a fresh 0700 `mktemp -d -t .loadout-linelight.XXXXXX`
+   dir. RED first: `env-linelight` `ro-runtime/tcsh`.
+
+**Coverage narrowed on purpose.** GRC wrapped ~45 commands; linelight profiles
+only commands without adequate native colour, and upstream closed linelight#5
+as "no bulk import of grc's list". `mount`, `ip`, `make`, `gcc`, `netstat`, ...
+are no longer coloured. Anyone calling `colourify` from their own layer must
+drop it.
+
+**Upstream tcsh bug (not filed -- needs the user's OK).** linelight's
+documented `eval "`linelight init tcsh`"` defines nothing: csh joins a quoted
+command substitution into one line, so the adapter's `if ... then ... endif`
+blocks fall apart (`Badly placed (.` interactively, silent under `tcsh -c`).
+Upstream CI only tests `init tcsh > file; source file`. Loadout's tcshrc
+sources the output from a file in a fresh private mktemp dir, which keeps
+working whether or not upstream fixes the eval form; tests/env-linelight's
+negative control (tcshrc switched to eval) fails `tty/tcsh`.
+
+**Upstream issues filed this session** (all closed by the user, 2026-10-31):
+linelight#1 `run`, #2 `run --stderr`, #3 `run --pty`, #4 `init` adapters,
+#5 profile coverage (closed: no bulk import), #6 glibc-2.28 release asset.
+
+**Verification:** full T1+T2 `All tests passed.` (1175 s) on
+`dee66b0`; after the fix T1 (168 s) and every tcsh/env T2 test again; Tier 3
+`run-all --container` `All tests passed.` (1509 s) on `aa48027` -- the
+almalinux8.10 `--full` smoke ran the linelight probe (`OK (colour)`). Native
+`tests/prebuilt-binaries`: 337 binaries OK (221 s). `build/verify-binaries
+linelight` PASS (payload == upstream asset after strip+patchelf). Manual, in a
+private tmux server, bash and tcsh: `ping` streams line by line and Ctrl-C
+keeps the coloured summary. EL8 tcsh 6.20 runs the tcsh block (df wrapped, no
+leftover temp dir). The user confirmed coloured `df` in their own shell.
+Final review: self-review only (agents are spawned only on the user's
+request); its one finding is commit 4.
+
+**Open:** 17 commits are ahead of origin/main (push only on the user's word);
+after the push, reinstall the deployed shared tree from main (memory
+`reference-deployed-shared-tree`) BEFORE users pick up the new env config --
+the envs no longer carry GRC, and colour now comes from the shared tree's
+linelight. The tcsh upstream prompt-issue draft
+(`docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`) is still
+unposted.
+
 ## 2026-10-30 (5): remaining tcsh audit gaps closed
 
 Every item in entry (3)'s "Still to do" list except 16 is now closed. Test-first
