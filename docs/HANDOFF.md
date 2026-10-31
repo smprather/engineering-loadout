@@ -96,9 +96,10 @@ sd0/cd0/`cd -` in all three shells, and a final full `run-all --container`
 deployed shared tree (memory `reference-deployed-shared-tree`) is on hosts
 this machine cannot reach: the user reinstalls it from main, BEFORE users pick
 up the new env config -- the envs no longer carry GRC, and colour now comes
-from the shared tree's linelight. The tcsh upstream prompt-issue draft
-(`docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`) is still
-unposted (it targets tcsh-org, not the user's repo).
+from the shared tree's linelight. The tcsh upstream prompt issue was posted
+on the user's OK (2026-10-31): tcsh-org/tcsh#128, linking the user's own
+2019 report #15 (closed 2021 for no response). The workaround in
+`helpers/prompt-markers` stays either way.
 
 ## 2026-10-30 (5): remaining tcsh audit gaps closed
 
@@ -249,9 +250,9 @@ users' login shell is the system one):
    `loadout-smoke:almalinux8.10` container.
 4. Draft (do NOT post without the user's OK) an issue for tcsh-org/tcsh: prompt
    `\n` is emitted as padding + autowrap, which breaks under reflowing
-   terminals; minimal repro above. DRAFTED, not posted:
-   `docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`
-   (untracked); waiting on the user's OK.
+   terminals; minimal repro above. Posted 2026-10-31 on the user's OK as
+   tcsh-org/tcsh#128 (draft:
+   `docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`, untracked).
 
 **Result:** steps 1-3 committed (`02fb075`, `6fcace1`, `57a1844`); full T1+T2
 on the final tree passed (81 tests, 1164 s, both new tests included). Nothing
