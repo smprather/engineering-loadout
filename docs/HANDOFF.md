@@ -56,7 +56,7 @@ as "no bulk import of grc's list". `mount`, `ip`, `make`, `gcc`, `netstat`, ...
 are no longer coloured. Anyone calling `colourify` from their own layer must
 drop it.
 
-**Upstream tcsh bug (not filed -- needs the user's OK).** linelight's
+**Upstream tcsh bug (filed as linelight#7, 2026-10-31).** linelight's
 documented `eval "`linelight init tcsh`"` defines nothing: csh joins a quoted
 command substitution into one line, so the adapter's `if ... then ... endif`
 blocks fall apart (`Badly placed (.` interactively, silent under `tcsh -c`).
@@ -81,13 +81,24 @@ leftover temp dir). The user confirmed coloured `df` in their own shell.
 Final review: self-review only (agents are spawned only on the user's
 request); its one finding is commit 4.
 
-**Open:** 17 commits are ahead of origin/main (push only on the user's word);
-after the push, reinstall the deployed shared tree from main (memory
-`reference-deployed-shared-tree`) BEFORE users pick up the new env config --
-the envs no longer carry GRC, and colour now comes from the shared tree's
-linelight. The tcsh upstream prompt-issue draft
+**Then, same day:** `2a5909f` tmux-path-store 2026.8.26 -> 2026.10.4 (same
+`--bash/--zsh/--csh` interface and shortcut set; upstream dropped the `v` from
+its tags; the build image has no `uv`, so the payload's own is used -- command
+in build/ADDING_BINARIES.md). Its new bash/zsh hooks run `cd -- "$dir"`, which
+exposed `2624e36`: loadout's `cd()` took `--` as the target and offered to
+create a directory named `--`, so cd0..cd9 silently went elsewhere (the ERR
+trap's `cd -- "$last_cmd"` had the same bug). Fixed in bash and zsh; tcsh was
+unaffected. Gates: env-bash-runtime / install-env-zsh `cd -- DIR`, live tmux
+sd0/cd0/`cd -` in all three shells, and a final full `run-all --container`
+`All tests passed.` (1757 s; EL8 smoke shows tmux-path-store 2026.10.4).
+
+**Open:** pushed to origin/main on the user's go-ahead (2026-10-31). The
+deployed shared tree (memory `reference-deployed-shared-tree`) is on hosts
+this machine cannot reach: the user reinstalls it from main, BEFORE users pick
+up the new env config -- the envs no longer carry GRC, and colour now comes
+from the shared tree's linelight. The tcsh upstream prompt-issue draft
 (`docs/superpowers/plans/2026-10-30-tcsh-upstream-issue-draft.md`) is still
-unposted.
+unposted (it targets tcsh-org, not the user's repo).
 
 ## 2026-10-30 (5): remaining tcsh audit gaps closed
 
