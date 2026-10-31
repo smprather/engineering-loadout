@@ -2560,7 +2560,6 @@ sha256  90f7f7037b73387851f98ad09ad682b91486d4b4d17f8c46af30eb40669d1826  payloa
 sha256  90fb9e3072652badf078d4d4f29f42ae395a0cac771c18caf1ca32f4d81b6476  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/just/locals.scm
 sha256  90fb9e3072652badf078d4d4f29f42ae395a0cac771c18caf1ca32f4d81b6476  payload/treesitter/vendor/nvim-treesitter/runtime/queries/just/locals.scm
 sha256  91139c5aad173aa9c75ef07bb09fb7fff4cdcf3ad85c4e7c6ecc1d7afb3d088a  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/glsl.lua
-sha256  9128c7ac8d6f90c5a34e93fa95738c80791ff564d0d71cb9992d198292895cdb  payload/installed-sizes.json
 sha256  9132f9effe7550d0051fbbc71c9dedf4fe6734aa5de0c631151393d016db1067  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/fennel.lua
 sha256  9148b692b561bc9a3126e6b552a48fbfe613417eb016192931d94e0878fa9ac2  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/snakemake.so.bz2
 sha256  915c52276bd63282ccaf4e93cfc384b2b6f6554916cddfd335ff5b1fb2739307  payload/el8.x86_64.glibc2p28/bin/fio.bz2
@@ -3694,6 +3693,7 @@ sha256  d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c  payloa
 sha256  d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c  payload/python-loaded/wheels/packaging-26.3-py3-none-any.whl
 sha256  d7205aa6589f1ad1306c6994ff2e1ab5efabacf938f9ffd7682fb225c197b06a  payload/el8.x86_64.glibc2p28/wheels/aiohttp-3.14.4-cp315-cp315-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
 sha256  d72975d2689fafe8dd12d1aea4eace0d0aad7bbacb89d35ddcefedb274073a0a  payload/fonts/RobotoMono.zip.part-000
+sha256  d741fe6153401ab2ba7af9c3525c8cb23d827603cff903c1fb11140a252f3773  payload/installed-sizes.json
 sha256  d749bb5adc3cd1128a276c828994df28f572a87150c48c7ef395449e3b8cc00f  payload/el8.x86_64.glibc2p28/bin/just.bz2
 sha256  d77d343c158f3066cdab316386ca6917e013b392cdcc6ffbe0485913d8519fe3  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/cpp/static-namespace-functions.cpp
 sha256  d79b4752aec5a82204362ed63eaf10697ac4c2d6c48c9490df0bd192c4a1ac8d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/bash.lua

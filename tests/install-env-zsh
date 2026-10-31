@@ -192,4 +192,13 @@ echo "$out" | grep -q 'C=1' || fail "sp2 did not export the host switch: [$out]"
 out=$(zsh_i 'sp2; sp1; print -r -- "H=$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
 echo "$out" | grep -q 'H=0' || fail "sp1 did not clear the host switch: [$out]"
 
+# --- `cd -- DIR` must land in DIR (`--` ends the options; a dash-led name
+# --- after it is a path). cd() took `--` as the target and offered to create
+# --- it, so tmux-path-store's cd0..cd9 hooks (`cd -- "$dir"`) went elsewhere.
+mkdir -p "$TMPHOME/cdtest/-dash"
+out=$(zsh_i "cd -- '$TMPHOME/cdtest'; print -r -- \"A=\$PWD\"; cd -- -dash; print -r -- \"B=\$PWD\"")
+case $out in *'does not exist'*) fail "cd -- DIR offered to create a directory: [$out]" ;; esac
+echo "$out" | grep -q "A=$TMPHOME/cdtest\$" || fail "cd -- DIR did not land in DIR: [$out]"
+echo "$out" | grep -q "B=$TMPHOME/cdtest/-dash\$" || fail "cd -- -dash did not treat -dash as a path: [$out]"
+
 echo "install-env-zsh: OK"

@@ -36,8 +36,10 @@ mkdir -p "$T/.config/bash/user"
 echo 'export LOADOUT_CFG_PREFERRED_LS=ls' >"$T/.config/bash/user/config.sh"
 # shellcheck disable=SC2016  # expanded by the interactive bash, not here
 echo '. "$BASH_CONFIG_ROOT_DIR/bashrc"' >"$T/.bashrc"
+# Bounded: a prompt that reads the terminal (cd()'s "Create it?") would
+# otherwise hang the suite instead of failing an assertion.
 interactive() {
-    clean_bash script -qec "bash -i -c '$1'" /dev/null </dev/null | tr -d '\r'
+    clean_bash timeout 60 script -qec "bash -i -c '$1'" /dev/null </dev/null | tr -d '\r'
 }
 
 ls_def=$(interactive 'declare -f ls')
@@ -80,5 +82,16 @@ printf '%s\n' "$out" | grep -q '^C=1$' || fail "sp2 did not export the host swit
 out=$(interactive 'sp2; sp1; printf "H=%s\n" "$LOADOUT_CFG_PROMPT_INCLUDE_HOST"')
 printf '%s\n' "$out" | grep -q '^H=0$' || fail "sp1 did not clear the host switch: [$out]"
 echo "  PASS  sp1/sp2 export the host prompt switch"
+
+# 6. `cd -- DIR` must land in DIR: `--` ends the options, so what follows is a
+#    path even when it starts with a dash. cd() took `--` itself as the target
+#    and offered to create a directory named `--`; its callers that pass it --
+#    the ERR trap above, tmux-path-store's cd0..cd9 hooks -- went elsewhere.
+mkdir -p "$T/cdtest/-dash"
+out=$(interactive "cd -- '$T/cdtest' >/dev/null; echo \"A=\$PWD\"; cd -- -dash >/dev/null; echo \"B=\$PWD\"" </dev/null)
+case $out in *'does not exist'*) fail "cd -- DIR offered to create a directory: [$out]" ;; esac
+printf '%s\n' "$out" | grep -q "^A=$T/cdtest\$" || fail "cd -- DIR did not land in DIR: [$out]"
+printf '%s\n' "$out" | grep -q "^B=$T/cdtest/-dash\$" || fail "cd -- -dash did not treat -dash as a path: [$out]"
+echo "  PASS  cd -- DIR lands in DIR (dash-led names too)"
 
 echo "env-bash-runtime: OK"

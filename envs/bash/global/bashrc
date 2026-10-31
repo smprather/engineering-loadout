@@ -539,6 +539,11 @@ cd() {
     if [[ "$1" == "cd" ]]; then
         shift
     fi
+    # `--` ends the options: what follows is a path even when it starts with a
+    # dash. tmux-path-store's cd0..cd9 hooks and the ERR trap below pass it.
+    if [[ "$1" == "--" ]]; then
+        shift
+    fi
 
     local target="$1"
     local response=""
@@ -568,7 +573,12 @@ cd() {
         fi
     fi
 
-    builtin cd "$target" && human_readable=0 ls
+    # A dash-led name is a path, not an option; a bare `-` stays OLDPWD.
+    if [[ $target == -?* ]]; then
+        builtin cd -- "$target" && human_readable=0 ls
+    else
+        builtin cd "$target" && human_readable=0 ls
+    fi
     # z "$target" && human_readable=0 ls
 }
 complete -o filenames -d cd

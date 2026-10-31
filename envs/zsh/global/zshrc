@@ -451,6 +451,11 @@ cd() {
     if [[ "$1" == "cd" ]]; then
         shift
     fi
+    # `--` ends the options: what follows is a path even when it starts with a
+    # dash. tmux-path-store's cd0..cd9 hooks pass it.
+    if [[ "$1" == "--" ]]; then
+        shift
+    fi
 
     local target="$1"
     local response=""
@@ -480,7 +485,12 @@ cd() {
         fi
     fi
 
-    builtin cd "$target"
+    # A dash-led name is a path, not an option; a bare `-` stays OLDPWD.
+    if [[ $target == -?* ]]; then
+        builtin cd -- "$target"
+    else
+        builtin cd "$target"
+    fi
 }
 
 # Every directory change lists. zsh's chpwd hook fires for cd, pushd, popd and
