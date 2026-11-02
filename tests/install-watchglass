@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Offline end-to-end smoke for watchglass: the bundled uv_tool must install
+# from the payload wheelhouse with no network, its launcher must report the
+# registry's version, its full runtime closure must import, the bundled
+# reference docs must be present, and a generated watch must validate and
+# poll --dry-run. It deliberately never runs `watchglass install`, which would
+# register and start a systemd user service.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-watchglass-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-watchglass-dest.XXXXXX")
+local_prefix="$dest_dir"
+
+cleanup() {
+    # The installed tree is sealed read-only, so make it writable first or the
+    # cleanup leaks ~1 GB into $TMPDIR.
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "watchglass smoke failed: $*" >&2
+    exit 1
+}
+
+echo "Installing watchglass into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" --verbose install -y watchglass --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -60 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+# The install must have used the bundled wheelhouse, not the index.
+grep -Fq -- "--no-index" "$test_home/install.log" || fail "uv tool install did not use --no-index"
+grep -Fq -- "--find-links" "$test_home/install.log" || fail "uv tool install did not use --find-links"
+echo "  OK: installed offline from the payload wheelhouse"
+
+probe_env=(env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
+launcher="$local_prefix/bin/watchglass"
+tool_python="$local_prefix/share/uv/tools/watchglass/bin/python"
+
+[[ -x $launcher ]] || fail "watchglass launcher not installed"
+[[ -x $tool_python ]] || fail "watchglass tool venv missing"
+
+# The expected version comes from the registry, not a literal that goes stale
+# on every bump: the point is that the installed artifact matches the claim.
+expected_version=$("$tool_python" -c '
+import json, sys
+print(str(json.load(open(sys.argv[1]))["packages"]["watchglass"]["version"]))
+' "$repo_dir/payload/packages.json") || fail "could not read watchglass version from packages.json"
+[[ -n $expected_version ]] || fail "empty watchglass version in packages.json"
+
+version_out=$("${probe_env[@]}" "$launcher" --version) || fail "watchglass --version"
+[[ $version_out == *"$expected_version"* ]] || fail "unexpected CLI version: $version_out (want $expected_version)"
+echo "  OK: watchglass --version reports $expected_version"
+
+# The closure is the whole reason this is a bundled wheel: prove textual,
+# watchdog and textual's markdown plugins actually import in the tool venv.
+"${probe_env[@]}" "$tool_python" -c '
+import importlib.metadata as m
+for dist in ("watchglass", "textual", "watchdog", "linkify-it-py", "mdit-py-plugins"):
+    print(dist, m.version(dist))
+' > "$test_home/closure.log" 2>&1 || {
+    cat "$test_home/closure.log" >&2
+    fail "runtime dependency closure does not import"
+}
+grep -q '^textual ' "$test_home/closure.log" || fail "textual missing"
+grep -q '^watchdog ' "$test_home/closure.log" || fail "watchdog missing"
+grep -q '^linkify-it-py ' "$test_home/closure.log" || fail "linkify-it-py missing"
+grep -q '^mdit-py-plugins ' "$test_home/closure.log" || fail "mdit-py-plugins missing"
+echo "  OK: textual + watchdog + markdown plugins import"
+
+docs_out=$("${probe_env[@]}" "$launcher" docs agent) || fail "watchglass docs agent"
+grep -q '# Writing a watchglass watch' <<< "$docs_out" || fail "bundled reference docs missing"
+echo "  OK: bundled reference docs are present"
+
+"${probe_env[@]}" "$launcher" init > "$test_home/init.log" 2>&1 || {
+    cat "$test_home/init.log" >&2
+    fail "watchglass init"
+}
+config_home="$test_home/.config/watchglass"
+[[ -f $config_home/config.toml ]] || fail "init did not write config.toml"
+[[ -d $config_home/watches ]] || fail "init did not create the watches directory"
+[[ -f $config_home/watches/AGENTS.md ]] || fail "init did not write the watches AGENTS.md"
+
+"${probe_env[@]}" "$launcher" new hello > "$test_home/new.log" 2>&1 || {
+    cat "$test_home/new.log" >&2
+    fail "watchglass new hello"
+}
+[[ -f $config_home/watches/hello/config.toml ]] || fail "new did not write config.toml"
+[[ -f $config_home/watches/hello/watch.py ]] || fail "new did not write watch.py"
+
+validate_out=$("${probe_env[@]}" "$launcher" validate hello) || fail "watchglass validate hello"
+[[ $validate_out == *hello* ]] || fail "validate did not mention the watch: $validate_out"
+
+# The generated check returns False; --dry-run must still load the watch and
+# exit 0 without running actions.
+"${probe_env[@]}" "$launcher" poll hello --dry-run > "$test_home/poll.log" 2>&1 || {
+    cat "$test_home/poll.log" >&2
+    fail "watchglass poll hello --dry-run"
+}
+echo "  OK: init/new/validate/poll --dry-run"
+
+# The farm-versions entry is part of the package surface; a stale regex or a
+# registry/TOOLS mismatch must fail here, not in a later release sweep.
+farm_json=$("${probe_env[@]}" "$repo_dir/build/farm-versions" --bin-dir "$local_prefix/bin" --format json) || \
+    fail "farm-versions --format json"
+printf '%s' "$farm_json" | "${probe_env[@]}" WATCHGLASS_EXPECTED="$expected_version" "$tool_python" -c '
+import json
+import os
+import sys
+
+expected = os.environ["WATCHGLASS_EXPECTED"]
+row = next(item for item in json.load(sys.stdin) if item["name"] == "watchglass")
+assert row["status"] == "ok", row
+assert row["version"] == expected, row
+' || fail "farm-versions did not report watchglass $expected_version"
+echo "  OK: farm-versions reports $expected_version"
+
+# Installing the package must not opt the user into the service.
+if [[ -e $test_home/.config/systemd/user/watchglass.service ]]; then
+    fail "package install registered a watchglass systemd user service"
+fi
+echo "  OK: no service registered by the package install"
+
+echo "watchglass smoke passed"

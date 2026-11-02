@@ -3587,6 +3587,93 @@ python3.15 build/gen-readme-table`, then `./loadout install tmux-path-store
 --dest-dir <d>` and check `<d>/bin/tmux-path-store --version` reports the
 tagged version and that no `tmux_path_store` launcher remains.
 
+## watchglass 2026.11.1 -- poll conditions and run actions (first-party python-tool)
+
+First-party (`github.com/smprather/watchglass`). Runs *watches*: a directory with
+a `config.toml`, a check and actions; polls each on its own interval, runs
+actions on rise/fall/while-true/while-false, retries with backoff, parks failing
+watches offline, and writes every result as JSON lines. Observers watch local
+directories, commands or remote directories; built-in recipes move files with
+verified scp/sftp transfers and `recipe = "mirror"` syncs a tree in place.
+`watchglass tui` is a read-only live view. MIT.
+
+**Current: 2026.11.1** (2026-11-02; first bundled version). Tag `v2026.11.1`
+exists on GitHub and the same version is published on PyPI. The GitHub
+*Releases* object lags the tag for this version, so `check-versions` must use
+PyPI -- do not add a GitHub `version_url`, which would read the older release
+list.
+
+**Shape.** `kind: python-tool`, `uv_tool: watchglass`, `bins: ["watchglass"]`,
+`depends: [portable-python, uv]`, non-optional (swept into `@shared`), member of
+`@system-monitor`, tags `monitor/automation/polling/systemd/python`. Pure Python
+wheel (`py3-none-any`), no compiled artifact.
+
+**Build** (`build/build-watchglass.sh --tag v2026.11.1`). The build image has no
+`uv`, so extract the payload's -- the same invocation as tmux-path-store:
+
+```sh
+build/build-shell sh -c 'mkdir -p /tmp/uvbin \
+    && bzip2 -dc payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2 >/tmp/uvbin/uv \
+    && chmod +x /tmp/uvbin/uv \
+    && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.1'
+```
+
+The script builds the wheel from the tag, refuses a tag/pyproject version
+mismatch or a pre-release, checks the wheel's `console_scripts` is exactly
+`watchglass`, requires every applicable `Requires-Dist` to already be in the
+wheelhouse, and checks the registry `wheels` list still matches the closure.
+
+**New wheelhouse members.** The existing wheels satisfied rich, rich-click,
+click, markdown-it-py, mdurl, platformdirs, pygments and typing-extensions.
+This package added four distributions (pure Python except watchdog's
+platform-tagged wheel; sha256 full):
+
+| wheel | sha256 |
+|---|---|
+| `textual-8.2.8-py3-none-any.whl` | `267375fd402dc8d981457212efa71f0e3365fd17bba144ba9bb3ed7563cb374a` |
+| `watchdog-7.0.0-py3-none-manylinux2014_x86_64.whl` | `edbfd843840fa8a750d79ed69e65ab67965748f9ccfc56ff957e1cee4a8cf796` |
+| `linkify_it_py-2.2.0-py3-none-any.whl` | `3adc40eb5af300b2605fcfdb968c24e1d780a90f1f2221af7c15e5111e94d443` |
+| `mdit_py_plugins-0.6.1-py3-none-any.whl` | `214c82fb2ac524472ab6a5bcab1de80f73b50443e187f401bfd77efbc7c6481d` |
+
+They were fetched in `build/build-shell` with the standard platform-tag set
+(see "manylinux platform flag for pip download") and each hash compared with
+PyPI:
+
+```sh
+PIP_REQUIRE_VIRTUALENV=0 python3.15 -m pip download \
+    textual==8.2.8 watchdog==7.0.0 linkify-it-py==2.2.0 mdit-py-plugins==0.6.1 \
+    --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
+    --platform manylinux2010_x86_64 --platform manylinux1_x86_64 \
+    --platform any --python-version 3.15 --only-binary :all: -d <tmpdir>
+```
+
+Then copy only those four into `payload/el8.x86_64.glibc2p28/wheels/`. Why the
+closure is what it is: `textual` requires `markdown-it-py[linkify]`,
+`mdit-py-plugins`, `platformdirs<5`, `pygments>=2.19.2` and `rich>=14.2`;
+`linkify-it-py` 2.2.0 has no base dependency (`uc-micro-py` is not pulled);
+`watchdog` 7.0.0 has no base dependency (PyYAML is only the `watchmedo` extra).
+`watchglass`'s `pywinpty` requirement is behind `sys_platform == "win32"` and is
+correctly absent. `tests/wheelhouse-closure` walks the whole closure and is the
+gate that proves it resolves under the bundled Python 3.15.
+
+**The registry `wheels` list is load-bearing for sizing/manifest.** It names
+all 13 distributions (the package's own plus the shared ones) so
+`gen-installed-sizes` and the `.content-manifest` allowlist cover every file
+uv will read. `_prepare_wheels_dir` verifies every wheel in the directory
+against the manifest before uv sees it.
+
+**Do not run `watchglass install` at package-install time.** It registers a
+systemd user unit (`systemctl --user`) or a Windows logon task and starts the
+service. loadout ships the CLI only; the user opts in. `tests/install-watchglass`
+proves the offline install, the launcher version, the bundled reference docs and
+a check/validate/dry-run cycle without touching the service.
+
+**Verify:** `python3.15 build/gen-installed-sizes`, then `python3.15
+build/gen-content-manifest` (the manifest hashes `installed-sizes.json`, so it
+must run last), then `python3.15 build/gen-readme-table`; finally
+`tests/install-watchglass` (T2) and the T1 gates `registry-integrity`,
+`wheelhouse-closure`, `docs-sync`, `content-manifest-shipped-set`.
+
 ## liberty-filter 1.0.1 -- strip unneeded data from Liberty .lib files (EDA)
 
 First-party (github.com/smprather/liberty-filter). Streams a Liberty timing file

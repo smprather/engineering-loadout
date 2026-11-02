@@ -3676,7 +3676,8 @@
         "procs",
         "duf",
         "dust",
-        "gping"
+        "gping",
+        "watchglass"
       ],
       "description": "Resource and process monitors"
     },
@@ -4322,6 +4323,44 @@
       ],
       "description": "Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks",
       "version_url": "https://github.com/smprather/tmux-path-store/releases"
+    },
+    "watchglass": {
+      "kind": "python-tool",
+      "uv_tool": "watchglass",
+      "bins": [
+        "watchglass"
+      ],
+      "depends": [
+        "portable-python",
+        "uv"
+      ],
+      "wheels": [
+        "click",
+        "linkify-it-py",
+        "markdown-it-py",
+        "mdit-py-plugins",
+        "mdurl",
+        "platformdirs",
+        "pygments",
+        "rich",
+        "rich-click",
+        "textual",
+        "typing-extensions",
+        "watchdog",
+        "watchglass"
+      ],
+      "version": "2026.11.1",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "monitor",
+        "automation",
+        "polling",
+        "systemd",
+        "python"
+      ],
+      "description": "Poll conditions and run actions from login onward — watches, observers, verified relay recipes, JSONL logs and a read-only TUI"
     }
   }
 }

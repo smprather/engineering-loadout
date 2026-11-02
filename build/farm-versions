@@ -660,6 +660,12 @@ TOOLS = [
         "https://github.com/smprather/tmux-path-store",
         strategy_flag(["--version"], r"tmux-path-store ([0-9]+\.[0-9]+\.[0-9]+)"),
     ),
+    (
+        "watchglass",
+        "watchglass",
+        "https://github.com/smprather/watchglass",
+        strategy_flag(["--version"], r"watchglass, version ([0-9][0-9.]*)"),
+    ),
     ("ncdu", "ncdu", "https://dev.yorhel.nl/ncdu", strategy_flag(["--version"], r"ncdu ([0-9]+\.[0-9]+\.[0-9]+)")),
     # nethogs -V prints just " version 0.9.0" -- no program name. Anchor on
     # "version " rather than on the tool name.

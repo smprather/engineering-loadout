@@ -13,6 +13,68 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-02 (1): watchglass 2026.11.1 bundled as a python-tool
+
+The user asked to add [smprather/watchglass](https://github.com/smprather/watchglass).
+It is a pure-Python CLI (hatchling, `py3-none-any`) that polls watches, runs
+observers/recipes, logs JSON lines and shows a read-only TUI. Packaged as a
+non-optional `python-tool`, `uv_tool: watchglass`, `depends: [portable-python,
+uv]`, member of `@system-monitor`; the build/verify recipe is
+`build/build-watchglass.sh` and the mandatory note is in
+`build/ADDING_BINARIES.md` ("watchglass 2026.11.1").
+
+**Version.** 2026.11.1, built from tag `v2026.11.1` (the same version is on
+PyPI). The GitHub *Releases* API still returns 2026.10.31.1, so the registry has
+NO GitHub `version_url`; `check-versions` must read PyPI. The script refuses a
+tag/pyproject mismatch, a pre-release, a console-script mismatch, a missing
+runtime dependency, or a registry `wheels` list that no longer matches the
+closure.
+
+**Wheel closure.** The wheelhouse already had rich, rich-click, click,
+markdown-it-py, mdurl, platformdirs, pygments and typing-extensions. Added:
+`textual-8.2.8`, `watchdog-7.0.0` (py3-none-manylinux2014_x86_64),
+`linkify_it_py-2.2.0`, `mdit_py_plugins-0.6.1` (sha256s and the one-time
+`pip download` command in `build/ADDING_BINARIES.md`). `linkify-it-py` 2.2.0
+has no base dep (no `uc-micro-py`); watchdog 7.0.0 has none either (PyYAML is
+only the `watchmedo` extra). `pywinpty` is correctly excluded by its win32
+marker. `tests/wheelhouse-closure` passes: all 15 enabled python-tools resolve
+offline under cp315.
+
+**Generators.** `gen-installed-sizes` must run BEFORE `gen-content-manifest`
+(the manifest hashes `installed-sizes.json`); running the manifest first leaves
+a MISMATCH and was caught by T1. README row, completion and manifest/sizes are
+regenerated. `watchglass` was added to `build/farm-versions` with
+`watchglass, version ([0-9][0-9.]*)`.
+
+**Test.** `tests/install-watchglass` (T2, `--deps auto`): installs offline into
+a temp root, asserts the installer passes `--no-index`/`--find-links`, checks
+the launcher version against the registry, imports the full closure, runs
+`docs agent`, then `init`/`new hello`/`validate hello`/`poll hello --dry-run`,
+checks `build/farm-versions` reports the tagged version, and asserts no systemd
+unit was registered. It never runs `watchglass install` (that is the user's
+opt-in to the service).
+
+**Docker bridge failure = reboot, not a workaround (rule set 2026-11-02).**
+During this work `docker run` failed with `failed to add the host <=> sandbox
+pair interfaces: operation not supported`; the user confirmed a pending kernel
+update. The build and generators were run via `docker run --network host`
+BEFORE the user ruled workarounds out; do NOT repeat that. On this failure,
+stop and tell the user exactly: "can't run tests until you reboot." The
+mandated `build/build-shell` entry point must not be bypassed. (The Tier 3
+`--network none` result above is from the normal test mode and stands.)
+A separate T1 trap: `tests/python-suite`'s D8 gate runs `git status --porcelain`
+on the shared wheelhouse, so new wheels must be COMMITTED, not merely staged,
+before T1 can pass.
+
+**Verification.** Build 4 s; generators 23-25 s; T2 smoke 9 s; Tier 3
+`tests/prebuilt-binaries-almalinux8 --no-build --full` PASS in 594 s (all 316
+binaries OK, 23 skipped; the new `watchglass --version` probe reports
+2026.11.1). `build/check-versions --format tsv` reports `watchglass 2026.11.1
+2026.11.1 pypi current`. T1 fast `tests/run-all --fast` PASS in 173 s after the
+wheelhouse commit (the D8 gate needs the wheels committed, not staged). Targeted
+T2 after the amend: `completion in sync`, `optional-packages` and
+`install-python-tool-upgrade` PASS (44 s total).
+
 ## 2026-10-31 (3): release 2026.10.9 -- tornado + pyasn1 security refresh
 
 **PUBLISHED and verified 2026-10-31** (tag on `b2d4a49`, Good ED25519
