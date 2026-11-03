@@ -13,6 +13,25 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (1): multiple Python versions -- case-driven, design parked (knowledge recorded, not pursued)
+
+Design conversation only; no code change. Asked: ship several CPython versions,
+selectable with an Environment Module (`python/3.12`), with uv wired so
+`uv init` does the right thing. **Decision: not built on speculation.** EL stays
+on one interpreter (3.15) plus python-loaded. A second version is added only
+when a specific script cannot be up-revved, usually by an AI agent. A dependency
+missing a 3.15 build is temporary and is not a trigger. EDA tool bindings are
+not a trigger either, because the tools ship their own Pythons.
+
+Full record, with the triage, the parked design (python-build-standalone
+interpreters at stable per-minor paths, EL-generated modulefiles, python-loaded
+per minor, uv wiring), 16 uv/PEP 723 measurements on uv 0.12.17, the prior-art
+survey and the open questions:
+`docs/superpowers/specs/2026-11-03-multi-python-versions-parked-design.md`.
+The measurement most likely to matter: a modulefile must never export
+`UV_PYTHON`. It overrides a project's `.python-version` and silently rebuilt a
+3.12-pinned `.venv` on 3.13.
+
 ## 2026-11-02 (1): watchglass 2026.11.1 bundled as a python-tool
 
 The user asked to add [smprather/watchglass](https://github.com/smprather/watchglass).
