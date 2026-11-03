@@ -35,7 +35,7 @@ no Linux code path is affected.
 (9 s): offline install, launcher and `farm-versions` report 2026.11.3, closure
 imports, reference docs, init/new/validate/poll --dry-run, no service
 registered. `build/check-versions --format tsv` reports `watchglass 2026.11.3
-2026.11.3 pypi current`. `tests/run-all --fast` PASS in 173 s.
+2026.11.3 pypi current`. `tests/run-all --fast` PASS in 169 s.
 
 ## 2026-11-03 (2): watchglass 2026.11.2 -- poke a watch
 
