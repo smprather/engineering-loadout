@@ -1,0 +1,67 @@
+#!/bin/sh
+# env-nvim-smart-quit: the global layer's smart :q must not break :q!.
+#
+# `cnoreabbrev <expr> q ...` rewrites bare :q to :Q. It fires the instant the
+# non-keyword `!` is typed, while getcmdline() still returns `q`, so :q! always
+# arrives at the user command as :Q!. Q must accept a bang, otherwise every
+# :q! dies with E477: No ! allowed (the getcmdline() guard cannot exclude it).
+#
+# Also pins the arglist-nag behavior: :q with an unvisited second file exits
+# without "N more files to edit", and :qa! stays untouched.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-nvim-quit.XXXXXX")"
+trap 'rm -rf "$T"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+nvim_bin=$(PATH=/usr/local/bin:/usr/bin:/bin command -v nvim || true)
+if [ -z "$nvim_bin" ]; then
+    echo "  SKIP  no nvim on this host"
+    echo "env-nvim-smart-quit: SKIP"
+    exit 0
+fi
+
+mkdir -p "$T/bin" "$T/cfg" "$T/home"
+ln -s "$nvim_bin" "$T/bin/nvim"
+ln -s "$REPO/envs/nvim" "$T/cfg/nvim"
+printf 'x\n' > "$T/a.txt"
+printf 'y\n' > "$T/b.txt"
+
+# run_nvim LOG FILE... -c CMD...  (no git on PATH, plugins disabled)
+run_nvim() {
+    log=$1
+    shift
+    timeout 20 env -i HOME="$T/home" PATH="$T/bin" TERM=xterm-256color \
+        XDG_CONFIG_HOME="$T/cfg" XDG_DATA_HOME="$T/data" \
+        XDG_STATE_HOME="$T/state" XDG_CACHE_HOME="$T/cache" \
+        "$T/bin/nvim" --headless -n "$@" >"$log" 2>&1 </dev/null
+}
+
+feed() { printf 'lua vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("%s",true,false,true),"tx",false)' "$1"; }
+
+# Modified buffer + :q! -> forced quit, no E477 (no E37 prompt either).
+if ! run_nvim "$T/qbang.log" "$T/a.txt" \
+    -c 'lua vim.bo.modified = true' -c "$(feed ':q!<CR>')"; then
+    fail ":q! on a modified buffer exited nonzero: $(head -5 "$T/qbang.log")"
+fi
+! grep -q -e 'E477' -e 'E37' "$T/qbang.log" \
+    || fail ":q! still errors: $(head -5 "$T/qbang.log")"
+echo "  PASS  modified :q! force-quits"
+
+# Two file args, second unvisited + :q -> no "N more files to edit" nag.
+if ! run_nvim "$T/arglist.log" "$T/a.txt" "$T/b.txt" -c "$(feed ':q<CR>')"; then
+    fail ":q with two args exited nonzero: $(head -5 "$T/arglist.log")"
+fi
+! grep -q 'more file' "$T/arglist.log" \
+    || fail ":q still nags about the arglist: $(head -5 "$T/arglist.log")"
+echo "  PASS  :q skips the arglist nag"
+
+# :qa! must not be rewritten (only a bare `q` matches the abbreviation).
+if ! run_nvim "$T/qa.log" "$T/a.txt" -c "$(feed ':qa!<CR>')"; then
+    fail ":qa! exited nonzero: $(head -5 "$T/qa.log")"
+fi
+echo "  PASS  :qa! unaffected"
+
+echo "env-nvim-smart-quit: OK"

@@ -32,6 +32,22 @@ The measurement most likely to matter: a modulefile must never export
 `UV_PYTHON`. It overrides a project's `.python-version` and silently rebuilt a
 3.12-pinned `.venv` on 3.13.
 
+## 2026-11-02 (2): nvim smart `:q` no longer breaks `:q!`
+
+The global layer rewrites a bare `:q` to the user command `:Q`, which drops the
+arglist before quitting (no "N more files to edit" nag). The rewrite is
+`cnoreabbrev <expr> q (getcmdline() ==# 'q') ? 'Q' : 'q'`. That guard cannot
+exclude `:q!`: the abbreviation expands the moment the non-keyword `!` is
+typed, while `getcmdline()` still returns `q`. So `:q!` always arrived as
+`:Q!`, and every `:q!` died with `E477: No ! allowed`.
+
+`Q` now takes `bang = true`, and the bang path runs `quit!`. `:q!` keeps its
+force-quit meaning on a modified buffer, and `:qa!` is unaffected
+(`envs/nvim/lua/global/init.lua`). The new gate is `tests/env-nvim-smart-quit`
+(T1, headless nvim with plugins and git absent). It covers modified `:q!`,
+`:q` skipping the arglist nag, and `:qa!`. Negative control: with the fix
+reverted, the gate fails with `E477`.
+
 ## 2026-11-02 (1): watchglass 2026.11.1 bundled as a python-tool
 
 The user asked to add [smprather/watchglass](https://github.com/smprather/watchglass).

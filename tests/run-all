@@ -330,6 +330,7 @@ run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
 run_test "needed-closure" "$PY" tests/needed-closure
 run_test "shim-bootstrap" tests/shim-bootstrap
 run_test "env-nvim-no-git" tests/env-nvim-no-git
+run_test "env-nvim-smart-quit" tests/env-nvim-smart-quit
 run_test "install-noop-stamps" "$PY" tests/install-noop-stamps
 run_test "nodejs-runpath" "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure

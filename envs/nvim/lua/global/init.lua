@@ -396,21 +396,29 @@ keymap("n", "<leader>h", ":split<cr>:bn<cr>",  noremap_silent)
 --
 -- Applies to :q, :Q, and <leader>c. Multi-window/multi-buffer variants
 -- (:qa, :wq, etc.) are intentionally NOT touched.
-vim.api.nvim_create_user_command("Q", function()
+--
+-- Q accepts a bang because `:q!` cannot be excluded from the abbreviation
+-- below: cnoreabbrev expands as soon as the non-keyword `!` is typed, while
+-- getcmdline() still returns exactly `q`, so `:q!` always arrives here as
+-- `:Q!`. Bang therefore means "force quit", preserving :q! semantics.
+vim.api.nvim_create_user_command("Q", function(opts)
     -- Kill the arglist first. Vim's :quit refuses when there are unvisited
     -- args and asks "N more files to edit. Quit anyway?"  That question is
     -- non-destructive and we never want it, so we drop the arglist before
     -- any quit path runs. pcall because :argdelete errors on an empty list.
     pcall(function() vim.cmd("argdelete *") end)
-    if vim.bo.modified then
+    if opts.bang then
+        vim.cmd("quit!")          -- :q! path
+    elseif vim.bo.modified then
         vim.cmd("confirm quit")   -- now only prompts about unsaved changes
     else
         vim.cmd("quit!")
     end
-end, { desc = "Quit current window, skipping the arglist nag" })
+end, { bang = true, desc = "Quit current window, skipping the arglist nag" })
 
 -- Rewrite bare `:q<CR>` and `:q <CR>` to `:Q<CR>` at command-line time.
--- Guarded so `:qa`, `:q!`, `:s/q/x/`, etc. are left alone.
+-- Guarded so `:qa`, `:s/q/x/`, etc. are left alone. `:q!` cannot be guarded
+-- this way (see above); Q's bang handling covers it.
 vim.cmd([[
     cnoreabbrev <expr> q  (getcmdtype() == ':' && getcmdline() ==# 'q') ? 'Q' : 'q'
 ]])
