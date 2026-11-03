@@ -4360,7 +4360,7 @@
         "systemd",
         "python"
       ],
-      "description": "Poll conditions and run actions from login onward — watches, observers, verified relay recipes, JSONL logs and a read-only TUI"
+      "description": "Poll conditions and run actions from login onward — watches, observers, verified relay recipes, JSONL logs and a live TUI"
     }
   }
 }
