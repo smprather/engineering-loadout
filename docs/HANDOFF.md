@@ -13,6 +13,26 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (4): multi-Python core builds -- plan written, implementation not started
+
+The user approved shipping CPython 3.12 + 3.13 alongside 3.15, with modulefiles
+and uv selection, and explicitly excluding per-version python-loaded. The
+implementation plan is
+`docs/superpowers/plans/2026-11-03-multi-python-core-builds.md` (Tasks 1-5,
+estimated 6.5-9.5 engineer-days). Key decisions: python-build-standalone
+`install_only_stripped` tag `20261026`, versions `3.12.16` and `3.13.18`; stable
+`<prefix>/opt/python/<minor>` installed through the existing generic
+runtime-archive machinery; installer-generated modulefiles at
+`<prefix>/share/modulefiles/python/<minor>`; the uv launcher reads
+`LOADOUT_PYTHON` and defers to a project `.python-version` or `requires-python`;
+extra versions are optional and grouped as `@python-versions`; `python-loaded`
+and EL's own 3.15 tools are untouched. No code or payload changed yet.
+
+Next: execute Task 1 in a fresh session. Read the plan, then the parked design
+at `docs/superpowers/specs/2026-11-03-multi-python-versions-parked-design.md`
+for the measured uv behavior. The plan's Review Focus section lists the five
+failure modes the tests must pin.
+
 ## 2026-11-03 (3): watchglass 2026.11.3 -- conpty failure classification
 
 Upstream published 2026.11.3 on 2026-11-03 (tag `v2026.11.3`, PyPI), hours
