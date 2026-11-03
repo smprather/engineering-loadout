@@ -35,11 +35,14 @@ ARCHIVE_SUFFIXES = (
 # pre-chunks rust.tar.bz2 itself).
 # portable-python: BOLT-optimized, must never be stripped/repacked.
 # rust.tar.bz2: repacked rustup toolchain, kept verbatim.
+# python-3.*: python-build-standalone `install_only_stripped` archives -- the
+#   EL8 build script already stripped them; repacking here would churn the
+#   committed bytes for no gain.
 # nvim-plugin-stash: a RELEASE ASSET (not a committed payload), and a tar of bare git
 #   mirrors -- strip must not extract/repack it. Doing so renormalized it away from the
 #   released asset hash AND chunked it locally, so the installer (which verifies against
 #   the single-file hash in .content-manifest.fetched) then refused the chunks.
-NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-", "rust.tar.bz2", "nvim-plugin-stash")
+NOSTRIP_ARCHIVE_PREFIXES = ("portable-python-", "rust.tar.bz2", "python-3.", "nvim-plugin-stash")
 
 # Files larger than this are split into .part-NNN chunks so no single file
 # exceeds GitHub's 50 MB hard limit or the 40 MB soft recommendation.

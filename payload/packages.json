@@ -9,6 +9,7 @@
     "recommends": "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
     "archive": "Path (relative to repo root, 'PLATFORM' placeholder allowed) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base', and archive-bundle 'bin' packages. Verified by 'loadout doctor'.",
     "archive_name": "Runtime-archive filename override for install_runtime_archives (default: '<pkg_name>.tar.bz2').",
+    "python_version": "For kind='python-base': the CPython minor this archive provides (e.g. '3.12'). Distinct from 'version' (the exact patch, e.g. '3.12.16'); used by modulefile generation and the ABI gate.",
     "install_to": "Target install path. '~' expanded at install time; a leading '.local' is kept for a HOME root and dropped for a prefix root (--dest-dir). Together with 'sentinel' this opts a package into the generic runtime-archive installer.",
     "prefer": "For kind='env': tool package names to prefer over system copies when this env is installed. The installer maintains exec shims under <install_root>/prefer/ (prepended to PATH).",
     "sentinel": "Path (relative to install_to) that must exist after extraction; missing sentinel records a FAIL. Together with 'install_to' this opts a package into the generic runtime-archive installer.",
@@ -3213,6 +3214,42 @@
       "optional": true,
       "description": "Curated EL8 Python 3.15 import environment with its own bin; not on PATH, installed by @shared-all or by name"
     },
+    "python-3.12": {
+      "kind": "python-base",
+      "archive": "payload/PLATFORM/runtime/python-3.12.tar.bz2",
+      "archive_name": "python-3.12.tar.bz2",
+      "sentinel": "bin/python3.12",
+      "install_to": "~/.local/opt/python/3.12",
+      "version": "3.12.16",
+      "python_version": "3.12",
+      "platforms": [
+        "linux"
+      ],
+      "optional": true,
+      "tags": [
+        "python",
+        "runtime"
+      ],
+      "description": "CPython 3.12 (python-build-standalone) for version-pinned scripts; module load python/3.12"
+    },
+    "python-3.13": {
+      "kind": "python-base",
+      "archive": "payload/PLATFORM/runtime/python-3.13.tar.bz2",
+      "archive_name": "python-3.13.tar.bz2",
+      "sentinel": "bin/python3.13",
+      "install_to": "~/.local/opt/python/3.13",
+      "version": "3.13.18",
+      "python_version": "3.13",
+      "platforms": [
+        "linux"
+      ],
+      "optional": true,
+      "tags": [
+        "python",
+        "runtime"
+      ],
+      "description": "CPython 3.13 (python-build-standalone) for version-pinned scripts; module load python/3.13"
+    },
     "gobject-typelibs": {
       "kind": "typelib",
       "typelibs": [
@@ -3827,6 +3864,14 @@
         "ty"
       ],
       "description": "Python interpreter + Astral tooling"
+    },
+    "@python-versions": {
+      "kind": "group",
+      "members": [
+        "python-3.12",
+        "python-3.13"
+      ],
+      "description": "Optional CPython 3.12 + 3.13 interpreters (module load python/3.12)"
     },
     "@python-tools-extra": {
       "kind": "group",

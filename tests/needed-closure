@@ -45,6 +45,7 @@ import concurrent.futures
 import glob
 import json
 import os
+import posixpath
 import struct
 import subprocess
 import sys
@@ -334,7 +335,24 @@ def main():
         for name in {os.path.basename(rel.split(":")[-1]).removesuffix(".bz2"), soname}:
             if name:
                 providers.setdefault(name, []).append(rel)
+    # A NEEDED entry can be a path relative to the referencing object's own
+    # directory ("$ORIGIN/../lib/libpython3.12.so.1.0", how python-build-
+    # standalone ships libpython3.so). It never reaches the linker's soname
+    # search, so resolve it against the SAME archive's member list instead of
+    # classifying the literal string.
+    archive_members = {}
+    for rel, _soname, _needed in elfs:
+        if ":" in rel:
+            archive, member = rel.split(":", 1)
+            archive_members.setdefault(archive, set()).add(member)
     elfs = [row for row in elfs if row[2] is not None]  # symlinks only provide
+
+    def origin_target_exists(rel, so):
+        if not so.startswith("$ORIGIN/") or ":" not in rel:
+            return False
+        archive, member = rel.split(":", 1)
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(member), so[len("$ORIGIN/") :]))
+        return target in archive_members.get(archive, ())
 
     memo = {}
     unresolved, ceiling_only, uninstallable = {}, {}, {}
@@ -342,7 +360,7 @@ def main():
     for rel, _soname, needed in elfs:
         need_owners = owners_of(rel, owners)
         for so in needed:
-            if so.startswith("!") or so in HOST_CONTRACT:
+            if so.startswith("!") or so in HOST_CONTRACT or origin_target_exists(rel, so):
                 continue
             if so in providers:
                 prov_owners = [owners_of(p, owners) for p in providers[so]]

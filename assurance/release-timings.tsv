@@ -6425,3 +6425,6 @@
 2026-11-03T17:06:56Z	test:security-pipeline	0	PASS	mode=all
 2026-11-03T17:06:56Z	test:check-versions-contract	0	PASS	mode=all
 2026-11-03T17:06:56Z	test:total	169	PASS	flags=--fast
+2026-11-03T22:14:17Z	build:build-python-standalone.sh --tag 20261026 --version 3.13.18	13	PASS	build-shell
+2026-11-03T22:19:24Z	build:shell	23	PASS	build-shell
+2026-11-03T22:20:16Z	build:shell	23	PASS	build-shell

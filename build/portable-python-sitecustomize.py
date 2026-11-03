@@ -12,7 +12,9 @@ one keeps full control. Otherwise the first existing system bundle is used.
 
 The portable build's own startup hook (OPENSSL_MODULES, TCL_LIBRARY,
 TK_LIBRARY and its single RHEL CA path) was renamed to sitecustomize_portable.py
-when this file was injected; it still runs, after this CA setup.
+when this file was injected; it still runs, after this CA setup. The same file
+is injected into the python-build-standalone interpreters, whose own hook (when
+a build ships one) is renamed to sitecustomize_pbs.py; whichever exists runs.
 """
 
 import os
@@ -32,6 +34,10 @@ if not os.environ.get("SSL_CERT_FILE") and not os.environ.get("SSL_CERT_DIR"):
 try:
     import importlib
 
-    importlib.import_module("sitecustomize_portable")  # the build's own hook
+    for _hook in ("sitecustomize_portable", "sitecustomize_pbs"):
+        try:
+            importlib.import_module(_hook)  # the build's own hook, when present
+        except ImportError:
+            pass
 except ImportError:
     pass

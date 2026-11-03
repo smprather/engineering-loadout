@@ -7330,3 +7330,56 @@ build/build-shell ./build/verify-binaries linelight     # PASS = payload == upst
   sources the output from a private file because upstream's documented
   `eval "`linelight init tcsh`"` defines nothing (csh joins the substitution
   into one line).
+
+## python-3.12 / python-3.13 -- secondary CPython interpreters (python-build-standalone import, added 2026-11-03)
+
+Two optional interpreters beside the 3.15 portable-python, for scripts that
+cannot move forward and cannot be rebuilt against 3.15. They are
+python-build-standalone `install_only_stripped` builds -- the same artifacts uv
+downloads -- not portable-python PGO/LTO/BOLT builds (hours per version, no
+benefit for a secondary interpreter). `python-loaded` and EL's own Python tools
+stay on 3.15.
+
+```bash
+build/build-shell sh -c 'build/build-python-standalone.sh \
+    --tag 20261026 --version 3.12.16 && build/build-python-standalone.sh \
+    --tag 20261026 --version 3.13.18'
+```
+
+| package | PBS asset | sha256 (release asset) | compressed | installed |
+|---|---|---|---|---|
+| python-3.12 | `cpython-3.12.16+20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz` | `ce4f6d0a6cfdb3bed6e44c2f9affd85943c76a42e25ad3a259002f31d6fb8a20` | 31,212,850 B | 99,018,994 B |
+| python-3.13 | `cpython-3.13.18+20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz` | `df15fe60d3ff55bf9dcf25824b5572756bb8816ff93865a273d3301d7066a8b7` | 31,925,122 B | 99,762,037 B |
+
+- Source: `https://github.com/astral-sh/python-build-standalone/releases/download/20261026/`.
+  The script checks the asset against its exact `SHA256SUMS` line and aborts on
+  a mismatch; the sums file is downloaded from the same tag.
+- Layout: the upstream tarball's top level is `python/`; the script repacks
+  `bin include lib share LOADOUT_BUILD` from inside it, so the archive extracts
+  directly into `<prefix>/opt/python/<minor>` (registry `install_to`). Patch
+  updates replace that tree in place, which is what keeps venvs built from
+  `opt/python/<minor>/bin/python3` working.
+- **CA injection.** PBS compiles OpenSSL's default paths against its own build
+  prefix and EL8 has no `/etc/ssl/cert.pem`, so the portable-python CA hook
+  (`build/portable-python-sitecustomize.py`) is installed as
+  `lib/python<minor>/sitecustomize.py`; it probes `/etc/ssl/certs/ca-certificates.crt`,
+  `/etc/pki/tls/certs/ca-bundle.crt` and `/etc/ssl/cert.pem`, and never
+  overrides a caller's `SSL_CERT_FILE`/`SSL_CERT_DIR`. A hook the PBS build ever
+  starts shipping is renamed `sitecustomize_pbs.py` and still runs (the shared
+  hook imports both companion names).
+- `LOADOUT_BUILD` records the source URL, tag, version and asset sha256.
+- EL8 floor: highest referenced symbol is `GLIBC_2.17` for both interpreters.
+- Closure: NEEDED is glibc only (plus PBS's bundled `libtcl9`/`libtcl9tk9` for
+  `_tkinter`, resolved inside the archive). `tests/needed-closure` also resolves
+  the `$ORIGIN/../lib/libpython3.<minor>.so.1.0` NEEDED that PBS puts on
+  `lib/libpython3.so` (other files are unchanged upstream bytes).
+- `bin/` holds `python`, `python3`, `python3.<minor>`, `pip*`, `idle3`,
+  `pydoc3` and `python3.<minor>-config`; the modulefile prepends the whole bin
+  dir, matching PBS's own layout.
+- Strip: `python-3.` is in `NOSTRIP_ARCHIVE_PREFIXES` (`build/strip-all-elf-binaries`);
+  the archives are already stripped, and a repack would only churn their bytes.
+- Registry: `kind: python-base`, `python_version: "<minor>"` (the ABI field
+  `tests/payload-interpreter-abi` reads), `optional: true`, group
+  `@python-versions`.
+- Smoke (both, after extraction): `python3.<minor> -c 'import sys, ssl, sqlite3, zlib'`
+  prints the expected version; no `gui_libs` dependency (no X11 NEEDED).

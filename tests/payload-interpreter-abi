@@ -69,6 +69,38 @@ def shipped_python_version():
     return m.group(1) if m else None
 
 
+def python_base_archives():
+    """Map runtime/<archive_name> -> the CPython minor its registry entry declares.
+
+    A `python-base` entry with `python_version` (python-3.12, python-3.13) owns a
+    whole archive of artifacts built FOR that interpreter: its ELF, its scripts
+    and its extension modules all legitimately name that minor, not the
+    portable-python minor. Files outside such an archive stay on the shipped
+    portable-python minor.
+    """
+    try:
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+    except OSError, KeyError, json.JSONDecodeError:
+        return {}
+    owned = {}
+    for entry in packages.values():
+        if entry.get("kind") != "python-base":
+            continue
+        minor = entry.get("python_version")
+        if not minor:
+            continue
+        archive = entry.get("archive_name") or os.path.basename(entry.get("archive", ""))
+        if archive:
+            owned[f"runtime/{archive}"] = minor
+    return owned
+
+
+def python_base_minors():
+    """The set of declared python-base minors (e.g. {'3.12', '3.13'})."""
+    return set(python_base_archives().values())
+
+
 def payload_files():
     """Every shipped payload file: (relpath, bytes).
 
@@ -178,9 +210,10 @@ def disabled_artifacts(disabled):
     owned = {}
     for name in disabled:
         entry = packages.get(name, {})
-        archive = entry.get("archive")
-        if archive:
-            owned[f"runtime/{os.path.basename(archive)}"] = name
+        for key in ("archive", "archive_name"):
+            archive = entry.get(key)
+            if archive:
+                owned[f"runtime/{os.path.basename(archive)}"] = name
         for stem in entry.get("bins", []):
             owned[f"bin/{stem}.bz2"] = name
         for stem in entry.get("libs", []):
@@ -246,6 +279,19 @@ def main():
     if disabled:
         ok(f"disabled (excluded from every sweep): {', '.join(sorted(disabled))}")
 
+    base_archives = python_base_archives()
+    declared_minors = sorted(python_base_minors())
+    if declared_minors:
+        ok(f"declared python-base minors: {', '.join(declared_minors)}")
+
+    def owner_minor(rel):
+        """The CPython minor the artifact's own archive declares; otherwise the
+        portable-python minor, which owns every non-python-base artifact."""
+        for prefix, minor in base_archives.items():
+            if rel.startswith(prefix + ":"):
+                return minor
+        return short
+
     files = payload_files()
     ok(f"scanned {len(files)} shipped payload files")
 
@@ -268,20 +314,21 @@ def main():
             m = re.match(r"libpython(\d+\.\d+)\.so", soname)
             if not m:
                 continue
-            if m.group(1) == short:
+            allowed = owner_minor(rel)
+            if m.group(1) == allowed:
                 continue
             pkg = owner(rel)
             if pkg:
                 disabled_stale.append(f"{pkg}: {rel} -> {soname}")
                 continue
-            stale_needed.setdefault(m.group(1), []).append(f"{rel} -> {soname}")
-    for found, users in sorted(stale_needed.items()):
+            stale_needed.setdefault((allowed, m.group(1)), []).append(f"{rel} -> {soname}")
+    for (allowed, found), users in sorted(stale_needed.items()):
         fail(
-            f"payload ELF links libpython{found}.so but the payload ships "
-            f"libpython{short}.so -- {len(users)} file(s), e.g. {users[0]}"
+            f"payload ELF links libpython{found}.so but expects "
+            f"libpython{allowed}.so -- {len(users)} file(s), e.g. {users[0]}"
         )
     if not stale_needed:
-        ok(f"no payload ELF links a libpython other than {short}")
+        ok("no payload ELF links a libpython other than its archive's minor")
     for note in sorted(set(disabled_stale)):
         ok(f"disabled package, not installed: {note}")
 
@@ -319,9 +366,10 @@ def main():
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             continue
+        allowed = owner_minor(rel)
         for m in PICK.finditer(text):
             found = next(g for g in m.groups() if g)
-            if found == short.split(".")[1]:
+            if found == allowed.split(".")[1]:
                 continue
             if not re.fullmatch(r"1[0-9]", found):
                 continue
@@ -330,13 +378,13 @@ def main():
             if pkg:
                 disabled_refs.append(f"{pkg}: {rel}:{line_no}: {m.group(0)}")
                 continue
-            stale_ref.setdefault(f"3.{found}", []).append(f"{rel}:{line_no}: {m.group(0)}")
-    for found, users in sorted(stale_ref.items()):
+            stale_ref.setdefault((allowed, f"3.{found}"), []).append(f"{rel}:{line_no}: {m.group(0)}")
+    for (allowed, found), users in sorted(stale_ref.items()):
         fail(
-            f"payload picks python{found} but the payload ships python{short} -- {len(users)} site(s), e.g. {users[0]}"
+            f"payload picks python{found} but its archive expects python{allowed} -- {len(users)} site(s), e.g. {users[0]}"
         )
     if not stale_ref:
-        ok(f"no payload script picks an interpreter other than python{short}")
+        ok("no payload script picks an interpreter other than its archive's minor")
     for note in sorted(set(disabled_refs)):
         ok(f"disabled package, not installed: {note}")
 
@@ -345,17 +393,18 @@ def main():
     for rel, _data in files:
         if not rel.startswith("runtime/"):
             continue
+        allowed = owner_minor(rel)
         for m in re.finditer(r"cpython-(\d)(\d+)[-.]", rel):
             abi = f"{m.group(1)}.{m.group(2)}"
-            if abi != short:
-                stale_ext.setdefault(abi, []).append(rel)
-    for abi, users in sorted(stale_ext.items()):
+            if abi != allowed:
+                stale_ext.setdefault((allowed, abi), []).append(rel)
+    for (allowed, abi), users in sorted(stale_ext.items()):
         fail(
-            f"payload ships cpython-{abi} extension modules but the payload "
-            f"ships python{short} -- {len(users)} file(s), e.g. {users[0]}"
+            f"payload ships cpython-{abi} extension modules but its archive "
+            f"expects cpython-{allowed} -- {len(users)} file(s), e.g. {users[0]}"
         )
     if not stale_ext:
-        ok(f"no payload extension module is built for an ABI other than {short}")
+        ok("no payload extension module is built for an ABI other than its archive's minor")
 
     # --- 4. the registry's portable-python version must match ---------------
     try:
