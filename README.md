@@ -479,6 +479,12 @@ escape sequences or stall in `wezterm set-working-directory`.
 installs under the install root (`<prefix>/bin/python3.15`, default
 `~/.local/share/loadout/bin`). Use `python3.15` and `pip3.15` to pin this build.
 
+Optional CPython **3.12** and **3.13** interpreters are bundled for scripts
+that cannot move to 3.15: `./loadout install @python-versions`, then
+`module load python/3.12` (see [docs/PYTHON-VERSIONS.md](docs/PYTHON-VERSIONS.md)).
+They install to `<prefix>/opt/python/<minor>/`, are not in `@shared`, and do
+not change `python-loaded` or EL's own 3.15-based tools.
+
 ---
 
 ## Neovim -- 326 Offline Tree-sitter Parsers

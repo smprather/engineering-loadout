@@ -960,6 +960,59 @@ def smoke_pythonpath_launcher_wrappers(tmpdir, failures):
     print(f"  OK   (wrapper):      librelane PYTHONPATH -> {site_packages}")
 
 
+def probe_python_versions(prefix, env, repo_dir):
+    """Every declared python-base interpreter starts and has a modulefile.
+
+    The registry decides which minors are expected (kind python-base with
+    python_version), so adding a version needs no edit here. A missing
+    interpreter, a non-starting one, or a missing modulefile is a failure.
+    """
+    failures = []
+    try:
+        with open(os.path.join(repo_dir, "payload", "packages.json"), encoding="utf-8") as fh:
+            packages = json.load(fh)["packages"]
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        return [("python versions", f"cannot read the registry: {exc}")]
+    declared = sorted(
+        (entry["python_version"], name)
+        for name, entry in packages.items()
+        if entry.get("kind") == "python-base" and entry.get("python_version")
+    )
+    if not declared:
+        return failures
+    print("Smoke-testing bundled Python interpreters...\n")
+    for minor, name in declared:
+        interp = os.path.join(prefix, "opt", "python", minor, "bin", f"python{minor}")
+        modulefile = os.path.join(prefix, "share", "modulefiles", "python", minor)
+        if not os.access(interp, os.X_OK):
+            failures.append((f"{name} runtime", f"missing interpreter {interp}"))
+            print(f"  FAIL ({name}): missing interpreter {interp}")
+            continue
+        try:
+            proc = subprocess.run(
+                [interp, "-c", "import sys, ssl, sqlite3, zlib; print('%d.%d' % sys.version_info[:2])"],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            failures.append((f"{name} runtime", str(exc)))
+            print(f"  FAIL ({name}): {exc}")
+            continue
+        if proc.returncode != 0 or proc.stdout.strip() != minor:
+            detail = " / ".join((proc.stderr or proc.stdout).strip().splitlines()[:3])
+            failures.append((f"{name} runtime", f"rc={proc.returncode} {detail}"))
+            print(f"  FAIL ({name}): rc={proc.returncode} {detail}")
+            continue
+        if not os.path.isfile(modulefile):
+            failures.append((f"{name} modulefile", f"missing {modulefile}"))
+            print(f"  FAIL ({name}): missing modulefile {modulefile}")
+            continue
+        print(f"  OK   ({name}): python{minor} runs ssl/sqlite3/zlib, modulefile present")
+    return failures
+
+
 def smoke_runtime_layout(tmpdir, env):
     failures = []
     bin_dir = os.path.join(tmpdir, "local", "bin")
@@ -2720,6 +2773,7 @@ def main(keep, no_cache):
                     "install",
                     "-y",
                     "@shared",
+                    "@python-versions",
                     "--dest-dir",
                     install_cache,
                     "--no-backup",
@@ -2758,6 +2812,7 @@ def main(keep, no_cache):
         print()
         runtime_failures = smoke_runtime_layout(tmpdir, probe_env)
         failures.extend(runtime_failures)
+        failures.extend(probe_python_versions(os.path.realpath(os.path.join(tmpdir, "local")), probe_env, repo_dir))
 
         if failures:
             print(f"FAILED: {len(failures)} smoke checks:")

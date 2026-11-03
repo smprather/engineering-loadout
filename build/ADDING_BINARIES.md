@@ -7383,3 +7383,50 @@ build/build-shell sh -c 'build/build-python-standalone.sh \
   `@python-versions`.
 - Smoke (both, after extraction): `python3.<minor> -c 'import sys, ssl, sqlite3, zlib'`
   prints the expected version; no `gui_libs` dependency (no X11 NEEDED).
+
+### Modulefiles (installed, not in the archive)
+
+`install_python_modulefiles()` (a phase after `runtime archives`) writes
+`<prefix>/share/modulefiles/python/<minor>` for every selected `python-base`
+entry with `python_version`. It is skipped when the package is not selected or
+`<prefix>/opt/python/<minor>/bin/python3` is absent, rewritten only when the
+content changed, and written through `_write_stream_atomic`. The exact text:
+
+```tcl
+#%Module1.0
+##
+## python/<minor> -- loadout-managed CPython <minor>
+##
+proc ModulesHelp { } {
+    puts stderr "CPython <minor> from loadout ({prefix}/opt/python/<minor>)"
+}
+module-whatis "CPython <minor> (loadout)"
+family python
+prepend-path PATH {<prefix>/opt/python/<minor>/bin}
+setenv LOADOUT_PYTHON {<prefix>/opt/python/<minor>/bin/python3}
+setenv UV_PYTHON_DOWNLOADS never
+```
+
+It sets no `PYTHONPATH`, `PYTHONHOME`, `LD_LIBRARY_PATH` or `UV_PYTHON`:
+those leak into child Pythons (EDA tools' own builds) and `UV_PYTHON` outranks
+a project pin. `family python` makes a second member conflict; Environment
+Modules 5.6.1 supports `module switch python/3.13`, and unload+load is the
+fallback for older sites. Gate: `tests/install-python-versions` (bash load,
+switch, tcsh load, env-leak asserts, venv stability across reinstall, and EL's
+3.15 default unchanged).
+
+### uv launcher policy
+
+`build/uv-launcher.sh` pins `UV_PYTHON` from `$LOADOUT_PYTHON` when it names
+an executable, else `<prefix>/bin/python3`. `project_pins_python()` walks
+`$PWD` to `/` looking for `.python-version` or a `pyproject.toml` with a
+`requires-python =` assignment; for `run`, `sync`, `lock`, `venv`, `add`,
+`remove`, `build` and `export` a project pin turns the default OFF (it does not
+override it). `uv pip` and `uv run` inside an activated venv keep their
+existing carve-outs. Launcher sources are payload files: after changing one,
+run `./build/update-prebuilt --launchers-only` (writes `payload/<platform>/bin/uv.bz2`
+and `uvx.bz2` without downloading the upstream binary), then regenerate sizes
+and the manifest. Gate: `tests/uv-launchers`.
+
+Tier 3 installs `@shared @python-versions` and probes every declared minor
+(`probe_python_versions`) for a working interpreter and its modulefile.
