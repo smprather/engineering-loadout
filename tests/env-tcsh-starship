@@ -36,6 +36,7 @@ Exits 0 if all cases pass, 1 otherwise.
 
 import os
 import re
+import shutil
 import sys
 import time
 
@@ -355,7 +356,6 @@ def main():
     # Controlled environment: HOME=<tmp>, cwd=<tmp>/proj (no git repo, no
     # venv), so only $directory and $character can render unless a custom
     # module is switched on.
-    import shutil
     import subprocess
     import tempfile
 
@@ -506,8 +506,19 @@ def main():
         char = "\x1b[1;32m\u276f\x1b[0m "
         body = "on " + branch + brk + path + brk + char
         # tcsh DROPS the astral python snake, so the helper substitutes a BMP
-        # label; without it the module reads as a bare `v3.14.8`.
-        py_seg = "\x1b[1;33mpython v3.14.8\x1b[0m "
+        # label. Starship reads whichever `python` is on the fixture PATH, so
+        # derive the version instead of pinning the host's patch release: a
+        # 3.14.8 literal failed the gate the day the host moved to 3.14.9.
+        py_exe = shutil.which("python", path="/usr/bin:/bin") or shutil.which("python3", path="/usr/bin:/bin")
+        if py_exe is None:
+            sys.exit("no python on the fixture PATH")
+        py_out = subprocess.run(
+            [py_exe, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True
+        ).stdout
+        py_match = re.search(r"Python (\d+\.\d+\.\d+)", py_out)
+        if py_match is None:
+            sys.exit(f"cannot parse python version from {py_out!r}")
+        py_seg = f"\x1b[1;33mpython v{py_match.group(1)}\x1b[0m "
         body_py = "on " + branch + py_seg + brk + path + brk + char
         expected_tcsh = {
             "off": body,
