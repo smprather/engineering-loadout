@@ -9,7 +9,7 @@
 # rich, rich-click, textual and watchdog. The payload wheelhouse already had
 # rich/rich-click and their shared deps; textual, watchdog, linkify-it-py and
 # mdit-py-plugins were added with this package (see build/ADDING_BINARIES.md,
-# "watchglass 2026.11.2"). No compiled artifact, no per-platform binary.
+# "watchglass 2026.11.3"). No compiled artifact, no per-platform binary.
 #
 # NOT `rolling_git`. Upstream tags every release and publishes the same wheel
 # to PyPI, so this is pinned like parity-plot/tmux-path-store: `--tag` only,
@@ -17,13 +17,13 @@
 # wheel) keeps the script's version check honest and exercises the tag.
 #
 # Usage (run from any directory):
-#   /path/to/build-watchglass.sh --tag v2026.11.2
+#   /path/to/build-watchglass.sh --tag v2026.11.3
 #
 # The build image has no `uv`; extract the payload's, as with tmux-path-store:
 #   build/build-shell sh -c 'mkdir -p /tmp/uvbin \
 #       && bzip2 -dc payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2 >/tmp/uvbin/uv \
 #       && chmod +x /tmp/uvbin/uv \
-#       && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.2'
+#       && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.3'
 
 set -eu
 
@@ -59,7 +59,7 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-loadout_require_tag "$tag" "$0" "$RELEASES_URL" "v2026.11.2"
+loadout_require_tag "$tag" "$0" "$RELEASES_URL" "v2026.11.3"
 loadout_require_cmds git uv python3.15
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/build-${PKG}.XXXXXX")

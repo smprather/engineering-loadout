@@ -6368,3 +6368,6 @@
 2026-11-03T15:47:34Z	test:check-versions-contract	0	PASS	mode=all
 2026-11-03T15:47:34Z	test:total	171	PASS	flags=--fast
 2026-11-03T15:49:03Z	build:shell	24	PASS	build-shell
+2026-11-03T17:02:59Z	build:build-watchglass.sh --tag v2026.11.3	4	PASS	build-shell
+2026-11-03T17:03:42Z	build:shell	24	PASS	build-shell
+2026-11-03T17:03:49Z	build:shell	4	PASS	build-shell

@@ -13,6 +13,30 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (3): watchglass 2026.11.3 -- conpty failure classification
+
+Upstream published 2026.11.3 on 2026-11-03 (tag `v2026.11.3`, PyPI), hours
+after the 2026.11.2 bundle. Rebuilt from the tag with
+`build/build-watchglass.sh --tag v2026.11.3` in `build/build-shell`; the
+tag/version, console-script and closure checks passed and the Linux runtime
+closure is unchanged, so no wheelhouse additions. `loadout_stamp_version` moved
+`payload/packages.json` to 2026.11.3; sizes -> manifest -> README regenerated.
+
+The release is Windows-only in effect: `password_mode = "conpty"` merges the
+command's stderr into stdout, and the classifiers now read that merged console.
+A rejected credential parks on the first auth failure instead of retrying to
+`max_failures`; a `-p` transfer whose bytes arrived but whose times could not be
+set is the usual warning; a vanished source raises `TransferMissing`; scp's
+`C:\Program Files\OpenSSH\scp.EXE:` prefix is recognised, a remote
+`/usr/bin/scp:` lookalike is not. Nothing a run printed to stderr changed, and
+no Linux code path is affected.
+
+**Verification.** Build 4 s; generators 24 s. `tests/install-watchglass` PASS
+(9 s): offline install, launcher and `farm-versions` report 2026.11.3, closure
+imports, reference docs, init/new/validate/poll --dry-run, no service
+registered. `build/check-versions --format tsv` reports `watchglass 2026.11.3
+2026.11.3 pypi current`. `tests/run-all --fast` PASS in 173 s.
+
 ## 2026-11-03 (2): watchglass 2026.11.2 -- poke a watch
 
 The user asked to update watchglass if needed. Upstream published 2026.11.2 on

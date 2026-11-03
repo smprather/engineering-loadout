@@ -3587,7 +3587,7 @@ python3.15 build/gen-readme-table`, then `./loadout install tmux-path-store
 --dest-dir <d>` and check `<d>/bin/tmux-path-store --version` reports the
 tagged version and that no `tmux_path_store` launcher remains.
 
-## watchglass 2026.11.2 -- poll conditions and run actions (first-party python-tool)
+## watchglass 2026.11.3 -- poll conditions and run actions (first-party python-tool)
 
 First-party (`github.com/smprather/watchglass`). Runs *watches*: a directory with
 a `config.toml`, a check and actions; polls each on its own interval, runs
@@ -3598,30 +3598,36 @@ verified scp/sftp transfers and `recipe = "mirror"` syncs a tree in place.
 `watchglass tui` is a live view; `p` (and `watchglass poke NAME`) asks the
 running service for an off-interval poll. MIT.
 
-**Current: 2026.11.2** (2026-11-03; was 2026.11.1). Tag `v2026.11.2` exists on
+**Current: 2026.11.3** (2026-11-03; was 2026.11.2). Tag `v2026.11.3` exists on
 GitHub and the same version is published on PyPI. The GitHub *Releases* object
 skipped `v2026.11.1` (it still listed 2026.10.31.1), so the entry has no GitHub
 `version_url`: `check-versions` reads PyPI for `python-tool`s.
 
-**2026.11.2 delta.** New `poke` command and TUI `p` binding; a poke overrides
-the interval, ordinary failure backoff and an ordinary offline marker, but is
-refused for `enabled = false`, a user disable or a permanent credential
-rejection. The runtime dependency closure is unchanged, so no wheelhouse
-additions were needed.
+**2026.11.3 delta.** Windows `password_mode = "conpty"` classifier fixes: a
+rejected credential now parks on the first auth failure instead of retrying to
+`max_failures`; merged-console `-p` warnings and vanished sources classify
+correctly; scp's `C:\Program Files\OpenSSH\scp.EXE:` prefix is recognised
+without matching a remote `/usr/bin/scp:` lookalike. Linux runtime dependency
+closure unchanged, so no wheelhouse additions.
+
+**2026.11.2 delta (previous).** New `poke` command and TUI `p` binding; a poke
+overrides the interval, ordinary failure backoff and an ordinary offline
+marker, but is refused for `enabled = false`, a user disable or a permanent
+credential rejection.
 
 **Shape.** `kind: python-tool`, `uv_tool: watchglass`, `bins: ["watchglass"]`,
 `depends: [portable-python, uv]`, non-optional (swept into `@shared`), member of
 `@system-monitor`, tags `monitor/automation/polling/systemd/python`. Pure Python
 wheel (`py3-none-any`), no compiled artifact.
 
-**Build** (`build/build-watchglass.sh --tag v2026.11.2`). The build image has no
+**Build** (`build/build-watchglass.sh --tag v2026.11.3`). The build image has no
 `uv`, so extract the payload's -- the same invocation as tmux-path-store:
 
 ```sh
 build/build-shell sh -c 'mkdir -p /tmp/uvbin \
     && bzip2 -dc payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2 >/tmp/uvbin/uv \
     && chmod +x /tmp/uvbin/uv \
-    && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.2'
+    && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.3'
 ```
 
 The script builds the wheel from the tag, refuses a tag/pyproject version
