@@ -7418,12 +7418,15 @@ switch, tcsh load, env-leak asserts, venv stability across reinstall, and EL's
 ### uv launcher policy
 
 `build/uv-launcher.sh` pins `UV_PYTHON` from `$LOADOUT_PYTHON` when it names
-an executable, else `<prefix>/bin/python3`. `project_pins_python()` walks
-`$PWD` to `/` looking for `.python-version` or a `pyproject.toml` with a
-`requires-python =` assignment; for `run`, `sync`, `lock`, `venv`, `add`,
-`remove`, `build` and `export` a project pin turns the default OFF (it does not
-override it). `uv pip` and `uv run` inside an activated venv keep their
-existing carve-outs. Launcher sources are payload files: after changing one,
+an executable, else `<prefix>/bin/python3`, and always exports
+`UV_PYTHON_DOWNLOADS=never`. `project_pins_python()` walks the project root
+(`--directory`/`--project`, else `$PWD`) to `/` looking for `.python-version`,
+`.python-versions`, or a `pyproject.toml` with a `requires-python =`
+assignment; for `run`, `sync`, `lock`, `venv`, `add`, `remove`, `build` and
+`export` a project pin turns the default OFF (it does not override it). The
+subcommand is the first non-option argument, so `uv -q venv` and
+`uv --directory D venv` obey the same gate. `uv pip` and `uv run` inside an
+activated venv keep their existing carve-outs. Launcher sources are payload files: after changing one,
 run `./build/update-prebuilt --launchers-only` (writes `payload/<platform>/bin/uv.bz2`
 and `uvx.bz2` without downloading the upstream binary), then regenerate sizes
 and the manifest. Gate: `tests/uv-launchers`.

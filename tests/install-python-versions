@@ -40,19 +40,20 @@ fail() {
 }
 
 install_selection() {
+    local verb=$1
     env -i \
         HOME="$test_home" \
         PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
         LANG="${LANG:-C.UTF-8}" \
         XDG_CACHE_HOME="$test_cache" \
         XDG_STATE_HOME="$test_state" \
-        "$repo_dir/loadout" install -y \
+        "$repo_dir/loadout" "$verb" -y \
         python-3.12 python-3.13 portable-python modules uv \
         --dest-dir "$dest_dir" --no-backup
 }
 
 echo "Installing interpreters + modules into fresh root: $dest_dir"
-install_selection
+install_selection install
 
 # --- 1. stable per-minor paths and versions --------------------------------
 for minor in 3.12 3.13; do
@@ -165,7 +166,11 @@ env -i \
         }
     ' || fail "venv creation from the loaded interpreter"
 
-install_selection >/dev/null
+inode_before=$(stat -c %i "$dest_dir/opt/python/3.12/bin/python3.12")
+install_selection reinstall >/dev/null
+inode_after=$(stat -c %i "$dest_dir/opt/python/3.12/bin/python3.12")
+[[ "$inode_before" != "$inode_after" ]] \
+    || fail "the interpreter was not replaced in place; the stability check is vacuous"
 "$venv_dir/bin/python" -c 'import sys, ssl' || fail "venv broke after an in-place reinstall"
 "$venv_dir/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12)' \
     || fail "venv interpreter changed version after reinstall"

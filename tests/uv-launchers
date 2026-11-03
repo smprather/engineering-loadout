@@ -133,4 +133,32 @@ else
         || fail "uv venv failed but left a venv behind: $(tail -3 "$work/projreq.log")"
 fi
 
+# 12. A global option BEFORE the subcommand must not bypass the gate:
+# `uv -q venv` is a project-scoped command whose subcommand is not $1.
+projopt="$work/projopt"
+mkdir -p "$projopt"
+printf '3.13\n' >"$projopt/.python-version"
+(cd "$projopt" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" -q venv "$projopt/.venv") >"$work/projopt.log" 2>&1 \
+    || { tail -5 "$work/projopt.log"; fail "uv -q venv failed in a pinned project"; }
+got=$("$projopt/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail "a global option bypassed the project-pin gate (venv on $got)"
+
+# 13. `.python-versions` (plural) is an upstream pin file too.
+projmulti="$work/projmulti"
+mkdir -p "$projmulti"
+printf '3.13\n3.12\n' >"$projmulti/.python-versions"
+(cd "$projmulti" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" venv -q "$projmulti/.venv") >"$work/projmulti.log" 2>&1 \
+    || { tail -5 "$work/projmulti.log"; fail "uv venv failed with a .python-versions pin"; }
+got=$("$projmulti/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail ".python-versions pin produced a $got venv"
+
+# 14. The launcher also disables interpreter downloads for unpinned runs, so
+# a pinned project without a local interpreter refuses instead of downloading.
+got=$(cd "$work" && "$UV" run --no-project python -c 'import os; print(os.environ.get("UV_PYTHON_DOWNLOADS", "<unset>"))')
+[ "$got" = never ] || fail "launcher did not set UV_PYTHON_DOWNLOADS=never (got '$got')"
+
 echo "uv-launchers: OK"

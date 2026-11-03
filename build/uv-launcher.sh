@@ -30,25 +30,36 @@
 #     chosen target and UV_PYTHON outranks it (measured), so the pin steps
 #     aside.
 #   * project-scoped commands in a project that pins its own Python, via
-#     .python-version or pyproject.toml requires-python in $PWD or any
-#     ancestor: run, sync, lock, venv, add, remove, build, export. UV_PYTHON
-#     outranks a project pin (measured: a 3.13 project silently rebuilt on the
-#     pinned interpreter), so a project pin must turn the default OFF rather
-#     than be overridden by it.
+#     .python-version, .python-versions, or pyproject.toml requires-python in
+#     the project root or any ancestor: run, sync, lock, venv, add, remove,
+#     build, export. UV_PYTHON outranks a project pin (measured: a 3.13
+#     project silently rebuilt on the pinned interpreter), so a project pin
+#     must turn the default OFF rather than be overridden by it.
+#
+# The subcommand is the first NON-OPTION argument, not necessarily $1: uv
+# accepts global options first (`uv -q venv`, `uv --offline sync`,
+# `uv --directory DIR venv`). Matching $1 alone let those bypass every
+# carve-out above. --directory/--project also move the project root, so their
+# value is the directory the pin walk starts from.
+#
+# UV_PYTHON_DOWNLOADS=never is set for every invocation (spec 6.4): on an
+# air-gapped node a missing interpreter must be a loud refusal, never a
+# download attempt. A caller that genuinely wants managed downloads can run
+# bin/uv.bin directly.
 #
 # The prefix is derived from this script's own location, never $HOME, so
 # --dest-dir and shared-prefix installs work.
 
 bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 1
 
-# True when the current directory or an ancestor declares a Python version:
-# a .python-version file, or a pyproject.toml with a requires-python
-# assignment. uv reads both; `uv python pin` with no arguments catches only
-# the first, so the launcher detects them itself.
+# True when START (default $PWD) or an ancestor declares a Python version:
+# .python-version, .python-versions, or a pyproject.toml with a
+# requires-python assignment. uv reads all three.
 project_pins_python() {
-    dir=$PWD
+    dir=${1:-$PWD}
+    dir=$(CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P) || dir=${1:-$PWD}
     while [ -n "$dir" ]; do
-        if [ -f "$dir/.python-version" ]; then
+        if [ -f "$dir/.python-version" ] || [ -f "$dir/.python-versions" ]; then
             return 0
         fi
         if [ -f "$dir/pyproject.toml" ] \
@@ -61,18 +72,57 @@ project_pins_python() {
     return 1
 }
 
+# First non-option argument = uv subcommand; --directory/--project move the
+# project root the pin walk starts from. Iterate a copy (`for arg in "$@"`)
+# so the original arguments are still intact for exec.
+walk_dir=$PWD
+command_name=""
+expect_value=""
+for arg in "$@"; do
+    case "$expect_value" in
+        root)
+            walk_dir=$arg
+            expect_value=""
+            continue
+            ;;
+        plain)
+            expect_value=""
+            continue
+            ;;
+    esac
+    case "$arg" in
+        --directory | --project)
+            expect_value=root
+            ;;
+        --config-file | --cache-dir | --color | --allow-insecure-host)
+            expect_value=plain
+            ;;
+        --directory=* | --project=*)
+            walk_dir=${arg#*=}
+            ;;
+        --config-file=* | --cache-dir=* | --color=* | --allow-insecure-host=*)
+            ;;
+        -?*)
+            ;;
+        *)
+            command_name=$arg
+            break
+            ;;
+    esac
+done
+
 pin=1
-case "${1:-}" in
+case "$command_name" in
     pip)
         pin=0
         ;;
     run)
-        if [ -n "${VIRTUAL_ENV:-}" ] || project_pins_python; then
+        if [ -n "${VIRTUAL_ENV:-}" ] || project_pins_python "$walk_dir"; then
             pin=0
         fi
         ;;
     sync | lock | venv | add | remove | build | export)
-        if project_pins_python; then
+        if project_pins_python "$walk_dir"; then
             pin=0
         fi
         ;;
@@ -91,4 +141,8 @@ if [ "$pin" = 1 ] && [ -z "${UV_PYTHON:-}" ]; then
         export UV_PYTHON
     fi
 fi
+
+UV_PYTHON_DOWNLOADS=never
+export UV_PYTHON_DOWNLOADS
+
 exec "$bin_dir/uv.bin" "$@"

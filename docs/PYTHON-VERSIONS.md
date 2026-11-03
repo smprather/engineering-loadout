@@ -69,10 +69,15 @@ Precedence, highest first:
 
 1. an explicit `uv --python PATH` (or `uv python` arguments);
 2. a caller-set `UV_PYTHON`;
-3. a project pin in `.python-version` or `pyproject.toml`'s
-   `requires-python`, found in the current directory or any ancestor;
+3. a project pin in `.python-version`, `.python-versions`, or
+   `pyproject.toml`'s `requires-python`, found in the project directory or any
+   ancestor (`--directory`/`--project` move where that search starts);
 4. `$LOADOUT_PYTHON` from the loaded module;
 5. `<prefix>/bin/python3` (3.15).
+
+EL's uv launcher always sets `UV_PYTHON_DOWNLOADS=never` (with or without a
+module loaded), so even a pinned project whose interpreter is absent refuses
+loudly instead of downloading one.
 
 A project pin **wins over the loaded module**: with `python/3.12` loaded, a
 project pinned to 3.13 is built on 3.13, not silently rebuilt on 3.12. If no
@@ -99,8 +104,8 @@ python3 -m venv ~/venvs/py312
 ## Offline behavior
 
 Everything comes from the payload: the interpreters are bundled archives and
-the module disables uv's downloads. Nothing in this feature needs a network,
-an internal PyPI mirror, or a compiler.
+EL's uv launcher sets `UV_PYTHON_DOWNLOADS=never` for every invocation. Nothing
+in this feature needs a network, an internal PyPI mirror, or a compiler.
 
 ## When not to add another version
 
