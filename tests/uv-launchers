@@ -161,4 +161,12 @@ got=$("$projmulti/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_
 got=$(cd "$work" && "$UV" run --no-project python -c 'import os; print(os.environ.get("UV_PYTHON_DOWNLOADS", "<unset>"))')
 [ "$got" = never ] || fail "launcher did not set UV_PYTHON_DOWNLOADS=never (got '$got')"
 
+# 15. A nonexistent --directory must end the walk, not spin it: `cd` fails, so
+# the pin walk used to see "." forever from dirname.
+rc=0
+timeout 10 env -i HOME="$work/home" PATH="$tree/bin:/usr/bin:/bin" \
+    "$UV" --directory no-such-dir venv >"$work/nodir.log" 2>&1 || rc=$?
+[ "$rc" -ne 124 ] || fail "launcher hung on a nonexistent --directory"
+[ "$rc" -ne 0 ] || fail "uv --directory no-such-dir unexpectedly succeeded"
+
 echo "uv-launchers: OK"

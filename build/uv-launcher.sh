@@ -57,7 +57,16 @@ bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 1
 # requires-python assignment. uv reads all three.
 project_pins_python() {
     dir=${1:-$PWD}
-    dir=$(CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P) || dir=${1:-$PWD}
+    if resolved=$(CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P); then
+        dir=$resolved
+    else
+        # A nonexistent --directory/--project must not stall the walk: turn a
+        # still-relative value into an absolute one against $PWD.
+        case "$dir" in
+            /*) ;;
+            *) dir=$PWD/$dir ;;
+        esac
+    fi
     while [ -n "$dir" ]; do
         if [ -f "$dir/.python-version" ] || [ -f "$dir/.python-versions" ]; then
             return 0
@@ -67,7 +76,10 @@ project_pins_python() {
             return 0
         fi
         [ "$dir" = "/" ] && break
-        dir=$(dirname -- "$dir")
+        parent=$(dirname -- "$dir")
+        # dirname's fixed point ('.', '/') ends the walk instead of spinning.
+        [ "$parent" = "$dir" ] && break
+        dir=$parent
     done
     return 1
 }
