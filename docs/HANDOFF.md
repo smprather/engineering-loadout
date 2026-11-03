@@ -13,6 +13,53 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (5): multi-Python core builds -- implemented and verified
+
+`@python-versions` (`python-3.12`, `python-3.13`) is implemented end to end:
+optional python-build-standalone `install_only_stripped` interpreters at the
+stable per-minor path `<prefix>/opt/python/<minor>`, an installer phase that
+writes `<prefix>/share/modulefiles/python/<minor>`, and a uv launcher that uses
+`LOADOUT_PYTHON` as its default without overriding project pins. `python-loaded`
+and EL's own Python tools remain on 3.15, and the new versions stay out of
+`@shared` (they are in `@shared-all`/`@all` and in `@python-versions`).
+
+**Pinned inputs.** PBS tag `20261026`; assets
+`cpython-3.12.16+20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz`
+sha256 `ce4f6d0a6cfdb3bed6e44c2f9affd85943c76a42e25ad3a259002f31d6fb8a20` and
+`cpython-3.13.18+...` sha256
+`df15fe60d3ff55bf9dcf25824b5572756bb8816ff93865a273d3301d7066a8b7`. Repacked
+payload: 31,212,850 B / 99,018,994 B installed (3.12) and 31,925,122 B /
+99,762,037 B (3.13). Highest GLIBC symbol 2.17, NEEDED glibc-only, no `gui_libs`
+dependency. Build: `build/build-shell sh -c 'build/build-python-standalone.sh
+--tag 20261026 --version 3.12.16 && ... 3.13.18'` (13.6 s).
+
+**Behaviour.** `module load python/3.12` prepends that interpreter's `bin`, sets
+`LOADOUT_PYTHON` and `UV_PYTHON_DOWNLOADS=never`, and sets no
+`PYTHONPATH`/`PYTHONHOME`/`LD_LIBRARY_PATH`/`UV_PYTHON`. The uv launcher pins
+`UV_PYTHON` from `LOADOUT_PYTHON` when executable, else `<prefix>/bin/python3`;
+a project `.python-version` or `requires-python` disables the default for
+`run`/`sync`/`lock`/`venv`/`add`/`remove`/`build`/`export`; `uv pip` and active
+venvs keep their carve-outs. venvs built from `opt/python/<minor>/bin/python3`
+survive in-place patch reinstalls. User docs: `docs/PYTHON-VERSIONS.md`.
+
+**Verification.** `tests/run-all --fast` PASS (175 s). Targeted T2 PASS:
+`tests/install-python-versions` (new), `tests/uv-launchers` (11 cases incl.
+LOADOUT_PYTHON pin, `uv init` pin, `.python-version` and `requires-python`
+precedence), `tests/install-modules`, `tests/install-watchglass`,
+`tests/install-python-tool-upgrade`. Tier 3
+`tests/prebuilt-binaries-almalinux8 --full` PASS (604 s): all 316 binaries OK,
+23 skipped, and both interpreter probes report the right version with a
+modulefile present. The first Tier 3 run failed only on the stale bundled bash
+completion (`@python-versions` missing); fixed in `3ae4a88`.
+
+**Open decisions.** (1) EOL: 3.12 ends October 2028, 3.13 October 2029 -- decide
+then whether to drop or freeze them. (2) Only minor modulefiles ship
+(`python/3.12`); exact-patch names are not offered. (3) A site running the
+bundled Environment Modules (5.6.1) gets `family python` switching; a site's own
+Modules needs 5.1+ for `family`, else wrap with `conflict python`. (4)
+`@python-versions` is deliberately NOT in `@python-stack`, so a default stack
+install stays single-version; revisit only if a real case asks for both.
+
 ## 2026-11-03 (4): multi-Python core builds -- plan written, implementation not started
 
 The user approved shipping CPython 3.12 + 3.13 alongside 3.15, with modulefiles
