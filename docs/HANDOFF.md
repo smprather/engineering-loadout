@@ -40,7 +40,13 @@ regeneration records the current size; no nvim content changed here.
 2026.11.2, the full closure imports, reference docs are present,
 init/new/validate/poll --dry-run work, and no service is registered.
 `build/check-versions --format tsv` reports `watchglass 2026.11.2 2026.11.2
-pypi current`.
+pypi current`. `tests/run-all --fast` PASS in 171 s.
+
+**T1 drift fixed in passing.** The first `--fast` run failed only
+`env-tcsh-starship`: the exact-prompt assertion pinned the host's Python to
+3.14.8, and the host had moved to 3.14.9. The gate now derives the version from
+the same `python` on its fixture PATH (`108c0eb`), so a host patch bump cannot
+red T1 again. No shell behavior changed.
 
 ## 2026-11-03 (1): multiple Python versions -- case-driven, design parked (knowledge recorded, not pursued)
 
