@@ -2265,7 +2265,7 @@
     "payload/el8.x86_64.glibc2p28/bin/urxvtc.bz2": 109960,
     "payload/el8.x86_64.glibc2p28/bin/urxvtd.bz2": 1143672,
     "payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2": 37606664,
-    "payload/el8.x86_64.glibc2p28/bin/uv.bz2": 1746,
+    "payload/el8.x86_64.glibc2p28/bin/uv.bz2": 3714,
     "payload/el8.x86_64.glibc2p28/bin/uvx.bz2": 732,
     "payload/el8.x86_64.glibc2p28/bin/vcd2fst.bz2": 142992,
     "payload/el8.x86_64.glibc2p28/bin/vcd2lxt.bz2": 60768,

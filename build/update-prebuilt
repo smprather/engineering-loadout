@@ -7,6 +7,8 @@ download release asset -> extract binary -> strip -> patchelf RPATH
 payload bin/ -> stamp packages.json version.
 
 Usage: update-prebuilt.py tool=version [tool=version ...]
+       update-prebuilt.py --launchers-only   (rewrite build/*-launcher.sh into
+                                             payload bin/*.bz2, no download)
 """
 
 import bz2
@@ -254,9 +256,33 @@ def stamp(reg_path, tool, ver):
     print(f"   registry: {tool} {before} -> {ver}")
 
 
+def write_launchers(tool):
+    """Rewrite one tool's launcher bz2s from build/<launcher>."""
+    for installed, launcher in LAUNCHERS.get(tool, ()):
+        src = os.path.join(REPO, "build", launcher)
+        with open(src, "rb") as f:
+            launcher_data = f.read()
+        launcher_out = os.path.join(BIN_DIR, installed + ".bz2")
+        with open(launcher_out, "wb") as f:
+            f.write(bz2.compress(launcher_data, 9))
+        print(f"   wrote {launcher_out} ({os.path.getsize(launcher_out)} bytes)")
+
+
 def main():
+    args = sys.argv[1:]
+    if args == ["--launchers-only"]:
+        # Recompose launchers without touching the upstream binary: the
+        # launcher is prefix-derived and version-independent, and a policy
+        # change (e.g. the LOADOUT_PYTHON pin) must not require a re-download.
+        for tool in LAUNCHERS:
+            print(f"== {tool} launchers")
+            write_launchers(tool)
+        return
+    if "--launchers-only" in args:
+        sys.exit("--launchers-only takes no other arguments")
+
     updates = []
-    for arg in sys.argv[1:]:
+    for arg in args:
         tool, _, ver = arg.partition("=")
         if not ver or tool not in TOOLS:
             sys.exit(f"bad arg or unknown tool: {arg} (known: {', '.join(TOOLS)})")
@@ -311,14 +337,7 @@ def main():
             with open(out, "wb") as f:
                 f.write(bz2.compress(data, 9))
             print(f"   wrote {out} ({os.path.getsize(out)} bytes)")
-            for installed, launcher in LAUNCHERS.get(tool, ()):
-                src = os.path.join(REPO, "build", launcher)
-                with open(src, "rb") as f:
-                    launcher_data = f.read()
-                launcher_out = os.path.join(BIN_DIR, installed + ".bz2")
-                with open(launcher_out, "wb") as f:
-                    f.write(bz2.compress(launcher_data, 9))
-                print(f"   wrote {launcher_out} ({os.path.getsize(launcher_out)} bytes)")
+            write_launchers(tool)
             stamp(reg_path, tool, ver)
 
 

@@ -18,7 +18,7 @@ wheels=$(ls -d "$REPO"/payload/*/wheels 2>/dev/null | head -1)
 
 mkdir -p "$work/home"
 env -i HOME="$work/home" PATH="/usr/bin:/bin" TMPDIR="$tmp_root" TERM=xterm \
-    "$REPO/loadout" install -y portable-python uv --dest-dir "$tree" --no-backup >"$work/install.log" 2>&1 \
+    "$REPO/loadout" install -y portable-python uv python-3.12 python-3.13 --dest-dir "$tree" --no-backup >"$work/install.log" 2>&1 \
     || { tail -20 "$work/install.log"; fail "install failed"; }
 
 UV="$tree/bin/uv"
@@ -78,5 +78,59 @@ grep -qF "No virtual environment found" "$work/guard.log" \
 
 # 7. uvx path: delegates to `uv tool run`
 "$UVX" --help 2>&1 | grep -qi 'tool' || fail "uvx --help does not look like tool run"
+
+# --- bundled 3.12/3.13 selection -------------------------------------------
+py312="$tree/opt/python/3.12/bin/python3"
+py313="$tree/opt/python/3.13/bin/python3"
+[ -x "$py312" ] || fail "python-3.12 interpreter missing"
+[ -x "$py313" ] || fail "python-3.13 interpreter missing"
+
+# 8. LOADOUT_PYTHON (set by `module load python/3.12`) is the launcher's pin
+# source when there is no project pin.
+got=$(cd "$work" && LOADOUT_PYTHON="$py312" "$UV" run --no-project python -c 'import sys; print(sys.executable)')
+case "$got" in
+    "$tree"/opt/python/3.12/*) ;;
+    *) fail "LOADOUT_PYTHON=3.12 did not steer uv run (got '$got')" ;;
+esac
+
+# 9. uv init writes the loaded minor into the project
+initdir="$work/init312"
+mkdir -p "$initdir"
+(cd "$initdir" && LOADOUT_PYTHON="$py312" "$UV" init --name probe >/dev/null 2>&1) \
+    || fail "uv init under LOADOUT_PYTHON=3.12 failed"
+pin=$(cat "$initdir/.python-version")
+case "$pin" in
+    3.12 | 3.12.*) ;;
+    *) fail "uv init wrote .python-version '$pin', expected 3.12" ;;
+esac
+
+# 10. A project pin outranks the module default: .python-version 3.13 must
+# build a 3.13 venv, not a silent rebuild on the loaded 3.12.
+proj313="$work/proj313"
+mkdir -p "$proj313"
+printf '3.13\n' >"$proj313/.python-version"
+(cd "$proj313" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" venv -q "$proj313/.venv") >"$work/proj313.log" 2>&1 \
+    || { tail -5 "$work/proj313.log"; fail "uv venv refused a 3.13 project pin"; }
+got=$("$proj313/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail "project pin 3.13 produced a $got venv under LOADOUT_PYTHON=3.12"
+
+# 11. requires-python alone is a pin too: with the module default on 3.12, a
+# project declaring >=3.13 must not be built on 3.12.
+projreq="$work/projreq"
+mkdir -p "$projreq"
+printf '[project]\nname = "probe"\nversion = "0.0.0"\nrequires-python = ">=3.13"\n' >"$projreq/pyproject.toml"
+if (cd "$projreq" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" venv -q "$projreq/.venv") >"$work/projreq.log" 2>&1; then
+    got=$("$projreq/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+    [ "$got" != 3.12 ] || fail "requires-python >=3.13 was silently built on 3.12"
+else
+    # A loud refusal is the acceptable alternative (no 3.13 discoverable in
+    # a real deployment); what must never happen is a 3.12 venv.
+    [ ! -e "$projreq/.venv/bin/python" ] \
+        || fail "uv venv failed but left a venv behind: $(tail -3 "$work/projreq.log")"
+fi
 
 echo "uv-launchers: OK"
