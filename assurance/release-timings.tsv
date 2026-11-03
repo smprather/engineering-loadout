@@ -6310,3 +6310,6 @@
 2026-11-02T17:16:46Z	test:check-versions-contract	0	PASS	mode=all
 2026-11-02T17:16:46Z	test:total	173	PASS	flags=--fast
 2026-11-02T17:38:20Z	tier3 prebuilt-binaries --full	594	PASS	docker --network none; 316 binaries OK, 23 skipped; watchglass probe OK
+2026-11-03T15:33:30Z	build:build-watchglass.sh --tag v2026.11.2	4	PASS	build-shell
+2026-11-03T15:34:15Z	build:shell	23	PASS	build-shell
+2026-11-03T15:38:02Z	build:shell	4	PASS	build-shell

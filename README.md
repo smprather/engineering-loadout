@@ -419,7 +419,7 @@ OpenSSH for those.
 | typescript-language-server | bin | 6.0.2 | TypeScript/JavaScript language server (LSP) — upstream npm package plus bundled TypeScript 6.x on loadout's bundled Node.js; drives envs/nvim/lsp/ts_ls.lua with no npm install or runtime downloads |
 | taplo | bin | 0.10.0 | TOML toolkit — linter, formatter and language server in one binary. Ships an offline JSON Schema catalog (49 SchemaStore schemas: Cargo.toml, pyproject.toml, ruff, uv, rustfmt, starship …) so `taplo lint` validates keys on an air-gapped node instead of silently degrading to grammar-only. Drives envs/nvim/lsp/taplo.lua and envs/helix/languages.toml |
 | tmux-path-store | python-tool | 2026.10.4 | Tmux window-name-keyed directory/file path store — shell aliases for per-window path bookmarks |
-| watchglass | python-tool | 2026.11.1 | Poll conditions and run actions from login onward — watches, observers, verified relay recipes, JSONL logs and a read-only TUI |
+| watchglass | python-tool | 2026.11.2 | Poll conditions and run actions from login onward — watches, observers, verified relay recipes, JSONL logs and a read-only TUI |
 
 Portable Python's standard-library `sqlite3` uses its own bundled SQLite,
 separate from the `sqlite3` CLI, with FTS5 built into that private library.

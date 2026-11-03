@@ -3587,7 +3587,7 @@ python3.15 build/gen-readme-table`, then `./loadout install tmux-path-store
 --dest-dir <d>` and check `<d>/bin/tmux-path-store --version` reports the
 tagged version and that no `tmux_path_store` launcher remains.
 
-## watchglass 2026.11.1 -- poll conditions and run actions (first-party python-tool)
+## watchglass 2026.11.2 -- poll conditions and run actions (first-party python-tool)
 
 First-party (`github.com/smprather/watchglass`). Runs *watches*: a directory with
 a `config.toml`, a check and actions; polls each on its own interval, runs
@@ -3595,27 +3595,33 @@ actions on rise/fall/while-true/while-false, retries with backoff, parks failing
 watches offline, and writes every result as JSON lines. Observers watch local
 directories, commands or remote directories; built-in recipes move files with
 verified scp/sftp transfers and `recipe = "mirror"` syncs a tree in place.
-`watchglass tui` is a read-only live view. MIT.
+`watchglass tui` is a live view; `p` (and `watchglass poke NAME`) asks the
+running service for an off-interval poll. MIT.
 
-**Current: 2026.11.1** (2026-11-02; first bundled version). Tag `v2026.11.1`
-exists on GitHub and the same version is published on PyPI. The GitHub
-*Releases* object lags the tag for this version, so `check-versions` must use
-PyPI -- do not add a GitHub `version_url`, which would read the older release
-list.
+**Current: 2026.11.2** (2026-11-03; was 2026.11.1). Tag `v2026.11.2` exists on
+GitHub and the same version is published on PyPI. The GitHub *Releases* object
+skipped `v2026.11.1` (it still listed 2026.10.31.1), so the entry has no GitHub
+`version_url`: `check-versions` reads PyPI for `python-tool`s.
+
+**2026.11.2 delta.** New `poke` command and TUI `p` binding; a poke overrides
+the interval, ordinary failure backoff and an ordinary offline marker, but is
+refused for `enabled = false`, a user disable or a permanent credential
+rejection. The runtime dependency closure is unchanged, so no wheelhouse
+additions were needed.
 
 **Shape.** `kind: python-tool`, `uv_tool: watchglass`, `bins: ["watchglass"]`,
 `depends: [portable-python, uv]`, non-optional (swept into `@shared`), member of
 `@system-monitor`, tags `monitor/automation/polling/systemd/python`. Pure Python
 wheel (`py3-none-any`), no compiled artifact.
 
-**Build** (`build/build-watchglass.sh --tag v2026.11.1`). The build image has no
+**Build** (`build/build-watchglass.sh --tag v2026.11.2`). The build image has no
 `uv`, so extract the payload's -- the same invocation as tmux-path-store:
 
 ```sh
 build/build-shell sh -c 'mkdir -p /tmp/uvbin \
     && bzip2 -dc payload/el8.x86_64.glibc2p28/bin/uv.bin.bz2 >/tmp/uvbin/uv \
     && chmod +x /tmp/uvbin/uv \
-    && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.1'
+    && PATH=/tmp/uvbin:$PATH build/build-watchglass.sh --tag v2026.11.2'
 ```
 
 The script builds the wheel from the tag, refuses a tag/pyproject version

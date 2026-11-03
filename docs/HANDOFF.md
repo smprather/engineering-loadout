@@ -13,6 +13,35 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (2): watchglass 2026.11.2 -- poke a watch
+
+The user asked to update watchglass if needed. Upstream published 2026.11.2 on
+2026-11-02 (PyPI upload 17:04Z; tag `v2026.11.2`), one release after the bundled
+2026.11.1. Rebuilt from the tag with `build/build-watchglass.sh --tag
+v2026.11.2` in `build/build-shell`; the tag/version, console-script and
+dependency-closure checks passed, and the closure is unchanged (Linux still
+resolves rich, rich-click, textual, watchdog and their deps; `pywinpty` stays
+behind the win32 marker), so no wheelhouse additions. `loadout_stamp_version`
+moved `payload/packages.json` to 2026.11.2, and `gen-installed-sizes` ->
+`gen-content-manifest` -> `gen-readme-table` regenerated the size map, manifest
+and README row. New CLI surface: `watchglass poke NAME` and TUI `p`, an
+off-interval poll request the running service consumes within a second. The
+entry still has no GitHub `version_url` -- the Releases object skipped
+`v2026.11.1` -- so `check-versions` reads PyPI.
+
+**Incidental drift fixed.** `installed-sizes.json` was stale for
+`envs/nvim/lua/global/init.lua` (19766 -> 20227 bytes): the 2026-11-02 nvim
+`:q!` fix (`a0a7035`) changed the file without regenerating the size map, so
+the T1 `installed-sizes in sync` gate would fail on that commit. This
+regeneration records the current size; no nvim content changed here.
+
+**Verification.** Build 4 s; generators 23 s. `tests/install-watchglass` PASS
+(9 s): offline wheelhouse install, launcher and `farm-versions` both report
+2026.11.2, the full closure imports, reference docs are present,
+init/new/validate/poll --dry-run work, and no service is registered.
+`build/check-versions --format tsv` reports `watchglass 2026.11.2 2026.11.2
+pypi current`.
+
 ## 2026-11-03 (1): multiple Python versions -- case-driven, design parked (knowledge recorded, not pursued)
 
 Design conversation only; no code change. Asked: ship several CPython versions,
