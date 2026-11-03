@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+# Tier 2: bundled CPython 3.12/3.13 -- install, modulefile selection, venv
+# path stability, and no environment leakage.
+#
+# What this pins:
+#   1. Both interpreters install at the STABLE per-minor path
+#      <prefix>/opt/python/<minor> and report their minor.
+#   2. The installer writes <prefix>/share/modulefiles/python/<minor>, and the
+#      file neither sets PYTHONPATH/PYTHONHOME/LD_LIBRARY_PATH/UV_PYTHON nor
+#      omits family/LOADOUT_PYTHON/UV_PYTHON_DOWNLOADS.
+#   3. bash `module load python/3.12` puts 3.12 first on PATH, sets
+#      LOADOUT_PYTHON and UV_PYTHON_DOWNLOADS, and leaks no Python env.
+#   4. `module switch python/3.13` moves the same shell to 3.13.
+#   5. tcsh can load the modulefile too (skipped when no csh is installed;
+#      Tier 3 has one).
+#   6. A venv built from the loaded interpreter records the stable path and
+#      keeps working after the interpreters are reinstalled in place.
+#   7. EL's own <prefix>/bin/python3 stays 3.15 -- the module changes one
+#      shell's PATH, not the tree.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-pyversions-home.XXXXXX")
+test_cache=$(mktemp -d "$tmp_root/loadout-pyversions-cache.XXXXXX")
+test_state=$(mktemp -d "$tmp_root/loadout-pyversions-state.XXXXXX")
+dest_dir="$test_home/tree"
+venv_dir="$test_home/venv-3.12"
+
+cleanup() {
+    chmod -R u+w "$test_home" "$test_cache" "$test_state" 2>/dev/null || true
+    rm -rf "$test_home" "$test_cache" "$test_state"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "install-python-versions failed: $*" >&2
+    exit 1
+}
+
+install_selection() {
+    env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+        LANG="${LANG:-C.UTF-8}" \
+        XDG_CACHE_HOME="$test_cache" \
+        XDG_STATE_HOME="$test_state" \
+        "$repo_dir/loadout" install -y \
+        python-3.12 python-3.13 portable-python modules uv \
+        --dest-dir "$dest_dir" --no-backup
+}
+
+echo "Installing interpreters + modules into fresh root: $dest_dir"
+install_selection
+
+# --- 1. stable per-minor paths and versions --------------------------------
+for minor in 3.12 3.13; do
+    interp="$dest_dir/opt/python/$minor/bin/python$minor"
+    [[ -x "$interp" ]] || fail "missing interpreter: $interp"
+    got=$("$interp" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+    [[ "$got" == "$minor" ]] || fail "$interp reports $got, expected $minor"
+    "$interp" -c 'import ssl, sqlite3, zlib' || fail "$interp cannot import ssl/sqlite3/zlib"
+    echo "  OK  $interp ($got)"
+done
+
+# --- 2. generated modulefiles ----------------------------------------------
+for minor in 3.12 3.13; do
+    mf="$dest_dir/share/modulefiles/python/$minor"
+    [[ -f "$mf" ]] || fail "missing modulefile: $mf"
+    for needle in 'family python' 'LOADOUT_PYTHON' 'UV_PYTHON_DOWNLOADS never'; do
+        grep -Fq "$needle" "$mf" || fail "$mf lacks: $needle"
+    done
+    if grep -Eq 'PYTHONPATH|PYTHONHOME|LD_LIBRARY_PATH|setenv UV_PYTHON ' "$mf"; then
+        fail "$mf exports Python environment that would leak into child processes"
+    fi
+    echo "  OK  modulefile $mf"
+done
+
+# --- 3/4/7. bash: load, switch, leak check, EL default unchanged -----------
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    TERM=dumb \
+    DEST="$dest_dir" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        assert_clean_env() {
+            [[ -z "${PYTHONPATH+x}" ]] || { echo "PYTHONPATH leaked: $PYTHONPATH" >&2; exit 1; }
+            [[ -z "${PYTHONHOME+x}" ]] || { echo "PYTHONHOME leaked: $PYTHONHOME" >&2; exit 1; }
+            [[ -z "${LD_LIBRARY_PATH+x}" ]] || { echo "LD_LIBRARY_PATH leaked: $LD_LIBRARY_PATH" >&2; exit 1; }
+            [[ -z "${UV_PYTHON+x}" ]] || { echo "UV_PYTHON leaked: $UV_PYTHON" >&2; exit 1; }
+        }
+        source "$DEST/lib/modules/init/bash"
+        module use "$DEST/share/modulefiles"
+        module load python/3.12
+        python3 -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+        [[ "$LOADOUT_PYTHON" == "$DEST/opt/python/3.12/bin/python3" ]] || {
+            echo "LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+        [[ "${UV_PYTHON_DOWNLOADS:-}" == never ]] || {
+            echo "UV_PYTHON_DOWNLOADS=${UV_PYTHON_DOWNLOADS:-<unset>}" >&2; exit 1; }
+        assert_clean_env
+        module switch python/3.13
+        python3 -c "import sys; assert sys.version_info[:2] == (3, 13), sys.version"
+        [[ "$LOADOUT_PYTHON" == "$DEST/opt/python/3.13/bin/python3" ]] || {
+            echo "after switch LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+        assert_clean_env
+        default_version=$("$DEST/bin/python3" -c "import sys; print(\"%d.%d\" % sys.version_info[:2])")
+        [[ "$default_version" == 3.15 ]] || {
+            echo "EL default python3 is $default_version, expected 3.15" >&2; exit 1; }
+    ' || fail "bash module load/switch assertions"
+echo "  OK  bash load/switch, no env leak, EL default still 3.15"
+
+# --- 5. tcsh ---------------------------------------------------------------
+csh_bin=$(command -v tcsh || command -v csh || true)
+if [[ -n "$csh_bin" ]]; then
+    out=$(env -i \
+        HOME="$test_home" \
+        PATH="/usr/bin:/bin" \
+        TERM=dumb \
+        DEST="$dest_dir" \
+        "$csh_bin" -f -c '
+            source "$DEST/lib/modules/init/csh"
+            module use "$DEST/share/modulefiles"
+            module load python/3.12
+            if (! $?LOADOUT_PYTHON) exit 1
+            if ("$LOADOUT_PYTHON" != "$DEST/opt/python/3.12/bin/python3") exit 1
+            python3 --version
+        ' 2>&1) || fail "tcsh module load failed: $out"
+    [[ "$out" == *"Python 3.12"* ]] || fail "tcsh python3 is not 3.12: $out"
+    echo "  OK  tcsh load ($out)"
+else
+    echo "  SKIP tcsh smoke (no csh interpreter; Tier 3 installs tcsh)"
+fi
+
+# --- 6. venv stable path, then survives an in-place reinstall --------------
+env -i \
+    HOME="$test_home" \
+    PATH="$dest_dir/bin:/usr/bin:/bin" \
+    TERM=dumb \
+    DEST="$dest_dir" \
+    VENV="$venv_dir" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        source "$DEST/lib/modules/init/bash"
+        module use "$DEST/share/modulefiles"
+        module load python/3.12
+        "$DEST/bin/uv" venv "$VENV" --python "$LOADOUT_PYTHON"
+        # A venv python reports its OWN path as sys.executable; the stable
+        # base is visible in the resolved symlink and sys.base_prefix.
+        resolved=$(readlink -f "$VENV/bin/python")
+        case "$resolved" in
+            "$DEST"/opt/python/3.12/*) ;;
+            *) echo "venv python resolves to $resolved, not the stable 3.12 path" >&2; exit 1 ;;
+        esac
+        base=$("$VENV/bin/python" -c "import sys; print(sys.base_prefix)")
+        [[ "$base" == "$DEST/opt/python/3.12" ]] || {
+            echo "venv base_prefix is $base, expected $DEST/opt/python/3.12" >&2
+            exit 1
+        }
+        grep -Fq "$DEST/opt/python/3.12/bin" "$VENV/pyvenv.cfg" || {
+            echo "pyvenv.cfg does not name the stable interpreter dir:" >&2
+            cat "$VENV/pyvenv.cfg" >&2
+            exit 1
+        }
+    ' || fail "venv creation from the loaded interpreter"
+
+install_selection >/dev/null
+"$venv_dir/bin/python" -c 'import sys, ssl' || fail "venv broke after an in-place reinstall"
+"$venv_dir/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12)' \
+    || fail "venv interpreter changed version after reinstall"
+echo "  OK  venv kept the stable path across an in-place reinstall"
+
+echo "install-python-versions OK"

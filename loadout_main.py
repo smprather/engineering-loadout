@@ -4810,6 +4810,76 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
     return bins
 
 
+def _python_modulefile_text(prefix, minor):
+    """The exact Environment Modules file for one bundled interpreter.
+
+    LOADOUT_PYTHON is the uv launcher's pin source; UV_PYTHON_DOWNLOADS covers
+    a user's own uv. Nothing here exports PYTHONPATH, PYTHONHOME,
+    LD_LIBRARY_PATH or UV_PYTHON: UV_PYTHON outranks a project's
+    .python-version and redirects `uv pip` inside an activated venv, and the
+    Python* variables leak into every child Python (EDA tools' own builds).
+    """
+    return (
+        "#%Module1.0\n"
+        "##\n"
+        f"## python/{minor} -- loadout-managed CPython {minor}\n"
+        "##\n"
+        "proc ModulesHelp { } {\n"
+        f'    puts stderr "CPython {minor} from loadout ({prefix}/opt/python/{minor})"\n'
+        "}\n"
+        f'module-whatis "CPython {minor} (loadout)"\n'
+        "family python\n"
+        f"prepend-path PATH {{{prefix}/opt/python/{minor}/bin}}\n"
+        f"setenv LOADOUT_PYTHON {{{prefix}/opt/python/{minor}/bin/python3}}\n"
+        "setenv UV_PYTHON_DOWNLOADS never\n"
+    )
+
+
+def install_python_modulefiles(repo_dir, home, selected_tools, registry):
+    """Write <prefix>/share/modulefiles/python/<minor> for each installed
+    python-base interpreter that declares `python_version`.
+
+    Skipped when the package is not selected or the interpreter is absent (a
+    modulefile pointing at nothing is worse than none). The file is rewritten
+    only when its content changed, through the same atomic inode swap as every
+    other installed file, so an already-loaded `module load python/3.12` in a
+    running shell keeps its loaded interpreter.
+    """
+    prefix = _local_root(home)
+    for pkg_name, entry in (registry or {}).items():
+        if pkg_name.startswith("@") or entry.get("kind") != "python-base":
+            continue
+        minor = entry.get("python_version")
+        if not minor:
+            continue
+        result_name = f"{pkg_name} modulefile"
+        if selected_tools is not None and pkg_name not in selected_tools:
+            record_result(result_name, "SKIP", "not in selected tools")
+            continue
+        interpreter = os.path.join(_resolve_install_to(entry.get("install_to", ""), home), "bin", "python3")
+        if not os.access(interpreter, os.X_OK):
+            skipped(
+                f"{result_name} (no interpreter at {interpreter})",
+                f"`module load python/{minor}` will NOT work",
+            )
+            record_result(result_name, "SKIP", f"no interpreter at {interpreter}")
+            continue
+        dest = os.path.join(prefix, "share", "modulefiles", "python", minor)
+        text = _python_modulefile_text(prefix, minor)
+        try:
+            with open(dest, encoding="utf-8") as fh:
+                if fh.read() == text:
+                    record_result(result_name, "OK", f"unchanged ({dest})")
+                    _vprint(f"  unchanged: {result_name}")
+                    continue
+        except OSError:
+            pass
+        ensure_dir(os.path.dirname(dest), result_name)
+        _write_stream_atomic(io.BytesIO(text.encode()), dest, 0o644)
+        record_result(result_name, "OK", dest)
+        print(f"  Installed: modulefile {dest}")
+
+
 def _prefix_bin_names(home, root, rels):
     """Names of the entries in rels (relative to root) that sit directly in
     <prefix>/bin: a runtime archive's share of the end-of-install ldd check
@@ -8212,6 +8282,7 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
     runtime_bins = run_install_step(
         "runtime archives", install_runtime_archives, repo_dir, home, selected_tools, registry, silent=True
     )
+    run_install_step("Python modulefiles", install_python_modulefiles, repo_dir, home, selected_tools, registry)
     run_install_step("Vim runtime", install_vim_runtime, repo_dir, home, selected_tools, registry, silent=True)
     mate_terminal_bins = run_install_step(
         "mate-terminal runtime", install_mate_terminal_runtime, repo_dir, home, selected_tools, registry, silent=True
