@@ -13,6 +13,39 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-03 (6): uv launcher dispatch -- review-fix follow-ups
+
+A fresh review of the multi-Python launcher found the subcommand scan could
+still be bypassed. Fixed in `build/uv-launcher.sh`:
+
+- Every value-taking global option is consumed with its value, including
+  `--trusted-host` and `--python-preference`; before, their value became the
+  "subcommand" and the project-pin gate was skipped.
+- Global options are recognized on either side of the subcommand (`uv venv
+  --directory DIR`, `uv run --project DIR`), and `--directory`/`--project`
+  move the pin walk's starting root. Previously the scan stopped at the
+  subcommand, so a post-subcommand `--directory` left the walk in the old cwd.
+- `--` ends option parsing, so a value after it can never be read as an
+  option.
+- A nonexistent relative `--directory`/`--project` no longer hangs the pin
+  walk: failed `cd -P` absolutes the value against `$PWD`, and the walk also
+  breaks on `dirname`'s fixed point. (This was the reported hang; the repro
+  `uv --directory no-such-dir venv` now returns uv's own ENOENT, not 124.)
+- The launcher always exports `UV_PYTHON_DOWNLOADS=never`, independent of a
+  loaded module.
+
+`tests/uv-launchers` is now 18 cases: global option before the subcommand,
+`.python-versions` pin, launcher-level download guard, the nonexistent-dir
+timeout, a non-subcommand value (`--trusted-host`), and post-subcommand
+`--directory`/`--project` moving the walk. `tests/install-python-versions` now
+runs `reinstall` and asserts the interpreter inode actually changed, so the
+venv-stability half of Review Focus #2 is exercised rather than vacuous.
+
+**Verification.** `tests/uv-launchers` PASS (18 cases);
+`tests/install-python-versions` PASS; `tests/run-all --fast` PASS (179 s);
+generated sizes/manifest `--check` PASS. Entry (5)'s "11 cases" and its
+`.python-version`-only phrasing are superseded by this entry.
+
 ## 2026-11-03 (5): multi-Python core builds -- implemented and verified
 
 `@python-versions` (`python-3.12`, `python-3.13`) is implemented end to end:

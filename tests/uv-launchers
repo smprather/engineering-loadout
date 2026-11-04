@@ -169,4 +169,42 @@ timeout 10 env -i HOME="$work/home" PATH="$tree/bin:/usr/bin:/bin" \
 [ "$rc" -ne 124 ] || fail "launcher hung on a nonexistent --directory"
 [ "$rc" -ne 0 ] || fail "uv --directory no-such-dir unexpectedly succeeded"
 
+# 16. A value-taking global option whose value is not a subcommand must not
+# let that value become the dispatch name (`--trusted-host pypi.internal`).
+projth="$work/projth"
+mkdir -p "$projth"
+printf '3.13\n' >"$projth/.python-version"
+(cd "$projth" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" --trusted-host pypi.internal venv -q "$projth/.venv") \
+    >"$work/projth.log" 2>&1 \
+    || { tail -5 "$work/projth.log"; fail "uv --trusted-host ... venv failed"; }
+got=$("$projth/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail "a global option's value bypassed the project-pin gate (venv on $got)"
+
+# 17. --directory/--project are global options uv also accepts AFTER the
+# subcommand; they must still move the pin walk.
+projdir="$work/projdir"
+mkdir -p "$projdir"
+printf '3.13\n' >"$projdir/.python-version"
+(cd "$work" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" venv -q --directory "$projdir" "$work/dirvenv") \
+    >"$work/projdir.log" 2>&1 \
+    || { tail -5 "$work/projdir.log"; fail "uv venv --directory failed"; }
+got=$("$work/dirvenv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail "post-subcommand --directory did not move the pin walk (venv on $got)"
+
+# 18. Same for --project (and its `=` spelling).
+projprj="$work/projprj"
+mkdir -p "$projprj"
+printf '3.13\n' >"$projprj/.python-version"
+(cd "$work" \
+    && PATH="$tree/opt/python/3.13/bin:$tree/opt/python/3.12/bin:$PATH" \
+        LOADOUT_PYTHON="$py312" "$UV" venv -q --project="$projprj" "$work/projvenv") \
+    >"$work/projprj.log" 2>&1 \
+    || { tail -5 "$work/projprj.log"; fail "uv venv --project failed"; }
+got=$("$work/projvenv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+[ "$got" = 3.13 ] || fail "post-subcommand --project did not move the pin walk (venv on $got)"
+
 echo "uv-launchers: OK"

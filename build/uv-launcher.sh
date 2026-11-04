@@ -36,11 +36,12 @@
 #     project silently rebuilt on the pinned interpreter), so a project pin
 #     must turn the default OFF rather than be overridden by it.
 #
-# The subcommand is the first NON-OPTION argument, not necessarily $1: uv
-# accepts global options first (`uv -q venv`, `uv --offline sync`,
-# `uv --directory DIR venv`). Matching $1 alone let those bypass every
-# carve-out above. --directory/--project also move the project root, so their
-# value is the directory the pin walk starts from.
+# The subcommand is the first NON-OPTION argument, not necessarily $1, and
+# uv's global options are accepted on either side of it (`uv -q venv`,
+# `uv venv --directory DIR`, `uv --offline sync`). Matching $1 alone let those
+# bypass every carve-out above. Every value-taking global option is consumed
+# with its value, and --directory/--project supply the directory the pin walk
+# starts from.
 #
 # UV_PYTHON_DOWNLOADS=never is set for every invocation (spec 6.4): on an
 # air-gapped node a missing interpreter must be a loud refusal, never a
@@ -84,12 +85,16 @@ project_pins_python() {
     return 1
 }
 
-# First non-option argument = uv subcommand; --directory/--project move the
-# project root the pin walk starts from. Iterate a copy (`for arg in "$@"`)
-# so the original arguments are still intact for exec.
+# First non-option argument = uv subcommand. uv accepts its global options on
+# either side of the subcommand, so the scan continues past it: --directory and
+# --project move the pin walk's starting root wherever they appear, and every
+# value-taking option is skipped with its value so a path/host can never be
+# mistaken for the subcommand. `--` ends option parsing. Iterate a copy
+# (`for arg in "$@"`) so the original arguments are still intact for exec.
 walk_dir=$PWD
 command_name=""
 expect_value=""
+options_open=1
 for arg in "$@"; do
     case "$expect_value" in
         root)
@@ -102,23 +107,29 @@ for arg in "$@"; do
             continue
             ;;
     esac
+    if [ "$options_open" = 0 ]; then
+        [ -n "$command_name" ] || command_name=$arg
+        continue
+    fi
     case "$arg" in
+        --)
+            options_open=0
+            ;;
         --directory | --project)
             expect_value=root
             ;;
-        --config-file | --cache-dir | --color | --allow-insecure-host)
+        --config-file | --cache-dir | --color | --allow-insecure-host | --trusted-host | --python-preference)
             expect_value=plain
             ;;
         --directory=* | --project=*)
             walk_dir=${arg#*=}
             ;;
-        --config-file=* | --cache-dir=* | --color=* | --allow-insecure-host=*)
+        --config-file=* | --cache-dir=* | --color=* | --allow-insecure-host=* | --trusted-host=* | --python-preference=*)
             ;;
         -?*)
             ;;
         *)
-            command_name=$arg
-            break
+            [ -n "$command_name" ] || command_name=$arg
             ;;
     esac
 done
