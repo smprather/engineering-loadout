@@ -252,6 +252,50 @@ def test_resolve_tool_selection(m):
     check("--force still platform-filters", sel == {"rg"})
 
 
+def test_skip_globs(m):
+    """--skip accepts glob patterns (*, ?, [...]), matched against registry
+    keys. Exact names keep their old meaning; a pattern that matches nothing
+    is a no-op, like an unknown package."""
+    rts = m.resolve_tool_selection
+    reg = {
+        "font-hack": {"kind": "font", "platforms": ["linux"]},
+        "font-fira": {"kind": "font", "platforms": ["linux"]},
+        "font-jetbrains": {"kind": "font", "platforms": ["linux"]},
+        "rg": {"kind": "bin", "platforms": ["linux"]},
+        "broken": {"kind": "bin", "platforms": ["linux"], "disabled": True},
+        "@fonts-all": {"kind": "group", "members": ["font-hack", "font-fira", "font-jetbrains"]},
+        "@cli": {"kind": "group", "members": ["rg"]},
+    }
+
+    def resolve(only, skip):
+        return set(rts(_args(only=only, skip=skip), reg))
+
+    check(
+        "--skip glob drops every matching package",
+        resolve("@fonts-all,rg", "font-*") == {"rg"},
+    )
+    check(
+        "--skip glob matching a group name expands it",
+        resolve("@fonts-all,@cli", "@cl*") == {"font-hack", "font-fira", "font-jetbrains"},
+    )
+    check(
+        "--skip glob supports ? and character classes",
+        resolve("@fonts-all", "font-?ira") == {"font-hack", "font-jetbrains"},
+    )
+    check(
+        "glob and literal names mix in one --skip value",
+        resolve("@fonts-all", "font-fira,font-j*") == {"font-hack"},
+    )
+    check(
+        "--skip glob with no match is a no-op",
+        resolve("rg", "nope-*") == {"rg"},
+    )
+    check(
+        "--skip glob matching a disabled package is a no-op",
+        resolve("rg", "*oken") == {"rg"},
+    )
+
+
 def test_tool_bin_lib_sets(m):
     allowed, registered = m._tool_bin_sets({"gvim"}, REGISTRY)
     check("bin sets: allowed follows selection", allowed == {"gvim", "gvim.bin"})
@@ -524,6 +568,7 @@ def main():
         test_walk_recommends,
         test_filter_by_platform,
         test_resolve_tool_selection,
+        test_skip_globs,
         test_tool_bin_lib_sets,
         test_parse_namelist,
         test_uv_tool_spec,

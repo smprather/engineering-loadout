@@ -58,6 +58,7 @@ every `@group` sweep skips it, naming it directly is refused with its
 ./loadout install octave                      # single package; deps auto-pulled
 ./loadout install @gui-suite                  # group; expands recursively
 ./loadout install @shared-all --skip @fonts-all   # all tools minus fonts
+./loadout install @shared-all --skip 'font-*'     # the same, by glob
 ./loadout install @shared-all --skip gnuplot,micro
 ./loadout install vim nvim rg tmux            # install exactly this set
 ./loadout install gvim --no-deps              # install gvim verbatim, no dep walk

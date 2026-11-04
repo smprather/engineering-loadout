@@ -335,6 +335,26 @@ def _parse_namelist(raw):
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def _expand_glob_names(names, registry):
+    """Expand glob tokens in a selector list into matching registry keys.
+
+    Only tokens containing glob metacharacters (*, ?, [) are treated as
+    patterns; every other name passes through untouched. Matching is
+    case-sensitive against package and @group names, so a pattern can select
+    a group that expand_groups() then expands. A pattern with no matches is
+    passed through as-is: expand_groups() emits its usual unknown-package
+    warning, and --skip stays a no-op.
+    """
+    out = []
+    for name in names:
+        if not any(ch in name for ch in "*?["):
+            out.append(name)
+            continue
+        matched = sorted(n for n in registry if fnmatch.fnmatchcase(n, name))
+        out.extend(matched or [name])
+    return out
+
+
 # Synthetic groups are computed at runtime (not stored in packages.json).
 # expand_groups() special-cases each name below; the descriptions here drive
 # `list --groups` and `describe`.
@@ -637,7 +657,8 @@ def resolve_tool_selection(args, registry):
     """Resolve CLI selectors into a frozenset of package names.
 
     Resolution steps:
-      1. Parse --skip (groups expanded).
+      1. Parse --skip (groups expanded, glob patterns matched against
+         registry keys).
       2. Build initial set from --only / --add (groups expanded).
          At least one of --only or --add must be non-empty; the caller is
          responsible for enforcing that.
@@ -658,8 +679,18 @@ def resolve_tool_selection(args, registry):
     # installable (unknown, or disabled) must be a no-op, not an error. A
     # non-empty stack selects the warn-and-continue branch of expand_groups
     # for a DISABLED name, so `--skip klayout` on a tree where klayout is
-    # already out of service says so and carries on.
-    skip_set = expand_groups(_parse_namelist(args.skip), registry, _stack=("--skip",)) if args.skip else set()
+    # already out of service says so and carries on. Glob patterns are
+    # expanded first (see _expand_glob_names), so a sweep can be subtracted
+    # without naming every family: `--skip 'font-*'`.
+    skip_set = (
+        expand_groups(
+            _expand_glob_names(_parse_namelist(args.skip), registry),
+            registry,
+            _stack=("--skip",),
+        )
+        if args.skip
+        else set()
+    )
 
     only = getattr(args, "only", None)
     add = getattr(args, "add", None)
@@ -8647,8 +8678,8 @@ def _selection_options(f):
     f = click.option(
         "--skip",
         default=None,
-        metavar="NAME,...",
-        help="Remove packages or @groups from the install set.",
+        metavar="NAME|PATTERN,...",
+        help="Remove packages, @groups, or glob patterns (e.g. 'font-*') from the install set.",
     )(f)
     f = click.argument("packages", nargs=-1, metavar="PKG...")(f)
     return f

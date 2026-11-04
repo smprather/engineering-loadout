@@ -80,7 +80,7 @@ and a disabled package reached through a group is skipped with a warning.
 
 `resolve_tool_selection(args, registry)` runs at install time:
 
-1. Parse `--skip` (expand groups).
+1. Parse `--skip` (glob patterns matched against registry keys; groups expand).
 2. Build initial set from positional `PKG` args (groups expanded). At least one
    package or group must be named; bare `install` errors with a non-zero exit
    code.
@@ -112,6 +112,7 @@ and a disabled package reached through a group is skipped with a warning.
 ./loadout install @shared-all                  # all bundled tools (shared tree)
 ./loadout install @envs-all                    # all per-user config bundles
 ./loadout install @shared-all --skip @fonts-all      # drop all font packages
+./loadout install @shared-all --skip 'font-*'        # same, by glob
 ./loadout install @core-cli vim                 # exact set (deps still walked)
 ./loadout install gvim --no-deps                # skip dep walking
 ./loadout install gvim --skip gui_libs --force  # warn on conflict, continue

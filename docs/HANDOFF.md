@@ -13,6 +13,39 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-04 (1): `--skip` accepts glob patterns
+
+`--skip` was literal-only: `--skip 'font-*'` warned `unknown package 'font-*'`
+and skipped nothing, so "a bundle minus a family of packages" needed every
+name spelled out. `resolve_tool_selection()` now runs a new
+`_expand_glob_names()` over the parsed `--skip` list before `expand_groups()`.
+
+- Patterns use `fnmatch` syntax (`*`, `?`, `[...]`) and match case-sensitively
+  against package and `@group` names; a matched group then expands normally, so
+  `--skip '@fonts-*'` works too.
+- Exact names keep their old meaning and a list can mix both:
+  `--skip 'font-firacode,font-j*'`.
+- A pattern with no matches is the same no-op as an unknown package (one
+  warning, nothing removed). A pattern matching a disabled package is a sweep,
+  not a demand: warn and continue, like a group member.
+- Subtraction still happens before dependency walking: a selected package whose
+  hard dep is skipped raises `ResolverError` unless `--no-deps`/`--force`.
+- Scope is `--skip` only. Positional/`--only` globs are NOT expanded;
+  `cmd_install_v2` still exits with `no match for argument` for them.
+
+`--skip` help/metavar and AGENTS.md, README.md, docs/ARCHITECTURE.md and
+docs/INSTALLATION.md were updated with the pattern form.
+
+**Verification.** `tests/unit-resolver` `test_skip_globs` (6 cases, written
+failing first for `*`, `?`/class, mixed list, no-match, disabled match);
+`tests/run-all --fast` PASS (181 s). CLI smoke: `resolve @fonts-all --skip
+'font-*'` → 0 packages; `--skip 'font-?ack'` → 11; `resolve
+@fonts-all,@core-cli --skip '@fonts-*'` → 22 bins (fonts gone, `@core-cli`
+intact).
+
+Branch `fix/skip-globs`. The uv-launcher fix in `4dd019b` below is an
+independent change, not part of this one.
+
 ## 2026-11-03 (6): uv launcher dispatch -- review-fix follow-ups
 
 A fresh review of the multi-Python launcher found the subcommand scan could

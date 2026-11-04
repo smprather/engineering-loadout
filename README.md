@@ -114,6 +114,7 @@ Name packages or groups the same way `dnf` or `apt` works:
 ./loadout install parity-plot                             # parity-plot CLI + local designer
 ./loadout install @gui-suite                              # a group
 ./loadout install @shared-all --skip @fonts-all           # all tools minus fonts
+./loadout install @shared-all --skip 'font-*'             # same, by glob
 ./loadout list                                            # browse packages
 ./loadout list vim helix                                  # name matches either filter
 ./loadout list --tag editor                               # filter by tag
@@ -518,8 +519,8 @@ Twelve font families bundled and installed to `~/.local/share/fonts`:
 | [Source Code Pro](https://github.com/adobe-fonts/source-code-pro) | Adobe's open-source workhorse |
 | [Ubuntu Mono](https://design.ubuntu.com/font) | Ubuntu monospace family |
 
-Use `./loadout install ... --skip @fonts-all` to skip every font, or
-`--skip font-firacode` to skip a single family. An existing
+Use `./loadout install ... --skip @fonts-all` to skip every font, `--skip
+'font-*'` to skip by glob, or `--skip font-firacode` to skip a single family. An existing
 `~/.local/share/fonts` directory is used in place: the installer replaces only
 the bundled font files (by an atomic rename, so running applications keep the
 old file) and leaves every other file there, including your own fonts. It never
