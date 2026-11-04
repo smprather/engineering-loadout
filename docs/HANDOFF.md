@@ -32,16 +32,20 @@ name spelled out. `resolve_tool_selection()` now runs a new
   hard dep is skipped raises `ResolverError` unless `--no-deps`/`--force`.
 - Scope is `--skip` only. Positional/`--only` globs are NOT expanded;
   `cmd_install_v2` still exits with `no match for argument` for them.
+- `--skip` is repeatable (`multiple=True`): occurrences are unioned, and each
+  value may still be a comma list or a pattern. `_parse_namelist()` accepts a
+  string or an iterable, so `--skip a,b --skip c` == `--skip a,b,c`.
 
 `--skip` help/metavar and AGENTS.md, README.md, docs/ARCHITECTURE.md and
 docs/INSTALLATION.md were updated with the pattern form.
 
-**Verification.** `tests/unit-resolver` `test_skip_globs` (6 cases, written
-failing first for `*`, `?`/class, mixed list, no-match, disabled match);
+**Verification.** `tests/unit-resolver` `test_skip_globs` (7 cases, written
+failing first for `*`, `?`/class, mixed list, repeated occurrence, no-match,
+disabled match; plus a repeated-occurrence case in `test_resolve_tool_selection`);
 `tests/run-all --fast` PASS (181 s). CLI smoke: `resolve @fonts-all --skip
 'font-*'` → 0 packages; `--skip 'font-?ack'` → 11; `resolve
 @fonts-all,@core-cli --skip '@fonts-*'` → 22 bins (fonts gone, `@core-cli`
-intact).
+intact); `--skip font-firacode --skip font-hack` → 10, same as the comma form.
 
 Branch `fix/skip-globs`. The uv-launcher fix in `4dd019b` below is an
 independent change, not part of this one.

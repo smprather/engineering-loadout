@@ -80,7 +80,8 @@ and a disabled package reached through a group is skipped with a warning.
 
 `resolve_tool_selection(args, registry)` runs at install time:
 
-1. Parse `--skip` (glob patterns matched against registry keys; groups expand).
+1. Parse `--skip` (repeatable; each value may be a comma list; glob patterns
+   matched against registry keys; groups expand).
 2. Build initial set from positional `PKG` args (groups expanded). At least one
    package or group must be named; bare `install` errors with a non-zero exit
    code.

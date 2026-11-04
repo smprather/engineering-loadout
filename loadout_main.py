@@ -329,10 +329,16 @@ def _current_platform():
 
 
 def _parse_namelist(raw):
-    """Split a comma-separated CLI value into a list of trimmed names."""
+    """Split CLI name lists into trimmed names.
+
+    Accepts one comma-separated string, or an iterable of them (a repeatable
+    click option hands over a tuple), so `--skip a,b --skip c` and
+    `--skip a,b,c` are equivalent.
+    """
     if not raw:
         return []
-    return [t.strip() for t in raw.split(",") if t.strip()]
+    chunks = (raw,) if isinstance(raw, str) else raw
+    return [t.strip() for chunk in chunks for t in chunk.split(",") if t.strip()]
 
 
 def _expand_glob_names(names, registry):
@@ -8677,9 +8683,12 @@ def _selection_options(f):
     )(f)
     f = click.option(
         "--skip",
-        default=None,
+        multiple=True,
         metavar="NAME|PATTERN,...",
-        help="Remove packages, @groups, or glob patterns (e.g. 'font-*') from the install set.",
+        help=(
+            "Remove packages, @groups, or glob patterns (e.g. 'font-*') from the install set. "
+            "Repeatable; occurrences are unioned."
+        ),
     )(f)
     f = click.argument("packages", nargs=-1, metavar="PKG...")(f)
     return f

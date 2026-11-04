@@ -213,6 +213,9 @@ def test_resolve_tool_selection(m):
     sel = rts(_args(only="@cli", skip="bat"), REGISTRY)
     check("--skip removes from group selection", sel == {"rg"})
 
+    sel = rts(_args(only="@cli", skip=("rg", "bat")), REGISTRY)
+    check("repeated --skip occurrences union", sel == set())
+
     try:
         rts(_args(), REGISTRY)
         check("no packages specified raises", False)
@@ -285,6 +288,10 @@ def test_skip_globs(m):
     check(
         "glob and literal names mix in one --skip value",
         resolve("@fonts-all", "font-fira,font-j*") == {"font-hack"},
+    )
+    check(
+        "repeated --skip occurrences union",
+        resolve("@fonts-all", ("font-fira", "font-j*")) == {"font-hack"},
     )
     check(
         "--skip glob with no match is a no-op",
