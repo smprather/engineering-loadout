@@ -3858,6 +3858,14 @@ offline.
 `installed-sizes.json` and the content manifest; run `gen-readme-table`, then a
 scratch-dest install and `lef-tools --help` / `def-tools --help`.
 
+**Pitfall found while verifying (2026-11-05): unset `UV_TOOL_DIR` /
+`UV_TOOL_BIN_DIR` before a scratch install.** The python-tool phase passes the
+installer's environment through to `uv tool install`, so those two variables
+redirect the venv and the launchers away from `<dest>` — and the progress table
+still reports `installed: lef-tools, def-tools`. The dest ends up with the
+interpreter and `uv`, no launchers, and no `share/uv/tools`. Check for the
+launcher file, not the table row.
+
 ## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
 
 First-party (github.com/smprather). Simplifies parasitic RC networks inside
