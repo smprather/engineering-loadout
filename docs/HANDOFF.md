@@ -13,6 +13,68 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-05 (1): `lef-tools` + `def-tools` (open-eda-file-tools distributions 2 and 3)
+
+`open-eda-file-tools` grew from one distribution to three. The registry had only
+`liberty-tools` (root of the clone); the LEF and DEF projects are now packages:
+
+- `lef-tools` (`rolling_subdir: lef_tools`) — `lef-tools` CLI.
+- `def-tools` (`rolling_subdir: def_tools`) — `def-tools` CLI (`instances`,
+  `net-shapes`, `cache`, `clock-instances`, `configure-io`).
+- Both `rolling_git` on the same clone URL as `open-eda-file-tools`; the registry
+  `version` is `git describe` of the clone root (`v2026.11.2-1-g515a151`), which
+  all three share, while each wheel's version comes from its own `pyproject.toml`.
+
+Shipped wheels: `lef_tools-2026.11.0-cp315-cp315-manylinux_2_28_x86_64.whl`,
+`def_tools-2026.11.2.dev0-cp315-cp315-manylinux_2_28_x86_64.whl`.
+
+`build/update` (rolling path) gained three things, each with its reason:
+
+- `rolling_subdir` — build the wheel from `<clone>/<subdir>`; absent means root.
+  Documented in the registry `_schema` (which `tests/registry-integrity` enforces)
+  and in `build/ADDING_BINARIES.md`.
+- A **glibc guard**: a maturin backend on a host newer than glibc 2.28 is refused
+  with the container command. Host-built, maturin's audit rejected lef-tools for
+  `GLIBC_2.30/2.33/2.34`; the alternative outcome is a wheel that dies on RHEL 8.
+- `UV_PYTHON` defaults to the repo's 3.15 bootstrap, so the wheel is cp315
+  (upstream `requires-python >=3.14`, and uv otherwise picks a 3.14).
+- A **workaround for an upstream defect**: their `.gitignore:11` is `build/`,
+  which also drops `vendor/cargo/zstd-sys/zstd/build/**` while
+  `.cargo-checksum.json` still lists it, so `cargo` fails checksumming on every
+  clean clone. The rolling path moves the clone's `.cargo/config.toml` aside for
+  the build (throwaway clone, network available) and says so. Remove it if
+  upstream fixes their `.gitignore`.
+
+`build/container-rust` provisions rustup + uv inside the container into the
+persistent `/cache` mount (the image ships none by design) and writes
+`/cache/env`, because rustup's shims need `RUSTUP_HOME` as well as PATH.
+
+**Verification.** In-container build `real 1m49s` (toolchain cached; includes two
+clones, crates compile, wheel copy, sizes + manifest regen).
+`tests/wheelhouse-closure` OK (244 wheels, 17 python-tools resolve offline under
+cp315); `tests/registry-integrity` 20/20; `build/gen-readme-table` in sync after
+adding the two hand-owned rows; offline smoke
+`uv tool install --no-index --find-links payload/el8.x86_64.glibc2p28/wheels`
+into a scratch `UV_TOOL_DIR`, then `lef-tools --help` and `def-tools --help`
+both run.
+
+**Not part of this entry:** the interactive-shell work landed separately
+(`3500357`, `d5a8ed0`, `dbb8d8c` plus the design doc in `7521999`). The working
+tree also carries uncommitted edits to `envs/tmux/tmux-global.conf` and
+`docs/TMUX.md` from that line of work; nothing here depends on them, and they
+are not staged with these changes.
+
+**Follow-ups.** (1) `lefdef-tools` (separate repo, `v2026.9.0`) is the unsplit
+predecessor of these two projects — same five DEF subcommands plus LEF queries.
+Decide whether it retires once the split tools have shipped; it was left alone
+here because dropping a shipped CLI is a user-facing decision. (2)
+`_version_tuple()` parses a describe string as numbers, so a hand-pinned
+dot-version placeholder (`2026.11.2.dev0`) looked like a downgrade against the
+first `git describe` stamp and made `./build/update` exit non-zero **after**
+writing the correct version. Observed once, self-correcting on the next run;
+worth teaching `_version_tuple` about `-N-gSHA` suffixes the day a rolling
+package is first added with a pinned placeholder.
+
 ## 2026-11-04 (1): `--skip` accepts glob patterns
 
 `--skip` was literal-only: `--skip 'font-*'` warned `unknown package 'font-*'`

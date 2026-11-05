@@ -218,6 +218,16 @@ Key rules:
 - `uv_extras` -- for `python-tool`: extras appended to `uv_tool` as
   `package[extra,...]`. Bundle the complete locked wheel closure for every extra;
   offline installs cannot fetch it later.
+- `rolling_git` + `rolling_subdir` -- for a `python-tool` built from source HEAD
+  instead of a published wheel: `rolling_git` is the clone URL, and
+  `./build/update <name>` clones it, stamps `git describe --tags` as `version`,
+  builds the wheel with `uv build` and drops it in the wheelhouse. `rolling_subdir`
+  names the directory holding the distribution when one repo hosts several
+  self-contained ones (`open-eda-file-tools` keeps `lef_tools/` and `def_tools/`
+  beside its root `liberty-tools`); omit it when the repo root is the project.
+  The tag still comes from the clone root, so sibling distributions of one repo
+  share a version string while their wheel versions come from their own
+  `pyproject.toml`.
 - packages.json is stored as RAW UTF-8. Any script that re-dumps the whole file
   must pass `ensure_ascii=False`; the default escapes every em-dash and churns
   every description on the next rebuild (regressed twice via new build scripts).
@@ -830,6 +840,29 @@ below).
 In the build container use `python3.15 -m pip download ...`: the repo's
 `.loadout-bootstrap/bin/pip3.15` carries the portable-python build path as its
 shebang and fails with "bad interpreter".
+
+### Rust extensions (maturin): build inside the container, always
+
+A wheel with a PyO3 cdylib is only `manylinux_2_28` if the **linker** was EL8's.
+Built on a newer host, maturin's own audit rejects it:
+`lef-tools` on CachyOS referenced `GLIBC_2.30/2.33/2.34` and failed the build,
+which is the good outcome -- the bad one is a wheel tagged `linux_x86_64` (or a
+hand-forced manylinux tag) that dies on the first RHEL 8 box that imports it.
+
+`./build/update <rolling-git pkg>` now refuses on a host whose glibc is newer
+than 2.28 for any maturin backend, and names the fix. The image carries no
+rustc/cargo/uv by design, so provision them once into the persistent `/cache`
+mount:
+
+```bash
+build/build-shell build/container-rust          # rustup + uv into /cache, idempotent
+build/build-shell sh -c 'export PATH=/cache/cargo/bin:/cache/uv:$PATH; ./build/update lef-tools def-tools'
+```
+
+`./build/update` sets `UV_PYTHON` to the repo's own 3.15 bootstrap when the
+variable is unset, so the wheel is cp315 without extra ceremony. The wheel
+version comes from the distribution's `pyproject.toml`; the registry `version`
+is `git describe` of the clone root, shared by all distributions of one repo.
 
 **2026-10-28 refresh (DEBT-1).** Fetched in `build/build-shell` with
 `--no-deps` and the platform set above, each file's sha256 checked against
@@ -3775,6 +3808,55 @@ truncating write would both sail past `--version`.
 **Verify after building:** `python3.15 build/gen-content-manifest &&
 python3.15 build/gen-readme-table`, then `./loadout install liberty-filter
 --dest-dir <d>` and run the filter above from the installed tree.
+
+## lef-tools / def-tools -- open-eda-file-tools distributions 2 and 3 (EDA)
+
+First-party (github.com/smprather/open-eda-file-tools). The repo grew from one
+distribution to three self-contained projects, so the registry now has three
+entries from one clone URL:
+
+| Package | Project dir | Distribution | CLIs |
+|---|---|---|---|
+| `open-eda-file-tools` | `.` (repo root) | `liberty-tools` | `liberty-format`, `liberty-view` |
+| `lef-tools` | `lef_tools/` | `lef-tools` | `lef-tools` |
+| `def-tools` | `def_tools/` | `def-tools` | `def-tools` |
+
+`rolling_git` on all three, with `rolling_subdir` naming the project directory
+for the two that are not at the root. The tag/describe comes from the clone
+root (one release cuts all three); the wheel version comes from each project's
+own `pyproject.toml`, so a registry `version` is a commit pointer, not a wheel
+version -- same as before for `liberty-tools`.
+
+**Build:** `./build/update lef-tools def-tools` — inside `build/build-shell`,
+after `build/build-shell build/container-rust`. Host builds are refused: maturin
+requires the EL8 linker for a `manylinux_2_28` tag, and this repo's extensions
+are new enough to use `GLIBC_2.30+` symbols when built on a modern host.
+
+**Python floor is 3.14** (`requires-python >=3.14`), so `uv build` must be given
+the payload's 3.15 or the wheel lands ABI-locked to the wrong minor.
+`./build/update` sets `UV_PYTHON` to `.loadout-bootstrap/bin/python3.15` itself
+when the variable is unset; do not override it.
+
+**Upstream defect that bites every clean clone (2026-11-05).** Their
+`.gitignore:11` ignores `build/`, which also matches
+`vendor/cargo/zstd-sys/zstd/build/**` — committed crate sources that
+`.cargo-checksum.json` still lists. `cargo` then dies with
+`failed to calculate checksum of ... CMakeLists.txt: No such file or directory`,
+which looks like a missing dependency and is not. Only `def-tools` needs zstd
+(`parquet` with the `zstd` feature). `_run_rolling` therefore moves the clone's
+`.cargo/config.toml` aside for its build (it is a throwaway clone, and the build
+has network), printing `vendored-source config disabled for this build`. If
+upstream fixes their `.gitignore`, that workaround can go -- it is harmless
+either way, but it is a workaround, not a design.
+
+**Closure:** `lef-tools` needs only `click`; `def-tools` needs
+`click`, `rich-click`, `rich`, `markdown-it-py`, `mdurl`, `pygments` — all
+already in the wheelhouse for other tools. `tests/wheelhouse-closure` proves it
+offline.
+
+**Verify after building:** `./build/update` already regenerates
+`installed-sizes.json` and the content manifest; run `gen-readme-table`, then a
+scratch-dest install and `lef-tools --help` / `def-tools --help`.
 
 ## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
 

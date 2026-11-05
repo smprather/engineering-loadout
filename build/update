@@ -254,6 +254,18 @@ ROLLING_GIT = {
     name: info["rolling_git"] for name, info in PACKAGES.items() if isinstance(info, dict) and info.get("rolling_git")
 }
 
+# Subdirectory holding the distribution, for a repo that hosts several
+# self-contained distributions side by side (open-eda-file-tools: liberty-tools
+# at the root, lef-tools and def-tools in lef_tools/ and def_tools/).  Tagged in
+# packages.json with "rolling_subdir": "<dir>" next to rolling_git; absent means
+# the clone root.  The tag/describe still comes from the clone root, because
+# that is where the repo's releases are cut.
+ROLLING_SUBDIR = {
+    name: info["rolling_subdir"].strip("/")
+    for name, info in PACKAGES.items()
+    if isinstance(info, dict) and info.get("rolling_subdir")
+}
+
 
 def _pkg_version(name):
     # Dev-artifact versions live outside packages.json.
@@ -958,6 +970,20 @@ def _git(args, cwd=None):
     return subprocess.check_output(["git"] + args, cwd=cwd, stderr=subprocess.DEVNULL).decode("utf-8").strip()
 
 
+def _host_glibc():
+    """(major, minor) of the glibc this process links against, or None.
+
+    Linux-only project, so confstr() is always present; None only when the
+    string is unparseable, and then the caller keeps its conservative default.
+    """
+    try:
+        version = os.confstr("CS_GNU_LIBC_VERSION") or ""
+    except AttributeError, OSError, ValueError:
+        return None
+    m = re.search(r"(\d+)\.(\d+)", version)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
 def _find_uv():
     for cand in (os.path.expanduser("~/.local/bin/uv"), shutil.which("uv")):
         if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
@@ -1032,6 +1058,7 @@ def _set_pkg_version(name, version):
 def _run_rolling(name, dry_run=False, force=False):
     _sep(name)
     url = ROLLING_GIT[name]
+    subdir = ROLLING_SUBDIR.get(name, "")
     wheels_dir = _platform_wheels_dir()
     if not wheels_dir:
         print("ERROR: no payload/<platform>/wheels dir found")
@@ -1046,7 +1073,8 @@ def _run_rolling(name, dry_run=False, force=False):
     if dry_run:
         print(f"$ git clone --filter=blob:none {url} <tmp>")
         print("$ git -C <tmp> describe --tags --always --dirty")
-        print("$ uv build --wheel --out-dir <tmp> <tmp>")
+        target = f"<tmp>/{subdir}" if subdir else "<tmp>"
+        print(f"$ uv build --wheel --out-dir <tmp> {target}")
         print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
         print(f"$ (stamp packages.json version for {name})")
         _run_payload_manifests(dry_run=True)
@@ -1081,15 +1109,52 @@ def _run_rolling(name, dry_run=False, force=False):
 
         out_dir = os.path.join(tmp, "wheels")
         os.makedirs(out_dir)
+        src_root = os.path.join(clone, subdir) if subdir else clone
+        if not os.path.isfile(os.path.join(src_root, "pyproject.toml")):
+            print(f"ERROR: no pyproject.toml under {os.path.relpath(src_root, tmp)} (rolling_subdir is wrong)")
+            return False
         env = os.environ.copy()
-        if "maturin" in _build_backend(clone):
+        backend = _build_backend(src_root)
+        if "maturin" in backend:
             # Under PEP517, maturin tags a bare linux_x86_64 wheel; force a
             # portable manylinux_2_28 build (EL8 glibc floor) to match the
             # repo's wheel-compat policy.  maturin reads MATURIN_PEP517_ARGS
             # when invoked by a build frontend (uv/pip/build).
             env["MATURIN_PEP517_ARGS"] = "--compatibility manylinux_2_28"
-        print("Building wheel via uv ...")
-        rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, clone], env=env)
+            # ...and the tag is only honest when the LINKER is EL8's.  Built on
+            # a newer host, maturin's audit rejects the result outright
+            # (2026-11-05: lef-tools referenced GLIBC_2.30/2.33/2.34).  Refuse
+            # before wasting the compile instead of failing at the end.
+            glibc = _host_glibc()
+            if glibc and glibc > (2, 28):
+                print(
+                    f"ERROR: {name} has a Rust extension and must be built against "
+                    f"glibc 2.28; this host is {glibc[0]}.{glibc[1]}.\n"
+                    f"       Run it in the build container:  build/build-shell ./build/update {name}"
+                )
+                return False
+            # Same interpreter the wheelhouse is built for.  Without it uv picks
+            # whatever >=3.14 it can find and the wheel is ABI-locked to the
+            # wrong minor (wheelhouse-closure then rejects it).
+            if "UV_PYTHON" not in env:
+                boot = os.path.join(REPO, ".loadout-bootstrap", "bin", "python3.15")
+                if os.access(boot, os.X_OK):
+                    env["UV_PYTHON"] = boot
+            # A repo that vendors its crates can still be unbuildable from a
+            # clone: git cannot carry a file a too-broad .gitignore excludes
+            # inside the vendor tree (open-eda-file-tools ignores build/, which
+            # drops zstd/build/** while .cargo-checksum.json still lists it).
+            # Cargo then fails checksumming.  Builds here have network, so drop
+            # the source replacement for this throwaway clone and let cargo use
+            # crates.io.
+            vendor_cfg = os.path.join(clone, ".cargo", "config.toml")
+            if os.path.isfile(vendor_cfg):
+                with open(vendor_cfg, encoding="utf-8", errors="replace") as fh:
+                    if "replace-with" in fh.read():
+                        os.replace(vendor_cfg, vendor_cfg + ".disabled")
+                        print("  vendored-source config disabled for this build (incomplete vendor tree)")
+        print(f"Building wheel via uv ({os.path.relpath(src_root, tmp)}) ...")
+        rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, src_root], env=env)
         if rc != 0:
             print(f"ERROR: uv build failed for {name}")
             return False

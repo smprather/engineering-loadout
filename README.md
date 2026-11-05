@@ -284,6 +284,8 @@ OpenSSH for those.
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
 | lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | open-eda-file-tools | python-tool | v2026.10.1-5-gebdd925 | open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs |
+| lef-tools | python-tool | v2026.11.2-1-g515a151 | lef-tools — parse cell LEF libraries into typed macros, pins, ports and rectangles; Rust-backed, geometry stays in LEF microns |
+| def-tools | python-tool | v2026.11.2-1-g515a151 | def-tools — parse and query DEF designs: placed instance bboxes, net shapes, binary DEF cache, SDC clock walks, IO policy configurator |
 | librelane | python-tool | 3.0.16 | librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled). Ships `librelane` + `librelane.config/env_info/help/state/steps` (or `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel. Member of @eda |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |

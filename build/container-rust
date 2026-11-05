@@ -1,0 +1,86 @@
+#!/bin/sh
+# Provision a Rust toolchain and uv INSIDE the EL8 build container, idempotently.
+#
+# Why this exists: the image deliberately ships no rustc/cargo/uv (build/Dockerfile:
+# those tools manage their own toolchains), but two kinds of build need them HERE
+# rather than on the host:
+#
+#   * Python wheels with a Rust extension (maturin) -- the wheel is only honestly
+#     manylinux_2_28 when the LINKER is EL8's. Built on a newer host, maturin's
+#     audit rejects the result (2026-11-05: lef-tools referenced GLIBC_2.30/
+#     2.33/2.34), so `./build/update <pkg>` now refuses outside the container.
+#   * anything linking portable-python's PGO/LTO toolchain.
+#
+# Everything lands under /cache (the persistent mount build-shell creates at
+# $HOME/.cache/loadout-build), so the second run is free.
+#
+# Downloads go through the repo's own Python 3.15 instead of curl/wget: both
+# artifacts are statically linked for the target, and the bootstrap tree is
+# already on PATH inside the container.
+#
+# Usage (inside build-shell, or as build/build-shell build/container-rust):
+#   build/build-shell build/container-rust
+#   build/build-shell sh -c 'export PATH=/cache/cargo/bin:/cache/uv:$PATH; ...'
+#
+# Prints the two exports to add to PATH on stdout's tail so a caller can eval it.
+
+set -eu
+
+if [ ! -d /cache ]; then
+    echo "container-rust: /cache is not mounted -- run this via build/build-shell" >&2
+    exit 1
+fi
+
+PY="${PY:-/repo/.loadout-bootstrap/bin/python3.15}"
+[ -x "$PY" ] || PY="$(command -v python3.15 || true)"
+[ -n "$PY" ] || { echo "container-rust: no python3.15 (run ./loadout once to bootstrap)" >&2; exit 1; }
+
+UV_VERSION="${UV_VERSION:-0.13.1}"
+RUSTUP_HOME=/cache/rustup
+CARGO_HOME=/cache/cargo
+UV_DIR=/cache/uv
+export RUSTUP_HOME CARGO_HOME
+
+mkdir -p "$UV_DIR"
+
+if [ ! -x "$CARGO_HOME/bin/cargo" ]; then
+    echo "container-rust: installing rustup (minimal profile) into $RUSTUP_HOME"
+    "$PY" - "$UV_VERSION" <<'PY'
+import sys, urllib.request
+urllib.request.urlretrieve(
+    "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init",
+    "/cache/rustup-init",
+)
+PY
+    chmod +x /cache/rustup-init
+    /cache/rustup-init -y --profile minimal --no-modify-path >/dev/null
+fi
+
+if [ ! -x "$UV_DIR/uv" ]; then
+    echo "container-rust: installing uv $UV_VERSION into $UV_DIR"
+    "$PY" - "$UV_VERSION" <<'PY'
+import sys, tarfile, urllib.request
+ver = sys.argv[1]
+url = f"https://github.com/astral-sh/uv/releases/download/{ver}/uv-x86_64-unknown-linux-musl.tar.gz"
+urllib.request.urlretrieve(url, "/cache/uv.tar.gz")
+with tarfile.open("/cache/uv.tar.gz") as tf:
+    member = next(m for m in tf.getmembers() if m.name.endswith("/uv") or m.name == "uv")
+    member.name = "uv"
+    member.mode = 0o755
+    tf.extract(member, "/cache/uv", filter="data")
+PY
+fi
+
+"$CARGO_HOME/bin/cargo" --version
+"$UV_DIR/uv" --version
+
+# rustup's shims find the toolchains through RUSTUP_HOME only; an invocation that
+# exports PATH alone fails with "rustup could not choose a version of cargo to
+# run ... no default is configured". Write the exports down once so builds source
+# them instead of rediscovering that.
+cat >/cache/env <<EOF
+export RUSTUP_HOME=$RUSTUP_HOME
+export CARGO_HOME=$CARGO_HOME
+export PATH=$CARGO_HOME/bin:$UV_DIR:\$PATH
+EOF
+echo "container-rust: ready -- . /cache/env  (exports RUSTUP_HOME, CARGO_HOME, PATH)"
