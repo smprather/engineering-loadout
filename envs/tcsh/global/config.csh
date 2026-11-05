@@ -7,8 +7,7 @@
 # control (see envs/tcsh/README.md): LOADOUT_CFG_ENABLE_FZF,
 # LOADOUT_CFG_ENABLE_ZOXIDE, LOADOUT_CFG_ENABLE_ICECREAM,
 # LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION,
-# LOADOUT_CFG_PRESERVE_FUNCTIONS (csh has no functions to preserve),
-# LOADOUT_CFG_PREFERRED_BASH (see LOADOUT_CFG_PREFERRED_TCSH below instead).
+# LOADOUT_CFG_PRESERVE_FUNCTIONS (csh has no functions to preserve).
 # Setting them here would be a variable nothing reads.
 #
 # NOT omitted any more: LOADOUT_CFG_ENABLE_STARSHIP. It used to be listed here
@@ -27,10 +26,6 @@
 # below; the repo source intentionally keeps it empty.
 
 # ---- shell selection ---------------------------------------------------------
-# Full path to a preferred tcsh binary; the rc re-execs into it at startup when
-# it is set, differs from the running shell, and is executable. The bash analogue
-# is LOADOUT_CFG_PREFERRED_BASH.
-if ( ! $?LOADOUT_CFG_PREFERRED_TCSH )      setenv LOADOUT_CFG_PREFERRED_TCSH ""
 # Interactive shell to switch to at startup: a bare name (zsh) or an absolute
 # path. Empty keeps the login shell. See README "Choosing your interactive shell".
 if ( ! $?LOADOUT_CFG_INTERACTIVE_SHELL ) setenv LOADOUT_CFG_INTERACTIVE_SHELL ""

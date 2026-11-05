@@ -605,6 +605,8 @@ The value:
   shell that cannot run on this host (a broken `#!` line, another
   architecture, a missing library; the target is tried once with `-c :`
   before the switch) -- is ignored, silently, so a typo never breaks a login.
+  From a csh/tcsh login, a path holding a quote, `$`, `!`, `~` or a blank is
+  ignored too (see `envs/tcsh/README.md`).
 
 The switch exports `LOADOUT_SHELL_EXEC` (the shell it started) and `SHELL`, and
 every shell started inside that session sees the marker and is left alone:
@@ -649,6 +651,7 @@ Retired settings are cut over, never aliased: setting an old name has no effect.
 | `LOADOUT_ONLINE_CACHE_TTL` | `LOADOUT_CFG_ONLINE_CACHE_TTL` (seconds, default `86400`; `0` disables the cache). |
 | `LOADOUT_CFG_PREFERRED_BASH` | `LOADOUT_CFG_INTERACTIVE_SHELL` (see "Choosing your interactive shell"; a typed `bash` or `t` no longer switches). |
 | `LOADOUT_CFG_PREFERRED_ZSH` | `LOADOUT_CFG_INTERACTIVE_SHELL`. |
+| `LOADOUT_CFG_PREFERRED_TCSH` | `LOADOUT_CFG_INTERACTIVE_SHELL`, set in `~/.config/tcsh/user/config.csh` (the tcsh binary's absolute path; a typed `tcsh` no longer switches). |
 
 ---
 

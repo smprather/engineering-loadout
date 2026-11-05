@@ -5,7 +5,8 @@
 # Design: docs/superpowers/specs/2026-11-05-interactive-shell-design.md (D1-D4,
 # D9). The bracketed numbers after each case letter are its Verification items.
 # bash and zsh share one implementation, loadout_exec_interactive_shell in
-# envs/bash/functions.sh.
+# envs/bash/functions.sh. tcsh and csh have their own block in
+# envs/tcsh/global/tcshrc plus helpers/resolve-shell (the tc-* cases).
 #
 # HARNESS TRAPS (as in tests/install-env-zsh), each of which gives a green run
 # that proves nothing:
@@ -91,6 +92,7 @@ set_pref() {
 PROBE='echo PROBE_comm=`ps -o comm= -p $$` PROBE_marker=`printenv LOADOUT_SHELL_EXEC` PROBE_shell=`printenv SHELL`'
 LOGIN_BASH='shopt -q login_shell && echo PROBE_login=yes || echo PROBE_login=no'
 LOGIN_ZSH='[[ -o login ]] && echo PROBE_login=yes || echo PROBE_login=no'
+LOGIN_TCSH='echo PROBE_loginsh=$?loginsh'
 
 # expect_probe OUT COMM MARKER SHELL LABEL: the line PROBE printed.
 expect_probe() {
@@ -102,15 +104,30 @@ expect_probe() {
 $1"
 }
 
+# expect_probe_csh_login OUT COMM MARKER LABEL: expect_probe without the SHELL
+# field, for a tcsh/csh LOGIN shell that PROBE runs in: its system login file
+# may set SHELL itself (Arch's /etc/csh.login runs `setenv SHELL /bin/tcsh`).
+expect_probe_csh_login() {
+    _got=$(printf '%s\n' "$1" \
+        | grep -o 'PROBE_comm=[^ ]* PROBE_marker=[^ ]*' \
+        | tail -n 1) || true
+    [ "$_got" = "PROBE_comm=$2 PROBE_marker=$3" ] \
+        || fail "$4: expected [PROBE_comm=$2 PROBE_marker=$3], got [$_got]
+$1"
+}
+
 # has_line OUT TEXT: a whole output line equals TEXT. The typed lines carry
 # these strings too, but never alone on a line.
 has_line() { printf '%s\n' "$1" | grep -qxF "$2"; }
 
 # assert_quiet OUT LABEL: startup stays silent whatever the value is.
 assert_quiet() {
-    # zsh spells it 'no such file', bash 'No such file'.
+    # zsh spells it 'no such file', bash 'No such file'. The second row is
+    # tcsh's own vocabulary (tests/install-env-tcsh, assert_no_csh_noise).
     for _pat in 'No such file' 'no such file' 'not found' 'Permission denied' 'command not found' \
-                'bad substitution'; do
+                'bad substitution' \
+                'Undefined variable' 'Badly placed' 'Expression Syntax' 'Variable syntax' \
+                'Unmatched' 'Too many arguments'; do
         case $1 in
             *"$_pat"*) fail "$2: the shell printed '$_pat':
 $1" ;;
@@ -383,6 +400,186 @@ $_cap" ;;
     done
 else
     echo "SKIP: case t (no tmux)"
+fi
+
+# --- tcsh and csh origins: the block in envs/tcsh/global/tcshrc ----------------
+# The same conditions as bash/zsh, written in csh, with helpers/resolve-shell
+# for the value. A case whose PROBE runs in a tcsh/csh LOGIN shell checks the
+# comm and the marker only: the system csh.login may set SHELL itself.
+if [ -n "$TCSH_BIN" ]; then
+    # --- tc-u [2,11]: tcsh login -> zsh, login preserved ------------------------
+    set_pref "$ZSH_BIN"
+    out=$(pty "$TCSH_BIN -l" "$PROBE
+$LOGIN_ZSH" SHELL="$TCSH_BIN")
+    assert_quiet "$out" "tc-u"
+    expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "tc-u: tcsh login with a zsh preference"
+    has_line "$out" PROBE_login=yes || fail "tc-u: the zsh target is not a login shell:
+$out"
+
+    # --- tc-v [2,11]: tcsh login -> bash, login preserved -----------------------
+    set_pref "$BASH_BIN"
+    out=$(pty "$TCSH_BIN -l" "$PROBE
+$LOGIN_BASH")
+    assert_quiet "$out" "tc-v"
+    expect_probe "$out" bash "$BASH_BIN" "$BASH_BIN" "tc-v: tcsh login with a bash preference"
+    has_line "$out" PROBE_login=yes || fail "tc-v: the bash target is not a login shell:
+$out"
+
+    # --- tc-w [11]: non-login tcsh, inherited SHELL=tcsh -> non-login zsh -------
+    set_pref "$ZSH_BIN"
+    out=$(pty "$TCSH_BIN -i" "$PROBE
+$LOGIN_ZSH" SHELL="$TCSH_BIN")
+    assert_quiet "$out" "tc-w"
+    expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "tc-w: non-login tcsh with a zsh preference"
+    has_line "$out" PROBE_login=no || fail "tc-w: the target of a non-login origin is a login shell:
+$out"
+
+    # --- tc-x [2,11]: zsh login -> tcsh, login preserved ------------------------
+    set_pref "$TCSH_BIN"
+    out=$(pty "$ZSH_BIN -l" "$PROBE
+$LOGIN_TCSH" SHELL="$ZSH_BIN")
+    assert_quiet "$out" "tc-x"
+    expect_probe_csh_login "$out" tcsh "$TCSH_BIN" "tc-x: zsh login with a tcsh preference"
+    has_line "$out" PROBE_loginsh=1 || fail "tc-x: the tcsh target is not a login shell:
+$out"
+
+    # --- tc-y [10]: tcsh -i -c runs its command and never switches --------------
+    # SHELL is tcsh, so every other condition holds and $?prompt is the only
+    # guard: tcsh leaves it unset under -c (the IDE environment-read shape).
+    # SHELL is set by `env`, not passed to pty, so `script` itself runs /bin/sh
+    # and this case alone decides whether the guard holds.
+    set_pref "$ZSH_BIN"
+    _t0=$(date +%s)
+    out=$(pty "env SHELL=$TCSH_BIN $TCSH_BIN -i -c 'echo PROBE_cmd=ran'" "")
+    [ $(($(date +%s) - _t0)) -lt 15 ] || fail "tc-y: tcsh -i -c ran into the timeout:
+$out"
+    assert_quiet "$out" "tc-y"
+    has_line "$out" PROBE_cmd=ran || fail "tc-y: tcsh -i -c did not run its command:
+$out"
+
+    # --- tc-z [3,9]: a tcsh typed inside the switched zsh stays tcsh ------------
+    set_pref "$ZSH_BIN"
+    out=$(pty "$TCSH_BIN -l" "tcsh
+$PROBE
+exit")
+    assert_quiet "$out" "tc-z"
+    expect_probe "$out" tcsh "$ZSH_BIN" "$ZSH_BIN" "tc-z: tcsh typed inside the switched zsh"
+
+    # --- tc-aa [8]: a bare name resolves through the shared prefix, not an alias
+    # tcsh's own `which` answers with aliases first; the helper never sees one.
+    set_pref zsh "" "setenv LOADOUT_CFG_SHARED_PREFIX $T/prefix
+alias zsh 'echo PROBE_hijack'"
+    out=$(pty "$TCSH_BIN -l" "$PROBE")
+    assert_quiet "$out" "tc-aa"
+    expect_probe "$out" zsh "$T/prefix/bin/zsh" "$T/prefix/bin/zsh" "tc-aa: bare name via the shared prefix"
+    case $out in
+        *PROBE_hijack*) fail "tc-aa: the resolver ran the zsh alias:
+$out" ;;
+    esac
+
+    # --- tc-ab [6]: a missing target -> no switch, no output --------------------
+    set_pref /nonexistent/zsh
+    out=$(pty "$TCSH_BIN -l" "$PROBE")
+    assert_quiet "$out" "tc-ab"
+    expect_probe_csh_login "$out" tcsh "" "tc-ab: missing target"
+
+    # --- tc-ac: csh is tcsh on EL8/EL9, and it reads ~/.tcshrc ------------------
+    case $(readlink -f /bin/csh 2>/dev/null) in
+        */tcsh)
+            set_pref "$ZSH_BIN"
+            out=$(pty "/bin/csh -l" "$PROBE
+$LOGIN_ZSH")
+            assert_quiet "$out" "tc-ac"
+            expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "tc-ac: csh login with a zsh preference"
+            has_line "$out" PROBE_login=yes || fail "tc-ac: the zsh target is not a login shell:
+$out"
+            ;;
+        *) echo "SKIP: case tc-ac (/bin/csh is not tcsh on this host)" ;;
+    esac
+
+    # --- tc-q: no inherited SHELL, or one that does not exist -> no switch ------
+    # The twin of q. tcsh never fills in SHELL itself (it sets only the lowercase
+    # $shell, which always names the running tcsh), so with SHELL absent from
+    # the environment a non-login tcsh is not a top-level spawn.
+    set_pref "$ZSH_BIN"
+    out=$(pty "$TCSH_BIN -i" "$PROBE")
+    assert_quiet "$out" "tc-q: SHELL unset"
+    expect_probe "$out" tcsh "" "" "tc-q: SHELL unset"
+    out=$(pty "env SHELL=/nonexistent/tcsh $TCSH_BIN -i" "$PROBE")
+    assert_quiet "$out" "tc-q: SHELL=/nonexistent/tcsh"
+    expect_probe "$out" tcsh "" /nonexistent/tcsh "tc-q: SHELL=/nonexistent/tcsh"
+
+    # --- tc-ad: an executable that cannot run here -> no switch (twin of u) -----
+    # Without the `-c :` probe, the bad interpreter leaves a marker behind for a
+    # switch that never happened, and brokensh ends the login.
+    for _v in "$T/bin/badshebang" "$T/bin/brokensh"; do
+        set_pref "$_v"
+        out=$(pty "$TCSH_BIN -l" "$PROBE")
+        assert_quiet "$out" "tc-ad: $_v"
+        expect_probe_csh_login "$out" tcsh "" "tc-ad: target $_v cannot run"
+    done
+
+    # --- tc-af [6,12]: values csh would re-parse -> no switch, no output --------
+    # Inside "`...`" csh substitutes and then re-parses the command, so a quote,
+    # `$` or backquote in the preference, or a blank in the resolved path (here
+    # a shared prefix with a space), used to print a csh error at every login.
+    # Single quotes keep the csh config line itself from expanding them.
+    mkdir -p "$T/sp ace/bin"
+    ln -s "$ZSH_BIN" "$T/sp ace/bin/zsh"
+    for _line in "setenv LOADOUT_CFG_INTERACTIVE_SHELL 'zsh\"x'" \
+                 "setenv LOADOUT_CFG_INTERACTIVE_SHELL 'zs\$h'" \
+                 "setenv LOADOUT_CFG_INTERACTIVE_SHELL 'zsh\`x'" \
+                 "setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh
+setenv LOADOUT_CFG_SHARED_PREFIX '$T/sp ace'"; do
+        set_pref ""
+        printf '%s\n' "$_line" > "$H/.config/tcsh/user/config.csh"
+        out=$(pty "$TCSH_BIN -l" "$PROBE")
+        assert_quiet "$out" "tc-af: [$_line]"
+        expect_probe_csh_login "$out" tcsh "" "tc-af: [$_line]"
+    done
+
+    # --- tc-ae [1,8,12]: helpers/resolve-shell agrees with the bash resolver ----
+    # One contract, two implementations (D5). Run from $T, so a relative PATH
+    # entry (`bin`, or an empty one) would find $T/bin's shells if either looked.
+    RESOLVE="$H/.config/tcsh/global/helpers/resolve-shell"
+    [ -x "$RESOLVE" ] || fail "tc-ae: helpers/resolve-shell is not installed executable"
+    sh -n "$RESOLVE" || fail "tc-ae: helpers/resolve-shell has a POSIX sh syntax error"
+    if command -v dash >/dev/null 2>&1; then
+        dash -n "$RESOLVE" || fail "tc-ae: helpers/resolve-shell is not POSIX (dash rejected it)"
+    fi
+    mkdir -p "$T/rshome/.local/share/loadout/bin"
+    ln -s "$ZSH_BIN" "$T/rshome/.local/share/loadout/bin/zsh"
+    # rs_run PATH PREFIX VALUE [CMD...]: the answer and status of CMD (default:
+    # the helper) for VALUE. PREFIX `-` leaves LOADOUT_CFG_SHARED_PREFIX unset.
+    rs_run() {
+        _rpath=$1 _rpre=$2 _rv=$3
+        shift 3
+        [ $# -gt 0 ] || set -- "$RESOLVE"
+        _rpv=""
+        [ "$_rpre" = - ] || _rpv="LOADOUT_CFG_SHARED_PREFIX=$_rpre"
+        (cd "$T" && env -i HOME="$T/rshome" PATH="$_rpath" ${_rpv:+"$_rpv"} "$@" "$_rv") \
+            && echo rc=0 || echo "rc=$?"
+    }
+    BASH_RESOLVE='. "$0"; loadout_resolve_interactive_shell "$1"'
+    for _combo in "/usr/bin:/bin|-" "/usr/bin:/bin|" "/usr/bin:/bin|$T/prefix" \
+                  "bin::$T/wrap:/usr/bin:/bin|$T/emptyprefix"; do
+        _cpath=${_combo%|*} _cpre=${_combo##*|}
+        for _v in "" " zsh" "zsh -l" "$(printf 'zsh\tx')" bin/zsh ./zsh /nonexistent/zsh \
+                  "$T/notexec" "$T/bin" "$ZSH_BIN" "$T/bin/zshwrap" zsh relsh zshwrap no-such-shell; do
+            _a=$(rs_run "$_cpath" "$_cpre" "$_v")
+            _b=$(rs_run "$_cpath" "$_cpre" "$_v" "$BASH_BIN" -c "$BASH_RESOLVE" "$REPO/envs/bash/functions.sh")
+            [ "$_a" = "$_b" ] || fail "tc-ae: [$_v] with PATH=$_cpath prefix=$_cpre: resolve-shell gave [$_a], the bash resolver [$_b]"
+        done
+    done
+    # Pinned answers, so the two cannot agree on being wrong.
+    [ "$(rs_run /usr/bin:/bin - zsh)" = "$T/rshome/.local/share/loadout/bin/zsh
+rc=0" ] || fail "tc-ae: an unset prefix does not default to ~/.local/share/loadout"
+    [ "$(rs_run "bin::$T/wrap:/usr/bin:/bin" "$T/emptyprefix" zsh)" = "$T/wrap/zsh
+rc=0" ] || fail "tc-ae: the PATH walk does not skip relative entries"
+    [ "$(rs_run "bin::/usr/bin:/bin" "$T/emptyprefix" relsh)" = "rc=1" ] \
+        || fail "tc-ae: a name only a relative PATH entry reaches resolved"
+else
+    echo "SKIP: tcsh cases tc-* (no tcsh interpreter)"
 fi
 
 echo "env-interactive-shell: all cases passed"

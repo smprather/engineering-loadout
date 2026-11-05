@@ -1,0 +1,46 @@
+#!/bin/sh
+# Resolve a LOADOUT_CFG_INTERACTIVE_SHELL value to an executable, for the
+# interactive-shell switch in global/tcshrc. The csh twin of
+# loadout_resolve_interactive_shell in envs/bash/functions.sh: same rules, same
+# answers (tests/env-interactive-shell compares the two). Prints the absolute
+# path and exits 0, or prints nothing and exits 1:
+#   empty, or any whitespace (`zsh -l`)  -> 1
+#   /absolute/path                       -> itself, when a regular executable
+#   any other slash (`bin/zsh`)          -> 1
+#   bare name                            -> <shared prefix>/bin/NAME, else the
+#                                           first absolute inherited PATH
+#                                           entry with it
+# Never `command -v` (nor csh's `which`): those answer with aliases and
+# builtins. Reads only LOADOUT_CFG_SHARED_PREFIX, HOME and PATH.
+
+v=${1-}
+case $v in
+    "" | *[[:space:]]*) exit 1 ;;
+    /*)
+        [ -f "$v" ] && [ -x "$v" ] || exit 1
+        printf '%s\n' "$v"
+        exit 0
+        ;;
+    */*) exit 1 ;;
+esac
+d=${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}/bin/$v
+if [ -f "$d" ] && [ -x "$d" ]; then
+    printf '%s\n' "$d"
+    exit 0
+fi
+rest=${PATH-}
+while [ -n "$rest" ]; do
+    d=${rest%%:*}
+    case $rest in
+        *:*) rest=${rest#*:} ;;
+        *) rest="" ;;
+    esac
+    # SHELL and the marker must be absolute: relative entries (and empty ones,
+    # which mean the cwd) are skipped.
+    case $d in /*) ;; *) continue ;; esac
+    if [ -f "$d/$v" ] && [ -x "$d/$v" ]; then
+        printf '%s\n' "$d/$v"
+        exit 0
+    fi
+done
+exit 1

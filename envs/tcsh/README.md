@@ -83,6 +83,41 @@ defaults. A direct tcsh login then finds shared `bin/`, `TERMINFO_DIRS`, typelib
 GUI helper paths, and any shared fonts (`FONTCONFIG_FILE`) without relying on the
 parent process to export the prefix.
 
+## Switching to another shell
+
+tcsh never reads the bash layers, so a csh or tcsh login takes its line in this
+env's user layer, `~/.config/tcsh/user/config.csh`:
+
+```csh
+setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh
+```
+
+`global/tcshrc` then runs the same one-shot exec as the bash and zsh rc, before
+its PATH work: the same conditions in the same order, written out in csh because
+csh cannot call the shared `loadout_exec_interactive_shell`. A bare name is
+resolved by `helpers/resolve-shell`, which follows the bash resolver's rules,
+never tcsh's `which` (that answers with an alias of the same name first). A
+tcsh login starts the target as a login shell. The rules are in the top-level
+README, "Choosing your interactive shell".
+
+- **`~/.login` stops applying.** A tcsh login reads `~/.tcshrc` first and
+  `~/.login` after it, so a login that switches never gets there. It is csh
+  syntax the target could not run anyway: move what you need into the target's
+  config layer.
+- **Plain paths only.** csh re-parses a command substitution after putting a
+  variable's value into it, so the tcsh rc also ignores a preference, a
+  resolved path (shared prefix or PATH entry) or an inherited `SHELL` with any
+  character outside `A-Z a-z 0-9 - _ . / + @ % , : =`. That covers quotes,
+  `$`, `!`, `~` and blanks. Ignoring them keeps the login silent. bash and zsh
+  accept such paths.
+- **csh is tcsh.** On EL8/EL9 `/bin/csh` is tcsh, which reads `~/.tcshrc` under
+  either name, so a passwd shell of `csh` switches as well. On a host with a real
+  BSD csh, which reads only `~/.cshrc`, the setting does nothing and breaks
+  nothing.
+- It replaces `LOADOUT_CFG_PREFERRED_TCSH`, which re-exec'd every interactive
+  tcsh into another tcsh binary. Setting the old name has no effect; give that
+  binary's absolute path instead. A tcsh typed at a prompt no longer switches.
+
 ## What you get
 
 Files under `global/` (plus the top-level `tcshrc` entrypoint):

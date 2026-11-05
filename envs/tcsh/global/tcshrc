@@ -21,18 +21,98 @@ else
 endif
 set _loadout_helpers = "${_loadout_global}/helpers"
 
-# ---- re-exec into a preferred tcsh, if one is configured and different --------
-# Mirrors LOADOUT_CFG_PREFERRED_BASH. Guarded against a re-exec loop by comparing
-# against the shell actually running.
-if ( $?LOADOUT_CFG_PREFERRED_TCSH && $?prompt ) then
-    if ( "$LOADOUT_CFG_PREFERRED_TCSH" != "" && -x "$LOADOUT_CFG_PREFERRED_TCSH" ) then
-        if ( "$LOADOUT_CFG_PREFERRED_TCSH" != "$shell" ) then
-            # Capture the target BEFORE clearing the variable: clearing it is what
-            # stops the replacement shell from re-execing again forever, but the
-            # exec still needs the value, so the order matters.
-            set _loadout_target_shell = "$LOADOUT_CFG_PREFERRED_TCSH"
-            setenv LOADOUT_CFG_PREFERRED_TCSH ""
-            exec "$_loadout_target_shell"
+# ---- switch to LOADOUT_CFG_INTERACTIVE_SHELL, once per session ---------------
+# The csh form of loadout_exec_interactive_shell (envs/bash/functions.sh): the
+# same conditions in the same order, cheap tests before forks. Unset or empty
+# costs one string test and no fork. csh substitutes a whole line before it
+# evaluates it, so a variable that may be unset is only named inside an `if`
+# that tested it. Nothing happens unless ALL of these hold:
+#   - LOADOUT_SHELL_EXEC is unset: no earlier switch in this session tree;
+#   - $prompt is set: interactive and no command string (`tcsh -i -c CMD` leaves
+#     it unset, and must run CMD -- IDEs read the environment that way);
+#   - a top-level spawn: a login shell, or an inherited $SHELL (not `sh`) that
+#     resolves to the running shell. tcsh never fills in SHELL itself (only the
+#     lowercase $shell), so a set SHELL came from the environment. A tcsh typed
+#     at a prompt is neither, so it never bounces back;
+#   - the value resolves (helpers/resolve-shell; never `which`, which answers
+#     with aliases first);
+#   - the target is not the running shell (symlinks resolved);
+#   - the target actually runs here: one `-c :` probe. A failed exec would leave
+#     the marker behind, and a loader failure would end the login.
+# Then exports LOADOUT_SHELL_EXEC and SHELL as the resolved path and execs it:
+# with -l for a login origin and a known login-capable shell, else bare.
+#
+# Every value that reaches a "`...`" below (the preference, the helpers dir, an
+# inherited SHELL, the resolved target) is first matched against the characters
+# csh passes through one unchanged. Inside "`...`" csh substitutes a variable and
+# then re-parses the command, and an inner `"` does not nest -- so a quote, `$`,
+# `!`, backquote, `~` or blank would print a csh error or change what runs. A
+# value with any other character counts as one that does not resolve.
+if ( $?LOADOUT_CFG_INTERACTIVE_SHELL ) then
+    if ( "$LOADOUT_CFG_INTERACTIVE_SHELL" != "" ) then
+        if ( ! $?LOADOUT_SHELL_EXEC && $?prompt ) then
+            # 1 = login shell; 2 = $SHELL names a shell other than sh, so its
+            # realpath decides below; 0 = neither (or an unsafe value).
+            set _loadout_ishell_top = 0
+            if ( "${LOADOUT_CFG_INTERACTIVE_SHELL}${_loadout_helpers}" =~ *[^-A-Za-z0-9_./+@%,:=]* ) then
+                set _loadout_ishell_top = 0
+            else if ( $?loginsh ) then
+                set _loadout_ishell_top = 1
+            else if ( $?SHELL ) then
+                if ( "$SHELL" != "" && "$SHELL:t" != sh ) set _loadout_ishell_top = 2
+                if ( "$SHELL" =~ *[^-A-Za-z0-9_./+@%,:=]* ) set _loadout_ishell_top = 0
+            endif
+            set _loadout_ishell_t = ""
+            if ( $_loadout_ishell_top != 0 && -x "${_loadout_helpers}/resolve-shell" ) then
+                set _loadout_ishell_self = "`readlink -f /proc/$$/exe`"
+                if ( $_loadout_ishell_top == 2 ) then
+                    if ( "`readlink -f "$SHELL"`" != "$_loadout_ishell_self" ) set _loadout_ishell_self = ""
+                endif
+                if ( "$_loadout_ishell_self" != "" ) then
+                    set _loadout_ishell_t = "`"${_loadout_helpers}/resolve-shell" "$LOADOUT_CFG_INTERACTIVE_SHELL"`"
+                endif
+                # The resolved path comes from the shared prefix or a PATH entry.
+                if ( "$_loadout_ishell_t" =~ *[^-A-Za-z0-9_./+@%,:=]* ) set _loadout_ishell_t = ""
+                if ( "$_loadout_ishell_t" != "" ) then
+                    if ( "`readlink -f "$_loadout_ishell_t"`" == "$_loadout_ishell_self" ) set _loadout_ishell_t = ""
+                endif
+                unset _loadout_ishell_self
+            endif
+            if ( "$_loadout_ishell_t" != "" ) then
+                set _loadout_ishell_ok = 0
+                switch ( "$_loadout_ishell_t:t" )
+                    case zsh:
+                    case tcsh:
+                    case csh:
+                        if ( { "$_loadout_ishell_t" -f -c : < /dev/null >& /dev/null } ) set _loadout_ishell_ok = 1
+                        breaksw
+                    case fish:
+                        if ( { "$_loadout_ishell_t" --no-config -c : < /dev/null >& /dev/null } ) set _loadout_ishell_ok = 1
+                        breaksw
+                    default:
+                        if ( { "$_loadout_ishell_t" -c : < /dev/null >& /dev/null } ) set _loadout_ishell_ok = 1
+                        breaksw
+                endsw
+                if ( $_loadout_ishell_ok == 1 ) then
+                    setenv LOADOUT_SHELL_EXEC "$_loadout_ishell_t"
+                    setenv SHELL "$_loadout_ishell_t"
+                    if ( $_loadout_ishell_top == 1 ) then
+                        switch ( "$_loadout_ishell_t:t" )
+                            case bash:
+                            case zsh:
+                            case tcsh:
+                            case csh:
+                            case fish:
+                            case ksh:
+                                exec "$_loadout_ishell_t" -l
+                        endsw
+                    endif
+                    exec "$_loadout_ishell_t"
+                endif
+                unset _loadout_ishell_ok
+            endif
+            unset _loadout_ishell_t
+            unset _loadout_ishell_top
         endif
     endif
 endif

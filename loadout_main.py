@@ -213,6 +213,9 @@ RETIRED_SHELL_SETTINGS = {
     "LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION": "removed: the integration script is found automatically",
     "LOADOUT_CFG_ENABLE_ONLINE_UPDATES": "LOADOUT_CFG_ONLINE_DETECT",
     "LOADOUT_ONLINE_CACHE_TTL": "LOADOUT_CFG_ONLINE_CACHE_TTL",
+    "LOADOUT_CFG_PREFERRED_BASH": "LOADOUT_CFG_INTERACTIVE_SHELL",
+    "LOADOUT_CFG_PREFERRED_ZSH": "LOADOUT_CFG_INTERACTIVE_SHELL",
+    "LOADOUT_CFG_PREFERRED_TCSH": "LOADOUT_CFG_INTERACTIVE_SHELL",
 }
 # ~/.profile is NOT a link to the bash-only bashrc. RHEL-family X sessions read it
 # -- /etc/X11/xinit/Xsession (#!/bin/bash) sources xinitrc-common, which runs
