@@ -1,0 +1,232 @@
+#!/bin/sh
+# interactive-shell-almalinux8: the interactive-shell switch keeps each shell
+# family's SYSTEM init on EL8 (Tier 3, --network=none).
+#
+# Design: docs/superpowers/specs/2026-11-05-interactive-shell-design.md, D4 and
+# the csh section. `exec` keeps the environment and nothing else: functions and
+# aliases a system init file defined are lost across a shell family, and only
+# the target's OWN system init brings them back. That needs a login origin to
+# exec a login target, and it is only observable with EL8's real init files:
+#
+#   bash -l  reads /etc/profile, which sources /etc/profile.d/*.sh;
+#   zsh  -l  reads /etc/zprofile (EL's zsh rpm: emulate sh -c 'source /etc/profile'),
+#            AFTER ~/.zshenv, where a zsh origin execs -- so it never ran it;
+#   tcsh -l  reads /etc/csh.login, which sources /etc/profile.d/*.csh
+#            (/etc/csh.cshrc does that only for a NON-login tcsh).
+#
+# The image (loadout-smoke:almalinux8.10) has tcsh, /bin/csh -> tcsh and no zsh
+# rpm or Environment Modules, so root writes the stand-ins: the sh-family
+# `module` function that profile.d/modules.sh defines (the real name, so the
+# bashrc's start-of-source `unset -f` treats it exactly as it treats the real
+# one: kept by the LOADOUT_CFG_PRESERVE_FUNCTIONS default), a csh-family alias
+# only profile.d/*.csh defines, and the zsh rpm's /etc/zprofile, which the
+# payload zsh reads.
+# carol installs zsh + env-bash/zsh/tcsh into the default root and each case
+# logs in through a real PTY (tests/env-interactive-shell: harness traps 1-3).
+#
+# The image has no procps, so PROBE names the shell from /proc/$$/exe.
+#
+# Usage: tests/interactive-shell-almalinux8        (host: runs the container)
+#        tests/interactive-shell-almalinux8 --inside (container, as root)
+set -eu
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+inside() {
+    for _c in script timeout readlink runuser useradd tcsh; do
+        command -v "$_c" >/dev/null 2>&1 || fail "the image has no '$_c' (needed for a PTY login)"
+    done
+
+    printf 'module() { :; }\n' > /etc/profile.d/zz-el-t3.sh
+    printf 'alias el_t3_csh_profile true\n' > /etc/profile.d/zz-el-t3.csh
+    printf "emulate sh -c 'source /etc/profile'\n" > /etc/zprofile
+    useradd --create-home carol
+    H=/home/carol
+    cd "$H"
+
+    runuser -u carol -- env -i HOME="$H" USER=carol PATH=/usr/bin:/bin LANG=en_US.UTF-8 \
+        /src/loadout install -y zsh env-bash env-zsh env-tcsh --no-backup >/tmp/i.log 2>&1 \
+        || { tail -20 /tmp/i.log >&2; fail "carol's install of zsh env-bash env-zsh env-tcsh failed"; }
+    ZSH_BIN="$H/.local/share/loadout/bin/zsh"
+    [ -x "$ZSH_BIN" ] || fail "the default root has no bin/zsh for the bare name"
+
+    # Strip OSC sequences BEFORE CSI ones (see tests/install-env-zsh).
+    strip_escapes() {
+        sed -e 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g' \
+            -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+            -e 's/\x1b[()][A-Za-z0-9]//g'
+    }
+
+    # pty ORIGIN_CMD CMDS: start ORIGIN_CMD as carol under a PTY in a clean
+    # environment, type CMDS, then `exit`.
+    pty() {
+        printf '%s\nexit\n' "$2" \
+            | runuser -u carol -- env -i HOME="$H" USER=carol PATH=/usr/bin:/bin LANG=en_US.UTF-8 TERM=xterm \
+                  timeout 20 script -qec "$1" /dev/null 2>&1 \
+            | tr -d '\r' \
+            | strip_escapes
+    }
+
+    # login_pty SHELL_PATH CMDS: a login shell as login(1)/sshd start it -- SHELL
+    # names it and no other shell ran first. (Passing SHELL to `script` would
+    # make it run "$SHELL -c ORIGIN": an outer shell reading its rc files before
+    # the origin starts.) `script` itself runs this through /bin/sh.
+    login_pty() { pty "exec env SHELL=$1 $1 -l" "$2"; }
+
+    # set_pref VALUE: the documented user-layer line, for both login-shell
+    # families (zsh reads the bash layers).
+    set_pref() {
+        runuser -u carol -- mkdir -p "$H/.config/bash/user" "$H/.config/tcsh/user"
+        printf 'export LOADOUT_CFG_INTERACTIVE_SHELL="%s"\n' "$1" \
+            | runuser -u carol -- tee "$H/.config/bash/user/config.sh" >/dev/null
+        printf 'setenv LOADOUT_CFG_INTERACTIVE_SHELL "%s"\n' "$1" \
+            | runuser -u carol -- tee "$H/.config/tcsh/user/config.csh" >/dev/null
+    }
+
+    # Backticks and $$ work in all three shells. The echoed input line never
+    # holds `PROBE_comm=<name>`: its fields are the backtick commands themselves.
+    # shellcheck disable=SC2016 # expanded by the shell under test, not here
+    PROBE='echo PROBE_comm=`readlink /proc/$$/exe | sed "s,.*/,,"` PROBE_marker=`printenv LOADOUT_SHELL_EXEC` PROBE_shell=`printenv SHELL`'
+    LOGIN_BASH='shopt -q login_shell && echo PROBE_login=yes || echo PROBE_login=no'
+    LOGIN_ZSH='[[ -o login ]] && echo PROBE_login=yes || echo PROBE_login=no'
+    LOGIN_TCSH='echo PROBE_loginsh=$?loginsh'
+
+    # expect_probe OUT COMM MARKER SHELL LABEL: the line PROBE printed.
+    expect_probe() {
+        _got=$(printf '%s\n' "$1" \
+            | grep -o 'PROBE_comm=[^ ]* PROBE_marker=[^ ]* PROBE_shell=[^ ]*' \
+            | tail -n 1) || true
+        [ "$_got" = "PROBE_comm=$2 PROBE_marker=$3 PROBE_shell=$4" ] \
+            || fail "$5: expected [PROBE_comm=$2 PROBE_marker=$3 PROBE_shell=$4], got [$_got]
+$1"
+    }
+
+    # has_line OUT TEXT: a whole output line equals TEXT. The typed lines carry
+    # these strings too, but never alone on a line.
+    has_line() { printf '%s\n' "$1" | grep -qxF "$2"; }
+
+    # assert_quiet OUT LABEL: startup stays silent (tests/env-interactive-shell).
+    assert_quiet() {
+        for _pat in 'No such file' 'no such file' 'not found' 'Permission denied' 'command not found' \
+                    'bad substitution' \
+                    'Undefined variable' 'Badly placed' 'Expression Syntax' 'Variable syntax' \
+                    'Unmatched' 'Too many arguments'; do
+            case $1 in
+                *"$_pat"*) fail "$2: the shell printed '$_pat':
+$1" ;;
+            esac
+        done
+    }
+
+    # --- T3-a: tcsh login -> bash: /etc/profile ran in the target ---------------
+    set_pref bash
+    out=$(login_pty /usr/bin/tcsh "$PROBE
+$LOGIN_BASH
+type module >/dev/null 2>&1 && echo PROBE_fn=yes || echo PROBE_fn=no")
+    assert_quiet "$out" "T3-a"
+    expect_probe "$out" bash /usr/bin/bash /usr/bin/bash "T3-a: tcsh login with a bash preference"
+    has_line "$out" PROBE_login=yes || fail "T3-a: the bash target is not a login shell (D4):
+$out"
+    has_line "$out" PROBE_fn=yes || fail "T3-a: module (from /etc/profile.d/*.sh) is not defined in the bash target:
+$out"
+    echo "  PASS  T3-a: tcsh login -> bash login; /etc/profile.d/*.sh module defined"
+
+    # --- T3-b: tcsh login -> zsh: /etc/zprofile -> /etc/profile ran -------------
+    set_pref zsh
+    out=$(login_pty /usr/bin/tcsh "$PROBE
+$LOGIN_ZSH
+whence -w module")
+    assert_quiet "$out" "T3-b"
+    expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "T3-b: tcsh login with a zsh preference"
+    has_line "$out" PROBE_login=yes || fail "T3-b: the zsh target is not a login shell (D4):
+$out"
+    has_line "$out" "module: function" || fail "T3-b: module (from /etc/profile.d/*.sh) is not a function in the zsh target:
+$out"
+    echo "  PASS  T3-b: tcsh login -> zsh login; /etc/zprofile -> /etc/profile.d/*.sh module defined"
+
+    # --- T3-c: zsh login -> bash: the origin never ran /etc/profile -------------
+    # The exec happens during ~/.zshenv, before /etc/zprofile, so only the
+    # target can have defined the function.
+    set_pref bash
+    out=$(login_pty "$ZSH_BIN" "$PROBE
+$LOGIN_BASH
+type module >/dev/null 2>&1 && echo PROBE_fn=yes || echo PROBE_fn=no")
+    assert_quiet "$out" "T3-c"
+    expect_probe "$out" bash /usr/bin/bash /usr/bin/bash "T3-c: zsh login with a bash preference"
+    has_line "$out" PROBE_login=yes || fail "T3-c: the bash target is not a login shell (D4):
+$out"
+    has_line "$out" PROBE_fn=yes || fail "T3-c: module (from /etc/profile.d/*.sh) is not defined in the bash target:
+$out"
+    echo "  PASS  T3-c: zsh login -> bash login; /etc/profile.d/*.sh module defined"
+
+    # --- T3-d: bash login -> tcsh: /etc/csh.login ran in the target ------------
+    set_pref tcsh
+    out=$(login_pty /bin/bash "$PROBE
+$LOGIN_TCSH
+echo PROBE_alias=\`alias el_t3_csh_profile\`")
+    assert_quiet "$out" "T3-d"
+    expect_probe "$out" tcsh /usr/bin/tcsh /usr/bin/tcsh "T3-d: bash login with a tcsh preference"
+    has_line "$out" PROBE_loginsh=1 || fail "T3-d: the tcsh target is not a login shell (D4):
+$out"
+    has_line "$out" PROBE_alias=true || fail "T3-d: alias el_t3_csh_profile (from /etc/profile.d/*.csh) is not defined in the tcsh target:
+$out"
+    echo "  PASS  T3-d: bash login -> tcsh login; /etc/profile.d/*.csh alias defined"
+
+    # --- T3-e: csh login -> zsh: csh is tcsh on EL8 and reads ~/.tcshrc ----------
+    case $(readlink -f /bin/csh) in
+        */tcsh) ;;
+        *) fail "T3-e: /bin/csh resolves to $(readlink -f /bin/csh), not tcsh" ;;
+    esac
+    set_pref zsh
+    out=$(login_pty /bin/csh "$PROBE
+$LOGIN_ZSH")
+    assert_quiet "$out" "T3-e"
+    expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "T3-e: csh login with a zsh preference"
+    has_line "$out" PROBE_login=yes || fail "T3-e: the zsh target is not a login shell (D4):
+$out"
+    echo "  PASS  T3-e: /bin/csh is tcsh, reads ~/.tcshrc, csh login -> zsh login"
+
+    # --- R7: does EL8's system init create SHELL for a non-login tcsh? ----------
+    # A non-login tcsh switches only on an INHERITED SHELL (tcshrc), on the
+    # premise that tcsh never creates SHELL itself. With SHELL absent, `script`
+    # runs the origin through /bin/sh, which does not export the SHELL it fills in.
+    rm -f "$H/.config/bash/user/config.sh" "$H/.config/tcsh/user/config.csh"
+    out=$(pty "tcsh -i" 'echo PROBE_r7=$?SHELL')
+    assert_quiet "$out" "R7"
+    if has_line "$out" PROBE_r7=0; then
+        echo "  PASS  R7: a non-login tcsh with no SHELL in its environment has no SHELL on EL8"
+    elif has_line "$out" PROBE_r7=1; then
+        # Which file? tcsh -f reads none, so a SHELL there is tcsh's own.
+        _who=$(pty "tcsh -f -i" 'echo PROBE_r7f=$?SHELL')
+        if has_line "$_who" PROBE_r7f=1; then
+            _who="tcsh itself (set under tcsh -f)"
+        else
+            _who=$(grep -lw SHELL /etc/csh.cshrc /etc/profile.d/*.csh 2>/dev/null | tr '\n' ' ') || true
+            _who="system file(s) naming SHELL: ${_who:-none of /etc/csh.cshrc, /etc/profile.d/*.csh}"
+        fi
+        echo "  NOTE: R7: EL8 sets SHELL in a non-login tcsh with none inherited -- $_who."
+        echo "  NOTE: R7: condition 4's inherited-SHELL premise does not hold on EL8; see the spec's D4."
+    else
+        fail "R7: no answer from the non-login tcsh:
+$out"
+    fi
+    echo "interactive-shell-almalinux8: OK"
+}
+
+if [ "${1:-}" = "--inside" ]; then
+    inside
+    exit 0
+fi
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+IMAGE=loadout-smoke:almalinux8.10
+if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "  SKIP  docker or the $IMAGE image is unavailable (tests/prebuilt-binaries-almalinux8 builds it)"
+    echo "interactive-shell-almalinux8: SKIP"
+    exit 0
+fi
+# The container mounts the repo read-only, so it cannot cold-bootstrap: warm
+# the per-clone interpreter cache on the host first.
+"$REPO/loadout" -V >/dev/null 2>&1 || fail "the host shim could not bootstrap Python"
+exec docker run --rm --network=none --user root --entrypoint /bin/sh \
+    -v "$REPO:/src:ro" "$IMAGE" /src/tests/interactive-shell-almalinux8 --inside
