@@ -186,17 +186,11 @@ if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
     source_if_exists "$HOME/.config/bash/user/config.sh"
 fi
 
-# Optionally exec into a preferred bash binary (e.g. newer bash from EE Linux Tools).
-# Set LOADOUT_CFG_PREFERRED_BASH=/full/path/to/bash in user/config.sh to enable.
-# Silently skipped if the binary doesn't exist or isn't executable.
-# Also skip if this is being sourced as part of a non-interactive startup (rare, but can happen).
-if [[ $- == *i* && -n "${LOADOUT_CFG_PREFERRED_BASH:-}" && -x "${LOADOUT_CFG_PREFERRED_BASH}" ]]; then
-    _preferred_real=$(realpath "${LOADOUT_CFG_PREFERRED_BASH}" 2>/dev/null)
-    _current_real=$(realpath /proc/$$/exe 2>/dev/null || realpath "$BASH" 2>/dev/null)
-    if [[ -n "$_preferred_real" && "$_current_real" != "$_preferred_real" ]]; then
-        LOADOUT_BASHRC_SOURCED=0 exec "${LOADOUT_CFG_PREFERRED_BASH}" --init-file "${BASH_SOURCE[0]}"
-    fi
-fi
+# Switch the interactive shell (LOADOUT_CFG_INTERACTIVE_SHELL, set in a config
+# layer above): a one-shot exec, before global/bashrc does any PATH work. Only a
+# top-level interactive shell switches; see loadout_exec_interactive_shell in
+# functions.sh and README "Choosing your interactive shell".
+[[ -n ${LOADOUT_CFG_INTERACTIVE_SHELL:-} ]] && loadout_exec_interactive_shell "${BASH_SOURCE[0]}"
 
 # PATH to common linux tools should be established by now
 # More PATH can be added by Environment Modules in corp/site/team/project/user layers.

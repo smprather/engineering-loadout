@@ -22,8 +22,27 @@ Override any `LOADOUT_CFG_*` variable in your layer's `config.sh`:
 export LOADOUT_CFG_PREFERRED_VI=nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=1
 export LOADOUT_CFG_ENABLE_FZF=1
-export LOADOUT_CFG_PREFERRED_BASH=/home/user/.local/share/loadout/bin/bash   # an installed loadout bash
+export LOADOUT_CFG_INTERACTIVE_SHELL=zsh   # switch interactive shells (see below)
 ```
+
+## Interactive shell
+
+`LOADOUT_CFG_INTERACTIVE_SHELL` (default empty) names the shell a top-level
+interactive bash replaces itself with, once, right after the config layers and
+before `global/bashrc` touches PATH: a bare name resolves through
+`${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}/bin` and then the
+inherited PATH; an absolute path is used as is; a relative path, a value with
+arguments or anything that does not resolve is ignored silently. A login bash
+starts the target with `-l`. The exported `LOADOUT_SHELL_EXEC` marker keeps
+every later shell in the session -- a typed `bash`, `t`, a tmux pane -- where it
+is. The zsh env runs the same function (`loadout_exec_interactive_shell` in
+`functions.sh`). The full user-facing rules are in README "Choosing your
+interactive shell".
+
+It replaces `LOADOUT_CFG_PREFERRED_BASH`, which re-exec'd *every* interactive
+bash into the preferred one, so a typed `bash` or `t` used to land there too.
+Now a typed shell stays on whichever bash PATH finds; set the variable to the
+preferred bash's absolute path to get it in new sessions.
 
 ## Non-interactive shells
 

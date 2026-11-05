@@ -1,5 +1,8 @@
-# Full path to preferred bash binary; re-execs at startup if set
-export LOADOUT_CFG_PREFERRED_BASH=""
+# Interactive shell to switch to at startup: a bare name (zsh) or an absolute
+# path. Empty keeps the login shell. zsh reads this layer too; see README
+# "Choosing your interactive shell".
+: "${LOADOUT_CFG_INTERACTIVE_SHELL:=}"
+export LOADOUT_CFG_INTERACTIVE_SHELL
 # Root of a separately-installed shared/read-only loadout tree: the directory
 # that directly contains bin/, share/ and lib64/. For `loadout install @shared
 # --dest-dir /foo/bar` that is /foo/bar itself (there is no `local/` level).

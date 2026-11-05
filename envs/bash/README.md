@@ -13,7 +13,8 @@ bash/
                     see bash-only syntax. Never link ~/.profile at bashrc.
   functions.sh    - Shared utilities loaded before any layer config
                     (path_*, is_truthy, fpcmp, array_slice, source_if_exists,
-                    loadout_add_precmd, loadout_find_wezterm_shell_integration, etc.)
+                    loadout_add_precmd, loadout_find_wezterm_shell_integration,
+                    loadout_exec_interactive_shell, etc.)
   global/         - Canonical upstream config. Don't edit locally -- changes here
                     should be upstreamed to the repo.
     config.sh     - LOADOUT_CFG_* preference defaults
@@ -44,7 +45,7 @@ bashrc
   `-- team/config.sh                   # ...
   `-- project/config.sh
   `-- user/config.sh
-  `-- [exec into LOADOUT_CFG_PREFERRED_BASH]  # if set, executable, and not already running it
+  `-- [exec into LOADOUT_CFG_INTERACTIVE_SHELL]  # once, top-level interactive shells only
   `-- global/bashrc                    # PATH, aliases, completions (exits if non-interactive)
   `-- corp/bashrc                      # (if exists)
   `-- site/bashrc
@@ -64,6 +65,17 @@ bash/user/config.sh      # override LOADOUT_CFG_* variables
 bash/user/bashrc         # add aliases, functions, PATH entries
 bash/corp/completions/mytool.bash  # add a completion (auto-sourced)
 ```
+
+To switch to another interactive shell, put the line in your own user layer,
+`~/.config/bash/user/config.sh`:
+
+```bash
+export LOADOUT_CFG_INTERACTIVE_SHELL=zsh
+```
+
+It applies to bash and zsh logins (zsh reads these layers); a csh/tcsh login
+reads `~/.config/tcsh/user/config.csh` instead. The rules are in the top-level
+README, "Choosing your interactive shell".
 
 ## Hook Injection Points
 

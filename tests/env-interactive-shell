@@ -1,0 +1,357 @@
+#!/bin/sh
+# env-interactive-shell: LOADOUT_CFG_INTERACTIVE_SHELL switches the interactive
+# shell with a one-shot exec near the top of the rc, and only there.
+#
+# Design: docs/superpowers/specs/2026-11-05-interactive-shell-design.md (D1-D4,
+# D9). The bracketed numbers after each case letter are its Verification items.
+# bash and zsh share one implementation, loadout_exec_interactive_shell in
+# envs/bash/functions.sh.
+#
+# HARNESS TRAPS (as in tests/install-env-zsh), each of which gives a green run
+# that proves nothing:
+#
+#   1. `SHELL -i -c CMD` does not drive the line editor, and it is exactly the
+#      case the exec must NOT fire for, so commands are typed on stdin.
+#   2. a piped stdin with no controlling terminal is not a real session, so a
+#      PTY is required -- hence `script -qec`.
+#   3. under `script` the child's diagnostics come back on STDOUT, so the
+#      output is scanned for noise (assert_quiet), not just stderr.
+#
+# Every shell runs under `env -i`: the developer's own exported LOADOUT_CFG_*,
+# LOADOUT_SHELL_EXEC and SHELL would otherwise decide the result. `script -c`
+# runs its command through "$SHELL -c"; with SHELL=zsh that outer zsh reads
+# ~/.zshenv non-interactively first, which never execs and only adds PATH rows.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v zsh >/dev/null 2>&1; then
+    echo "SKIP: env-interactive-shell (no zsh interpreter)"
+    exit 0
+fi
+if ! command -v script >/dev/null 2>&1; then
+    echo "SKIP: env-interactive-shell (no 'script' for a PTY)"
+    exit 0
+fi
+
+# Resolved here, before any `env -i` leaves PATH=/usr/bin:/bin.
+BASH_BIN=$(command -v bash)
+ZSH_BIN=$(command -v zsh)
+TCSH_BIN=$(command -v tcsh || true) # the tcsh cases
+TMUX_BIN=$(command -v tmux || true)
+
+T="$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-ishell.XXXXXX")"
+H="$T/home"
+mkdir -p "$H"
+TMUX_SOCKETS=""
+cleanup() {
+    # Only the private servers this test started; never the default socket.
+    for _s in $TMUX_SOCKETS; do
+        env -i PATH=/usr/bin:/bin "$TMUX_BIN" -L "$_s" kill-server >/dev/null 2>&1 || true
+    done
+    chmod -R u+w "$T" 2>/dev/null || true
+    rm -rf "$T"
+}
+trap cleanup EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Strip OSC sequences BEFORE CSI ones (see tests/install-env-zsh): command
+# output arrives glued to OSC 133/7 markers.
+strip_escapes() {
+    sed -e 's/\x1b\][^\x1b\x07]*\(\x07\|\x1b\\\)//g' \
+        -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+        -e 's/\x1b[()][A-Za-z0-9]//g'
+}
+
+# pty ORIGIN_CMD CMDS [VAR=value ...]: start ORIGIN_CMD under a PTY in a clean
+# environment plus the given assignments, type CMDS, then `exit`.
+pty() {
+    _origin=$1
+    _cmds=$2
+    shift 2
+    printf '%s\nexit\n' "$_cmds" \
+        | env -i HOME="$H" TERM=xterm PATH=/usr/bin:/bin "$@" \
+              timeout 20 script -qec "$_origin" /dev/null 2>&1 \
+        | tr -d '\r' \
+        | strip_escapes
+}
+
+# set_pref VALUE [EXTRA_BASH_LINE] [EXTRA_CSH_LINE]: the documented user-layer
+# line, for both login-shell families (zsh reads the bash layers).
+set_pref() {
+    mkdir -p "$H/.config/bash/user" "$H/.config/tcsh/user"
+    printf 'export LOADOUT_CFG_INTERACTIVE_SHELL="%s"\n%s\n' "$1" "${2:-}" \
+        > "$H/.config/bash/user/config.sh"
+    printf 'setenv LOADOUT_CFG_INTERACTIVE_SHELL "%s"\n%s\n' "$1" "${3:-}" \
+        > "$H/.config/tcsh/user/config.csh"
+}
+
+# Backticks and $$ work in all three shells. The echoed input line never holds
+# `PROBE_comm=<name>`: its fields are the backtick commands themselves.
+PROBE='echo PROBE_comm=`ps -o comm= -p $$` PROBE_marker=`printenv LOADOUT_SHELL_EXEC` PROBE_shell=`printenv SHELL`'
+LOGIN_BASH='shopt -q login_shell && echo PROBE_login=yes || echo PROBE_login=no'
+LOGIN_ZSH='[[ -o login ]] && echo PROBE_login=yes || echo PROBE_login=no'
+
+# expect_probe OUT COMM MARKER SHELL LABEL: the line PROBE printed.
+expect_probe() {
+    _got=$(printf '%s\n' "$1" \
+        | grep -o 'PROBE_comm=[^ ]* PROBE_marker=[^ ]* PROBE_shell=[^ ]*' \
+        | tail -n 1) || true
+    [ "$_got" = "PROBE_comm=$2 PROBE_marker=$3 PROBE_shell=$4" ] \
+        || fail "$5: expected [PROBE_comm=$2 PROBE_marker=$3 PROBE_shell=$4], got [$_got]
+$1"
+}
+
+# has_line OUT TEXT: a whole output line equals TEXT. The typed lines carry
+# these strings too, but never alone on a line.
+has_line() { printf '%s\n' "$1" | grep -qxF "$2"; }
+
+# assert_quiet OUT LABEL: startup stays silent whatever the value is.
+assert_quiet() {
+    for _pat in 'No such file' 'not found' 'Permission denied' 'command not found' 'bad substitution'; do
+        case $1 in
+            *"$_pat"*) fail "$2: the shell printed '$_pat':
+$1" ;;
+        esac
+    done
+}
+
+HOME="$H" "$REPO/loadout" install -y env-bash env-zsh env-tcsh --no-backup >/dev/null
+
+# --- fixtures ----------------------------------------------------------------
+mkdir -p "$T/bin" "$T/prefix/bin" "$T/emptyprefix/bin" "$T/wrap"
+ln -s "$BASH_BIN" "$T/bin/mybash"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$ZSH_BIN" > "$T/bin/zshwrap"
+cp "$T/bin/zshwrap" "$T/wrap/zsh"
+printf '#!/bin/sh\necho "PROBE_oddsh_args=[$*]"\nexec "%s"\n' "$ZSH_BIN" > "$T/bin/oddsh"
+chmod 755 "$T/bin/zshwrap" "$T/bin/oddsh" "$T/wrap/zsh"
+ln -s "$ZSH_BIN" "$T/prefix/bin/zsh"
+: > "$T/notexec"
+chmod 644 "$T/notexec"
+
+# --- a [1]: bash login -> zsh, login preserved ----------------------------------
+set_pref "$ZSH_BIN"
+out=$(pty "$BASH_BIN -l" "$PROBE
+$LOGIN_ZSH" SHELL="$BASH_BIN")
+assert_quiet "$out" "a"
+expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "a: bash login with a zsh preference"
+has_line "$out" PROBE_login=yes || fail "a: the zsh target is not a login shell:
+$out"
+
+# --- b [2]: zsh login -> bash, login preserved ----------------------------------
+set_pref "$BASH_BIN"
+out=$(pty "$ZSH_BIN -l" "$PROBE
+$LOGIN_BASH" SHELL="$ZSH_BIN")
+assert_quiet "$out" "b"
+expect_probe "$out" bash "$BASH_BIN" "$BASH_BIN" "b: zsh login with a bash preference"
+has_line "$out" PROBE_login=yes || fail "b: the bash target is not a login shell:
+$out"
+
+# --- c [3,9]: a typed bash inside the switched zsh stays bash ------------------
+set_pref "$ZSH_BIN"
+out=$(pty "$BASH_BIN -l" "bash
+$PROBE
+printenv LOADOUT_CFG_INTERACTIVE_SHELL
+exit" SHELL="$BASH_BIN")
+assert_quiet "$out" "c"
+expect_probe "$out" bash "$ZSH_BIN" "$ZSH_BIN" "c: bash typed inside the switched zsh"
+has_line "$out" "$ZSH_BIN" || fail "c: the child does not see the preference:
+$out"
+
+# --- d [4]: non-interactive shells never exec (no PTY) ------------------------
+# `-l -c` is what makes the bash half real: plain `bash -c` reads no rc at all.
+for _flags in "-c" "-l -c"; do
+    # shellcheck disable=SC2086
+    out=$(env -i HOME="$H" TERM=xterm PATH=/usr/bin:/bin SHELL="$BASH_BIN" \
+        timeout 20 "$BASH_BIN" $_flags 'echo PROBE_c=$BASH_VERSION' </dev/null 2>&1) || true
+    printf '%s\n' "$out" | grep -q '^PROBE_c=[0-9]' \
+        || fail "d: bash $_flags did not run its command in bash: [$out]"
+    assert_quiet "$out" "d: bash $_flags"
+done
+set_pref "$BASH_BIN"
+for _flags in "-c" "-l -c"; do
+    # shellcheck disable=SC2086
+    out=$(env -i HOME="$H" TERM=xterm PATH=/usr/bin:/bin SHELL="$ZSH_BIN" \
+        timeout 20 "$ZSH_BIN" $_flags 'echo PROBE_c=$ZSH_VERSION' </dev/null 2>&1) || true
+    printf '%s\n' "$out" | grep -q '^PROBE_c=[0-9]' \
+        || fail "d: zsh $_flags did not run its command in zsh: [$out]"
+    assert_quiet "$out" "d: zsh $_flags"
+done
+
+# --- e [5]: empty, then no line at all -> today's behaviour ---------------------
+set_pref ""
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "e"
+expect_probe "$out" bash "" "$BASH_BIN" "e: empty preference"
+rm -f "$H/.config/bash/user/config.sh" "$H/.config/tcsh/user/config.csh"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "e"
+expect_probe "$out" bash "" "$BASH_BIN" "e: no preference line"
+
+# --- f [6], k: missing, not executable, typo -> no exec, no output ------------
+for _v in /nonexistent/zsh "$T/notexec" zhs no-such-shell; do
+    set_pref "$_v"
+    out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+    assert_quiet "$out" "f/k: $_v"
+    expect_probe "$out" bash "" "$BASH_BIN" "f/k: unusable preference $_v"
+done
+
+# --- g [7]: a symlink to the running shell -> no exec -------------------------
+set_pref "$T/bin/mybash"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "g"
+expect_probe "$out" bash "" "$BASH_BIN" "g: symlink to the running bash"
+
+# --- h [7]: a wrapper script -> exactly one exec, no loop (the marker) --------
+# $T/wrap/zsh is the load-bearing one: a login-capable name gets -l, so the
+# login condition holds again in the target, and its realpath never equals
+# the running zsh -- only the marker stops it (loadout's own fish is this shape).
+for _v in "$T/bin/zshwrap" "$T/wrap/zsh"; do
+    set_pref "$_v"
+    _t0=$(date +%s)
+    out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+    [ $(($(date +%s) - _t0)) -lt 15 ] || fail "h: the wrapper target $_v ran into the timeout:
+$out"
+    assert_quiet "$out" "h: $_v"
+    expect_probe "$out" zsh "$_v" "$_v" "h: wrapper around zsh at $_v"
+done
+
+# --- i [8]: a bare name resolves through the shared prefix first --------------
+set_pref zsh "export LOADOUT_CFG_SHARED_PREFIX=$T/prefix"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "i"
+expect_probe "$out" zsh "$T/prefix/bin/zsh" "$T/prefix/bin/zsh" "i: bare name via the shared prefix"
+
+# --- j: ... and falls back to the inherited PATH -----------------------------
+PATH_ZSH=""
+for _d in /usr/bin /bin; do
+    if [ -f "$_d/zsh" ] && [ -x "$_d/zsh" ]; then
+        PATH_ZSH="$_d/zsh"
+        break
+    fi
+done
+if [ -n "$PATH_ZSH" ]; then
+    set_pref zsh "export LOADOUT_CFG_SHARED_PREFIX=$T/emptyprefix"
+    out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+    assert_quiet "$out" "j"
+    expect_probe "$out" zsh "$PATH_ZSH" "$PATH_ZSH" "j: bare name via PATH"
+else
+    echo "SKIP: case j (no zsh in /usr/bin or /bin)"
+fi
+
+# --- l [10]: an interactive shell given a command runs it, never execs --------
+set_pref "$ZSH_BIN"
+_t0=$(date +%s)
+out=$(pty "$BASH_BIN -i -l -c 'echo PROBE_cmd=ran'" "" SHELL="$BASH_BIN")
+[ $(($(date +%s) - _t0)) -lt 15 ] || fail "l: bash -i -l -c ran into the timeout:
+$out"
+assert_quiet "$out" "l: bash"
+has_line "$out" PROBE_cmd=ran || fail "l: bash -i -l -c did not run its command:
+$out"
+set_pref "$BASH_BIN"
+_t0=$(date +%s)
+out=$(pty "$ZSH_BIN -i -l -c 'echo PROBE_cmd=ran'" "" SHELL="$ZSH_BIN")
+[ $(($(date +%s) - _t0)) -lt 15 ] || fail "l: zsh -i -l -c ran into the timeout:
+$out"
+assert_quiet "$out" "l: zsh"
+has_line "$out" PROBE_cmd=ran || fail "l: zsh -i -l -c did not run its command:
+$out"
+
+# --- m [11]: a non-login origin gives a non-login target ----------------------
+set_pref "$ZSH_BIN"
+out=$(pty "$BASH_BIN -i" "$PROBE
+$LOGIN_ZSH" SHELL="$BASH_BIN")
+assert_quiet "$out" "m"
+expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "m: non-login bash with a zsh preference"
+has_line "$out" PROBE_login=no || fail "m: the target of a non-login origin is a login shell:
+$out"
+
+# --- n [11]: an unknown target basename gets no -l ----------------------------
+set_pref "$T/bin/oddsh"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "n"
+has_line "$out" "PROBE_oddsh_args=[]" || fail "n: oddsh was not exec'd without arguments:
+$out"
+expect_probe "$out" zsh "$T/bin/oddsh" "$T/bin/oddsh" "n: unknown target basename"
+
+# --- o [12]: a relative path or a value with arguments -> no exec, no output --
+for _v in bin/zsh "zsh -l"; do
+    set_pref "$_v"
+    out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+    assert_quiet "$out" "o: $_v"
+    expect_probe "$out" bash "" "$BASH_BIN" "o: rejected preference [$_v]"
+done
+
+# --- p [13]: SHELL=/bin/sh (cron, systemd) is not a top-level spawn ------------
+set_pref "$ZSH_BIN"
+case $(readlink -f /bin/sh) in
+    */bash)
+        out=$(pty "$BASH_BIN -i" "$PROBE" SHELL=/bin/sh)
+        assert_quiet "$out" "p"
+        expect_probe "$out" bash "" /bin/sh "p: SHELL=/bin/sh"
+        ;;
+    *) echo "SKIP: case p (/bin/sh is not bash on this host)" ;;
+esac
+
+# --- q: no inherited SHELL, or one that does not exist -> no exec -------------
+# With SHELL unset, `script` itself falls back to /bin/sh. bash then fills in
+# its own (unexported) SHELL from passwd, which must not count as inherited.
+out=$(pty "$BASH_BIN -i" "$PROBE")
+assert_quiet "$out" "q: SHELL unset"
+expect_probe "$out" bash "" "" "q: SHELL unset"
+out=$(pty "env SHELL=/nonexistent/bash $BASH_BIN -i" "$PROBE")
+assert_quiet "$out" "q: SHELL=/nonexistent/bash"
+expect_probe "$out" bash "" /nonexistent/bash "q: SHELL=/nonexistent/bash"
+
+# --- r: the preference is the running shell -> no exec, no marker -------------
+set_pref "$BASH_BIN"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "r"
+expect_probe "$out" bash "" "$BASH_BIN" "r: preference is the running bash"
+
+# --- s: resolution never consults functions or aliases ------------------------
+set_pref zsh "export LOADOUT_CFG_SHARED_PREFIX=$T/prefix
+zsh() { echo PROBE_hijack; }"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "s"
+expect_probe "$out" zsh "$T/prefix/bin/zsh" "$T/prefix/bin/zsh" "s: a zsh() function in the user layer"
+case $out in
+    *PROBE_hijack*) fail "s: the resolver ran the zsh() function:
+$out" ;;
+esac
+
+# --- t [14]: tmux panes -------------------------------------------------------
+if [ -n "$TMUX_BIN" ]; then
+    set_pref "$ZSH_BIN"
+    for _case in a b; do
+        _sock="el-ishell-$$-$_case"
+        if [ "$_case" = a ]; then
+            _marker="" _want=zsh
+        else
+            _marker="LOADOUT_SHELL_EXEC=$ZSH_BIN" _want=bash
+        fi
+        TMUX_SOCKETS="$TMUX_SOCKETS $_sock"
+        env -i HOME="$H" SHELL="$BASH_BIN" TERM=xterm-256color PATH=/usr/bin:/bin ${_marker:+"$_marker"} \
+            "$TMUX_BIN" -L "$_sock" -f /dev/null new-session -d -s t -x 200 -y 50
+        env -i PATH=/usr/bin:/bin "$TMUX_BIN" -L "$_sock" \
+            send-keys -t t 'echo PROBE_pane=$(ps -o comm= -p $$)' Enter
+        _i=0 _cap=""
+        while [ "$_i" -lt 50 ]; do
+            _cap=$(env -i PATH=/usr/bin:/bin "$TMUX_BIN" -L "$_sock" capture-pane -p -t t)
+            case $_cap in *"PROBE_pane=$_want"*) break ;; esac
+            sleep 0.2
+            _i=$((_i + 1))
+        done
+        case $_cap in
+            *"PROBE_pane=$_want"*) ;;
+            *) fail "t$_case: expected PROBE_pane=$_want in the pane:
+$_cap" ;;
+        esac
+        assert_quiet "$_cap" "t$_case"
+        env -i PATH=/usr/bin:/bin "$TMUX_BIN" -L "$_sock" kill-server >/dev/null 2>&1 || true
+    done
+else
+    echo "SKIP: case t (no tmux)"
+fi
+
+echo "env-interactive-shell: all cases passed"

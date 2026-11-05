@@ -219,6 +219,102 @@ loadout_find_wezterm_shell_integration() {
     return 1
 }
 
+# Resolve a LOADOUT_CFG_INTERACTIVE_SHELL value to an executable. Prints the
+# absolute path and returns 0, or prints nothing and returns 1:
+#   empty, or any whitespace (`zsh -l`)  -> 1
+#   /absolute/path                       -> itself, when a regular executable
+#   any other slash (`bin/zsh`)          -> 1
+#   bare name                            -> <shared prefix>/bin/NAME, else the
+#                                           first inherited PATH entry with it
+# Never `command -v`/`type`/`whence`: those answer with aliases and functions.
+loadout_resolve_interactive_shell() {
+    local _v="${1:-}" _rest _d
+    case $_v in
+    "" | *[[:space:]]*) return 1 ;;
+    /*)
+        [ -f "$_v" ] && [ -x "$_v" ] || return 1
+        printf '%s\n' "$_v"
+        return 0
+        ;;
+    */*) return 1 ;;
+    esac
+    _d="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}/bin/$_v"
+    if [ -f "$_d" ] && [ -x "$_d" ]; then
+        printf '%s\n' "$_d"
+        return 0
+    fi
+    _rest=${PATH:-}
+    while [ -n "$_rest" ]; do
+        _d=${_rest%%:*}
+        case $_rest in
+        *:*) _rest=${_rest#*:} ;;
+        *) _rest="" ;;
+        esac
+        [ -n "$_d" ] || continue
+        if [ -f "$_d/$_v" ] && [ -x "$_d/$_v" ]; then
+            printf '%s\n' "$_d/$_v"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# One-shot exec into LOADOUT_CFG_INTERACTIVE_SHELL, called near the top of the
+# bash and zsh rc only when that variable is non-empty. Returns 0 with no side
+# effects unless ALL of these hold (cheap tests first, forks last):
+#   - LOADOUT_SHELL_EXEC is unset: no earlier exec in this session tree;
+#   - the shell is interactive and has no command string (`SHELL -ilc CMD`
+#     must run CMD -- IDEs read the environment that way);
+#   - it is a top-level spawn: a login shell, or the INHERITED $SHELL (not
+#     `sh`) resolves to the running shell. A shell typed at a prompt is
+#     neither, so it never bounces back;
+#   - the value resolves (loadout_resolve_interactive_shell);
+#   - the target is not the running shell (symlinks resolved).
+# Then exports LOADOUT_SHELL_EXEC and SHELL as the resolved path and execs:
+# with `-l` for a login origin and a known login-capable shell, with
+# --init-file BASH_INIT_FILE for bash -> bash, else with no arguments.
+# Usage: loadout_exec_interactive_shell [BASH_INIT_FILE]
+loadout_exec_interactive_shell() {
+    local _t _self _login=0
+    [ -z "${LOADOUT_SHELL_EXEC+set}" ] || return 0
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        # Not `-o shinstdin`: zsh turns that on only AFTER its startup files,
+        # so it is off here even for a plain interactive zsh.
+        [[ -o interactive && -z ${ZSH_EXECUTION_STRING:-} ]] || return 0
+        [[ -o login ]] && _login=1
+    elif [ -n "${BASH_VERSION:-}" ]; then
+        [[ $- == *i* && -z ${BASH_EXECUTION_STRING:-} ]] || return 0
+        shopt -q login_shell && _login=1
+    else
+        return 0
+    fi
+    if [ "$_login" = 0 ]; then
+        [ -n "${SHELL:-}" ] && [ "${SHELL##*/}" != sh ] || return 0
+        # bash sets an unset SHELL to the passwd shell, unexported. Only an
+        # inherited (exported) SHELL says anything about how we were spawned.
+        if [ -n "${BASH_VERSION:-}" ]; then
+            case $(declare -p SHELL 2>/dev/null) in "declare -x"*) ;; *) return 0 ;; esac
+        fi
+    fi
+    _self=$(readlink -f /proc/$$/exe 2>/dev/null) && [ -n "$_self" ] || return 0
+    if [ "$_login" = 0 ]; then
+        [ "$(readlink -f "$SHELL" 2>/dev/null)" = "$_self" ] || return 0
+    fi
+    _t=$(loadout_resolve_interactive_shell "${LOADOUT_CFG_INTERACTIVE_SHELL:-}") || return 0
+    [ "$(readlink -f "$_t" 2>/dev/null)" != "$_self" ] || return 0
+
+    export LOADOUT_SHELL_EXEC="$_t" SHELL="$_t"
+    if [ "$_login" = 1 ]; then
+        case ${_t##*/} in
+        bash | zsh | tcsh | csh | fish | ksh) exec "$_t" -l ;;
+        esac
+    fi
+    if [ -n "${BASH_VERSION:-}" ] && [ -n "${1:-}" ] && [ "${_t##*/}" = bash ]; then
+        LOADOUT_BASHRC_SOURCED=0 exec "$_t" --init-file "$1"
+    fi
+    exec "$_t"
+}
+
 is_in() {
     echo -n "$2" | /bin/grep -w -q "$1"
 }

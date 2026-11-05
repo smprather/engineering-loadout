@@ -10,12 +10,6 @@
 #
 # Override any of these in ~/.config/zsh/user/config.zsh.
 
-# Full path to a preferred zsh binary; global/zshrc re-execs into it at startup
-# when set, executable, and different from the running shell. The bash analogue
-# is LOADOUT_CFG_PREFERRED_BASH.
-: "${LOADOUT_CFG_PREFERRED_ZSH:=}"
-export LOADOUT_CFG_PREFERRED_ZSH
-
 # Run compinit (zsh's completion system) at startup. It is the single most
 # expensive part of zsh startup on a slow/networked filesystem, so it gets its
 # own switch; the bash env has no equivalent because bash-completion is sourced

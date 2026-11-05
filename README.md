@@ -567,6 +567,73 @@ tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,
 and keeps home-local override layers active even when `TCSH_CONFIG_ROOT_DIR`
 points at a shared tcsh config root.
 
+### Choosing your interactive shell
+
+Add one line to the user layer of your **login** shell (the shell in your
+passwd entry):
+
+| Login shell | File | Line |
+|---|---|---|
+| bash or zsh | `~/.config/bash/user/config.sh` | `export LOADOUT_CFG_INTERACTIVE_SHELL=zsh` |
+| csh or tcsh | `~/.config/tcsh/user/config.csh` | `setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh` |
+
+zsh reads the bash layers, so one line covers bash and zsh logins. A line in
+the other family's file never fires; setting it in both is harmless. For a zsh
+target, install `env-zsh` too (`./loadout install env-zsh`; it is not in
+`@envs`), or zsh starts without the loadout config.
+
+Early in startup, before any PATH work, a top-level interactive shell then
+replaces itself with the chosen one, once. A login shell starts the target as a
+login shell (`-l`, for bash, zsh, tcsh, csh, fish and ksh; any other shell
+starts with no arguments), so the target runs its own family's system login
+files, as with `chsh`. Nothing outside your home changes: no `chsh`, no
+`/etc/shells`, no terminal setting. Deleting the line undoes it for new
+sessions.
+
+The value:
+
+- a bare name (`zsh`) is looked up in the loadout tree first
+  (`${LOADOUT_CFG_SHARED_PREFIX:-~/.local/share/loadout}/bin/zsh`), so it
+  follows the tree across `--dest-dir` and shared-prefix moves, and then on the
+  PATH the session started with -- not the PATH loadout builds later. Give a
+  shell that only that later PATH reaches, or the system copy when loadout also
+  ships one, as an absolute path.
+- an absolute path is used as it is.
+- empty (the default) keeps the login shell.
+- anything else -- a relative path (`bin/zsh`), a value with arguments
+  (`zsh -l`), a name that does not resolve, a file that is not executable -- is
+  ignored, silently, so a typo never breaks a login.
+
+The switch exports `LOADOUT_SHELL_EXEC` (the shell it started) and `SHELL`, and
+every shell started inside that session sees the marker and is left alone:
+
+- a shell you type (`bash`, `bash -l`, `t`) is the one you asked for and never
+  bounces back. For a one-off switch, run `exec zsh -l`.
+- a changed preference takes effect in the next **fresh** session: a new `ssh`
+  or console login, a new tmux server, or a terminal started after the change.
+- `$SHELL -i -c CMD` (how IDEs read your environment), scripts, `ssh host cmd`
+  and cron never switch.
+
+From a csh/tcsh login, `~/.login` runs after `~/.tcshrc`, so it stops applying
+once the switch happens. It is csh syntax the target could not run anyway; move
+what you need into the target's config layer.
+
+tmux panes start `$SHELL` as a login shell. A server started before you set the
+variable switches each new pane. A server started from a switched shell runs
+the target directly and carries the marker, so after a later change its new
+panes keep the old shell. To move it on without killing the server:
+
+```bash
+tmux set -g default-shell /path/to/new/shell   # new panes start the new shell
+tmux set-environment -gu LOADOUT_SHELL_EXEC    # new panes start the old shell, which then switches
+```
+
+Coming from `LOADOUT_CFG_PREFERRED_BASH`: it re-exec'd every interactive bash,
+so a typed `bash` or `t` (`exec bash`) landed in the preferred bash. A typed
+shell now stays on whichever bash PATH finds; set
+`LOADOUT_CFG_INTERACTIVE_SHELL` to the preferred bash's absolute path for new
+sessions.
+
 ### Retired and renamed settings
 
 Retired settings are cut over, never aliased: setting an old name has no effect.
@@ -578,6 +645,8 @@ Retired settings are cut over, never aliased: setting an old name has no effect.
 | `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | Removed. The integration script is found automatically; `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` still switches it on or off. |
 | `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` | `LOADOUT_CFG_ONLINE_DETECT` (`auto`, `1` or `0`). |
 | `LOADOUT_ONLINE_CACHE_TTL` | `LOADOUT_CFG_ONLINE_CACHE_TTL` (seconds, default `86400`; `0` disables the cache). |
+| `LOADOUT_CFG_PREFERRED_BASH` | `LOADOUT_CFG_INTERACTIVE_SHELL` (see "Choosing your interactive shell"; a typed `bash` or `t` no longer switches). |
+| `LOADOUT_CFG_PREFERRED_ZSH` | `LOADOUT_CFG_INTERACTIVE_SHELL`. |
 
 ---
 

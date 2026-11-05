@@ -31,6 +31,9 @@
 # it is set, differs from the running shell, and is executable. The bash analogue
 # is LOADOUT_CFG_PREFERRED_BASH.
 if ( ! $?LOADOUT_CFG_PREFERRED_TCSH )      setenv LOADOUT_CFG_PREFERRED_TCSH ""
+# Interactive shell to switch to at startup: a bare name (zsh) or an absolute
+# path. Empty keeps the login shell. See README "Choosing your interactive shell".
+if ( ! $?LOADOUT_CFG_INTERACTIVE_SHELL ) setenv LOADOUT_CFG_INTERACTIVE_SHELL ""
 
 # ---- prompt ------------------------------------------------------------------
 # Starship drives the tcsh prompt, same as the bash env. All three shells use

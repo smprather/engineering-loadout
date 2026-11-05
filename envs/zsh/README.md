@@ -115,6 +115,16 @@ shared `loadout_private_dir` check passes, exactly as in bash; otherwise the
 prefix stays unset and the runtime dir falls back to `~/.cache/loadout/runtime`.
 See "Private runtime dirs" in `envs/bash/global/README.md`.
 
+## Switching to zsh (or away from it)
+
+`LOADOUT_CFG_INTERACTIVE_SHELL` is a shared setting, so its line goes in the
+bash layers, not in `config.zsh`: `export LOADOUT_CFG_INTERACTIVE_SHELL=zsh` in
+`~/.config/bash/user/config.sh` switches a bash login to zsh, and naming
+another shell there switches a zsh login away. `global/zshrc` runs the same
+one-shot exec as the bash rc (`loadout_exec_interactive_shell` in
+`functions.sh`), before its PATH work. The rules are in the top-level README,
+"Choosing your interactive shell".
+
 ## zsh-only configuration
 
 The shared defaults are not duplicated here; `global/config.zsh` holds only what
@@ -122,7 +132,6 @@ exists *because* the shell is zsh:
 
 | variable | default | purpose |
 |---|---|---|
-| `LOADOUT_CFG_PREFERRED_ZSH` | `""` | re-exec into this zsh at startup (analogue of `LOADOUT_CFG_PREFERRED_BASH`) |
 | `LOADOUT_CFG_ZSH_ENABLE_COMPLETION` | `1` | run `compinit` — the most expensive part of startup on a networked filesystem |
 | `LOADOUT_CFG_ZSH_ENABLE_BASHCOMPINIT` | `0` | load the bash-format loadout completions through the compatibility shim |
 

@@ -9,15 +9,10 @@
 # Non-interactive shells return early, after PATH and the exported environment,
 # exactly as the bash env does -- scripts need those and nothing below.
 
-# --- re-exec into a preferred zsh, if one is configured and different ---------
-if [[ -n ${LOADOUT_CFG_PREFERRED_ZSH:-} && -x ${LOADOUT_CFG_PREFERRED_ZSH} \
-      && ${LOADOUT_CFG_PREFERRED_ZSH} != ${SHELL:-} && -o interactive ]]; then
-    # Clear it first so the replacement shell does not re-exec forever; capture
-    # the target before clearing, since the exec still needs the value.
-    _loadout_target_shell=$LOADOUT_CFG_PREFERRED_ZSH
-    export LOADOUT_CFG_PREFERRED_ZSH=""
-    exec "$_loadout_target_shell"
-fi
+# --- switch the interactive shell (LOADOUT_CFG_INTERACTIVE_SHELL) -------------
+# A one-shot exec before any PATH work, shared with bash: see
+# loadout_exec_interactive_shell in functions.sh.
+[[ -n ${LOADOUT_CFG_INTERACTIVE_SHELL:-} ]] && loadout_exec_interactive_shell
 
 # --- NVM ----------------------------------------------------------------------
 # nvm.sh hangs under zsh via its auto-use path, so the shell function is loaded
@@ -517,6 +512,6 @@ else
     export EXTENDED_KEYS_SUPPORTED=0
 fi
 
-unset _bin_dir _loadout_local_prefix _loadout_newest_hist _loadout_target_shell
+unset _bin_dir _loadout_local_prefix _loadout_newest_hist
 
 # vim: ft=zsh ts=4
