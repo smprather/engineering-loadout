@@ -94,6 +94,22 @@ else
     case "$out" in *"(EL rc: no)"*) : ;; *) fail "non bash/zsh/tcsh passwd shell should report EL rc: no";; esac
 fi
 
+# Probe-failure finding (R8): a target that resolves but does not run.
+mkdir -p "$tmp/bin"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/bin/brokensh"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/okshell"
+chmod 755 "$tmp/bin/brokensh" "$tmp/bin/okshell"
+out=$(env -i HOME="$ish" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL="$tmp/bin/brokensh" "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero for a broken target"
+case "$out" in
+    *"LOADOUT_CFG_INTERACTIVE_SHELL=$tmp/bin/brokensh resolves to $tmp/bin/brokensh but does not run on this host"*) : ;;
+    *) fail "probe failure not reported:
+$out" ;;
+esac
+out=$(env -i HOME="$ish" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL="$tmp/bin/okshell" "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero for a healthy target"
+case "$out" in *"does not run on this host"*) fail "healthy target reported as not running";; esac
+
 # Negative control: clean HOME has no interactive-shell findings.
 out=$(env -i HOME="$clean" PATH="/usr/bin:/bin" TERM=xterm "$repo/loadout" doctor 2>&1)
 case "$out" in *"retired setting"*) fail "clean HOME reported a retired setting";; esac
