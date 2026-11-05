@@ -23,7 +23,7 @@ WHY VENDORED HERE (not shipped with the wezterm binary, not used from /etc):
 HOW IT IS LOADED:
   envs/bash/global/bashrc sources it (when LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION
   is truthy) via loadout_find_wezterm_shell_integration in envs/bash/functions.sh.
-  Resolver order: explicit LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION -> this vendored
+  Resolver order: this vendored
   copy -> paths relative to the installed `wezterm` binary -> shared prefix.
   Never /etc. See docs/BASH.md and envs/bash/global/README.md "Prompt & shell
   integration" for the full rationale.

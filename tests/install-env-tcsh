@@ -614,4 +614,14 @@ out=$(tcsh_i 'echo "SYM=$LOADOUT_TEST_SYMLAYER"')
 assert_no_csh_noise "symlinked config layers" "$out"
 echo "$out" | grep -q 'SYM=1' || fail "preserved layer was not sourced: [$out]"
 
+# --- LOADOUT_CFG_ONLINE_DETECT forces the startup verdict. The probe host is a
+# --- closed port, so an `auto` probe would say 0: seeing 1 proves the setting
+# --- was read, not the network.
+for want in 1 0; do
+    printf 'setenv LOADOUT_CFG_ONLINE_DETECT %s\nsetenv LOADOUT_CFG_ONLINE_DETECT_HOSTS "127.0.0.1:9"\n' "$want" \
+        > "$TMPHOME/.config/tcsh/user/config.csh"
+    out=$(tcsh_i_clean_home "$TMPHOME" 'printenv LOADOUT_ONLINE')
+    echo "$out" | grep -qx "$want" || fail "ONLINE_DETECT=$want did not give LOADOUT_ONLINE=$want: [$out]"
+done
+
 echo "install-env-tcsh: OK"

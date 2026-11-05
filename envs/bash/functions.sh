@@ -41,10 +41,10 @@ loadout_detect_online() {
 # from disk without touching the network. Keyed on an md5 of the host list so
 # a user override of LOADOUT_CFG_ONLINE_DETECT_HOSTS gets its own entry.
 # Usage: loadout_detect_online_cached [timeout_secs]   (TTL:
-# LOADOUT_ONLINE_CACHE_TTL, default 86400; 0 disables caching)
+# LOADOUT_CFG_ONLINE_CACHE_TTL, default 86400; 0 disables caching)
 loadout_detect_online_cached() {
     [ -n "${ZSH_VERSION:-}" ] && setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null
-    local _ttl="${LOADOUT_ONLINE_CACHE_TTL:-86400}"
+    local _ttl="${LOADOUT_CFG_ONLINE_CACHE_TTL:-86400}"
     local _hosts="${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}"
     local _dir="${XDG_RUNTIME_DIR:-}/.loadout-net"
     local _key _file _verdict _now _age _result
@@ -85,65 +85,19 @@ loadout_detect_online_cached() {
     return $_result
 }
 
-auto_attach_to_tmux() {
-    if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX}"; then
-        # Make sure terminal is in a known-good state
-        reset
-
-        if tmux has-session 2>/dev/null; then
-            if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS}"; then
-                # Attach this bash, -d -> detach all others
-                unset_bashrc_local_vars
-                tmux attach -d
-            else
-                unset_bashrc_local_vars
-                tmux attach
-            fi
-        else
-            # Create a new tmux session
-            unset_bashrc_local_vars
-            tmux
-        fi
-    fi
-}
-
 # Use a leading _ char for bashrc local vars that should go away at the end of env setup.
 # LOADOUT_CFG_* vars are exported scalars -- they survive into child processes intentionally.
 unset_bashrc_local_vars() {
     # Unset all local variables that start with '_'.
-    #
-    # `compgen` is a BASH builtin with no zsh equivalent, and this function is
-    # reached from auto_attach_to_tmux, which the zsh env calls -- so a zsh user
-    # with LOADOUT_CFG_ATTACH_TO_TMUX enabled got
-    # "unset_bashrc_local_vars:2: command not found: compgen" on every login.
-    # zsh lists parameter names through the `parameters` association instead.
-    # The zsh-only expansions below go through `eval` so that this file, which
-    # is bash-shaped and gets read by bash tooling, stays free of syntax bash
-    # and shellcheck do not recognise (SC2296). Both shells parse it either way;
-    # this is about not handing a reviewer a spurious error.
+    # bash only: `compgen` has no zsh equivalent, and the zsh env never calls this.
     local var
     local -a _lo_names
-    if [ -n "${ZSH_VERSION:-}" ]; then
-        eval '_lo_names=(${(Mk)parameters:#_*})'
-    else
-        _lo_names=($(compgen -v _))
-    fi
+    _lo_names=($(compgen -v _))
     for var in "${_lo_names[@]}"; do
         # Skip exported variables -- LOADOUT_CFG_* and friends are meant to
         # survive into child processes.
-        #
-        # The two shells report "is exported" differently and there is no shared
-        # spelling: bash's `declare -p` prints `declare -x NAME=...`, while
-        # zsh's `typeset -p` prints `export NAME=...` with no -x anywhere. A
-        # single `*" -x"*` test therefore matched nothing under zsh and unset
-        # every exported variable it looked at. zsh's ${(t)} type string is the
-        # reliable test there.
         _lo_exported=0
-        if [ -n "${ZSH_VERSION:-}" ]; then
-            eval '[[ ${(tP)var} == *export* ]] && _lo_exported=1'
-        else
-            case $(declare -p "$var" 2>/dev/null) in "declare -x"*) _lo_exported=1 ;; esac
-        fi
+        case $(declare -p "$var" 2>/dev/null) in "declare -x"*) _lo_exported=1 ;; esac
         [ "$_lo_exported" = 1 ] && continue
         unset "$var"
     done
@@ -219,23 +173,15 @@ loadout_add_precmd() {
 
 # Locate the wezterm shell-integration script (semantic zones / OSC 7 cwd / user
 # vars) from user-writable space only -- never /etc. Search order:
-#   1. LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION  (explicit path; e.g. set by the
-#      engineering-loadout --dest-dir installer)
-#   2. copy vendored with the loadout (config root, plus home-dir override)
-#   3. paths relative to the installed `wezterm` binary (dest-dir installs)
-#   4. the configured shared prefix (${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local})
+#   1. copy vendored with the loadout (config root, plus home-dir override)
+#   2. paths relative to the installed `wezterm` binary (dest-dir installs)
+#   3. the configured shared prefix (${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local})
 # Echoes the first readable match; returns 1 with no output if none found.
 loadout_find_wezterm_shell_integration() {
     local _c _bin _real _bindir _prefix
     local _subs=(share/wezterm/shell-integration/wezterm.sh share/wezterm/wezterm.sh etc/profile.d/wezterm.sh)
 
-    # 1. explicit override
-    if [[ -n "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION:-}" && -r "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION}" ]]; then
-        echo "${LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION}"
-        return 0
-    fi
-
-    # 2. vendored copy (canonical config root, then home-dir override)
+    # 1. vendored copy (canonical config root, then home-dir override)
     for _c in "$BASH_CONFIG_ROOT_DIR/global/wezterm/wezterm.sh" \
         "$HOME/.config/bash/global/wezterm/wezterm.sh"; do
         [[ -r "$_c" ]] && {
@@ -244,7 +190,7 @@ loadout_find_wezterm_shell_integration() {
         }
     done
 
-    # 3. relative to the installed wezterm binary
+    # 2. relative to the installed wezterm binary
     if _bin=$(command -v wezterm 2>/dev/null); then
         _real=$(realpath "$_bin" 2>/dev/null || readlink -f "$_bin" 2>/dev/null || echo "$_bin")
         _bindir=$(dirname "$_real")
@@ -261,7 +207,7 @@ loadout_find_wezterm_shell_integration() {
         }
     fi
 
-    # 4. configured shared prefix
+    # 3. configured shared prefix
     _prefix="${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}"
     for _c in "${_subs[@]}"; do
         [[ -r "$_prefix/$_c" ]] && {

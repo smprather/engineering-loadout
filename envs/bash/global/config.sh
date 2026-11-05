@@ -16,8 +16,6 @@ export LOADOUT_CFG_SHM_DIR="/dev/shm"
 # eza falls back to plain ls when it is not installed.
 export LOADOUT_CFG_PREFERRED_LS="eza"
 export LOADOUT_CFG_PREFERRED_VI="nvim"
-export LOADOUT_CFG_ATTACH_TO_TMUX="0"
-export LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS="0"
 # Pane TERM inside tmux, read by the tmux config through the server
 # environment. Default xterm-256color because corp tools hard-check it; switch
 # to tmux-256color once they accept it. Only newly created panes are affected.
@@ -26,7 +24,6 @@ export LOADOUT_CFG_ENABLE_TMUX_PATH_STORE="1"
 export LOADOUT_CFG_PROMPT_INCLUDE_HOST="0"
 export LOADOUT_CFG_PROMPT_COLOR_NORMAL="$PROMPT_YELLOW"
 export LOADOUT_CFG_PROMPT_COLOR_FARM="$PROMPT_RED"
-export LOADOUT_CFG_ENABLE_FASTNVIM="0"
 export LOADOUT_CFG_ENABLE_FZF="0"
 export LOADOUT_CFG_ENABLE_ZOXIDE="0"
 # linelight colour for df/diff/dig/free/lsblk/ping/ps/sensors/ss (needs the
@@ -48,19 +45,15 @@ export LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT=""
 # terminals, and its OSC sequences are ignored by terminals that don't grok
 # them. Benefits wezterm users (including tmux-in-wezterm with passthrough).
 export LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION="1"
-# Explicit path to wezterm.sh. Empty -> auto-resolve (vendored copy, then paths
-# relative to the installed `wezterm` binary / shared prefix). Set this from the
-# engineering-loadout --dest-dir installer to pin an exact location. Never /etc.
-export LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION=""
-# LOADOUT_CFG_ENABLE_ONLINE_UPDATES -> auto | 1 | 0
-export LOADOUT_CFG_ENABLE_ONLINE_UPDATES="auto"
+# LOADOUT_CFG_ONLINE_DETECT -> auto | 1 | 0
+export LOADOUT_CFG_ONLINE_DETECT="auto"
 # LOADOUT_CFG_ONLINE_DETECT_TIMEOUT -> seconds per host (GNU timeout; decimal ok)
 export LOADOUT_CFG_ONLINE_DETECT_TIMEOUT="0.15"
 # LOADOUT_CFG_ONLINE_DETECT_HOSTS -> space-separated host:port
 export LOADOUT_CFG_ONLINE_DETECT_HOSTS="github.com:443 raw.githubusercontent.com:443 pypi.org:443"
 # Startup online verdict is cached on disk for this many seconds (default one
 # day) so only the first login pays for probes. 0 disables the cache.
-# export LOADOUT_ONLINE_CACHE_TTL="86400"
+export LOADOUT_CFG_ONLINE_CACHE_TTL="86400"
 # LOADOUT_CFG_USE_LOADOUT_MODULES -> 0 | 1  (source modules-init.bash; opt-in)
 export LOADOUT_CFG_USE_LOADOUT_MODULES="0"
 # LOADOUT_CFG_PRESERVE_FUNCTIONS -> space-separated function names.

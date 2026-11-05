@@ -203,6 +203,17 @@ FONT_EXCLUDES = (
 
 CONFIG_LAYERS = ("corp", "site", "team", "project", "user")
 BASH_ENTRYPOINTS = (".bashrc", ".bash_profile")
+# Shell-env settings that were removed or renamed. Maps each retired name to its
+# replacement setting, or to text starting "removed:". Retired settings are cut
+# over, never aliased; tests/env-shell-parity fails if an env source still uses one.
+RETIRED_SHELL_SETTINGS = {
+    "LOADOUT_CFG_ATTACH_TO_TMUX": "removed: tmux auto-attach was retired",
+    "LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS": "removed: tmux auto-attach was retired",
+    "LOADOUT_CFG_ENABLE_FASTNVIM": "removed: nothing ever read it",
+    "LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION": "removed: the integration script is found automatically",
+    "LOADOUT_CFG_ENABLE_ONLINE_UPDATES": "LOADOUT_CFG_ONLINE_DETECT",
+    "LOADOUT_ONLINE_CACHE_TTL": "LOADOUT_CFG_ONLINE_CACHE_TTL",
+}
 # ~/.profile is NOT a link to the bash-only bashrc. RHEL-family X sessions read it
 # -- /etc/X11/xinit/Xsession (#!/bin/bash) sources xinitrc-common, which runs
 # `[ -r $HOME/.profile ] && . $HOME/.profile` -- while POSIX login shells (dash)

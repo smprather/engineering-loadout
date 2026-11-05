@@ -191,7 +191,7 @@ export MANROFFOPT="-c"
 # Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells and
 # tmux panes. loadout_detect_online is the shared implementation.
 if [[ -z "${LOADOUT_ONLINE+x}" ]]; then
-    case "${LOADOUT_CFG_ENABLE_ONLINE_UPDATES:-auto}" in
+    case "${LOADOUT_CFG_ONLINE_DETECT:-auto}" in
     0 | false | no | off | disabled) LOADOUT_ONLINE=0 ;;
     1 | true | yes | on | enabled) LOADOUT_ONLINE=1 ;;
     *) loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
@@ -515,11 +515,6 @@ if check_extended_keys; then
     export EXTENDED_KEYS_SUPPORTED=1
 else
     export EXTENDED_KEYS_SUPPORTED=0
-fi
-
-# Auto-attach to tmux if configured (shared implementation).
-if is_truthy "${LOADOUT_CFG_ATTACH_TO_TMUX}"; then
-    auto_attach_to_tmux
 fi
 
 unset _bin_dir _loadout_local_prefix _loadout_newest_hist _loadout_target_shell

@@ -6,7 +6,7 @@
 # Deliberately omitted, because upstream ships no tcsh target for the thing they
 # control (see envs/tcsh/README.md): LOADOUT_CFG_ENABLE_FZF,
 # LOADOUT_CFG_ENABLE_ZOXIDE, LOADOUT_CFG_ENABLE_ICECREAM,
-# LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION / _WEZTERM_SHELL_INTEGRATION,
+# LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION,
 # LOADOUT_CFG_PRESERVE_FUNCTIONS (csh has no functions to preserve),
 # LOADOUT_CFG_PREFERRED_BASH (see LOADOUT_CFG_PREFERRED_TCSH below instead).
 # Setting them here would be a variable nothing reads.
@@ -63,8 +63,6 @@ if ( ! $?LOADOUT_CFG_PREFERRED_VI )        setenv LOADOUT_CFG_PREFERRED_VI  nvim
 # linelight colour for df/diff/dig/free/lsblk/ping/ps/sensors/ss (needs the
 # linelight package; per-command opt-out: ~/.config/linelight/adapters.toml).
 if ( ! $?LOADOUT_CFG_ENABLE_LINELIGHT )    setenv LOADOUT_CFG_ENABLE_LINELIGHT 1
-# Fast nvim mode (read by the nvim config, not by the shell).
-if ( ! $?LOADOUT_CFG_ENABLE_FASTNVIM )     setenv LOADOUT_CFG_ENABLE_FASTNVIM 0
 # Source modules-init.csh at startup to select the loadout-bundled Environment
 # Modules install. Off by default -- opt in per user/site layer.
 if ( ! $?LOADOUT_CFG_USE_LOADOUT_MODULES ) setenv LOADOUT_CFG_USE_LOADOUT_MODULES 0
@@ -86,8 +84,6 @@ if ( ! $?LOADOUT_CFG_PROMPT_COLOR_FARM )   setenv LOADOUT_CFG_PROMPT_COLOR_FARM 
 if ( ! $?LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT ) setenv LOADOUT_CFG_STARSHIP_USERIDS_TO_HIGHLIGHT ""
 
 # ---- tmux --------------------------------------------------------------------
-if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX )      setenv LOADOUT_CFG_ATTACH_TO_TMUX 0
-if ( ! $?LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS ) setenv LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS 0
 # Pane TERM inside tmux; mirrors the bash variable.
 if ( ! $?LOADOUT_CFG_TMUX_TERM )          setenv LOADOUT_CFG_TMUX_TERM "xterm-256color"
 
@@ -111,7 +107,7 @@ if ( ! $?LOADOUT_CFG_ENABLE_SSH_AGENT )  setenv LOADOUT_CFG_ENABLE_SSH_AGENT 0
 # ---- online connectivity detection -------------------------------------------
 # auto (parallel TCP probe on startup) | 1 (force online) | 0 (force offline).
 # Exports LOADOUT_ONLINE=1/0, inherited by child shells and tmux panes.
-if ( ! $?LOADOUT_CFG_ENABLE_ONLINE_UPDATES ) setenv LOADOUT_CFG_ENABLE_ONLINE_UPDATES auto
+if ( ! $?LOADOUT_CFG_ONLINE_DETECT ) setenv LOADOUT_CFG_ONLINE_DETECT auto
 # Per-host TCP connect timeout in seconds (GNU timeout; decimal OK).
 if ( ! $?LOADOUT_CFG_ONLINE_DETECT_TIMEOUT ) setenv LOADOUT_CFG_ONLINE_DETECT_TIMEOUT 0.15
 # Space-separated host:port pairs probed in parallel. Override in user/config.csh
@@ -119,4 +115,4 @@ if ( ! $?LOADOUT_CFG_ONLINE_DETECT_TIMEOUT ) setenv LOADOUT_CFG_ONLINE_DETECT_TI
 if ( ! $?LOADOUT_CFG_ONLINE_DETECT_HOSTS ) setenv LOADOUT_CFG_ONLINE_DETECT_HOSTS "github.com:443 raw.githubusercontent.com:443 pypi.org:443"
 # Startup online verdict is cached on disk for this many seconds (default one
 # day) so only the first login pays for probes. 0 disables the cache.
-if ( ! $?LOADOUT_ONLINE_CACHE_TTL ) setenv LOADOUT_ONLINE_CACHE_TTL 86400
+if ( ! $?LOADOUT_CFG_ONLINE_CACHE_TTL ) setenv LOADOUT_CFG_ONLINE_CACHE_TTL 86400

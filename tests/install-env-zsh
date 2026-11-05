@@ -201,4 +201,14 @@ case $out in *'does not exist'*) fail "cd -- DIR offered to create a directory: 
 echo "$out" | grep -q "A=$TMPHOME/cdtest\$" || fail "cd -- DIR did not land in DIR: [$out]"
 echo "$out" | grep -q "B=$TMPHOME/cdtest/-dash\$" || fail "cd -- -dash did not treat -dash as a path: [$out]"
 
+# --- LOADOUT_CFG_ONLINE_DETECT forces the startup verdict. The probe host is a
+# --- closed port, so an `auto` probe would say 0: seeing 1 proves the setting
+# --- was read, not the network.
+for want in 1 0; do
+    printf 'export LOADOUT_CFG_ONLINE_DETECT=%s\nexport LOADOUT_CFG_ONLINE_DETECT_HOSTS="127.0.0.1:9"\n' "$want" \
+        >"$TMPHOME/.config/bash/user/config.sh"
+    out=$(zsh_i 'printenv LOADOUT_ONLINE')
+    echo "$out" | grep -qx "$want" || fail "ONLINE_DETECT=$want did not give LOADOUT_ONLINE=$want: [$out]"
+done
+
 echo "install-env-zsh: OK"

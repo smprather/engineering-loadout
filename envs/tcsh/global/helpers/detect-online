@@ -20,7 +20,7 @@ timeout_s=${1:-${LOADOUT_CFG_ONLINE_DETECT_TIMEOUT:-0.15}}
 hosts=${LOADOUT_CFG_ONLINE_DETECT_HOSTS:-github.com:443 raw.githubusercontent.com:443 pypi.org:443}
 
 cache_dir=${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/.loadout-net}
-cache_ttl=${LOADOUT_ONLINE_CACHE_TTL:-86400}
+cache_ttl=${LOADOUT_CFG_ONLINE_CACHE_TTL:-86400}
 [ -n "$cache_dir" ] || cache_ttl=0
 if command -v md5sum >/dev/null 2>&1; then
     key=$(printf '%s' "$hosts" | md5sum | awk '{print $1}')

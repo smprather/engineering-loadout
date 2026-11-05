@@ -127,7 +127,7 @@ We **own** this file rather than relying on the system copy because:
 
 Loaded by `global/bashrc` (when `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` is
 truthy) through `loadout_find_wezterm_shell_integration` (`envs/bash/functions.sh`).
-Resolver order: explicit `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` -> this vendored
+Resolver order: this vendored
 copy -> paths relative to the installed `wezterm` binary -> shared prefix. Never
 `/etc`.
 

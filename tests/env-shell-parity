@@ -30,6 +30,7 @@ helper script. Behaviour is covered by tests/install-env-tcsh, which drives a
 real PTY. This gate only answers "does the tcsh env know this name exists".
 """
 
+import ast
 import os
 import re
 import sys
@@ -105,7 +106,6 @@ EXPECTED_MISSING_CONFIG = {
     "LOADOUT_CFG_ENABLE_ICECREAM": "IceCream-Bash needs ${!var} indirection and export -f",
     "LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION": "OSC 133 zones need bash-preexec; tcsh carries "
     "OSC 7 via cwdcmd instead",
-    "LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION": "path to the bash-preexec integration script",
     "LOADOUT_CFG_PRESERVE_FUNCTIONS": "csh has no functions to preserve",
 }
 
@@ -573,6 +573,39 @@ def main():
         '%if "#{==:#{EXTENDED_KEYS_SUPPORTED},0}"' in tmux_global,
         "an unset variable (tcsh) must not force extended-keys off server-wide",
     )
+
+    # Retired and renamed settings must not survive in any env source.
+    table = {}
+    with open(os.path.join(REPO, "loadout_main.py")) as fh:
+        for node in ast.parse(fh.read()).body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "RETIRED_SHELL_SETTINGS" for t in node.targets
+            ):
+                table = ast.literal_eval(node.value)
+    check("retired-settings table found", len(table) >= 6, f"got {len(table)} entries")
+    skip_trees = (
+        os.path.join(REPO, "envs", "bash", "global", "github.scop.bash-completion"),
+        os.path.join(REPO, "envs", "bash", "global", "icecream-bash"),
+    )
+    patterns = {n: re.compile(r"(?<![A-Za-z0-9_])" + re.escape(n) + r"(?![A-Za-z0-9_])") for n in table}
+    hits = []
+    for sub in ("bash", "zsh", "tcsh"):
+        for root, _dirs, files in os.walk(os.path.join(REPO, "envs", sub)):
+            if any(root == t or root.startswith(t + os.sep) for t in skip_trees):
+                continue
+            for fn in files:
+                path = os.path.join(root, fn)
+                if fn.endswith(".md") or not os.path.isfile(path) or os.path.islink(path):
+                    continue
+                try:
+                    lines = open(path, encoding="utf-8").read().splitlines()
+                except UnicodeDecodeError:
+                    continue
+                for i, line in enumerate(lines, 1):
+                    for name, pat in patterns.items():
+                        if pat.search(line):
+                            hits.append(f"{os.path.relpath(path, REPO)}:{i}: {name} -> {table[name]}")
+    check("no env source uses a retired setting", not hits, "\n    " + "\n    ".join(hits))
 
     print()
     if FAILURES:

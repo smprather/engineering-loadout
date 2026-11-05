@@ -189,7 +189,6 @@ preference is a `LOADOUT_CFG_*` variable you can override in your user layer:
 # envs/bash/user/config.sh
 export LOADOUT_CFG_PREFERRED_VI=vim        # use vim instead of nvim
 export LOADOUT_CFG_ENABLE_STARSHIP=0       # use the built-in prompt
-export LOADOUT_CFG_ATTACH_TO_TMUX=1        # auto-attach tmux on login
 export LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION=0   # disable wezterm OSC integration
 ```
 
@@ -567,6 +566,18 @@ six-layer override chain (`global -> corp -> site -> team -> project -> user`),
 tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,
 and keeps home-local override layers active even when `TCSH_CONFIG_ROOT_DIR`
 points at a shared tcsh config root.
+
+### Retired and renamed settings
+
+Retired settings are cut over, never aliased: setting an old name has no effect.
+
+| Old name | New name or action |
+|---|---|
+| `LOADOUT_CFG_ATTACH_TO_TMUX`, `LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS` | Removed. Tmux auto-attach was retired; start tmux yourself. |
+| `LOADOUT_CFG_ENABLE_FASTNVIM` | Removed. Nothing ever read it. |
+| `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | Removed. The integration script is found automatically; `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` still switches it on or off. |
+| `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` | `LOADOUT_CFG_ONLINE_DETECT` (`auto`, `1` or `0`). |
+| `LOADOUT_ONLINE_CACHE_TTL` | `LOADOUT_CFG_ONLINE_CACHE_TTL` (seconds, default `86400`; `0` disables the cache). |
 
 ---
 

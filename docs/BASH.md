@@ -78,7 +78,8 @@ login and `exec bash` behaving identically.
 |----------|---------|---------|
 | `LOADOUT_CFG_ENABLE_STARSHIP` | `1` | Starship prompt (falls back to the built-in prompt) |
 | `LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION` | `1` | Source the loadout-owned `wezterm.sh` (OSC 133 semantic zones, OSC 7 cwd, user vars). Self-skips `dumb`/`linux` and non-interactive shells. Outside real WezTerm, `bashrc` sources it with all WezTerm output hooks skipped, keeping bash-preexec without raw OSC output or `wezterm set-working-directory` prompt stalls |
-| `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` | `""` | Explicit path to `wezterm.sh`; empty auto-resolves (vendored copy -> wezterm-binary-relative -> shared prefix). Set from a `--dest-dir` installer to pin it. Never `/etc` |
+| `LOADOUT_CFG_ONLINE_DETECT` | `auto` | Startup network verdict exported as `LOADOUT_ONLINE`: `auto` probes (cached per day), `1` forces online, `0` forces offline |
+| `LOADOUT_CFG_ONLINE_CACHE_TTL` | `86400` | Seconds the `auto` verdict is cached on disk; `0` disables the cache |
 
 WezTerm shell integration is **vendored** at `envs/bash/global/wezterm/wezterm.sh`
 (the bundled wezterm runtime ships only `wezterm shell-completion`, not the

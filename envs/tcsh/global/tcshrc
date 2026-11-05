@@ -309,7 +309,7 @@ if ( $?prompt ) then
     # panes. Mirrors the bash env, including the auto/1/0 tri-state.
     if ( ! $?LOADOUT_ONLINE ) then
         set _loadout_mode = "auto"
-        if ( $?LOADOUT_CFG_ENABLE_ONLINE_UPDATES ) set _loadout_mode = "$LOADOUT_CFG_ENABLE_ONLINE_UPDATES"
+        if ( $?LOADOUT_CFG_ONLINE_DETECT ) set _loadout_mode = "$LOADOUT_CFG_ONLINE_DETECT"
         switch ( "$_loadout_mode" )
             case 0:
             case false:
@@ -634,18 +634,6 @@ if ( $?prompt ) then
                 rm -f "$SSH_AUTH_SOCK" >& /dev/null
                 ssh-agent -a "$SSH_AUTH_SOCK" >& /dev/null
             endif
-        endif
-    endif
-
-    # ---- tmux auto-attach (last, so a failure cannot skip prompt setup) -------
-    if ( $?LOADOUT_CFG_ATTACH_TO_TMUX && ! $?TMUX ) then
-        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ATTACH_TO_TMUX" } && -X tmux ) then
-            set _loadout_detach = ""
-            if ( $?LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS ) then
-                if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS" } ) set _loadout_detach = "-d"
-            endif
-            tmux attach $_loadout_detach >& /dev/null || tmux
-            unset _loadout_detach
         endif
     endif
 
