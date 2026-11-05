@@ -9,7 +9,7 @@ upstream project has used.
 | `terminalrc` | `~/.config/xfce4/terminal/terminalrc` | xfce4-terminal 1.0.x, including the loadout build |
 
 The xfconf XML is the absorbed operator config (`xfconf-query -c
-xfce4-terminal -l` shows the same twelve properties). `terminalrc` is its
+xfce4-terminal -l` shows the same thirteen properties). `terminalrc` is its
 translation for 1.0.4, whose rc reader takes each property's blurb as the key
 (`terminal/terminal-preferences.c`).
 
@@ -20,9 +20,15 @@ it. Nothing else under `~/.config/xfce4` is touched -- install_path() runs per
 file, not on the directory, so unrelated Xfce apps and xfconf channels are
 never deleted.
 
+`command-login-shell` / `CommandLoginShell=TRUE` makes every window start a
+login shell, so a shell switched to by `LOADOUT_CFG_INTERACTIVE_SHELL` gets its
+family's system init (spec D8). Like the rest, it is seeded once: existing
+users keep `FALSE` until they delete the seeded file or tick the preference
+(Preferences > General > Run command as login shell).
+
 ## 1.2.0 -> 1.0.4 compatibility
 
-Eleven of the twelve settings map exactly. `tests/install-env-xfce4-terminal`
+Twelve of the thirteen settings map exactly. `tests/install-env-xfce4-terminal`
 enforces the mapping, so a new 1.2.0 property cannot silently ship without a
 1.0.4 decision.
 
@@ -39,6 +45,7 @@ enforces the mapping, so a new 1.2.0 property cannot silently ship without a
 | `color-palette` | `ColorPalette` | 1.0.4 parses the `rgb()` form via `gdk_rgba_parse()` |
 | `misc-right-click-action` | `MiscRightClickAction` | same enum names |
 | `misc-highlight-urls` | `MiscHighlightUrls` | |
+| `command-login-shell` | `CommandLoginShell` | 1.0.4 blurb is "Run command as login shell" |
 | `misc-maximize-default` | *(none)* | **not representable in 1.0.4** |
 
 `MiscMaximizeDefault` does not exist in the 1.0.4 property table, so it is

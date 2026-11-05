@@ -13,6 +13,10 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## Next release notes
+
+- New installs open xfce4-terminal windows as login shells (`CommandLoginShell=TRUE`, seeded once; existing users keep their file).
+
 ## 2026-11-05 (1): `lef-tools` + `def-tools` (open-eda-file-tools distributions 2 and 3)
 
 `open-eda-file-tools` grew from one distribution to three. The registry had only
