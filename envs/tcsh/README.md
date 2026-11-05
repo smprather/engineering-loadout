@@ -384,3 +384,6 @@ a green run that proves nothing:
    start while the test was green. `assert_no_csh_noise` now scans the output for
    tcsh's error vocabulary, and both bugs were re-introduced deliberately to
    confirm it fails.
+
+Every `LOADOUT_CFG_*` setting is listed, with defaults and the shells that read it, in the
+[Settings table](../bash/README.md#settings).

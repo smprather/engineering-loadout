@@ -157,3 +157,6 @@ proves nothing:
 `env -i` in the test harness is also load-bearing: without it the surrounding
 loadout bash session's exported `LOADOUT_CFG_*` and PATH leak in, and the test
 measures the developer's shell instead of a fresh farm HOME.
+
+Every `LOADOUT_CFG_*` setting is listed, with defaults and the shells that read it, in the
+[Settings table](../bash/README.md#settings).
