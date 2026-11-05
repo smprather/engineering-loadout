@@ -56,20 +56,42 @@ setopt INTERACTIVE_COMMENTS 2>/dev/null
 # Deliberately the bash files: the defaults live in exactly one place so a value
 # a user sets for bash also applies to zsh. zsh-only settings go in pass 1b.
 if typeset -f source_if_exists >/dev/null 2>&1; then
+    # A shared config root (outside HOME) still gets the HOME corp..user override
+    # layers afterwards, as bash and tcsh do. Skipped when the root IS the home
+    # dir (resolved with :A, no fork) -- those files were just sourced.
+    _home_overlay_bash=0 _home_overlay_zsh=0 _home_bash=$HOME/.config/bash _home_zsh=$HOME/.config/zsh
+    [[ ${BASH_CONFIG_ROOT_DIR:A} != ${_home_bash:A} ]] && _home_overlay_bash=1
+    [[ ${ZSH_CONFIG_ROOT_DIR:A} != ${_home_zsh:A} ]] && _home_overlay_zsh=1
+
     source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
     for _layer in corp site team project user; do
         source_if_exists "$BASH_CONFIG_ROOT_DIR/$_layer/config.sh"
     done
+    if (( _home_overlay_bash )); then
+        for _layer in corp site team project user; do
+            source_if_exists "$HOME/.config/bash/$_layer/config.sh"
+        done
+    fi
 
     # --- Pass 1b: zsh-specific config, every layer ----------------------------
     for _layer in global corp site team project user; do
         source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/config.zsh"
     done
+    if (( _home_overlay_zsh )); then
+        for _layer in corp site team project user; do
+            source_if_exists "$HOME/.config/zsh/$_layer/config.zsh"
+        done
+    fi
 
     # --- Pass 2: the shell config itself, every layer -------------------------
     for _layer in global corp site team project user; do
         source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/zshrc"
     done
+    if (( _home_overlay_zsh )); then
+        for _layer in corp site team project user; do
+            source_if_exists "$HOME/.config/zsh/$_layer/zshrc"
+        done
+    fi
 fi
 
-unset _layer
+unset _layer _home_overlay_bash _home_overlay_zsh _home_bash _home_zsh

@@ -52,6 +52,17 @@ zsh_i() {
         | strip_escapes
 }
 
+# zsh_i with extra `env -i` assignments (VAR=value...) after the command text.
+zsh_i_env() {
+    _cmds=$1; shift
+    : > "$ERRFILE"
+    printf '%s\nexit\n' "$_cmds" \
+        | env -i HOME="$TMPHOME" TERM=xterm PATH=/usr/bin:/bin "$@" \
+              script -qec "$ZSH_BIN -i" /dev/null 2>"$ERRFILE" \
+        | tr -d '\r' \
+        | strip_escapes
+}
+
 # Strip OSC sequences BEFORE CSI ones. The zsh env emits OSC 133 semantic zones
 # and OSC 7 cwd, so command output arrives glued to a marker
 # ("<ESC>]133;C<ESC>\alive") and a CSI-only filter leaves the marker text in
@@ -210,5 +221,34 @@ for want in 1 0; do
     out=$(zsh_i 'printenv LOADOUT_ONLINE')
     echo "$out" | grep -qx "$want" || fail "ONLINE_DETECT=$want did not give LOADOUT_ONLINE=$want: [$out]"
 done
+
+# --- A shared config root (BASH_CONFIG_ROOT_DIR / ZSH_CONFIG_ROOT_DIR outside
+# --- HOME) must still get the HOME corp..user override layers afterwards, in all
+# --- three passes -- as bash and tcsh do. Mirrors tests/install-env-tcsh.
+rm -f "$TMPHOME/.config/bash/user/config.sh"
+ALTB="$TMPHOME/shared-bash-root"
+ALTZ="$TMPHOME/shared-zsh-root"
+mkdir -p "$ALTB" "$ALTZ"
+cp -a "$TMPHOME/.config/bash/global" "$ALTB/global"
+cp -a "$TMPHOME/.config/bash/functions.sh" "$ALTB/functions.sh"
+cp -a "$TMPHOME/.config/zsh/global" "$ALTZ/global"
+for layer in corp site team project user; do
+    mkdir -p "$ALTB/$layer" "$ALTZ/$layer"
+done
+mkdir -p "$TMPHOME/.config/bash/user" "$TMPHOME/.config/zsh/user"
+echo 'export LOADOUT_TEST_OV_CFGSH=yes' > "$TMPHOME/.config/bash/user/config.sh"
+echo 'export LOADOUT_TEST_OV_CFGZSH=yes' > "$TMPHOME/.config/zsh/user/config.zsh"
+cat > "$TMPHOME/.config/zsh/user/zshrc" <<'RC'
+export LOADOUT_TEST_OV_ZSHRC=yes
+export LOADOUT_TEST_ZSHRC_COUNT=$(( ${LOADOUT_TEST_ZSHRC_COUNT:-0} + 1 ))
+RC
+out=$(zsh_i_env 'print -r -- "OV=$LOADOUT_TEST_OV_CFGSH,$LOADOUT_TEST_OV_CFGZSH,$LOADOUT_TEST_OV_ZSHRC"' \
+    BASH_CONFIG_ROOT_DIR="$ALTB" ZSH_CONFIG_ROOT_DIR="$ALTZ")
+assert_no_zsh_noise "shared-root overlay" "$out"
+echo "$out" | grep -q 'OV=yes,yes,yes' || fail "home override layers not sourced under shared roots: [$out]"
+# Negative control: default roots are the home layers themselves -- sourced once.
+out=$(zsh_i 'print -r -- "N=$LOADOUT_TEST_ZSHRC_COUNT"')
+echo "$out" | grep -q 'N=1' || fail "home zshrc layer not sourced exactly once under default roots: [$out]"
+rm -f "$TMPHOME/.config/bash/user/config.sh" "$TMPHOME/.config/zsh/user/config.zsh" "$TMPHOME/.config/zsh/user/zshrc"
 
 echo "install-env-zsh: OK"
