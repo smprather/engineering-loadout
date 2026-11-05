@@ -94,7 +94,7 @@ fi
 ####################################################################################################
 
 ### Detection ###
-_is_ssh_connection=$(ps -f $PPID | grep -c sshd)
+_is_ssh_connection=$(ps -f $PPID 2>/dev/null | grep -c sshd)
 # Detect GLIBC version. I can't support everything on RH7, but I want a minimal level of usability
 # since we still occasionally find ourselves on incredibly old RH7 machines.
 _glibc=$(/usr/bin/ldd --version | /bin/grep -Po "\d\.\d+" | /bin/head -n 1)
@@ -174,7 +174,7 @@ export HISTFILESIZE=10000
 # If a history file with the PID already exists, that means an exec bash just happened.
 if [[ ! -f "$HISTFILE" ]]; then
     # If not, then do this...
-    if ps -f $PPID | grep -q bash; then
+    if ps -f $PPID 2>/dev/null | grep -q bash; then
         # If this is a child bash, then inherit the history from the parent.
         [[ -f "$XDG_RUNTIME_DIR/bash_history.$PPID" ]] && cp "$XDG_RUNTIME_DIR/bash_history.$PPID" "$HISTFILE"
     else

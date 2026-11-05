@@ -20,12 +20,15 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 ERRFILE="$TMPHOME/stderr.txt"
 BASH_BIN="$(command -v bash)"
 
-# bash_i CMDS -- run CMDS in an interactive bash under a PTY with a CLEAN
-# environment (env -i: the surrounding shell's exported LOADOUT_* must not leak).
+# bash_i CMDS [VAR=value ...] -- run CMDS in an interactive bash under a PTY with
+# a CLEAN environment (env -i: the surrounding shell's exported LOADOUT_* must
+# not leak) plus the given assignments.
 bash_i() {
+    _cmds=$1
+    shift
     : > "$ERRFILE"
-    printf '%s\nexit\n' "$1" \
-        | env -i HOME="$TMPHOME" TERM=xterm PATH=/usr/bin:/bin \
+    printf '%s\nexit\n' "$_cmds" \
+        | env -i HOME="$TMPHOME" TERM=xterm PATH=/usr/bin:/bin "$@" \
               script -qec "$BASH_BIN -i" /dev/null 2>"$ERRFILE" \
         | tr -d '\r' \
         | strip_escapes
@@ -84,5 +87,26 @@ for want in 1 0; do
     out=$(bash_i 'printenv LOADOUT_ONLINE')
     echo "$out" | grep -qx "$want" || fail "ONLINE_DETECT=$want did not give LOADOUT_ONLINE=$want: [$out]"
 done
+
+# --- The start-of-source `unset -f` keeps LOADOUT_CFG_PRESERVE_FUNCTIONS' default
+# --- even when nothing exported it yet. It runs before config.sh, so on a first
+# --- login (sshd, or a tcsh origin switching to bash) the variable is unset, and
+# --- Environment Modules' `module` -- defined by /etc/profile.d, or inherited
+# --- through `export -f` as here -- was wiped. Unset = the documented default.
+rm -f "$TMPHOME/.config/bash/user/config.sh"
+MODULE_FN='BASH_FUNC_module%%=() {  echo MODULE_OK
+}'
+out=$(bash_i 'module 2>/dev/null || echo PROBE_nomodule' "$MODULE_FN")
+echo "$out" | grep -qx MODULE_OK \
+    || fail "an exported module() did not survive bashrc's reset with LOADOUT_CFG_PRESERVE_FUNCTIONS unset: [$out]"
+# Control: config.sh documents "Empty = clear all", so an explicit empty value
+# still wipes it (the default applies to unset only, not to empty).
+out=$(bash_i 'module 2>/dev/null || echo PROBE_nomodule' "$MODULE_FN" LOADOUT_CFG_PRESERVE_FUNCTIONS=)
+echo "$out" | grep -qx PROBE_nomodule \
+    || fail "an exported module() survived bashrc's reset with LOADOUT_CFG_PRESERVE_FUNCTIONS empty: [$out]"
+# The default is spelled twice (bashrc applies it before config.sh exists).
+_cfg_default=$(sed -n 's/^export LOADOUT_CFG_PRESERVE_FUNCTIONS="\(.*\)"$/\1/p' "$REPO/envs/bash/global/config.sh")
+grep -qF "\${LOADOUT_CFG_PRESERVE_FUNCTIONS-$_cfg_default}" "$REPO/envs/bash/bashrc" \
+    || fail "envs/bash/bashrc's PRESERVE_FUNCTIONS fallback differs from config.sh's default [$_cfg_default]"
 
 echo "install-env-bash: OK"

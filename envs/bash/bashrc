@@ -40,7 +40,8 @@ unalias -a
 # on the prompt. PS1/PS2/PROMPT_COMMAND/precmd_functions are rebuilt later (or
 # reset in the prompt block), so PS0's function-references are the only ones we
 # must carry across the wipe.
-_lo_keep_fns=" ${LOADOUT_CFG_PRESERVE_FUNCTIONS:-} "
+# This runs before config.sh, so unset gets config.sh's documented default here (`-`: empty still clears all).
+_lo_keep_fns=" ${LOADOUT_CFG_PRESERVE_FUNCTIONS-module _module_raw ml} "
 if [[ -n ${PS0:-} ]]; then
     for _lo_tok in ${PS0}; do
         # Command substitutions and bare words alike; keep valid identifiers

@@ -64,4 +64,6 @@ export LOADOUT_CFG_USE_LOADOUT_MODULES="0"
 # `exec bash` starts from a clean slate. Names listed here survive that reset --
 # e.g. the Environment Modules functions (module/_module_raw/ml) inherited via
 # `export -f` from a parent shell, which would otherwise be wiped. Empty = clear all.
+# The reset runs before this file, so bash/bashrc applies this same default when
+# the variable is unset (tests/install-env-bash keeps the two equal).
 export LOADOUT_CFG_PRESERVE_FUNCTIONS="module _module_raw ml"
