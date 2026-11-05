@@ -13,6 +13,10 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## Next release notes
+
+- New installs open xfce4-terminal windows as login shells (`CommandLoginShell=TRUE`, seeded once; existing users keep their file).
+
 ## 2026-11-05 (1): `lef-tools` + `def-tools` (open-eda-file-tools distributions 2 and 3)
 
 `open-eda-file-tools` grew from one distribution to three. The registry had only
@@ -56,7 +60,12 @@ cp315); `tests/registry-integrity` 20/20; `build/gen-readme-table` in sync after
 adding the two hand-owned rows; offline smoke
 `uv tool install --no-index --find-links payload/el8.x86_64.glibc2p28/wheels`
 into a scratch `UV_TOOL_DIR`, then `lef-tools --help` and `def-tools --help`
-both run.
+both run. `tests/run-all --fast` PASS (174 s). Scratch-dest install through the
+real installer: `lef-tools, version 2026.11.0` and
+`def-tools, version 2026.11.2.dev0`.
+`tests/prebuilt-binaries-almalinux8 --full` PASS (606 s; 318 binaries OK, 23
+skipped) — it caught the stale bash completion (Tier 2 only, so `--fast` missed
+it), now regenerated.
 
 **Not part of this entry:** the interactive-shell work landed separately
 (`3500357`, `d5a8ed0`, `dbb8d8c` plus the design doc in `7521999`). The working

@@ -54,6 +54,7 @@ trc_key_for() {
         text-blink-mode) echo TextBlinkMode ;;
         misc-menubar-default) echo MiscMenubarDefault ;;
         color-palette) echo ColorPalette ;;
+        command-login-shell) echo CommandLoginShell ;;
         misc-right-click-action) echo MiscRightClickAction ;;
         misc-highlight-urls) echo MiscHighlightUrls ;;
         # 1.0.4 has no MiscMaximizeDefault; --maximize is CLI-only there.
@@ -81,14 +82,14 @@ for prop in $xml_props; do
             ;;
     esac
 done
-[ "$mapped" -eq 11 ] || fail "expected 11 mapped settings, got $mapped"
+[ "$mapped" -eq 12 ] || fail "expected 12 mapped settings, got $mapped"
 [ "$unmapped" -eq 1 ] || fail "expected exactly 1 unrepresentable setting, got $unmapped"
 ! grep -q '^MiscMaximizeDefault=' "$TRC" \
     || fail "terminalrc carries MiscMaximizeDefault, which 1.0.4 does not implement"
 
 # No terminalrc key may be extra: it must correspond to an XML property.
 trc_keys=$(sed -n 's/^\([A-Za-z][A-Za-z0-9]*\)=.*/\1/p' "$TRC")
-[ "$(echo "$trc_keys" | grep -c .)" -eq 11 ] || fail "terminalrc has keys beyond the mapped set"
+[ "$(echo "$trc_keys" | grep -c .)" -eq 12 ] || fail "terminalrc has keys beyond the mapped set"
 for key in $trc_keys; do
     found=0
     for prop in $xml_props; do
@@ -99,6 +100,7 @@ done
 
 # Settings the two formats share must survive the terminalrc translation.
 for line in \
+    'CommandLoginShell=TRUE' \
     'FontName=Hack Nerd Font Mono 12' \
     'FontUseSystem=FALSE' \
     'MiscCopyOnSelect=TRUE' \
