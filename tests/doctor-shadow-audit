@@ -39,4 +39,64 @@ out=$(env -i HOME="$clean" PATH="/usr/bin:/bin" TERM=xterm "$repo/loadout" docto
     || fail "clean-HOME doctor exited nonzero"
 case "$out" in *"legacy EL copies"*) fail "clean HOME reported legacy copies";; esac
 
+# Interactive-shell audit.
+ish="$tmp/ish"
+mkdir -p "$ish/.config/bash/global" "$ish/.config/tcsh/global" "$ish/.config/bash/user" "$ish/.config/tcsh/user"
+cat >"$ish/.config/bash/user/config.sh" <<'EOF'
+export LOADOUT_CFG_PREFERRED_BASH=/x
+export LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS=1
+export LOADOUT_CFG_ENABLE_WEZTERM_SHELL_INTEGRATION=1
+export LOADOUT_ONLINE_CACHE_TTL=0
+EOF
+printf 'setenv LOADOUT_CFG_PREFERRED_TCSH /y\n' >"$ish/.config/tcsh/user/config.csh"
+out=$(env -i HOME="$ish" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL="zsh -l" "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero with interactive-shell findings:
+$out"
+case "$out" in *"Interactive shell:"*) : ;; *) fail "missing Interactive shell section";; esac
+echo "$out" | grep 'retired setting LOADOUT_CFG_PREFERRED_BASH in' | grep -q -- '-> LOADOUT_CFG_INTERACTIVE_SHELL' \
+    || fail "retired PREFERRED_BASH not reported with replacement"
+n=$(echo "$out" | grep -c 'retired setting LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS' || true)
+[ "$n" = 1 ] || fail "expected exactly one DETACH_OTHERS finding, got $n"
+if echo "$out" | grep -q 'retired setting LOADOUT_CFG_ATTACH_TO_TMUX in'; then
+    fail "whole-word match leaked: ATTACH_TO_TMUX matched inside the longer name"
+fi
+if echo "$out" | grep 'retired setting' | grep -q 'ENABLE_WEZTERM'; then
+    fail "ENABLE_WEZTERM matched the retired WEZTERM name"
+fi
+echo "$out" | grep 'retired setting' | grep -q -- '-> LOADOUT_CFG_ONLINE_CACHE_TTL' \
+    || fail "retired ONLINE_CACHE_TTL replacement missing"
+echo "$out" | grep 'retired setting LOADOUT_CFG_PREFERRED_TCSH in' | grep -q 'config.csh' \
+    || fail "csh-syntax retired setting (setenv) not reported"
+case "$out" in *"LOADOUT_CFG_INTERACTIVE_SHELL=zsh -l does not resolve"*) : ;; *) fail "unresolvable value not reported";; esac
+
+if [ -x /usr/bin/zsh ]; then
+    out=$(env -i HOME="$ish" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL=/usr/bin/zsh "$repo/loadout" doctor 2>&1) \
+        || fail "doctor exited nonzero for zsh target"
+    case "$out" in *"env-zsh is not installed"*) : ;; *) fail "missing env-zsh not reported";; esac
+fi
+
+# Value set only in the OTHER family's layers.
+fam=$(basename "$(getent passwd "$(id -un)" | cut -d: -f7)")
+case "$fam" in
+    bash | zsh) other=tcsh; ofile=config.csh; oline='setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh' ;;
+    tcsh | csh) other=bash; ofile=config.sh; oline='export LOADOUT_CFG_INTERACTIVE_SHELL=zsh' ;;
+    *) other="" ;;
+esac
+if [ -n "$other" ]; then
+    wl="$tmp/wronglayer"
+    mkdir -p "$wl/.config/bash/global" "$wl/.config/tcsh/global" "$wl/.config/$other/user"
+    printf '%s\n' "$oline" >"$wl/.config/$other/user/$ofile"
+    out=$(env -i HOME="$wl" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL=zsh "$repo/loadout" doctor 2>&1) \
+        || fail "doctor exited nonzero for wrong-layer run"
+    [ "$fam" = csh ] && fam=tcsh
+    case "$out" in *"LOADOUT_CFG_INTERACTIVE_SHELL is not set in the $fam layers"*) : ;; *) fail "wrong-layer value not reported for $fam";; esac
+else
+    case "$out" in *"(EL rc: no)"*) : ;; *) fail "non bash/zsh/tcsh passwd shell should report EL rc: no";; esac
+fi
+
+# Negative control: clean HOME has no interactive-shell findings.
+out=$(env -i HOME="$clean" PATH="/usr/bin:/bin" TERM=xterm "$repo/loadout" doctor 2>&1)
+case "$out" in *"retired setting"*) fail "clean HOME reported a retired setting";; esac
+case "$out" in *"does not resolve"*) fail "clean HOME reported an unresolvable value";; esac
+
 echo "doctor-shadow-audit: OK"

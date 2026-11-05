@@ -7637,6 +7637,178 @@ def _stale_tmux_autosave_refs(user_home):
     return hits
 
 
+def _resolve_interactive_shell(value, shared_prefix, path):
+    """Python mirror of loadout_resolve_interactive_shell (envs/bash/functions.sh).
+
+    Returns the absolute path LOADOUT_CFG_INTERACTIVE_SHELL resolves to, or None.
+    Empty or whitespace-bearing values and relative paths with a slash never
+    resolve; a bare name is looked up in <shared_prefix>/bin, then in the
+    absolute entries of `path` (relative and empty entries are skipped).
+    """
+
+    def _runnable(candidate):
+        return os.path.isfile(candidate) and os.access(candidate, os.X_OK)
+
+    if not value or any(ch.isspace() for ch in value):
+        return None
+    if value.startswith("/"):
+        return value if _runnable(value) else None
+    if "/" in value:
+        return None
+    candidate = os.path.join(shared_prefix, "bin", value)
+    if _runnable(candidate):
+        return candidate
+    for entry in (path or "").split(":"):
+        if not entry.startswith("/"):
+            continue
+        candidate = f"{entry}/{value}"
+        if _runnable(candidate):
+            return candidate
+    return None
+
+
+def _shell_family(path):
+    """Return "bash", "zsh" or "tcsh" (csh maps to tcsh) for a shell path, else None.
+
+    The path's own basename is tried first, then the realpath's, so a link named
+    `mysh` pointing at a file named `bash` is bash.
+    """
+    for candidate in (path, os.path.realpath(path)):
+        base = os.path.basename(candidate)
+        if base == "csh":
+            base = "tcsh"
+        if base in ("bash", "zsh", "tcsh"):
+            return base
+    return None
+
+
+_SHELL_FAMILY_CONFIG = {"bash": "config.sh", "zsh": "config.zsh", "tcsh": "config.csh"}
+_CSH_UNSAFE_CHARS = re.compile(r"[^-A-Za-z0-9_./+@%,:=]")
+
+
+def _shell_config_roots(family, user_home, environ):
+    """Config roots for a shell family: ~/.config/<family> plus $<FAMILY>_CONFIG_ROOT_DIR."""
+    roots, seen = [], set()
+    candidates = [os.path.join(user_home, ".config", family)]
+    extra = environ.get(f"{family.upper()}_CONFIG_ROOT_DIR")
+    if extra:
+        candidates.append(extra)
+    for root in candidates:
+        real = os.path.realpath(root)
+        if real not in seen:
+            seen.add(real)
+            roots.append(root)
+    return roots
+
+
+def _shell_layer_files(family, user_home, environ):
+    """Yield every existing corp..user layer config file of a family, across its roots."""
+    for root in _shell_config_roots(family, user_home, environ):
+        for layer in CONFIG_LAYERS:
+            path = os.path.join(root, layer, _SHELL_FAMILY_CONFIG[family])
+            if os.path.isfile(path):
+                yield path
+
+
+def _read_lines(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return fh.read().splitlines()
+    except OSError:
+        return []
+
+
+def _doctor_shell_audit(user_home, environ, passwd_shell=None):
+    """Read-only report on the interactive-shell setting. Returns the finding count.
+
+    Informational only -- findings never change doctor's exit status. passwd_shell
+    overrides the account's login shell (tests).
+    """
+    findings = 0
+    print("Interactive shell:")
+    if passwd_shell is None:
+        try:
+            passwd_shell = pwd.getpwuid(os.getuid()).pw_shell or "unknown"
+        except KeyError:
+            passwd_shell = "unknown"
+    pw_family = _shell_family(passwd_shell) if passwd_shell != "unknown" else None
+
+    def _env_installed(family):
+        roots = _shell_config_roots(family, user_home, environ)
+        return os.path.isdir(os.path.join(roots[0], "global"))
+
+    el_rc = bool(pw_family) and _env_installed(pw_family)
+    print(f"  passwd shell: {passwd_shell} (EL rc: {'yes' if el_rc else 'no'})")
+
+    for family in _SHELL_FAMILY_CONFIG:
+        for path in _shell_layer_files(family, user_home, environ):
+            for lineno, line in enumerate(_read_lines(path), 1):
+                for name, replacement in RETIRED_SHELL_SETTINGS.items():
+                    if re.search(rf"(?<![A-Za-z0-9_]){name}(?![A-Za-z0-9_])", line):
+                        print(f"  retired setting {name} in {path}:{lineno} -> {replacement}")
+                        findings += 1
+
+    value = environ.get("LOADOUT_CFG_INTERACTIVE_SHELL", "")
+    if not value:
+        return findings
+
+    prefix = environ.get("LOADOUT_CFG_SHARED_PREFIX") or os.path.join(user_home, ".local/share/loadout")
+    resolved = _resolve_interactive_shell(value, prefix, environ.get("PATH", ""))
+    if resolved is None:
+        print(f"  LOADOUT_CFG_INTERACTIVE_SHELL={value} does not resolve to an executable; the shells ignore it")
+        findings += 1
+    else:
+        print(f"  LOADOUT_CFG_INTERACTIVE_SHELL={value} -> {resolved}")
+        base = os.path.basename(resolved)
+        flags = ["-f"] if base in ("zsh", "tcsh", "csh") else ["--no-config"] if base == "fish" else []
+        try:
+            ok = (
+                subprocess.run(
+                    [resolved, *flags, "-c", ":"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                ).returncode
+                == 0
+            )
+        except OSError, subprocess.SubprocessError:
+            ok = False
+        if not ok:
+            print(
+                f"  LOADOUT_CFG_INTERACTIVE_SHELL={value} resolves to {resolved} but does not run on this host;"
+                " the shells silently stay put"
+            )
+            findings += 1
+        target_family = _shell_family(resolved)
+        if target_family and not _env_installed(target_family):
+            print(f"  env-{target_family} is not installed; the {target_family} you switch to has no EL rc")
+            findings += 1
+        if pw_family == "tcsh" and (_CSH_UNSAFE_CHARS.search(value) or _CSH_UNSAFE_CHARS.search(resolved)):
+            print(
+                f"  csh/tcsh cannot use LOADOUT_CFG_INTERACTIVE_SHELL={value}: a character outside"
+                " [-A-Za-z0-9_./+@%,:=] in the value or the resolved path makes tcsh ignore it"
+            )
+            findings += 1
+
+    if pw_family:
+        families = {"bash": ["bash"], "zsh": ["bash", "zsh"], "tcsh": ["tcsh"]}[pw_family]
+        pattern = re.compile(r"(?<![A-Za-z0-9_])LOADOUT_CFG_INTERACTIVE_SHELL(?![A-Za-z0-9_])")
+        is_set = any(
+            pattern.search(line) and not line.lstrip().startswith("#")
+            for family in families
+            for path in _shell_layer_files(family, user_home, environ)
+            for line in _read_lines(path)
+        )
+        if not is_set:
+            print(
+                f"  LOADOUT_CFG_INTERACTIVE_SHELL is not set in the {pw_family} layers;"
+                " your login shell will not honor the environment value"
+            )
+            findings += 1
+    return findings
+
+
 def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
     """Read-only report: install layout, legacy copies, prefer shims, PATH shadows.
 
@@ -7729,6 +7901,7 @@ def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
         print("    PATH order alone decides the winner; prefer/ shims are the intentional exception")
         findings += len(shadowed)
     findings += _doctor_font_backups(install_root, user_home, repo_dir)
+    findings += _doctor_shell_audit(user_home, os.environ)
     print()
     return findings
 

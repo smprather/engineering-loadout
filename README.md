@@ -644,6 +644,8 @@ sessions.
 
 Retired settings are cut over, never aliased: setting an old name has no effect.
 
+`./loadout doctor` has an "Interactive shell" section: it reports retired names left in your shell layers, a `LOADOUT_CFG_INTERACTIVE_SHELL` value that does not resolve or does not run on this host, a missing `env-zsh`/`env-tcsh`/`env-bash` for the target, and a value your login shell's layers do not set. Findings never change doctor's exit status.
+
 | Old name | New name or action |
 |---|---|
 | `LOADOUT_CFG_ATTACH_TO_TMUX`, `LOADOUT_CFG_ATTACH_TO_TMUX_WITH_DETACH_OTHERS` | Removed. Tmux auto-attach was retired; start tmux yourself. |

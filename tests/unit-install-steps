@@ -664,6 +664,77 @@ def test_build_scripts_honor_loadout_patchelf(m, tmp):
     )
 
 
+def test_resolve_interactive_shell(m, tmp):
+    """Python mirror of loadout_resolve_interactive_shell / helpers/resolve-shell."""
+    for rel, mode in (
+        ("prefix/bin/zsh", 0o755),
+        ("pathdir/zsh", 0o755),
+        ("pathdir/plain", 0o644),
+        ("bin/abs", 0o755),
+    ):
+        path = os.path.join(tmp, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\n")
+        os.chmod(path, mode)
+    prefix = f"{tmp}/prefix"
+    pathdir = f"{tmp}/pathdir"
+    cases = (
+        ("empty", "", prefix, pathdir, None),
+        ("whitespace", "zsh -l", prefix, pathdir, None),
+        ("relative slash", "bin/zsh", prefix, pathdir, None),
+        ("absolute", f"{tmp}/bin/abs", prefix, pathdir, f"{tmp}/bin/abs"),
+        ("absolute non-exec", f"{pathdir}/plain", prefix, pathdir, None),
+        ("prefix wins", "zsh", prefix, pathdir, f"{tmp}/prefix/bin/zsh"),
+        ("PATH fallback", "zsh", f"{tmp}/none", pathdir, f"{tmp}/pathdir/zsh"),
+        ("unknown name", "nosuch", prefix, pathdir, None),
+        ("relative PATH entry skipped", "zsh", f"{tmp}/none", f"bin:{pathdir}", f"{tmp}/pathdir/zsh"),
+        ("only relative PATH entries", "zsh", f"{tmp}/none", "pathdir", None),
+    )
+    for label, value, pfx, path, want in cases:
+        got = m._resolve_interactive_shell(value, pfx, path)
+        check(f"resolve: {label}", got == want, f"{got!r} != {want!r}")
+
+
+def test_shell_family(m, tmp):
+    check("family /bin/csh is tcsh", m._shell_family("/bin/csh") == "tcsh")
+    check("family zsh", m._shell_family("/usr/bin/zsh") == "zsh")
+    check("family fish is None", m._shell_family("/usr/bin/fish") is None)
+    real = os.path.join(tmp, "bash")
+    with open(real, "w", encoding="utf-8") as fh:
+        fh.write("")
+    link = os.path.join(tmp, "mysh")
+    os.symlink(real, link)
+    check("family follows symlink", m._shell_family(link) == "bash")
+
+
+def test_doctor_shell_audit_csh_chars(m, tmp):
+    """csh/tcsh ignore a value with characters outside the safe set (R11)."""
+    import contextlib
+    import io
+
+    home = os.path.join(tmp, "home")
+    os.makedirs(os.path.join(home, ".config", "tcsh", "global"))
+    weird = os.path.join(tmp, "we~ird")
+    os.makedirs(weird)
+    target = os.path.join(weird, "zsh")
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write("#!/bin/sh\nexit 0\n")
+    os.chmod(target, 0o755)
+    env = {"LOADOUT_CFG_INTERACTIVE_SHELL": target, "PATH": "/usr/bin:/bin"}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m._doctor_shell_audit(home, env, passwd_shell="/bin/tcsh")
+    out = buf.getvalue()
+    check(
+        "tcsh family flags unsafe characters", f"csh/tcsh cannot use LOADOUT_CFG_INTERACTIVE_SHELL={target}" in out, out
+    )
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m._doctor_shell_audit(home, env, passwd_shell="/bin/bash")
+    check("bash family accepts unsafe characters", "csh/tcsh cannot use" not in buf.getvalue(), buf.getvalue())
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
@@ -687,6 +758,9 @@ TESTS = (
     test_describe_python_suite_uses_install_root,
     test_disabled_messages_use_out_of_service_wording,
     test_build_scripts_honor_loadout_patchelf,
+    test_resolve_interactive_shell,
+    test_shell_family,
+    test_doctor_shell_audit_csh_chars,
 )
 
 
