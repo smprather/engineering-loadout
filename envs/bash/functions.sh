@@ -225,7 +225,8 @@ loadout_find_wezterm_shell_integration() {
 #   /absolute/path                       -> itself, when a regular executable
 #   any other slash (`bin/zsh`)          -> 1
 #   bare name                            -> <shared prefix>/bin/NAME, else the
-#                                           first inherited PATH entry with it
+#                                           first absolute inherited PATH
+#                                           entry with it
 # Never `command -v`/`type`/`whence`: those answer with aliases and functions.
 loadout_resolve_interactive_shell() {
     local _v="${1:-}" _rest _d
@@ -250,7 +251,9 @@ loadout_resolve_interactive_shell() {
         *:*) _rest=${_rest#*:} ;;
         *) _rest="" ;;
         esac
-        [ -n "$_d" ] || continue
+        # SHELL and the marker must be absolute: relative entries (and empty
+        # ones, which mean the cwd) are skipped.
+        case $_d in /*) ;; *) continue ;; esac
         if [ -f "$_d/$_v" ] && [ -x "$_d/$_v" ]; then
             printf '%s\n' "$_d/$_v"
             return 0
@@ -269,7 +272,8 @@ loadout_resolve_interactive_shell() {
 #     `sh`) resolves to the running shell. A shell typed at a prompt is
 #     neither, so it never bounces back;
 #   - the value resolves (loadout_resolve_interactive_shell);
-#   - the target is not the running shell (symlinks resolved).
+#   - the target is not the running shell (symlinks resolved);
+#   - the target actually runs here: one `-c :` probe.
 # Then exports LOADOUT_SHELL_EXEC and SHELL as the resolved path and execs:
 # with `-l` for a login origin and a known login-capable shell, with
 # --init-file BASH_INIT_FILE for bash -> bash, else with no arguments.
@@ -302,6 +306,13 @@ loadout_exec_interactive_shell() {
     fi
     _t=$(loadout_resolve_interactive_shell "${LOADOUT_CFG_INTERACTIVE_SHELL:-}") || return 0
     [ "$(readlink -f "$_t" 2>/dev/null)" != "$_self" ] || return 0
+    # Probe first: it catches bad interpreter, exec format and loader failures,
+    # which `execfail` cannot catch after exec (the shell is already gone).
+    case ${_t##*/} in
+    zsh | tcsh | csh) "$_t" -f -c : </dev/null >/dev/null 2>&1 || return 0 ;;
+    fish) "$_t" --no-config -c : </dev/null >/dev/null 2>&1 || return 0 ;;
+    *) "$_t" -c : </dev/null >/dev/null 2>&1 || return 0 ;;
+    esac
 
     export LOADOUT_SHELL_EXEC="$_t" SHELL="$_t"
     if [ "$_login" = 1 ]; then

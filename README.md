@@ -601,8 +601,10 @@ The value:
 - an absolute path is used as it is.
 - empty (the default) keeps the login shell.
 - anything else -- a relative path (`bin/zsh`), a value with arguments
-  (`zsh -l`), a name that does not resolve, a file that is not executable -- is
-  ignored, silently, so a typo never breaks a login.
+  (`zsh -l`), a name that does not resolve, a file that is not executable, or a
+  shell that cannot run on this host (a broken `#!` line, another
+  architecture, a missing library; the target is tried once with `-c :`
+  before the switch) -- is ignored, silently, so a typo never breaks a login.
 
 The switch exports `LOADOUT_SHELL_EXEC` (the shell it started) and `SHELL`, and
 every shell started inside that session sees the marker and is left alone:

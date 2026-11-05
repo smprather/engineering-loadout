@@ -32,7 +32,8 @@ interactive bash replaces itself with, once, right after the config layers and
 before `global/bashrc` touches PATH: a bare name resolves through
 `${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local/share/loadout}/bin` and then the
 inherited PATH; an absolute path is used as is; a relative path, a value with
-arguments or anything that does not resolve is ignored silently. A login bash
+arguments, anything that does not resolve, or a target that fails a one-time
+`-c :` probe (it cannot run on this host) is ignored silently. A login bash
 starts the target with `-l`. The exported `LOADOUT_SHELL_EXEC` marker keeps
 every later shell in the session -- a typed `bash`, `t`, a tmux pane -- where it
 is. The zsh env runs the same function (`loadout_exec_interactive_shell` in

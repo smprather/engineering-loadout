@@ -108,7 +108,9 @@ has_line() { printf '%s\n' "$1" | grep -qxF "$2"; }
 
 # assert_quiet OUT LABEL: startup stays silent whatever the value is.
 assert_quiet() {
-    for _pat in 'No such file' 'not found' 'Permission denied' 'command not found' 'bad substitution'; do
+    # zsh spells it 'no such file', bash 'No such file'.
+    for _pat in 'No such file' 'no such file' 'not found' 'Permission denied' 'command not found' \
+                'bad substitution'; do
         case $1 in
             *"$_pat"*) fail "$2: the shell printed '$_pat':
 $1" ;;
@@ -128,6 +130,12 @@ chmod 755 "$T/bin/zshwrap" "$T/bin/oddsh" "$T/wrap/zsh"
 ln -s "$ZSH_BIN" "$T/prefix/bin/zsh"
 : > "$T/notexec"
 chmod 644 "$T/notexec"
+# Executable files that cannot run as a shell. brokensh stands in for a target
+# whose loader fails (missing library): it dies after execve succeeds.
+printf '#!/no/such/interp\necho x\n' > "$T/bin/badshebang"
+printf '#!/bin/sh\nexit 127\n' > "$T/bin/brokensh"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$ZSH_BIN" > "$T/bin/relsh"
+chmod 755 "$T/bin/badshebang" "$T/bin/brokensh" "$T/bin/relsh"
 
 # --- a [1]: bash login -> zsh, login preserved ----------------------------------
 set_pref "$ZSH_BIN"
@@ -319,6 +327,29 @@ case $out in
     *PROBE_hijack*) fail "s: the resolver ran the zsh() function:
 $out" ;;
 esac
+
+# --- u: an executable that cannot run here -> no exec, the origin survives ---
+# The target is probed with `-c :` first; a bad interpreter (or exec format)
+# error would otherwise kill the login shell, and a loader failure would kill
+# the already-replaced process. The PROBE line printing proves the origin lived.
+set_pref "$T/bin/badshebang"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "u: bad interpreter, bash origin"
+expect_probe "$out" bash "" "$BASH_BIN" "u: bad interpreter, bash origin"
+out=$(pty "$ZSH_BIN -l" "$PROBE" SHELL="$ZSH_BIN")
+assert_quiet "$out" "u: bad interpreter, zsh origin"
+expect_probe "$out" zsh "" "$ZSH_BIN" "u: bad interpreter, zsh origin"
+set_pref "$T/bin/brokensh"
+out=$(pty "$BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "u: target that fails to start"
+expect_probe "$out" bash "" "$BASH_BIN" "u: target that fails to start"
+
+# --- v: a bare name only a RELATIVE PATH entry reaches -> no exec -------------
+# SHELL and the marker must be absolute, so relative PATH entries are skipped.
+set_pref relsh
+out=$(pty "cd '$T' && PATH=bin:/usr/bin:/bin exec $BASH_BIN -l" "$PROBE" SHELL="$BASH_BIN")
+assert_quiet "$out" "v"
+expect_probe "$out" bash "" "$BASH_BIN" "v: bare name on a relative PATH entry"
 
 # --- t [14]: tmux panes -------------------------------------------------------
 if [ -n "$TMUX_BIN" ]; then
