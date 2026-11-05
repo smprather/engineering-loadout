@@ -181,6 +181,20 @@ and panes use tmux's normal `$SHELL`/passwd default, so a tcsh login gets tcsh
 panes. Helpers that need bash (`tmux-popout`, the layout/state scripts) invoke
 it explicitly.
 
+Panes are login shells started from `$SHELL`, which is how
+`LOADOUT_CFG_INTERACTIVE_SHELL` (README, "Choosing your interactive shell")
+reaches them without a pin. A server started before the change still switches
+pane by pane: each new pane is the passwd shell as a login shell, and its rc
+execs the chosen shell. A server started from a switched shell runs the chosen
+shell directly, and its global environment carries the marker
+`LOADOUT_SHELL_EXEC`, so after a later change its new panes keep the old shell.
+To migrate such a server, never `kill-server` (it destroys every session):
+
+```bash
+tmux set -g default-shell /path/to/new/shell   # new panes start the new shell
+tmux set-environment -gu LOADOUT_SHELL_EXEC    # new panes start the old shell, which then switches
+```
+
 `EXTENDED_KEYS_SUPPORTED` is exported by bash/zsh/tcsh from the same
 `check_extended_keys` logic: kitty/alacritty and an existing tmux server whose
 `extended-keys` is already on are answered cheaply; otherwise a Secondary-DA

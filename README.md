@@ -607,7 +607,8 @@ The value:
   shell that cannot run on this host (a broken `#!` line, another
   architecture, a missing library; the target is tried once with `-c :`
   before the switch) -- is ignored, silently, so a typo never breaks a login.
-  From a csh/tcsh login, a path holding a quote, `$`, `!`, `~` or a blank is
+  Under csh/tcsh (login or not), a value or resolved path with any character
+  outside `[-A-Za-z0-9_./+@%,:=]` -- a quote, `$`, `!`, `~`, a blank -- is
   ignored too (see `envs/tcsh/README.md`).
 
 The switch exports `LOADOUT_SHELL_EXEC` (the shell it started) and `SHELL`, and

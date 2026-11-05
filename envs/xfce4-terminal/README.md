@@ -45,7 +45,7 @@ enforces the mapping, so a new 1.2.0 property cannot silently ship without a
 | `color-palette` | `ColorPalette` | 1.0.4 parses the `rgb()` form via `gdk_rgba_parse()` |
 | `misc-right-click-action` | `MiscRightClickAction` | same enum names |
 | `misc-highlight-urls` | `MiscHighlightUrls` | |
-| `command-login-shell` | `CommandLoginShell` | 1.0.4 blurb is "Run command as login shell" |
+| `command-login-shell` | `CommandLoginShell` | the Preferences label is "Run command as login shell" |
 | `misc-maximize-default` | *(none)* | **not representable in 1.0.4** |
 
 `MiscMaximizeDefault` does not exist in the 1.0.4 property table, so it is

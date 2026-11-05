@@ -1,7 +1,9 @@
 # Interactive shell selection (`LOADOUT_CFG_INTERACTIVE_SHELL`)
 
 Date: 2026-11-05
-Status: draft for review (rev 2: design review folded in, see *Revision notes*)
+Status: implemented on main 2026-11-05 (`6fe25dd`..`c6ce7e1`; rev 3: execution
+rulings folded in, see *Revision notes*). The manual X-session check is still
+open (`docs/HANDOFF.md`).
 Scope: per-user interactive shell choice, without root, without per-terminal config.
 Release class: **C**. The `loadout doctor` findings (D7, csh section) touch
 `loadout_main.py`, and `docs/RELEASE.md` puts anything touching it in class C
@@ -76,7 +78,7 @@ Value semantics:
 
 - absolute path → used verbatim when executable;
 - bare name → `<shared prefix>/bin/<name>` when executable, else the first match
-  on the inherited `PATH`;
+  on the inherited `PATH`, whose non-absolute entries are skipped (rev 3);
 - anything else — a relative path (`bin/zsh`), a value with whitespace
   (`zsh -l`, `/usr/bin/env zsh`) — is rejected: no exec and no output (see
   Anti-goals), and `loadout doctor` reports it (D7).
@@ -119,13 +121,17 @@ evaluation order: the first is the only work done when the variable is unset
 2. the marker `LOADOUT_SHELL_EXEC` is unset (D3);
 3. the shell is interactive **and was not given a command string**: bash
    `[[ $- == *i* && -z ${BASH_EXECUTION_STRING:-} ]]`, zsh
-   `[[ -o interactive && -o shinstdin ]]`, tcsh `$?prompt` (`tcsh -i -c` does
-   not set it, `tests/install-env-tcsh:12-13`);
+   `[[ -o interactive && -z ${ZSH_EXECUTION_STRING:-} ]]` (rev 3: not
+   `-o shinstdin`, which is off throughout zsh's startup files), tcsh `$?prompt`
+   (`tcsh -i -c` does not set it, `tests/install-env-tcsh:12-13`);
 4. this is a top-level spawn: the shell is a login shell **or**
-   `realpath(running shell) == realpath("$SHELL")` with `${SHELL##*/}` ≠ `sh`;
+   `realpath(running shell) == realpath("$SHELL")` with `${SHELL##*/}` ≠ `sh`,
+   where only an inherited (exported) `SHELL` counts (rev 3);
 5. the value resolves to an executable (D1);
 6. `realpath(running shell) != realpath(target)` (`/proc/$$/exe`, Linux-only is
-   fine — EL is Linux-only).
+   fine — EL is Linux-only);
+7. the target runs on this host: one `"$t" -c : </dev/null` probe succeeds
+   (zsh, tcsh and csh get `-f`, fish `--no-config`; rev 3).
 
 Condition 4 is the one that matters. Without it, `bash` typed inside a loadout
 zsh would `exec` straight back to zsh, because the preference is still exported.
@@ -142,7 +148,9 @@ interactive and login, so it passes every other condition, and an exec would
 replace it with an interactive shell that never runs CMD. VS Code and JetBrains
 IDEs read the user's environment exactly this way, and then time out. Both
 guards were checked on the dev host on 2026-11-05: `BASH_EXECUTION_STRING` is
-set under `bash -ic`, and `shinstdin` is off under `zsh -lic`.
+set under `bash -ic`, and `ZSH_EXECUTION_STRING` under `zsh -lic` (empty for a
+plain `zsh -i`). rev 2's zsh guard, `shinstdin`, is off in the rc in both
+cases, so it would have blocked every zsh origin (rev 3).
 
 Non-interactive shells never exec (`bash -c`, scripts, `ssh host cmd`), and
 neither do interactive shells given a command. What remains is a PTY-driven
@@ -537,9 +545,10 @@ is the required "don't rule out other shells" property.
 
 - One extra shell init per top-level window while the login shell differs from
   the target (tcsh config + zsh rc instead of zsh rc). The replaced shell does
-  config only — no PATH, aliases, prompt or plugins (D4) — so this is tens of
-  milliseconds, and it is the only reason a terminal-side accelerator could ever
-  be worth revisiting.
+  config only — no PATH, aliases, prompt or plugins (D4) — plus one `-c :` start
+  of the target before the exec (condition 7; 1–3 ms measured, paid only on the
+  switching path). That is tens of milliseconds, and it is the only reason a
+  terminal-side accelerator could ever be worth revisiting.
 - The system login init runs twice for bash→zsh and bash→bash login switches
   (D4). It is idempotent on EL.
 - The shipped layers do no PATH work before the exec, and the target's loadout
@@ -586,7 +595,11 @@ Doctor findings (D7 items 1-4) get cases next to the existing
 `_doctor_layout_audit` coverage (`tests/doctor-shadow-audit`, T1).
 
 Tier 3 (EL8 container, `--network=none`), in `loadout-smoke:almalinux8.10`, which
-has tcsh and Environment Modules' `profile.d/modules.{sh,csh}`:
+has tcsh but neither Environment Modules nor a zsh rpm (rev 3: rev 2 claimed
+`profile.d/modules.{sh,csh}`). `tests/interactive-shell-almalinux8` writes
+stand-ins as root: a `module() { :; }` in `profile.d/*.sh` (the real name, so
+the bashrc's function wipe treats it as it treats the real one), an alias in
+`profile.d/*.csh`, and the zsh rpm's `/etc/zprofile`:
 
 - `csh` verification (csh section);
 - tcsh login → bash target and tcsh login → zsh target both have `module`
@@ -667,6 +680,24 @@ gates change.
 - Doctor output formatting.
 
 ## Revision notes
+
+rev 3 (execution, 2026-11-05), from controller rulings made while the plan ran:
+
+- R6 — zsh's command-string guard is `ZSH_EXECUTION_STRING`; `shinstdin` is off
+  throughout zsh's startup files (D2 condition 3).
+- R7 — only an inherited `SHELL` counts: bash fills an unset one from passwd,
+  unexported; tcsh never creates `SHELL`, and EL8's init does not either
+  (measured in Tier 3) (D2 condition 4).
+- R8 — the target is probed with `-c :` before the exec: a failed exec killed
+  bash/zsh logins, and a loader failure dies after the exec. Cost 1–3 ms on the
+  switching path (D2 condition 7, Costs).
+- R9 — the PATH walk skips non-absolute entries (D1).
+- R11 — csh/tcsh ignore a value or resolved path with any character outside
+  `[-A-Za-z0-9_./+@%,:=]`, since csh re-parses a substituted value; bash and zsh
+  accept them.
+- R16 — the bash function wipe now applies the documented keep list
+  (`module _module_raw ml`) on a first login too, so `/etc/profile.d`'s `module`
+  survives (D4; it was lost on every fresh EL8 bash login before `e150665`).
 
 rev 2 (2026-11-05), from a design review:
 
