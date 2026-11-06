@@ -611,7 +611,10 @@ run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
-run_test "content-manifest matches export" --deps export --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
+# build/ is in the key because this gate IMPORTS build/gen-content-manifest for
+# ROOTS and the manifest parser: editing the generator changes the verdict
+# without touching .content-manifest or any ref.
+run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
 run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
 run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
 run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
