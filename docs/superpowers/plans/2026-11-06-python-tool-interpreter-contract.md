@@ -166,3 +166,10 @@ anticipate:
   constraints. Left as a known gap rather than guessed at.
 - `build/update` needed no CLI change: the container provisioning script
   (`build/container-rust`) already existed, so the rebuild was one command.
+- Task 2's "import every console-script module" probe was wrong and was replaced
+  (`f0967b6`) before the release gates: jupyterlab's `labhubapp` needs unbundled
+  JupyterHub and a GUI package's module import needs libGL, so
+  `tests/install-linux-tmp-home` failed on a correct install. The probe now
+  checks what the ABI lock actually claims: every compiled extension the
+  distribution itself ships must be tagged for the venv interpreter's ABI and
+  must import (dependency extensions are skipped).
