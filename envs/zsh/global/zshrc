@@ -184,12 +184,16 @@ export MANROFFOPT="-c"
 
 ### Online connectivity detection ###
 # Sets LOADOUT_ONLINE=1/0 once per login session; inherited by child shells and
-# tmux panes. loadout_detect_online is the shared implementation.
+# tmux panes. The shared loadout_detect_online_cached is the implementation, as
+# in bash and tcsh: only the first login of the day pays for the network probe,
+# every later login reads the verdict from $XDG_RUNTIME_DIR/.loadout-net (TTL:
+# LOADOUT_CFG_ONLINE_CACHE_TTL). It falls back to loadout_detect_online when
+# there is no XDG_RUNTIME_DIR.
 if [[ -z "${LOADOUT_ONLINE+x}" ]]; then
     case "${LOADOUT_CFG_ONLINE_DETECT:-auto}" in
     0 | false | no | off | disabled) LOADOUT_ONLINE=0 ;;
     1 | true | yes | on | enabled) LOADOUT_ONLINE=1 ;;
-    *) loadout_detect_online && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
+    *) loadout_detect_online_cached && LOADOUT_ONLINE=1 || LOADOUT_ONLINE=0 ;;
     esac
     export LOADOUT_ONLINE
 fi

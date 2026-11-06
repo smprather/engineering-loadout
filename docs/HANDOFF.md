@@ -13,7 +13,7 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
-## 2026-11-06 (5): persistent package exclusions
+## 2026-11-06 (8): persistent package exclusions
 
 `config.toml` carries an `exclude` list (`LOADOUT_CFG_EXCLUDE` is the
 environment form) that `install` / `reinstall` / `upgrade` / `resolve` /
@@ -68,6 +68,119 @@ its review fix):
 tests install into temp roots), Tier 3 (`tests/run-all --container`) and
 `build/release`. Class C makes Tier 3 required before the next release, so that
 release block must run it.
+
+## 2026-11-06 (7): payload ABI gate caches findings and scans in parallel
+
+Class A (test only). `tests/payload-interpreter-abi` decompressed ~3 GB and
+spawned `readelf` once per ELF on every payload/loader/build edit -- 71 s, and
+a one-line registry edit counted as a payload edit.
+
+- Findings (ELF `DT_NEEDED`, shebang interpreter picks) are computed per
+  payload ARTIFACT and cached on its (mtime_ns, size) in
+  `~/.cache/engineering-loadout/payload-abi-scan-v1.json`; a registry edit
+  re-runs the gate but re-reads nothing. `ANALYSE_VERSION` guards the
+  derivation itself.
+- Artifacts are decompressed and analysed in parallel (up to 8 threads), and
+  the scan no longer holds every decompressed file in memory -- only findings.
+- The three audits are unchanged; the registry / `_BUNDLED_PY` / build-script
+  checks are untouched.
+
+Measured: 71 s -> 11.4 s cold, 0.31 s warm; touching one 118 MB artifact
+re-reads only that artifact (3.4 s). The gate still fails on synthetic
+defects -- a payload ELF whose NEEDED says `libpython3.14` and a shebang
+`env python3.10` were both reported, including from a warm cache.
+
+## 2026-11-06 (6): Tier 1 runs in parallel; the size gate reuses measurements
+
+Class A (tests + build tooling + docs). Follow-up to (5): the cache made a
+repeat run cheap, but a changed file still ran its tests one at a time, and
+`gen-installed-sizes --check` decompressed ~3 GB on every env edit.
+
+- Tier 1 runs min(4, nproc) tests at a time (`--serial`, or
+  `LOADOUT_TEST_JOBS=N`). `auto` (Tier 2) tests never overlap: they arm the
+  repo-global dependency-capture marker. Each job writes its own log and exit
+  status; the parent replays the log and counts FAIL/SKIP from the status.
+- The `all`/`container`/group verdicts are precomputed once per run, in
+  parallel, and handed to workers via `GROUP_STATE`/`SIDECAR_OK`; the
+  end-of-run sidecars are written in parallel too.
+- `gen-installed-sizes` caches each measured size keyed on the source's
+  mtime+size (`~/.cache/engineering-loadout/installed-sizes-v1.json`); only
+  changed artifacts are decompressed. Unreadable artifacts are never cached,
+  so a transient failure retries instead of freezing a wrong number.
+- Groups widened after auditing what each test opens: `docs-sync` now covers
+  build/, tools/, tests/ and the shim; `payload-interpreter-abi` adds
+  loader+build; `python-suite` adds build; `install-noop-stamps` adds envs;
+  `nodejs-runpath` adds loader. The harness itself (`tests/run-all`,
+  `build/fingerprint.py`) is a required input of every group, so editing the
+  runner invalidates all group verdicts.
+- `content-manifest matches export` is keyed on `.content-manifest` plus the
+  git refs (it verifies HEAD), so working-tree edits stop re-running it.
+- Fixed a counting bug this exposed: `_run_test` fell through with the status
+  of its last assignment, so a failing test reported success to the parallel
+  parent (and a 77 would have aborted `--serial` at `set -e`). It now returns
+  0 / 1 / 77 explicitly, and the serial wrapper swallows the status.
+
+Measured here (Tier 1, 53 tests): warm 4.1 s (52 CACHED, one 2 s gate runs);
+`touch envs/zsh/global/zshrc` 18 s (was 49); `touch payload/packages.json`
+90 s (was 144, and 70 s of it is the single-threaded payload ABI walk); cold
+116 s. `gen-installed-sizes --check`: 23.5 s cold -> 1.0 s warm.
+
+## 2026-11-06 (5): test results cache per dependency group; `--fast` uses it
+
+Class A (tests + docs). Two flaws made every small change pay for the whole
+suite:
+
+1. `--fast` set `CACHE_ACTIVE=0`, so the dev loop never read or wrote the
+   result cache; every `--fast` re-ran all of Tier 1 (175 s here).
+2. Every Tier 1 test was keyed on ONE fingerprint over
+   payload+envs+installer+tests, so one env byte invalidated all of them.
+
+What changed in `tests/run-all`:
+
+- `--fast` uses the cache (`--no-cache` still forces a full run).
+- `run_test NAME --deps <group>[+<group>] ...` keys a test on named roots --
+  `envs`, `payload`, `loader`, `build`, `sonames`, `locks`, `readme`,
+  `stfonts` (`DEP_GROUP`). Each group has its own sidecar, verified once per
+  run and written at the end, including the `--fast` early exit (which
+  previously skipped the write entirely, so a `--fast` run could never warm
+  the cache).
+- `--deps-key FILE` caches a gate whose script lives outside `tests/`: the
+  gen-* `--check` gates (installed-sizes, parser-locks, st-font, README table)
+  use their own generator as the test-script hash, and their inputs/outputs
+  are in the group roots. `content-manifest in sync` and `matches export` stay
+  uncached -- they read git tracking state, which has no fingerprint.
+- The `all` and `container` verdicts are computed once per run, not per test.
+- A FAIL now drops any older PASS for that test, so a failure on unchanged
+  inputs can no longer be masked by the previous run's green.
+
+Measured on this host (Tier 1, 53 tests): cold 178 s; warm unchanged 14 s
+(51 CACHED); `touch envs/zsh/global/zshrc` 49 s with every payload/loader test
+still CACHED; `touch payload/packages.json` 144 s with every env test still
+CACHED. Omitted groups default to `all`, so opting in is what needs review --
+a group that names too little is a stale green, not a fast run.
+
+## 2026-11-06 (4): zsh reads the online-detection cache
+
+Class B (payload env only; installer, registry and package artifacts
+untouched). `envs/zsh/global/zshrc` called `loadout_detect_online`, so every
+fresh zsh login that did not inherit `LOADOUT_ONLINE` paid the TCP probe; bash
+(`envs/bash/global/bashrc`) and tcsh (`envs/tcsh/global/helpers/detect-online`)
+both read the once-per-day verdict. zsh now calls
+`loadout_detect_online_cached`, the function bash uses: it is zsh-safe
+(`setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT`) and falls back to a live
+probe when there is no `XDG_RUNTIME_DIR`. Everything else is unchanged --
+`LOADOUT_CFG_ONLINE_DETECT` still forces 1/0, `LOADOUT_CFG_ONLINE_CACHE_TTL=0`
+still disables caching, inherited `LOADOUT_ONLINE` still short-circuits.
+
+Verified: `zsh -n envs/zsh/global/zshrc`; the real rc under `zsh -i` in a temp
+HOME (seeded verdict 0 wins over a live online probe; an expired entry
+re-probes); `tests/install-env-zsh` PASS, and its new cache assertions FAIL on
+the old call (`FAIL: seeded online verdict not read from the cache`).
+`payload/installed-sizes.json` regenerated (zshrc 22165 -> 22453 bytes);
+`assurance/release-timings.tsv` gained this run's T1 rows.
+`tests/run-all --fast` green. `tests/run-all` Tier 2 (other than
+install-env-zsh) and the Tier 3 container gates not run for this change -- no
+installer code touched; run them before the next release.
 
 ## 2026-11-06 (3): release 2026.11.2 -- open-eda-file-tools is one package
 
@@ -247,10 +360,12 @@ as a single-instance caveat in README "Choosing your interactive shell".
 
 **Follow-ups.**
 
-1. zsh does not cache the online verdict: `envs/zsh/global/zshrc` calls
+1. ~~zsh does not cache the online verdict: `envs/zsh/global/zshrc` calls
    `loadout_detect_online`, bash calls `loadout_detect_online_cached`, so every
    zsh session that does not inherit `LOADOUT_ONLINE` (each new login) pays the
-   probe instead of reading the once-a-day cache.
+   probe instead of reading the once-a-day cache.~~ **Closed 2026-11-06**:
+   zshrc now calls `loadout_detect_online_cached`; `tests/install-env-zsh`
+   seeds a verdict and asserts the cache is read (it fails on the old call).
 2. D4 residual: a non-login origin gives a non-login target, and a non-login
    bash target gets no `/etc/profile.d` (accepted in the spec; sourcing
    `/etc/bashrc` is out of scope).

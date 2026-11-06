@@ -28,6 +28,7 @@ Usage:
 
 import bz2
 import concurrent.futures
+import glob
 import json
 import multiprocessing
 import os
@@ -54,10 +55,61 @@ SKIP_SUBSTRINGS = (
 
 _PART_RE = re.compile(r"\.part-\d+$")
 
+# Measuring an artifact means DECOMPRESSING it (~3 GB across the payload), so
+# --check used to cost ~22 s even when the only edit was an env file. Cache
+# the measured size keyed on the source file's (mtime_ns, size): an artifact
+# whose bytes did not change cannot change size either, so `--check` only
+# decompresses what actually changed. This is the same mtime-based trust the
+# test-result cache uses -- a touched-but-identical file costs one needless
+# measurement, never a wrong number. The cache lives outside the repo: the
+# committed installed-sizes.json stays the source of truth.
+CACHE_SCHEMA = 1
+CACHE_PATH = os.path.join(
+    os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+    "engineering-loadout",
+    "installed-sizes-v1.json",
+)
+
 
 def logical_path(path):
     """foo.tar.bz2.part-003 -> foo.tar.bz2 ; anything else unchanged."""
     return _PART_RE.sub("", path)
+
+
+def _source_stamp(rel):
+    """mtime_ns:size for every file feeding this logical artifact; None if gone."""
+    base = os.path.join(REPO, rel)
+    parts = sorted(glob.glob(base + ".part-[0-9]*"))
+    stamp = []
+    for path in parts or [base]:
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return None
+        stamp.append(f"{st.st_mtime_ns}:{st.st_size}")
+    return "|".join(stamp)
+
+
+def _load_cache():
+    try:
+        with open(CACHE_PATH) as fh:
+            data = json.load(fh)
+    except OSError, ValueError:
+        return {}
+    if data.get("schema") != CACHE_SCHEMA:
+        return {}
+    return data.get("entries") or {}
+
+
+def _save_cache(entries):
+    try:
+        os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+        tmp = f"{CACHE_PATH}.{os.getpid()}"
+        with open(tmp, "w") as fh:
+            json.dump({"schema": CACHE_SCHEMA, "entries": entries}, fh)
+        os.replace(tmp, CACHE_PATH)
+    except OSError:
+        pass
 
 
 def _chunk_reader(logical_abs, seekable=False):
@@ -118,14 +170,16 @@ def _chunk_reader(logical_abs, seekable=False):
 
 
 def measure(rel):
-    """Uncompressed bytes for one logical artifact. Returns (rel, bytes)."""
+    """Uncompressed bytes for one logical artifact: (rel, bytes) or (rel, None)
+    when the artifact is unreadable -- None is never cached, so a transient
+    failure is retried next run instead of being frozen into the map."""
     abs_path = os.path.join(REPO, rel)
     try:
         # zip and wheel directories record uncompressed sizes -- no inflate needed.
         if rel.endswith((".zip", ".whl")):
             fh = _chunk_reader(abs_path, seekable=True)
             if fh is None:
-                return rel, 0
+                return rel, None
             try:
                 with zipfile.ZipFile(fh) as zf:
                     return rel, sum(i.file_size for i in zf.infolist())
@@ -135,7 +189,7 @@ def measure(rel):
         if rel.endswith(".tar.bz2"):
             fh = _chunk_reader(abs_path)
             if fh is None:
-                return rel, 0
+                return rel, None
             try:
                 total = 0
                 with tarfile.open(fileobj=fh, mode="r|bz2") as tf:
@@ -149,7 +203,7 @@ def measure(rel):
         if rel.endswith(".bz2"):
             fh = _chunk_reader(abs_path)
             if fh is None:
-                return rel, 0
+                return rel, None
             try:
                 dec = bz2.BZ2Decompressor()
                 total = 0
@@ -170,7 +224,7 @@ def measure(rel):
         return rel, os.lstat(abs_path).st_size
     except Exception as exc:  # noqa: BLE001 - a bad artifact must not kill the sweep
         print(f"WARNING: {rel}: {exc}", file=sys.stderr)
-        return rel, 0
+        return rel, None
 
 
 def collect():
@@ -191,19 +245,40 @@ def collect():
 
 def build():
     paths = collect()
+    stamps = {rel: _source_stamp(rel) for rel in paths}
+    cached = _load_cache()
     sizes = {}
-    workers = min(os.cpu_count() or 4, 20)
-    kwargs = {"max_workers": workers}
-    if hasattr(os, "fork"):
-        # Python 3.14 defaults to forkserver on POSIX. That creates a temp Unix
-        # socket, which some sandboxed build shells reject with EPERM. This
-        # script is a short-lived Linux payload scanner and does not rely on
-        # forkserver semantics, so use plain fork when the platform supports it.
-        kwargs["mp_context"] = multiprocessing.get_context("fork")
-    with concurrent.futures.ProcessPoolExecutor(**kwargs) as ex:
-        for rel, n in ex.map(measure, paths, chunksize=8):
-            sizes[rel] = n
-    return sizes
+    todo = []
+    for rel in paths:
+        stamp = stamps[rel]
+        entry = cached.get(rel)
+        if stamp is not None and isinstance(entry, dict) and entry.get("stamp") == stamp:
+            sizes[rel] = entry.get("bytes")
+        else:
+            todo.append(rel)
+
+    if todo:
+        workers = min(os.cpu_count() or 4, 20)
+        kwargs = {"max_workers": workers}
+        if hasattr(os, "fork"):
+            # Python 3.14 defaults to forkserver on POSIX. That creates a temp Unix
+            # socket, which some sandboxed build shells reject with EPERM. This
+            # script is a short-lived Linux payload scanner and does not rely on
+            # forkserver semantics, so use plain fork when the platform supports it.
+            kwargs["mp_context"] = multiprocessing.get_context("fork")
+        with concurrent.futures.ProcessPoolExecutor(**kwargs) as ex:
+            for rel, n in ex.map(measure, todo, chunksize=8):
+                sizes[rel] = n
+
+    _save_cache(
+        {
+            rel: {"stamp": stamps[rel], "bytes": sizes[rel]}
+            for rel in paths
+            if stamps[rel] is not None and isinstance(sizes.get(rel), int)
+        }
+    )
+    # An unreadable artifact keeps the old "record 0, warn on stderr" contract.
+    return {rel: (0 if n is None else n) for rel, n in sizes.items()}
 
 
 def main(argv):

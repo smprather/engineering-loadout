@@ -11,20 +11,35 @@
 #   ./tests/run-all             # Tier 1 + Tier 2
 #   ./tests/run-all --fast      # Tier 1 only
 #   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
-#   ./tests/run-all --no-cache  # ignore the Tier 2 result cache (see below)
+#   ./tests/run-all --no-cache  # ignore the result cache (see below)
+#   ./tests/run-all --serial    # one test at a time (LOADOUT_TEST_JOBS=N too)
 #
-# Tier 2 integration tests are cached: when the inputs a test actually
+# Tier 1 runs min(4, nproc) tests at a time; Tier 2 `auto` installs always run
+# alone (they arm a repo-global dependency-capture marker).
+#
+# Results are cached, `--fast` included: when the inputs a test actually
 # depends on are unchanged since its last green run, the cached PASS is
-# reused instead of re-installing ~8 GB. Installer-driven tests cache per
-# test against the exact payload files they touched (`--deps auto`, captured
-# by the installer); Tier 1 sync gates and non-installer tests cache against
-# the whole payload (`all`). Fingerprints are mtime+size (fast); a
-# touched-but-identical file costs one needless re-run, never a false green.
-# Failed tests have no cache entry and always re-run. A test that skips the
-# whole run exits 77: run-all reports SKIP and never records it as a PASS
-# (a skipped container test used to cache as a green Tier 3 result). Cache lives in
-# ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1; delete it to
-# force a full re-run.
+# reused instead of re-installing ~8 GB or re-walking the payload. Three
+# dependency keys:
+#
+#   --deps auto       installer-captured: the exact payload files the test
+#                     touched (Tier 2 installs).
+#   --deps envs       an explicit dependency group (see DEP_GROUP): an env
+#                     edit re-runs the env tests and leaves payload tests
+#                     alone, and a payload edit does the reverse.
+#                     Composable: `--deps payload+loader`. Undeclared tests
+#                     keep the conservative `all` key -- a group that names
+#                     too little is a stale green, so opt in per test.
+#   (default) all     one sidecar over payload+envs+installer+tests, computed
+#                     ONCE per run; used by sync gates that must see any drift.
+#
+# Fingerprints are mtime+size (fast); a touched-but-identical file costs one
+# needless re-run, never a false green. Failed and skipped tests have no
+# cache entry and always re-run. Cache lives in
+# ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1; delete it (or
+# pass --no-cache) to force a full re-run. Sidecars record absolute paths, so a
+# second checkout of the same commit (git worktree) starts cold once and then
+# keeps its own verdicts.
 
 set -euo pipefail
 
@@ -57,11 +72,13 @@ fi
 FAST=0
 CONTAINER=0
 NO_CACHE=0
+SERIAL=0
 for arg in "$@"; do
     case "$arg" in
         --fast) FAST=1 ;;
         --container) CONTAINER=1 ;;
         --no-cache) NO_CACHE=1 ;;
+        --serial) SERIAL=1 ;;
         -h|--help)
             sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -72,6 +89,17 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# Tier 1 runs JOBS tests at a time. `auto` (installer-driven) tests always run
+# alone; see the scheduler. --serial, or LOADOUT_TEST_JOBS=1, turns it off.
+JOBS=${LOADOUT_TEST_JOBS:-0}
+if [ "$SERIAL" -eq 1 ]; then
+    JOBS=1
+fi
+if [ "$JOBS" -le 0 ]; then
+    JOBS=$(nproc 2>/dev/null || echo 4)
+    [ "$JOBS" -gt 4 ] && JOBS=4
+fi
 
 PY=""
 for cand in "${XDG_DATA_HOME:-$HOME/.local/share}/loadout/bin/python3.15" "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
@@ -156,15 +184,20 @@ _log_runtime() {  # suite test seconds status detail
 # it mid-run would make remaining tests cache against a state the run itself
 # is still verifying. `auto` sidecars are written per test, after it passes.
 CACHE_ACTIVE=0
-if [ "$NO_CACHE" -eq 0 ] && [ "$FAST" -eq 0 ]; then
+if [ "$NO_CACHE" -eq 0 ]; then
     CACHE_ACTIVE=1
 fi
 
-# Safety net: never leave the dependency-capture marker armed after a run.
+# Safety net: never leave the dependency-capture marker armed, nor the
+# per-run log directory, behind.
 DEP_MARKER="$REPO_DIR/.loadout-dep-capture"
 DEP_LOG="$REPO_DIR/.loadout-deps.log"
-cleanup_dep_marker() { rm -f "$DEP_MARKER"; }
-trap cleanup_dep_marker EXIT INT TERM
+cleanup_run_state() {
+    rm -f "$DEP_MARKER"
+    [ -n "${RUN_TMP:-}" ] && rm -rf "$RUN_TMP"
+    return 0
+}
+trap cleanup_run_state EXIT INT TERM
 
 # Files every `auto` test always depends on: the harness itself, the
 # fingerprint tool, the installer, and the registry. Kept in the dep list so
@@ -172,12 +205,172 @@ trap cleanup_dep_marker EXIT INT TERM
 # fingerprint must not be masked by a stale green).
 AUTO_BASE_DEPS=(tests/run-all build/fingerprint.py loadout loadout_main.py payload/packages.json)
 
-run_test() {
+# --- dependency groups ------------------------------------------------------
+# `run_test NAME --deps <group>[+<group>...] ...` keys that test's PASS on the
+# named roots instead of the whole tree, so an env edit re-runs the env tests
+# and leaves the payload tests alone (and the reverse). Opt-in on purpose: an
+# undeclared test keeps the conservative `all` key, because a group that names
+# too little is a stale green. Add a test to a group only after reading what
+# it actually opens -- build/, assurance/ and docs/ count too.
+#
+# Each GROUP gets its OWN sidecar and is verified once per run, so a spec is
+# just a combination: `payload+loader` costs nothing extra over `payload`.
+declare -A DEP_GROUP=(
+    [envs]="envs"
+    [payload]="payload"
+    [loader]="loadout loadout_main.py installer_vendor"
+    [build]="build"
+    [sonames]="assurance/el8-stock-sonames.txt"
+    [locks]="payload assurance/treesitter-parser-locks.json"
+    [readme]="README.md payload/packages.json"
+    [stfonts]="payload/fonts envs/st"
+    [docs]="docs README.md AGENTS.md .github loadout_main.py payload/packages.json envs build tools tests loadout"
+    [export]=".content-manifest .git/HEAD .git/refs"
+    [harness]="tests/run-all build/fingerprint.py"
+)
+
+group_sidecar() { printf '%s/group-%s.json' "$CACHE_DIR" "$1"; }
+
+group_roots() {  # group name -> its roots, one per line
+    local _saved_ifs=$IFS
+    local -a roots=()
+    IFS=' '
+    # shellcheck disable=SC2206  # deliberate split of the group's root list
+    roots=(${DEP_GROUP[$1]})
+    IFS=$_saved_ifs
+    printf '%s\n' "${roots[@]}"
+}
+
+sidecar_matches() {  # sidecar roots...
+    local sidecar=$1
+    shift
+    [ -f "$sidecar" ] || return 1
+    "$PY" "$FP_SCRIPT" --fast --check "$sidecar" --roots "$@" >/dev/null 2>&1
+}
+
+write_sidecar() {  # sidecar roots...
+    local sidecar=$1
+    shift
+    "$PY" "$FP_SCRIPT" --fast --write "$sidecar" --roots "$@" >/dev/null 2>&1 || true
+}
+
+declare -A GROUP_OK=()
+GROUP_NAMES_USED=" harness"
+
+split_spec() {  # spec -> one group name per line
+    local spec=$1
+    while [ -n "$spec" ]; do
+        if [ "${spec%%+*}" = "$spec" ]; then
+            printf '%s\n' "$spec"
+            spec=""
+        else
+            printf '%s\n' "${spec%%+*}"
+            spec=${spec#*+}
+        fi
+    done
+}
+
+group_one_unchanged() {  # group name -> 0 when unchanged
+    local g=$1
+    if [ -n "${GROUP_OK[$g]:-}" ]; then
+        [ "${GROUP_OK[$g]}" = 1 ]
+        return
+    fi
+    # A precomputed verdict (parallel mode) wins: the parent verified each
+    # group once, and a subshell re-walking the payload would defeat that.
+    if [ -n "${GROUP_STATE:-}" ]; then
+        case " $GROUP_STATE " in
+            *" $g=1 "*) return 0 ;;
+            *" $g=0 "*) return 1 ;;
+        esac
+    fi
+    local ok=0
+    local -a roots=()
+    mapfile -t roots < <(group_roots "$g")
+    if [ "${#roots[@]}" -gt 0 ] && sidecar_matches "$(group_sidecar "$g")" "${roots[@]}"; then
+        ok=1
+    fi
+    GROUP_OK[$g]=$ok
+    [ "$ok" -eq 1 ]
+}
+
+group_unchanged() {  # spec -> 0 when every constituent group is unchanged
+    local g
+    # The harness itself (this script, the fingerprint tool) is an input to
+    # every grouped test: a change there must invalidate the cached verdicts.
+    group_one_unchanged harness || return 1
+    while IFS= read -r g; do
+        group_one_unchanged "$g" || return 1
+    done < <(split_spec "$1")
+    return 0
+}
+
+groups_used() {  # spec -> remember each group so its sidecar is written
+    local g
+    while IFS= read -r g; do
+        case " $GROUP_NAMES_USED " in
+            *" $g "*) ;;
+            *) GROUP_NAMES_USED="$GROUP_NAMES_USED $g" ;;
+        esac
+    done < <(split_spec "$1")
+}
+
+test_script_hash() { sha256sum "$1" | cut -d' ' -f1; }
+
+# The `all`, `container` and per-group verdicts are computed ONCE per run, in
+# PARALLEL: every test shares those inputs, and re-walking payload+envs+tests
+# per test (or per group, serially) was most of a cached run. Subshells read
+# the verdicts from GROUP_STATE/SIDECAR_OK instead of re-checking.
+SIDECAR_OK=0
+SIDECAR_CONTAINER_OK=0
+GROUP_STATE=""
+
+precompute_verdicts() {
+    [ "$CACHE_ACTIVE" -eq 1 ] || return 0
+    local dir g
+    dir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-verdict.XXXXXX") || return 0
+    (
+        if sidecar_matches "$CACHE_SIDECAR" "${FP_ROOTS[@]}"; then echo 1; else echo 0; fi
+    ) >"$dir/all" &
+    if [ "$CONTAINER" -eq 1 ]; then
+        (
+            if sidecar_matches "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}"; then echo 1; else echo 0; fi
+        ) >"$dir/container" &
+    fi
+    for g in "${!DEP_GROUP[@]}"; do
+        (
+            local -a roots=()
+            mapfile -t roots < <(group_roots "$g")
+            if sidecar_matches "$(group_sidecar "$g")" "${roots[@]}"; then echo 1; else echo 0; fi
+        ) >"$dir/g-$g" &
+    done
+    wait
+    SIDECAR_OK=$(cat "$dir/all" 2>/dev/null || echo 0)
+    if [ "$CONTAINER" -eq 1 ]; then
+        SIDECAR_CONTAINER_OK=$(cat "$dir/container" 2>/dev/null || echo 0)
+    fi
+    GROUP_STATE=""
+    for g in "${!DEP_GROUP[@]}"; do
+        GROUP_STATE="$GROUP_STATE $g=$(cat "$dir/g-$g" 2>/dev/null || echo 0)"
+    done
+    rm -rf "$dir"
+    export SIDECAR_OK SIDECAR_CONTAINER_OK GROUP_STATE
+}
+
+
+# One test, end to end. Called directly by the scheduler (inline) or in a
+# subshell; global counters are only authoritative in the inline case, which is
+# why the parallel scheduler counts from the exit status instead.
+_run_test() {
     local name=$1
     shift
-    local deps_mode=all
+    local deps_mode=all deps_key=""
     if [ "$1" = "--deps" ]; then
         deps_mode=$2
+        shift 2
+    fi
+    if [ "$1" = "--deps-key" ]; then
+        deps_key=$2
         shift 2
     fi
     echo
@@ -190,32 +383,63 @@ run_test() {
         esac
     done
 
+    # `auto` = installer-captured deps; `all`/`container` = one shared sidecar;
+    # anything else names dependency groups (`envs`, `payload+loader`, ...).
+    local deps_kind=all
+    case "$deps_mode" in
+        auto) deps_kind=auto ;;
+        all | container) deps_kind=$deps_mode ;;
+        *)
+            deps_kind=group
+            local _g
+            while IFS= read -r _g; do
+                if [ -z "${DEP_GROUP[$_g]:-}" ]; then
+                    echo "ERROR: $name: unknown --deps group '$_g' (known: ${!DEP_GROUP[*]})" >&2
+                    exit 2
+                fi
+            done < <(split_spec "$deps_mode")
+            ;;
+    esac
+
+    # A gate whose "script" lives outside tests/ (build/gen-*) names it here so
+    # edits to the generator still invalidate the cached PASS.
+    [ -n "$deps_key" ] && test_script=$deps_key
+
     local deps_file="$CACHE_DIR/$name.deps"
     local fp_file="$CACHE_DIR/$name.fp.json"
     local t0=$SECONDS
 
     # --- cache check ---
-    if [ "$CACHE_ACTIVE" -eq 1 ]; then
-        if [ "$deps_mode" = auto ] && [ -n "$test_script" ] \
-            && [ -f "$deps_file" ] && [ -f "$fp_file" ] \
-            && "$PY" "$FP_SCRIPT" --fast --check "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
-            echo "=== $name: CACHED PASS (deps unchanged)"
-            _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
-            return 0
-        fi
-        local sidecar="$CACHE_SIDECAR" fp_roots=("${FP_ROOTS[@]}")
-        if [ "$deps_mode" = container ]; then
-            sidecar="$CACHE_SIDECAR_CONTAINER"
-            fp_roots=("${FP_ROOTS_CONTAINER[@]}")
-        fi
-        if { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -f "$sidecar" ] \
-            && "$PY" "$FP_SCRIPT" --fast --check "$sidecar" --roots "${fp_roots[@]}" >/dev/null 2>&1 \
-            && [ -n "$test_script" ] && [ -f "$CACHE_DIR/$name.pass" ] \
-            && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(sha256sum "$test_script" | cut -d' ' -f1)" ]; then
-            echo "=== $name: CACHED PASS (inputs unchanged)"
-            _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
-            return 0
-        fi
+    if [ "$CACHE_ACTIVE" -eq 1 ] && [ -n "$test_script" ]; then
+        case "$deps_kind" in
+        auto)
+            if [ -f "$deps_file" ] && [ -f "$fp_file" ] \
+                && "$PY" "$FP_SCRIPT" --fast --check "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
+                echo "=== $name: CACHED PASS (deps unchanged)"
+                _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
+                return 0
+            fi
+            ;;
+        group)
+            groups_used "$deps_mode"
+            if group_unchanged "$deps_mode" && [ -f "$CACHE_DIR/$name.pass" ] \
+                && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(test_script_hash "$test_script")" ]; then
+                echo "=== $name: CACHED PASS (group inputs unchanged: $deps_mode)"
+                _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
+                return 0
+            fi
+            ;;
+        all | container)
+            local verdict=$SIDECAR_OK
+            [ "$deps_kind" = container ] && verdict=$SIDECAR_CONTAINER_OK
+            if [ "$verdict" -eq 1 ] && [ -f "$CACHE_DIR/$name.pass" ] \
+                && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(test_script_hash "$test_script")" ]; then
+                echo "=== $name: CACHED PASS (inputs unchanged)"
+                _log_runtime "run-all" "$name" "$((SECONDS - t0))" "CACHED" "mode=$deps_mode"
+                return 0
+            fi
+            ;;
+        esac
     fi
 
     # --- run ---
@@ -248,20 +472,86 @@ run_test() {
         echo "=== $name: SKIP"
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "SKIP" "mode=$deps_mode"
         SKIPPED=$((SKIPPED + 1))
-        return 0
+        return 77
     fi
     if [ "$rc" -eq 0 ]; then
-        if [ "$CACHE_ACTIVE" -eq 1 ] && { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -n "$test_script" ]; then
+        if [ "$CACHE_ACTIVE" -eq 1 ] && [ -n "$test_script" ] \
+            && { [ "$deps_kind" = all ] || [ "$deps_kind" = container ] || [ "$deps_kind" = group ]; }; then
             mkdir -p "$CACHE_DIR"
-            sha256sum "$test_script" | cut -d' ' -f1 > "$CACHE_DIR/$name.pass"
+            test_script_hash "$test_script" > "$CACHE_DIR/$name.pass"
         fi
         echo "=== $name: PASS"
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "PASS" "mode=$deps_mode"
+        return 0
     else
+        # A failed run proves nothing: drop every cached green for it, so the
+        # next run cannot report a stale PASS on unchanged inputs.
+        rm -f "$CACHE_DIR/$name.pass" "$deps_file" "$fp_file"
         echo "=== $name: FAIL" >&2
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "FAIL" "mode=$deps_mode"
         FAILURES=$((FAILURES + 1))
+        return 1
     fi
+}
+
+# --- scheduler --------------------------------------------------------------
+# Tier 1 tests are independent, so they run JOBS at a time (default: min(4,
+# nproc); LOADOUT_TEST_JOBS overrides, --serial forces 1). `auto` tests never
+# overlap: they arm a repo-global dependency-capture marker and truncate its
+# log. Each job writes its own log + status file, and the parent replays them,
+# so output stays per-test instead of interleaved.
+declare -a _JOB_PIDS=() _JOB_IDS=()
+_JOB_SEQ=0
+RUN_TMP=""
+
+_reap_one() {
+    local pid=${_JOB_PIDS[0]} id=${_JOB_IDS[0]} rc=1
+    wait "$pid" || true
+    _JOB_PIDS=("${_JOB_PIDS[@]:1}")
+    _JOB_IDS=("${_JOB_IDS[@]:1}")
+    if [ -f "$RUN_TMP/$id.rc" ]; then
+        rc=$(cat "$RUN_TMP/$id.rc")
+    fi
+    cat "$RUN_TMP/$id.log" 2>/dev/null || true
+    rm -f "$RUN_TMP/$id.log" "$RUN_TMP/$id.rc"
+    case "$rc" in
+        0) ;;
+        77) SKIPPED=$((SKIPPED + 1)) ;;
+        *) FAILURES=$((FAILURES + 1)) ;;
+    esac
+}
+
+drain_jobs() {
+    while [ "${#_JOB_PIDS[@]}" -gt 0 ]; do
+        _reap_one
+    done
+}
+
+run_test() {
+    local _is_auto=0
+    if [ "${2:-}" = "--deps" ] && [ "${3:-}" = auto ]; then
+        _is_auto=1
+    fi
+    if [ "$JOBS" -le 1 ] || [ "$_is_auto" -eq 1 ]; then
+        drain_jobs
+        # Counters are updated in-process here; the status must not reach
+        # `set -e` at the call site.
+        _run_test "$@" || true
+        return 0
+    fi
+    RUN_TMP=${RUN_TMP:-$(mktemp -d "${TMPDIR:-/tmp}/loadout-run.XXXXXX")}
+    if [ "${2:-}" = "--deps" ]; then
+        groups_used "${3:-}"
+    fi
+    local id=$_JOB_SEQ
+    _JOB_SEQ=$((_JOB_SEQ + 1))
+    ( _run_test "$@" >"$RUN_TMP/$id.log" 2>&1; echo $? >"$RUN_TMP/$id.rc" ) &
+    _JOB_PIDS+=($!)
+    _JOB_IDS+=("$id")
+    while [ "${#_JOB_PIDS[@]}" -ge "$JOBS" ]; do
+        _reap_one
+    done
+    return 0
 }
 
 is_first_party_python_path() {
@@ -310,12 +600,14 @@ check_python_format() {
 
 collect_python_files
 
+precompute_verdicts
+
 # --- Tier 1: fast, no temp HOME -------------------------------------------
 run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
 run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
 run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
-run_test "config-toml-exclude" "$PY" tests/config-toml-exclude
+run_test "config-toml-exclude" --deps payload+loader "$PY" tests/config-toml-exclude
 run_test "unit-private-state" "$PY" tests/unit-private-state
 run_test "unit-install-steps" "$PY" tests/unit-install-steps
 run_test "install-atomic-replace" "$PY" tests/install-atomic-replace
@@ -325,48 +617,82 @@ run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
-run_test "content-manifest matches export" "$PY" build/verify-manifest-export
+# build/ is in the key because this gate IMPORTS build/gen-content-manifest for
+# ROOTS and the manifest parser: editing the generator changes the verdict
+# without touching .content-manifest or any ref.
+run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
 run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
-run_test "installed-sizes in sync" "$PY" build/gen-installed-sizes --check
-run_test "parser-locks in sync" "$PY" build/gen-parser-locks --check
-run_test "st font list in sync" "$PY" build/gen-st-font-comments --check
-run_test "README table in sync" "$PY" build/gen-readme-table --check
-run_test "docs-sync" "$PY" tests/docs-sync
+run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
+run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
+run_test "st font list in sync" --deps stfonts --deps-key build/gen-st-font-comments "$PY" build/gen-st-font-comments --check
+run_test "README table in sync" --deps readme --deps-key build/gen-readme-table "$PY" build/gen-readme-table --check
+run_test "docs-sync" --deps docs "$PY" tests/docs-sync
 run_test "assurance-check" "$PY" tests/assurance-check
-run_test "env-shell-parity" "$PY" tests/env-shell-parity
-run_test "env-bash-profile-shim" "$PY" tests/env-bash-profile-shim
-run_test "env-bash-runtime" tests/env-bash-runtime
-run_test "portable-python-ca" tests/portable-python-ca
-run_test "shell-typeahead" tests/shell-typeahead
-run_test "install-zsh-relocation" "$PY" tests/install-zsh-relocation
-run_test "python-tool-source-patches" "$PY" tests/python-tool-source-patches
-run_test "payload-interpreter-abi" "$PY" tests/payload-interpreter-abi
-run_test "needed-closure" "$PY" tests/needed-closure
-run_test "shim-bootstrap" tests/shim-bootstrap
-run_test "env-nvim-no-git" tests/env-nvim-no-git
-run_test "env-nvim-smart-quit" tests/env-nvim-smart-quit
-run_test "install-noop-stamps" "$PY" tests/install-noop-stamps
-run_test "nodejs-runpath" "$PY" tests/nodejs-runpath
+run_test "env-shell-parity" --deps envs+loader "$PY" tests/env-shell-parity
+run_test "env-bash-profile-shim" --deps envs "$PY" tests/env-bash-profile-shim
+run_test "env-bash-runtime" --deps envs tests/env-bash-runtime
+run_test "portable-python-ca" --deps payload tests/portable-python-ca
+run_test "shell-typeahead" --deps envs tests/shell-typeahead
+run_test "install-zsh-relocation" --deps loader "$PY" tests/install-zsh-relocation
+run_test "python-tool-source-patches" --deps payload+loader "$PY" tests/python-tool-source-patches
+run_test "payload-interpreter-abi" --deps payload+loader+build "$PY" tests/payload-interpreter-abi
+run_test "needed-closure" --deps payload+sonames "$PY" tests/needed-closure
+run_test "shim-bootstrap" --deps loader tests/shim-bootstrap
+run_test "env-nvim-no-git" --deps envs tests/env-nvim-no-git
+run_test "env-nvim-smart-quit" --deps envs tests/env-nvim-smart-quit
+run_test "install-noop-stamps" --deps payload+loader+envs "$PY" tests/install-noop-stamps
+run_test "nodejs-runpath" --deps payload+build+loader "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
-run_test "python-suite" "$PY" tests/python-suite
+run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
 run_test "release-timings" "$PY" tests/release-timings
-run_test "env-tcsh-starship" "$PY" tests/env-tcsh-starship
-run_test "prompt-no-rc" "$PY" tests/prompt-no-rc
+run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship
+run_test "prompt-no-rc" --deps envs "$PY" tests/prompt-no-rc
 run_test "test-cleanup" "$PY" tests/test-cleanup
 run_test "pre-commit-hook" tests/pre-commit-hook
 run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
 run_test "dep-capture" tests/dep-capture
 run_test "oom-guard-reap" "$PY" tests/oom-guard-reap
-run_test "check-installer" tests/check-installer
-run_test "st-wrapper" tests/st-wrapper
-run_test "env-helix-config" tests/env-helix-config
+run_test "check-installer" --deps loader tests/check-installer
+run_test "st-wrapper" --deps build tests/st-wrapper
+run_test "env-helix-config" --deps envs+payload tests/env-helix-config
 run_test "update-cadence" "$PY" tests/update-cadence
 run_test "release-tag-scheme" "$PY" tests/release-tag-scheme
 run_test "fetch-stash-trust" "$PY" tests/fetch-stash-trust
 run_test "security-pipeline" "$PY" tests/security-pipeline
 run_test "check-versions-contract" "$PY" tests/check-versions-contract
 
+# The sidecars are written even when some tests failed: they only record
+# "inputs unchanged", and the per-test .pass files are the actual cache
+# entries -- a failed test has no .pass file, so it always re-runs. Writing
+# them at the end (not per test) keeps the remaining tests from caching
+# against a state the run itself is still verifying. `--fast` calls this too,
+# before its early exit: a Tier 1 run has to be reusable by the next one.
+write_cache_sidecars() {
+    if [ "$CACHE_ACTIVE" -eq 0 ]; then
+        return 0
+    fi
+    drain_jobs
+    mkdir -p "$CACHE_DIR"
+    write_sidecar "$CACHE_SIDECAR" "${FP_ROOTS[@]}" &
+    if [ "$CONTAINER" -eq 1 ]; then
+        write_sidecar "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}" &
+    fi
+    # One sidecar per dependency group any test used this run, computed in
+    # parallel: the walks are independent and each one is a full tree pass.
+    local _g
+    for _g in $GROUP_NAMES_USED; do
+        (
+            local -a _roots=()
+            mapfile -t _roots < <(group_roots "$_g")
+            write_sidecar "$(group_sidecar "$_g")" "${_roots[@]}"
+        ) &
+    done
+    wait
+}
+
 if [ "$FAST" -eq 1 ]; then
+    drain_jobs
+    write_cache_sidecars
     echo
     if [ "$FAILURES" -eq 0 ]; then
         if [ "$SKIPPED" -gt 0 ]; then
@@ -433,18 +759,8 @@ if [ "$CONTAINER" -eq 1 ]; then
 fi
 
 echo
-# The sidecar is written even when some tests failed: it only records "inputs
-# unchanged", and the per-test .pass files are the actual cache entries -- a
-# failed test has no .pass file, so it always re-runs. Writing it here (not
-# per test) keeps the remaining tests from caching against a state the run
-# itself is still verifying.
-if [ "$CACHE_ACTIVE" -eq 1 ]; then
-    mkdir -p "$CACHE_DIR"
-    "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR" --roots "${FP_ROOTS[@]}" >/dev/null 2>&1
-    if [ "$CONTAINER" -eq 1 ]; then
-        "$PY" "$FP_SCRIPT" --fast --write "$CACHE_SIDECAR_CONTAINER" --roots "${FP_ROOTS_CONTAINER[@]}" >/dev/null 2>&1
-    fi
-fi
+drain_jobs
+write_cache_sidecars
 if [ "$FAILURES" -eq 0 ]; then
     if [ "$SKIPPED" -gt 0 ]; then
         echo "All tests passed ($SKIPPED skipped)."
