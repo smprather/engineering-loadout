@@ -3813,44 +3813,61 @@ def _patch_uv_tool_sources(pkg_name, tools_home):
     return results
 
 
-# Imports what a uv tool's launchers import, under the tool's OWN interpreter.
+# Proves a uv tool's venv can LOAD what it ships, under its own interpreter.
+#
 # `uv tool install` exits 0 for a wheel whose ABI does not match the
-# interpreter (uv accepts a cp313 wheel under 3.15 for forward compatibility),
+# interpreter (uv accepts a cp313 wheel under 3.15 for forward compatibility)
 # and the extension then fails at the first import, on the user's machine.
-# Importing the console-script modules is the cheapest proof that the venv can
-# run what it puts on PATH; running the CLIs would be slower and could hang.
-_UV_TOOL_IMPORT_PROBE = """
+# Importing every console-script module is the wrong probe: jupyterlab's
+# `labhubapp` needs JupyterHub (deliberately unbundled, launcher pruned) and a
+# GUI package's module import needs libGL from the bundled gui_libs -- both are
+# false positives on a headless install. What the ABI lock actually means is
+# narrower and checkable without a display: every compiled extension that
+# belongs to the distribution itself must be tagged for THIS interpreter's ABI,
+# and must import.
+_UV_TOOL_ABI_PROBE = """
 import importlib
 import importlib.metadata
+import os
 import sys
 
 dist = sys.argv[1]
-modules = sorted(
-    {
-        entry.value.split(":")[0].strip()
-        for entry in importlib.metadata.distribution(dist).entry_points
-        if ":" in (entry.value or "")
-    }
-)
-if not modules:
-    raise SystemExit(f"{dist} declares no console-script modules")
-for module in modules:
-    importlib.import_module(module)
-print(", ".join(modules))
+mine = "cpython-{}{}".format(*sys.version_info[:2])
+info = importlib.metadata.distribution(dist)
+own = {line.strip() for line in (info.read_text("top_level.txt") or "").splitlines() if line.strip()}
+mismatched, loaded = [], []
+for rel in (str(f) for f in (info.files or [])):
+    name = os.path.basename(rel)
+    if not name.endswith(".so"):
+        continue
+    top = rel.split("/", 1)[0]
+    if own and top not in own:
+        continue  # a dependency's extension (PyQt6, ...) is not this ABI proof
+    stem = rel.split(".cpython-")[0] if ".cpython-" in rel else name[: -len(".so")]
+    if stem.endswith(".abi3"):
+        stem = stem[: -len(".abi3")]
+    elif ".cpython-" in rel and mine not in name:
+        mismatched.append(rel)
+        continue
+    importlib.import_module(stem.replace("/", "."))
+    loaded.append(stem.replace("/", "."))
+if mismatched:
+    raise SystemExit("extension module(s) built for another CPython ABI: " + ", ".join(sorted(mismatched)))
+print(", ".join(sorted(loaded)) or "no compiled extensions")
 """
 
 
 def _assert_uv_tool_imports(tool_name, tools_home, timeout=60):
-    """(ok, detail) for "this tool's venv can import its own launchers".
+    """(ok, detail) for "this tool's venv can load its own compiled code".
 
-    detail is the imported module list on success, or the reason on failure.
+    detail is what was imported on success, or the reason on failure.
     """
     python_bin = os.path.join(tools_home, tool_name, "bin", "python")
     if not os.path.isfile(python_bin):
         return False, f"no venv interpreter at {python_bin}"
     try:
         proc = run(
-            [python_bin, "-c", _UV_TOOL_IMPORT_PROBE, tool_name],
+            [python_bin, "-c", _UV_TOOL_ABI_PROBE, tool_name],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

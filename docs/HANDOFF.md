@@ -28,9 +28,14 @@ watchglass `>=3.12`).
 compares the declaration with `_BUNDLED_PY` and raises `ResolverError` naming
 the package, so `resolve`, `install --dry-run` and a real install all abort
 before any phase. After each successful `uv tool install`,
-`_assert_uv_tool_imports` imports the distribution's console-script modules
-under the tool's own venv interpreter; a wheel whose ABI does not match is a
-FAILED row (`Python tools | FAILED`), not a first-run crash. `./build/update`
+`_assert_uv_tool_imports` runs an ABI probe under the tool's own venv
+interpreter: each compiled extension the DISTRIBUTION itself ships must be
+tagged for that interpreter's ABI and must import. A wheel built for another
+minor is a FAILED row (`Python tools | FAILED`), not a first-run crash. The
+first draft imported every console-script module instead and was wrong:
+jupyterlab's `labhubapp` needs unbundled JupyterHub (its launcher is pruned as
+dead) and a GUI module import needs libGL -- `tests/install-linux-tmp-home`
+caught both. `./build/update`
 refuses to copy a rebuilt wheel whose ABI lock the declaration does not pin.
 
 **Payload:** `def-tools` v2026.11.4.dev0 (upstream `v2026.11.4-1-gef72bb6`)
