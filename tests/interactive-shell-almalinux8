@@ -26,6 +26,10 @@
 #
 # The image has no procps, so PROBE names the shell from /proc/$$/exe.
 #
+# T3-f also covers what only an old bash can show: EL8's bash 4.4 does not set
+# $0 to a script operand during the startup files, so the argv half of the
+# script-operand guard is exercised here and nowhere else.
+#
 # Usage: tests/interactive-shell-almalinux8        (host: runs the container)
 #        tests/interactive-shell-almalinux8 --inside (container, as root)
 set -eu
@@ -185,6 +189,27 @@ $LOGIN_ZSH")
     has_line "$out" PROBE_login=yes || fail "T3-e: the zsh target is not a login shell (D4):
 $out"
     echo "  PASS  T3-e: /bin/csh is tcsh, reads ~/.tcshrc, csh login -> zsh login"
+
+    # --- T3-f: EL8's bash 4.4 given a script runs it, never switches -----------
+    # bash < 5.2 still says $0=bash while the rc runs, so only here does the
+    # /proc/$$/cmdline half of the script-operand guard
+    # (loadout_bash_argv_has_script) run inside a real interactive bash. The
+    # inherited SHELL names the running bash, so without the guard the exec
+    # fires and drops the script; the control without one must still switch.
+    set_pref zsh
+    printf 'echo PROBE_script=ran\n' | runuser -u carol -- tee "$H/el-t3-script.sh" >/dev/null
+    out=$(pty "exec env SHELL=/bin/bash /bin/bash -i $H/el-t3-script.sh" "$PROBE")
+    assert_quiet "$out" "T3-f"
+    has_line "$out" PROBE_script=ran || fail "T3-f: bash -i FILE did not run FILE:
+$out"
+    case $out in
+        *"PROBE_comm=zsh "*) fail "T3-f: bash -i FILE switched to zsh:
+$out" ;;
+    esac
+    out=$(pty "exec env SHELL=/bin/bash /bin/bash -i" "$PROBE")
+    assert_quiet "$out" "T3-f control"
+    expect_probe "$out" zsh "$ZSH_BIN" "$ZSH_BIN" "T3-f control: non-login bash -i with no script"
+    echo "  PASS  T3-f: bash 4.4 -i FILE runs FILE; bash -i with no script still switches"
 
     # --- R7: does EL8's system init create SHELL for a non-login tcsh? ----------
     # A non-login tcsh switches only on an INHERITED SHELL (tcshrc), on the

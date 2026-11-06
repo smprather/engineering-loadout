@@ -368,6 +368,84 @@ out=$(pty "cd '$T' && PATH=bin:/usr/bin:/bin exec $BASH_BIN -l" "$PROBE" SHELL="
 assert_quiet "$out" "v"
 expect_probe "$out" bash "" "$BASH_BIN" "v: bare name on a relative PATH entry"
 
+# --- w: an interactive shell given a SCRIPT runs it, never execs --------------
+# `bash -i FILE`, `zsh -i FILE` and a `#!/bin/bash -i` script read the rc and
+# then run FILE. Desktop launchers and systemd user services export the passwd
+# SHELL, so with no marker the rest of the top-level-spawn test holds; only the
+# script-operand guard keeps the script alive (an exec would drop FILE).
+printf 'echo PROBE_script=ran\n' > "$T/s.sh"
+printf '#!%s -i\necho PROBE_script=ran\n' "$BASH_BIN" > "$T/shebang.sh"
+chmod 755 "$T/shebang.sh"
+# w_case ORIGIN_CMD SHELL TARGET_COMM
+w_case() {
+    _t0=$(date +%s)
+    out=$(pty "$1" "$PROBE" SHELL="$2")
+    [ $(($(date +%s) - _t0)) -lt 15 ] || fail "w: [$1] ran into the timeout:
+$out"
+    assert_quiet "$out" "w: $1"
+    has_line "$out" PROBE_script=ran || fail "w: [$1] did not run its script:
+$out"
+    case $out in
+        *"PROBE_comm=$3 "*) fail "w: [$1] switched to $3:
+$out" ;;
+    esac
+}
+set_pref "$ZSH_BIN"
+for _origin in "$BASH_BIN -i $T/s.sh" "$BASH_BIN -i -l $T/s.sh" "$T/shebang.sh"; do
+    w_case "$_origin" "$BASH_BIN" zsh
+done
+set_pref "$BASH_BIN"
+for _origin in "$ZSH_BIN -i $T/s.sh" "$ZSH_BIN -i -l $T/s.sh"; do
+    w_case "$_origin" "$ZSH_BIN" bash
+done
+
+# --- w-argv: the bash < 5.2 half of that guard, on any bash -------------------
+# Before 5.2, bash still says $0=bash while the rc runs, so the guard reads the
+# script operand off /proc/$$/cmdline (loadout_bash_argv_has_script). The PTY
+# cases above take the $0 branch on a newer bash, so the parser is pinned here
+# on fixture argv files: each line is the answer, then one argv, `|`-separated
+# (written NUL-terminated, as /proc/PID/cmdline is).
+_argv_rc() {
+    printf '%s|' "$1" | tr '|' '\0' > "$T/argv"
+    "$BASH_BIN" -c '. "$0"; loadout_bash_argv_has_script "$1"' \
+        "$REPO/envs/bash/functions.sh" "$T/argv" && echo script || echo none
+}
+while IFS=' ' read -r _want _argv; do
+    _got=$(_argv_rc "$_argv")
+    [ "$_got" = "$_want" ] || fail "w-argv: [$_argv] gave $_got, expected $_want"
+done <<'EOF'
+none -bash
+none bash
+none /usr/bin/bash|-l
+none bash|-i
+none bash|--login
+none bash|--login|-i
+none bash|--noprofile|--norc|-i
+none bash|--rcfile|/x/rc|-i
+none bash|--init-file|/x/rc
+none bash|-o|vi|-i
+none bash|+O|extglob|-i
+none bash|-io|vi
+none bash|-i|-s|x|y
+none bash|-is|x
+none bash|-i|--
+none bash|-i|-c|echo x
+script bash|-i|/t/s.sh
+script bash|-i|-l|/t/s.sh
+script bash|-il|/t/s.sh|a|b
+script bash|-i|--|/t/s.sh
+script bash|-i|-|/t/s.sh
+script bash|--norc|-i|/t/s.sh
+script bash|--rcfile|/x/rc|-i|/t/s.sh
+script bash|-o|vi|/t/s.sh
+script bash|-oO|vi|extglob|/t/s.sh
+script /usr/bin/bash|-i|/t/shebang.sh
+EOF
+_got=$(_argv_rc "bash|-i"; "$BASH_BIN" -c '. "$0"; loadout_bash_argv_has_script /nonexistent/cmdline' \
+    "$REPO/envs/bash/functions.sh" 2>&1 && echo script || echo none)
+[ "$_got" = "none
+none" ] || fail "w-argv: an unreadable argv file is not 'no script', silently: [$_got]"
+
 # --- t [14]: tmux panes -------------------------------------------------------
 if [ -n "$TMUX_BIN" ]; then
     set_pref "$ZSH_BIN"

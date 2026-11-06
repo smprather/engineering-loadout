@@ -94,7 +94,9 @@ setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh
 
 `global/tcshrc` then runs the same one-shot exec as the bash and zsh rc, before
 its PATH work: the same conditions in the same order, written out in csh because
-csh cannot call the shared `loadout_exec_interactive_shell`. A bare name is
+csh cannot call the shared `loadout_exec_interactive_shell`. One is missing:
+bash and zsh also stay put when given a script (`bash -i FILE`), and whether
+`tcsh -i FILE` switches is unverified. A bare name is
 resolved by `helpers/resolve-shell`, which follows the bash resolver's rules,
 never tcsh's `which` (that answers with an alias of the same name first). A
 tcsh login starts the target as a login shell. The rules are in the top-level

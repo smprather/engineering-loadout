@@ -262,12 +262,67 @@ loadout_resolve_interactive_shell() {
     return 1
 }
 
+# bash only. Returns 0 when the bash argv in FILE (NUL-separated, the
+# /proc/PID/cmdline shape) names a script operand, else 1; prints nothing and
+# forks nothing. bash < 5.2 sets $0 to the script only AFTER the startup files,
+# so the exec guard reads the operand off argv instead. The grammar is bash(1)
+# INVOCATION: long options first (--init-file and --rcfile take an argument),
+# then option clusters (each o/O in one takes the next argument) up to `-` or
+# `--`; -c and -s mean no script; the first other argument is the script.
+loadout_bash_argv_has_script() {
+    [ -n "${BASH_VERSION:-}" ] && [ -r "${1:-}" ] || return 1
+    local _a _r _skip=0 _long=1 _first=1
+    while IFS= read -r -d '' _a; do
+        if [ "$_first" = 1 ]; then
+            _first=0 # argv[0]
+            continue
+        fi
+        if [ "$_skip" -gt 0 ]; then
+            _skip=$((_skip - 1))
+            continue
+        fi
+        if [ "$_long" = 1 ]; then
+            case $_a in
+            --init-file | --rcfile)
+                _skip=1
+                continue
+                ;;
+            --) ;;
+            --*) continue ;;
+            esac
+            _long=0
+        fi
+        case $_a in
+        - | --)
+            IFS= read -r -d '' _a
+            return
+            ;;
+        [-+]?*)
+            case $_a in [-+]*[cs]*) return 1 ;; esac
+            _r=${_a#?}
+            while [ -n "$_r" ]; do
+                case $_r in [oO]*) _skip=$((_skip + 1)) ;; esac
+                _r=${_r#?}
+            done
+            ;;
+        *) return 0 ;;
+        esac
+    done <"$1"
+    return 1
+}
+
 # One-shot exec into LOADOUT_CFG_INTERACTIVE_SHELL, called near the top of the
 # bash and zsh rc only when that variable is non-empty. Returns 0 with no side
 # effects unless ALL of these hold (cheap tests first, forks last):
 #   - LOADOUT_SHELL_EXEC is unset: no earlier exec in this session tree;
 #   - the shell is interactive and has no command string (`SHELL -ilc CMD`
 #     must run CMD -- IDEs read the environment that way);
+#   - it has no script operand: `bash -i FILE`, `zsh -i FILE` and a
+#     `#!/bin/bash -i` script read the rc and then run FILE, which an exec
+#     would drop. zsh says so in ZSH_SCRIPT. bash >= 5.2 sets $0 to FILE while
+#     the rc runs (a login argv0 such as `-bash` is never one; $BASH itself
+#     comes from passwd there); older bash still says `bash`, so its argv is
+#     read (loadout_bash_argv_has_script);
 #   - it is a top-level spawn: a login shell, or the INHERITED $SHELL (not
 #     `sh`) resolves to the running shell. A shell typed at a prompt is
 #     neither, so it never bounces back;
@@ -284,10 +339,17 @@ loadout_exec_interactive_shell() {
     if [ -n "${ZSH_VERSION:-}" ]; then
         # Not `-o shinstdin`: zsh turns that on only AFTER its startup files,
         # so it is off here even for a plain interactive zsh.
-        [[ -o interactive && -z ${ZSH_EXECUTION_STRING:-} ]] || return 0
+        [[ -o interactive && -z ${ZSH_EXECUTION_STRING:-} && -z ${ZSH_SCRIPT-} ]] || return 0
         [[ -o login ]] && _login=1
     elif [ -n "${BASH_VERSION:-}" ]; then
         [[ $- == *i* && -z ${BASH_EXECUTION_STRING:-} ]] || return 0
+        case $0 in
+        -*) ;;
+        *) [ "${0##*/}" = "${BASH##*/}" ] || return 0 ;;
+        esac
+        if [ "${BASH_VERSINFO[0]}" -lt 5 ] || { [ "${BASH_VERSINFO[0]}" = 5 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]; }; then
+            ! loadout_bash_argv_has_script "/proc/$$/cmdline" || return 0
+        fi
         shopt -q login_shell && _login=1
     else
         return 0

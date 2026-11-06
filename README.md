@@ -617,8 +617,9 @@ every shell started inside that session sees the marker and is left alone:
   bounces back. For a one-off switch, run `exec zsh -l`.
 - a changed preference takes effect in the next **fresh** session: a new `ssh`
   or console login, a new tmux server, or a terminal started after the change.
-- `$SHELL -i -c CMD` (how IDEs read your environment), scripts, `ssh host cmd`
-  and cron never switch.
+- `$SHELL -i -c CMD` (how IDEs read your environment), scripts (including one
+  run as `bash -i FILE` or `zsh -i FILE`, or with a `#!/bin/bash -i` line),
+  `ssh host cmd` and cron never switch.
 
 From a csh/tcsh login, `~/.login` runs after `~/.tcshrc`, so it stops applying
 once the switch happens. It is csh syntax the target could not run anyway; move

@@ -1868,6 +1868,7 @@ sha256  6a630d203a314d798078275af126b3926d5cade9591c18560384bb14847a3dfc  payloa
 sha256  6a645fa7e24ce8e728db3837396b1bcdbd6e789ccf7b2249e748b3b669da36e2  payload/treesitter/vendor/nvim-treesitter/tests/query/injections/http/injections.http
 sha256  6a90a0bc827574aea7fb06cb1ac34f841c5b57e273a63b6102b9cafe08b9f43a  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/xresources/locals.scm
 sha256  6a90a0bc827574aea7fb06cb1ac34f841c5b57e273a63b6102b9cafe08b9f43a  payload/treesitter/vendor/nvim-treesitter/runtime/queries/xresources/locals.scm
+sha256  6a9dfb1b75e8c4cb9408f5c2f613e03dc244f62604add72f966704dcc1b7577a  payload/installed-sizes.json
 sha256  6aa33a4c58de3f4f3a0eadeaca1c57df2ee3242d3d5c74a46d762efe5423c80b  payload/treesitter/vendor/nvim-treesitter/tests/indent/capnp_spec.lua
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/squirrel/indents.scm
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/squirrel/indents.scm
@@ -4440,7 +4441,6 @@ sha256  f637500fd44acaac0f295e7d9d82a2906203e87bdb86f660f145915d52e882ae  payloa
 sha256  f66f7a32ada52435fa32cc60f1a336f25549324dd6837374d2b7760f925d213f  payload/el8.x86_64.glibc2p28/runtime/modules.tar.bz2
 sha256  f67190d5118594547064b8eb474d67df935a3fa6a2e601917bb5f107a95b50d3  payload/python-loaded/wheels/importlib_metadata-10.0.0-py3-none-any.whl
 sha256  f683b47703fb7ee4386763051b3258601c00662055ed472c140408c0e899c2c1  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/gotmpl.so.bz2
-sha256  f6a10019c22a0480c7d83ce57c6a4cb1a0deb3c5d0f02fa4b4238834c64b2446  payload/installed-sizes.json
 sha256  f6ad3d700a06a124190204cff80dad1d80110c8c82daf1be968c81ec98b7e1b4  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/aligned_indent.c
 sha256  f6be3699fca411b9ba4c662d0953fe16d721506ab47c194afd60287ee2afa9ce  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/typescript/highlights.scm
 sha256  f6cc951e689b908a0d2d12cd10895ef406b7e54c5498e67152c8ce78d4eb8780  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/helm.lua
