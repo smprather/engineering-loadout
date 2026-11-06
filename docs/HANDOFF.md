@@ -20,6 +20,19 @@ a sync target:
 - Settings cut over without aliases (`loadout doctor` names any left in your layers): tmux auto-attach (`LOADOUT_CFG_ATTACH_TO_TMUX*`), `LOADOUT_CFG_ENABLE_FASTNVIM` and `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` are removed; `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` is now `LOADOUT_CFG_ONLINE_DETECT`, `LOADOUT_ONLINE_CACHE_TTL` is now `LOADOUT_CFG_ONLINE_CACHE_TTL`.
 - A first login bash keeps `/etc/profile.d`'s `module` (every fresh EL8 bash login used to delete it).
 
+**Currency worklist for the next sweep** (2026-11-06, no bumps taken in this
+release): biome 2.6.5, broot 1.62.0, btm 0.15.0, btop 1.4.8, dust 1.2.7,
+fd 10.5.1, fresh 0.5.7, fzf 0.74.5, gnuplot 6.0.6, gopls 0.24.0, gvim/vim
+9.2.1302, ipython 9.18.1, jupyterlab 4.6.5, just 1.59.0, klayout 0.30.13,
+lazygit 0.66.2, librelane 3.0.17, linelight 2026.10.32, marktext 0.23.0,
+nodejs 26.13.0, numr 0.9.3, rsync 3.5.2, ruff 0.17.4, sqlite 3.54.1,
+strace 7.3, stylua 2.6.0, tmux-path-store 2026.10.5, ty 0.0.98,
+typescript-language-server 6.0.3, uv 0.13.7, valgrind 3.28.0, verilator 5.054,
+visidata 3.5, watchglass 2026.11.3.2, yq 4.54.2; rolling-git
+open-eda-file-tools and time-plot moved. pdftotext stays pinned (poppler
+>=26.06 needs fontconfig >=2.15; EL8 ships 2.13.1). ncdu's lookup 503'd.
+Security data itself is current: YARA-Forge 20261103, ClamAV 28175 (2026-11-06).
+
 ## 2026-11-05 (2): interactive shell selection (`LOADOUT_CFG_INTERACTIVE_SHELL`) landed
 
 One setting now chooses the interactive shell for every terminal, `ssh` session,
