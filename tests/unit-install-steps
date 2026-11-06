@@ -665,7 +665,12 @@ def test_build_scripts_honor_loadout_patchelf(m, tmp):
 
 
 def test_resolve_interactive_shell(m, tmp):
-    """Python mirror of loadout_resolve_interactive_shell / helpers/resolve-shell."""
+    """Python mirror of loadout_resolve_interactive_shell / helpers/resolve-shell.
+
+    The answer carries where the match came from -- "absolute", "prefix" or
+    "path" -- because only a PATH match depends on which PATH is searched:
+    doctor sees the finished one, the shells the one the session started with.
+    """
     for rel, mode in (
         ("prefix/bin/zsh", 0o755),
         ("pathdir/zsh", 0o755),
@@ -683,12 +688,12 @@ def test_resolve_interactive_shell(m, tmp):
         ("empty", "", prefix, pathdir, None),
         ("whitespace", "zsh -l", prefix, pathdir, None),
         ("relative slash", "bin/zsh", prefix, pathdir, None),
-        ("absolute", f"{tmp}/bin/abs", prefix, pathdir, f"{tmp}/bin/abs"),
+        ("absolute", f"{tmp}/bin/abs", prefix, pathdir, (f"{tmp}/bin/abs", "absolute")),
         ("absolute non-exec", f"{pathdir}/plain", prefix, pathdir, None),
-        ("prefix wins", "zsh", prefix, pathdir, f"{tmp}/prefix/bin/zsh"),
-        ("PATH fallback", "zsh", f"{tmp}/none", pathdir, f"{tmp}/pathdir/zsh"),
+        ("prefix wins", "zsh", prefix, pathdir, (f"{tmp}/prefix/bin/zsh", "prefix")),
+        ("PATH fallback", "zsh", f"{tmp}/none", pathdir, (f"{tmp}/pathdir/zsh", "path")),
         ("unknown name", "nosuch", prefix, pathdir, None),
-        ("relative PATH entry skipped", "zsh", f"{tmp}/none", f"bin:{pathdir}", f"{tmp}/pathdir/zsh"),
+        ("relative PATH entry skipped", "zsh", f"{tmp}/none", f"bin:{pathdir}", (f"{tmp}/pathdir/zsh", "path")),
         ("only relative PATH entries", "zsh", f"{tmp}/none", "pathdir", None),
     )
     for label, value, pfx, path, want in cases:

@@ -7640,10 +7640,13 @@ def _stale_tmux_autosave_refs(user_home):
 def _resolve_interactive_shell(value, shared_prefix, path):
     """Python mirror of loadout_resolve_interactive_shell (envs/bash/functions.sh).
 
-    Returns the absolute path LOADOUT_CFG_INTERACTIVE_SHELL resolves to, or None.
-    Empty or whitespace-bearing values and relative paths with a slash never
-    resolve; a bare name is looked up in <shared_prefix>/bin, then in the
-    absolute entries of `path` (relative and empty entries are skipped).
+    Returns (resolved, source) for a LOADOUT_CFG_INTERACTIVE_SHELL value, or
+    None. resolved is the absolute path; source says where it matched:
+    "absolute" (the value itself), "prefix" (<shared_prefix>/bin) or "path" (an
+    entry of `path`, the directory of resolved). Empty or whitespace-bearing
+    values and relative paths with a slash never resolve; a bare name is looked
+    up in <shared_prefix>/bin, then in the absolute entries of `path` (relative
+    and empty entries are skipped).
     """
 
     def _runnable(candidate):
@@ -7652,18 +7655,18 @@ def _resolve_interactive_shell(value, shared_prefix, path):
     if not value or any(ch.isspace() for ch in value):
         return None
     if value.startswith("/"):
-        return value if _runnable(value) else None
+        return (value, "absolute") if _runnable(value) else None
     if "/" in value:
         return None
     candidate = os.path.join(shared_prefix, "bin", value)
     if _runnable(candidate):
-        return candidate
+        return candidate, "prefix"
     for entry in (path or "").split(":"):
         if not entry.startswith("/"):
             continue
         candidate = f"{entry}/{value}"
         if _runnable(candidate):
-            return candidate
+            return candidate, "path"
     return None
 
 
@@ -7753,12 +7756,20 @@ def _doctor_shell_audit(user_home, environ, passwd_shell=None):
         return findings
 
     prefix = environ.get("LOADOUT_CFG_SHARED_PREFIX") or os.path.join(user_home, ".local/share/loadout")
-    resolved = _resolve_interactive_shell(value, prefix, environ.get("PATH", ""))
-    if resolved is None:
+    match = _resolve_interactive_shell(value, prefix, environ.get("PATH", ""))
+    if match is None:
         print(f"  LOADOUT_CFG_INTERACTIVE_SHELL={value} does not resolve to an executable; the shells ignore it")
         findings += 1
     else:
+        resolved, source = match
         print(f"  LOADOUT_CFG_INTERACTIVE_SHELL={value} -> {resolved}")
+        if source == "path":
+            # A note, not a finding: doctor searched its own (finished) PATH,
+            # which may hold directories the rc files added after the switch.
+            print(
+                f"    found via PATH entry {os.path.dirname(resolved)}; the switch searches the PATH your"
+                " session starts with, so use an absolute path if your config adds that directory"
+            )
         base = os.path.basename(resolved)
         flags = ["-f"] if base in ("zsh", "tcsh", "csh") else ["--no-config"] if base == "fish" else []
         try:

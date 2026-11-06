@@ -645,7 +645,7 @@ sessions.
 
 Retired settings are cut over, never aliased: setting an old name has no effect.
 
-`./loadout doctor` has an "Interactive shell" section: it reports retired names left in your shell layers, a `LOADOUT_CFG_INTERACTIVE_SHELL` value that does not resolve or does not run on this host, a missing `env-zsh`/`env-tcsh`/`env-bash` for the target, and a value your login shell's layers do not set. Findings never change doctor's exit status.
+`./loadout doctor` has an "Interactive shell" section: it reports retired names left in your shell layers, a `LOADOUT_CFG_INTERACTIVE_SHELL` value that does not resolve or does not run on this host, a missing `env-zsh`/`env-tcsh`/`env-bash` for the target, and a value your login shell's layers do not set. When a bare name was found through a PATH entry, it adds a note: doctor searches the PATH it runs with, after your config extended it, while the switch searches the PATH the session starts with, so a shell only a directory your config adds (such as `~/.local/bin`) reaches needs an absolute path. Findings never change doctor's exit status.
 
 | Old name | New name or action |
 |---|---|

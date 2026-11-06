@@ -109,6 +109,30 @@ esac
 out=$(env -i HOME="$ish" PATH=/usr/bin:/bin TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL="$tmp/bin/okshell" "$repo/loadout" doctor 2>&1) \
     || fail "doctor exited nonzero for a healthy target"
 case "$out" in *"does not run on this host"*) fail "healthy target reported as not running";; esac
+case "$out" in *"found via PATH entry"*) fail "an absolute target got the PATH note:
+$out" ;; esac
+
+# Where a bare name matched (F2): doctor searches the PATH it runs with, which
+# the rc files have already extended; the switch searches the PATH the session
+# started with. A PATH match is the only kind that can differ, so only it gets
+# the note.
+mkdir -p "$tmp/pathbin" "$tmp/pfx/bin"
+cp "$tmp/bin/okshell" "$tmp/pathbin/okshell"
+out=$(env -i HOME="$ish" PATH="$tmp/pathbin:/usr/bin:/bin" TERM=xterm LOADOUT_CFG_INTERACTIVE_SHELL=okshell "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero for a PATH-found target"
+case "$out" in
+    *"found via PATH entry $tmp/pathbin; the switch searches the PATH your session starts with, so use an absolute path if your config adds that directory"*) : ;;
+    *) fail "PATH-found target has no PATH note:
+$out" ;;
+esac
+cp "$tmp/bin/okshell" "$tmp/pfx/bin/okshell"
+out=$(env -i HOME="$ish" PATH="$tmp/pathbin:/usr/bin:/bin" TERM=xterm LOADOUT_CFG_SHARED_PREFIX="$tmp/pfx" \
+    LOADOUT_CFG_INTERACTIVE_SHELL=okshell "$repo/loadout" doctor 2>&1) \
+    || fail "doctor exited nonzero for a prefix-found target"
+case "$out" in *"LOADOUT_CFG_INTERACTIVE_SHELL=okshell -> $tmp/pfx/bin/okshell"*) : ;; *) fail "prefix match not reported:
+$out" ;; esac
+case "$out" in *"found via PATH entry"*) fail "a shared-prefix target got the PATH note:
+$out" ;; esac
 
 # Negative control: clean HOME has no interactive-shell findings.
 out=$(env -i HOME="$clean" PATH="/usr/bin:/bin" TERM=xterm "$repo/loadout" doctor 2>&1)
