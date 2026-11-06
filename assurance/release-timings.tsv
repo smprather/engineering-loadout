@@ -10810,3 +10810,11 @@
 2026-11-06T22:03:54Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	14	PASS	mode=container
 2026-11-06T22:14:18Z	test:almalinux8.10 container smoke (--full)	638	PASS	mode=container
 2026-11-06T22:14:18Z	test:total	1793	PASS	flags=--container skipped=0
+2026-11-06T22:15:12Z	version table	0.0	PASS	2026.11.3
+2026-11-06T22:15:13Z	payload consistency	1.2	PASS	2026.11.3
+2026-11-06T22:15:21Z	manifest export	8.9	PASS	2026.11.3
+2026-11-06T22:15:22Z	checksums	10.4	PASS	2026.11.3
+2026-11-06T22:15:23Z	vulnerability scan	11.3	PASS	2026.11.3
+2026-11-06T22:15:34Z	secret scan	22.6	PASS	2026.11.3
+2026-11-06T22:17:36Z	malware scan	144.2	FAIL	2026.11.3
+2026-11-06T22:19:06Z	binary smoke test	234.6	PASS	2026.11.3
