@@ -325,6 +325,26 @@ def main():
         )
         failures += check("doctor still prints the install layout", "Install layout:" in proc.stdout, True)
 
+        # 13b. A token that cannot resolve is reported, not swallowed: an
+        # unknown package name, an unmatched glob and an unknown group each
+        # get their own line, and the source-less expand_groups warning stays
+        # out of stderr because the token never reaches the resolver.
+        write_config(doc_home, 'exclude = ["wathcglass", "wathc*", "@nope"]\n')
+        proc = run_loadout(doc_home, "doctor")
+        failures += check("doctor exits 0 with unresolvable tokens", proc.returncode, 0)
+        for token in ("wathcglass", "wathc*", "@nope"):
+            failures += check(
+                f"doctor reports unresolvable token {token}",
+                f"  {token}: invalid (unknown package or group)\n" in proc.stdout,
+                True,
+            )
+        failures += check(
+            "unresolvable tokens print no source-less warning",
+            "unknown package" in proc.stderr or "unknown group" in proc.stderr,
+            False,
+        )
+        failures += check("doctor still prints the install layout", "Install layout:" in proc.stdout, True)
+
         # 14. No policy, no section: doctor stays quiet rather than printing an
         # empty header that looks like a finding.
         bare_doc_home = os.path.join(tmp, "doctor-bare")

@@ -7947,9 +7947,16 @@ def _doctor_exclusions(registry, install_root):
     bin_dir = os.path.join(_local_root(install_root), "bin")
     for source, tokens in policy:
         # Expand per token, not per source: one retired group must not hide the
-        # packages named on the tokens after it.
+        # packages named on the tokens after it. A token that cannot resolve is
+        # reported here rather than handed to expand_groups, whose only signal
+        # is a source-less stderr warning -- the section would otherwise print
+        # nothing for a dead name. Retired groups DO reach expand_groups: their
+        # own multi-line error is the useful text.
         names = set()
         for token in _expand_glob_names(tokens, registry):
+            if token not in registry and token not in _RETIRED_GROUPS and token not in _SYNTHETIC_GROUPS:
+                print(f"  {token}: invalid (unknown package or group)")
+                continue
             try:
                 names |= expand_groups([token], registry, _stack=(source,))
             except ResolverError as exc:
