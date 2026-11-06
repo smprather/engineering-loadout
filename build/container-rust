@@ -20,9 +20,12 @@
 #
 # Usage (inside build-shell, or as build/build-shell build/container-rust):
 #   build/build-shell build/container-rust
-#   build/build-shell sh -c 'export PATH=/cache/cargo/bin:/cache/uv:$PATH; ...'
+#   build/build-shell sh -c '. /cache/env; ./build/update lef-tools def-tools'
 #
-# Prints the two exports to add to PATH on stdout's tail so a caller can eval it.
+# `. /cache/env` is NOT optional politeness: it exports RUSTUP_HOME and
+# CARGO_HOME as well as PATH. With PATH alone, rustup's cargo shim cannot find
+# its toolchain and every build dies with "rustup could not choose a version of
+# cargo to run ... no default is configured" (hit 2026-11-05).
 
 set -eu
 

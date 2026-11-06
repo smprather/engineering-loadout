@@ -856,8 +856,13 @@ mount:
 
 ```bash
 build/build-shell build/container-rust          # rustup + uv into /cache, idempotent
-build/build-shell sh -c 'export PATH=/cache/cargo/bin:/cache/uv:$PATH; ./build/update lef-tools def-tools'
+build/build-shell sh -c '. /cache/env; ./build/update lef-tools def-tools'
 ```
+
+Source `/cache/env`; do not just prepend the PATH. It also exports
+`RUSTUP_HOME`/`CARGO_HOME`, and with PATH alone rustup's cargo shim answers
+"rustup could not choose a version of cargo to run ... no default is
+configured" for every build.
 
 `./build/update` sets `UV_PYTHON` to the repo's own 3.15 bootstrap when the
 variable is unset, so the wheel is cp315 without extra ceremony. The wheel
