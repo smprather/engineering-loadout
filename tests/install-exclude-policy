@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# A package the persistent `exclude` policy names must never reach the
+# installed tree, even when a GROUP sweep selects it. The unit-level halves
+# are pinned by tests/config-toml-exclude (the reader and resolver union);
+# this is the end-to-end proof through the real installer that no entry point
+# forgets to resolve with the policy.
+#
+# `@compression` is four single-bin packages (p7zip, bzip2, pigz, pv), so the
+# sweep is a few seconds. A directly named excluded package is an error by
+# design, so the package is reached through the group, which is exactly the
+# path a user's config must survive.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-exclude-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-exclude-dest.XXXXXX")
+
+cleanup() {
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "install-exclude-policy failed: $*" >&2
+    exit 1
+}
+
+mkdir -p "$test_home/.config/engineering-loadout"
+printf 'exclude = ["pigz"]\n' > "$test_home/.config/engineering-loadout/config.toml"
+
+echo "Installing @compression into: $dest_dir (pigz excluded by policy)"
+# env -i keeps the developer's real config out of the run: the policy must come
+# from the throwaway HOME only.
+env -i HOME="$test_home" PATH="/usr/bin:/bin:/usr/sbin:/sbin" LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install -y @compression --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -20 "$test_home/install.log" >&2
+    fail "install failed (see log)"
+}
+
+[ -x "$dest_dir/bin/pv" ] || fail "selected package pv was not installed"
+[ ! -e "$dest_dir/bin/pigz" ] || fail "excluded pigz was installed"
+grep -q "excluded by policy" "$test_home/install.log" || fail "no policy note in the install output"
+
+echo "Install exclude policy OK"
