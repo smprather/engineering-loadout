@@ -19,6 +19,11 @@ a sync target:
 - `LOADOUT_CFG_INTERACTIVE_SHELL` chooses your interactive shell for every terminal, `ssh` session, console and tmux pane: one line in your login shell's user layer (README "Choosing your interactive shell"). It replaces `LOADOUT_CFG_PREFERRED_BASH`/`_ZSH`/`_TCSH`; a typed `bash`, `t` or `tcsh` no longer switches.
 - Settings cut over without aliases (`loadout doctor` names any left in your layers): tmux auto-attach (`LOADOUT_CFG_ATTACH_TO_TMUX*`), `LOADOUT_CFG_ENABLE_FASTNVIM` and `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` are removed; `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` is now `LOADOUT_CFG_ONLINE_DETECT`, `LOADOUT_ONLINE_CACHE_TTL` is now `LOADOUT_CFG_ONLINE_CACHE_TTL`.
 - A first login bash keeps `/etc/profile.d`'s `module` (every fresh EL8 bash login used to delete it).
+- `python-3.12` and `python-3.13` are now bundled CPython builds with `module load python/3.12|3.13` modulefiles; the default `python3` is unchanged.
+- `lef-tools` and `def-tools` replace the retired `lefdef-tools` (LEF and DEF parsing split into two tools). Existing trees keep the old installed files; remove `$prefix/bin/lefdef-tools` and `$prefix/share/uv/tools/lefdef-tools/` by hand.
+- `watchglass` 2026.11.3: the TUI is live (not read-only), with conpty failure classification.
+- The resolver's `--skip` accepts glob patterns and may be repeated.
+- The `uv` launcher honors `LOADOUT_PYTHON` without overriding per-project pins.
 
 **Currency worklist for the next sweep** (2026-11-06, no bumps taken in this
 release): biome 2.6.5, broot 1.62.0, btm 0.15.0, btop 1.4.8, dust 1.2.7,
