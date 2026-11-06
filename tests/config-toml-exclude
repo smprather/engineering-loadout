@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""config-toml-exclude -- the persistent `exclude` policy and the resolver union.
+
+`--skip` was per-invocation, so a consumer that never wants a package had to
+remember the flag on every run, and a wrapper that forgot it silently
+reinstalled the duplicate. `~/.config/engineering-loadout/config.toml` now
+carries an `exclude` list; `LOADOUT_CFG_EXCLUDE` supplies the same policy from
+the environment so a distribution can set it without writing into $HOME.
+
+This test pins both halves:
+
+  * the reader -- two unioned sources, wrong types ignored, absent file empty;
+  * the resolver union -- the policy lands in the same set as `--skip`, so
+    subtraction, hard-dependency safety and recommendation dropping are
+    unchanged, with a policy name (never a sweep) reported by source.
+
+Every case runs against a throwaway HOME so the developer's real config is
+never read and never written.
+"""
+
+import contextlib
+import importlib.util
+import io
+import os
+import sys
+import tempfile
+import types
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VENDOR = os.path.join(REPO, "installer_vendor")
+
+FILE_SOURCE = "config.toml exclude"
+ENV_SOURCE = "LOADOUT_CFG_EXCLUDE"
+
+
+def load_module():
+    """Import loadout_main.py once; config reads happen at call time."""
+    for path in (REPO, VENDOR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    spec = importlib.util.spec_from_file_location("loadout_exclude_under_test", os.path.join(REPO, "loadout_main.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_config(home, body):
+    cfg = os.path.join(home, ".config", "engineering-loadout")
+    os.makedirs(cfg, exist_ok=True)
+    with open(os.path.join(cfg, "config.toml"), "w", encoding="utf-8") as fh:
+        fh.write(body)
+
+
+def args(only=None, skip=None, no_deps=False, force=False):
+    return types.SimpleNamespace(skip=skip, only=only, add=None, no_deps=no_deps, force=force)
+
+
+REG = {
+    "@fonts": {"kind": "group", "members": ["font-a", "font-b"]},
+    "app": {"kind": "bin", "bins": ["app"], "depends": ["lib"]},
+    "lib": {"kind": "bin", "bins": ["lib"]},
+    "tool": {"kind": "bin", "bins": ["tool"]},
+    "font-a": {"kind": "font"},
+    "font-b": {"kind": "font"},
+}
+
+# What @shared resolves to for REG: every non-group, non-env, non-optional entry.
+SHARED = {"app", "lib", "tool", "font-a", "font-b"}
+
+
+def check(label, got, want):
+    if got != want:
+        print(f"  FAIL  {label}\n          got:  {got}\n          want: {want}")
+        return 1
+    print(f"  PASS  {label}")
+    return 0
+
+
+def attempt(module, only=None, skip=None, exclude=None, force=False):
+    """Resolve with stderr captured.
+
+    Returns (result, stderr), where result is the frozenset normally and the
+    ResolverError instance when the resolver raised -- so a case can pin both
+    the outcome and the message without duplicating try/except boilerplate.
+    """
+    with contextlib.redirect_stderr(io.StringIO()) as err:
+        try:
+            result = module.resolve_tool_selection(args(only=only, skip=skip, force=force), REG, exclude=exclude)
+        except module.ResolverError as exc:
+            result = exc
+    return result, err.getvalue()
+
+
+def raised(module, value):
+    return isinstance(value, module.ResolverError)
+
+
+def main():
+    failures = 0
+    os.environ.pop("XDG_DATA_HOME", None)
+    os.environ.pop(ENV_SOURCE, None)
+    with tempfile.TemporaryDirectory() as tmp:
+        module = load_module()
+
+        # 1. The reader: the file list, the env var, and the union of both.
+        home = os.path.join(tmp, "reader")
+        os.makedirs(home)
+        os.environ["HOME"] = home
+        write_config(home, 'exclude = ["a", 42, " b "]\n')
+        failures += check(
+            "config list: strings trimmed, non-strings dropped",
+            module._exclusion_policy(),
+            [(FILE_SOURCE, ["a", "b"])],
+        )
+        os.environ[ENV_SOURCE] = "c, d"
+        failures += check(
+            "env var unions with the file list",
+            module._exclusion_policy(),
+            [(FILE_SOURCE, ["a", "b"]), (ENV_SOURCE, ["c", "d"])],
+        )
+        os.environ.pop(ENV_SOURCE, None)
+
+        write_config(home, 'exclude = "a"\n')
+        failures += check("wrong-typed exclude ignored", module._exclusion_policy(), [])
+
+        home = os.path.join(tmp, "absent")
+        os.makedirs(home)
+        os.environ["HOME"] = home
+        failures += check("absent config -> no policy", module._exclusion_policy(), [])
+
+        # The resolver cases pass the policy explicitly: the reader is done.
+        home = os.path.join(tmp, "resolver")
+        os.makedirs(home)
+        os.environ["HOME"] = home
+
+        # 2. A policy name is subtracted from a sweep, exactly like --skip.
+        got, _ = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("policy name dropped from a sweep", got, SHARED - {"tool"})
+
+        # 3. --skip and the policy union; neither overrides the other.
+        got, _ = attempt(module, only="@shared", skip="font-a", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("--skip unions with the policy", got, SHARED - {"tool", "font-a"})
+
+        # 4. A policy glob sweeps a family.
+        got, err = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["font-*"])])
+        failures += check("policy glob expands", got, SHARED - {"font-a", "font-b"})
+        failures += check("policy glob warns nothing", "WARNING" in err, False)
+
+        # 5. A policy group token expands to its members.
+        got, _ = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["@fonts"])])
+        failures += check("policy @group expands", got, SHARED - {"font-a", "font-b"})
+
+        # 6. Hard-dependency safety is unchanged: the policy set is `forbidden`.
+        got, _ = attempt(module, only="app", exclude=[(FILE_SOURCE, ["lib"])])
+        failures += check("hard dep on a policy-excluded package raises", raised(module, got), True)
+        failures += check(
+            "dependency error names the exclusion, not just --skip",
+            "excluded" in str(got) and "persistent" in str(got),
+            True,
+        )
+        got, _ = attempt(module, only="app", exclude=[(FILE_SOURCE, ["lib"])], force=True)
+        failures += check("--force installs past the excluded dependency", got, {"app"})
+
+        # 7. A directly demanded package the policy excludes is an error, not a
+        # silent empty install -- but only when it is the whole demand: the
+        # sweep counterpart below empties the selection and stays a no-op.
+        got, _ = attempt(module, only="tool", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("directly demanded excluded package raises", raised(module, got), True)
+        failures += check(
+            "error names the policy and its source",
+            "excluded by the persistent policy" in str(got) and FILE_SOURCE in str(got),
+            True,
+        )
+        got, err = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["app", "lib", "tool", "font-a", "font-b"])])
+        failures += check("a sweep emptied by policy is a no-op", got, set())
+        failures += check("the emptied sweep still notes the drop", "note: excluded by policy" in err, True)
+
+        # 8. A partial drop installs the rest, with one note naming the source.
+        got, err = attempt(module, only="tool,app", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("partial policy drop installs the rest", got, {"app", "lib"})
+        failures += check(
+            "partial drop prints one note naming package and source",
+            "note: excluded by policy" in err and "tool" in err and FILE_SOURCE in err,
+            True,
+        )
+
+        # 9. A stale name is a warning about that source, never a crash.
+        got, err = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["nope"])])
+        failures += check("unknown policy name leaves the selection whole", got, SHARED)
+        failures += check(
+            "unknown policy name warns with its source",
+            f"{FILE_SOURCE}: unknown package 'nope'" in err,
+            True,
+        )
+
+        # 10. A retired group in the policy raises its loud error (D3).
+        got, _ = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["@engineering-loadout"])])
+        failures += check("retired group in policy raises", raised(module, got), True)
+        failures += check(
+            "retired-group error is the group's own", "@engineering-loadout was retired" in str(got), True
+        )
+
+    print(f"\n{'OK' if not failures else 'FAILED'}: config-toml-exclude")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

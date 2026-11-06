@@ -315,6 +315,7 @@ run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
 run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
 run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
 run_test "unit-resolver" "$PY" tests/unit-resolver
+run_test "config-toml-exclude" --deps payload+loader "$PY" tests/config-toml-exclude
 run_test "unit-private-state" "$PY" tests/unit-private-state
 run_test "unit-install-steps" "$PY" tests/unit-install-steps
 run_test "install-atomic-replace" "$PY" tests/install-atomic-replace

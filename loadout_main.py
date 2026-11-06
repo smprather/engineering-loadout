@@ -604,11 +604,12 @@ def walk_depends(names, registry, forbidden=None, force=False, disabled=None):
             for d in dep_set:
                 if d in forbidden:
                     if force:
-                        warn(f"package '{name}' hard-depends on '{d}' which was skipped (--force: continuing)")
+                        warn(f"package '{name}' hard-depends on '{d}' which is excluded (--force: continuing)")
                         continue
                     raise ResolverError(
-                        f"package '{name}' hard-depends on '{d}', but '{d}' was passed to --skip. "
-                        f"Either remove from --skip, drop '{name}' from selection, or pass --no-deps / --force."
+                        f"package '{name}' hard-depends on '{d}', but '{d}' is excluded "
+                        f"(--skip or the persistent `exclude` policy). Either stop excluding it, "
+                        f"drop '{name}' from the selection, or pass --no-deps / --force."
                     )
                 # A DISABLED package cannot be pulled in as a hard
                 # dependency either: the install would be broken by
@@ -677,19 +678,47 @@ def filter_by_platform(names, registry, platform):
     return out
 
 
-def resolve_tool_selection(args, registry):
+def _exclusion_policy():
+    """The persistent package exclusions: [(source, tokens), ...].
+
+    Two sources, unioned (never overriding each other): config.toml `exclude`
+    (a list of strings) and LOADOUT_CFG_EXCLUDE (comma-separated), so a
+    distribution can set the policy without writing into $HOME. Wrong types are
+    ignored like dest_dir/prefer; tokens may be names, @groups or globs.
+    """
+    policy = []
+    value = _loadout_config().get("exclude")
+    if isinstance(value, list):
+        tokens = [v.strip() for v in value if isinstance(v, str) and v.strip()]
+        if tokens:
+            policy.append(("config.toml exclude", tokens))
+    tokens = _parse_namelist(os.environ.get("LOADOUT_CFG_EXCLUDE", ""))
+    if tokens:
+        policy.append(("LOADOUT_CFG_EXCLUDE", tokens))
+    return policy
+
+
+def resolve_tool_selection(args, registry, exclude=None):
     """Resolve CLI selectors into a frozenset of package names.
 
     Resolution steps:
       1. Parse --skip (groups expanded, glob patterns matched against
-         registry keys).
+         registry keys), then union the persistent policy list (`exclude`:
+         the config.toml `exclude` key and LOADOUT_CFG_EXCLUDE, already
+         labelled per source by _exclusion_policy()).
       2. Build initial set from --only / --add (groups expanded).
          At least one of --only or --add must be non-empty; the caller is
          responsible for enforcing that.
-      3. Subtract --skip.
-      4. Walk hard 'depends' (error if any dep is in skip set, unless --no-deps/--force).
-      5. Walk soft 'recommends' (silently drop anything in skip set).
+      3. Subtract --skip and the policy set.
+      4. Walk hard 'depends' (error if any dep is in that set, unless --no-deps/--force).
+      5. Walk soft 'recommends' (silently drop anything in that set).
       6. Filter by current platform.
+
+    `exclude=None` means "no policy": the resolver stays pure, so a unit test
+    never depends on the developer's config.toml. A directly named (literal,
+    non-glob, non-group) package the policy excludes is an error rather than a
+    silent empty install; a sweep it empties is a no-op; a partial drop prints
+    one note and installs the rest.
 
     When the registry is empty (legacy / missing JSON) returns None as before.
     """
@@ -716,6 +745,25 @@ def resolve_tool_selection(args, registry):
         else set()
     )
 
+    # The persistent policy is the SAME subtraction, just remembered: a
+    # distribution or consumer that never wants a package says so once. Each
+    # source is expanded on its own so a stale name or a bad group is reported
+    # against the file or the variable that produced it. Unknown names are
+    # warned here and filtered out first: expand_groups() would otherwise warn
+    # again, without the source.
+    policy_set = set()
+    policy_sources = []
+    for source, tokens in exclude or ():
+        policy_sources.append(source)
+        known = []
+        for name in _expand_glob_names(tokens, registry):
+            if name in registry or name.startswith("@"):
+                known.append(name)
+            else:
+                warn(f"{source}: unknown package '{name}' (ignored)")
+        policy_set |= expand_groups(known, registry, _stack=(source,))
+    skip_set |= policy_set
+
     only = getattr(args, "only", None)
     add = getattr(args, "add", None)
     if only:
@@ -727,7 +775,28 @@ def resolve_tool_selection(args, registry):
     else:
         raise ResolverError("no packages specified")
 
+    selected_before = set(selected)
     selected -= skip_set
+
+    # A DEMAND is different from a SWEEP: `install tool` is a request for that
+    # package by name, so a policy entry that blocks it must fail loudly rather
+    # than resolve zero packages and report success. A group or glob that the
+    # policy empties is the documented no-op -- the caller asked for "everything
+    # except what I exclude". A partial drop installs the rest with one note.
+    requested = _parse_namelist(only or add or "")
+    demanded = list(dict.fromkeys(n for n in requested if not n.startswith("@") and not any(c in n for c in "*?[")))
+    blocked = [n for n in demanded if n in policy_set]
+    if blocked and len(blocked) == len(demanded):
+        raise ResolverError(
+            "package(s) excluded by the persistent policy:\n"
+            f"  {', '.join(sorted(blocked))}\n"
+            f"  source: {' + '.join(policy_sources)}\n"
+            "  Remove the entry from ~/.config/engineering-loadout/config.toml\n"
+            "  `exclude` (or LOADOUT_CFG_EXCLUDE) to install it."
+        )
+    dropped = selected_before & policy_set
+    if dropped:
+        eprint(f"  note: excluded by policy ({' + '.join(policy_sources)}): {', '.join(sorted(dropped))}")
 
     if not no_deps:
         # Alternate to a fixed point: a recommended package can carry hard
