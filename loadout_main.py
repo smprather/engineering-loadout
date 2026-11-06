@@ -7522,18 +7522,17 @@ def cmd_describe(args, registry):
     return 0
 
 
-def cmd_resolve(args, registry):
-    """Resolve selection (treating positional args as --add) and print sorted set."""
-    if args.positional and not args.only and not args.add:
-        args.add = ",".join(args.positional)
-    try:
-        selected = resolve_tool_selection(args, registry)
-    except ResolverError as _err:
-        eprint(f"Resolver error: {_err}")
-        return 1
+def _print_resolved(selected, registry):
+    """Print a resolved selection: sentinel line, count header, by-kind groups.
+
+    Split out of cmd_resolve so an `install --dry-run` can print the SAME
+    listing from the set it already resolved, instead of resolving a second
+    time -- a second resolution would repeat the policy note and any
+    expansion warning.
+    """
     if selected is None:
         print("(empty registry; resolver returned None -> install-everything sentinel)")
-        return 0
+        return
     print(f"Resolved {len(selected)} packages:")
     by_kind = {}
     for n in sorted(selected):
@@ -7542,6 +7541,18 @@ def cmd_resolve(args, registry):
     for k in sorted(by_kind):
         pkgs = by_kind[k]
         print("  [{}] ({}): {}".format(k, len(pkgs), ", ".join(pkgs)))
+
+
+def cmd_resolve(args, registry):
+    """Resolve selection (treating positional args as --add) and print sorted set."""
+    if args.positional and not args.only and not args.add:
+        args.add = ",".join(args.positional)
+    try:
+        selected = resolve_tool_selection(args, registry, exclude=_exclusion_policy())
+    except ResolverError as _err:
+        eprint(f"Resolver error: {_err}")
+        return 1
+    _print_resolved(selected, registry)
     return 0
 
 
@@ -8518,7 +8529,8 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
 
     if args.dry_run:
         print("DRY RUN: would install {} packages.".format(len(selected_tools) if selected_tools else "(all)"))
-        return cmd_resolve(args, registry)
+        _print_resolved(selected_tools, registry)
+        return 0
 
     # Test-only dependency capture (no-op unless tests/run-all armed the marker).
     _record_install_deps(selected_tools, registry, repo_dir)
@@ -8697,7 +8709,7 @@ def cmd_install_v2(args, registry, repo_dir, home):
         return 1
     _adapt_install_args(args)
     try:
-        selected_tools = resolve_tool_selection(args, registry)
+        selected_tools = resolve_tool_selection(args, registry, exclude=_exclusion_policy())
     except ResolverError as _err:
         eprint(f"Resolver error: {_err}")
         return 1

@@ -12,7 +12,10 @@ This test pins both halves:
   * the reader -- two unioned sources, wrong types ignored, absent file empty;
   * the resolver union -- the policy lands in the same set as `--skip`, so
     subtraction, hard-dependency safety and recommendation dropping are
-    unchanged, with a policy name (never a sweep) reported by source.
+    unchanged, with a policy name (never a sweep) reported by source;
+  * the CLI wiring -- `resolve` and `install --dry-run` pass the policy to the
+    resolver, proved end-to-end through the `./loadout` shim so a future entry
+    point that forgets `exclude=` fails here and not in a user's tree.
 
 Every case runs against a throwaway HOME so the developer's real config is
 never read and never written.
@@ -22,6 +25,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import types
@@ -93,6 +97,25 @@ def attempt(module, only=None, skip=None, exclude=None, force=False):
 
 def raised(module, value):
     return isinstance(value, module.ResolverError)
+
+
+def run_loadout(home, *argv, extra_env=None):
+    """Run the real `./loadout` shim against a throwaway HOME.
+
+    A subprocess is the only way to pin the CLI wiring: the resolver cases
+    above pass `exclude=` themselves and can never catch an entry point that
+    forgets to. The env is complete rather than inherited so the developer's
+    config, XDG dirs and LOADOUT_CFG_EXCLUDE cannot leak in.
+    """
+    env = {"HOME": home, "PATH": "/usr/bin:/bin", "TERM": "xterm"}
+    env.update(extra_env or {})
+    return subprocess.run(
+        [os.path.join(REPO, "loadout"), *argv],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
 
 
 def main():
@@ -210,6 +233,53 @@ def main():
         failures += check("retired group in policy raises", raised(module, got), True)
         failures += check(
             "retired-group error is the group's own", "@engineering-loadout was retired" in str(got), True
+        )
+
+        # 11. The CLI passes the policy: `resolve` and `install --dry-run` are
+        # the entry points that hand the resolver a selection. Without the
+        # wiring the resolver unit cases above still pass, so only the real
+        # shim proves the flag reaches it.
+        cli_home = os.path.join(tmp, "cli")
+        os.makedirs(cli_home)
+        write_config(cli_home, 'exclude = ["gnuplot"]\n')
+
+        proc = run_loadout(cli_home, "resolve", "@shared-all")
+        failures += check("resolve @shared-all exits 0 under a policy", proc.returncode, 0)
+        failures += check("resolve @shared-all drops the excluded package", "gnuplot" in proc.stdout, False)
+
+        proc = run_loadout(cli_home, "resolve", "gnuplot")
+        failures += check("resolve of a demanded excluded package exits 1", proc.returncode, 1)
+        failures += check(
+            "that error names the policy and its source",
+            "excluded by the persistent policy" in proc.stdout + proc.stderr
+            and FILE_SOURCE in proc.stdout + proc.stderr,
+            True,
+        )
+
+        proc = run_loadout(cli_home, "resolve", "@shared-all", "--skip", "micro")
+        failures += check("policy and --skip both subtract", "gnuplot" in proc.stdout or "micro" in proc.stdout, False)
+
+        # The env var is the second source: a distribution can set the policy
+        # without touching the user's config.
+        bare_home = os.path.join(tmp, "cli-bare")
+        os.makedirs(bare_home)
+        proc = run_loadout(bare_home, "resolve", "@shared-all", extra_env={ENV_SOURCE: "gnuplot"})
+        failures += check("LOADOUT_CFG_EXCLUDE drops the package", "gnuplot" in proc.stdout, False)
+
+        # ...and the absence above must be the policy, not a package the
+        # @shared-all sweep never had.
+        proc = run_loadout(bare_home, "resolve", "@shared-all")
+        failures += check("with no policy the package is listed", "gnuplot" in proc.stdout, True)
+
+        # A dry run installs nothing, so the sweep is cheap; the listing must
+        # come from the resolved set (not a second resolution), which is what
+        # keeps the policy note to one.
+        proc = run_loadout(cli_home, "install", "--dry-run", "@shared-all")
+        combined = proc.stdout + proc.stderr
+        failures += check("install --dry-run exits 0 under a policy", proc.returncode, 0)
+        failures += check("install --dry-run drops the excluded package", "gnuplot" in proc.stdout, False)
+        failures += check(
+            "install --dry-run notes the drop exactly once", combined.count("note: excluded by policy"), 1
         )
 
     print(f"\n{'OK' if not failures else 'FAILED'}: config-toml-exclude")
