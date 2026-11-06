@@ -13,6 +13,48 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (11): release 2026.11.3 -- interpreter contract, exclusions, multi-dist open-eda
+
+**Released** `2026.11.3` (signed tag, 4 assets, `origin/main == bdf92d1`), which
+ships issues #13, #14 and #16 together: persistent `config.toml exclude`,
+open-eda-file-tools as one package over three uv distributions with
+`def-dump-instances`, and the python-tool interpreter contract
+(`requires_python`, resolver abort, venv ABI probe).
+
+**Gate cost, measured** (the number that keeps coming up): T1 43 s; T2 800 s;
+T3 1793 s; release gates ~430 s when the payload changed, 19 s cached. The
+all-or-nothing payload key on the smoke and malware caches is what turns a
+one-wheel change into a full retest.
+
+**Follow-ups this session opened, in value order:**
+
+1. **Per-artifact smoke and malware-scan caches.** `build/scan-for-malware`
+   keys on `_scan_source_fingerprint` (all of the payload), so one wheel
+   re-extracts 11 GiB and rescans 75k files; the smoke probes all 340 binaries
+   for the same reason. Detection is a function of (bytes, rules, engine), so
+   per-file digests under a rules/engine fingerprint are sound, and
+   `payload-abi-scan-v1` / `installed-sizes` already use exactly that shape.
+2. **Capture env sources as install deps.** `install-env-*` are `--deps auto`,
+   whose fingerprint is test script + harness + captured PAYLOAD files. `envs/`
+   is not captured, so an `envs/zsh/global/zshrc` edit leaves `install-env-zsh`
+   CACHED PASS -- fast, but untested. Call `_dep_capture_add` for the env
+   sources the installer copies.
+3. **Tk runtime coverage is now an explicit gap.** `wish` moved to `NO_EXEC`
+   (ldd-only, no launch): its default probes started the Tk event loop, which
+   flashed a window on every smoke run while the timeout-as-OK rule scored it
+   green. The payload's `wish` cannot load `tk.tcl` on the dev host
+   (`//zipfs:/app/tk_library` candidates, `/tmp/loadout-tk-instdir-9.0.3/...`),
+   and the `tkinter` probe calls `tkinter.Tcl()`, which never runs `Tk_Init`.
+   Needs an EL8 investigation; not a release gate.
+4. **`tests/run-all --container` prints `DEP_GROUP[$1]: unbound variable`** after
+   the summary: four tests use `--deps container`, and `DEP_GROUP` has no such
+   entry. Harmless (container verdicts are keyed by the container sidecar), but
+   it is noise on every class-C run.
+5. **`/tmp` is a 16 GB tmpfs** and the malware scan defaults there: it ENOSPC'd
+   at 76% full and the release reported "detections (or failed)". Run release
+   work with `TMPDIR=/var/tmp`. `tests/install-readonly-tree` also leaked a
+   6.2 GB read-only tree into `/tmp` from a PASSING run.
+
 ## 2026-11-06 (10): python-tool interpreter contract declared, asserted, gated
 
 Issue `smprather/engineering-loadout#16`. The bundled CPython minor a
