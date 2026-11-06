@@ -13,6 +13,27 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (7): payload ABI gate caches findings and scans in parallel
+
+Class A (test only). `tests/payload-interpreter-abi` decompressed ~3 GB and
+spawned `readelf` once per ELF on every payload/loader/build edit -- 71 s, and
+a one-line registry edit counted as a payload edit.
+
+- Findings (ELF `DT_NEEDED`, shebang interpreter picks) are computed per
+  payload ARTIFACT and cached on its (mtime_ns, size) in
+  `~/.cache/engineering-loadout/payload-abi-scan-v1.json`; a registry edit
+  re-runs the gate but re-reads nothing. `ANALYSE_VERSION` guards the
+  derivation itself.
+- Artifacts are decompressed and analysed in parallel (up to 8 threads), and
+  the scan no longer holds every decompressed file in memory -- only findings.
+- The three audits are unchanged; the registry / `_BUNDLED_PY` / build-script
+  checks are untouched.
+
+Measured: 71 s -> 11.4 s cold, 0.31 s warm; touching one 118 MB artifact
+re-reads only that artifact (3.4 s). The gate still fails on synthetic
+defects -- a payload ELF whose NEEDED says `libpython3.14` and a shebang
+`env python3.10` were both reported, including from a warm cache.
+
 ## 2026-11-06 (6): Tier 1 runs in parallel; the size gate reuses measurements
 
 Class A (tests + build tooling + docs). Follow-up to (5): the cache made a
