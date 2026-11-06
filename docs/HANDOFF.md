@@ -13,6 +13,38 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (9): feature branch merged; suite state after the speed work
+
+**Merge `aca8756`** -- `issue-13-persistent-exclude` + `main`; both branches
+and `merge-issue-13` point at it, working tree clean, **16 commits unpushed**.
+Conflicts: `AGENTS.md` (both sides rewrote the same two long lines -- main's
+cache/parallel-suite text kept, the branch's two test names re-inserted in the
+tests list and the testing-tiers line), `docs/HANDOFF.md` (the feature entry
+kept as (8)), `assurance/release-timings.tsv` (union of both sides,
+timestamp-ordered, duplicates dropped). `tests/run-all` auto-merged;
+`config-toml-exclude` regained `--deps payload+loader` (the branch carried it
+before the group existed, then dropped it).
+
+Verified on the merge: `tests/run-all --fast` green (76 s, including
+`config-toml-exclude`, `unit-resolver`, `docs-sync`);
+`tests/install-exclude-policy` PASS; `tests/install-split-shared-envs` PASS in
+3m31s with `TMPDIR=/var/tmp` -- a first run on /tmp's 16 GB tmpfs died with
+ENOSPC, which is scratch sizing, not code.
+
+**Suite state** (entries 4-7): Tier 1 caches per dependency group
+(`DEP_GROUP`; undeclared tests keep `all`), runs min(4, nproc) tests in
+parallel, and warms to ~4 s unchanged / ~18 s after an env-only edit;
+`gen-installed-sizes` caches measurements and `payload-interpreter-abi` caches
+findings, both keyed on source mtime+size.
+
+**Still owed:** Tier 3 `tests/run-all --container` before the next release
+(this merge is class C). The retired `lefdef-tools` cleanup is still manual
+(entry 2026-11-05): an existing tree keeps `bin/lefdef-tools` and
+`share/uv/tools/lefdef-tools/`; there is no content-gated remover (pyright and
+openssh have precedents) and no user-facing migration note.
+
+`stash@{0}` is fully redundant (its zsh work is committed) and can be dropped.
+
 ## 2026-11-06 (8): persistent package exclusions
 
 `config.toml` carries an `exclude` list (`LOADOUT_CFG_EXCLUDE` is the
