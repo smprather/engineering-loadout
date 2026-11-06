@@ -102,10 +102,11 @@ never tcsh's `which` (that answers with an alias of the same name first). A
 tcsh login starts the target as a login shell. The rules are in the top-level
 README, "Choosing your interactive shell".
 
-- **`~/.login` stops applying.** A tcsh login reads `~/.tcshrc` first and
-  `~/.login` after it, so a login that switches never gets there. It is csh
-  syntax the target could not run anyway: move what you need into the target's
-  config layer.
+- **`~/.login` stops applying, unless the target is tcsh/csh.** A tcsh login
+  reads `~/.tcshrc` first and `~/.login` after it, so a login that switches
+  never gets there; a tcsh or csh target starts as a login shell and reads
+  `~/.login` itself. Any other target could not run its csh syntax anyway: move
+  what you need into the target's config layer.
 - **Plain paths only.** csh re-parses a command substitution after putting a
   variable's value into it, so the tcsh rc also ignores a preference, a
   resolved path (shared prefix or PATH entry) or an inherited `SHELL` with any

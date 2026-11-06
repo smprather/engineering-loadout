@@ -1868,7 +1868,6 @@ sha256  6a630d203a314d798078275af126b3926d5cade9591c18560384bb14847a3dfc  payloa
 sha256  6a645fa7e24ce8e728db3837396b1bcdbd6e789ccf7b2249e748b3b669da36e2  payload/treesitter/vendor/nvim-treesitter/tests/query/injections/http/injections.http
 sha256  6a90a0bc827574aea7fb06cb1ac34f841c5b57e273a63b6102b9cafe08b9f43a  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/xresources/locals.scm
 sha256  6a90a0bc827574aea7fb06cb1ac34f841c5b57e273a63b6102b9cafe08b9f43a  payload/treesitter/vendor/nvim-treesitter/runtime/queries/xresources/locals.scm
-sha256  6a9dfb1b75e8c4cb9408f5c2f613e03dc244f62604add72f966704dcc1b7577a  payload/installed-sizes.json
 sha256  6aa33a4c58de3f4f3a0eadeaca1c57df2ee3242d3d5c74a46d762efe5423c80b  payload/treesitter/vendor/nvim-treesitter/tests/indent/capnp_spec.lua
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/squirrel/indents.scm
 sha256  6ab1deca9841f6e6e8ef76751dd874f6070891b92a62e941f7450b7f66a79ef5  payload/treesitter/vendor/nvim-treesitter/runtime/queries/squirrel/indents.scm
@@ -3396,6 +3395,7 @@ sha256  c5455db696b32da99eb0ec3c7ee8b4872e66b60b22ea003866af68a01012d8c6  payloa
 sha256  c5455db696b32da99eb0ec3c7ee8b4872e66b60b22ea003866af68a01012d8c6  payload/treesitter/vendor/nvim-treesitter/runtime/queries/gleam/folds.scm
 sha256  c5497d4f000629c705c4711c8e1f51948352e58751b4e621f19a2fb8c20435e9  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/prisma/highlights.scm
 sha256  c5497d4f000629c705c4711c8e1f51948352e58751b4e621f19a2fb8c20435e9  payload/treesitter/vendor/nvim-treesitter/runtime/queries/prisma/highlights.scm
+sha256  c5535cfdf0e2148ce96edddff451bbd731d1e6a4de512dc00e30a63a9188c3bc  payload/installed-sizes.json
 sha256  c568d3f5ce614a61a122d248768c8327adb0bb7602062909df991f22b685b698  envs/tmux/vendor/plugins/tpm/scripts/update_plugin_prompt_handler.sh
 sha256  c56f9340f6a1e999f411659f0f552abdc9757c0ec6ab25e879a5af60cd501ae0  payload/treesitter/vendor/nvim-treesitter/tests/indent/meson/method.meson
 sha256  c574d9acc6503ad27b37a9acea48f957a8ba7c9c9876cfcb37898931c098ce9d  payload/el8.x86_64.glibc2p28/wheels/anywidget-0.11.0-py3-none-any.whl

@@ -579,7 +579,8 @@ passwd entry):
 | csh or tcsh | `~/.config/tcsh/user/config.csh` | `setenv LOADOUT_CFG_INTERACTIVE_SHELL zsh` |
 
 zsh reads the bash layers, so one line covers bash and zsh logins. A line in
-the other family's file never fires; setting it in both is harmless. For a zsh
+the other family's file never fires. If you set it in both, keep them the same;
+the line in your login shell's layer decides. For a zsh
 target, install `env-zsh` too (`./loadout install env-zsh`; it is not in
 `@envs`), or zsh starts without the loadout config.
 
@@ -622,8 +623,9 @@ every shell started inside that session sees the marker and is left alone:
   `ssh host cmd` and cron never switch.
 
 From a csh/tcsh login, `~/.login` runs after `~/.tcshrc`, so it stops applying
-once the switch happens. It is csh syntax the target could not run anyway; move
-what you need into the target's config layer.
+once the switch happens, unless the target is tcsh/csh: that target starts as a
+login shell and reads `~/.login` itself. Any other target could not run its csh
+syntax anyway; move what you need into the target's config layer.
 
 tmux panes start `$SHELL` as a login shell. A server started before you set the
 variable switches each new pane. A server started from a switched shell runs
@@ -634,6 +636,18 @@ panes keep the old shell. To move it on without killing the server:
 tmux set -g default-shell /path/to/new/shell   # new panes start the new shell
 tmux set-environment -gu LOADOUT_SHELL_EXEC    # new panes start the old shell, which then switches
 ```
+
+Known limits:
+
+- An interactive shell with no marker in its environment can still switch: one
+  that a program starts under a PTY (expect, pexpect), or a terminal that starts
+  a non-login shell, launched from a desktop session or a systemd user service.
+  Both export your passwd shell as `SHELL`, so the shell counts as a top-level
+  spawn.
+- A non-login origin gives a non-login target, and a non-login bash target gets
+  no `/etc/profile.d`, like any non-login loadout bash.
+- A script given to `bash -i` or `zsh -i` (or a `#!/bin/bash -i` script) runs
+  and does not switch. Whether `tcsh -i FILE` switches is unverified.
 
 Coming from `LOADOUT_CFG_PREFERRED_BASH`: it re-exec'd every interactive bash,
 so a typed `bash` or `t` (`exec bash`) landed in the preferred bash. A typed

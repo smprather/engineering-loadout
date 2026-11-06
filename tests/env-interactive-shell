@@ -307,7 +307,7 @@ for _v in bin/zsh "zsh -l"; do
     expect_probe "$out" bash "" "$BASH_BIN" "o: rejected preference [$_v]"
 done
 
-# --- p [13]: SHELL=/bin/sh (cron, systemd) is not a top-level spawn ------------
+# --- p [13]: SHELL=/bin/sh (cron) is not a top-level spawn ---------------------
 set_pref "$ZSH_BIN"
 case $(readlink -f /bin/sh) in
     */bash)

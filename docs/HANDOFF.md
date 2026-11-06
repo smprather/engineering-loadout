@@ -45,6 +45,7 @@ rules: README "Choosing your interactive shell".
 | 7, Settings table + gate | `534f8e7` | one Settings table in `envs/bash/README.md`; `tests/docs-sync` requires every defined setting documented |
 | 8, Tier 3 | `e150665`, `c6ce7e1` | bash keeps the documented function list on a first login and silences `ps` where procps is absent; `tests/interactive-shell-almalinux8` |
 | 9, close-out | `e2eeaca`, this entry | spec rev 3, doc-accuracy fixes, the docs/TMUX.md migration paragraph (D9) |
+| final review | `4b7153e`, `e167e8c`, `d6c4237`, then the docs commit | spec rev 4: `bash -i FILE`/`zsh -i FILE` no longer switch (bash < 5.2 reads `/proc/$$/cmdline`); doctor notes a PATH-found target; the Settings gate requires a table row; doc corrections |
 
 Interleaved on main, for context only (another agent's work, not part of this
 plan): `e759592`, `7c86657`, `85ff7c9`, `ae682c4` (lef-tools/def-tools), then
@@ -117,13 +118,47 @@ as a single-instance caveat in README "Choosing your interactive shell".
    inherited ones; question whether it should run there at all, or only on a
    re-source in the same shell.
 4. `tests/run-all` caches a container test's SKIP (exit 0) as a PASS
-   (`interactive-shell-almalinux8`, `private-state-two-users`).
+   (`interactive-shell-almalinux8`, `private-state-two-users`). Fix before the
+   next class-C release.
 5. D3, single-instance terminals: depends on step 3 of the manual check.
 6. A change to any file under `envs/`, a README included, changes
    `payload/installed-sizes.json` (env sources are sized as whole trees), so it
    needs `build/gen-installed-sizes` and then `build/gen-content-manifest`
    before the commit. Only the T1 sync gate catches it; consider a pre-commit
    check.
+7. The wezterm resolver step still falls back to
+   `${LOADOUT_CFG_SHARED_PREFIX:-$HOME/.local}`, not the canonical
+   `~/.local/share/loadout`.
+8. `unset_bashrc_local_vars` is bash-only (`compgen`); add
+   `[ -n "${BASH_VERSION:-}" ] || return 0` before any zsh caller appears.
+9. `envs/zsh/zshrc`'s root-vs-home `[[ ... != ${_home_*:A} ]]` has an unquoted
+   RHS, so a HOME with glob characters mis-compares.
+10. `tests/env-interactive-shell` depends on `ps` with no SKIP; use
+    `readlink /proc/$$/exe` like Tier 3.
+11. No regression case for the bash→bash non-login `--init-file` exec form
+    (verified by hand, again after `4b7153e`).
+12. tcsh: no tcsh-origin cases for symlink-to-self or an unknown basename (no
+    `-l`); the inherited-SHELL charset guard and the helpers-dir half are
+    untested; `envs/tcsh/README.md` should name the config-root path among the
+    guarded values.
+13. AGENTS.md's interactive-shell paragraph overclaims ("every value shape";
+    the Python mirror is not in tc-ae's comparison). Feed tc-ae's value list to
+    `_resolve_interactive_shell` too (R4's shared case list).
+14. doctor: no no-false-positive test for "set in the passwd-family layer";
+    `tests/doctor-shadow-audit`'s `(EL rc: no)` branch reuses `$out` from an
+    earlier run; `_env_installed` checks only the first root's `global/`
+    (false findings under a manual shared config root).
+15. `tests/install-env-xfce4-terminal` checks XML properties by name only, not
+    by value.
+16. `tests/interactive-shell-almalinux8`: `timeout` sits mid-pipeline (a hang
+    shows as `got []`), and nothing bounds the install or the `docker run`.
+17. T3-f (EL8 bash 4.4 given a script runs it; the only gate on the
+    `/proc/$$/cmdline` half of the script-operand guard) was written in
+    `4b7153e` and has not run yet: the next `tests/run-all --container` is its
+    first run. The mechanism was checked by hand in `almalinux:8.10` (HEAD
+    switched all four script shapes, the fix ran them; controls still switch).
+18. zsh's `ZSH_SCRIPT` guard is checked on zsh 5.9 (dev host, the payload zsh)
+    only. EL8's system zsh 5.5.1 is unchecked; no local image has it.
 
 ## 2026-11-05 (1): `lef-tools` + `def-tools` (open-eda-file-tools distributions 2 and 3)
 

@@ -17,9 +17,10 @@ set +x
 if [[ "${LOADOUT_BASHRC_SOURCED:-0}" == "1" ]]; then
     return 0 2>/dev/null || exit 0
 fi
-# unset first to strip from environment (the preferred-bash re-exec passes it as
-# LOADOUT_BASHRC_SOURCED=0, which lands it in the exported env); re-setting without
-# export after unset makes it shell-local so child processes don't inherit it.
+# unset first to strip from environment (the bash -> bash LOADOUT_CFG_INTERACTIVE_SHELL
+# exec of a non-login origin runs `LOADOUT_BASHRC_SOURCED=0 exec ... --init-file`,
+# which lands it in the exported env); re-setting without export after unset makes
+# it shell-local so child processes don't inherit it.
 unset LOADOUT_BASHRC_SOURCED
 LOADOUT_BASHRC_SOURCED=1
 

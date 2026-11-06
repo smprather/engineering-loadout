@@ -2,8 +2,8 @@
 
 Date: 2026-11-05
 Status: implemented on main 2026-11-05 (`6fe25dd`..`c6ce7e1`; rev 3: execution
-rulings folded in, see *Revision notes*). The manual X-session check is still
-open (`docs/HANDOFF.md`).
+rulings folded in; rev 4: final-review corrections, see *Revision notes*). The
+manual X-session check is still open (`docs/HANDOFF.md`).
 Scope: per-user interactive shell choice, without root, without per-terminal config.
 Release class: **C**. The `loadout doctor` findings (D7, csh section) touch
 `loadout_main.py`, and `docs/RELEASE.md` puts anything touching it in class C
@@ -123,7 +123,11 @@ evaluation order: the first is the only work done when the variable is unset
    `[[ $- == *i* && -z ${BASH_EXECUTION_STRING:-} ]]`, zsh
    `[[ -o interactive && -z ${ZSH_EXECUTION_STRING:-} ]]` (rev 3: not
    `-o shinstdin`, which is off throughout zsh's startup files), tcsh `$?prompt`
-   (`tcsh -i -c` does not set it, `tests/install-env-tcsh:12-13`);
+   (`tcsh -i -c` does not set it, `tests/install-env-tcsh:12-13`); **and
+   (rev 4) was not given a script**: zsh `-z ${ZSH_SCRIPT-}`; bash a non-dash
+   `$0` equal to `${BASH##*/}` (bash >= 5.2 sets `$0` to the script for the
+   startup files) and, below 5.2, no script operand in `/proc/$$/cmdline`
+   (`loadout_bash_argv_has_script`); tcsh unchanged;
 4. this is a top-level spawn: the shell is a login shell **or**
    `realpath(running shell) == realpath("$SHELL")` with `${SHELL##*/}` ≠ `sh`,
    where only an inherited (exported) `SHELL` counts (rev 3);
@@ -139,9 +143,11 @@ Login-ness alone is not enough either: `command-login-shell` defaults to `FALSE`
 in the shipped 1.0.4, and the terminal prefers `$SHELL` over the passwd shell
 (`terminal-screen.c:734-755`), so a window may be spawned non-login from a
 session whose `$SHELL` equals the passwd shell — the `$SHELL` comparison covers
-that case. The `sh` exclusion exists because cron and systemd set
-`SHELL=/bin/sh`, which resolves to bash on EL (`/bin/sh -> bash`). Without it,
-an interactive bash that cron-driven expect spawns under a PTY would match.
+that case. The `sh` exclusion exists because cron sets `SHELL=/bin/sh`, which
+resolves to bash on EL (`/bin/sh -> bash`). Without it, an interactive bash that
+cron-driven expect spawns under a PTY would match. systemd does not (rev 4; rev
+2 said it did): a user service gets the passwd shell as `SHELL`, so a PTY-driven
+shell there is the accepted residual below.
 
 The command-string half of condition 3 is not optional. `$SHELL -i -l -c CMD` is
 interactive and login, so it passes every other condition, and an exec would
@@ -153,10 +159,10 @@ plain `zsh -i`). rev 2's zsh guard, `shinstdin`, is off in the rc in both
 cases, so it would have blocked every zsh origin (rev 3).
 
 Non-interactive shells never exec (`bash -c`, scripts, `ssh host cmd`), and
-neither do interactive shells given a command. What remains is a PTY-driven
+neither do interactive shells given a command or (rev 4) a script. What remains is a PTY-driven
 interactive shell with no command (expect `spawn bash`, pexpect) started from
 a context that has no marker. The marker covers every such shell spawned from a
-switched session, and the `sh` exclusion covers cron and systemd. Anything
+switched session, and the `sh` exclusion covers cron. Anything
 beyond that is accepted and documented, not claimed impossible.
 
 Residual gap, accepted: a terminal that spawns a *non-login* shell, ignores
@@ -243,7 +249,8 @@ files, which is bash→zsh (EL's `/etc/zprofile` sources `/etc/profile`) and
 bash→bash. EL's `/etc/profile` is idempotent: `pathmunge` checks before adding,
 and the profile.d snippets re-initialize. Across the csh/sh boundary the files
 are disjoint, so nothing is duplicated, and a zsh origin has not yet run its
-own.
+own. Within the csh family it is duplicated again (rev 4): a tcsh→tcsh (or
+csh) login switch runs `/etc/csh.cshrc` and `/etc/csh.login` in both shells.
 
 The exec still runs before the shipped rc files touch PATH (`bashrc:189` vs
 `global/bashrc:28-30`; `zsh/global/zshrc:12` vs `:45-64`; `tcsh/global/tcshrc:24`
@@ -253,9 +260,10 @@ directs it there), and whatever they export reaches the target along with
 everything else exported.
 
 Not recoverable: a tcsh origin's `~/.login` runs *after* `~/.tcshrc`, so a
-tcsh→X exec skips the user's own `~/.login`. It is csh syntax, so the target
-could not run it anyway. This is documented: move what you need into the
-target's config layer.
+tcsh→X exec skips the user's own `~/.login`, unless the target is tcsh/csh
+(rev 4): that target is a login shell itself and runs `~/.login`. For any other
+target it is csh syntax, which the target could not run anyway. This is
+documented: move what you need into the target's config layer.
 
 Residual: a non-login origin (a terminal that does not start login shells, see
 D8) gives a non-login target, and a non-login bash target gets no profile.d.
@@ -297,7 +305,9 @@ exactly the dead-switch class that check exists to catch
 shell that sessions *start* in, which is the passwd shell:
 `~/.config/tcsh/user/config.csh` for csh/tcsh, and `~/.config/bash/user/config.sh`
 for bash and zsh (zsh reads the bash layers). A line only in the other family's
-layer never fires; setting it in both is harmless. `loadout doctor` checks this
+layer never fires. Setting it in both is not harmless when the two differ (rev
+4): the login shell's layer decides the switch, and the target family's layer
+then re-exports its own value, so keep them the same. `loadout doctor` checks this
 (D7). The "one documented line" in Goals means one line in the login shell's
 layer.
 
@@ -550,7 +560,8 @@ is the required "don't rule out other shells" property.
   switching path). That is tens of milliseconds, and it is the only reason a
   terminal-side accelerator could ever be worth revisiting.
 - The system login init runs twice for bash→zsh and bash→bash login switches
-  (D4). It is idempotent on EL.
+  (D4). It is idempotent on EL. A tcsh→tcsh (or csh) login switch runs the csh
+  system init, `/etc/csh.cshrc` and `/etc/csh.login`, twice too (rev 4).
 - The shipped layers do no PATH work before the exec, and the target's loadout
   rc runs once (D4). User config layers may do PATH work, and what they export
   reaches the target. `path_modify`'s lack of dedupe
@@ -680,6 +691,34 @@ gates change.
 - Doctor output formatting.
 
 ## Revision notes
+
+rev 4 (final review, 2026-11-05), from the whole-branch review:
+
+- D2's "cron and systemd set `SHELL=/bin/sh`" was wrong for systemd: its user
+  services get the passwd shell as `SHELL` (as desktop launchers do), so a
+  PTY-driven shell started there is the accepted residual, not excluded.
+  Corrected in D2.
+- Script-operand guard (D2 condition 3): `bash -i FILE`, `zsh -i FILE` and
+  `#!/bin/bash -i` scripts read the rc and then run FILE, and the exec used to
+  drop FILE. zsh checks `ZSH_SCRIPT`. bash compares a non-dash `$0` with
+  `${BASH##*/}`: from 5.2 `$0` is FILE during the startup files, a dash argv0
+  is never a script, and for one `$BASH` comes from passwd. Below 5.2 (EL8's
+  4.4 and EL9's 5.1) `$0` still says `bash` there, so the review's `$0` rule
+  alone left EL8 switching (measured); `loadout_bash_argv_has_script` reads the
+  operand off `/proc/$$/cmdline` with the read builtin, no fork. tcsh is
+  unchanged; `tcsh -i FILE` is unverified.
+- `~/.login` (D4): a tcsh/csh target runs it, so it stops applying only for a
+  target outside the csh family; a tcsh→tcsh switch runs the csh system init
+  twice (D4, Costs).
+- docs-sync: a defined setting needs a row in `envs/bash/README.md`'s Settings
+  table (first cell, whole word), not merely a mention anywhere in the docs.
+- D6 against the "second source of truth" anti-goal: the two family layers can
+  hold different values. The login shell's layer decides the switch, and after
+  it the target family's layer re-exports its own value, so the docs now say to
+  keep them the same instead of calling both "harmless". doctor already reports
+  a value the login shell's layers do not set.
+- doctor resolves against its own (finished) PATH, the shells against the
+  inherited one; for a PATH match it now adds a note saying so (D7).
 
 rev 3 (execution, 2026-11-05), from controller rulings made while the plan ran:
 
