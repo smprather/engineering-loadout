@@ -282,7 +282,6 @@ OpenSSH for those.
 | btm | bin | 0.14.9 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support, plus the bundled theme set and btop-theme-tour |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
-| lefdef-tools | python-tool | v2026.9.0 | lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend) |
 | open-eda-file-tools | python-tool | v2026.10.1-5-gebdd925 | open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs |
 | lef-tools | python-tool | v2026.11.2-1-g515a151 | lef-tools — parse cell LEF libraries into typed macros, pins, ports and rectangles; Rust-backed, geometry stays in LEF microns |
 | def-tools | python-tool | v2026.11.2-1-g515a151 | def-tools — parse and query DEF designs: placed instance bboxes, net shapes, binary DEF cache, SDC clock walks, IO policy configurator |

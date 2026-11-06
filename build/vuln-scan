@@ -103,7 +103,7 @@ def scan_lockfiles(tmp_dir):
     # --no-resolve: the wheelhouse listing IS the complete closure (offline
     # installs resolve every dependency from it), so transitive resolution adds
     # nothing -- and it hard-fails on first-party wheels that are not on PyPI
-    # (osv-scanner 2.6.0: 'package ... lefdef-tools: not found', exit 127).
+    # (osv-scanner 2.6.0: 'package ... liberty-tools: not found', exit 127).
     # Match exactly the shipped set.
     cmd = [
         osv,

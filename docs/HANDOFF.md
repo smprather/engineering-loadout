@@ -73,10 +73,21 @@ tree also carries uncommitted edits to `envs/tmux/tmux-global.conf` and
 `docs/TMUX.md` from that line of work; nothing here depends on them, and they
 are not staged with these changes.
 
-**Follow-ups.** (1) `lefdef-tools` (separate repo, `v2026.9.0`) is the unsplit
-predecessor of these two projects — same five DEF subcommands plus LEF queries.
-Decide whether it retires once the split tools have shipped; it was left alone
-here because dropping a shipped CLI is a user-facing decision. (2)
+**`lefdef-tools` retired (2026-11-05, same day).** The unsplit predecessor
+(separate repo, `v2026.9.0`; same five DEF subcommands plus LEF queries) is
+gone: registry entry, wheel, `@python-tools-extra` membership, README row,
+rolling-git lists and its `build/currency-state.json` row. `lef-tools` +
+`def-tools` are the replacement.
+
+Nothing prunes an install that already has it: there is no retired-package
+sweep, so an existing tree keeps `bin/lefdef-tools` and
+`share/uv/tools/lefdef-tools/`. Clean up by hand:
+
+```sh
+rm -rf "$prefix/bin/lefdef-tools" "$prefix/share/uv/tools/lefdef-tools"
+```
+
+**Follow-up.**
 `_version_tuple()` parses a describe string as numbers, so a hand-pinned
 dot-version placeholder (`2026.11.2.dev0`) looked like a downgrade against the
 first `git describe` stamp and made `./build/update` exit non-zero **after**

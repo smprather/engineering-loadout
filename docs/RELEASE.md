@@ -123,7 +123,7 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
   the pins are the source of truth, so an unchanged lockfile means an
   equivalent stash. Say so in the release notes if you skip it.
 - **rolling-git** (`open-eda-file-tools`, `lef-tools`, `def-tools`, `text-serdes`,
-  `time-plot`, `lefdef-tools`) — first-party; `./build/update <name>` rebuilds from
+  `time-plot`) — first-party; `./build/update <name>` rebuilds from
   source HEAD when the commit moved, `--rebuild` forces. The ones with a Rust
   extension must run INSIDE the container (`build/build-shell ./build/update <name>`,
   after `build/build-shell build/container-rust`) — `./build/update` refuses on a

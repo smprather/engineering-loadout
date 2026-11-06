@@ -219,38 +219,6 @@
       "description": "liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only",
       "version_url": "https://github.com/smprather/liberty-filter/tags"
     },
-    "lefdef-tools": {
-      "kind": "python-tool",
-      "bins": [
-        "lefdef-tools"
-      ],
-      "wheels": [
-        "lefdef-tools",
-        "click",
-        "rich-click",
-        "rich",
-        "markdown-it-py",
-        "mdurl",
-        "pygments"
-      ],
-      "uv_tool": "lefdef-tools",
-      "rolling_git": "https://github.com/smprather/lefdef-tools.git",
-      "version": "v2026.9.0",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "eda",
-        "lef",
-        "def",
-        "python"
-      ],
-      "depends": [
-        "portable-python",
-        "uv"
-      ],
-      "description": "lefdef-tools — fast LEF/DEF parsing and query tools (Rust backend)"
-    },
     "open-eda-file-tools": {
       "kind": "python-tool",
       "bins": [
@@ -3893,7 +3861,7 @@
         "librelane",
         "xschem"
       ],
-      "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/open-eda-file-tools/lef-tools/def-tools/lefdef-tools are reachable by name or their own groups"
+      "description": "EDA tools: waveform viewing, layout viewing, RTL simulation. The older EDA packages (ngspice, spice-subckt-rc-reduce, espresso) still live in @scientific, and surfer/open-eda-file-tools/lef-tools/def-tools are reachable by name or their own groups"
     },
     "@gui-suite": {
       "kind": "group",
@@ -3944,7 +3912,8 @@
         "text-serdes",
         "pygwalker",
         "open-eda-file-tools",
-        "lefdef-tools"
+        "lef-tools",
+        "def-tools"
       ],
       "description": "Optional Python tools installed via uv tool install"
     },
