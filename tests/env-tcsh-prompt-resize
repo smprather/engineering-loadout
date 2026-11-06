@@ -23,6 +23,8 @@ TMUX_BIN=$(command -v tmux || true)
 STARSHIP_BIN=$(command -v starship || true)
 cleanup() {
     [ -z "$TMUX_BIN" ] || "$TMUX_BIN" -L "$SOCK" kill-server 2>/dev/null || true
+    # tmux leaves the socket file behind when the server exits.
+    rm -f "${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)/$SOCK"
     chmod -R u+w "$T" 2>/dev/null
     rm -rf "$T"
 }

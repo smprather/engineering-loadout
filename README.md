@@ -639,11 +639,12 @@ tmux set-environment -gu LOADOUT_SHELL_EXEC    # new panes start the old shell, 
 
 Known limits:
 
-- An interactive shell with no marker in its environment can still switch: one
-  that a program starts under a PTY (expect, pexpect), or a terminal that starts
-  a non-login shell, launched from a desktop session or a systemd user service.
-  Both export your passwd shell as `SHELL`, so the shell counts as a top-level
-  spawn.
+- Automation that drives an interactive shell under a PTY (expect, pexpect)
+  switches too when it runs outside a switched session, for example from a
+  desktop session or a systemd user service: both export your passwd shell as
+  `SHELL`, so the shell looks like a top-level spawn. Inside a switched session
+  the marker stops it. Give such tools a shell with its rc disabled
+  (`bash --norc`, `zsh -f`, `tcsh -f`).
 - A non-login origin gives a non-login target, and a non-login bash target gets
   no `/etc/profile.d`, like any non-login loadout bash.
 - A script given to `bash -i` or `zsh -i` (or a `#!/bin/bash -i` script) runs

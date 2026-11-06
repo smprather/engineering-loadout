@@ -47,8 +47,12 @@ mkdir -p "$H"
 TMUX_SOCKETS=""
 cleanup() {
     # Only the private servers this test started; never the default socket.
+    # tmux leaves its socket file behind when a server exits, so remove it too.
+    # The servers run under env -i, so TMUX_TMPDIR is unset and the socket dir
+    # is tmux's default.
     for _s in $TMUX_SOCKETS; do
         env -i PATH=/usr/bin:/bin "$TMUX_BIN" -L "$_s" kill-server >/dev/null 2>&1 || true
+        rm -f "/tmp/tmux-$(id -u)/$_s"
     done
     chmod -R u+w "$T" 2>/dev/null || true
     rm -rf "$T"

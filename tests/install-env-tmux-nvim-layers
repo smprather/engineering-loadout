@@ -19,6 +19,8 @@ TEST_ROOT=$(mktemp -d "$tmp_root/loadout-env-two-layers.XXXXXX")
 TEST_TMUX_SOCK="loadout-ffm-test-$$"
 cleanup() {
     tmux -L "$TEST_TMUX_SOCK" kill-server 2>/dev/null || true
+    # tmux leaves the socket file behind when the server exits.
+    rm -f "${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)/$TEST_TMUX_SOCK"
     # Managed trees are installed read-only (and backups copy those modes);
     # re-open them so rm -rf can remove the test root.
     chmod -R u+w "$TEST_ROOT" 2>/dev/null || true

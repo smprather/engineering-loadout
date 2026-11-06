@@ -31,7 +31,7 @@ during execution): `docs/superpowers/specs/2026-11-05-interactive-shell-design.m
 plan: `docs/superpowers/plans/2026-11-05-interactive-shell.md`. User-facing
 rules: README "Choosing your interactive shell".
 
-**What landed** (main, not pushed):
+**What landed** (main, pushed to origin 2026-11-06):
 
 | Task | Commits | Change |
 |---|---|---|
@@ -45,7 +45,12 @@ rules: README "Choosing your interactive shell".
 | 7, Settings table + gate | `534f8e7` | one Settings table in `envs/bash/README.md`; `tests/docs-sync` requires every defined setting documented |
 | 8, Tier 3 | `e150665`, `c6ce7e1` | bash keeps the documented function list on a first login and silences `ps` where procps is absent; `tests/interactive-shell-almalinux8` |
 | 9, close-out | `e2eeaca`, this entry | spec rev 3, doc-accuracy fixes, the docs/TMUX.md migration paragraph (D9) |
-| final review | `4b7153e`, `e167e8c`, `d6c4237`, then the docs commit | spec rev 4: `bash -i FILE`/`zsh -i FILE` no longer switch (bash < 5.2 reads `/proc/$$/cmdline`); doctor notes a PATH-found target; the Settings gate requires a table row; doc corrections |
+| final review | `4b7153e`, `e167e8c`, `d6c4237`, `db3106b` | spec rev 4: `bash -i FILE`/`zsh -i FILE` no longer switch (bash < 5.2 reads `/proc/$$/cmdline`); doctor notes a PATH-found target; the Settings gate requires a table row; doc corrections |
+| cleanup | the commit after `db3106b` | `tests/env-interactive-shell`, `tests/env-tcsh-prompt-resize` and `tests/install-env-tmux-nvim-layers` remove their private tmux socket files on exit (tmux leaves the socket behind when a server exits; 72 stale ones had piled up in `/tmp/tmux-$UID`), and `build/secret-scan` keeps its default report in a `TemporaryDirectory` (it leaked one `.loadout-secret-scan-*` dir per run; 57 had piled up). The stale leftovers were removed by hand. |
+
+Final gate on the pushed tree: `tests/run-all --container` at `db3106b`,
+**91/91 PASS in 1927 s** (2026-11-06 04:55-05:27 UTC), including
+interactive-shell-almalinux8 with T3-a..f and R7.
 
 Interleaved on main, for context only (another agent's work, not part of this
 plan): `e759592`, `7c86657`, `85ff7c9`, `ae682c4` (lef-tools/def-tools), then
@@ -154,9 +159,11 @@ as a single-instance caveat in README "Choosing your interactive shell".
     shows as `got []`), and nothing bounds the install or the `docker run`.
 17. T3-f (EL8 bash 4.4 given a script runs it; the only gate on the
     `/proc/$$/cmdline` half of the script-operand guard) was written in
-    `4b7153e` and has not run yet: the next `tests/run-all --container` is its
-    first run. The mechanism was checked by hand in `almalinux:8.10` (HEAD
-    switched all four script shapes, the fix ran them; controls still switch).
+    `4b7153e` and has since passed at `db3106b`: alone in 6 s, and inside the
+    full `tests/run-all --container` (91/91, 1927 s). The guard still misreads
+    bash's undocumented single-dash long options (`-norc`, `-noprofile`,
+    `-rcfile F`, `-posix`) as option clusters, so `bash -norc -i FILE` on
+    bash < 5.2 switches and drops FILE; rare, not fixed.
 18. zsh's `ZSH_SCRIPT` guard is checked on zsh 5.9 (dev host, the payload zsh)
     only. EL8's system zsh 5.5.1 is unchecked; no local image has it.
 
