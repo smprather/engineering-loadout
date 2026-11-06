@@ -13,6 +13,28 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (3): release 2026.11.2 -- open-eda-file-tools is one package
+
+**PUBLISHED and verified 2026-11-06** (tag on `988e6c9`, Good ED25519
+signature, tag binds `sha256sums.txt sha256 54fbce69...`, which matches the
+published asset; four assets, not a draft; stash 344538464 bytes, sha256 equal
+to the local one; `origin/main` = tag commit). Gates on `988e6c9`:
+`tests/run-all --container` `All tests passed.` (1919 s; 92/92, nothing cached
+or skipped; Tier 3 smoke 317 binaries OK, 23 skipped, plus dynamic analysis,
+private-state-two-users and interactive-shell-almalinux8 PASS);
+`build/release` 164 s after a 233 s dry run (malware scan CLEAN -- content-cached
+from the dry run, 0 detections across 75,487 files, YARA-Forge 20261103 +
+ClamAV 28175; smoke 339 binaries OK, 1 skipped; vuln-scan CLEAN; secret scan
+tree + history CLEAN; manifest export 4584 files).
+
+Class C (registry + installer + payload). Carries the merge in (2):
+`open-eda-file-tools` installs liberty-tools, lef-tools and def-tools from one
+package; the split entries and the absorbed `lefdef-tools` are gone. Currency
+sweep re-run the same day (37 outdated rows, nothing bumped; worklist in the
+2026.11.1 entry). No migration needed for a 2026.11.1 tree: the distributions
+keep the same venv names, so reinstalling `open-eda-file-tools` updates all
+three; the retired package names no longer resolve.
+
 ## 2026-11-06 (2): open-eda-file-tools is one package, three distributions
 
 **Ruling:** `lefdef-tools` was absorbed into `open-eda-file-tools` upstream
@@ -35,7 +57,7 @@ package and asserts four launchers and three tool venvs.
 
 Verified so far: unit-resolver 98/98, registry-integrity 21/21,
 wheelhouse-closure OK (14 python-tools), install-open-eda-file-tools PASS,
-docs-sync 9/9. Release 2026.11.2 carries the change.
+docs-sync 9/9. Released as 2026.11.2 (entry 3).
 
 ## 2026-11-06: release 2026.11.1 -- interactive shell selection, split LEF/DEF tools, bundled Python 3.12/3.13
 

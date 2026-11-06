@@ -7847,3 +7847,19 @@
 2026-11-06T08:51:20Z	test:private-state-two-users	2	PASS	mode=container
 2026-11-06T08:51:26Z	test:interactive-shell-almalinux8	6	PASS	mode=container
 2026-11-06T08:51:27Z	test:total	1921	PASS	flags=--container skipped=0
+2026-11-06T08:53:40Z	version table	0.0	PASS	2026.11.2
+2026-11-06T08:53:42Z	malware scan	2.0	PASS	2026.11.2
+2026-11-06T08:53:51Z	checksums	10.5	PASS	2026.11.2
+2026-11-06T08:53:51Z	manifest export	11.1	PASS	2026.11.2
+2026-11-06T08:53:52Z	vulnerability scan	11.9	PASS	2026.11.2
+2026-11-06T08:54:04Z	secret scan	23.4	PASS	2026.11.2
+2026-11-06T08:54:55Z	payload consistency	74.4	PASS	2026.11.2
+2026-11-06T08:57:32Z	binary smoke test	231.4	PASS	2026.11.2
+2026-11-06T08:57:55Z	version table	0.0	PASS	2026.11.2
+2026-11-06T08:57:56Z	binary smoke test	0.4	PASS	2026.11.2
+2026-11-06T08:57:57Z	malware scan	2.0	PASS	2026.11.2
+2026-11-06T08:58:04Z	manifest export	9.0	PASS	2026.11.2
+2026-11-06T08:58:05Z	vulnerability scan	9.7	PASS	2026.11.2
+2026-11-06T08:58:06Z	checksums	10.3	PASS	2026.11.2
+2026-11-06T08:58:10Z	secret scan	14.5	PASS	2026.11.2
+2026-11-06T08:59:10Z	payload consistency	74.3	PASS	2026.11.2
