@@ -13,6 +13,63 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (5): test results cache per dependency group; `--fast` uses it
+
+Class A (tests + docs). Two flaws made every small change pay for the whole
+suite:
+
+1. `--fast` set `CACHE_ACTIVE=0`, so the dev loop never read or wrote the
+   result cache; every `--fast` re-ran all of Tier 1 (175 s here).
+2. Every Tier 1 test was keyed on ONE fingerprint over
+   payload+envs+installer+tests, so one env byte invalidated all of them.
+
+What changed in `tests/run-all`:
+
+- `--fast` uses the cache (`--no-cache` still forces a full run).
+- `run_test NAME --deps <group>[+<group>] ...` keys a test on named roots --
+  `envs`, `payload`, `loader`, `build`, `sonames`, `locks`, `readme`,
+  `stfonts` (`DEP_GROUP`). Each group has its own sidecar, verified once per
+  run and written at the end, including the `--fast` early exit (which
+  previously skipped the write entirely, so a `--fast` run could never warm
+  the cache).
+- `--deps-key FILE` caches a gate whose script lives outside `tests/`: the
+  gen-* `--check` gates (installed-sizes, parser-locks, st-font, README table)
+  use their own generator as the test-script hash, and their inputs/outputs
+  are in the group roots. `content-manifest in sync` and `matches export` stay
+  uncached -- they read git tracking state, which has no fingerprint.
+- The `all` and `container` verdicts are computed once per run, not per test.
+- A FAIL now drops any older PASS for that test, so a failure on unchanged
+  inputs can no longer be masked by the previous run's green.
+
+Measured on this host (Tier 1, 53 tests): cold 178 s; warm unchanged 14 s
+(51 CACHED); `touch envs/zsh/global/zshrc` 49 s with every payload/loader test
+still CACHED; `touch payload/packages.json` 144 s with every env test still
+CACHED. Omitted groups default to `all`, so opting in is what needs review --
+a group that names too little is a stale green, not a fast run.
+
+## 2026-11-06 (4): zsh reads the online-detection cache
+
+Class B (payload env only; installer, registry and package artifacts
+untouched). `envs/zsh/global/zshrc` called `loadout_detect_online`, so every
+fresh zsh login that did not inherit `LOADOUT_ONLINE` paid the TCP probe; bash
+(`envs/bash/global/bashrc`) and tcsh (`envs/tcsh/global/helpers/detect-online`)
+both read the once-per-day verdict. zsh now calls
+`loadout_detect_online_cached`, the function bash uses: it is zsh-safe
+(`setopt LOCAL_OPTIONS KSH_ARRAYS SH_WORD_SPLIT`) and falls back to a live
+probe when there is no `XDG_RUNTIME_DIR`. Everything else is unchanged --
+`LOADOUT_CFG_ONLINE_DETECT` still forces 1/0, `LOADOUT_CFG_ONLINE_CACHE_TTL=0`
+still disables caching, inherited `LOADOUT_ONLINE` still short-circuits.
+
+Verified: `zsh -n envs/zsh/global/zshrc`; the real rc under `zsh -i` in a temp
+HOME (seeded verdict 0 wins over a live online probe; an expired entry
+re-probes); `tests/install-env-zsh` PASS, and its new cache assertions FAIL on
+the old call (`FAIL: seeded online verdict not read from the cache`).
+`payload/installed-sizes.json` regenerated (zshrc 22165 -> 22453 bytes);
+`assurance/release-timings.tsv` gained this run's T1 rows.
+`tests/run-all --fast` green. `tests/run-all` Tier 2 (other than
+install-env-zsh) and the Tier 3 container gates not run for this change -- no
+installer code touched; run them before the next release.
+
 ## 2026-11-06 (3): release 2026.11.2 -- open-eda-file-tools is one package
 
 **PUBLISHED and verified 2026-11-06** (tag on `988e6c9`, Good ED25519
@@ -191,10 +248,12 @@ as a single-instance caveat in README "Choosing your interactive shell".
 
 **Follow-ups.**
 
-1. zsh does not cache the online verdict: `envs/zsh/global/zshrc` calls
+1. ~~zsh does not cache the online verdict: `envs/zsh/global/zshrc` calls
    `loadout_detect_online`, bash calls `loadout_detect_online_cached`, so every
    zsh session that does not inherit `LOADOUT_ONLINE` (each new login) pays the
-   probe instead of reading the once-a-day cache.
+   probe instead of reading the once-a-day cache.~~ **Closed 2026-11-06**:
+   zshrc now calls `loadout_detect_online_cached`; `tests/install-env-zsh`
+   seeds a verdict and asserts the cache is read (it fails on the old call).
 2. D4 residual: a non-login origin gives a non-login target, and a non-login
    bash target gets no `/etc/profile.d` (accepted in the spec; sourcing
    `/etc/bashrc` is out of scope).

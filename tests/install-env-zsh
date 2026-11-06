@@ -84,9 +84,10 @@ assert_no_zsh_noise() {
 $_text" ;;
         esac
     done
-    # Background-job notices ("[9] 2825450", "[9]  + done ..."). loadout_detect_online
-    # backgrounds its probes; zsh reports jobs it owns, so the fan-out has to stay
-    # inside a subshell or every startup prints job control noise.
+    # Background-job notices ("[9] 2825450", "[9]  + done ..."). The online probe
+    # (loadout_detect_online, reached through the cached wrapper) backgrounds its
+    # probes; zsh reports jobs it owns, so the fan-out has to stay inside a
+    # subshell or every startup prints job control noise.
     if echo "$_text" | grep -qE '^\[[0-9]+\]'; then
         fail "$_label: zsh printed background-job notices:
 $_text"
@@ -152,6 +153,33 @@ echo "$out" | grep -qE 'O=[01]'      || fail "LOADOUT_ONLINE not set: [$out]"
 echo "$out" | grep -q  'ED=nvim'     || fail "EDITOR not derived from LOADOUT_CFG_PREFERRED_VI: [$out]"
 echo "$out" | grep -q  'PG=less'     || fail "PAGER not set: [$out]"
 echo "$out" | grep -q  'CT=truecolor' || fail "COLORTERM not set: [$out]"
+
+# --- The auto verdict is read from the on-disk cache, as in bash and tcsh.
+# --- The probe host is a closed port, so a live probe can only say 0; a seeded
+# --- verdict of 1 therefore proves the cache was read. Regression guard for zsh
+# --- calling loadout_detect_online directly, which made every new login pay the
+# --- probe instead of reading the once-a-day verdict.
+CACHE_RT="$TMPHOME/rt"
+PROBE_HOSTS="127.0.0.1:9"
+probe_key=$(printf '%s' "$PROBE_HOSTS" | md5sum | awk '{print $1}')
+mkdir -p "$CACHE_RT/.loadout-net"
+chmod 700 "$CACHE_RT" "$CACHE_RT/.loadout-net"
+printf 'export LOADOUT_CFG_ONLINE_DETECT_HOSTS="%s"\n' "$PROBE_HOSTS" \
+    >"$TMPHOME/.config/bash/user/config.sh"
+printf '1\n' >"$CACHE_RT/.loadout-net/detect-$probe_key"
+out=$(zsh_i_env 'print -r -- "OC=$LOADOUT_ONLINE"' XDG_RUNTIME_DIR="$CACHE_RT")
+assert_no_zsh_noise "online cache" "$out"
+echo "$out" | grep -q 'OC=1' || fail "seeded online verdict not read from the cache (a probe would say 0): [$out]"
+printf '0\n' >"$CACHE_RT/.loadout-net/detect-$probe_key"
+out=$(zsh_i_env 'print -r -- "OC=$LOADOUT_ONLINE"' XDG_RUNTIME_DIR="$CACHE_RT")
+assert_no_zsh_noise "online cache" "$out"
+echo "$out" | grep -q 'OC=0' || fail "seeded offline verdict not read from the cache: [$out]"
+# No cache entry, unreachable host: the probe still runs and reports offline.
+rm -f "$CACHE_RT/.loadout-net/detect-$probe_key"
+out=$(zsh_i_env 'print -r -- "OC=$LOADOUT_ONLINE"' XDG_RUNTIME_DIR="$CACHE_RT")
+assert_no_zsh_noise "online probe" "$out"
+echo "$out" | grep -q 'OC=0' || fail "unreachable probe host did not report offline: [$out]"
+rm -f "$TMPHOME/.config/bash/user/config.sh"
 
 # --- Per-PID history, matching the bash env's model (and what `gah` searches).
 out=$(zsh_i 'echo "HF=$HISTFILE"')
