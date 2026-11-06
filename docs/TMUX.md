@@ -157,15 +157,21 @@ enforced on every draw.
 
 Wheel scrolling moves **three lines per notch** (stock tmux uses five) and
 leaves copy-mode when the bottom is reached (`copy-mode -e`, set on
-`Prefix+[` / `PgUp` / `PgDn`). `j`, `Down` and `G` leave copy-mode only when the
-move actually brings the view back to the live bottom, so a first press while
-already at the bottom (e.g. straight after `Prefix+[`) does not bounce the
-cursor off the visible screen.
+`Prefix+[` / `PgUp` / `PgDn`). `PgDn` and `C-f` also send `scroll-exit-on`
+before `page-down` (`%if`-guarded to tmux >= 3.7, where that copy-mode command
+first appeared), so the bottom exit no longer depends on how the mode was
+entered; an active selection still keeps the mode alive. `j`, `Down` and `G` do
+not consult `scroll_exit`, so they carry their own test: they leave copy-mode
+when the view is already at the live bottom and the cursor is on the last row,
+and when a scroll-back move reaches the bottom. A Down inside the visible
+screen only moves the cursor, and an active selection is never cancelled --
+`v` + `Down` extends it.
 
 The bundled `better-mouse-mode` plugin is **not declared** (dropped 2026-10-20),
 so the managed root-wheel binds above are the ones in effect. They fix a
-first-wheel-up case the plugin gets wrong; the copy-mode binds and `j`/`Down`/`G`
-are unchanged. The plugin remains vendored only as historical payload.
+first-wheel-up case the plugin gets wrong; the copy-mode binds are owned by the
+managed layer, not the plugin. The plugin remains vendored only as historical
+payload.
 
 The managed layer sets `default-terminal` from `LOADOUT_CFG_TMUX_TERM`
 (default `xterm-256color`, exported by the bash/tcsh config), falling back to
