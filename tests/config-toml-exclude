@@ -162,8 +162,8 @@ def main():
         failures += check("--force installs past the excluded dependency", got, {"app"})
 
         # 7. A directly demanded package the policy excludes is an error, not a
-        # silent empty install -- but only when it is the whole demand: the
-        # sweep counterpart below empties the selection and stays a no-op.
+        # silent empty install. A sweep is the only path that survives a drop;
+        # its all-excluded counterpart below empties the selection and is a no-op.
         got, _ = attempt(module, only="tool", exclude=[(FILE_SOURCE, ["tool"])])
         failures += check("directly demanded excluded package raises", raised(module, got), True)
         failures += check(
@@ -175,11 +175,23 @@ def main():
         failures += check("a sweep emptied by policy is a no-op", got, set())
         failures += check("the emptied sweep still notes the drop", "note: excluded by policy" in err, True)
 
-        # 8. A partial drop installs the rest, with one note naming the source.
-        got, err = attempt(module, only="tool,app", exclude=[(FILE_SOURCE, ["tool"])])
-        failures += check("partial policy drop installs the rest", got, {"app", "lib"})
+        # 7b. Another name in the same request does not launder the demand: the
+        # package the user typed is excluded, so the whole request fails.
+        got, _ = attempt(module, only="tool,app", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("excluded demand fails beside a deliverable name", raised(module, got), True)
+        failures += check("that error still names the excluded demand", "\n  tool\n" in str(got), True)
+
+        # 7c. An undeliverable name beside the excluded demand must not dilute
+        # the gate: `ghost` is unknown, so it cannot excuse a drop of `tool`.
+        got, _ = attempt(module, only="tool,ghost", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("unknown name cannot dilute the demand gate", raised(module, got), True)
+        failures += check("that error still names the excluded demand", "\n  tool\n" in str(got), True)
+
+        # 8. A sweep drop installs the rest, with one note naming the source.
+        got, err = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["tool"])])
+        failures += check("sweep drop installs the rest", got, SHARED - {"tool"})
         failures += check(
-            "partial drop prints one note naming package and source",
+            "sweep drop prints one note naming package and source",
             "note: excluded by policy" in err and "tool" in err and FILE_SOURCE in err,
             True,
         )

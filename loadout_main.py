@@ -716,9 +716,9 @@ def resolve_tool_selection(args, registry, exclude=None):
 
     `exclude=None` means "no policy": the resolver stays pure, so a unit test
     never depends on the developer's config.toml. A directly named (literal,
-    non-glob, non-group) package the policy excludes is an error rather than a
-    silent empty install; a sweep it empties is a no-op; a partial drop prints
-    one note and installs the rest.
+    non-glob, non-group) package the policy excludes is an error, even when
+    other names accompany it; a group or glob drop installs the rest with one
+    note; a sweep the policy empties is a no-op.
 
     When the registry is empty (legacy / missing JSON) returns None as before.
     """
@@ -779,14 +779,18 @@ def resolve_tool_selection(args, registry, exclude=None):
     selected -= skip_set
 
     # A DEMAND is different from a SWEEP: `install tool` is a request for that
-    # package by name, so a policy entry that blocks it must fail loudly rather
-    # than resolve zero packages and report success. A group or glob that the
-    # policy empties is the documented no-op -- the caller asked for "everything
-    # except what I exclude". A partial drop installs the rest with one note.
+    # package by name, so a policy entry that blocks it must fail loudly, even
+    # when other names rode along in the same request, rather than resolve a
+    # smaller set and call it success (D5). The ratio this used to test -- every
+    # literal token blocked -- also counted names the resolver cannot deliver,
+    # so `install tool,ghost` with `tool` excluded slipped through to an empty
+    # selection. A group or glob drop is the sweep path instead: install the
+    # rest and print one note; a sweep the policy empties is the documented
+    # no-op, because the caller asked for "everything except what I exclude".
     requested = _parse_namelist(only or add or "")
     demanded = list(dict.fromkeys(n for n in requested if not n.startswith("@") and not any(c in n for c in "*?[")))
     blocked = [n for n in demanded if n in policy_set]
-    if blocked and len(blocked) == len(demanded):
+    if blocked:
         raise ResolverError(
             "package(s) excluded by the persistent policy:\n"
             f"  {', '.join(sorted(blocked))}\n"
