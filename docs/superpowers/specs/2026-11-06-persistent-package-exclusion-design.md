@@ -92,9 +92,11 @@ rule keys on how the name was requested, not on whether the result is empty:
 
 - A package named **directly** on the command line (`loadout install
   time-plot`) that the policy excludes -> `ResolverError` naming the package,
-  the source and the remedy ("remove it from `exclude`"). Exit 1, not a silent
-  empty install. "Directly" means a literal registry name in `--only`/`--add`:
-  not a `@group`, not a glob, and not a package pulled in as a dependency.
+  the source and the remedy ("remove it from `exclude`"). This holds even when
+  other packages are named in the same command: a name the user typed is a
+  demand, and a demand the policy forbids fails. Exit 1, not a silent empty
+  install. "Directly" means a literal registry name in `--only`/`--add`: not a
+  `@group`, not a glob, and not a package pulled in as a dependency.
 - A sweep (`@shared-all`, `@group`, a glob) -> plain subtraction, exactly like
   `--skip`. If the policy removes the whole sweep the selection is empty and
   the run is a no-op, not an error: the consumer asked for "everything except

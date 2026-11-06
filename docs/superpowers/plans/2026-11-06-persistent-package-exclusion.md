@@ -104,7 +104,8 @@ Cases in `main()` (each `check(label, got, want)` like the dest-dir test; `failu
 5. Group token: `exclude=[(..., ["@fonts"])]` -> no font.
 6. Hard dependency: `args(only="app")` with `exclude=[(..., ["lib"])]` raises `ResolverError`; with `force=True` -> `{"app"}`.
 7. Direct demand excluded: `args(only="tool")` + `exclude=[(..., ["tool"])]` raises `ResolverError` whose text contains `excluded by the persistent policy` and `config.toml exclude`. Its sweep counterpart -- `args(only="@shared")` + `exclude=[(..., ["app", "lib", "tool", "font-a", "font-b"])]` -- returns `set()` and raises nothing.
-8. Partial: `args(only="tool,app")` + exclude `tool` -> `{"app", "lib"}`, and stderr (captured with `contextlib.redirect_stderr(io.StringIO())`) contains `note: excluded by policy` and `tool`.
+7b. Direct demand among others: `args(only="tool,app")` + `exclude=[(..., ["tool"])]` raises `ResolverError` (a named package cannot be silently dropped).
+8. Partial drop from a sweep: `args(only="@shared")` + exclude `tool` -> `{"app", "lib", "font-a", "font-b"}`, and stderr (captured with `contextlib.redirect_stderr(io.StringIO())`) contains `note: excluded by policy` and `tool`.
 9. Unknown name: `exclude=[("config.toml exclude", ["nope"])]` with `only="@shared"` -> full set unchanged and stderr contains `config.toml exclude: unknown package 'nope'`.
 10. Retired group: `exclude=[("config.toml exclude", ["@engineering-loadout"])]` with `only="@shared"` raises `ResolverError` containing `@engineering-loadout was retired`.
 
@@ -231,7 +232,7 @@ Cases:
 3. Config `exclude = ["gnuplot"]`; `run_loadout(home, "resolve", "@shared-all", "--skip", "micro")` -> neither `gnuplot` nor `micro` in stdout.
 4. No config file; `run_loadout(home, "resolve", "@shared-all", extra_env={"LOADOUT_CFG_EXCLUDE": "gnuplot"})` -> `gnuplot` absent.
 5. `run_loadout(home, "resolve", "@shared-all")` with no policy -> `gnuplot` present (proves the absence above is the policy, not the registry).
-6. Config `exclude = ["gnuplot"]`; `run_loadout(home, "install", "--dry-run", "micro", "gnuplot")` -> exit 0, `gnuplot` absent from the listing, and `note: excluded by policy` appears exactly once in stdout+stderr.
+6. Config `exclude = ["gnuplot"]`; `run_loadout(home, "install", "--dry-run", "@shared-all")` -> exit 0, `gnuplot` absent from the listing, and `note: excluded by policy` appears exactly once in stdout+stderr. (A dry run installs nothing, so the sweep is cheap.)
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -286,16 +287,18 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 test_home=$(mktemp -d "${TMPDIR:-/tmp}/loadout-exclude-home.XXXXXX")
 dest_dir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-exclude-dest.XXXXXX")
 mkdir -p "$test_home/.config/engineering-loadout"
-printf 'exclude = ["gnuplot"]\n' > "$test_home/.config/engineering-loadout/config.toml"
+printf 'exclude = ["pigz"]\n' > "$test_home/.config/engineering-loadout/config.toml"
 
 env -i HOME="$test_home" PATH="/usr/bin:/bin:/usr/sbin:/sbin" LANG="${LANG:-C.UTF-8}" \
-    "$repo_dir/loadout" install -y micro gnuplot --dest-dir "$dest_dir" --no-backup \
+    "$repo_dir/loadout" install -y @compression --dest-dir "$dest_dir" --no-backup \
     > "$test_home/install.log" 2>&1 || fail "install failed (see log)"
 
-[ -x "$dest_dir/bin/micro" ] || fail "selected package micro was not installed"
-[ ! -e "$dest_dir/bin/gnuplot" ] || fail "excluded gnuplot was installed"
+[ -x "$dest_dir/bin/pv" ] || fail "selected package pv was not installed"
+[ ! -e "$dest_dir/bin/pigz" ] || fail "excluded pigz was installed"
 grep -q "excluded by policy" "$test_home/install.log" || fail "no policy note in the install output"
 ```
+
+`@compression` is four single-bin packages (p7zip, bzip2, pigz, pv), so the sweep is a few seconds. A directly named excluded package is an error (spec D5), so the test must reach the package through a group.
 
 - [ ] **Step 2: Register it**
 
