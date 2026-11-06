@@ -13,6 +13,50 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (5): persistent package exclusions
+
+`config.toml` carries an `exclude` list (`LOADOUT_CFG_EXCLUDE` is the
+environment form) that `install` / `reinstall` / `upgrade` / `resolve` /
+`--dry-run` subtract exactly like `--skip`, which it unions with. Tokens are
+package names, `@groups` or globs; a directly named excluded package fails with
+an error naming the key, a group/glob sweep drops it with one
+`note: excluded by policy` line, and excluding a hard dependency of a selected
+package keeps the existing dependency error (`--force` / `--no-deps`). Removing
+the entry is the only override. `doctor` prints an `Exclusions` section and
+flags any declared binary a previous install left in `<prefix>/bin` (the policy
+stops future installs, it never uninstalls). Design:
+`docs/superpowers/specs/2026-11-06-persistent-package-exclusion-design.md`;
+plan: `docs/superpowers/plans/2026-11-06-persistent-package-exclusion.md`.
+Issue `smprather/engineering-loadout#13`.
+
+**Class C** (any `loadout_main.py` change; no payload, registry or schema
+change). Commits `000ccc5` resolver policy + `tests/config-toml-exclude` (T1),
+`d8d2672` fail on a directly demanded excluded package, `ce090a3` CLI wiring
+and the single-note `--dry-run`, `060d8b0` `tests/install-exclude-policy`
+(T2), `084bfbf` the doctor section; this entry's docs commit updates
+`README.md`, `docs/INSTALLATION.md` and `AGENTS.md`.
+
+**Gates run** (dev host, 2026-11-06, HEAD `084bfbf` plus the docs commit):
+
+- `tests/docs-sync`: 9 passed, 0 failed (~1 s).
+- `tests/run-all --fast` (T1): `Tier 1 passed.`, 55/55 PASS, 185 s
+  (18:22:32-18:25:35Z, `skipped=0`; slowest `payload-interpreter-abi` 73 s,
+  `config-toml-exclude` 3 s). Its rows are the appended block in
+  `assurance/release-timings.tsv`.
+- `tests/install-exclude-policy` (T2): PASS, 1 s (`Install exclude policy OK`).
+- Real-surface smoke, throwaway `HOME`, `exclude = ["gnuplot"]`:
+  `./loadout resolve @shared-all` -> exit 0, `Resolved 161 packages`, no
+  `gnuplot`, `note: excluded by policy (config.toml exclude): gnuplot` on
+  stderr; `./loadout resolve gnuplot` -> exit 1,
+  `package(s) excluded by the persistent policy` naming the source; `./loadout
+  doctor` -> exit 0, `Exclusions (config.toml exclude):` with
+  `gnuplot: excluded by policy`, no traceback.
+
+**Not run:** Tier 2 beyond `install-exclude-policy` (the other integration
+tests install into temp roots), Tier 3 (`tests/run-all --container`) and
+`build/release`. Class C makes Tier 3 required before the next release, so that
+release block must run it.
+
 ## 2026-11-06 (3): release 2026.11.2 -- open-eda-file-tools is one package
 
 **PUBLISHED and verified 2026-11-06** (tag on `988e6c9`, Good ED25519

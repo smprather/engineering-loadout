@@ -169,11 +169,32 @@ the flag, config goes to `$HOME` and a configured `dest_dir` is ignored with a
 dest_dir   = "~/.loadout"    # pin the install root (default: ~/.local/share/loadout)
 prefer     = ["firefox"]     # opt a tool ahead of the system copy (see PATH below)
 prefer_off = ["tmux"]        # opt out of a package's default preference
+exclude    = ["watchglass", "time-plot"]  # never install these, on every run
 ```
 
 `dest_dir` mirrors the flag name exactly. A missing file is not an error, and
 a malformed file (or a key of the wrong type) degrades to "no default" rather
 than aborting an install.
+
+`exclude` is the persistent form of `--skip`: tokens may be package names,
+`@groups` or glob patterns (`*?[`) matched against package and group names, and
+`install`, `reinstall`, `upgrade` and `resolve` (including `--dry-run`) subtract
+them exactly as `--skip` does. The list unions with `--skip` -- neither
+overrides the other -- and `LOADOUT_CFG_EXCLUDE="a,b"` (comma-separated) unions
+with the file list, so a distribution can set the policy without writing into
+`$HOME`. Excluding a hard dependency of a selected package keeps today's error
+(`--force` or `--no-deps` overrides it), and naming an excluded package
+*directly* on the command line fails with an error naming this key, even when
+other packages are also named; a group or glob sweep drops it and installs the
+rest with a `note: excluded by policy` line (a sweep the policy empties is a
+no-op). An invalid token -- a retired group, or a bare `all` -- fails the run
+loudly instead of being skipped; an unknown or stale name warns with the source
+that produced it and the rest of the run proceeds. Neither is silent, so a
+broken entry cannot quietly install what you meant to exclude. `loadout doctor`
+prints an `Exclusions` section for the active policy and flags any declared
+binary a previous install left in `<prefix>/bin`; the policy stops future
+installs but never uninstalls. Removing the entry (or unsetting the variable) is
+the only override -- there is no flag that re-includes a single package.
 
 `--dest-dir` also stages non-default roots for tests and previews, e.g.
 `./loadout install octave --dest-dir /tmp/test-home`, and it still overrides a

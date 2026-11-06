@@ -58,7 +58,7 @@ On `PATH`, the shared `bin` is **appended** so the distribution's own copies
 keep priority, and `<prefix>/prefer` is **prepended**: the installer writes a
 small exec shim there for each explicitly preferred tool. `env-tmux` prefers
 the bundled `tmux`; add `prefer = ["firefox"]` or `prefer_off = ["tmux"]` to
-`config.toml` to change that. See
+`config.toml` to change that, and list packages you never want in `exclude`. See
 [Installation](docs/INSTALLATION.md#migrating-an-existing-install) if you are
 moving from an older `~/.local` install.
 
@@ -123,6 +123,10 @@ Name packages or groups the same way `dnf` or `apt` works:
 ./loadout install octave --dry-run                        # preview only
 ./loadout reinstall octave                                # redo every step, even if current
 ```
+
+`--skip` applies to that one run; to record a permanent exclusion, put
+`exclude = ["watchglass", "time-plot"]` in `config.toml` (or set
+`LOADOUT_CFG_EXCLUDE`) instead of repeating the flag.
 
 `install` over an up-to-date tree is fast: each step that placed files left an
 install stamp (`<prefix>/.loadout-stamps/`), and a step whose source bytes are
