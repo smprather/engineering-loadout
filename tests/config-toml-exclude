@@ -282,6 +282,50 @@ def main():
             "install --dry-run notes the drop exactly once", combined.count("note: excluded by policy"), 1
         )
 
+        # 12. `doctor` reports the policy. A policy that silently removes
+        # packages is invisible, so doctor names it, expands it, and flags
+        # what a past install left behind in the tree. The binary file is a
+        # leftover even though nothing installed it here; doctor is read-only.
+        doc_home = os.path.join(tmp, "doctor")
+        os.makedirs(doc_home)
+        write_config(doc_home, 'exclude = ["watchglass", "time-plot"]\n')
+        leftover = os.path.join(doc_home, ".local", "share", "loadout", "bin", "watchglass")
+        os.makedirs(os.path.dirname(leftover), exist_ok=True)
+        with open(leftover, "w", encoding="utf-8"):
+            pass
+
+        proc = run_loadout(doc_home, "doctor")
+        failures += check("doctor exits 0 under a policy", proc.returncode, 0)
+        failures += check("doctor prints an Exclusions section", f"Exclusions ({FILE_SOURCE}):" in proc.stdout, True)
+        failures += check(
+            "doctor names the leftover binary",
+            f"  watchglass: excluded by policy; still installed: {leftover}\n" in proc.stdout,
+            True,
+        )
+        failures += check(
+            "a package with no bins gets the plain line",
+            "  time-plot: excluded by policy\n" in proc.stdout,
+            True,
+        )
+
+        # 13. A stale token is one line, never a failed doctor: the retired
+        # group's own error is printed in place and the report carries on.
+        write_config(doc_home, 'exclude = ["@engineering-loadout"]\n')
+        proc = run_loadout(doc_home, "doctor")
+        failures += check("doctor exits 0 with a retired group in the policy", proc.returncode, 0)
+        failures += check(
+            "doctor prints the retired-group error", "@engineering-loadout was retired" in proc.stdout, True
+        )
+        failures += check("doctor still prints the install layout", "Install layout:" in proc.stdout, True)
+
+        # 14. No policy, no section: doctor stays quiet rather than printing an
+        # empty header that looks like a finding.
+        bare_doc_home = os.path.join(tmp, "doctor-bare")
+        os.makedirs(bare_doc_home)
+        proc = run_loadout(bare_doc_home, "doctor")
+        failures += check("doctor with no policy exits 0", proc.returncode, 0)
+        failures += check("doctor with no policy prints no Exclusions section", "Exclusions (" in proc.stdout, False)
+
     print(f"\n{'OK' if not failures else 'FAILED'}: config-toml-exclude")
     return 1 if failures else 0
 

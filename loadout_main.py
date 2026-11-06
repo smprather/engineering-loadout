@@ -7925,6 +7925,42 @@ def _doctor_shell_audit(user_home, environ, passwd_shell=None):
     return findings
 
 
+def _doctor_exclusions(registry, install_root):
+    """Read-only report on the persistent `exclude` policy.
+
+    A policy that silently drops packages is invisible: nothing on the command
+    line names the package the user is missing. So doctor prints the policy
+    (labelled per source), expands each token, and flags binaries still present
+    under the tree from an install made before the policy existed.
+
+    Informational only, like the layout audit: a stale token prints its own
+    error line and the rest of the report continues. Never changes doctor's
+    exit status, and never raises on a bad config.
+    """
+    policy = _exclusion_policy()
+    if not policy:
+        return
+    print("Exclusions ({}):".format(", ".join(source for source, _ in policy)))
+    bin_dir = os.path.join(_local_root(install_root), "bin")
+    for source, tokens in policy:
+        # Expand per token, not per source: one retired group must not hide the
+        # packages named on the tokens after it.
+        names = set()
+        for token in _expand_glob_names(tokens, registry):
+            try:
+                names |= expand_groups([token], registry, _stack=(source,))
+            except ResolverError as exc:
+                print(f"  {token}: invalid ({exc})")
+        for name in sorted(names):
+            bins = registry.get(name, {}).get("bins") or []
+            leftover = [path for path in (os.path.join(bin_dir, b) for b in bins) if os.path.isfile(path)]
+            line = f"  {name}: excluded by policy"
+            if leftover:
+                line += "; still installed: {}".format(", ".join(leftover))
+            print(line)
+    print()
+
+
 def _doctor_layout_audit(repo_dir, registry, install_root, user_home):
     """Read-only report: install layout, legacy copies, prefer shims, PATH shadows.
 
@@ -8188,6 +8224,7 @@ def cmd_doctor(args, registry, repo_dir):
         print("No system binary is newer than its payload counterpart.")
     print()
 
+    _doctor_exclusions(registry, _resolve_home(None))
     _doctor_layout_audit(repo_dir, registry, _resolve_home(None), os.path.expanduser("~"))
 
     # Optional content verification: hash every shipped payload file against
