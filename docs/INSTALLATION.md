@@ -188,13 +188,14 @@ with the file list, so a distribution can set the policy without writing into
 other packages are also named; a group or glob sweep drops it and installs the
 rest with a `note: excluded by policy` line (a sweep the policy empties is a
 no-op). An invalid token -- a retired group, or a bare `all` -- fails the run
-loudly instead of being skipped; an unknown or stale name warns with the source
-that produced it and the rest of the run proceeds. Neither is silent, so a
-broken entry cannot quietly install what you meant to exclude. `loadout doctor`
-prints an `Exclusions` section for the active policy and flags any declared
-binary a previous install left in `<prefix>/bin`; the policy stops future
-installs but never uninstalls. Removing the entry (or unsetting the variable) is
-the only override -- there is no flag that re-includes a single package.
+loudly instead of being skipped; an unknown or stale package name warns with the
+source that produced it (a stale `@group` warns without one) and the rest of the
+run proceeds. Neither is silent, so a broken entry cannot quietly install what
+you meant to exclude. `loadout doctor` prints an `Exclusions` section for the
+active policy and flags any declared binary a previous install left in
+`<prefix>/bin`; the policy stops future installs but never uninstalls. Removing
+the entry (or unsetting the variable) is the only override -- there is no flag
+that re-includes a single package.
 
 `--dest-dir` also stages non-default roots for tests and previews, e.g.
 `./loadout install octave --dest-dir /tmp/test-home`, and it still overrides a

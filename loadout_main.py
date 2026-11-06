@@ -748,16 +748,19 @@ def resolve_tool_selection(args, registry, exclude=None):
     # The persistent policy is the SAME subtraction, just remembered: a
     # distribution or consumer that never wants a package says so once. Each
     # source is expanded on its own so a stale name or a bad group is reported
-    # against the file or the variable that produced it. Unknown names are
-    # warned here and filtered out first: expand_groups() would otherwise warn
-    # again, without the source.
+    # against the file or the variable that produced it. Unknown package names
+    # are warned here and filtered out first: expand_groups() would otherwise
+    # warn again, without the source. `all` is forwarded so expand_groups()
+    # raises its own "bare 'all' is not a group" error: expansion errors are
+    # never swallowed (a silently ignored `all` would install exactly what the
+    # consumer meant to exclude).
     policy_set = set()
     policy_sources = []
     for source, tokens in exclude or ():
         policy_sources.append(source)
         known = []
         for name in _expand_glob_names(tokens, registry):
-            if name in registry or name.startswith("@"):
+            if name in registry or name.startswith("@") or name == "all":
                 known.append(name)
             else:
                 warn(f"{source}: unknown package '{name}' (ignored)")

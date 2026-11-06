@@ -34,23 +34,35 @@ change). Commits `000ccc5` resolver policy + `tests/config-toml-exclude` (T1),
 `d8d2672` fail on a directly demanded excluded package, `ce090a3` CLI wiring
 and the single-note `--dry-run`, `060d8b0` `tests/install-exclude-policy`
 (T2), `084bfbf` the doctor section; this entry's docs commit updates
-`README.md`, `docs/INSTALLATION.md` and `AGENTS.md`.
+`README.md`, `docs/INSTALLATION.md` and `AGENTS.md`. A review fix on top
+forwards a bare `all` policy token to `expand_groups()` so it raises its
+"bare 'all' is not a group" error instead of being warned away as an unknown
+name -- expansion errors in the policy are never swallowed (spec D3) -- pinned
+by `tests/config-toml-exclude` case 10b.
 
-**Gates run** (dev host, 2026-11-06, HEAD `084bfbf` plus the docs commit):
+**Gates run** (dev host, 2026-11-06, HEAD `084bfbf` plus the docs commit and
+its review fix):
 
 - `tests/docs-sync`: 9 passed, 0 failed (~1 s).
-- `tests/run-all --fast` (T1): `Tier 1 passed.`, 55/55 PASS, 185 s
-  (18:22:32-18:25:35Z, `skipped=0`; slowest `payload-interpreter-abi` 73 s,
-  `config-toml-exclude` 3 s). Its rows are the appended block in
-  `assurance/release-timings.tsv`.
-- `tests/install-exclude-policy` (T2): PASS, 1 s (`Install exclude policy OK`).
-- Real-surface smoke, throwaway `HOME`, `exclude = ["gnuplot"]`:
+- `tests/run-all --fast` (T1, after the fix): `Tier 1 passed.`, 54/54 PASS,
+  181 s (18:36:30-18:39:30Z, `skipped=0`; slowest `payload-interpreter-abi`
+  73 s, `config-toml-exclude` 4 s). Its rows are the last 55-row block in
+  `assurance/release-timings.tsv`, ending `test:total 181 PASS
+  flags=--fast skipped=0`.
+- `tests/config-toml-exclude`: 47/47 checks PASS, ~3.7 s (includes the
+  bare-`all` case).
+- `tests/unit-resolver`: 98 passed, 0 failed.
+- `tests/install-exclude-policy` (T2): PASS, <1 s (`Install exclude policy
+  OK`).
+- Real-surface smoke, throwaway `HOME`, `exclude = ["gnuplot"]` (1.3 s total):
   `./loadout resolve @shared-all` -> exit 0, `Resolved 161 packages`, no
   `gnuplot`, `note: excluded by policy (config.toml exclude): gnuplot` on
   stderr; `./loadout resolve gnuplot` -> exit 1,
   `package(s) excluded by the persistent policy` naming the source; `./loadout
   doctor` -> exit 0, `Exclusions (config.toml exclude):` with
-  `gnuplot: excluded by policy`, no traceback.
+  `gnuplot: excluded by policy`, no traceback. With `exclude = ["all"]` instead,
+  `./loadout resolve @shared` -> exit 1 and the bare-`all` group error (151 ms),
+  no install.
 
 **Not run:** Tier 2 beyond `install-exclude-policy` (the other integration
 tests install into temp roots), Tier 3 (`tests/run-all --container`) and

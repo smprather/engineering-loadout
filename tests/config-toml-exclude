@@ -235,6 +235,13 @@ def main():
             "retired-group error is the group's own", "@engineering-loadout was retired" in str(got), True
         )
 
+        # 10b. A bare `all` in the policy also raises instead of being dropped:
+        # the unknown-name pre-filter must forward it, or the run proceeds and
+        # installs exactly what the consumer meant to exclude (D3).
+        got, _ = attempt(module, only="@shared", exclude=[(FILE_SOURCE, ["all"])])
+        failures += check("bare 'all' in policy raises", raised(module, got), True)
+        failures += check("bare-'all' error is expand_groups' own", "bare 'all' is not a group" in str(got), True)
+
         # 11. The CLI passes the policy: `resolve` and `install --dry-run` are
         # the entry points that hand the resolver a selection. Without the
         # wiring the resolver unit cases above still pass, so only the real
