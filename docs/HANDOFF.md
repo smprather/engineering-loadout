@@ -77,7 +77,11 @@ are not staged with these changes.
 (separate repo, `v2026.9.0`; same five DEF subcommands plus LEF queries) is
 gone: registry entry, wheel, `@python-tools-extra` membership, README row,
 rolling-git lists and its `build/currency-state.json` row. `lef-tools` +
-`def-tools` are the replacement.
+`def-tools` are the replacement. Verified: registry-integrity 20/20,
+wheelhouse-closure OK (16 python-tools resolve offline; the orphan wheel is
+gone), docs-sync 9/9, completion in sync, T1 `--fast` PASS (175 s),
+`prebuilt-binaries-almalinux8 --full` PASS (611 s, 317 binaries — one fewer,
+as expected).
 
 Nothing prunes an install that already has it: there is no retired-package
 sweep, so an existing tree keeps `bin/lefdef-tools` and
