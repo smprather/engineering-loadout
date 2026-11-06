@@ -16,6 +16,114 @@ a sync target:
 ## Next release notes
 
 - New installs open xfce4-terminal windows as login shells (`CommandLoginShell=TRUE`, seeded once; existing users keep their file).
+- `LOADOUT_CFG_INTERACTIVE_SHELL` chooses your interactive shell for every terminal, `ssh` session, console and tmux pane: one line in your login shell's user layer (README "Choosing your interactive shell"). It replaces `LOADOUT_CFG_PREFERRED_BASH`/`_ZSH`/`_TCSH`; a typed `bash`, `t` or `tcsh` no longer switches.
+- Settings cut over without aliases (`loadout doctor` names any left in your layers): tmux auto-attach (`LOADOUT_CFG_ATTACH_TO_TMUX*`), `LOADOUT_CFG_ENABLE_FASTNVIM` and `LOADOUT_CFG_WEZTERM_SHELL_INTEGRATION` are removed; `LOADOUT_CFG_ENABLE_ONLINE_UPDATES` is now `LOADOUT_CFG_ONLINE_DETECT`, `LOADOUT_ONLINE_CACHE_TTL` is now `LOADOUT_CFG_ONLINE_CACHE_TTL`.
+- A first login bash keeps `/etc/profile.d`'s `module` (every fresh EL8 bash login used to delete it).
+
+## 2026-11-05 (2): interactive shell selection (`LOADOUT_CFG_INTERACTIVE_SHELL`) landed
+
+One setting now chooses the interactive shell for every terminal, `ssh` session,
+console and tmux pane, with no root, `chsh` or terminal config: a top-level
+interactive bash, zsh or tcsh/csh replaces itself with the chosen shell once,
+before any PATH work, keeping login-ness (`-l`). It replaces
+`LOADOUT_CFG_PREFERRED_{BASH,ZSH,TCSH}`. Design (rev 3, with the rulings made
+during execution): `docs/superpowers/specs/2026-11-05-interactive-shell-design.md`;
+plan: `docs/superpowers/plans/2026-11-05-interactive-shell.md`. User-facing
+rules: README "Choosing your interactive shell".
+
+**What landed** (main, not pushed):
+
+| Task | Commits | Change |
+|---|---|---|
+| design | `7521999` | spec + plan |
+| 1, settings clean-up (D11) | `6fe25dd` | tmux auto-attach, `ENABLE_FASTNVIM` and the explicit wezterm integration path removed; `ENABLE_ONLINE_UPDATES` -> `ONLINE_DETECT`, `LOADOUT_ONLINE_CACHE_TTL` -> `LOADOUT_CFG_ONLINE_CACHE_TTL` |
+| 2, zsh home layers (D6) | `cd5585b` | zsh reads the home corp..user layers under a shared config root |
+| 3, bash + zsh switch (D1-D4) | `3500357`, `d5a8ed0` | the switch; `PREFERRED_BASH`/`ZSH` retired; target probed with `-c :` before the exec; PATH walk takes absolute entries only |
+| 4, tcsh + csh switch (D5) | `dbb8d8c` | the tcsh/csh switch; `PREFERRED_TCSH` retired; csh charset allowlist |
+| 5, doctor (D7) | `02713b2`, `bf25e3d` | doctor's "Interactive shell" section and retired-setting report |
+| 6, xfce4-terminal (D8) | `ff8fada` (+ `d7142f5`, `a9d4e23`) | `CommandLoginShell=TRUE` seeded once. The change was first swept into the other agent's `ae682c4` through the shared git index; `d7142f5` backs our hunks out of it, `ff8fada` re-lands them as their own commit, `a9d4e23` restores the test's 100755 mode. No history was rewritten. |
+| 7, Settings table + gate | `534f8e7` | one Settings table in `envs/bash/README.md`; `tests/docs-sync` requires every defined setting documented |
+| 8, Tier 3 | `e150665`, `c6ce7e1` | bash keeps the documented function list on a first login and silences `ps` where procps is absent; `tests/interactive-shell-almalinux8` |
+| 9, close-out | `e2eeaca`, this entry | spec rev 3, doc-accuracy fixes, the docs/TMUX.md migration paragraph (D9) |
+
+Interleaved on main, for context only (another agent's work, not part of this
+plan): `e759592`, `7c86657`, `85ff7c9`, `ae682c4` (lef-tools/def-tools), then
+`6de4aba`, `008b42e`, `a881a33` (lefdef-tools retired), `7b151c9` (tmux
+copy-mode fix) and `aecea1d` (gate timings). Entry (1) calls the then-uncommitted
+`envs/tmux/tmux-global.conf` / `docs/TMUX.md` edits part of this line of work;
+they are `7b151c9`'s copy-mode change, which is separate. This work's only
+docs/TMUX.md change is `e2eeaca`'s migration paragraph.
+
+**Gates** (2026-11-05/06 UTC, dev host + `loadout-smoke:almalinux8.10`):
+
+- First `tests/run-all` (T1+T2, 23:42-00:03 UTC, HEAD `e2eeaca`): 1284 s,
+  86 PASS, 1 FAIL. `installed-sizes in sync` found `payload/installed-sizes.json`
+  stale for 10 env files: nine from this work (env README, rc and xfce4-terminal
+  edits in `534f8e7`, `ff8fada`, `e150665`, `e2eeaca`; the tasks ran focused
+  tests, never this T1 sync gate) and `completions/loadout.bash` from `7c86657`.
+  The other agent's `6de4aba` regenerated the file, and `gen-installed-sizes
+  --check` is OK from there on. That run's rows went into `aecea1d`.
+- Fresh `tests/run-all --container` (03:04-03:33 UTC, HEAD `aecea1d`, clean
+  tree): **All tests passed**, 91/91, 1727 s. T1: 53 tests, ~183 s. T2: 34
+  tests, ~1102 s (largest: install-linux-tmp-home 244 s, install-readonly-tree
+  205 s, install-split-shared-envs 204 s; env-interactive-shell 31 s). T3: 4
+  tests, 440 s: container smoke `--full` 422 s, dynamic analysis 13 s,
+  private-state-two-users 2 s, **interactive-shell-almalinux8 3 s** (T3-a..e
+  and the R7 check all PASS, really run, not a SKIP).
+- Drift check (retired names outside archive/specs/HANDOFF): only README's
+  "Retired and renamed settings" table, `RETIRED_SHELL_SETTINGS`, the
+  `tests/doctor-shadow-audit` fixtures, and the three migration notes the spec
+  asks for (README "Coming from `LOADOUT_CFG_PREFERRED_BASH`", `docs/BASH.md`,
+  `envs/tcsh/README.md`).
+
+**Deployment.** `e150665` fixes a loss that predates this work: the bashrc's
+start-of-source `unset -f` kept only an INHERITED
+`LOADOUT_CFG_PRESERVE_FUNCTIONS`, so every fresh EL8 bash login deleted
+`/etc/profile.d`'s `module`. Deployed trees pick up the fix and the shell switch
+only after `./loadout reinstall env-bash -y`, plus `env-tcsh` and `env-zsh` for
+the switch from or to those shells. The deployed shared tree
+(`.../loadout-shared/latest`, memory `reference-deployed-shared-tree`) is on
+hosts this machine cannot reach; the user runs that reinstall there. Not run
+from here.
+
+**OPEN: manual X-session check -- NOT RUN.** No automated gate covers the
+terminal side, and an agent cannot drive a real X session. In a real X session,
+with `LOADOUT_CFG_INTERACTIVE_SHELL=zsh` set in the passwd shell's layer,
+check that:
+
+1. an xfce4-terminal window opened from the launcher starts as the passwd shell
+   and switches to zsh as a login shell;
+2. `xfce4-terminal` typed in a switched shell opens zsh directly;
+3. with xfce4-terminal already running (it is single-instance), changing the
+   preference and opening a window from the launcher shows whether the first
+   instance's marker carries over (D3).
+
+Record each result here. If step 3 shows the marker carrying over, document it
+as a single-instance caveat in README "Choosing your interactive shell".
+
+**Follow-ups.**
+
+1. zsh does not cache the online verdict: `envs/zsh/global/zshrc` calls
+   `loadout_detect_online`, bash calls `loadout_detect_online_cached`, so every
+   zsh session that does not inherit `LOADOUT_ONLINE` (each new login) pays the
+   probe instead of reading the once-a-day cache.
+2. D4 residual: a non-login origin gives a non-login target, and a non-login
+   bash target gets no `/etc/profile.d` (accepted in the spec; sourcing
+   `/etc/bashrc` is out of scope).
+3. Other `/etc/profile.d` functions are still wiped at every bash login: the
+   keep list is only `module _module_raw ml`, and any other function the system
+   init defined before the bashrc is lost. Loadout's own functions are never
+   exported, so in a fresh process the wipe can only remove the system's and
+   inherited ones; question whether it should run there at all, or only on a
+   re-source in the same shell.
+4. `tests/run-all` caches a container test's SKIP (exit 0) as a PASS
+   (`interactive-shell-almalinux8`, `private-state-two-users`).
+5. D3, single-instance terminals: depends on step 3 of the manual check.
+6. A change to any file under `envs/`, a README included, changes
+   `payload/installed-sizes.json` (env sources are sized as whole trees), so it
+   needs `build/gen-installed-sizes` and then `build/gen-content-manifest`
+   before the commit. Only the T1 sync gate catches it; consider a pre-commit
+   check.
 
 ## 2026-11-05 (1): `lef-tools` + `def-tools` (open-eda-file-tools distributions 2 and 3)
 
