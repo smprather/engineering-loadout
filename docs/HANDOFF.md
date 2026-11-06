@@ -13,7 +13,20 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
-## Next release notes
+## 2026-11-06: release 2026.11.1 -- interactive shell selection, split LEF/DEF tools, bundled Python 3.12/3.13
+
+**PUBLISHED and verified 2026-11-06** (tag on `7972609`, Good ED25519
+signature, tag binds `sha256sums.txt sha256 4f91014a...`, which matches the
+published asset; four assets, not a draft; stash 344538464 bytes, sha256 equal
+to the local one; `origin/main` = tag commit). Gates on `7972609`:
+`tests/run-all --container` `All tests passed.` (1748 s; 91/91, nothing cached
+or skipped; Tier 3 smoke 317 binaries OK, 23 skipped, plus dynamic analysis,
+private-state-two-users and interactive-shell-almalinux8 PASS); `build/release`
+163 s after a 341 s dry run (malware scan CLEAN -- 0 detections across 75,487
+files, YARA-Forge 20261103 + ClamAV 28175, content-cached from the dry run;
+vuln-scan CLEAN; secret scan tree + history CLEAN; manifest export 4584 files).
+
+Class C (installer + registry + payload changed since 2026.10.9). What shipped:
 
 - New installs open xfce4-terminal windows as login shells (`CommandLoginShell=TRUE`, seeded once; existing users keep their file).
 - `LOADOUT_CFG_INTERACTIVE_SHELL` chooses your interactive shell for every terminal, `ssh` session, console and tmux pane: one line in your login shell's user layer (README "Choosing your interactive shell"). It replaces `LOADOUT_CFG_PREFERRED_BASH`/`_ZSH`/`_TCSH`; a typed `bash`, `t` or `tcsh` no longer switches.
@@ -25,18 +38,23 @@ a sync target:
 - The resolver's `--skip` accepts glob patterns and may be repeated.
 - The `uv` launcher honors `LOADOUT_PYTHON` without overriding per-project pins.
 
-**Currency worklist for the next sweep** (2026-11-06, no bumps taken in this
-release): biome 2.6.5, broot 1.62.0, btm 0.15.0, btop 1.4.8, dust 1.2.7,
-fd 10.5.1, fresh 0.5.7, fzf 0.74.5, gnuplot 6.0.6, gopls 0.24.0, gvim/vim
-9.2.1302, ipython 9.18.1, jupyterlab 4.6.5, just 1.59.0, klayout 0.30.13,
-lazygit 0.66.2, librelane 3.0.17, linelight 2026.10.32, marktext 0.23.0,
-nodejs 26.13.0, numr 0.9.3, rsync 3.5.2, ruff 0.17.4, sqlite 3.54.1,
-strace 7.3, stylua 2.6.0, tmux-path-store 2026.10.5, ty 0.0.98,
+Currency sweep run, nothing bumped (a feature release six days after the last
+sweep; the worklist is the next class-C job): biome 2.6.5, broot 1.62.0,
+btm 0.15.0, btop 1.4.8, dust 1.2.7, fd 10.5.1, fresh 0.5.7, fzf 0.74.5,
+gnuplot 6.0.6, gopls 0.24.0, gvim/vim 9.2.1302, ipython 9.18.1,
+jupyterlab 4.6.5, just 1.59.0, klayout 0.30.13, lazygit 0.66.2,
+librelane 3.0.17, linelight 2026.10.32, marktext 0.23.0, nodejs 26.13.0,
+numr 0.9.3, rsync 3.5.2, ruff 0.17.4, sqlite 3.54.1, strace 7.3,
+stylua 2.6.0, tmux-path-store 2026.10.5, ty 0.0.98,
 typescript-language-server 6.0.3, uv 0.13.7, valgrind 3.28.0, verilator 5.054,
 visidata 3.5, watchglass 2026.11.3.2, yq 4.54.2; rolling-git
 open-eda-file-tools and time-plot moved. pdftotext stays pinned (poppler
 >=26.06 needs fontconfig >=2.15; EL8 ships 2.13.1). ncdu's lookup 503'd.
-Security data itself is current: YARA-Forge 20261103, ClamAV 28175 (2026-11-06).
+Security data is current: YARA-Forge 20261103, ClamAV 28175 (2026-11-06).
+
+The HANDOFF follow-up that blocked a class-C release is closed: a whole-test
+SKIP now exits 77, and `tests/run-all` (9272cad) reports it as SKIP, counts it
+separately and never caches it as a PASS.
 
 ## 2026-11-05 (2): interactive shell selection (`LOADOUT_CFG_INTERACTIVE_SHELL`) landed
 
