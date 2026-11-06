@@ -460,7 +460,11 @@ def main():
     bad = []
     for tool_name, entry in sorted(tools.items()):
         if entry.get("disabled"):
-            continue  # out of service: it is not installed, so it cannot fail
+            # Out of service: it is not installed, so it cannot fail. Its
+            # requires_python declaration is checked again the moment it is put
+            # back in service (librelane, parity-plot and pygwalker are disabled
+            # today, so their ==3.15.* pins are currently unverified here).
+            continue
         specs = entry.get("uv_tools") or [entry.get("uv_tool", "")]
 
         # 1. The entry's DECLARATION must be usable and satisfied by the
@@ -487,8 +491,14 @@ def main():
                     for clause in declared.split(",")
                     if clause.strip().startswith("==") and clause.strip().endswith(".*")
                 }
+                # The lock can come from ANY wheel the entry installs, not just
+                # its own distribution: librelane ships a pure-Python wheel but
+                # its closure carries lln_libparse/lxml cp315 wheels, which
+                # is why the entry must pin ==3.15.*. Scan the declared
+                # closure (`wheels`), falling back to the dists when a
+                # python-tool declares no closure.
                 locked = set()
-                for wheel_name in specs:
+                for wheel_name in entry.get("wheels") or specs:
                     for filename, _path, _meta in index.get(normalize(wheel_name), []):
                         match = re.search(r"-cp(3\d+)-cp\1-", filename)
                         if match:

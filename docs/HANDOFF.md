@@ -53,6 +53,15 @@ mdformat, `>=3.14` on open-eda, a ghost bin -- each failed as intended);
 `tests/install-open-eda-file-tools` requires all five launchers and runs
 `def-dump-instances --help` with a `python3` that exits 99 first on PATH.
 
+Review fix on top (`tests/wheelhouse-closure`): the ABI-lock check first scanned
+only the entry's OWN distributions, which only pins `open-eda-file-tools` --
+for cicwave, jupyterlab, time-plot, text-serdes (and the disabled librelane,
+parity-plot, pygwalker) the cp315 lock lives in a DEPENDENCY wheel, so a wrong
+`>=3.10` declaration passed. It now scans the declared `wheels` closure;
+negative control: cicwave `>=3.10` fails with the wheel-lock message. Note the
+gate skips `disabled: true` entries (they are not installed), so those three
+declarations are only re-verified when the package is put back in service.
+
 Design/plan: `docs/superpowers/plans/2026-11-06-python-tool-interpreter-contract.md`.
 
 ## 2026-11-06 (9): feature branch merged; suite state after the speed work
