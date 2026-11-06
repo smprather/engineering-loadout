@@ -87,6 +87,19 @@ HOST_REQUIRED_COMMANDS = {
 # probe argv[0] may be a bare command (resolved on the probe PATH, which puts the
 # staged bin dir first) or an absolute path.
 HOST_REQUIRED_CAPABILITIES = {
+    # `wish` is an INTERACTIVE Tk shell. None of the default flags (--version,
+    # -V, -version, --help) is a version flag to it, so every attempt either
+    # starts the Tk event loop -- a visible "wish" window on a desktop host --
+    # or blocks in Tk's "Can't find a usable tk.tcl" error dialog. The probe's
+    # timeout path scores that as OK, so this entry has never verified anything;
+    # it only flashed a window on every smoke run, on a package the change did
+    # not touch. Found 2026-11-06 while releasing 2026.11.3 (the payload's own
+    # wish cannot load tk.tcl on the dev host -- see docs/HANDOFF.md).
+    "wish": (
+        ["sh", "-c", "exit 1"],
+        "interactive Tk shell with no version flag: a probe either opens a window "
+        "or blocks in Tk's error dialog, and the timeout was being scored as a pass",
+    ),
     "firefox": (
         ["unshare", "-U", "true"],
         "user namespaces -- firefox's sandbox calls clone(CLONE_NEWUSER) before it "
