@@ -20,7 +20,7 @@
 #
 # Usage (inside build-shell, or as build/build-shell build/container-rust):
 #   build/build-shell build/container-rust
-#   build/build-shell sh -c '. /cache/env; ./build/update lef-tools def-tools'
+#   build/build-shell sh -c '. /cache/env; ./build/update open-eda-file-tools'
 #
 # `. /cache/env` is NOT optional politeness: it exports RUSTUP_HOME and
 # CARGO_HOME as well as PATH. With PATH alone, rustup's cargo shim cannot find

@@ -218,16 +218,20 @@ Key rules:
 - `uv_extras` -- for `python-tool`: extras appended to `uv_tool` as
   `package[extra,...]`. Bundle the complete locked wheel closure for every extra;
   offline installs cannot fetch it later.
-- `rolling_git` + `rolling_subdir` -- for a `python-tool` built from source HEAD
+- `uv_tools` -- for a `python-tool` that is ONE registry package over a monorepo's
+  self-contained distributions: the distribution names, each installed as its own
+  `uv tool` (own venv and launchers). Mutually exclusive with `uv_tool`/`uv_extras`;
+  list every distribution's `bins` and the union of their wheel closures.
+- `rolling_git` + `rolling_subdirs` -- for a `python-tool` built from source HEAD
   instead of a published wheel: `rolling_git` is the clone URL, and
   `./build/update <name>` clones it, stamps `git describe --tags` as `version`,
-  builds the wheel with `uv build` and drops it in the wheelhouse. `rolling_subdir`
-  names the directory holding the distribution when one repo hosts several
-  self-contained ones (`open-eda-file-tools` keeps `lef_tools/` and `def_tools/`
-  beside its root `liberty-tools`); omit it when the repo root is the project.
-  The tag still comes from the clone root, so sibling distributions of one repo
-  share a version string while their wheel versions come from their own
-  `pyproject.toml`.
+  builds ONE wheel per listed directory with `uv build` and drops them in the
+  wheelhouse. `rolling_subdirs` names the distribution directories when one repo
+  hosts several self-contained ones (`open-eda-file-tools`: `.` is liberty-tools,
+  `lef_tools/` and `def_tools/` are the other two); omit it when the repo root is
+  the only project. The tag still comes from the clone root, so sibling
+  distributions of one repo share a version string while their wheel versions come
+  from their own `pyproject.toml`.
 - packages.json is stored as RAW UTF-8. Any script that re-dumps the whole file
   must pass `ensure_ascii=False`; the default escapes every em-dash and churns
   every description on the next rebuild (regressed twice via new build scripts).
@@ -856,7 +860,7 @@ mount:
 
 ```bash
 build/build-shell build/container-rust          # rustup + uv into /cache, idempotent
-build/build-shell sh -c '. /cache/env; ./build/update lef-tools def-tools'
+build/build-shell sh -c '. /cache/env; ./build/update open-eda-file-tools'
 ```
 
 Source `/cache/env`; do not just prepend the PATH. It also exports
@@ -3814,28 +3818,31 @@ truncating write would both sail past `--version`.
 python3.15 build/gen-readme-table`, then `./loadout install liberty-filter
 --dest-dir <d>` and run the filter above from the installed tree.
 
-## lef-tools / def-tools -- open-eda-file-tools distributions 2 and 3 (EDA)
+## open-eda-file-tools -- three distributions, one package (EDA)
 
-First-party (github.com/smprather/open-eda-file-tools). The repo grew from one
-distribution to three self-contained projects, so the registry now has three
-entries from one clone URL:
+First-party (github.com/smprather/open-eda-file-tools). The repo hosts three
+self-contained projects, and the registry exposes them as ONE package, so
+installing the project by name does not depend on an internal split:
 
-| Package | Project dir | Distribution | CLIs |
-|---|---|---|---|
-| `open-eda-file-tools` | `.` (repo root) | `liberty-tools` | `liberty-format`, `liberty-view` |
-| `lef-tools` | `lef_tools/` | `lef-tools` | `lef-tools` |
-| `def-tools` | `def_tools/` | `def-tools` | `def-tools` |
+| Project dir | Distribution | CLIs |
+|---|---|---|
+| `.` (repo root) | `liberty-tools` | `liberty-format`, `liberty-view` |
+| `lef_tools/` | `lef-tools` | `lef-tools` |
+| `def_tools/` | `def-tools` | `def-tools` |
 
-`rolling_git` on all three, with `rolling_subdir` naming the project directory
-for the two that are not at the root. The tag/describe comes from the clone
-root (one release cuts all three); the wheel version comes from each project's
-own `pyproject.toml`, so a registry `version` is a commit pointer, not a wheel
-version -- same as before for `liberty-tools`.
+Registry shape: `uv_tools: ["liberty-tools", "lef-tools", "def-tools"]` (each is
+installed as its OWN uv tool, with its own venv and launchers), `rolling_git`,
+and `rolling_subdirs: [".", "lef_tools", "def_tools"]`. The tag/describe comes
+from the clone root (one release cuts all three); the wheel version comes from
+each project's own `pyproject.toml`, so the registry `version` is a commit
+pointer, not a wheel version. The former split entries `lef-tools`/`def-tools`
+and the separate `lefdef-tools` repo they replaced are gone.
 
-**Build:** `./build/update lef-tools def-tools` — inside `build/build-shell`,
+**Build:** `./build/update open-eda-file-tools` — inside `build/build-shell`,
 after `build/build-shell build/container-rust`. Host builds are refused: maturin
 requires the EL8 linker for a `manylinux_2_28` tag, and this repo's extensions
-are new enough to use `GLIBC_2.30+` symbols when built on a modern host.
+are new enough to use `GLIBC_2.30+` symbols when built on a modern host. The
+build loops over `rolling_subdirs` and installs one wheel per distribution.
 
 **Python floor is 3.14** (`requires-python >=3.14`), so `uv build` must be given
 the payload's 3.15 or the wheel lands ABI-locked to the wrong minor.
@@ -3848,7 +3855,7 @@ when the variable is unset; do not override it.
 `.cargo-checksum.json` still lists. `cargo` then dies with
 `failed to calculate checksum of ... CMakeLists.txt: No such file or directory`,
 which looks like a missing dependency and is not. Only `def-tools` needs zstd
-(`parquet` with the `zstd` feature). `_run_rolling` therefore moves the clone's
+(`parquet` with the `zstd` feature). `_run_rolling` therefore moves the relevant
 `.cargo/config.toml` aside for its build (it is a throwaway clone, and the build
 has network), printing `vendored-source config disabled for this build`. If
 upstream fixes their `.gitignore`, that workaround can go -- it is harmless
@@ -3856,20 +3863,22 @@ either way, but it is a workaround, not a design.
 
 **Closure:** `lef-tools` needs only `click`; `def-tools` needs
 `click`, `rich-click`, `rich`, `markdown-it-py`, `mdurl`, `pygments` — all
-already in the wheelhouse for other tools. `tests/wheelhouse-closure` proves it
-offline.
+already in the wheelhouse for `liberty-tools`. `tests/wheelhouse-closure` proves
+every distribution resolves offline.
 
 **Verify after building:** `./build/update` already regenerates
 `installed-sizes.json` and the content manifest; run `gen-readme-table`, then a
-scratch-dest install and `lef-tools --help` / `def-tools --help`.
+scratch-dest install and `liberty-format --help`, `lef-tools --help` and
+`def-tools --help` against the SAME dest. `tests/install-open-eda-file-tools`
+pins exactly that: four launchers, three tool venvs, one registry package.
 
 **Pitfall found while verifying (2026-11-05): unset `UV_TOOL_DIR` /
 `UV_TOOL_BIN_DIR` before a scratch install.** The python-tool phase passes the
 installer's environment through to `uv tool install`, so those two variables
-redirect the venv and the launchers away from `<dest>` — and the progress table
-still reports `installed: lef-tools, def-tools`. The dest ends up with the
-interpreter and `uv`, no launchers, and no `share/uv/tools`. Check for the
-launcher file, not the table row.
+redirect the venvs and the launchers away from `<dest>` — and the progress table
+still reports `installed: liberty-tools, lef-tools, def-tools`. The dest ends up
+with the interpreter and `uv`, no launchers, and no `share/uv/tools`. Check for
+the launcher files, not the table row.
 
 ## spice-subckt-rc-reduce 0.1.0 -- SPICE .subckt parasitic RC reduction (EDA)
 

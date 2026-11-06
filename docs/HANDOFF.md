@@ -13,6 +13,30 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (2): open-eda-file-tools is one package, three distributions
+
+**Ruling:** `lefdef-tools` was absorbed into `open-eda-file-tools` upstream
+(`smprather/open-eda-file-tools` commit `8e9759a`, release v2026.11.1), so
+loadout exposes the project as ONE package. 2026.11.1 briefly shipped three
+registry entries from that clone (`open-eda-file-tools`, `lef-tools`,
+`def-tools`); they are merged here.
+
+**What changed.** The registry field `uv_tools` (list) installs several
+self-contained distributions as separate uv tools for one package.
+`open-eda-file-tools` now carries `uv_tools: [liberty-tools, lef-tools,
+def-tools]`, all four CLIs in `bins`, the union wheel closure, and
+`rolling_subdirs: [".", "lef_tools", "def_tools"]` for `./build/update`
+(which builds one wheel per directory). `rolling_subdir` is retired
+(subsumed by the list), and the two split entries plus their
+`@python-tools-extra` membership are gone. `tests/registry-integrity` pins
+the `uv_tools` shape, `tests/wheelhouse-closure` walks every distribution's
+closure, and `tests/install-open-eda-file-tools` (new, T2) installs the single
+package and asserts four launchers and three tool venvs.
+
+Verified so far: unit-resolver 98/98, registry-integrity 21/21,
+wheelhouse-closure OK (14 python-tools), install-open-eda-file-tools PASS,
+docs-sync 9/9. Release 2026.11.2 carries the change.
+
 ## 2026-11-06: release 2026.11.1 -- interactive shell selection, split LEF/DEF tools, bundled Python 3.12/3.13
 
 **PUBLISHED and verified 2026-11-06** (tag on `7972609`, Good ED25519

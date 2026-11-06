@@ -410,46 +410,47 @@ def main():
     for tool_name, entry in sorted(tools.items()):
         if entry.get("disabled"):
             continue  # out of service: it is not installed, so it cannot fail
-        spec = entry.get("uv_tool", "")
-        root = normalize(spec)
-        candidates = index.get(root, [])
-        if not candidates:
-            bad.append(f"{tool_name}: no wheel for '{spec}' in the wheelhouse")
-            continue
-        # Walk the closure over the wheelhouse, ABI-compatibility first.
-        seen = set()
-        queue = [root]
-        problems = []
-        while queue:
-            current = queue.pop()
-            if current in seen:
+        specs = entry.get("uv_tools") or [entry.get("uv_tool", "")]
+        for spec in specs:
+            root = normalize(spec)
+            candidates = index.get(root, [])
+            if not candidates:
+                bad.append(f"{tool_name}: no wheel for '{spec}' in the wheelhouse")
                 continue
-            seen.add(current)
-            entries = index.get(current, [])
-            usable = [e for e in entries if wheel_is_abi_compatible(e[0], version)]
-            if not usable:
-                if entries:
-                    problems.append(
-                        f"{current} (bundled only as {', '.join(e[0] for e in entries)} -- "
-                        f"no cp{version.replace('.', '')}/abi3/py3-none-any wheel)"
-                    )
-                else:
-                    problems.append(f"{current} (no wheel in the wheelhouse)")
-                continue
-            _fn, _p, (_n, _v, requires) = usable[0]
-            for req in requires:
-                dep = requirement_name(req)
-                if not dep:
+            # Walk the closure over the wheelhouse, ABI-compatibility first.
+            seen = set()
+            queue = [root]
+            problems = []
+            while queue:
+                current = queue.pop()
+                if current in seen:
                     continue
-                # A requirement guarded by an environment marker only applies on
-                # the target: "tomli; python_version < '3.11'" is not a
-                # dependency of a 3.15 install.
-                marker = req.split(";", 1)[1].strip() if ";" in req else ""
-                if not marker_applies(marker):
+                seen.add(current)
+                entries = index.get(current, [])
+                usable = [e for e in entries if wheel_is_abi_compatible(e[0], version)]
+                if not usable:
+                    if entries:
+                        problems.append(
+                            f"{current} (bundled only as {', '.join(e[0] for e in entries)} -- "
+                            f"no cp{version.replace('.', '')}/abi3/py3-none-any wheel)"
+                        )
+                    else:
+                        problems.append(f"{current} (no wheel in the wheelhouse)")
                     continue
-                queue.append(normalize(dep))
-        if problems:
-            bad.append(f"{tool_name}: " + "; ".join(sorted(set(problems))))
+                _fn, _p, (_n, _v, requires) = usable[0]
+                for req in requires:
+                    dep = requirement_name(req)
+                    if not dep:
+                        continue
+                    # A requirement guarded by an environment marker only applies on
+                    # the target: "tomli; python_version < '3.11'" is not a
+                    # dependency of a 3.15 install.
+                    marker = req.split(";", 1)[1].strip() if ";" in req else ""
+                    if not marker_applies(marker):
+                        continue
+                    queue.append(normalize(dep))
+            if problems:
+                bad.append(f"{tool_name} ({spec}): " + "; ".join(sorted(set(problems))))
 
     for problem in bad:
         fail(problem)

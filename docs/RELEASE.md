@@ -122,13 +122,14 @@ build/check-versions --outdated-only     # bundled vs upstream, GitHub + PyPI
   Skipping it is defensible when `envs/nvim/lazy-lock.json` has not moved:
   the pins are the source of truth, so an unchanged lockfile means an
   equivalent stash. Say so in the release notes if you skip it.
-- **rolling-git** (`open-eda-file-tools`, `lef-tools`, `def-tools`, `text-serdes`,
-  `time-plot`) — first-party; `./build/update <name>` rebuilds from
+- **rolling-git** (`open-eda-file-tools`, `text-serdes`, `time-plot`) —
+  first-party; `./build/update <name>` rebuilds from
   source HEAD when the commit moved, `--rebuild` forces. The ones with a Rust
   extension must run INSIDE the container (`build/build-shell ./build/update <name>`,
   after `build/build-shell build/container-rust`) — `./build/update` refuses on a
-  host whose glibc is newer than EL8's, because maturin rejects the wheel. Sibling
-  distributions of one repo carry `rolling_subdir` (`lef-tools`, `def-tools`).
+  host whose glibc is newer than EL8's, because maturin rejects the wheel. A repo
+  that ships several distributions under one package lists them in
+  `rolling_subdirs` (`open-eda-file-tools`: `.`, `lef_tools/`, `def_tools/`).
 - **build** — needs `build/build-<tool>.sh --tag vX.Y.Z` on this EL8 box.
 - **download** / **import-script** — `./build/update <name>` prints the exact recipe.
 

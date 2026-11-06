@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# install-open-eda-file-tools: ONE registry package, three uv distributions.
+#
+# open-eda-file-tools is a monorepo whose self-contained projects are liberty-tools
+# (liberty-format, liberty-view), lef-tools and def-tools. The registry exposes it
+# as a single package (`uv_tools`), and the installer must install each
+# distribution as its OWN uv tool -- a package that silently installed only
+# liberty-tools would leave the CLIs named in `bins` missing from PATH, and the
+# merged registry entry is exactly the kind of change that can look green while
+# doing that.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-open-eda-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-open-eda-dest.XXXXXX")
+local_prefix="$dest_dir"
+
+cleanup() {
+    # The installed tree is sealed read-only, so make it writable first or the
+    # cleanup leaks into $TMPDIR.
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "open-eda-file-tools smoke failed: $*" >&2
+    exit 1
+}
+
+echo "Installing open-eda-file-tools into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" --verbose install -y open-eda-file-tools --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -80 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+# The install must have used the bundled wheelhouse, not the index.
+grep -Fq -- "--no-index" "$test_home/install.log" || fail "uv tool install did not use --no-index"
+grep -Fq -- "--find-links" "$test_home/install.log" || fail "uv tool install did not use --find-links"
+echo "  OK: installed offline from the payload wheelhouse"
+
+probe_env=(env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
+
+# All four CLIs the registry claims. liberty-view is a server launcher, so it is
+# only checked for presence; the three that print help are executed.
+for bin in liberty-format liberty-view lef-tools def-tools; do
+    [[ -x "$local_prefix/bin/$bin" ]] || fail "$bin launcher not installed"
+done
+echo "  OK: all four launchers installed"
+
+# Three separate uv tools, each with its own venv -- not one venv under the
+# registry package's name.
+for dist in liberty-tools lef-tools def-tools; do
+    tool_python="$local_prefix/share/uv/tools/$dist/bin/python"
+    [[ -x $tool_python ]] || fail "$dist tool venv missing"
+    "${probe_env[@]}" "$tool_python" -c "
+import importlib.metadata as m
+print(m.version('$dist'))
+" > "$test_home/$dist.version" 2>&1 || {
+        cat "$test_home/$dist.version" >&2
+        fail "$dist is not importable from its tool venv"
+    }
+    [[ -s "$test_home/$dist.version" ]] || fail "$dist reported no version"
+done
+echo "  OK: liberty-tools, lef-tools and def-tools each have a tool venv"
+
+for bin in liberty-format lef-tools def-tools; do
+    "${probe_env[@]}" "$local_prefix/bin/$bin" --help > "$test_home/$bin.help" 2>&1 || {
+        cat "$test_home/$bin.help" >&2
+        fail "$bin --help"
+    }
+done
+echo "  OK: liberty-format/lef-tools/def-tools --help"
+
+# The registry must NOT still expose the split entries: one package, not three.
+"$repo_dir/loadout" info lef-tools > "$test_home/old-name.log" 2>&1 && \
+    fail "retired split entry 'lef-tools' is still a registry package"
+"$repo_dir/loadout" info def-tools > "$test_home/old-name2.log" 2>&1 && \
+    fail "retired split entry 'def-tools' is still a registry package"
+echo "  OK: the split entries are gone from the registry"
+
+echo "open-eda-file-tools smoke passed"

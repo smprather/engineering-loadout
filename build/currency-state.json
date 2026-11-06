@@ -1,14 +1,8 @@
 {
   "_comment": "Bookkeeping for ./build/update cadence: WHEN each package last ran. Policy (how often) is auto_update_interval in payload/packages.json. Dev-only -- build/ is export-ignore, so this never ships.",
   "packages": {
-    "def-tools": {
-      "last_auto_update": "2026-11-05"
-    },
     "env-nvim": {
       "last_auto_update": "2026-08-24"
-    },
-    "lef-tools": {
-      "last_auto_update": "2026-11-05"
     },
     "nodejs": {
       "last_auto_update": "2026-10-24"

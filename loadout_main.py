@@ -293,6 +293,10 @@ def _load_tool_registry(repo_dir):
       typelibs     -- typelibs/*.typelib files documented as required.
       wheels       -- Python wheel basenames bundled offline.
       uv_tool      -- package name passed to 'uv tool install'.
+      uv_tools     -- distribution names installed as separate uv tools for one
+                     registry package (a monorepo's self-contained projects).
+                     Mutually exclusive with uv_tool; uv_extras applies to the
+                     single uv_tool form only.
       uv_extras    -- optional extras included in the uv tool requirement.
       disabled     -- if true, the package is DISABLED: it is excluded from every
                      sweep (@shared, @shared-all, @envs-all, @all) and installing
@@ -2709,7 +2713,7 @@ def install_prebuilt_binaries(repo_dir, home, selected_tools=None):
             _present_stems = {os.path.basename(f)[:-4] for f in _bz2.find(bin_dir)}
             for _pname in sorted(selected_tools):
                 _e = _registry.get(_pname, {})
-                if _e.get("kind") != "bin" or _e.get("archive") or "uv_tool" in _e:
+                if _e.get("kind") != "bin" or _e.get("archive") or "uv_tool" in _e or "uv_tools" in _e:
                     continue
                 _claimed = _e.get("bins", [])
                 if _claimed and not any(b in _present_stems for b in _claimed):
@@ -3270,6 +3274,23 @@ def _uv_tool_spec(info):
     return f"{package}[{','.join(extras)}]" if extras else package
 
 
+def _uv_tool_entries(info):
+    """[(distribution, requirement)] for the uv tools a registry entry installs.
+
+    A package normally installs one tool (``uv_tool``). A monorepo may publish
+    several self-contained distributions that belong to one registry package
+    (``uv_tools``, e.g. open-eda-file-tools); each is installed as its OWN uv
+    tool, so every distribution keeps its own venv and launchers. ``uv_extras``
+    applies only to the single ``uv_tool`` form.
+    """
+    tools = info.get("uv_tools")
+    if tools:
+        return [(tool, tool) for tool in tools]
+    if "uv_tool" in info:
+        return [(info["uv_tool"], _uv_tool_spec(info))]
+    return []
+
+
 # Launchers a wheel installs that CANNOT work in this bundle, keyed by uv_tool
 # distribution name. `uv tool install` creates an entry point for every console
 # script the wheel declares, including ones whose imports we deliberately do not
@@ -3602,11 +3623,10 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     # is a clean SKIP, not a FAIL for a missing uv/python the caller never asked for.
     tools_to_install = []
     for name, info in registry.items():
-        if "uv_tool" not in info:
-            continue
         if selected_tools is not None and name not in selected_tools:
             continue
-        tools_to_install.append((name, info["uv_tool"], _uv_tool_spec(info)))
+        for dist, spec in _uv_tool_entries(info):
+            tools_to_install.append((name, dist, spec))
 
     if not tools_to_install:
         skipped("Python tools (no selected tools require uv_tool)", "")
@@ -3639,17 +3659,17 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
     installed = []
     failed = []
     skipped_tools = []
-    progress = _ItemProgress("Python tools", (t[0] for t in tools_to_install))
+    progress = _ItemProgress("Python tools", (t[1] for t in tools_to_install))
     try:
-        for tool_name, pkg_name, install_spec in tools_to_install:
+        for _pkg_name, tool_name, install_spec in tools_to_install:
             progress.step(tool_name, prefix="Python tools: ")
             try:
-                # Check if a wheel for this package exists (whole or chunked) before install.
-                norm = pkg_name.lower().replace("-", "_").replace(".", "_")
+                # Check if a wheel for this distribution exists (whole or chunked) before install.
+                norm = tool_name.lower().replace("-", "_").replace(".", "_")
                 matches = (
-                    glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl"))
+                    glob.glob(os.path.join(wheels_dir, tool_name + "-*.whl"))
                     + glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
-                    + glob.glob(os.path.join(wheels_dir, pkg_name + "-*.whl.part-000"))
+                    + glob.glob(os.path.join(wheels_dir, tool_name + "-*.whl.part-000"))
                     + glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
                 )
                 if not matches:
@@ -3702,14 +3722,14 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 else:
                     installed.append(tool_name)
                     _vprint(f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']}")
-                    for launcher in _prune_dead_uv_launchers(pkg_name, _env["XDG_BIN_HOME"]):
+                    for launcher in _prune_dead_uv_launchers(tool_name, _env["XDG_BIN_HOME"]):
                         _vprint(f"  Removed unsupported launcher: {launcher}")
                     _tools_home = os.path.join(_env["XDG_DATA_HOME"], "uv", "tools")
-                    for launcher in _wrap_uv_tool_launchers(pkg_name, _env["XDG_BIN_HOME"], _tools_home):
+                    for launcher in _wrap_uv_tool_launchers(tool_name, _env["XDG_BIN_HOME"], _tools_home):
                         _vprint(
                             f"  Wrapped {launcher} launcher with the tool venv's PYTHONPATH (helper scripts need it)"
                         )
-                    for outcome in _patch_uv_tool_sources(pkg_name, _tools_home):
+                    for outcome in _patch_uv_tool_sources(tool_name, _tools_home):
                         _vprint(f"  Source patch: {outcome}")
                         if outcome.endswith(": patched"):
                             print(f"  Patched {outcome.rsplit(': ', 1)[0]} (upstream/toolchain incompatibility)")
@@ -7398,6 +7418,7 @@ def cmd_describe(args, registry):
         "wheels",
         "typelibs",
         "uv_tool",
+        "uv_tools",
         "uv_extras",
         "archive",
         "archive_name",

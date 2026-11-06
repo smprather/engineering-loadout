@@ -333,6 +333,18 @@ def test_uv_tool_spec(m):
         "uv tool spec preserves extra order",
         spec({"uv_tool": "demo", "uv_extras": ["one", "two"]}) == "demo[one,two]",
     )
+    entries = m._uv_tool_entries
+    check("uv tool entries: single tool", entries({"uv_tool": "time-plot"}) == [("time-plot", "time-plot")])
+    check(
+        "uv tool entries: single tool with extras",
+        entries({"uv_tool": "parity-plot", "uv_extras": ["designer"]}) == [("parity-plot", "parity-plot[designer]")],
+    )
+    check(
+        "uv tool entries: several distributions of one package",
+        entries({"uv_tools": ["liberty-tools", "lef-tools", "def-tools"]})
+        == [("liberty-tools", "liberty-tools"), ("lef-tools", "lef-tools"), ("def-tools", "def-tools")],
+    )
+    check("uv tool entries: no tool", entries({"kind": "bin"}) == [])
 
 
 def test_list_name_filters(m):

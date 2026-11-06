@@ -15,7 +15,8 @@ Asserts:
   5. Known enum fields hold known values (kind, platforms).
   6. Every python-tool carries depends [portable-python, uv].
   7. uv_extras occurs only on python-tools with valid uv_tool names, and is a
-     non-empty unique string list.
+     non-empty unique string list. uv_tools is the multi-distribution form:
+     non-empty unique strings, no uv_tool/uv_extras.
   8. Every tool name in farm-versions' TOOLS table maps to a registry package
      (directly or via the known alias table) -- catches the "shipped but never
      registered" drift class.
@@ -210,6 +211,29 @@ def main():
         "uv extras belong to python-tools and are unique non-empty strings",
         not bad_extras,
         ", ".join(bad_extras),
+    )
+
+    # 7b. uv_tools: several distributions installed for one registry package.
+    # Mutually exclusive with uv_tool/uv_extras; each name non-empty and unique.
+    bad_uv_tools = []
+    for name, entry in registry.items():
+        if "uv_tools" not in entry:
+            continue
+        tools = entry["uv_tools"]
+        if (
+            entry.get("kind") != "python-tool"
+            or "uv_tool" in entry
+            or "uv_extras" in entry
+            or not isinstance(tools, list)
+            or not tools
+            or any(not isinstance(tool, str) or not tool for tool in tools)
+            or len(tools) != len(set(tools))
+        ):
+            bad_uv_tools.append(name)
+    check(
+        "uv_tools are unique non-empty strings on python-tools without uv_tool/uv_extras",
+        not bad_uv_tools,
+        ", ".join(bad_uv_tools),
     )
 
     # 7b. prefer declarations: an env package may name tool packages to prefer
