@@ -33,6 +33,7 @@
     "uv_tool": "Base package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
     "uv_tools": "List of distribution names installed as SEPARATE uv tools for one registry package (a monorepo's self-contained projects, e.g. liberty-tools/lef-tools/def-tools). Mutually exclusive with uv_tool.",
     "uv_extras": "Optional Python extras included in the uv tool requirement. Their locked wheel closure must be bundled for offline installation.",
+    "requires_python": "PEP 440 specifier the install interpreter must satisfy for a python-tool: '==3.15.*' when any wheel in the entry's closure is ABI-locked (cp315-cp315), else the upstream Requires-Python floor ('>=3.11'). Required on every python-tool; the resolver compares it with the bundled CPython minor and aborts the install with the package named on a mismatch.",
     "version": "Version of the bundled binary or package. Empty string when the payload has no meaningful upstream version.",
     "rolling_git": "Clone URL for first-party rolling packages; './build/update' rebuilds the wheel from source HEAD and stamps 'version' with git describe.",
     "rolling_subdirs": "Distribution directories (including '.') inside one rolling_git clone; './build/update' builds one wheel per directory and each must match an entry in uv_tools. Absent means the clone root alone.",
@@ -226,7 +227,8 @@
         "liberty-format",
         "liberty-view",
         "lef-tools",
-        "def-tools"
+        "def-tools",
+        "def-dump-instances"
       ],
       "wheels": [
         "liberty-tools",
@@ -265,13 +267,14 @@
         "lef-tools",
         "def-tools"
       ],
+      "requires_python": "==3.15.*",
       "rolling_git": "https://github.com/smprather/open-eda-file-tools.git",
       "rolling_subdirs": [
         ".",
         "lef_tools",
         "def_tools"
       ],
-      "version": "v2026.11.2-1-g515a151",
+      "version": "v2026.11.4-1-gef72bb6",
       "platforms": [
         "linux"
       ],
@@ -330,6 +333,7 @@
         "zstandard"
       ],
       "uv_tool": "librelane",
+      "requires_python": "==3.15.*",
       "version": "3.0.16",
       "platforms": [
         "linux"
@@ -2440,6 +2444,7 @@
         "standard-mailcap"
       ],
       "uv_tool": "visidata",
+      "requires_python": ">=3.8",
       "version": "3.4",
       "platforms": [
         "linux"
@@ -2661,6 +2666,7 @@
         "zipp"
       ],
       "uv_tool": "tclint",
+      "requires_python": ">=3.10",
       "version": "0.9.0",
       "platforms": [
         "linux"
@@ -2749,6 +2755,7 @@
         "traitlets"
       ],
       "uv_tool": "ipython",
+      "requires_python": ">=3.11",
       "version": "9.17.1",
       "platforms": [
         "linux"
@@ -2863,6 +2870,7 @@
         "comm"
       ],
       "uv_tool": "jupyterlab",
+      "requires_python": "==3.15.*",
       "libs": [
         "libatomic.so.1"
       ],
@@ -2896,6 +2904,7 @@
         "mdurl"
       ],
       "uv_tool": "time-plot",
+      "requires_python": "==3.15.*",
       "rolling_git": "https://github.com/smprather/time-plot.git",
       "version": "v2026.9.15",
       "platforms": [
@@ -2932,6 +2941,7 @@
         "pygments"
       ],
       "uv_tool": "text-serdes",
+      "requires_python": "==3.15.*",
       "rolling_git": "https://github.com/smprather/text-serdes.git",
       "version": "361bbf0",
       "platforms": [
@@ -2975,6 +2985,7 @@
         "six"
       ],
       "uv_tool": "cicwave",
+      "requires_python": "==3.15.*",
       "version": "0.7.2",
       "platforms": [
         "linux"
@@ -2995,6 +3006,7 @@
     "mdformat": {
       "kind": "python-tool",
       "uv_tool": "mdformat",
+      "requires_python": ">=3.10",
       "bins": [
         "mdformat"
       ],
@@ -3092,6 +3104,7 @@
         "yarl"
       ],
       "uv_tool": "parity-plot",
+      "requires_python": "==3.15.*",
       "version": "v0.7.0",
       "platforms": [
         "linux"
@@ -3146,6 +3159,7 @@
         "typing_extensions"
       ],
       "uv_tool": "pygwalker",
+      "requires_python": "==3.15.*",
       "version": "0.5.0.1",
       "platforms": [
         "linux"
@@ -4329,6 +4343,7 @@
     "tmux-path-store": {
       "kind": "python-tool",
       "uv_tool": "tmux-path-store",
+      "requires_python": ">=3.11",
       "bins": [
         "tmux-path-store"
       ],
@@ -4354,6 +4369,7 @@
     "watchglass": {
       "kind": "python-tool",
       "uv_tool": "watchglass",
+      "requires_python": ">=3.12",
       "bins": [
         "watchglass"
       ],

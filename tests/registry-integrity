@@ -261,6 +261,34 @@ def main():
     check("prefer declarations are valid", not bad_prefer, "; ".join(bad_prefer))
     check("env-tmux prefers the bundled tmux", registry.get("env-tmux", {}).get("prefer") == ["tmux"])
 
+    # 7d. The interpreter contract (issue #16): every python-tool declares the
+    # CPython minor its wheels are installable under, as a PEP 440 specifier the
+    # bundled interpreter satisfies. The resolver enforces it at install time;
+    # this catches a registry edit before it reaches a user, and the wheel tags
+    # are cross-checked against the declaration by tests/wheelhouse-closure.
+    missing_rp = []
+    bad_rp = []
+    for name, entry in registry.items():
+        if entry.get("kind") != "python-tool":
+            continue
+        spec = entry.get("requires_python")
+        if not isinstance(spec, str) or not spec.strip():
+            missing_rp.append(name)
+            continue
+        try:
+            satisfied = mod._python_spec_satisfied(spec, mod._BUNDLED_PY)
+        except ValueError as exc:
+            bad_rp.append(f"{name}: {exc}")
+            continue
+        if not satisfied:
+            bad_rp.append(f"{name}: {spec} excludes the bundled CPython {mod._BUNDLED_PY}")
+    check("every python-tool declares requires_python", not missing_rp, ", ".join(missing_rp))
+    check(
+        "every requires_python is usable and satisfied by the bundled interpreter",
+        not bad_rp,
+        "; ".join(bad_rp),
+    )
+
     # 8. farm-versions TOOLS <-> registry sync. A TOOLS name is valid when it
     # is a registry package, a bin stem some package claims, or a known alias.
     bin_owners = set()

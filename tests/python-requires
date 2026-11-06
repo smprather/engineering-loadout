@@ -1,0 +1,137 @@
+#!/usr/bin/env python3.15
+"""
+python-requires -- the python-tool interpreter contract aborts an install.
+
+Issue #16: a python-tool's wheels are ABI-locked to one CPython minor
+(`def_tools-…-cp315-cp315-…whl` cannot be installed by 3.16), but the registry
+carried no such constraint -- `depends` is a list of NAMES -- so a bundle
+shipped under the wrong minor installed "successfully" and died at first
+import. `requires_python` is that declaration, and the resolver refuses a
+selection whose declaration the bundled interpreter does not satisfy, BEFORE
+anything is written (`resolve` and `install --dry-run` both fail).
+
+This gate drives the real CLI over a throwaway repo: loadout_main.py loaded
+from a temp directory (so `repo_dir` is the temp dir) with the real
+installer_vendor and a COPY of payload/packages.json it may mutate. Nothing
+is installed and no payload is needed -- resolution is registry-only.
+
+Cases:
+  1. the shipped registry resolves open-eda-file-tools (control);
+  2. `requires_python: ">=3.16"` aborts `install --dry-run` with the package,
+     the declared spec and the bundled minor in the message;
+  3. a missing field aborts with "declares no requires_python";
+  4. an unparseable specifier aborts instead of being silently ignored.
+
+Exits 0 if all cases pass, 1 otherwise.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PACKAGES = os.path.join(REPO, "payload", "packages.json")
+PKG = "open-eda-file-tools"
+
+PASSED = 0
+FAILED = 0
+
+
+def check(name, cond, detail=""):
+    global PASSED, FAILED
+    if cond:
+        PASSED += 1
+        print(f"  PASS  {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL  {name}  {detail}")
+
+
+def make_repo(root):
+    """A repo dir that is only the installer + a mutable registry."""
+    os.symlink(os.path.join(REPO, "loadout_main.py"), os.path.join(root, "loadout_main.py"))
+    os.symlink(os.path.join(REPO, "installer_vendor"), os.path.join(root, "installer_vendor"))
+    os.makedirs(os.path.join(root, "payload"))
+    registry = os.path.join(root, "payload", "packages.json")
+    shutil.copy2(PACKAGES, registry)
+    return registry
+
+
+def run(root, *args):
+    env = {k: v for k, v in os.environ.items() if k not in ("LOADOUT_CFG_EXCLUDE",)}
+    proc = subprocess.run(
+        [sys.executable, os.path.join(root, "loadout_main.py")] + list(args),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+    )
+    return proc.returncode, proc.stdout.decode("utf-8", "replace")
+
+
+def set_python(registry, mutate):
+    with open(registry, encoding="utf-8") as fh:
+        data = json.load(fh)
+    mutate(data["packages"][PKG])
+    with open(registry, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+
+
+def main():
+    root = tempfile.mkdtemp(prefix="loadout-python-requires.")
+    try:
+        registry = make_repo(root)
+
+        rc, out = run(root, "resolve", PKG)
+        check("shipped registry resolves the python-tool", rc == 0 and PKG in out, out.strip()[-400:])
+
+        def too_new(entry):
+            entry["requires_python"] = ">=3.16"
+
+        set_python(registry, too_new)
+        rc, out = run(root, "install", "-y", "--dry-run", PKG, "--dest-dir", os.path.join(root, "dest"))
+        check("a newer requires_python aborts install --dry-run", rc != 0, f"rc={rc}\n{out.strip()[-600:]}")
+        check("the abort names the package", PKG in out, out.strip()[-400:])
+        check("the abort names the declared spec", ">=3.16" in out, out.strip()[-400:])
+        check("the abort names the bundled minor", "3.15" in out, out.strip()[-400:])
+        check(
+            "the abort happens before any phase runs",
+            "Installing" not in out and "python3.15 not found" not in out,
+            out.strip()[-400:],
+        )
+
+        def drop(entry):
+            entry.pop("requires_python", None)
+
+        set_python(registry, drop)
+        rc, out = run(root, "resolve", PKG)
+        check("a missing declaration aborts", rc != 0 and "declares no requires_python" in out, out.strip()[-400:])
+
+        def garble(entry):
+            entry["requires_python"] = "at least 3.15"
+
+        set_python(registry, garble)
+        rc, out = run(root, "resolve", PKG)
+        check("an unparseable declaration aborts", rc != 0 and "unusable requires_python" in out, out.strip()[-400:])
+
+        # A stray requires_python on a package that is NOT a python-tool is not
+        # a contract: `uv` is a bin package, so the field must not abort it.
+        with open(registry, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["packages"][PKG]["requires_python"] = "==3.15.*"
+        data["packages"]["uv"]["requires_python"] = ">=3.16"
+        with open(registry, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        rc, out = run(root, "resolve", PKG, "uv")
+        check("a stray field on a non-python-tool is not enforced", rc == 0, out.strip()[-400:])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

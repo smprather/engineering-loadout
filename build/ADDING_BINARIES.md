@@ -222,6 +222,15 @@ Key rules:
   self-contained distributions: the distribution names, each installed as its own
   `uv tool` (own venv and launchers). Mutually exclusive with `uv_tool`/`uv_extras`;
   list every distribution's `bins` and the union of their wheel closures.
+- `requires_python` -- for every `python-tool`: the PEP 440 specifier the install
+  interpreter must satisfy. Use `==3.15.*` when ANY wheel in the entry's closure
+  is ABI-locked to one minor (`cp315-cp315`; the lock is in the filename, and a
+  `cp314` wheel cannot be installed by 3.15 at all), else the upstream floor
+  (`>=3.11`). The resolver compares it with `_BUNDLED_PY` and aborts the install
+  naming the package, `./build/update` refuses to copy a rebuilt wheel that
+  contradicts it, and `tests/wheelhouse-closure` cross-checks it against the
+  wheels' tags and `Requires-Python`. A missing field fails
+  `tests/registry-integrity`.
 - `rolling_git` + `rolling_subdirs` -- for a `python-tool` built from source HEAD
   instead of a published wheel: `rolling_git` is the clone URL, and
   `./build/update <name>` clones it, stamps `git describe --tags` as `version`,
@@ -867,6 +876,15 @@ Source `/cache/env`; do not just prepend the PATH. It also exports
 `RUSTUP_HOME`/`CARGO_HOME`, and with PATH alone rustup's cargo shim answers
 "rustup could not choose a version of cargo to run ... no default is
 configured" for every build.
+
+After a rolling rebuild, re-check the DEPENDENCY closure the new wheels demand,
+not just their ABI: `v2026.11.4` of open-eda-file-tools moved to
+`polars>=2.1.0` while the wheelhouse carried 2.0.0, so `uv tool install
+liberty-tools` failed with an unsatisfiable requirement and only
+`tests/install-open-eda-file-tools` (T2) noticed -- `tests/wheelhouse-closure`
+checks wheel presence, ABI tags and `Requires-Python`, NOT `Requires-Dist`
+version floors. Refresh the closure with the `pip download` recipe above and
+prune the superseded versions.
 
 `./build/update` sets `UV_PYTHON` to the repo's own 3.15 bootstrap when the
 variable is unset, so the wheel is cp315 without extra ceremony. The wheel

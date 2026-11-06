@@ -71,6 +71,23 @@ def normalize(name):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+def load_loadout():
+    """Load loadout_main.py as a module (the resolver's specifier evaluator).
+
+    One implementation, so this gate and the installer cannot disagree about
+    what a `requires_python` specifier means.
+    """
+    import importlib.machinery
+    import importlib.util
+
+    path = os.path.join(REPO, "loadout_main.py")
+    loader = importlib.machinery.SourceFileLoader("loadout_mod", path)
+    spec = importlib.util.spec_from_loader("loadout_mod", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
 def wheel_tags(filename):
     """The (python, abi, platform) tag triple a wheel filename declares.
 
@@ -205,24 +222,38 @@ def _clause_applies(clause):
 
 
 def wheel_metadata(path):
-    """(name, version, [requirement strings]) from a wheel's METADATA."""
+    """(name, version, [requirement strings], requires_python, [console scripts]) from a wheel."""
     with zipfile.ZipFile(path) as z:
-        for member in z.namelist():
+        members = z.namelist()
+        for member in members:
             if member.endswith(".dist-info/METADATA"):
                 text = z.read(member).decode("utf-8", "replace")
                 break
         else:
             return None
-    name = version = None
+        scripts = []
+        for member in members:
+            if not member.endswith(".dist-info/entry_points.txt"):
+                continue
+            section = None
+            for line in z.read(member).decode("utf-8", "replace").splitlines():
+                line = line.strip()
+                if line.startswith("["):
+                    section = line.strip("[]").strip()
+                elif section == "console_scripts" and "=" in line:
+                    scripts.append(line.split("=")[0].strip())
+    name = version = requires_python = None
     requires = []
     for line in text.splitlines():
         if line.startswith("Name: ") and name is None:
             name = line[6:].strip()
         elif line.startswith("Version: ") and version is None:
             version = line[9:].strip()
+        elif line.startswith("Requires-Python: ") and requires_python is None:
+            requires_python = line[17:].strip()
         elif line.startswith("Requires-Dist: "):
             requires.append(line[15:].strip())
-    return name, version, requires
+    return name, version, requires, requires_python, scripts
 
 
 def requirement_name(req):
@@ -373,17 +404,37 @@ def main():
                 os.unlink(temp)
         if meta is None:
             continue
-        name, _ver, _req = meta
+        name, _ver, _req, _rp, _scripts = meta
         index.setdefault(normalize(name), []).append((filename, path, meta))
 
     ok(f"wheelhouse: {sum(len(v) for v in index.values())} wheels, {len(index)} distributions")
 
+    # The declared interpreter contract has to agree with the payload: a spec
+    # the registry cannot satisfy, or a wheel whose own Requires-Python rejects
+    # the shipped minor, is a defect no install-time check can see. The
+    # evaluator is loadout_main's (one implementation, the one the resolver
+    # uses), loaded without executing the CLI.
+    satisfies = load_loadout()._python_spec_satisfied
+
+    def spec_ok(spec, version):
+        """(True, None) / (False, reason) for a PEP 440 specifier."""
+        try:
+            return satisfies(spec, version), None
+        except ValueError as exc:
+            return False, f"unusable specifier {spec!r}: {exc}"
+
     # A wheel the shipped interpreter cannot install is dead weight in every
     # release: no closure can use it. The 3.15 sweep left 30 cp314 wheels
-    # (238 MB) that nothing could install; pruned 2026-10-28 (DEBT-1).
-    dead = sorted(
-        fn for entries in index.values() for fn, _p, _m in entries if not wheel_is_abi_compatible(fn, version)
-    )
+    # (238 MB) that nothing could install; pruned 2026-10-28 (DEBT-1). The same
+    # rule covers Requires-Python: a wheel that declares it needs a different
+    # minor is just as unusable, whatever its ABI tag says.
+    dead = []
+    for entries in index.values():
+        for fn, _p, (_n, _v, _req, requires_python, _scripts) in entries:
+            if not wheel_is_abi_compatible(fn, version):
+                dead.append(fn)
+            elif requires_python and not spec_ok(requires_python, version)[0]:
+                dead.append(f"{fn} (Requires-Python {requires_python!r})")
     if dead:
         fail(
             f"{len(dead)} wheel(s) the shipped cp{version.replace('.', '')} interpreter cannot install "
@@ -411,6 +462,59 @@ def main():
         if entry.get("disabled"):
             continue  # out of service: it is not installed, so it cannot fail
         specs = entry.get("uv_tools") or [entry.get("uv_tool", "")]
+
+        # 1. The entry's DECLARATION must be usable and satisfied by the
+        # shipped interpreter -- the resolver enforces exactly this at install
+        # time, so a registry that fails here fails only later, at a user's
+        # keyboard.
+        declared = entry.get("requires_python")
+        if not isinstance(declared, str) or not declared.strip():
+            bad.append(f"{tool_name}: declares no requires_python")
+        else:
+            ok_spec, why = spec_ok(declared, version)
+            if not ok_spec:
+                bad.append(
+                    f"{tool_name}: requires_python {declared!r} "
+                    f"{why or f'is not satisfied by the shipped CPython {version}'}"
+                )
+            else:
+                # 2. A cp315-cp315 wheel is installable by 3.15 ONLY, so a
+                # declaration that does not pin that minor understates the
+                # entry (the cp313-under-3.15 failure mode: uv accepts the
+                # wheel, the import dies).
+                pins = {
+                    clause.strip()[2:-2]
+                    for clause in declared.split(",")
+                    if clause.strip().startswith("==") and clause.strip().endswith(".*")
+                }
+                locked = set()
+                for wheel_name in specs:
+                    for filename, _path, _meta in index.get(normalize(wheel_name), []):
+                        match = re.search(r"-cp(3\d+)-cp\1-", filename)
+                        if match:
+                            digits = match.group(1)
+                            locked.add(f"{digits[0]}.{digits[1:]}")
+                for minor in sorted(locked):
+                    if minor not in pins:
+                        bad.append(
+                            f"{tool_name}: bundled wheels are ABI-locked to CPython {minor}, but "
+                            f"requires_python {declared!r} does not pin '=={minor}.*'"
+                        )
+
+        # 3. `bins` are PATH-facing promises. Every one must be a console
+        # script of the vendored wheels -- otherwise the registry advertises a
+        # launcher no `uv tool install` will create (this is how an older
+        # def-tools wheel would silently lose def-dump-instances).
+        scripts = {
+            script
+            for wheel_name in specs
+            for _f, _p, meta in index.get(normalize(wheel_name), [])
+            for script in meta[4]
+        }
+        missing_bins = sorted(set(entry.get("bins", [])) - scripts)
+        if missing_bins:
+            bad.append(f"{tool_name}: bins {missing_bins} are not console scripts of the vendored wheels")
+
         for spec in specs:
             root = normalize(spec)
             candidates = index.get(root, [])
@@ -437,7 +541,7 @@ def main():
                     else:
                         problems.append(f"{current} (no wheel in the wheelhouse)")
                     continue
-                _fn, _p, (_n, _v, requires) = usable[0]
+                _fn, _p, (_n, _v, requires, _rp, _scripts) = usable[0]
                 for req in requires:
                     dep = requirement_name(req)
                     if not dep:

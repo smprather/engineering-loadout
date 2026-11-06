@@ -46,14 +46,26 @@ grep -Fq -- "--no-index" "$test_home/install.log" || fail "uv tool install did n
 grep -Fq -- "--find-links" "$test_home/install.log" || fail "uv tool install did not use --find-links"
 echo "  OK: installed offline from the payload wheelhouse"
 
-probe_env=(env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
+# PATH poison: a `python3` that is NOT the bundled minor, first on PATH. Every
+# launcher uv wrote carries an absolute-interpreter shebang, so nothing here may
+# depend on what `python3` resolves to (acceptance criterion of issue #16: the
+# tools work with python3 -> 3.12 first on PATH).
+poison_dir="$test_home/poison-bin"
+mkdir -p "$poison_dir"
+for name in python python3; do
+    printf '#!/bin/sh\nexit 99\n' > "$poison_dir/$name"
+    chmod +x "$poison_dir/$name"
+done
+probe_env=(env -i HOME="$test_home" PATH="$poison_dir:$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
 
-# All four CLIs the registry claims. liberty-view is a server launcher, so it is
-# only checked for presence; the three that print help are executed.
-for bin in liberty-format liberty-view lef-tools def-tools; do
+# Every CLI the registry claims. liberty-view is a server launcher, so it is
+# only checked for presence; the rest print help and are executed.
+# def-dump-instances only exists from def-tools v2026.11.4: a stale wheel in the
+# payload makes the registry promise a launcher nothing creates.
+for bin in liberty-format liberty-view lef-tools def-tools def-dump-instances; do
     [[ -x "$local_prefix/bin/$bin" ]] || fail "$bin launcher not installed"
 done
-echo "  OK: all four launchers installed"
+echo "  OK: all five launchers installed"
 
 # Three separate uv tools, each with its own venv -- not one venv under the
 # registry package's name.
@@ -71,13 +83,13 @@ print(m.version('$dist'))
 done
 echo "  OK: liberty-tools, lef-tools and def-tools each have a tool venv"
 
-for bin in liberty-format lef-tools def-tools; do
+for bin in liberty-format lef-tools def-tools def-dump-instances; do
     "${probe_env[@]}" "$local_prefix/bin/$bin" --help > "$test_home/$bin.help" 2>&1 || {
         cat "$test_home/$bin.help" >&2
         fail "$bin --help"
     }
 done
-echo "  OK: liberty-format/lef-tools/def-tools --help"
+echo "  OK: liberty-format/lef-tools/def-tools/def-dump-instances --help (python3 poisoned on PATH)"
 
 # The registry must NOT still expose the split entries: one package, not three.
 "$repo_dir/loadout" info lef-tools > "$test_home/old-name.log" 2>&1 && \

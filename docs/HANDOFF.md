@@ -13,6 +13,48 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (10): python-tool interpreter contract declared, asserted, gated
+
+Issue `smprather/engineering-loadout#16`. The bundled CPython minor a
+`python-tool` is installable under is now a registry field instead of a
+constant plus a wheel tag: `requires_python` (PEP 440). `==3.15.*` for every
+entry whose wheel closure holds an ABI-locked `cp315-cp315` wheel
+(open-eda-file-tools, librelane, jupyterlab, time-plot, text-serdes, cicwave,
+parity-plot, pygwalker), the upstream floor for the pure-Python ones
+(visidata `>=3.8`, tclint/mdformat `>=3.10`, ipython/tmux-path-store `>=3.11`,
+watchglass `>=3.12`).
+
+**Class C** (loader + payload + registry + schema). `resolve_tool_selection`
+compares the declaration with `_BUNDLED_PY` and raises `ResolverError` naming
+the package, so `resolve`, `install --dry-run` and a real install all abort
+before any phase. After each successful `uv tool install`,
+`_assert_uv_tool_imports` imports the distribution's console-script modules
+under the tool's own venv interpreter; a wheel whose ABI does not match is a
+FAILED row (`Python tools | FAILED`), not a first-run crash. `./build/update`
+refuses to copy a rebuilt wheel whose ABI lock the declaration does not pin.
+
+**Payload:** `def-tools` v2026.11.4.dev0 (upstream `v2026.11.4-1-gef72bb6`)
+via `build/build-shell sh -c 'build/container-rust && . /cache/env &&
+./build/update open-eda-file-tools --rebuild'` (98 s) -- `def-dump-instances`
+is now a launcher and is listed in `bins`; `liberty-tools` 2.0.5.dev0,
+`lef_tools` rebuilt. That upstream bump requires `polars>=2.1.0`, so the
+wheelhouse gained `polars`, `polars-runtime-{32,64,compat}` 2.1.0 (chunked) and
+the superseded 1.41.2 / 2.0.0 polars wheels were pruned: without them
+`uv tool install liberty-tools` failed with an unsatisfiable `polars>=2.1.0`,
+which is how the missing closure first showed up (the T2 gate caught it).
+
+**Gates:** `tests/python-requires` (new, T1) pins the abort end-to-end over a
+temp repo (mismatch, missing field, unparseable spec, stray field on a
+non-python-tool); `tests/registry-integrity` requires the field on every
+python-tool; `tests/wheelhouse-closure` now also checks every wheel's
+`Requires-Python`, the ABI lock vs the declaration, and that `bins` are real
+console scripts of the vendored wheels (negative controls run: `>=3.16` on
+mdformat, `>=3.14` on open-eda, a ghost bin -- each failed as intended);
+`tests/install-open-eda-file-tools` requires all five launchers and runs
+`def-dump-instances --help` with a `python3` that exits 99 first on PATH.
+
+Design/plan: `docs/superpowers/plans/2026-11-06-python-tool-interpreter-contract.md`.
+
 ## 2026-11-06 (9): feature branch merged; suite state after the speed work
 
 **Merge `aca8756`** -- `issue-13-persistent-exclude` + `main`; both branches

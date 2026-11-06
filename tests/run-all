@@ -613,6 +613,7 @@ run_test "unit-install-steps" "$PY" tests/unit-install-steps
 run_test "install-atomic-replace" "$PY" tests/install-atomic-replace
 run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
 run_test "registry-integrity" "$PY" tests/registry-integrity
+run_test "python-requires" --deps payload+loader "$PY" tests/python-requires
 run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
@@ -642,7 +643,9 @@ run_test "env-nvim-no-git" --deps envs tests/env-nvim-no-git
 run_test "env-nvim-smart-quit" --deps envs tests/env-nvim-smart-quit
 run_test "install-noop-stamps" --deps payload+loader+envs "$PY" tests/install-noop-stamps
 run_test "nodejs-runpath" --deps payload+build+loader "$PY" tests/nodejs-runpath
-run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
+# The gate loads loadout_main.py for the one specifier evaluator, and reads the
+# payload wheelhouse: either side invalidates its verdict.
+run_test "wheelhouse-closure" --deps payload+loader "$PY" tests/wheelhouse-closure
 run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
 run_test "release-timings" "$PY" tests/release-timings
 run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship

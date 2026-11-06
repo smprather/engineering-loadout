@@ -1052,6 +1052,51 @@ def _set_pkg_version(name, version):
         fh.write(txt[:i] + new_block + txt[j:])
 
 
+def _wheel_abi_minor(filename):
+    """The CPython minor a wheel is ABI-locked to ('3.15'), or '' for abi3/pure.
+
+    `-cp315-cp315-` can only be installed by CPython 3.15; `-cp36-abi3-` and
+    `py3-none-any` work on any 3.x.
+    """
+    match = re.search(r"-cp(3\d+)-cp\1-", filename)
+    if not match:
+        return ""
+    digits = match.group(1)
+    return f"{digits[0]}.{digits[1:]}"
+
+
+def _wheel_declaration_problems(name, entry, wheel_paths):
+    """Wheels whose ABI lock the entry's requires_python does not declare.
+
+    A rebuilt wheel is where the interpreter contract can silently drift: a
+    build that picked the wrong interpreter (uv resolves UV_PYTHON, and a
+    monkeypatched one is invisible until the import) produces a wheel for a
+    minor the registry never promised. Refuse before copying it into the
+    payload -- tests/wheelhouse-closure would catch it afterwards, but only
+    after the bytes and the manifest are already committed.
+    """
+    spec = entry.get("requires_python")
+    if not isinstance(spec, str) or not spec.strip():
+        return [
+            f'{name} declares no requires_python: add e.g. "requires_python": '
+            f'"==3.15.*" to payload/packages.json before rebuilding its wheels'
+        ]
+    pins = {
+        clause.strip()[2:-2]
+        for clause in spec.split(",")
+        if clause.strip().startswith("==") and clause.strip().endswith(".*")
+    }
+    problems = []
+    for wheel in wheel_paths:
+        minor = _wheel_abi_minor(wheel)
+        if minor and minor not in pins:
+            problems.append(
+                f"{wheel} is ABI-locked to CPython {minor}, but {name}.requires_python "
+                f"{spec!r} does not pin '=={minor}.*'"
+            )
+    return problems
+
+
 def _run_rolling(name, dry_run=False, force=False):
     _sep(name)
     url = ROLLING_GIT[name]
@@ -1162,6 +1207,13 @@ def _run_rolling(name, dry_run=False, force=False):
         built = sorted(f for f in os.listdir(out_dir) if f.endswith(".whl"))
         if not built:
             print(f"ERROR: no wheel produced for {name}")
+            return False
+        problems = _wheel_declaration_problems(name, PACKAGES.get(name) or {}, built)
+        if problems:
+            print("ERROR: the built wheel(s) contradict the registry's interpreter contract:")
+            for problem in problems:
+                print(f"  - {problem}")
+            print("       Nothing was copied into the payload.")
             return False
         for wheel in built:
             dist = wheel.split("-")[0]  # normalized dist name, e.g. liberty_tools

@@ -33,6 +33,10 @@ Every package also declares:
 - `tags: [...]` -- free-form labels for `list --tag T`
 - Per-kind artifact fields: `bins`, `libs`, `archive`, `wheels`, `uv_tool`,
   `requirements`, `lock`, `wheels_dir`, etc.
+- `requires_python` (python-tool only): the PEP 440 specifier the install
+  interpreter must satisfy (`==3.15.*` when the entry's wheels are ABI-locked
+  to one CPython minor, else the upstream floor). The resolver compares it with
+  the bundled interpreter and aborts before any phase runs.
 - `version`, `description`, `homepage`
 - Optional upstream version tracking: `version_url`, `version_pattern`,
   `version_url_accept`, `version_url_ua`

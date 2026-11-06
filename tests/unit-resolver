@@ -347,6 +347,107 @@ def test_uv_tool_spec(m):
     check("uv tool entries: no tool", entries({"kind": "bin"}) == [])
 
 
+def test_python_requires(m):
+    """The declared interpreter contract (issue #16): the specifier evaluator,
+    and the resolver refusing a python-tool the bundle cannot install."""
+    sat = m._python_spec_satisfied
+    cases = [
+        (">=3.14", True),
+        (">=3.15", True),
+        ("==3.15.*", True),
+        ("==3.15.0", True),
+        ("==3.16.*", False),
+        ("==3.14.*", False),
+        ("~=3.14.0", False),
+        ("~=3.15.0", True),
+        ("~=3.14", True),
+        ("~=3.16", False),
+        ("!=3.15.*", False),
+        ("!=3.14.*", True),
+        ("<3.15", False),
+        ("<=3.15", True),
+        (">3.15", False),
+        (">=3.14,<4", True),
+        (">=3.14,!=3.15.*", False),
+    ]
+    for spec, expected in cases:
+        try:
+            got = sat(spec, "3.15")
+        except ValueError as exc:
+            got = f"ValueError: {exc}"
+        check(f"requires_python {spec!r} against 3.15 -> {expected}", got is expected, repr(got))
+
+    for bad in ("3.15", ">>3.14", "===nope", "==*"):
+        try:
+            sat(bad, "3.15")
+            check(f"unparseable specifier {bad!r} raises", False)
+        except ValueError:
+            check(f"unparseable specifier {bad!r} raises", True)
+
+    reg = {
+        "portable-python": {"kind": "python-base", "platforms": ["linux"]},
+        "uv": {"kind": "bin", "platforms": ["linux"]},
+        "py-exact": {
+            "kind": "python-tool",
+            "uv_tool": "py-exact",
+            "requires_python": "==3.15.*",
+            "depends": ["portable-python", "uv"],
+            "platforms": ["linux"],
+        },
+        "py-floor": {
+            "kind": "python-tool",
+            "uv_tools": ["alpha", "beta"],
+            "requires_python": ">=3.10",
+            "depends": ["portable-python", "uv"],
+            "platforms": ["linux"],
+        },
+        "py-future": {
+            "kind": "python-tool",
+            "uv_tool": "py-future",
+            "requires_python": ">=3.16",
+            "depends": ["portable-python", "uv"],
+            "platforms": ["linux"],
+        },
+        "py-undeclared": {
+            "kind": "python-tool",
+            "uv_tool": "py-undeclared",
+            "depends": ["portable-python", "uv"],
+            "platforms": ["linux"],
+        },
+        "py-garbled": {
+            "kind": "python-tool",
+            "uv_tool": "py-garbled",
+            "requires_python": "at least 3.15",
+            "depends": ["portable-python", "uv"],
+            "platforms": ["linux"],
+        },
+    }
+    rts = m.resolve_tool_selection
+    check("declared exact pin resolves", rts(_args(only="py-exact"), reg) == {"py-exact", "portable-python", "uv"})
+    check("declared floor resolves", rts(_args(only="py-floor"), reg) == {"py-floor", "portable-python", "uv"})
+
+    for name in ("py-future", "py-undeclared", "py-garbled"):
+        try:
+            rts(_args(only=name), reg)
+            check(f"resolver refuses {name}", False)
+        except m.ResolverError as exc:
+            check(f"resolver refuses {name}", name in str(exc), str(exc))
+
+    try:
+        rts(_args(only="py-future"), reg)
+    except m.ResolverError as exc:
+        check(
+            "mismatch names the declared spec and the bundled minor",
+            ">=3.16" in str(exc) and "3.15" in str(exc),
+            str(exc),
+        )
+
+    # A registry whose python-tools are fine must not gain a false positive from
+    # a non-python-tool entry that happens to carry the field.
+    reg["plain"] = {"kind": "bin", "requires_python": ">=3.16", "platforms": ["linux"]}
+    check("requires_python on a non-python-tool is ignored", rts(_args(only="plain"), reg) == {"plain"})
+
+
 def test_list_name_filters(m):
     rows = []
     original_list_table = m._list_table
@@ -591,6 +692,7 @@ def main():
         test_tool_bin_lib_sets,
         test_parse_namelist,
         test_uv_tool_spec,
+        test_python_requires,
         test_list_name_filters,
         test_get_version_release_stamp,
         test_local_root_and_install_to,

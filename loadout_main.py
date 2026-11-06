@@ -298,6 +298,14 @@ def _load_tool_registry(repo_dir):
                      Mutually exclusive with uv_tool; uv_extras applies to the
                      single uv_tool form only.
       uv_extras    -- optional extras included in the uv tool requirement.
+      requires_python -- PEP 440 specifier the install interpreter must
+                     satisfy for a python-tool: '==3.15.*' when any wheel in the
+                     entry's closure is ABI-locked (cp315-cp315), else the
+                     upstream floor ('>=3.11'). Required on every python-tool;
+                     checked against _BUNDLED_PY by the resolver
+                     (_python_requires_error), so a mismatch aborts the install
+                     with the package named instead of producing a venv that
+                     cannot import.
       disabled     -- if true, the package is DISABLED: it is excluded from every
                      sweep (@shared, @shared-all, @envs-all, @all) and installing
                      it by name is a hard error. Use this for a tool whose
@@ -576,6 +584,106 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
     return out
 
 
+def _requirement_version(text):
+    """Numeric release tuple of a version string ("3.15" -> (3, 15), "" on junk).
+
+    PEP 440 pre/post/local suffixes are irrelevant here: the only thing a
+    python-tool's `requires_python` is compared against is the bundled MINOR.
+    """
+    match = re.match(r"\s*(\d+(?:\.\d+)*)", text or "")
+    return tuple(int(part) for part in match.group(1).split(".")) if match else ()
+
+
+def _python_spec_satisfied(spec, version):
+    """True when `version` satisfies a comma-separated PEP 440 specifier.
+
+    Supports the operators a registry `requires_python` actually uses: ==, !=,
+    <=, >=, <, > (with an `X.Y.*` wildcard), and ~=. Anything else raises
+    ValueError, so a typo in payload/packages.json is a loud error instead of a
+    constraint that silently never applies. The installer stays stdlib-only:
+    `packaging` is not importable from the bundled interpreter.
+    """
+    want = _requirement_version(version)
+    if not want:
+        raise ValueError(f"unparseable Python version {version!r}")
+
+    def clamp(pairs):
+        width = max(len(p) for p in pairs)
+        return tuple((p + (0,) * width)[:width] for p in pairs)
+
+    for clause in (part.strip() for part in spec.split(",")):
+        if not clause:
+            continue
+        match = re.fullmatch(r"(===|==|!=|<=|>=|~=|<|>)\s*([0-9][0-9A-Za-z.*+!-]*)", clause)
+        if not match:
+            raise ValueError(f"unparseable specifier clause {clause!r} in {spec!r}")
+        op, raw = match.group(1), match.group(2)
+        if raw.endswith(".*"):
+            # Prefix match: ==3.15.* is CPython 3.15, any patch.
+            prefix = _requirement_version(raw[:-2])
+            if op not in ("==", "!=") or not prefix:
+                raise ValueError(f"'{raw}' is not a valid wildcard clause in {spec!r}")
+            hit = want[: len(prefix)] == prefix
+            if hit != (op == "=="):
+                return False
+            continue
+        target = _requirement_version(raw)
+        if not target:
+            raise ValueError(f"unparseable version {raw!r} in {spec!r}")
+        if op == "~=":
+            # ~=3.14.0 means >=3.14.0, ==3.14.* -- and 3.15 satisfies it only
+            # after padding, since (3, 15) < (3, 15, 0) as plain tuples.
+            prefix = target[:-1]
+            left, right = clamp((want, target))
+            if want[: len(prefix)] != prefix or left < right:
+                return False
+            continue
+        left, right = clamp((want, target))
+        if op == "==" and left != right:
+            return False
+        if op == "!=" and left == right:
+            return False
+        if op == "<" and not left < right:
+            return False
+        if op == "<=" and not left <= right:
+            return False
+        if op == ">" and not left > right:
+            return False
+        if op == ">=" and not left >= right:
+            return False
+        if op == "===" and version.strip() != raw:
+            return False
+    return True
+
+
+def _python_requires_error(name, entry):
+    """Why `entry` cannot be installed under the bundled interpreter, or None.
+
+    A python-tool's wheels are ABI-locked to one CPython minor (`cp315-cp315`
+    cannot be installed by 3.16) but the registry used to carry no such
+    constraint: `depends` is a list of NAMES, so `depends: ["portable-python"]`
+    said nothing about which interpreter the wheels need. That gap is only
+    discovered at the first import, on the user's machine -- see
+    docs/superpowers/plans/2026-11-06-python-tool-interpreter-contract.md.
+    """
+    spec = entry.get("requires_python")
+    if not isinstance(spec, str) or not spec.strip():
+        return (
+            f"'{name}' declares no requires_python, so the interpreter its wheels need is "
+            f'undeclared. Add e.g. "requires_python": "=={_BUNDLED_PY}.*" to its '
+            f"payload/packages.json entry."
+        )
+    try:
+        if _python_spec_satisfied(spec, _BUNDLED_PY):
+            return None
+    except ValueError as exc:
+        return f"'{name}' has an unusable requires_python {spec!r}: {exc}"
+    return (
+        f"'{name}' requires Python {spec}; the bundle ships CPython {_BUNDLED_PY} "
+        f"(bin/{_BUNDLED_PY_BIN}) and its wheels are built for that minor."
+    )
+
+
 def walk_depends(names, registry, forbidden=None, force=False, disabled=None):
     """Return names plus the transitive closure of hard 'depends'.
 
@@ -818,6 +926,24 @@ def resolve_tool_selection(args, registry, exclude=None):
             selected = grown
 
     selected = filter_by_platform(selected, registry, _current_platform())
+
+    # The interpreter contract: every python-tool is installed with `uv tool
+    # install --python <prefix>/bin/python3.15`, and its wheels are built for
+    # one CPython minor. Check the DECLARED requirement here, before the
+    # resolver returns, so `resolve`, `--dry-run` and a real install all fail
+    # the same way -- naming the package and the bundled minor -- instead of
+    # leaving a venv that cannot import (issue #16).
+    blocked_python = [
+        msg
+        for name in sorted(selected)
+        if _uv_tool_entries(registry.get(name) or {}) and (msg := _python_requires_error(name, registry[name]))
+    ]
+    if blocked_python:
+        raise ResolverError(
+            "python-tool interpreter requirement not satisfied:\n  "
+            + "\n  ".join(blocked_python)
+            + f"\n  The installer runs every python-tool under the bundled CPython {_BUNDLED_PY}."
+        )
 
     return frozenset(selected)
 
@@ -3687,6 +3813,57 @@ def _patch_uv_tool_sources(pkg_name, tools_home):
     return results
 
 
+# Imports what a uv tool's launchers import, under the tool's OWN interpreter.
+# `uv tool install` exits 0 for a wheel whose ABI does not match the
+# interpreter (uv accepts a cp313 wheel under 3.15 for forward compatibility),
+# and the extension then fails at the first import, on the user's machine.
+# Importing the console-script modules is the cheapest proof that the venv can
+# run what it puts on PATH; running the CLIs would be slower and could hang.
+_UV_TOOL_IMPORT_PROBE = """
+import importlib
+import importlib.metadata
+import sys
+
+dist = sys.argv[1]
+modules = sorted(
+    {
+        entry.value.split(":")[0].strip()
+        for entry in importlib.metadata.distribution(dist).entry_points
+        if ":" in (entry.value or "")
+    }
+)
+if not modules:
+    raise SystemExit(f"{dist} declares no console-script modules")
+for module in modules:
+    importlib.import_module(module)
+print(", ".join(modules))
+"""
+
+
+def _assert_uv_tool_imports(tool_name, tools_home, timeout=60):
+    """(ok, detail) for "this tool's venv can import its own launchers".
+
+    detail is the imported module list on success, or the reason on failure.
+    """
+    python_bin = os.path.join(tools_home, tool_name, "bin", "python")
+    if not os.path.isfile(python_bin):
+        return False, f"no venv interpreter at {python_bin}"
+    try:
+        proc = run(
+            [python_bin, "-c", _UV_TOOL_IMPORT_PROBE, tool_name],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"importing its console scripts timed out after {timeout}s"
+    if proc.returncode != 0:
+        lines = proc.stderr.decode("utf-8", "replace").strip().splitlines()
+        return False, lines[-1] if lines else f"import probe exited {proc.returncode}"
+    return True, proc.stdout.decode("utf-8", "replace").strip()
+
+
 def install_python_tools(repo_dir, home, selected_tools, registry):
     """Install Python tools via 'uv tool install' using bundled offline wheels."""
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
@@ -3796,11 +3973,25 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                     warn(f"uv tool install {install_spec} exited {proc.returncode}")
                     failed.append(tool_name)
                 else:
+                    _tools_home = os.path.join(_env["XDG_DATA_HOME"], "uv", "tools")
+                    imported, detail = _assert_uv_tool_imports(tool_name, _tools_home)
+                    if not imported:
+                        # A venv that cannot import its own launchers is not an
+                        # install. Name the interpreter and the reason; the
+                        # wheels are built for _BUNDLED_PY by construction.
+                        warn(
+                            f"Python tool {tool_name} (for {_pkg_name}) is installed but "
+                            f"does not import under {python_bin}: {detail}"
+                        )
+                        failed.append(tool_name)
+                        continue
                     installed.append(tool_name)
-                    _vprint(f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']}")
+                    _vprint(
+                        f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']} "
+                        f"(imports {detail} under {_BUNDLED_PY_BIN})"
+                    )
                     for launcher in _prune_dead_uv_launchers(tool_name, _env["XDG_BIN_HOME"]):
                         _vprint(f"  Removed unsupported launcher: {launcher}")
-                    _tools_home = os.path.join(_env["XDG_DATA_HOME"], "uv", "tools")
                     for launcher in _wrap_uv_tool_launchers(tool_name, _env["XDG_BIN_HOME"], _tools_home):
                         _vprint(
                             f"  Wrapped {launcher} launcher with the tool venv's PYTHONPATH (helper scripts need it)"
