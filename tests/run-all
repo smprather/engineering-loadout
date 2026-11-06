@@ -12,6 +12,10 @@
 #   ./tests/run-all --fast      # Tier 1 only
 #   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
 #   ./tests/run-all --no-cache  # ignore the result cache (see below)
+#   ./tests/run-all --serial    # one test at a time (LOADOUT_TEST_JOBS=N too)
+#
+# Tier 1 runs min(4, nproc) tests at a time; Tier 2 `auto` installs always run
+# alone (they arm a repo-global dependency-capture marker).
 #
 # Results are cached, `--fast` included: when the inputs a test actually
 # depends on are unchanged since its last green run, the cached PASS is
@@ -68,11 +72,13 @@ fi
 FAST=0
 CONTAINER=0
 NO_CACHE=0
+SERIAL=0
 for arg in "$@"; do
     case "$arg" in
         --fast) FAST=1 ;;
         --container) CONTAINER=1 ;;
         --no-cache) NO_CACHE=1 ;;
+        --serial) SERIAL=1 ;;
         -h|--help)
             sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -83,6 +89,17 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# Tier 1 runs JOBS tests at a time. `auto` (installer-driven) tests always run
+# alone; see the scheduler. --serial, or LOADOUT_TEST_JOBS=1, turns it off.
+JOBS=${LOADOUT_TEST_JOBS:-0}
+if [ "$SERIAL" -eq 1 ]; then
+    JOBS=1
+fi
+if [ "$JOBS" -le 0 ]; then
+    JOBS=$(nproc 2>/dev/null || echo 4)
+    [ "$JOBS" -gt 4 ] && JOBS=4
+fi
 
 PY=""
 for cand in "${XDG_DATA_HOME:-$HOME/.local/share}/loadout/bin/python3.15" "$HOME/.local/bin/python3.15" "$REPO_DIR/.loadout-bootstrap/bin/python3.15" python3.15; do
@@ -202,7 +219,9 @@ declare -A DEP_GROUP=(
     [locks]="payload assurance/treesitter-parser-locks.json"
     [readme]="README.md payload/packages.json"
     [stfonts]="payload/fonts envs/st"
-    [docs]="docs README.md AGENTS.md .github loadout_main.py payload/packages.json envs"
+    [docs]="docs README.md AGENTS.md .github loadout_main.py payload/packages.json envs build tools tests loadout"
+    [export]=".content-manifest .git/HEAD .git/refs"
+    [harness]="tests/run-all build/fingerprint.py"
 )
 
 group_sidecar() { printf '%s/group-%s.json' "$CACHE_DIR" "$1"; }
@@ -231,7 +250,7 @@ write_sidecar() {  # sidecar roots...
 }
 
 declare -A GROUP_OK=()
-GROUP_NAMES_USED=""
+GROUP_NAMES_USED=" harness"
 
 split_spec() {  # spec -> one group name per line
     local spec=$1
@@ -252,6 +271,14 @@ group_one_unchanged() {  # group name -> 0 when unchanged
         [ "${GROUP_OK[$g]}" = 1 ]
         return
     fi
+    # A precomputed verdict (parallel mode) wins: the parent verified each
+    # group once, and a subshell re-walking the payload would defeat that.
+    if [ -n "${GROUP_STATE:-}" ]; then
+        case " $GROUP_STATE " in
+            *" $g=1 "*) return 0 ;;
+            *" $g=0 "*) return 1 ;;
+        esac
+    fi
     local ok=0
     local -a roots=()
     mapfile -t roots < <(group_roots "$g")
@@ -264,6 +291,9 @@ group_one_unchanged() {  # group name -> 0 when unchanged
 
 group_unchanged() {  # spec -> 0 when every constituent group is unchanged
     local g
+    # The harness itself (this script, the fingerprint tool) is an input to
+    # every grouped test: a change there must invalidate the cached verdicts.
+    group_one_unchanged harness || return 1
     while IFS= read -r g; do
         group_one_unchanged "$g" || return 1
     done < <(split_spec "$1")
@@ -282,20 +312,51 @@ groups_used() {  # spec -> remember each group so its sidecar is written
 
 test_script_hash() { sha256sum "$1" | cut -d' ' -f1; }
 
-# The `all` and `container` verdicts are computed ONCE per run: every test in
-# those modes shares the same inputs, and re-walking payload+envs+tests for
-# each of ~60 tests was the whole cost of a cached run.
+# The `all`, `container` and per-group verdicts are computed ONCE per run, in
+# PARALLEL: every test shares those inputs, and re-walking payload+envs+tests
+# per test (or per group, serially) was most of a cached run. Subshells read
+# the verdicts from GROUP_STATE/SIDECAR_OK instead of re-checking.
 SIDECAR_OK=0
 SIDECAR_CONTAINER_OK=0
-if [ "$CACHE_ACTIVE" -eq 1 ]; then
-    sidecar_matches "$CACHE_SIDECAR" "${FP_ROOTS[@]}" && SIDECAR_OK=1
+GROUP_STATE=""
+
+precompute_verdicts() {
+    [ "$CACHE_ACTIVE" -eq 1 ] || return 0
+    local dir g
+    dir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-verdict.XXXXXX") || return 0
+    (
+        if sidecar_matches "$CACHE_SIDECAR" "${FP_ROOTS[@]}"; then echo 1; else echo 0; fi
+    ) >"$dir/all" &
     if [ "$CONTAINER" -eq 1 ]; then
-        sidecar_matches "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}" && SIDECAR_CONTAINER_OK=1
+        (
+            if sidecar_matches "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}"; then echo 1; else echo 0; fi
+        ) >"$dir/container" &
     fi
-fi
+    for g in "${!DEP_GROUP[@]}"; do
+        (
+            local -a roots=()
+            mapfile -t roots < <(group_roots "$g")
+            if sidecar_matches "$(group_sidecar "$g")" "${roots[@]}"; then echo 1; else echo 0; fi
+        ) >"$dir/g-$g" &
+    done
+    wait
+    SIDECAR_OK=$(cat "$dir/all" 2>/dev/null || echo 0)
+    if [ "$CONTAINER" -eq 1 ]; then
+        SIDECAR_CONTAINER_OK=$(cat "$dir/container" 2>/dev/null || echo 0)
+    fi
+    GROUP_STATE=""
+    for g in "${!DEP_GROUP[@]}"; do
+        GROUP_STATE="$GROUP_STATE $g=$(cat "$dir/g-$g" 2>/dev/null || echo 0)"
+    done
+    rm -rf "$dir"
+    export SIDECAR_OK SIDECAR_CONTAINER_OK GROUP_STATE
+}
 
 
-run_test() {
+# One test, end to end. Called directly by the scheduler (inline) or in a
+# subshell; global counters are only authoritative in the inline case, which is
+# why the parallel scheduler counts from the exit status instead.
+_run_test() {
     local name=$1
     shift
     local deps_mode=all deps_key=""
@@ -406,7 +467,7 @@ run_test() {
         echo "=== $name: SKIP"
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "SKIP" "mode=$deps_mode"
         SKIPPED=$((SKIPPED + 1))
-        return 0
+        return 77
     fi
     if [ "$rc" -eq 0 ]; then
         if [ "$CACHE_ACTIVE" -eq 1 ] && [ -n "$test_script" ] \
@@ -416,6 +477,7 @@ run_test() {
         fi
         echo "=== $name: PASS"
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "PASS" "mode=$deps_mode"
+        return 0
     else
         # A failed run proves nothing: drop every cached green for it, so the
         # next run cannot report a stale PASS on unchanged inputs.
@@ -423,7 +485,68 @@ run_test() {
         echo "=== $name: FAIL" >&2
         _log_runtime "run-all" "$name" "$((SECONDS - t0))" "FAIL" "mode=$deps_mode"
         FAILURES=$((FAILURES + 1))
+        return 1
     fi
+}
+
+# --- scheduler --------------------------------------------------------------
+# Tier 1 tests are independent, so they run JOBS at a time (default: min(4,
+# nproc); LOADOUT_TEST_JOBS overrides, --serial forces 1). `auto` tests never
+# overlap: they arm a repo-global dependency-capture marker and truncate its
+# log. Each job writes its own log + status file, and the parent replays them,
+# so output stays per-test instead of interleaved.
+declare -a _JOB_PIDS=() _JOB_IDS=()
+_JOB_SEQ=0
+RUN_TMP=""
+
+_reap_one() {
+    local pid=${_JOB_PIDS[0]} id=${_JOB_IDS[0]} rc=1
+    wait "$pid" || true
+    _JOB_PIDS=("${_JOB_PIDS[@]:1}")
+    _JOB_IDS=("${_JOB_IDS[@]:1}")
+    if [ -f "$RUN_TMP/$id.rc" ]; then
+        rc=$(cat "$RUN_TMP/$id.rc")
+    fi
+    cat "$RUN_TMP/$id.log" 2>/dev/null || true
+    rm -f "$RUN_TMP/$id.log" "$RUN_TMP/$id.rc"
+    case "$rc" in
+        0) ;;
+        77) SKIPPED=$((SKIPPED + 1)) ;;
+        *) FAILURES=$((FAILURES + 1)) ;;
+    esac
+}
+
+drain_jobs() {
+    while [ "${#_JOB_PIDS[@]}" -gt 0 ]; do
+        _reap_one
+    done
+}
+
+run_test() {
+    local _is_auto=0
+    if [ "${2:-}" = "--deps" ] && [ "${3:-}" = auto ]; then
+        _is_auto=1
+    fi
+    if [ "$JOBS" -le 1 ] || [ "$_is_auto" -eq 1 ]; then
+        drain_jobs
+        # Counters are updated in-process here; the status must not reach
+        # `set -e` at the call site.
+        _run_test "$@" || true
+        return 0
+    fi
+    RUN_TMP=${RUN_TMP:-$(mktemp -d "${TMPDIR:-/tmp}/loadout-run.XXXXXX")}
+    if [ "${2:-}" = "--deps" ]; then
+        groups_used "${3:-}"
+    fi
+    local id=$_JOB_SEQ
+    _JOB_SEQ=$((_JOB_SEQ + 1))
+    ( _run_test "$@" >"$RUN_TMP/$id.log" 2>&1; echo $? >"$RUN_TMP/$id.rc" ) &
+    _JOB_PIDS+=($!)
+    _JOB_IDS+=("$id")
+    while [ "${#_JOB_PIDS[@]}" -ge "$JOBS" ]; do
+        _reap_one
+    done
+    return 0
 }
 
 is_first_party_python_path() {
@@ -472,6 +595,8 @@ check_python_format() {
 
 collect_python_files
 
+precompute_verdicts
+
 # --- Tier 1: fast, no temp HOME -------------------------------------------
 run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
 run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
@@ -486,7 +611,7 @@ run_test "search-groups" tests/search-groups
 run_test "tar-safety" "$PY" tests/tar-safety
 run_test "content-verify" "$PY" tests/content-verify
 run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
-run_test "content-manifest matches export" "$PY" build/verify-manifest-export
+run_test "content-manifest matches export" --deps export --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
 run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
 run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
 run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
@@ -501,15 +626,15 @@ run_test "portable-python-ca" --deps payload tests/portable-python-ca
 run_test "shell-typeahead" --deps envs tests/shell-typeahead
 run_test "install-zsh-relocation" --deps loader "$PY" tests/install-zsh-relocation
 run_test "python-tool-source-patches" --deps payload+loader "$PY" tests/python-tool-source-patches
-run_test "payload-interpreter-abi" --deps payload "$PY" tests/payload-interpreter-abi
+run_test "payload-interpreter-abi" --deps payload+loader+build "$PY" tests/payload-interpreter-abi
 run_test "needed-closure" --deps payload+sonames "$PY" tests/needed-closure
 run_test "shim-bootstrap" --deps loader tests/shim-bootstrap
 run_test "env-nvim-no-git" --deps envs tests/env-nvim-no-git
 run_test "env-nvim-smart-quit" --deps envs tests/env-nvim-smart-quit
-run_test "install-noop-stamps" --deps payload+loader "$PY" tests/install-noop-stamps
-run_test "nodejs-runpath" --deps payload+build "$PY" tests/nodejs-runpath
+run_test "install-noop-stamps" --deps payload+loader+envs "$PY" tests/install-noop-stamps
+run_test "nodejs-runpath" --deps payload+build+loader "$PY" tests/nodejs-runpath
 run_test "wheelhouse-closure" "$PY" tests/wheelhouse-closure
-run_test "python-suite" --deps payload+loader "$PY" tests/python-suite
+run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
 run_test "release-timings" "$PY" tests/release-timings
 run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship
 run_test "prompt-no-rc" --deps envs "$PY" tests/prompt-no-rc
@@ -537,21 +662,27 @@ write_cache_sidecars() {
     if [ "$CACHE_ACTIVE" -eq 0 ]; then
         return 0
     fi
+    drain_jobs
     mkdir -p "$CACHE_DIR"
-    write_sidecar "$CACHE_SIDECAR" "${FP_ROOTS[@]}"
+    write_sidecar "$CACHE_SIDECAR" "${FP_ROOTS[@]}" &
     if [ "$CONTAINER" -eq 1 ]; then
-        write_sidecar "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}"
+        write_sidecar "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}" &
     fi
-    # One sidecar per dependency group any test used this run.
+    # One sidecar per dependency group any test used this run, computed in
+    # parallel: the walks are independent and each one is a full tree pass.
     local _g
     for _g in $GROUP_NAMES_USED; do
-        local -a _roots=()
-        mapfile -t _roots < <(group_roots "$_g")
-        write_sidecar "$(group_sidecar "$_g")" "${_roots[@]}"
+        (
+            local -a _roots=()
+            mapfile -t _roots < <(group_roots "$_g")
+            write_sidecar "$(group_sidecar "$_g")" "${_roots[@]}"
+        ) &
     done
+    wait
 }
 
 if [ "$FAST" -eq 1 ]; then
+    drain_jobs
     write_cache_sidecars
     echo
     if [ "$FAILURES" -eq 0 ]; then
@@ -618,6 +749,7 @@ if [ "$CONTAINER" -eq 1 ]; then
 fi
 
 echo
+drain_jobs
 write_cache_sidecars
 if [ "$FAILURES" -eq 0 ]; then
     if [ "$SKIPPED" -gt 0 ]; then

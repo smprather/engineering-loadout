@@ -13,6 +13,41 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-06 (6): Tier 1 runs in parallel; the size gate reuses measurements
+
+Class A (tests + build tooling + docs). Follow-up to (5): the cache made a
+repeat run cheap, but a changed file still ran its tests one at a time, and
+`gen-installed-sizes --check` decompressed ~3 GB on every env edit.
+
+- Tier 1 runs min(4, nproc) tests at a time (`--serial`, or
+  `LOADOUT_TEST_JOBS=N`). `auto` (Tier 2) tests never overlap: they arm the
+  repo-global dependency-capture marker. Each job writes its own log and exit
+  status; the parent replays the log and counts FAIL/SKIP from the status.
+- The `all`/`container`/group verdicts are precomputed once per run, in
+  parallel, and handed to workers via `GROUP_STATE`/`SIDECAR_OK`; the
+  end-of-run sidecars are written in parallel too.
+- `gen-installed-sizes` caches each measured size keyed on the source's
+  mtime+size (`~/.cache/engineering-loadout/installed-sizes-v1.json`); only
+  changed artifacts are decompressed. Unreadable artifacts are never cached,
+  so a transient failure retries instead of freezing a wrong number.
+- Groups widened after auditing what each test opens: `docs-sync` now covers
+  build/, tools/, tests/ and the shim; `payload-interpreter-abi` adds
+  loader+build; `python-suite` adds build; `install-noop-stamps` adds envs;
+  `nodejs-runpath` adds loader. The harness itself (`tests/run-all`,
+  `build/fingerprint.py`) is a required input of every group, so editing the
+  runner invalidates all group verdicts.
+- `content-manifest matches export` is keyed on `.content-manifest` plus the
+  git refs (it verifies HEAD), so working-tree edits stop re-running it.
+- Fixed a counting bug this exposed: `_run_test` fell through with the status
+  of its last assignment, so a failing test reported success to the parallel
+  parent (and a 77 would have aborted `--serial` at `set -e`). It now returns
+  0 / 1 / 77 explicitly, and the serial wrapper swallows the status.
+
+Measured here (Tier 1, 53 tests): warm 4.1 s (52 CACHED, one 2 s gate runs);
+`touch envs/zsh/global/zshrc` 18 s (was 49); `touch payload/packages.json`
+90 s (was 144, and 70 s of it is the single-threaded payload ABI walk); cold
+116 s. `gen-installed-sizes --check`: 23.5 s cold -> 1.0 s warm.
+
 ## 2026-11-06 (5): test results cache per dependency group; `--fast` uses it
 
 Class A (tests + docs). Two flaws made every small change pay for the whole
