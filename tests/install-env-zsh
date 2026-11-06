@@ -24,11 +24,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 if ! command -v zsh >/dev/null 2>&1; then
     echo "SKIP: native zsh smoke (no zsh interpreter)"
-    exit 0
+    exit 77
 fi
 if ! command -v script >/dev/null 2>&1; then
     echo "SKIP: native zsh smoke (no 'script' for a PTY; cannot test startup silence honestly)"
-    exit 0
+    exit 77
 fi
 
 ZSH_BIN="$(command -v zsh)"

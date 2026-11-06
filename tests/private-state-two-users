@@ -105,7 +105,7 @@ IMAGE=loadout-smoke:almalinux8.10
 if ! command -v docker >/dev/null 2>&1 || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "  SKIP  docker or the $IMAGE image is unavailable (tests/prebuilt-binaries-almalinux8 builds it)"
     echo "private-state-two-users: SKIP"
-    exit 0
+    exit 77
 fi
 # The container mounts the repo read-only, so it cannot cold-bootstrap: warm
 # the per-clone interpreter cache on the host first.

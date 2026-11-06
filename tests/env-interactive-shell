@@ -28,11 +28,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 if ! command -v zsh >/dev/null 2>&1; then
     echo "SKIP: env-interactive-shell (no zsh interpreter)"
-    exit 0
+    exit 77
 fi
 if ! command -v script >/dev/null 2>&1; then
     echo "SKIP: env-interactive-shell (no 'script' for a PTY)"
-    exit 0
+    exit 77
 fi
 
 # Resolved here, before any `env -i` leaves PATH=/usr/bin:/bin.

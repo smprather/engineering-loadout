@@ -22,11 +22,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 if ! command -v tcsh >/dev/null 2>&1; then
     echo "SKIP: native tcsh smoke (no tcsh interpreter; Tier 3 installs tcsh)"
-    exit 0
+    exit 77
 fi
 if ! command -v script >/dev/null 2>&1; then
     echo "SKIP: native tcsh smoke (no 'script' for a PTY; cannot test startup silence honestly)"
-    exit 0
+    exit 77
 fi
 
 tmp_root=${TMPDIR:-/tmp}

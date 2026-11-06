@@ -34,8 +34,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 if [ -z "$TMUX_BIN" ] || [ -z "$STARSHIP_BIN" ] || ! command -v tcsh >/dev/null 2>&1; then
     echo "  SKIP  needs tmux, starship and tcsh on PATH (tmux=${TMUX_BIN:-none} starship=${STARSHIP_BIN:-none})"
-    echo "env-tcsh-prompt-resize: OK (skipped)"
-    exit 0
+    echo "env-tcsh-prompt-resize: SKIP"
+    exit 77
 fi
 
 ME=$(id -un)

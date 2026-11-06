@@ -36,7 +36,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 if [ ! -f "$BIN_BZ2" ]; then
     echo "env-helix-config: SKIP (no hx.bin.bz2 for platform $PLATFORM)"
-    exit 0
+    exit 77
 fi
 
 HX="$TMP/hx.bin"

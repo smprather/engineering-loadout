@@ -20,7 +20,9 @@
 # by the installer); Tier 1 sync gates and non-installer tests cache against
 # the whole payload (`all`). Fingerprints are mtime+size (fast); a
 # touched-but-identical file costs one needless re-run, never a false green.
-# Failed tests have no cache entry and always re-run. Cache lives in
+# Failed tests have no cache entry and always re-run. A test that skips the
+# whole run exits 77: run-all reports SKIP and never records it as a PASS
+# (a skipped container test used to cache as a green Tier 3 result). Cache lives in
 # ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1; delete it to
 # force a full re-run.
 
@@ -81,6 +83,7 @@ done
 [ -n "$PY" ] || { echo "ERROR: python3.15 not found (loadout_main.py needs >= 3.14)" >&2; exit 1; }
 
 FAILURES=0
+SKIPPED=0
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/engineering-loadout/test-cache-v1"
 CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
 # Container tests get their own sidecar. A plain (non---container) run must not
@@ -224,7 +227,7 @@ run_test() {
         armed=1
     fi
     local rc=0
-    "$@" || rc=1
+    "$@" || rc=$?
     if [ "$armed" -eq 1 ]; then
         rm -f "$DEP_MARKER"
         if [ "$rc" -eq 0 ]; then
@@ -236,6 +239,16 @@ run_test() {
         else
             rm -f "$deps_file" "$fp_file"
         fi
+    fi
+    if [ "$rc" -eq 77 ]; then
+        # A whole-run skip (exit 77) is not a PASS: it proves nothing about the
+        # behavior the test would have exercised, so it must never be cached
+        # green. Drop any older .pass for this test as well.
+        rm -f "$CACHE_DIR/$name.pass"
+        echo "=== $name: SKIP"
+        _log_runtime "run-all" "$name" "$((SECONDS - t0))" "SKIP" "mode=$deps_mode"
+        SKIPPED=$((SKIPPED + 1))
+        return 0
     fi
     if [ "$rc" -eq 0 ]; then
         if [ "$CACHE_ACTIVE" -eq 1 ] && { [ "$deps_mode" = all ] || [ "$deps_mode" = container ]; } && [ -n "$test_script" ]; then
@@ -355,8 +368,12 @@ run_test "check-versions-contract" "$PY" tests/check-versions-contract
 if [ "$FAST" -eq 1 ]; then
     echo
     if [ "$FAILURES" -eq 0 ]; then
-        echo "Tier 1 passed."
-        _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=--fast"
+        if [ "$SKIPPED" -gt 0 ]; then
+            echo "Tier 1 passed ($SKIPPED skipped)."
+        else
+            echo "Tier 1 passed."
+        fi
+        _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=--fast skipped=$SKIPPED"
     else
         echo "$FAILURES test(s) FAILED." >&2
         _log_runtime "run-all" "total" "$SECONDS" "FAIL" "flags=--fast"
@@ -426,8 +443,12 @@ if [ "$CACHE_ACTIVE" -eq 1 ]; then
     fi
 fi
 if [ "$FAILURES" -eq 0 ]; then
-    echo "All tests passed."
-    _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=$*"
+    if [ "$SKIPPED" -gt 0 ]; then
+        echo "All tests passed ($SKIPPED skipped)."
+    else
+        echo "All tests passed."
+    fi
+    _log_runtime "run-all" "total" "$SECONDS" "PASS" "flags=$* skipped=$SKIPPED"
 else
     echo "$FAILURES test(s) FAILED." >&2
     _log_runtime "run-all" "total" "$SECONDS" "FAIL" "flags=$*"

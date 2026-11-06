@@ -20,7 +20,7 @@ nvim_bin=$(PATH=/usr/local/bin:/usr/bin:/bin command -v nvim || true)
 if [ -z "$nvim_bin" ]; then
     echo "  SKIP  no nvim on this host"
     echo "env-nvim-smart-quit: SKIP"
-    exit 0
+    exit 77
 fi
 
 mkdir -p "$T/bin" "$T/cfg" "$T/home"

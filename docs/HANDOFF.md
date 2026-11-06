@@ -122,9 +122,14 @@ as a single-instance caveat in README "Choosing your interactive shell".
    exported, so in a fresh process the wipe can only remove the system's and
    inherited ones; question whether it should run there at all, or only on a
    re-source in the same shell.
-4. `tests/run-all` caches a container test's SKIP (exit 0) as a PASS
-   (`interactive-shell-almalinux8`, `private-state-two-users`). Fix before the
-   next class-C release.
+4. **FIXED 2026-11-06.** `tests/run-all` cached a whole-test SKIP (exit 0) as
+   a PASS (`interactive-shell-almalinux8`, `private-state-two-users`). Whole-run
+   skips now exit 77; run-all reports `SKIP`, counts it separately, drops any
+   stale `.pass`, and never caches it as green. The same convention was applied
+   to every other whole-run skip (env-helix-config, env-nvim-no-git,
+   env-nvim-smart-quit, install-env-vim-xdg, env-interactive-shell,
+   install-env-tcsh, install-env-zsh, env-tcsh-prompt-resize). Partial skips
+   inside a test that still runs its other cases keep exit 0.
 5. D3, single-instance terminals: depends on step 3 of the manual check.
 6. A change to any file under `envs/`, a README included, changes
    `payload/installed-sizes.json` (env sources are sized as whole trees), so it

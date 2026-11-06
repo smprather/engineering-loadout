@@ -20,7 +20,7 @@ set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 [ -x "$REPO/loadout" ] || { echo "FAIL: $REPO/loadout missing" >&2; exit 1; }
-command -v script >/dev/null 2>&1 || { echo "SKIP: no 'script' for a PTY"; exit 0; }
+command -v script >/dev/null 2>&1 || { echo "SKIP: no 'script' for a PTY"; exit 77; }
 
 tmp_root=${TMPDIR:-/tmp}
 TMPHOME="$(mktemp -d "$tmp_root/loadout-env-vim.XXXXXX")"
