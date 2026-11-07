@@ -999,6 +999,80 @@ def _platform_wheels_dir():
     return candidates[0]
 
 
+def _source_archive_path(name):
+    """Absolute path of a rolling package's declared source payload, else None.
+
+    A rolling-git entry that declares `archive` ships its COMPLETE committed
+    source tree next to the wheel it installs, so a deployment can be rebuilt
+    from scratch on the user's own machine instead of only re-installed from a
+    wheel. `PLATFORM` in the registry path means the payload platform dir the
+    wheels are built for. The wheels and the source tree therefore always come
+    from the same clone at the same commit -- one clone, one `git describe`.
+    """
+    rel = (PACKAGES.get(name) or {}).get("archive") or ""
+    if not rel:
+        return None
+    wheels_dir = _platform_wheels_dir()
+    platform_id = os.path.basename(os.path.dirname(wheels_dir)) if wheels_dir else ""
+    if "PLATFORM" in rel:
+        if not platform_id:
+            raise RuntimeError(f"{name}: 'archive' needs a payload platform dir, none matched")
+        rel = rel.replace("PLATFORM", platform_id)
+    return os.path.normpath(os.path.join(REPO, rel))
+
+
+def _write_source_archive(name, clone, dest):
+    """Write the clone's committed tree to `dest` as a .tar.bz2 source payload.
+
+    `git archive HEAD` emits exactly the files the wheels were built from --
+    including vendor/cargo, whose hundreds of files the negations at the end of
+    the upstream .gitignore keep trackable -- and .tar.bz2 is what the generic
+    runtime-archive installer can chunk, rejoin and extract. The declared
+    sentinel is checked INSIDE the archive: an archive that cannot produce the
+    file the installer verifies is a broken payload, and shipping it (or a
+    silent empty export) would only surface after the user tries to rebuild.
+    """
+    entry = PACKAGES.get(name) or {}
+    if not dest.endswith(".tar.bz2"):
+        print(f"ERROR: {name}: 'archive' must name a .tar.bz2 file ({os.path.relpath(dest, REPO)})")
+        return False
+    sentinel = entry.get("sentinel", "")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    tmp = dest + ".tmp"
+    print(f"Archiving source tree -> {os.path.relpath(dest, REPO)} ...")
+    try:
+        # Stream git archive straight through bzip2: the tree is ~85 MB raw and
+        # ~12 MB compressed, so it never has to sit in memory whole.
+        rc = subprocess.call(
+            ["sh", "-c", 'git archive --format=tar HEAD | bzip2 -9 > "$1"', "sh", tmp],
+            cwd=clone,
+        )
+        if rc != 0:
+            print(f"ERROR: git archive failed for {name} (rc={rc})")
+            return False
+        with tarfile.open(tmp, "r:bz2") as tf:
+            names = tf.getnames()
+        if sentinel and sentinel not in names:
+            print(f"ERROR: {name}: source archive lacks the declared sentinel '{sentinel}'")
+            return False
+        if not names:
+            print(f"ERROR: {name}: source archive is empty")
+            return False
+        # Chunked payloads (.part-NNN) are produced later by
+        # strip-all-elf-binaries; a stale chunk set next to a fresh archive
+        # makes the installer rejoin the OLD bytes, so drop them here.
+        for stale in glob.glob(dest + ".part-*"):
+            os.remove(stale)
+            print(f"  removed stale {os.path.basename(stale)}")
+        os.replace(tmp, dest)
+        mb = os.path.getsize(dest) / (1024 * 1024)
+        print(f"  archived {len(names)} files, {mb:.1f} MB compressed")
+        return True
+    finally:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+
+
 def _remote_head_short(url):
     """Short SHA of remote HEAD via ls-remote (no clone). '' on failure."""
     try:
@@ -1107,8 +1181,13 @@ def _run_rolling(name, dry_run=False, force=False):
         return False
 
     current = _pkg_version(name)
+    source_archive = _source_archive_path(name)
     remote_short = _remote_head_short(url)
-    if not force and remote_short and remote_short in (current or "") and not dry_run:
+    # A package that ships its source also owes that source: a registry entry
+    # bumped past the archive (e.g. a payload prune kept the wheels), or a
+    # platform dir that only ever got wheels, must not report "nothing to build".
+    have_source = source_archive is None or os.path.isfile(source_archive)
+    if not force and remote_short and remote_short in (current or "") and not dry_run and have_source:
         print(f"Already at {current} (remote HEAD {remote_short}) -- nothing to build.")
         return True
 
@@ -1119,6 +1198,8 @@ def _run_rolling(name, dry_run=False, force=False):
             target = f"<tmp>/{subdir}" if subdir else "<tmp>"
             print(f"$ uv build --wheel --out-dir <tmp> {target}")
         print(f"$ (prune old <dist>-*.whl, copy new wheel into {os.path.relpath(wheels_dir, REPO)})")
+        if source_archive:
+            print(f"$ git -C <tmp> archive --format=tar HEAD | bzip2 -9 > {os.path.relpath(source_archive, REPO)}")
         print(f"$ (stamp packages.json version for {name})")
         _run_payload_manifests(dry_run=True)
         return True
@@ -1146,12 +1227,13 @@ def _run_rolling(name, dry_run=False, force=False):
         except Exception:
             version = _git(["rev-parse", "--short", "HEAD"], cwd=clone)
         print(f"  source version: {version}")
-        if version == current and not force:
+        if version == current and not force and have_source:
             print(f"Already at {version} -- source unchanged, skipping rebuild.")
             return True
 
         out_dir = os.path.join(tmp, "wheels")
         os.makedirs(out_dir)
+        verified_vendor_dirs = set()
         for subdir in subdirs:
             src_root = os.path.join(clone, subdir) if subdir else clone
             if not os.path.isfile(os.path.join(src_root, "pyproject.toml")):
@@ -1184,20 +1266,43 @@ def _run_rolling(name, dry_run=False, force=False):
                     boot = os.path.join(REPO, ".loadout-bootstrap", "bin", "python3.15")
                     if os.access(boot, os.X_OK):
                         env["UV_PYTHON"] = boot
-                # A repo that vendors its crates can still be unbuildable from a
-                # clone: git cannot carry a file a too-broad .gitignore excludes
-                # inside the vendor tree (open-eda-file-tools ignores build/, which
-                # drops zstd/build/** while .cargo-checksum.json still lists it).
-                # Cargo then fails checksumming.  Builds here have network, so drop
-                # the source replacement for this throwaway clone and let cargo use
-                # crates.io.  Check the clone root and the distribution subdir.
+                # A vendored repo must build against ITS OWN vendor tree: when the
+                # registry also ships that source, the wheel and the tree a user
+                # recompiles have to come from the same bytes. Verify the tree with
+                # the repo's own checker instead of assuming it is damaged -- the
+                # old blanket fallback existed because this repo's Python-flavoured
+                # .gitignore matched vendor/cargo/*/build/; the negations at the end
+                # of that file keep those files tracked, and a clean `git archive`
+                # builds from vendor/ alone (verified 2026-11-07: empty CARGO_HOME,
+                # --network none, --locked; removing .cargo/config.toml fails with
+                # "no matching package named flate2"). Fall back to crates.io only
+                # when the tree really is broken, and say so.
                 for base in dict.fromkeys((clone, src_root)):
                     vendor_cfg = os.path.join(base, ".cargo", "config.toml")
-                    if os.path.isfile(vendor_cfg):
-                        with open(vendor_cfg, encoding="utf-8", errors="replace") as fh:
-                            if "replace-with" in fh.read():
-                                os.replace(vendor_cfg, vendor_cfg + ".disabled")
-                                print("  vendored-source config disabled for this build (incomplete vendor tree)")
+                    if not os.path.isfile(vendor_cfg):
+                        continue
+                    with open(vendor_cfg, encoding="utf-8", errors="replace") as fh:
+                        if "replace-with" not in fh.read():
+                            continue
+                    checker = os.path.join(base, "scripts", "check_vendored_crates.py")
+                    if os.path.isfile(checker):
+                        verdict = subprocess.run(
+                            [sys.executable, checker],
+                            cwd=base,
+                            capture_output=True,
+                            text=True,
+                        )
+                        if verdict.returncode == 0:
+                            # One line per repo, not per distribution: the same
+                            # clone root is re-checked for every rolling_subdir.
+                            if base not in verified_vendor_dirs:
+                                verified_vendor_dirs.add(base)
+                                print("  vendored crates verified -- building from vendor/, not crates.io")
+                            continue
+                        detail = (verdict.stdout + verdict.stderr).strip().splitlines()
+                        print("  vendored crates FAILED verification: " + (detail[0] if detail else "no detail"))
+                    os.replace(vendor_cfg, vendor_cfg + ".disabled")
+                    print("  vendored-source config disabled for this build (incomplete vendor tree)")
             print(f"Building wheel via uv ({os.path.relpath(src_root, tmp)}) ...")
             rc = subprocess.call([uv, "build", "--wheel", "--out-dir", out_dir, src_root], env=env)
             if rc != 0:
@@ -1229,6 +1334,8 @@ def _run_rolling(name, dry_run=False, force=False):
 
         _set_pkg_version(name, version)
         print(f"  packages.json version -> {version}")
+        if source_archive and not _write_source_archive(name, clone, source_archive):
+            return False
         rc = _run_payload_manifests(dry_run=False)
         if rc != 0:
             print(f"WARNING: payload manifest chain exited rc={rc}")

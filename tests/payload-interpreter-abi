@@ -290,6 +290,35 @@ def payload_members():
     return out
 
 
+def source_payload_archives():
+    """runtime/<archive> keys of SOURCE payloads: rolling repos shipped as source.
+
+    A `rolling_git` entry that declares `archive` ships its upstream source
+    tree instead of an installer artifact (`open-eda-file-tools`: all four
+    project roots, `Cargo.lock`, `uv.lock` and `vendor/cargo`). Those members
+    are DATA until the user compiles them: upstream's own helper scripts
+    legitimately default to the interpreter upstream supports (3.14 today) and
+    BUILD.md tells the user to point PYTHON at the installed 3.15, so auditing
+    them as installable launchers would flag pristine third-party source and
+    fail every rebuild. They are skipped explicitly and reported, never
+    silently -- an ELF or a launcher that a user's build produces is covered by
+    the deployed tree, not by this gate.
+    """
+    try:
+        with open(PAYLOADS_JSON) as fh:
+            packages = json.load(fh)["packages"]
+    except OSError, KeyError, json.JSONDecodeError:
+        return {}
+    owned = {}
+    for name, entry in packages.items():
+        if not entry.get("rolling_git"):
+            continue
+        archive = entry.get("archive_name") or os.path.basename(entry.get("archive", ""))
+        if archive:
+            owned[f"runtime/{archive}"] = name
+    return owned
+
+
 def disabled_packages():
     """Packages marked disabled in the registry.
 
@@ -406,6 +435,27 @@ def main():
 
     files = payload_members()
     ok(f"scanned {len(files)} shipped payload files")
+
+    # A source payload is compiled by the user, not executed by the installer;
+    # its members are excluded from BOTH checks below (see
+    # source_payload_archives). Reported with a count so the exemption is
+    # visible in every run.
+    source_archives = source_payload_archives()
+    if source_archives:
+        kept = []
+        skipped = {}
+        for rel, findings in files:
+            owner = next((prefix for prefix in source_archives if rel.startswith(prefix + ":")), None)
+            if owner is None:
+                kept.append((rel, findings))
+            else:
+                skipped[owner] = skipped.get(owner, 0) + 1
+        for prefix, count in sorted(skipped.items()):
+            ok(
+                f"source payload, compiled by the user not installed as launchers: "
+                f"{source_archives[prefix]} {os.path.basename(prefix)} ({count} files skipped)"
+            )
+        files = kept
 
     # An artifact owned by a disabled package is not part of any deployment,
     # so it cannot break a user -- it is reported, not failed.

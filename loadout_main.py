@@ -8316,7 +8316,9 @@ def cmd_doctor(args, registry, repo_dir):
     for name in sorted(registry):
         entry = registry[name]
         kind = entry.get("kind")
-        if kind in ("runtime", "data", "font", "python-base") or (kind == "bin" and entry.get("archive")):
+        # Every entry that declares an archive must have it in the payload --
+        # including a rolling python-tool whose archive is its source tree.
+        if entry.get("archive") or kind in ("runtime", "data", "font", "python-base"):
             archive = entry.get("archive", "")
             if not archive:
                 continue

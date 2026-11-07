@@ -7,7 +7,7 @@
     "tags": "Free-form labels for filtering/grouping (e.g. ['search', 'editor', 'gui']).",
     "depends": "Hard dependencies: package names (or @group refs) that MUST be installed alongside this one. Resolver auto-pulls them; skipping a hard dep of a selected pkg is an error unless --no-deps or --force.",
     "recommends": "Soft dependencies: package names (or @group refs) auto-pulled when available; silently dropped if skipped or unavailable.",
-    "archive": "Path (relative to repo root, 'PLATFORM' placeholder allowed) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base', and archive-bundle 'bin' packages. Verified by 'loadout doctor'.",
+    "archive": "Path (relative to repo root, 'PLATFORM' placeholder allowed) to the archive this package extracts. For kinds 'runtime', 'font', 'data', 'python-base', and archive-bundle 'bin' packages. A rolling_git 'python-tool' may also declare one: it then ships its complete source tree (vendored crates included) beside the wheel, and './build/update' regenerates it from the same commit, so the installed tree can be rebuilt from scratch. Verified by 'loadout doctor'.",
     "archive_name": "Runtime-archive filename override for install_runtime_archives (default: '<pkg_name>.tar.bz2').",
     "python_version": "For kind='python-base': the CPython minor this archive provides (e.g. '3.12'). Distinct from 'version' (the exact patch, e.g. '3.12.16'); used by modulefile generation and the ABI gate.",
     "install_to": "Target install path. '~' expanded at install time; a leading '.local' is kept for a HOME root and dropped for a prefix root (--dest-dir). Together with 'sentinel' this opts a package into the generic runtime-archive installer.",
@@ -35,7 +35,7 @@
     "uv_extras": "Optional Python extras included in the uv tool requirement. Their locked wheel closure must be bundled for offline installation.",
     "requires_python": "PEP 440 specifier the install interpreter must satisfy for a python-tool: '==3.15.*' when any wheel in the entry's closure is ABI-locked (cp315-cp315), else the upstream Requires-Python floor ('>=3.11'). Required on every python-tool; the resolver compares it with the bundled CPython minor and aborts the install with the package named on a mismatch.",
     "version": "Version of the bundled binary or package. Empty string when the payload has no meaningful upstream version.",
-    "rolling_git": "Clone URL for first-party rolling packages; './build/update' rebuilds the wheel from source HEAD and stamps 'version' with git describe.",
+    "rolling_git": "Clone URL for first-party rolling packages; './build/update' rebuilds the wheel from source HEAD and stamps 'version' with git describe. When the entry also declares 'archive', the same clone at the same commit is exported (git archive, .tar.bz2) as the package's source payload.",
     "rolling_subdirs": "Distribution directories (including '.') inside one rolling_git clone; './build/update' builds one wheel per directory and each must match an entry in uv_tools. Absent means the clone root alone.",
     "version_url": "Upstream URL './check-versions' (via build) queries for the latest release when the project is not on GitHub/PyPI.",
     "version_pattern": "Regex applied to the version_url response to extract the latest version string.",
@@ -274,7 +274,11 @@
         "lef_tools",
         "def_tools"
       ],
-      "version": "v2026.11.4-1-gef72bb6",
+      "archive": "payload/PLATFORM/runtime/open-eda-file-tools-source.tar.bz2",
+      "archive_name": "open-eda-file-tools-source.tar.bz2",
+      "install_to": "~/.local/share/loadout/src/open-eda-file-tools",
+      "sentinel": "Cargo.lock",
+      "version": "v2026.11.5-1-g31e2aa3",
       "platforms": [
         "linux"
       ],
@@ -289,7 +293,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "open-eda-file-tools — open EDA data-file tooling: Liberty (liberty-format, liberty-view), LEF (lef-tools) and DEF (def-tools) parsing and queries, Rust-backed"
+      "description": "open-eda-file-tools — open EDA data-file tooling: Liberty (liberty-format, liberty-view), LEF (lef-tools) and DEF (def-tools) parsing and queries, Rust-backed, with the complete source tree (vendored crates included) installed for offline rebuilds"
     },
     "librelane": {
       "kind": "python-tool",
@@ -486,12 +490,32 @@
       "platforms": [
         "linux"
       ],
+      "depends": [
+        "clang-headers"
+      ],
       "tags": [
         "compiler",
         "llvm",
         "dev"
       ],
       "description": "LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link)"
+    },
+    "clang-headers": {
+      "kind": "runtime",
+      "archive": "payload/PLATFORM/runtime/clang-headers.tar.bz2",
+      "archive_name": "clang-headers.tar.bz2",
+      "install_to": "~/.local",
+      "sentinel": "lib/clang/23/include/stddef.h",
+      "version": "23.0git",
+      "platforms": [
+        "linux"
+      ],
+      "tags": [
+        "compiler",
+        "llvm",
+        "dev"
+      ],
+      "description": "clang 23 builtin headers and compiler-rt (lib/clang/23/{include,lib} from the LLVM build that produced the bundled clang) -- without them clang cannot compile C at all: <stddef.h> and friends live in the resource dir, not in the binary. Built by build/gen-clang-headers"
     },
     "cloc": {
       "kind": "bin",

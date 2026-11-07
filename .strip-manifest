@@ -471,6 +471,7 @@ sha256  552d3b7dcb2a64bdbe48a1bbcdf39171cdd6f314eea6ff6aaac799a74f9671cb  payloa
 sha256  c4ad38a147a2896d3da0bf3263d0957876eb0762983da8d69e134bff2577b6e5  payload/el8.x86_64.glibc2p28/lib64/libz.so.1.bz2
 tar-meta  288777  1784306255  payload/el8.x86_64.glibc2p28/runtime/bash-docs.tar.bz2
 tar-meta  16602  1790052605  payload/el8.x86_64.glibc2p28/runtime/btop-themes.tar.bz2
+tar-meta  920957  1794074330  payload/el8.x86_64.glibc2p28/runtime/clang-headers.tar.bz2
 tar-meta  417820  1784306255  payload/el8.x86_64.glibc2p28/runtime/expect.tar.bz2
 tar-meta  41943040  1789336921  payload/el8.x86_64.glibc2p28/runtime/firefox.tar.bz2.part-000
 tar-meta  209  1789353040  payload/el8.x86_64.glibc2p28/runtime/fish.tar.bz2
@@ -490,6 +491,7 @@ tar-meta  210547  1784306281  payload/el8.x86_64.glibc2p28/runtime/ngspice.tar.b
 tar-meta  39679742  1793132371  payload/el8.x86_64.glibc2p28/runtime/node.tar.bz2
 tar-meta  4858563  1792856937  payload/el8.x86_64.glibc2p28/runtime/nvim.tar.bz2
 tar-meta  4409885  1785864815  payload/el8.x86_64.glibc2p28/runtime/octave.tar.bz2
+tar-meta  11667015  1794074337  payload/el8.x86_64.glibc2p28/runtime/open-eda-file-tools-source.tar.bz2
 tar-meta  3791513  1786381869  payload/el8.x86_64.glibc2p28/runtime/pdftotext.tar.bz2
 tar-meta  1642087  1790703932  payload/el8.x86_64.glibc2p28/runtime/prettier.tar.bz2
 tar-meta  3082228  1787409797  payload/el8.x86_64.glibc2p28/runtime/pyright.tar.bz2

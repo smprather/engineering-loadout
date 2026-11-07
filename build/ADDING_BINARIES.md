@@ -241,6 +241,16 @@ Key rules:
   the only project. The tag still comes from the clone root, so sibling
   distributions of one repo share a version string while their wheel versions come
   from their own `pyproject.toml`.
+- `archive` on the same `rolling_git` entry -- ship the SOURCE, not just the wheel.
+  `./build/update` exports the same clone at the same commit with
+  `git archive HEAD`, bzip2s it to the declared path, and the generic runtime
+  installer extracts it to `install_to` (verified by `sentinel`), exactly like any
+  other archive package. The archive is the complete committed tree, so it carries
+  `vendor/cargo`/`Cargo.lock` and a user can rebuild the extension offline with
+  nothing but a compiler, `cargo` and the interpreter. Point `install_to` at a
+  package-owned path under `<prefix>/share/loadout/src/`, never at a directory
+  that holds user state; extraction is additive, so an upgrade never deletes a
+  file upstream still names.
 - packages.json is stored as RAW UTF-8. Any script that re-dumps the whole file
   must pass `ensure_ascii=False`; the default escapes every em-dash and churns
   every description on the next rebuild (regressed twice via new build scripts).
@@ -2540,9 +2550,13 @@ rustc_driver/LLVM corrupts the compiler).
   staged tree (isolated PATH) before packing. ~554 MB staged -> ~171 MB bz2 ->
   5 `.part-NNN` chunks (build-rust.sh pre-splits at 40 MiB since NOSTRIP archives
   are not chunked by the strip pass; installer rejoins via `_bz2.resolve`).
-- Host prerequisite at compile time: a C toolchain (`gcc`/`cc` + `ld`) -- rustc
-  shells out to `cc` for the final link. The one thing a package manager can't
-  remove; the AlmaLinux test image installs `gcc glibc-devel`.
+- Host prerequisite at compile time: a C toolchain (`cc`/`ld`) -- rustc shells
+  out to a linker driver for the final link. Loadout can supply that itself from
+  2026-11-07: `clang` + `clang-headers` + `lld`/`llvm-ar`, driven with
+  `CC=clang AR=llvm-ar RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld"`
+  (see the clang section below; `tests/compile-open-eda-from-source` builds a
+  Rust workspace that way with every system compiler poisoned). The AlmaLinux
+  test image still installs `gcc glibc-devel` for ITS own builds.
 - Package: `rust` (kind runtime, sentinel `bin/cargo`, install_to `~/.local`).
   Install with `./loadout install rust`. There is NO bundled registry: bring your
   own dependency source (network, `cargo vendor`, or a private mirror).
@@ -2551,6 +2565,70 @@ rustc_driver/LLVM corrupts the compiler).
 `@rust` group were retired 2026-10-08: offline Rust development on farm nodes was
 aspirational, and the subsystem cost 364 MB of payload plus a per-tool rebuild/
 pin treadmill. The toolchain itself is independent and stays.)
+
+## clang 23.0git + clang-headers -- the bundled C toolchain (LLVM resource dir)
+
+Two packages, one toolchain:
+
+| Package | Kind | Installs |
+|---|---|---|
+| `clang` | bin | `bin/{clang,clang-23,clang++,lld,ld.lld,clangd,clang-format,clang-tidy,llvm-ar,llvm-nm,llvm-objcopy,llvm-objdump,llvm-readobj,llvm-readelf,llvm-symbolizer,llvm-cov,llvm-profdata,llvm-link,llvm-strip,llvm-ranlib}` + `lib64/{libedit.so.0,libxml2.so.2}` |
+| `clang-headers` | runtime | `lib/clang/23/{include,lib}` (builtin C/C++ headers + compiler-rt) |
+
+**Provenance:** LLVM `23.0.0git` (`db7f01dc3b3395aebd0565172107ba8045a0da05`),
+the LLVM build on the build box (`~/.local`, the same one portable-python's
+PGO/LTO/BOLT toolchain comes from, bind-mounted into the container). The
+binaries had no build note here until 2026-11-07 -- bin/*.bz2 provenance was
+recovered from `clang --version`, exactly the gap liberty-filter hit.
+
+**`clang-headers` exists because the binary alone is not a C compiler.** clang
+resolves its builtin headers (`stddef.h`, `stdarg.h`, `stdint.h`, `limits.h`,
+`__clang_cuda_*.h`, ...) from `<prefix>/lib/clang/<major>/include` -- the
+directory `clang -print-resource-dir` names -- and `cmake --install` puts that
+under the INSTALL prefix, not inside the binary. The first packaging shipped
+only `bin/*.bz2` + libs, so an installed clang failed on the first include:
+
+```
+$ install -y clang; clang -E -x c /dev/null -v
+ignoring nonexistent directory ".../loadout/lib/clang/23/include"   <-- the gap
+$ printf '#include <stddef.h>\n' > x.c && clang -c x.c
+fatal error: 'stddef.h' file not found
+```
+
+Every container build stayed green because the EL8 build box's own gcc install
+supplied `/usr/lib/gcc/x86_64-redhat-linux/8/include/stddef.h`. Found
+2026-11-07 while proving `open-eda-file-tools` compiles from its bundled source
+with Loadout's toolchain ALONE (`zstd-sys` compiles vendored C, so the chain is
+cargo -> cc-rs -> clang -> `<stddef.h>`).
+
+**Repackage / refresh** (resource dir is version-scoped, so bump both packages
+and `build/gen-clang-headers`' member path together):
+
+```sh
+cp -a ~/.local/lib/clang/23 ~/.cache/loadout-build/clang-23-resource
+build/build-shell build/gen-clang-headers /cache/clang-23-resource 23
+```
+
+The script refuses a resource dir without `include/stddef.h`, bzip2s
+`lib/clang/23/{include,lib}` into
+`payload/<platform>/runtime/clang-headers.tar.bz2` (306 members, 1 MB), checks
+the archive's own sentinel, then re-pins `installed-sizes.json` BEFORE the
+content manifest. `clang` hard-depends on `clang-headers`, so
+`./loadout install clang` cannot produce a half toolchain.
+
+**Using it as the C toolchain for a Rust build** (no gcc anywhere on PATH --
+this is what `tests/compile-open-eda-from-source` pins):
+
+```sh
+CC=clang CXX=clang++ AR=llvm-ar RANLIB=llvm-ranlib \
+RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld" \
+cargo build --release --locked --offline --workspace --lib
+```
+
+`-C linker=clang` is load-bearing: rustc's default linker driver is `cc`, so
+without it cargo shells out to a name that belongs to the SYSTEM. glibc's own
+headers (`stdlib.h`, `stdio.h`) still come from the OS -- upstream lists them as
+a system prerequisite, and no compiler package can supply libc's headers.
 
 ## vcd-toggle-profiler 891a391 -- VCD signal toggle profiler (C++17, EL8 SOURCE build)
 
@@ -3867,17 +3945,45 @@ the payload's 3.15 or the wheel lands ABI-locked to the wrong minor.
 `./build/update` sets `UV_PYTHON` to `.loadout-bootstrap/bin/python3.15` itself
 when the variable is unset; do not override it.
 
-**Upstream defect that bites every clean clone (2026-11-05).** Their
-`.gitignore:11` ignores `build/`, which also matches
-`vendor/cargo/zstd-sys/zstd/build/**` — committed crate sources that
-`.cargo-checksum.json` still lists. `cargo` then dies with
-`failed to calculate checksum of ... CMakeLists.txt: No such file or directory`,
-which looks like a missing dependency and is not. Only `def-tools` needs zstd
-(`parquet` with the `zstd` feature). `_run_rolling` therefore moves the relevant
-`.cargo/config.toml` aside for its build (it is a throwaway clone, and the build
-has network), printing `vendored-source config disabled for this build`. If
-upstream fixes their `.gitignore`, that workaround can go -- it is harmless
-either way, but it is a workaround, not a design.
+**Upstream defect that used to bite every clean clone (2026-11-05, resolved).**
+Their `.gitignore:11` matches `build/` at any depth, which also matches
+`vendor/cargo/zstd-sys/zstd/build/**`, so an early vendor refresh shipped those
+committed crate sources UNTRACKED while `.cargo-checksum.json` still listed them.
+`cargo` then died with `failed to calculate checksum of ... CMakeLists.txt: No
+such file or directory`, which looks like a missing dependency and is not. The
+negations at the end of their `.gitignore` now keep the whole vendor tree
+trackable, `scripts/check_vendored_crates.py` verifies it against every checksum
+manifest, and `_run_rolling` runs that checker on any clone with a vendored
+source replacement: a verified tree builds from `vendor/` (no crates.io), a
+damaged one falls back to crates.io with a printed reason. Verified 2026-11-07
+in the EL8 container, `--network none`, empty `CARGO_HOME`, from a plain
+`git archive HEAD` export: `liberty_tools_native` and `def_tools` both link
+against the vendor tree alone, and removing `.cargo/config.toml` fails with
+`no matching package named flate2` -- the negative control that proves the
+vendor tree, not a registry cache, supplied the crates.
+
+**Bundled source payload (`archive` on the rolling entry).** The registry entry
+also declares
+`archive: payload/PLATFORM/runtime/open-eda-file-tools-source.tar.bz2` with
+`install_to: ~/.local/share/loadout/src/open-eda-file-tools` and
+`sentinel: Cargo.lock`, so installing the package ships the COMPLETE committed
+tree next to the wheels: all four projects, `.cargo/config.toml`, `Cargo.lock`,
+`uv.lock`, and all 5655 vendored crate files. `./build/update` regenerates it
+from the same clone and commit as the wheels (`git archive HEAD | bzip2 -9`,
+11.2 MB compressed for 5773 files / 85 MB raw), and refuses to ship an archive
+that lacks the declared sentinel. The tree is what makes the deployment
+rebuildable rather than merely re-installable:
+
+```bash
+SRC="${XDG_DATA_HOME:-$HOME/.local/share}/loadout/src/open-eda-file-tools"
+cd "$SRC" && python3 scripts/check_vendored_crates.py      # ok: 119 crates, 5536 files
+cd def_tools && CARGO_NET_OFFLINE=true cargo build --release --locked --offline --lib
+```
+
+`tests/install-open-eda-file-tools` runs exactly the first line against the
+installed tree (with the install's own `python3.15`), so a payload that lost
+part of `vendor/cargo` -- the historical `.gitignore` failure mode -- fails the
+install test instead of a user's rebuild.
 
 **Closure:** `lef-tools` needs only `click`; `def-tools` needs
 `click`, `rich-click`, `rich`, `markdown-it-py`, `mdurl`, `pygments` — all
@@ -3888,7 +3994,8 @@ every distribution resolves offline.
 `installed-sizes.json` and the content manifest; run `gen-readme-table`, then a
 scratch-dest install and `liberty-format --help`, `lef-tools --help` and
 `def-tools --help` against the SAME dest. `tests/install-open-eda-file-tools`
-pins exactly that: four launchers, three tool venvs, one registry package.
+pins exactly that: five launchers, three tool venvs, one registry package, and
+the bundled source tree's vendored crates.
 
 **Pitfall found while verifying (2026-11-05): unset `UV_TOOL_DIR` /
 `UV_TOOL_BIN_DIR` before a scratch install.** The python-tool phase passes the

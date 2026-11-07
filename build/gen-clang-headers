@@ -1,0 +1,97 @@
+#!/bin/sh
+# gen-clang-headers -- bundle LLVM's clang RESOURCE DIR into the payload.
+#
+# WHY: the `clang` package ships binaries + shared libs only (`bin/*.bz2`,
+# `libs`), so a clang installed from this payload could not compile ANY C file
+# that includes <stddef.h>: clang resolves its builtin headers from
+# `<prefix>/lib/clang/<major>/include` (the directory `clang -print-resource-dir`
+# names), and nothing created it. The EL8 build box's own gcc supplied those
+# headers there, which is why every container build stayed green and no host
+# without gcc could use the bundled clang. Found 2026-11-07 while proving that
+# open-eda-file-tools' source tree compiles with Loadout's toolchain ALONE
+# (zstd-sys compiles vendored C, so the failing chain is
+# cargo -> cc-rs -> clang -> <stddef.h>).
+#
+# The resource dir is part of the LLVM INSTALL (`cmake --install` writes
+# lib/clang/<major>/), not of the clang binary, so it is repackaged from the
+# same LLVM 23 build that produced `bin/clang-23.bz2`.
+#
+# USAGE (inside the EL8 build container; bzip2 must be EL8's 1.0.6 so the
+# archive byte-round-trips):
+#
+#   # stage the resource dir where the container can read it, e.g.
+#   cp -a ~/.local/lib/clang/23 ~/.cache/loadout-build/clang-23-resource
+#   build/build-shell build/gen-clang-headers /cache/clang-23-resource 23
+#
+# Produces payload/<platform>/runtime/clang-headers.tar.bz2 with members
+# lib/clang/<major>/{include,lib}/** -- exactly the layout `install_to: ~/.local`
+# needs -- then re-pins installed-sizes.json BEFORE the content manifest (the
+# sizes file lives under payload/, so the manifest hashes it).
+
+set -eu
+
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+SRC=${1:-}
+[ -n "$SRC" ] || {
+    echo "usage: build/gen-clang-headers <llvm-resource-dir>   (e.g. .../lib/clang/23)" >&2
+    exit 2
+}
+[ -d "$SRC/include" ] || {
+    echo "ERROR: $SRC/include is missing -- that is not an LLVM resource dir" >&2
+    echo "       (it is the path 'clang -print-resource-dir' prints)" >&2
+    exit 2
+}
+[ -f "$SRC/include/stddef.h" ] || {
+    echo "ERROR: $SRC/include/stddef.h is missing -- clang cannot compile C without it" >&2
+    exit 2
+}
+
+MAJOR=${2:-$(basename "$SRC")}
+case "$MAJOR" in
+    [0-9]*) ;;
+    *)
+        echo "ERROR: cannot tell the LLVM major from '$MAJOR'; pass it: build/gen-clang-headers <dir> <major>" >&2
+        echo "       (the resource dir is lib/clang/<major>, e.g. .../lib/clang/23)" >&2
+        exit 2
+        ;;
+esac
+
+PLATFORM_DIR=
+for d in "$REPO"/payload/el8.*/; do
+    [ -d "$d" ] || continue
+    PLATFORM_DIR=$d
+    break
+done
+[ -n "$PLATFORM_DIR" ] || {
+    echo "ERROR: no payload/el8.* platform dir" >&2
+    exit 1
+}
+OUT="$PLATFORM_DIR/runtime/clang-headers.tar.bz2"
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/lib/clang/$MAJOR"
+cp -a "$SRC/include" "$stage/lib/clang/$MAJOR/"
+if [ -d "$SRC/lib" ]; then
+    # compiler-rt (sanitizer/profile runtimes). Not needed to compile plain C,
+    # but shipping half a resource dir is how the stddef.h gap happened.
+    cp -a "$SRC/lib" "$stage/lib/clang/$MAJOR/"
+fi
+
+echo "Packaging $SRC -> ${OUT#"$REPO"/}"
+tar -cf - -C "$stage" lib | bzip2 -9 > "$OUT"
+
+# A payload archive is only complete when its declared sentinel is inside it.
+tar -tjf "$OUT" | grep -qx "lib/clang/$MAJOR/include/stddef.h" || {
+    echo "ERROR: archive lacks lib/clang/$MAJOR/include/stddef.h" >&2
+    exit 1
+}
+files=$(tar -tjf "$OUT" | wc -l)
+mb=$(du -m "$OUT" | cut -f1)
+echo "  $files members, ${mb} MB compressed"
+
+echo "Re-pinning payload maps (sizes BEFORE manifest)..."
+cd "$REPO"
+python3.15 build/gen-installed-sizes
+python3.15 build/gen-content-manifest
+echo "Done. Stage the payload: git add payload/ .content-manifest payload/packages.json"

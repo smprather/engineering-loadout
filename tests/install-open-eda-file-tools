@@ -91,6 +91,29 @@ for bin in liberty-format lef-tools def-tools def-dump-instances; do
 done
 echo "  OK: liberty-format/lef-tools/def-tools/def-dump-instances --help (python3 poisoned on PATH)"
 
+# --- bundled source: the install must be rebuildable, not just runnable ------
+# open-eda-file-tools ships its COMPLETE committed tree -- vendored Rust crates
+# included -- so the Rust extension can be rebuilt on the user's own machine,
+# offline. `scripts/check_vendored_crates.py` is upstream's own gate: it hashes
+# every file vendor/cargo/*/.cargo-checksum.json lists and fails on a single
+# missing or altered one, so an archive that dropped part of the vendor tree
+# (the historical `.gitignore:11` bug) cannot pass it here.
+src_root="$local_prefix/share/loadout/src/open-eda-file-tools"
+for f in Cargo.toml Cargo.lock uv.lock pyproject.toml BUILD.md .cargo/config.toml; do
+    [[ -f "$src_root/$f" ]] || fail "bundled source is missing $f"
+done
+for d in def_tools lef_tools liberty_tools vendor/cargo; do
+    [[ -d "$src_root/$d" ]] || fail "bundled source is missing $d/"
+done
+[[ -f "$src_root/.cargo/config.toml" ]] || fail "bundled source lost the vendored-source redirect"
+echo "  OK: source tree installed at ${src_root#"$local_prefix/"}"
+
+vendored=$("$local_prefix/bin/python3.15" "$src_root/scripts/check_vendored_crates.py" 2>/dev/null) || {
+    fail "bundled vendor/cargo is incomplete or altered"
+}
+grep -q 'present and unchanged' <<<"$vendored" || fail "vendored crate check reported no clean tree: $vendored"
+echo "  OK: $vendored"
+
 # The registry must NOT still expose the split entries: one package, not three.
 "$repo_dir/loadout" info lef-tools > "$test_home/old-name.log" 2>&1 && \
     fail "retired split entry 'lef-tools' is still a registry package"

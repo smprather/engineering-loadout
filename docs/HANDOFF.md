@@ -13,6 +13,95 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-07 (13): open-eda-file-tools ships its source — the install is rebuildable, not just runnable
+
+Rebuilt `open-eda-file-tools` to `v2026.11.5-1-g31e2aa3` (wheels:
+`liberty_tools 2.0.6.dev0`, `lef_tools 2026.11.0`, `def_tools 2026.11.5.dev0`)
+and made the registry entry ship the COMPLETE source tree beside them, so an
+end user can recompile the Rust extension on their own machine, offline.
+
+**Registry shape:** one entry, not two. `open-eda-file-tools` now also declares
+`archive: payload/PLATFORM/runtime/open-eda-file-tools-source.tar.bz2`,
+`archive_name`, `install_to: ~/.local/share/loadout/src/open-eda-file-tools` and
+`sentinel: Cargo.lock`. `sentinel` + `install_to` opt a package into the generic
+runtime-archive installer whatever its `kind`, so selection, upgrade, reinstall
+and the install stamps all couple automatically -- no second row, no `depends`
+change (`tests/registry-integrity` pins python-tool `depends` to
+`[portable-python, uv]`).
+
+**Generation** (`build/update` rolling path): a `rolling_git` entry with an
+`archive` now gets that archive from the SAME clone at the SAME commit the wheels
+came from: `git archive --format=tar HEAD | bzip2 -9`, sentinel verified inside
+the archive, stale `.part-NNN` chunks dropped. The "already at HEAD" short
+circuits also require the archive to exist, so a payload pruned of the source (or
+a platform dir that only ever got wheels) rebuilds instead of reporting "nothing
+to build". Measured: 5773 tracked files / 85 MB raw -> 11.2 MB compressed,
+6742 tar members, byte-identical MEMBERSHIP to a host `git archive HEAD` of the
+same commit; full rebuild 96.5 s, re-run 97.3 s.
+
+**Vendoring workaround removed (was wrong).** `_run_rolling` used to move
+`.cargo/config.toml` aside for any repo with a vendored source replacement,
+claiming the vendor tree could not be complete in git. It is complete: the
+negations at the end of upstream's `.gitignore` keep `vendor/cargo/*/build/**`
+trackable (the 2026-11-05 zstd-sys failure was a hand-`git add`, not git
+archive). The clone's own `scripts/check_vendored_crates.py` is now run first; a
+verified tree BUILDS FROM `vendor/` (printed: `vendored crates verified -- building
+from vendor/, not crates.io`), and only a checker failure falls back to crates.io
+with the reason printed. That makes the shipped wheel derive from the shipped
+source. Evidence (EL8 container, `--network none`, empty `CARGO_HOME`, from a
+plain `git archive HEAD` export): `liberty_tools_native` and `def_tools` both
+link offline; removing `.cargo/config.toml` fails with `no matching package named
+flate2` -- the negative control proving the vendor tree (not a registry cache)
+supplied the crates.
+
+**Gate: `tests/compile-open-eda-from-source` (T2, NEW, ~2 min).** Installs
+`open-eda-file-tools rust clang` into a temp root and compiles the INSTALLED
+(read-only) tree out-of-tree:
+
+```sh
+CC=clang CXX=clang++ AR=llvm-ar RANLIB=llvm-ranlib \
+RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld" \
+CARGO_NET_OFFLINE=true CARGO_HOME=<tmp>/cargo CARGO_TARGET_DIR=<tmp>/target \
+cargo build --release --locked --offline --workspace --lib
+```
+
+`cc`/`gcc`/`g++`/`c++`/`ld` are poisoned with `exit 99` BEFORE `/usr/bin`, and
+the test asserts `command -v {cargo,rustc,clang,llvm-ar}` resolves inside the
+install root -- so a fallback to a system toolchain fails the test instead of
+passing on a box that happens to have gcc. Asserts the three cdylibs
+(`lib_native.so`, `liblef_tools_native.so`, `libdef_tools_native.so`) exist and
+are ELF. Measured 49.3 s for the build (8 cores), three cdylibs.
+
+**Defect it found: the `clang` package was not a C compiler.** It shipped
+`bin/*.bz2` + libs only; clang resolves builtin headers from
+`<prefix>/lib/clang/23/include`, which nothing provided, so the first include
+died with `fatal error: 'stddef.h' file not found`. Container builds were green
+because the EL8 box's gcc supplied those headers. New `clang-headers` package
+(kind runtime, archive `runtime/clang-headers.tar.bz2`, `install_to: ~/.local`,
+sentinel `lib/clang/23/include/stddef.h`, 306 members / 1 MB) built by the new
+`build/gen-clang-headers` from the LLVM 23 resource dir; `clang` now
+hard-depends on it. `build/ADDING_BINARIES.md` gained a clang section (it had
+none -- same provenance gap liberty-filter hit).
+
+**Also gate:** `tests/install-open-eda-file-tools` (T2) now asserts the tree is
+at `<dest>/share/loadout/src/open-eda-file-tools` with `Cargo.toml`, `Cargo.lock`,
+`uv.lock`, `pyproject.toml`, `BUILD.md`, `.cargo/config.toml`, the four project
+dirs and `vendor/cargo`, then runs upstream's own
+`scripts/check_vendored_crates.py` under the INSTALLED `python3.15` and requires
+`... present and unchanged` (`ok: 119 crates, 5536 files`). A payload that lost
+part of the vendor tree fails the install test instead of a user's rebuild.
+
+**Docs:** `payload/packages.json` `_schema` (`archive` now documents the
+rolling-git source payload; `rolling_git` documents the export),
+`AGENTS.md` (python-tools section), `build/ADDING_BINARIES.md` (field list,
+case study, and the corrected `.gitignore`/vendor note).
+
+**Not done, deliberately:** the source archive is additive on upgrade, like every
+other archive package -- a file upstream DELETES survives in the installed tree
+(`remove_before_extract: "."` would delete the staging dir mid-extract). Same
+behaviour as helix/nvim; the vendored-crate checksums catch the case that
+matters (a stale or altered vendor tree).
+
 ## 2026-11-07 (12): incremental verdicts land — smoke and scan cost proportional to the change
 
 Follow-ups 1, 2 and 4 from entry (11) are closed. The release gates and the

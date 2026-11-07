@@ -756,6 +756,7 @@ run_test "optional-packages" --deps auto tests/optional-packages
 run_test "install-parity-plot" --deps auto tests/install-parity-plot
 run_test "install-watchglass" --deps auto tests/install-watchglass
 run_test "install-open-eda-file-tools" --deps auto tests/install-open-eda-file-tools
+run_test "compile-open-eda-from-source" --deps auto tests/compile-open-eda-from-source
 run_test "install-python-tool-upgrade" --deps auto tests/install-python-tool-upgrade
 run_test "uv-launchers" --deps auto tests/uv-launchers
 run_test "install-typescript-language-server" --deps auto tests/install-typescript-language-server

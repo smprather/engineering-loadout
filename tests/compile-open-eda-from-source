@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# compile-open-eda-from-source: the installed source tree must compile with
+# nothing but what Engineering Loadout ships.
+#
+# WHY THIS TEST EXISTS. `open-eda-file-tools` installs its complete committed
+# source tree (all four projects, lockfiles, and vendor/cargo) so a user can
+# rebuild the Rust extensions on their own machine, offline.
+# tests/install-open-eda-file-tools proves that tree is COMPLETE -- upstream's
+# own script hashes every vendored crate file. Completeness is not compilability,
+# and a tree that "looks complete" but cannot be built defeats the reason the
+# source ships at all. Writing this test found two real defects:
+#
+#   * the `clang` package shipped no `lib/clang/23/{include,lib}`, so a clang
+#     installed from the payload could not compile ANY C file that includes
+#     <stddef.h>. zstd-sys compiles vendored C, so the build died inside cc-rs
+#     with "fatal error: 'stddef.h' file not found". Fixed by the
+#     `clang-headers` package (build/gen-clang-headers), which `clang` now
+#     hard-depends on.
+#   * cargo must be told `-C linker=clang`; with the default linker driver it
+#     reaches for `cc`, which is a system tool.
+#
+# CONTRACT: every compiler, linker and interpreter used here comes from the
+# temp install root. Host `cc`, `gcc`, `g++`, `c++` and `ld` are poisoned with
+# an `exit 99` script placed BEFORE /usr/bin, so any fallback to a system
+# toolchain fails this test instead of quietly passing on a box that happens to
+# have gcc. C library HEADERS stay the operating system's -- upstream BUILD.md
+# lists them as a system prerequisite, and no toolchain can supply glibc's
+# headers -- but no COMPILER does.
+#
+# OFF-LINE BY CONSTRUCTION: `--locked --offline` with an empty CARGO_HOME, so
+# the vendored crates are the only source of crates; a network fetch would fail
+# rather than silently paper over a broken vendor tree.
+
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+tmp_root=${TMPDIR:-/tmp}
+test_home=$(mktemp -d "$tmp_root/loadout-eda-compile-home.XXXXXX")
+dest_dir=$(mktemp -d "$tmp_root/loadout-eda-compile-dest.XXXXXX")
+local_prefix="$dest_dir"
+
+cleanup() {
+    # The installed tree is sealed read-only, so make it writable first or the
+    # cleanup leaks ~1.5 GB into $TMPDIR.
+    chmod -R u+w "$test_home" "$dest_dir" 2>/dev/null || true
+    rm -rf "$test_home" "$dest_dir"
+}
+trap cleanup EXIT
+
+fail() {
+    echo "open-eda-file-tools compile-from-source failed: $*" >&2
+    exit 1
+}
+
+# --- 1. install the package AND the toolchain it is supposed to be built with
+echo "Installing open-eda-file-tools + rust + clang into: $dest_dir"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" --verbose install -y open-eda-file-tools rust clang \
+    --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -80 "$test_home/install.log" >&2
+    fail "install exited non-zero"
+}
+
+src_root="$local_prefix/share/loadout/src/open-eda-file-tools"
+[[ -d "$src_root" ]] || fail "source tree not installed at $src_root"
+for tool in cargo rustc clang lld llvm-ar; do
+    [[ -x "$local_prefix/bin/$tool" ]] || fail "toolchain binary missing: bin/$tool"
+done
+headers="$local_prefix/lib/clang/23/include"
+[[ -f "$headers/stddef.h" ]] || fail "clang resource dir missing: lib/clang/23/include/stddef.h"
+echo "  OK: source tree + EL toolchain (cargo, rustc, clang, lld, llvm-ar, clang-headers)"
+
+# --- 2. poison every host toolchain entry point ----------------------------
+poison_dir="$test_home/poison-bin"
+mkdir -p "$poison_dir"
+for name in cc gcc g++ c++ ld; do
+    printf '#!/bin/sh\nexit 99\n' > "$poison_dir/$name"
+    chmod +x "$poison_dir/$name"
+done
+build_env=(
+    env -i
+    HOME="$test_home"
+    PATH="$local_prefix/bin:$poison_dir:/usr/bin:/bin"
+    LANG="${LANG:-C.UTF-8}"
+    CC=clang
+    CXX=clang++
+    AR=llvm-ar
+    RANLIB=llvm-ranlib
+    # Rust's default linker driver is `cc`; name clang and make it use the
+    # bundled lld, or the poisoned `cc` trips the build for the wrong reason.
+    RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld"
+    CARGO_NET_OFFLINE=true
+    CARGO_HOME="$test_home/cargo"
+    CARGO_TARGET_DIR="$test_home/target"
+)
+
+# PATH order alone is a weak proof -- assert the resolved binaries really are
+# the ones the installer just wrote.
+for tool in cargo rustc clang llvm-ar; do
+    resolved=$("${build_env[@]}" sh -c "command -v $tool")
+    [[ "$resolved" == "$local_prefix/bin/$tool" ]] || fail "$tool resolves to $resolved, not the installed tree"
+done
+echo "  OK: cargo/rustc/clang/llvm-ar resolve inside the install root"
+
+# --- 3. compile the installed tree, out of tree ---------------------------
+# The installed tree is read-only by design; the target dir lives in the test
+# home, which is also how a user would build without dirtying the deployment.
+echo "Compiling the installed source tree (workspace, offline, vendored crates)"
+start=$SECONDS
+(
+    cd "$src_root"
+    "${build_env[@]}" cargo build --release --locked --offline --workspace --lib
+) > "$test_home/build.log" 2>&1 || {
+    tail -60 "$test_home/build.log" >&2
+    fail "cargo build failed (see the clang/driver lines above)"
+}
+grep -q 'Finished `release`' "$test_home/build.log" || {
+    tail -20 "$test_home/build.log" >&2
+    fail "cargo build did not report a finished release profile"
+}
+echo "  OK: cargo build --release --locked --offline --workspace --lib ($((SECONDS - start))s)"
+
+# Three cdylibs, one per distribution -- the artifacts a rebuild exists for.
+for artifact in lib_native.so liblef_tools_native.so libdef_tools_native.so; do
+    path="$test_home/target/release/$artifact"
+    [[ -s "$path" ]] || fail "missing build artifact: target/release/$artifact"
+    [ "$(head -c 4 "$path" | od -An -c | tr -d ' \n')" = "177ELF" ] || fail "$artifact is not an ELF object"
+done
+echo "  OK: lib_native.so, liblef_tools_native.so, libdef_tools_native.so built"
+
+# The build must not have needed the network: --offline with an empty CARGO_HOME
+# means the vendor tree is what supplied every crate, so a registry miss would
+# have surfaced as a hard error rather than a quiet download.
+if grep -q "no matching package" "$test_home/build.log"; then
+    fail "cargo tried to reach a registry (vendor tree is incomplete)"
+fi
+
+echo "open-eda-file-tools compile-from-source passed"

@@ -286,7 +286,7 @@ OpenSSH for those.
 | btm | bin | 0.14.9 | Cross-platform system resource monitor (TUI) |
 | btop | bin | 1.4.7 | Resource monitor with graphs and mouse support, plus the bundled theme set and btop-theme-tour |
 | liberty-filter | bin | 1.0.1 | liberty-filter — strip unneeded data from Liberty (.lib) timing files; Rust CLI, system-libs only |
-| open-eda-file-tools | python-tool | v2026.11.4-1-gef72bb6 | open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs |
+| open-eda-file-tools | python-tool | v2026.11.5-1-g31e2aa3 | open-eda-file-tools — home for open EDA data-file tooling; ships liberty-tools (Rust-backed Liberty parser/query library) with liberty-format and liberty-view CLIs |
 | librelane | python-tool | 3.0.16 | librelane — LibreLane ASIC implementation-flow infrastructure, Python layer only (Classic/Chip flows; EDA tools and PDKs NOT bundled). Ships `librelane` + `librelane.config/env_info/help/state/steps` (or `python -m librelane`); klayout 0.30.12 Python API bundled as an offline wheel. Member of @eda |
 | vcd-toggle-profiler | runtime | 891a391 | VCD toggle profiler — C++17 VCD signal toggle analysis with offline self-contained HTML reports |
 | pdftotext | bin | 26.04.0 | pdftotext (poppler-utils) — extract plain text from PDF files; static libpoppler, bundles liblcms2+libopenjp2 and poppler-data (CJK CMaps) with a relocatable wrapper |
@@ -294,6 +294,7 @@ OpenSSH for those.
 | bzip2 | bin | 1.0.8 | Block-sorting file compressor |
 | choose | bin | 1.3.7 | awk/cut alternative for column field selection |
 | clang | bin | 23.0git | LLVM/Clang 23 compiler toolchain (clang, lld, clangd, clang-format, clang-tidy, llvm-ar/nm/objcopy/objdump/symbolizer/cov/profdata/link) |
+| clang-headers | runtime | 23.0git | clang builtin headers + compiler-rt (`lib/clang/23/{include,lib}`) — a C compiler without them cannot compile a file that includes `<stddef.h>`; installed automatically with `clang` |
 | cloc | bin | 2.10 | Count Lines of Code by language (blank/comment/code). Self-contained Perl script; requires host perl |
 | scc | bin | 4.1.0 | Sloc, Cloc and Code — fast code counter with complexity estimates (GitHub's counter). Go static binary, no deps |
 | tokei | bin | 15.0.0 | Fast code counter by language. Rust; EL8 source build (v14 ships no prebuilt), links system libs only, glibc 2.28 |
