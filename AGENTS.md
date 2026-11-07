@@ -85,7 +85,14 @@ over the EXACT inputs it consumed, pass-only, input-double-checked, fail-closed:
   cache (payload+installer+probe-script digest) remains the fast path for a
   byte-identical tree.
 - **T2 installs**: `--deps auto` keys each test on the captured payload/
-  installer/ENV files it touched (`install_path`/`sync_dir` capture).
+  installer/ENV files it touched (`install_path`/`sync_dir` capture). The
+  records are per INSTALL ROOT (`<repo>/.loadout-deps.d/<sha256(root)>.log`,
+  lines `<root>\t<path>`), and each test runs with a private TMPDIR, so a
+  record is attributable to exactly one test while several installs overlap.
+  Installer-driven tests therefore run concurrently, bounded by
+  `LOADOUT_TEST_T2_JOBS` (default 4; `--serial`/`LOADOUT_TEST_JOBS=1` forces
+  one at a time) instead of the old always-alone rule. A PASS with no captured
+  inputs is NOT cached (fail closed).
 - **`--no-cache` is the deep run, always available**: `tests/run-all
   --no-cache [--container]`, `./build/release --no-cache` (full smoke + full
   11 GiB scan), `build/scan-for-malware --no-cache`. Periodic full scans are

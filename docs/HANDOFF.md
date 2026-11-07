@@ -13,6 +13,66 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-07 (14): installer tests run in parallel — cold suite 2.1× faster, verdicts still per-test
+
+`tests/run-all` no longer runs every `--deps auto` test alone. Installer-driven
+tests overlap up to `LOADOUT_TEST_T2_JOBS` (default 4; `--serial` or
+`LOADOUT_TEST_JOBS=1` restores the old one-at-a-time behavior), which was the
+last structural ceiling besides Tier 1's `min(4, nproc)` batch.
+
+**Why they could not overlap before:** dependency capture was one repo-global
+append-only `.loadout-deps.log` sliced by byte offset around each test. Two
+installs at once interleave and nothing attributes a line to a test.
+
+**Now:** the installer writes capture records PER INSTALL ROOT --
+`<repo>/.loadout-deps.d/<sha256(real root)[:16]>.log`, each line
+`<root>\t<repo-relative path>` -- and every auto test runs with a PRIVATE
+`TMPDIR`, so all of its temp HOMEs and `--dest-dir` roots sit under one path and
+a record is attributable by prefix (`_dep_capture_add`, `_CAPTURE_DEST` set once
+per install command in `cmd_install_v2`). The legacy `.loadout-deps.log` is
+still written (single-install/debug protocol, pinned by `tests/dep-capture`),
+the marker is now armed for the WHOLE run, and **a PASS with no captured inputs
+is never cached** -- an empty dep list would go green on any payload change, so
+it re-runs instead (fail closed).
+
+**Third bug class found while making it work: path LENGTH.** Per-job `TMPDIR`
+becomes the head of every install root, and two shipped limits are length-based.
+A descriptive `tmp-<test name>/` prefix pushed `install-linux-tmp-home` past
+zsh's 97-byte build placeholder (`prefix relocation failed`) and pushed the
+suite venv's console-script shebang past the kernel limit, so uv fell back to a
+`#!/bin/sh` trampoline (`console script shebang names the versioned venv`
+FAILED). Both are deterministic under the new layout, not flaky. Job scratch
+dirs are now 13 bytes (`${TMPDIR}/lr.<rand>/<id>`), which restores the headroom.
+
+**Also fixed:** `groups_used auto` recorded "auto" as a dependency group (that
+call was unreachable while auto tests ran inline), which killed
+`write_cache_sidecars` with `DEP_GROUP[auto]: unbound variable` at the end of
+every run; `install-fonts-rejoin`, `install-readonly-source` and
+`install-parity-plot` were declared `--deps auto` although they never install
+(pure unit tests / disabled package), so they are now `loader+payload`,
+`loader` and `payload+loader`. `tests/dep-capture` gained section 1c: two armed
+installs into two roots must produce two record files, each naming ONLY its own
+root, and it snapshots/restores the marker (run-all arms it run-wide now).
+`envs/bash/global/completions/loadout.bash` was regenerated (`clang-headers` was
+missing from its package list; `tests/completion in sync` caught it) and
+`installed-sizes.json` repinned.
+
+**Measured** (24-core host, `TMPDIR=/var/tmp`, all tests green):
+`tests/run-all --no-cache` **733 s** wall against **1532 s** of per-test time
+(sum of the 158 logged rows) -> **2.1x**, i.e. the old serial run's >=25.5 min
+of test work now finishes in 12.2 min. Warm suite **6.0 s** with 91 CACHED
+verdicts. Precision check: touching
+`payload/<platform>/wheels/watchglass-2026.11.3-py3-none-any.whl` re-ran
+`install-watchglass` and left the other 35 installer tests `CACHED PASS (deps
+unchanged)` -- the union-of-a-batch coarsening this design was chosen to avoid
+does not exist.
+
+**Follow-ups:** T2 concurrency is bounded by scratch disk/IO rather than CPU
+(four concurrent `@shared` installs are ~32 GB of transients), so on a small
+scratch root set `LOADOUT_TEST_T2_JOBS=1`. `--no-cache` deliberately writes no
+verdicts, so the run AFTER it repopulates the cache; that is why a `--no-cache`
+run is always followed by one full re-run before the loop is warm again.
+
 ## 2026-11-07 (13): open-eda-file-tools ships its source — the install is rebuildable, not just runnable
 
 Rebuilt `open-eda-file-tools` to `v2026.11.5-1-g31e2aa3` (wheels:

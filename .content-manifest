@@ -2792,7 +2792,6 @@ sha256  9f75fa9c0a92fb68cc6161327a8e3224eaabdb6b98137bdb95863c5c19fbc46e  payloa
 sha256  9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a  payload/el8.x86_64.glibc2p28/wheels/markdown_it_py-4.2.0-py3-none-any.whl
 sha256  9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a  payload/python-loaded/wheels/markdown_it_py-4.2.0-py3-none-any.whl
 sha256  9f910804d9a76bfc4ad77313542ab2be13f0b2b5534fb075249bf7f9b492e8ae  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/luap.so.bz2
-sha256  9fd28f32da9407236469c2884cfa26171f8fd06bb01979a6e8c2585380edc6a4  payload/installed-sizes.json
 sha256  9fef506bc33faf19ad87fbcb11aabad7e8f617e32999d3c1844c4a33527a7e34  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/struct.c
 sha256  a0060888950864447d19580efaa734ebab2dd6e11bdd9dd4f5d55299eb8cd5e2  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/ziggy_schema/indents.scm
 sha256  a0060888950864447d19580efaa734ebab2dd6e11bdd9dd4f5d55299eb8cd5e2  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ziggy_schema/indents.scm
@@ -3014,6 +3013,7 @@ sha256  adcd1df230f050570ca5a9d3afc8dcce0d7a10d04bfae04de73053502408895c  payloa
 sha256  add7ee8b0241ea077d7954868ee8b3d26df2f44cfc6b320a527f6af710b0991c  envs/tmux/vendor/plugins/tmux-persist/strategies/vim_session.sh
 sha256  ade934edf66a8b0c86c3a88c2dc3376ecd97c7b943b40f9ad84f2b8554405875  payload/treesitter/vendor/nvim-treesitter/tests/indent/java/annotation_2.java
 sha256  adec4c0f0d2df7cef054aaeb8a31491de3f438fcfa403d1c1e5452c89eb8f5b8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/yaml.lua
+sha256  adff25b06cf93de8f827c0298345c030b1b3f06dec0b082e527c2fc12d8e8b49  payload/installed-sizes.json
 sha256  ae17398ee8ea925aa93112168541b68b01047d5b5450750f9bcc5a3d7292098c  payload/treesitter/vendor/nvim-treesitter/tests/indent/algorithm_spec.lua
 sha256  ae1e05f4474ab893019daefc9f483440db00a5664132175715c76b3773b7e6ba  payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry.lua
 sha256  ae24a212b86ca90f1dde6fb308116b8d9bf20c26c1989624edfc327d54acb83e  payload/el8.x86_64.glibc2p28/lib64/libXinerama.so.1.bz2

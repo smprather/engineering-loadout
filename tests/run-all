@@ -14,8 +14,12 @@
 #   ./tests/run-all --no-cache  # ignore the result cache (see below)
 #   ./tests/run-all --serial    # one test at a time (LOADOUT_TEST_JOBS=N too)
 #
-# Tier 1 runs min(4, nproc) tests at a time; Tier 2 `auto` installs always run
-# alone (they arm a repo-global dependency-capture marker).
+# Tier 1 runs min(4, nproc) tests at a time. Installer-driven (`--deps auto`)
+# tests get their own limit -- LOADOUT_TEST_T2_JOBS (default 4) -- because they
+# are disk/IO-bound installs rather than CPU-bound gates. They can overlap
+# safely: each job gets a private TMPDIR, the installer records the inputs of
+# each INSTALL ROOT under `<repo>/.loadout-deps.d/`, and a record belongs to the
+# job whose TMPDIR prefixes its install root.
 #
 # Results are cached, `--fast` included: when the inputs a test actually
 # depends on are unchanged since its last green run, the cached PASS is
@@ -97,8 +101,12 @@ for arg in "$@"; do
     esac
 done
 
-# Tier 1 runs JOBS tests at a time. `auto` (installer-driven) tests always run
-# alone; see the scheduler. --serial, or LOADOUT_TEST_JOBS=1, turns it off.
+# Concurrency limits. Tier 1 tests are CPU-bound gates: JOBS at a time
+# (default min(4, nproc); LOADOUT_TEST_JOBS overrides, --serial forces 1).
+# Installer-driven (`--deps auto`) tests do multi-gigabyte installs, so they are
+# bounded by disk/IO instead: their own limit, T2_JOBS (LOADOUT_TEST_T2_JOBS,
+# default 4). Their dependency capture is per install root, so overlapping
+# installs cannot interleave records (see _dep_capture_add).
 JOBS=${LOADOUT_TEST_JOBS:-0}
 if [ "$SERIAL" -eq 1 ]; then
     JOBS=1
@@ -106,6 +114,19 @@ fi
 if [ "$JOBS" -le 0 ]; then
     JOBS=$(nproc 2>/dev/null || echo 4)
     [ "$JOBS" -gt 4 ] && JOBS=4
+fi
+T2_JOBS=${LOADOUT_TEST_T2_JOBS:-4}
+if [ "$SERIAL" -eq 1 ] || [ "$JOBS" -le 1 ]; then
+    T2_JOBS=1
+fi
+case "$T2_JOBS" in
+    '' | *[!0-9]*)
+        echo "LOADOUT_TEST_T2_JOBS must be a positive integer (got '$T2_JOBS')" >&2
+        exit 2
+        ;;
+esac
+if [ "$T2_JOBS" -lt 1 ]; then
+    T2_JOBS=1
 fi
 
 PY=""
@@ -185,7 +206,11 @@ _log_runtime() {  # suite test seconds status detail
 #          loadout_main.py, armed by the repo-local .loadout-dep-capture
 #          marker -- env vars do not survive the tests' `env -i`). The test's
 #          PASS is then keyed on the fingerprint of exactly those files, so
-#          rebuilding one artifact re-runs only the tests that use it.
+#          rebuilding one artifact re-runs only the tests that use it. Records
+#          are written PER INSTALL ROOT under .loadout-deps.d/, keyed on the
+#          root's real path, and each job runs with a private TMPDIR: that is
+#          how a record is attributed to one test while installer tests
+#          overlap (see T2_JOBS).
 #
 # The `all` sidecar is written ONCE at the end of a run (not per test): writing
 # it mid-run would make remaining tests cache against a state the run itself
@@ -195,16 +220,37 @@ if [ "$NO_CACHE" -eq 0 ]; then
     CACHE_ACTIVE=1
 fi
 
-# Safety net: never leave the dependency-capture marker armed, nor the
-# per-run log directory, behind.
+# Safety net: never leave the dependency-capture marker armed, nor the per-run
+# capture/scratch dirs, behind. The marker stays armed for the WHOLE run now
+# that installer tests overlap -- individual tests no longer arm/truncate it,
+# and the records they produce are per install root (see .loadout-deps.d).
 DEP_MARKER="$REPO_DIR/.loadout-dep-capture"
 DEP_LOG="$REPO_DIR/.loadout-deps.log"
+DEP_DIR="$REPO_DIR/.loadout-deps.d"
+RUN_TMP=""
+ensure_run_tmp() {
+    if [ -z "$RUN_TMP" ]; then
+        # SHORT on purpose. Every auto test's TMPDIR becomes the head of its
+        # install roots, and two shipped limits are length-based: zsh's build
+        # placeholder is 97 bytes, and a console-script shebang over the kernel
+        # limit makes uv/pip fall back to a `#!/bin/sh` trampoline. A verbose
+        # `tmp-<test name>/` prefix pushed real installs over both
+        # (install-linux-tmp-home failed relocation; python-suite-install saw a
+        # `#!/bin/sh` pylint). `lr.<rand>/<job id>` costs ~13 bytes.
+        RUN_TMP=$(mktemp -d "${TMPDIR:-/tmp}/lr.XXXXXX")
+    fi
+}
 cleanup_run_state() {
     rm -f "$DEP_MARKER"
-    [ -n "${RUN_TMP:-}" ] && rm -rf "$RUN_TMP"
+    rm -rf "$DEP_DIR"
+    if [ -n "$RUN_TMP" ]; then
+        chmod -R u+w "$RUN_TMP" 2>/dev/null || true
+        rm -rf "$RUN_TMP"
+    fi
     return 0
 }
 trap cleanup_run_state EXIT INT TERM
+rm -rf "$DEP_DIR"
 
 # Files every `auto` test always depends on: the harness itself, the
 # fingerprint tool, the installer, and the registry. Kept in the dep list so
@@ -456,26 +502,55 @@ _run_test() {
     fi
 
     # --- run ---
-    local armed=0
+    # An installer-driven test gets a PRIVATE TMPDIR. Everything it creates
+    # (temp HOME, temp dest roots) then lives under that path, the installer
+    # records each install root's inputs under .loadout-deps.d/, and a record
+    # belongs to this test iff its install root is prefixed by this TMPDIR.
+    # That is what makes concurrent installer tests attributable -- the old
+    # shared .loadout-deps.log had to be sliced by offset, which only worked
+    # while exactly one test ran.
+    local armed=0 job_tmp="" saved_tmpdir="${TMPDIR:-}"
     if [ "$CACHE_ACTIVE" -eq 1 ] && [ "$deps_mode" = auto ] && [ -n "$test_script" ]; then
         mkdir -p "$CACHE_DIR"
-        : > "$DEP_LOG"
+        ensure_run_tmp
+        # 2-3 bytes of job identity, not the test name: see ensure_run_tmp.
+        job_tmp="$RUN_TMP/${_JOB_TMP_ID:-0}"
+        mkdir -p "$job_tmp"
         touch "$DEP_MARKER"
+        TMPDIR=$job_tmp
+        export TMPDIR
         armed=1
     fi
     local rc=0
     "$@" || rc=$?
     if [ "$armed" -eq 1 ]; then
-        rm -f "$DEP_MARKER"
-        if [ "$rc" -eq 0 ]; then
-            { printf '%s\n' "$test_script"; printf '%s\n' "${AUTO_BASE_DEPS[@]}"; cat "$DEP_LOG"; } \
-                | sort -u > "$deps_file"
+        local job_real captures=0
+        job_real=$(realpath "$job_tmp" 2>/dev/null || printf '%s' "$job_tmp")
+        # The installer records REAL install roots, so match on the real path.
+        captures=$(awk -F'\t' -v p="$job_real/" 'index($1, p) == 1 {n++} END {print n+0}' \
+            "$DEP_DIR"/*.log 2>/dev/null) || captures=0
+        if [ "$rc" -eq 0 ] && [ "${captures:-0}" -gt 0 ]; then
+            {
+                printf '%s\n' "$test_script"
+                printf '%s\n' "${AUTO_BASE_DEPS[@]}"
+                awk -F'\t' -v p="$job_real/" 'index($1, p) == 1 {print $2}' "$DEP_DIR"/*.log
+            } | sort -u > "$deps_file"
             if ! "$PY" "$FP_SCRIPT" --fast --write "$fp_file" --roots-from-file "$deps_file" >/dev/null 2>&1; then
                 rm -f "$deps_file" "$fp_file"
             fi
         else
+            # FAIL CLOSED. A PASS with no captured inputs would cache against
+            # an almost-empty dep list and go green on ANY payload change, so
+            # such a verdict is simply not cached: the test re-runs next time.
             rm -f "$deps_file" "$fp_file"
+            if [ "$rc" -eq 0 ]; then
+                echo "  note: $name captured no inputs under its TMPDIR -- PASS not cached"
+            fi
         fi
+        TMPDIR=$saved_tmpdir
+        export TMPDIR
+        chmod -R u+w "$job_tmp" 2>/dev/null || true
+        rm -rf "$job_tmp"
     fi
     if [ "$rc" -eq 77 ]; then
         # A whole-run skip (exit 77) is not a PASS: it proves nothing about the
@@ -513,15 +588,15 @@ _run_test() {
 # overlap: they arm a repo-global dependency-capture marker and truncate its
 # log. Each job writes its own log + status file, and the parent replays them,
 # so output stays per-test instead of interleaved.
-declare -a _JOB_PIDS=() _JOB_IDS=()
+declare -a _JOB_PIDS=() _JOB_IDS=() _JOB_AUTO=()
 _JOB_SEQ=0
-RUN_TMP=""
 
 _reap_one() {
     local pid=${_JOB_PIDS[0]} id=${_JOB_IDS[0]} rc=1
     wait "$pid" || true
     _JOB_PIDS=("${_JOB_PIDS[@]:1}")
     _JOB_IDS=("${_JOB_IDS[@]:1}")
+    _JOB_AUTO=("${_JOB_AUTO[@]:1}")
     if [ -f "$RUN_TMP/$id.rc" ]; then
         rc=$(cat "$RUN_TMP/$id.rc")
     fi
@@ -540,30 +615,64 @@ drain_jobs() {
     done
 }
 
+_AUTO_N=0
+count_auto_running() {
+    local f
+    _AUTO_N=0
+    for f in "${_JOB_AUTO[@]}"; do
+        if [ "$f" = 1 ]; then
+            _AUTO_N=$((_AUTO_N + 1))
+        fi
+    done
+}
+
 run_test() {
     local _is_auto=0
     if [ "${2:-}" = "--deps" ] && [ "${3:-}" = auto ]; then
         _is_auto=1
     fi
-    if [ "$JOBS" -le 1 ] || [ "$_is_auto" -eq 1 ]; then
+    # Installer-driven tests are bounded by T2_JOBS, CPU-bound gates by JOBS.
+    local _limit=$JOBS
+    if [ "$_is_auto" -eq 1 ]; then
+        _limit=$T2_JOBS
+    fi
+    if [ "$_limit" -le 1 ]; then
         drain_jobs
         # Counters are updated in-process here; the status must not reach
         # `set -e` at the call site.
         _run_test "$@" || true
         return 0
     fi
-    RUN_TMP=${RUN_TMP:-$(mktemp -d "${TMPDIR:-/tmp}/loadout-run.XXXXXX")}
-    if [ "${2:-}" = "--deps" ]; then
-        groups_used "${3:-}"
-    fi
+    ensure_run_tmp
+    # Only real group specs need a sidecar: `auto`/`all`/`container` have their
+    # own cache modes, and DEP_GROUP has no entry for them (recording "auto"
+    # here made write_cache_sidecars die on `DEP_GROUP[auto]: unbound variable`
+    # as soon as installer tests took this code path).
+    case "${3:-}" in
+        auto | all | container | "") ;;
+        *)
+            if [ "${2:-}" = "--deps" ]; then
+                groups_used "${3:-}"
+            fi
+            ;;
+    esac
     local id=$_JOB_SEQ
     _JOB_SEQ=$((_JOB_SEQ + 1))
-    ( _run_test "$@" >"$RUN_TMP/$id.log" 2>&1; echo $? >"$RUN_TMP/$id.rc" ) &
-    _JOB_PIDS+=($!)
-    _JOB_IDS+=("$id")
-    while [ "${#_JOB_PIDS[@]}" -ge "$JOBS" ]; do
+    # Wait for BOTH limits: total jobs, and this test's class (so a burst of
+    # cheap gates cannot starve the installers, and vice versa).
+    while :; do
+        if [ "${#_JOB_PIDS[@]}" -lt "$JOBS" ]; then
+            count_auto_running
+            if [ "$_is_auto" -eq 0 ] || [ "$_AUTO_N" -lt "$_limit" ]; then
+                break
+            fi
+        fi
         _reap_one
     done
+    ( _JOB_TMP_ID=$id; _run_test "$@" >"$RUN_TMP/$id.log" 2>&1; echo $? >"$RUN_TMP/$id.rc" ) &
+    _JOB_PIDS+=($!)
+    _JOB_IDS+=("$id")
+    _JOB_AUTO+=("$_is_auto")
     return 0
 }
 
@@ -728,7 +837,7 @@ fi
 # --- Tier 2: integration installs into temp roots --------------------------
 # Installer-driven tests use --deps auto (per-test payload deps). The
 # completion check keeps the global `all` cache.
-run_test "install-fonts-rejoin" --deps auto "$PY" tests/install-fonts-rejoin
+run_test "install-fonts-rejoin" --deps loader+payload "$PY" tests/install-fonts-rejoin
 run_test "python-suite-install" --deps auto "$PY" tests/python-suite-install
 run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
 run_test "install-modules" --deps auto tests/install-modules
@@ -749,11 +858,11 @@ run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-termin
 run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
 run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
 run_test "install-env-vim-xdg" --deps auto tests/install-env-vim-xdg
-run_test "install-readonly-source" --deps auto "$PY" tests/install-readonly-source
+run_test "install-readonly-source" --deps loader "$PY" tests/install-readonly-source
 run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
 run_test "install-exclude-policy" --deps auto tests/install-exclude-policy
 run_test "optional-packages" --deps auto tests/optional-packages
-run_test "install-parity-plot" --deps auto tests/install-parity-plot
+run_test "install-parity-plot" --deps payload+loader tests/install-parity-plot
 run_test "install-watchglass" --deps auto tests/install-watchglass
 run_test "install-open-eda-file-tools" --deps auto tests/install-open-eda-file-tools
 run_test "compile-open-eda-from-source" --deps auto tests/compile-open-eda-from-source

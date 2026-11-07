@@ -12,6 +12,7 @@ loadout_backups/
 # by production installs.
 .loadout-dep-capture
 .loadout-deps.log
+.loadout-deps.d/
 __pycache__/
 *.log
 !envs/bash/global/grc/share/grc/conf.log

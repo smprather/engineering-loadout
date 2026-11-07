@@ -8602,12 +8602,30 @@ def _artifact_paths(entry, repo_dir, platform_dir):
 # repo-local marker does, regardless of the test's environment.
 _DEP_CAPTURE_MARKER = ".loadout-dep-capture"
 _DEP_CAPTURE_LOG = ".loadout-deps.log"
+# CONCURRENCY-SAFE records. `.loadout-deps.log` is one append-only file, so two
+# installs writing at once produce an interleaved log nobody can attribute to a
+# test -- which is exactly why tests/run-all used to run every installer-driven
+# test alone. Instead, the installer also writes one file per INSTALL ROOT under
+# `<repo>/.loadout-deps.d/<sha256(dest)[:16]>.log`, each line
+# `<real install root>\t<repo-relative path>`. The runner gives every test its
+# own TMPDIR, so every dest root a test installs into is prefixed by that
+# test's private root and the records are attributable by prefix -- no shared
+# mutable state, no serialization.
+_DEP_CAPTURE_DIR = ".loadout-deps.d"
+# Install root of the CURRENT command, used to key those per-root records.
+# Set once per install command; capture stays best-effort and diagnostic.
+_CAPTURE_DEST = ""
 # Repo root resolved from the marker by _capture_source_dep, cached per process.
 _CAPTURE_REPO_DIR = None
 
 
 def _dep_capture_add(paths, repo_dir):
-    """Append repo-relative paths to the capture log, if the marker is armed.
+    """Record repo-relative paths as this install's dependencies, if armed.
+
+    Writes both protocols: the legacy append-only `.loadout-deps.log` (one
+    install at a time; `tests/dep-capture` pins it) and the per-install-root
+    file under `.loadout-deps.d/` that lets tests/run-all attribute records to
+    one test while several installs overlap.
 
     Best-effort: capture is diagnostic and must never break an install. The
     release-asset nvim plugin stash is excluded -- gitignored, absent on many
@@ -8617,9 +8635,17 @@ def _dep_capture_add(paths, repo_dir):
         if not os.path.exists(os.path.join(repo_dir, _DEP_CAPTURE_MARKER)):
             return
         rels = sorted(os.path.relpath(p, repo_dir) for p in paths if os.path.exists(p) and "nvim-plugin-stash" not in p)
-        if rels:
-            with open(os.path.join(repo_dir, _DEP_CAPTURE_LOG), "a") as fh:
-                fh.write("\n".join(rels) + "\n")
+        if not rels:
+            return
+        with open(os.path.join(repo_dir, _DEP_CAPTURE_LOG), "a") as fh:
+            fh.write("\n".join(rels) + "\n")
+        if _CAPTURE_DEST:
+            root = os.path.realpath(_CAPTURE_DEST)
+            capture_dir = os.path.join(repo_dir, _DEP_CAPTURE_DIR)
+            os.makedirs(capture_dir, exist_ok=True)
+            key = hashlib.sha256(root.encode("utf-8", "replace")).hexdigest()[:16]
+            with open(os.path.join(capture_dir, key + ".log"), "a") as fh:
+                fh.write("".join(f"{root}\t{rel}\n" for rel in rels))
     except Exception:  # noqa: BLE001 - capture is diagnostic, never fatal
         pass
 
@@ -8981,6 +9007,12 @@ def _adapt_install_args(args):
 
 def cmd_install_v2(args, registry, repo_dir, home):
     """Thin shim: adapt new-CLI args -> legacy cmd_install."""
+    # Key this command's dependency-capture records on the install root it is
+    # writing into (see _dep_capture_add). Every install root a test uses lives
+    # under that test's private TMPDIR, which is how tests/run-all attributes
+    # records to one test while several installer tests run concurrently.
+    global _CAPTURE_DEST
+    _CAPTURE_DEST = home
     pkgs = list(getattr(args, "packages", None) or [])
     if not pkgs:
         eprint("Error: no package specified")

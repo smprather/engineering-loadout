@@ -22,13 +22,29 @@ cd "$repo_dir"
 
 marker="$repo_dir/.loadout-dep-capture"
 log="$repo_dir/.loadout-deps.log"
+deps_dir="$repo_dir/.loadout-deps.d"
 
 tmp_root=${TMPDIR:-/tmp}
 test_home=$(mktemp -d "$tmp_root/loadout-depcapture-home.XXXXXX")
 dest_dir=$(mktemp -d "$tmp_root/loadout-depcapture-dest.XXXXXX")
 
+# tests/run-all arms the marker for the WHOLE run now that installer tests
+# overlap, so this gate must put the marker back the way it found it: removing
+# it outright would silently stop capture for every test after this one.
+marker_prearmed=0
+[ -e "$marker" ] && marker_prearmed=1
+restore_marker() {
+    if [ "$marker_prearmed" -eq 1 ]; then
+        : > "$marker"
+    else
+        rm -f "$marker"
+    fi
+}
+
 cleanup() {
-    rm -f "$marker" "$log"
+    restore_marker
+    chmod -R u+w "$deps_dir" 2>/dev/null || true
+    rm -rf "$deps_dir"
     # The installed tree is SEALED read-only (0444 files, 0555 dirs) on
     # purpose, so a plain `rm -rf` cannot remove it: the cleanup
     # leaks the whole tree into $TMPDIR and the next test that
@@ -111,6 +127,60 @@ if grep -q '^payload/el8\.' "$log"; then
     fail "env-tcsh capture recorded unrelated payload artifacts"
 fi
 echo "  OK: cross-package env sources (SHARED_ENV_HELPERS) captured"
+
+# --- 1c. per-INSTALL-ROOT records (what lets installer tests overlap) -------
+# tests/run-all gives every test its own TMPDIR and attributes capture records
+# by the install root they name, so several installer tests can run at once.
+# Two installs into two different roots, both armed, must therefore produce two
+# record files, each naming ONLY its own root -- a shared or interleaved record
+# is exactly what would silently attach one test's inputs to another.
+chmod -R u+w "$deps_dir" 2>/dev/null || true
+rm -rf "$deps_dir"
+dest2=$(mktemp -d "$tmp_root/loadout-depcapture-dest2.XXXXXX")
+chmod -R u+w "$dest2" 2>/dev/null || true
+: > "$marker"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install -y env-tcsh --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install-a.log" 2>&1 || fail "root A install exited non-zero"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install -y env-zsh --dest-dir "$dest2" --no-backup \
+    > "$test_home/install-b.log" 2>&1 || fail "root B install exited non-zero"
+restore_marker
+
+root_a=$(realpath "$dest_dir")
+root_b=$(realpath "$dest2")
+shopt -s nullglob
+records=("$deps_dir"/*.log)
+shopt -u nullglob
+[ "${#records[@]}" -eq 2 ] || fail "expected 2 per-root capture records, found ${#records[@]}"
+
+stray=$(cat "${records[@]}" | awk -F'\t' -v a="$root_a" -v b="$root_b" '$1 != a && $1 != b {print}' | head -3)
+[ -z "$stray" ] || {
+    printf '%s\n' "$stray" >&2
+    fail "a capture record names a root neither install used"
+}
+for pair in "$root_a:envs/tcsh/tcshrc" "$root_b:envs/zsh/zshrc"; do
+    root=${pair%%:*}
+    want=${pair#*:}
+    grep -q "$(printf '%s\t' "$root")$want\$" "${records[@]}" \
+        || fail "no record pairs $want with its own install root $root"
+done
+# Each file must be exclusive: root B's records may not appear in root A's file.
+file_a=""
+for f in "${records[@]}"; do
+    if awk -F'\t' -v r="$root_a" '$1 == r {found=1} END {exit !found}' "$f"; then file_a=$f; fi
+done
+[ -n "$file_a" ] || fail "no dedicated record file for install root A"
+if grep -q "$(printf '%s\t' "$root_b")" "$file_a"; then
+    fail "install root B's inputs leaked into install root A's record"
+fi
+echo "  OK: per-install-root records stay exclusive (concurrent-test attribution)"
 
 # --- 2. marker absent -> no capture -----------------------------------------
 rm -f "$log"
