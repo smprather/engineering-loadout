@@ -40,6 +40,13 @@
 # pass --no-cache) to force a full re-run. Sidecars record absolute paths, so a
 # second checkout of the same commit (git worktree) starts cold once and then
 # keeps its own verdicts.
+#
+# Do NOT pipe this run through an early-closing consumer (`| head`): the
+# closed stdout kills the suite mid-flight before the verdict sidecars and
+# the test:total row are written, and the next run re-does the killed work.
+# Every COMPLETED test still records its own verdict and ci-runtimes row, so
+# nothing verified is lost. Use a file redirect or a consumer that reads to
+# EOF (grep, tail).
 
 set -euo pipefail
 
