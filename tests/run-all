@@ -43,6 +43,15 @@
 
 set -euo pipefail
 
+# A closed stdout must not kill the suite mid-run: `./tests/run-all | head`
+# (or any early-closing consumer) used to SIGPIPE the runner part-way through
+# Tier 2, silently aborting before the verdict sidecars and the test:total
+# row were written -- the next run then re-did the work the killed run had
+# half-completed. With SIGPIPE ignored, prints fail with EPIPE and the run
+# finishes and records its verdicts; the report is what the operator pipes,
+# never what the run depends on.
+trap '' PIPE
+
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_DIR"
 
