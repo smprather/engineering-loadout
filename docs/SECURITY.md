@@ -48,23 +48,30 @@ portable-python was skipped entirely -- fixed. The Windows payload left
 coverage when the platform was retired 2026-08-31.)
 
 ```bash
-./build/scan-for-malware              # full scan (YARA + ClamAV)
+./build/scan-for-malware              # incremental scan (YARA + ClamAV)
 ./build/scan-for-malware --fast       # bin/lib64 only (dev tier)
 ./build/scan-for-malware --no-clamav  # YARA only
-./build/scan-for-malware --no-cache   # force a fresh scan and do not write cache
-./build/scan-for-malware --clear-cache # delete cached clean scan results first
+./build/scan-for-malware --no-cache   # FULL scan: ignore recorded verdicts, write none
+./build/scan-for-malware --clear-cache # delete recorded clean verdicts first
 ./build/scan-for-malware --path DIR   # scan an arbitrary staging tree (pre-pack)
 ```
 
-**Clean-result cache.** Clean scan results are cached under
-`${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/malware-scan-v1/`. Only clean
-verdicts are cached; detections are never cached. The cache key hashes the
-source scan corpus (compressed payloads plus vendored plugin trees, or the
-explicit `--path` tree), `scan-for-malware` itself, the `build/yara/` engine
-and rules, the YARA release tag, scan mode flags, and the ClamAV engine/signature
-fingerprint from `clamscan --version`. Any payload byte change, rule update,
-allowlist/script edit, or ClamAV signature update misses the cache and performs
-a full scan. `--verbose` bypasses the cache so raw YARA output is available.
+**Per-artifact clean verdicts.** Clean scan results are cached per ARTIFACT
+under `${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/malware-scan-v1/`:
+each logical archive (chunked sets count as one) carries a recorded clean
+verdict keyed on its part identities under a scanner fingerprint that hashes
+`scan-for-malware` itself, the `build/yara/` engine and rules, the YARA
+release tag, scan mode flags, and the ClamAV engine/signature fingerprint.
+Only clean verdicts are cached; detections are never cached. A run
+re-extracts and re-scans ONLY artifacts whose bytes changed (or that have no
+recorded verdict); unchanged artifacts are covered by their recorded verdict.
+This is sound because detection is a function of (bytes, engine, rules): a
+recorded clean verdict over the same bytes under the same fingerprint is
+exactly as strong as re-running the scan. Any rule update, allowlist/script
+edit, engine change or ClamAV signature update changes the fingerprint and
+forces a full re-scan; an artifact whose extraction errored never earns a
+verdict. `--verbose` bypasses the cache so raw YARA output is available, and
+`--no-cache` is the periodic full scan.
 
 **False-positive allowlist.** `_YARA_ALLOWLIST` in `scan-for-malware` excuses a
 short, audited set of (rule, path) pairs, each with a written justification;

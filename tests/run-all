@@ -227,6 +227,7 @@ declare -A DEP_GROUP=(
     [docs]="docs README.md AGENTS.md .github loadout_main.py payload/packages.json envs build tools tests loadout"
     [export]=".content-manifest .git/HEAD .git/refs"
     [harness]="tests/run-all build/fingerprint.py"
+    [smoke]="build/scan-for-malware tests/prebuilt-binaries"
 )
 
 group_sidecar() { printf '%s/group-%s.json' "$CACHE_DIR" "$1"; }
@@ -308,6 +309,11 @@ group_unchanged() {  # spec -> 0 when every constituent group is unchanged
 groups_used() {  # spec -> remember each group so its sidecar is written
     local g
     while IFS= read -r g; do
+        # `container` is not a dependency group: its verdicts come from
+        # CACHE_SIDECAR_CONTAINER, and DEP_GROUP has no entry for it (which
+        # used to print `DEP_GROUP[container]: unbound variable` from
+        # write_cache_sidecars after every --container run).
+        [ "$g" = "container" ] && continue
         case " $GROUP_NAMES_USED " in
             *" $g "*) ;;
             *) GROUP_NAMES_USED="$GROUP_NAMES_USED $g" ;;
@@ -624,6 +630,7 @@ run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
 run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
 run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
 run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
+run_test "incremental-verdicts" --deps smoke "$PY" tests/incremental-verdicts
 run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
 run_test "st font list in sync" --deps stfonts --deps-key build/gen-st-font-comments "$PY" build/gen-st-font-comments --check
 run_test "README table in sync" --deps readme --deps-key build/gen-readme-table "$PY" build/gen-readme-table --check

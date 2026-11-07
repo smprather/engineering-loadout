@@ -31,8 +31,10 @@ Usage:
 
 import concurrent.futures
 import glob
+import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -2641,16 +2643,310 @@ def _probe_workers():
     return 16
 
 
-def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
+# --- per-probe verdict cache -------------------------------------------------
+# Every probe's PASS is cached keyed on the exact inputs the probe consumes:
+# the probed file's identity, the staged ELF closure it loads (readelf
+# DT_NEEDED resolved inside the staged lib dirs), any uv-tool venv a launcher
+# script references, the installer/shim/probe-script bytes, the probe spec and
+# the host platform. An installed file's identity changes exactly when the
+# stamped install rewrote it -- i.e. when its source bytes or the installer
+# changed -- so a cached PASS is reused only when every input is identical to
+# the run that produced it. Pass-only and input-double-checked, same trust
+# model as the test-suite dependency groups: a changed input re-runs exactly
+# the probes that consume it, and a FAIL is never cached.
+PROBE_CACHE_SCHEMA = 1
+_PROBE_CACHE_DIR_NAME = os.path.join("engineering-loadout", "prebuilt-binaries-v1")
+
+
+def _probe_cache_root():
+    return os.path.join(
+        os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache"), _PROBE_CACHE_DIR_NAME
+    )
+
+
+def _append_runtime_row(test, seconds, status, detail):
+    """One row in the local ci-runtimes log (format: build/ci-runtimes). The
+    incremental split (probes cached vs re-run, install seconds) is the watch
+    data: build/ci-runtimes flags a gate whose runtime regresses, and this row
+    carries why."""
+    try:
+        log = os.path.join(
+            os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+            "engineering-loadout",
+            "ci-runtimes.tsv",
+        )
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        def clean(s):
+            return str(s).replace("\t", " ").replace("\n", " ").strip()
+
+        with open(log, "a") as fh:
+            fh.write(f"{ts}\trelease\t{clean(test)}\t{int(seconds)}\t{clean(status)}\t{clean(detail)}\n")
+    except OSError:
+        pass
+
+
+class ProbeVerdicts:
+    """Probe pass store under ~/.cache/engineering-loadout/prebuilt-binaries-v1/."""
+
+    def __init__(self, enabled):
+        self.enabled = enabled
+        self.path = os.path.join(_probe_cache_root(), "probes.json")
+        self.data = None
+        if enabled:
+            self.data = self._load()
+
+    def _load(self):
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except OSError, ValueError:
+            return {"schema": PROBE_CACHE_SCHEMA, "verdicts": {}}
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("verdicts"), dict)
+            or data.get("schema") != PROBE_CACHE_SCHEMA
+        ):
+            return {"schema": PROBE_CACHE_SCHEMA, "verdicts": {}}
+        return data
+
+    def check(self, key):
+        return self.enabled and key in self.data["verdicts"]
+
+    def record(self, key, detail):
+        if self.enabled:
+            self.data["verdicts"][key] = {"detail": detail, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+    def flush(self):
+        if not self.enabled:
+            return
+        try:
+            os.makedirs(_probe_cache_root(), exist_ok=True)
+            tmp = f"{self.path}.tmp.{os.getpid()}"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(self.data, fh, indent=2, sort_keys=True)
+                fh.write("\n")
+            os.replace(tmp, self.path)
+        except OSError as e:
+            print(f"WARNING: could not write probe verdicts {self.path}: {e}", file=sys.stderr)
+
+
+def _sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _platform_fp():
+    uname = subprocess.run(["uname", "-s", "-m"], capture_output=True, text=True).stdout.strip()
+    glibc = subprocess.run(["getconf", "GNU_LIBC_VERSION"], capture_output=True, text=True).stdout.strip()
+    return [uname, glibc]
+
+
+def _file_identity(path):
+    """Comparable identity of an installed file: [size, mtime_ns, mode], or
+    ["l", target] for a symlink (its mtime churns on every recreate, and the
+    target string IS its content).
+
+    Deliberately WITHOUT the inode: portable-python and the KLayout launchers
+    are re-written every install (atomic rename, new inode) with their
+    archive-preserved mtimes, while their bytes are still exactly the current
+    source's. The installer guarantees the tree always reflects the current
+    sources -- the identity only has to notice when those changed, which is
+    the project's (mtime_ns, size) convention used by the other per-artifact
+    caches."""
+    if os.path.islink(path):
+        return ["l", os.readlink(path)]
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return None
+    return [st.st_size, st.st_mtime_ns, st.st_mode]
+
+
+def _tree_identities(root):
+    """{relative path: identity} for a file, or every regular file under a dir."""
+    out = {}
+    if os.path.isdir(root):
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = sorted(d for d in dirs if not os.path.islink(os.path.join(dirpath, d)))
+            for name in sorted(files):
+                full = os.path.join(dirpath, name)
+                ident = _file_identity(full)
+                if ident is not None:
+                    out[os.path.relpath(full, root)] = ident
+    else:
+        ident = _file_identity(root)
+        if ident is not None:
+            out[os.path.basename(root)] = ident
+    return out
+
+
+def _elf_needed(path):
+    try:
+        proc = subprocess.run(["readelf", "-d", path], capture_output=True, text=True, timeout=5)
+    except OSError, subprocess.TimeoutExpired:
+        return []
+    needed = []
+    for line in proc.stdout.splitlines():
+        if "(NEEDED)" in line:
+            needed.append(line.rsplit("Shared library:", 1)[-1].strip().strip("[]"))
+    return needed
+
+
+def _staged_closure(root_elf, lib_dirs, memo):
+    """Identities of root_elf and every staged ELF it transitively NEEDs.
+
+    Sonames resolve only inside the staged lib dirs; host libraries are
+    covered by the platform fingerprint instead."""
+    seen = set()
+    stack = [os.path.realpath(root_elf)]
+    idents = {}
+    while stack:
+        p = stack.pop()
+        if p in seen:
+            continue
+        seen.add(p)
+        ident = _file_identity(p)
+        if ident is not None:
+            idents[p] = ident
+        needed = memo.get(p)
+        if needed is None:
+            needed = _elf_needed(p)
+            memo[p] = needed
+        for soname in needed:
+            for d in lib_dirs:
+                cand = os.path.join(d, soname)
+                if os.path.isfile(cand):
+                    stack.append(os.path.realpath(cand))
+                    break
+    return idents
+
+
+def _uv_venvs_from_launcher(bin_dir, name):
+    """venv dirs a launcher script references (uv tool launchers embed their
+    venv path). Used as the detector for "this probe is a uv tool": wheel
+    changes reinstall the venv, so the probe keys on the wheelhouse and
+    toolchain instead of the churning venv files."""
+    full = os.path.join(bin_dir, name)
+    try:
+        with open(full, encoding="utf-8", errors="replace") as fh:
+            text = fh.read(262144)
+    except OSError:
+        return set()
+    prefix = os.path.dirname(bin_dir)
+    out = set()
+    for m in re.finditer(r"share/uv/tools/([^/\"'\\\s]+)", text):
+        cand = os.path.join(prefix, m.group(0))
+        if os.path.isdir(cand):
+            out.add(os.path.realpath(cand))
+    return out
+
+
+def _wheelhouse_identities(repo_dir):
+    """Identities of every wheel in the current platform's wheelhouse. uv
+    recreates each tool venv on every install, so the venv's INPUTS (wheels,
+    uv, interpreter) carry the probe key -- they are stable when the payload
+    is unchanged and change exactly when a wheel does."""
+    machine = platform.machine()
+    plat_dirs = sorted(glob.glob(os.path.join(repo_dir, "payload", "*.*.glibc*")))
+    plat = next((d for d in plat_dirs if machine in os.path.basename(d)), None) or (plat_dirs[0] if plat_dirs else None)
+    if not plat:
+        return {}
+    wheels = os.path.join(plat, "wheels")
+    if not os.path.isdir(wheels):
+        return {}
+    out = {}
+    for name in sorted(os.listdir(wheels)):
+        if name.endswith(".whl") or ".whl.part-" in name:
+            ident = _file_identity(os.path.join(wheels, name))
+            if ident is not None:
+                out[name] = ident
+    return out
+
+
+def _resolve_real_elf(binary_path):
+    """The real ELF a PATH wrapper execs, or None -- the lookup real_elf_for_wrapper
+    uses, against the persistent install root (install_cache IS <tmpdir>/local)."""
+    name = os.path.basename(binary_path)
+    candidates = [binary_path + ".bin"]
+    lib_root = os.path.join(os.path.dirname(os.path.dirname(binary_path)), "lib")
+    for pkg_dir in sorted(glob.glob(os.path.join(lib_root, "*"))):
+        if not os.path.isdir(pkg_dir):
+            continue
+        for cand in (name, name + ".bin", name + "-bin"):
+            candidates.append(os.path.join(pkg_dir, cand))
+    for path in candidates:
+        if os.path.isfile(path) and is_elf(path):
+            return path
+    return None
+
+
+def _probe_key(binary_path, name, base, lib_dirs, memo, bin_dir, wheelhouse):
+    """sha256 of the exact inputs `name`'s probe consumes, folded with the
+    run-wide inputs (installer, shim, script, platform, schema)."""
+    expect = EXPECT_NONZERO.get(name)
+    spec = expect[0] if expect is not None else PROBE_FLAGS.get(name, DEFAULT_PROBE)
+    inputs = {"probe": name, "spec": spec}
+    target = os.path.realpath(binary_path)
+    if os.path.islink(binary_path):
+        inputs["link"] = os.readlink(binary_path)
+    else:
+        inputs["file"] = _file_identity(binary_path)
+    is_tool = "/share/uv/tools/" in target or bool(_uv_venvs_from_launcher(bin_dir, name))
+    if is_elf(target):
+        inputs["closure"] = _staged_closure(target, lib_dirs, memo)
+    elif is_tool:
+        # uv recreates the venv and rewrites the launcher on every install, so
+        # installed-state identities churn even when nothing changed. The venv
+        # is a pure function of (wheels, uv, interpreter, installer) -- key on
+        # those, all of which are stable when the payload is unchanged.
+        inputs["wheelhouse"] = wheelhouse
+        inputs["uv"] = _file_identity(os.path.join(os.path.dirname(bin_dir), "bin", "uv"))
+        inputs["interp"] = _staged_closure(os.path.join(bin_dir, "python3.15"), lib_dirs, memo)
+    else:
+        interp = _shebang_interpreter(target)
+        if interp is not None:
+            inputs["interp"] = _staged_closure(os.path.join(os.path.dirname(binary_path), interp), lib_dirs, memo)
+        # sh-style wrappers that exec a SIBLING staged binary by name (idle3.15
+        # runs python3.15): the sibling's closure joins the key, so a change to
+        # what it execs re-runs the wrapper probe.
+        try:
+            with open(target, encoding="utf-8", errors="replace") as fh:
+                text = fh.read(65536)
+        except OSError:
+            text = ""
+        siblings = {}
+        for sib in os.listdir(bin_dir):
+            if sib != name and sib in text:
+                sib_path = os.path.join(bin_dir, sib)
+                if os.path.isfile(sib_path) and is_elf(sib_path):
+                    siblings[sib] = _staged_closure(sib_path, lib_dirs, memo)
+        if siblings:
+            inputs["siblings"] = siblings
+    encoded = json.dumps({"base": base, "inputs": inputs}, sort_keys=True, default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures, verdicts, base_inputs, lib_dirs, wheelhouse):
     """Probe every executable in bin_dir. Probes are independent, so they run
     in parallel (16 workers); the 4 s per-probe timeout budget dominates the
-    sequential wall time on a box with slow-starting GUI binaries."""
+    sequential wall time on a box with slow-starting GUI binaries. A probe
+    whose exact inputs carry a recorded PASS is skipped ("CACHED OK") -- only
+    the input set matters, never which run recorded it."""
     entries = []
     for fname in sorted(os.listdir(bin_dir)):
         fpath = os.path.join(bin_dir, fname)
         if not os.path.isfile(fpath) or not os.access(fpath, os.X_OK):
             continue
         entries.append((fname, fpath))
+
+    memo = {}
+
+    cached = [0]
 
     def classify(fname, fpath):
         if is_elf(fpath):
@@ -2682,9 +2978,15 @@ def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
         if fname in NO_EXEC and is_elf(fpath):
             return ("ok", f"  OK   (ldd-only):     {fname}")
 
+        key = _probe_key(fpath, fname, base_inputs, lib_dirs, memo, bin_dir, wheelhouse)
+        if verdicts.check(key):
+            cached[0] += 1
+            return ("ok", f"  CACHED OK               {fname:20s}")
+
         ok, detail = probe_binary(fpath, probe_env, tmpdir)
         status = "OK:  " if ok else "FAIL:"
         if ok:
+            verdicts.record(key, detail)
             return ("ok", f"  {status}                 {fname:20s}  {detail}")
         return ("fail", f"  {status}                 {fname:20s}  {detail}", (fname, detail))
 
@@ -2702,7 +3004,64 @@ def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
                 failures.append(result[2])
             print(result[1], flush=True)
 
-    return tested, skipped, failures
+    return tested, skipped, failures, cached[0]
+
+
+def _layout_inputs(install_cache, bin_dir, repo_dir, lib_dirs, wheelhouse):
+    """The inputs smoke_runtime_layout consumes: the staged tree minus the
+    churning pieces (top-level uv venvs and the uv tool launchers uv rewrites
+    every install), plus -- when tools are installed -- the wheelhouse and
+    toolchain identities those pieces are a pure function of, and the in-repo
+    fixtures/scripts the checks read."""
+    venv_marker = b"share/uv/tools/"
+    staged = {}
+    for sub in ("bin", "lib", "share"):
+        root = os.path.join(install_cache, sub)
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = sorted(
+                d
+                for d in dirs
+                if not os.path.islink(os.path.join(dirpath, d))
+                and not (sub == "share" and dirpath == root and d == "uv")
+            )
+            for name in sorted(files):
+                full = os.path.join(dirpath, name)
+                if sub == "bin" and dirpath == root:
+                    try:
+                        with open(full, "rb") as fh:
+                            if venv_marker in fh.read(65536):
+                                continue
+                    except OSError:
+                        pass
+                ident = _file_identity(full)
+                if ident is not None:
+                    staged[os.path.relpath(full, install_cache)] = ident
+    has_tools = False
+    for name in sorted(os.listdir(bin_dir)):
+        if _uv_venvs_from_launcher(bin_dir, name):
+            has_tools = True
+            break
+    inputs = {"staged": staged}
+    if has_tools:
+        inputs["wheelhouse"] = wheelhouse
+        inputs["uv"] = _file_identity(os.path.join(os.path.dirname(bin_dir), "bin", "uv"))
+        inputs["interp"] = _staged_closure(os.path.join(bin_dir, "python3.15"), lib_dirs, {})
+    repo_inputs = {}
+    for p in (
+        os.path.join(repo_dir, "envs", "helix", "config.toml"),
+        os.path.join(repo_dir, "envs", "helix", "languages.toml"),
+        os.path.join(repo_dir, "build", "gui-wrapper-env.sh"),
+        os.path.join(repo_dir, "build", "repair-libpython-dynsym"),
+        os.path.join(repo_dir, "build", "klayout", "klayout"),
+        os.path.join(repo_dir, "build", "build-klayout.sh"),
+    ):
+        ident = _file_identity(p)
+        if ident is not None:
+            repo_inputs[os.path.relpath(p, repo_dir)] = ident
+    for d in ("build/firefox", "build/openroad", "build/marktext"):
+        repo_inputs[d] = _tree_identities(os.path.join(repo_dir, d))
+    inputs["repo"] = repo_inputs
+    return inputs
 
 
 @click.command(
@@ -2710,21 +3069,24 @@ def probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures):
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 @click.option("--keep", is_flag=True, help="Keep the temp install dir after testing.")
-@click.option("--no-cache", is_flag=True, help="Force a fresh @shared install (ignore the persistent install tree).")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Full smoke: fresh @shared install into a wiped tree, every probe re-run, no verdicts written.",
+)
 def main(keep, no_cache):
     """Smoke-test installed binary and runtime payloads.
 
-    Runs `./loadout install @shared --dest-dir /tmp/... --no-backup` to get a
-    real deployment layout, then probes each executable in <dest>/local/bin/
-    with PATH limited to that bin dir plus basic system directories. Detects
-    loader failures, signal crashes, "symbol lookup error" / "undefined symbol"
-    in output, runtime sentinel drift, and Neovim runtime regressions.
-
-    The install tree is cached: a persistent tree under
-    ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/smoke-install-v1 is
-    reused when the payload fingerprint is unchanged, so a routine re-run
-    skips the ~10 minute @shared install. The probe phase always runs
-    against the (possibly cached) tree. --no-cache forces a fresh install.
+    Installs @shared + @python-versions into a PERSISTENT tree under
+    ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/smoke-install-v1. The
+    installer's own stamps make that install incremental: unchanged artifacts
+    are skipped, changed ones re-extract. Probes then run against the tree,
+    and every probe PASS is cached keyed on the exact inputs it consumes
+    (the probed file, its staged ELF closure, any referenced uv-tool venv,
+    the installer, the probe spec and the host platform) -- so a one-wheel
+    change re-installs one wheel and re-probes only what that wheel feeds.
+    --no-cache wipes the tree and forces everything: the full-scan escape
+    hatch, kept exactly as strong as before, just no longer the default.
 
     Exit 0: all clean. Exit 1: failures detected (fails the pre-commit).
     """
@@ -2734,11 +3096,9 @@ def main(keep, no_cache):
 
     cache_root = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
     install_cache = os.path.join(cache_root, "engineering-loadout", "smoke-install-v1")
-    sidecar = os.path.join(install_cache, "fingerprint.json")
-    fp_script = os.path.join(repo_dir, "build", "fingerprint.py")
-    fp_roots = [os.path.join(repo_dir, "payload"), installer, os.path.join(repo_dir, "loadout_main.py")]
 
     tmpdir = tempfile.mkdtemp(prefix="loadout-smoketest-")
+    install_t0 = time.monotonic()
     try:
         os.makedirs(os.path.join(tmpdir, "home"), exist_ok=True)
         install_env = {
@@ -2751,48 +3111,38 @@ def main(keep, no_cache):
 
         # The install tree is NOT relocatable: the installer bakes absolute
         # paths into some artifacts (taplo's schema catalog), so a copied
-        # tree breaks. Instead the tree lives permanently at
-        # install_cache and the probe scratch dir symlinks to it.
+        # tree breaks. Instead the tree lives permanently at install_cache
+        # and the probe scratch dir symlinks to it.
         tree = os.path.join(tmpdir, "local")
-        cache_valid = (
-            not no_cache
-            and os.path.isfile(sidecar)
-            and os.path.isdir(os.path.join(install_cache, "bin"))
-            and subprocess.run(
-                [sys.executable, fp_script, "--fast", "--check", sidecar, "--roots", *fp_roots],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            ).returncode
-            == 0
+        if no_cache:
+            shutil.rmtree(install_cache, ignore_errors=True)
+        os.makedirs(install_cache, exist_ok=True)
+        # Never wipe the tree on a payload change: the installer's stamps make
+        # a re-install over an unchanged tree a seconds-long no-op and
+        # re-extract exactly the changed artifacts -- that plus the per-probe
+        # verdicts is what keeps the smoke incremental.
+        print(f"Installing to {install_cache} (stamped, incremental) ...")
+        proc = subprocess.run(
+            [
+                installer,
+                "install",
+                "-y",
+                "@shared",
+                "@python-versions",
+                "--dest-dir",
+                install_cache,
+                "--no-backup",
+            ],
+            env=install_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=1200,
         )
-
-        if cache_valid:
-            print(f"Reusing cached install tree ({install_cache}) -- payload unchanged")
-        else:
-            if not no_cache:
-                shutil.rmtree(install_cache, ignore_errors=True)
-            os.makedirs(install_cache, exist_ok=True)
-            print(f"Installing to {install_cache} ...")
-            proc = subprocess.run(
-                [
-                    installer,
-                    "install",
-                    "-y",
-                    "@shared",
-                    "@python-versions",
-                    "--dest-dir",
-                    install_cache,
-                    "--no-backup",
-                ],
-                env=install_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=1200,
-            )
-            install_out = proc.stdout.decode("utf-8", "replace")
-            if proc.returncode != 0:
-                print(f"Install failed (exit {proc.returncode}):\n{install_out}")
-                sys.exit(1)
+        install_out = proc.stdout.decode("utf-8", "replace")
+        if proc.returncode != 0:
+            print(f"Install failed (exit {proc.returncode}):\n{install_out}")
+            sys.exit(1)
+        install_secs = time.monotonic() - install_t0
 
         os.symlink(install_cache, tree)
 
@@ -2807,18 +3157,59 @@ def main(keep, no_cache):
             sys.exit(1)
         probe_env["PATH"] = bin_dir + ":" + probe_env["PATH"].split(":", 1)[1]
 
+        verdicts = ProbeVerdicts(not no_cache)
+        base_inputs = {
+            "schema": PROBE_CACHE_SCHEMA,
+            "installer": _sha256_file(os.path.join(repo_dir, "loadout_main.py")),
+            "shim": _sha256_file(installer),
+            "vendor": _tree_identities(os.path.join(repo_dir, "installer_vendor")),
+            "script": _sha256_file(__file__),
+            "platform": _platform_fp(),
+        }
+        lib_root = os.path.join(install_cache, "lib")
+        lib_dirs = [os.path.join(install_cache, "lib64"), lib_root]
+        lib_dirs += sorted(d for d in glob.glob(os.path.join(lib_root, "*")) if os.path.isdir(d))
+        wheelhouse = _wheelhouse_identities(repo_dir)
+
         print(f"Smoke-testing binaries in {bin_dir} ...\n")
         print(f"Probe PATH: {probe_env['PATH']}\n")
         failures = []
         tested = 0
         skipped = 0
 
-        tested, skipped, failures = probe_all(bin_dir, probe_env, tmpdir, tested, skipped, failures)
+        probe_t0 = time.monotonic()
+        tested, skipped, failures, cached_probes = probe_all(
+            bin_dir, probe_env, tmpdir, tested, skipped, failures, verdicts, base_inputs, lib_dirs, wheelhouse
+        )
+        probe_secs = time.monotonic() - probe_t0
+        print(f"\n  ({cached_probes} probes cached, {tested - cached_probes} re-run in {probe_secs:.1f}s)")
 
         print()
-        runtime_failures = smoke_runtime_layout(tmpdir, probe_env)
-        failures.extend(runtime_failures)
+        layout_inputs = _layout_inputs(install_cache, bin_dir, repo_dir, lib_dirs, wheelhouse)
+        layout_key = hashlib.sha256(
+            json.dumps({"base": base_inputs, "inputs": layout_inputs}, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        before_layout = len(failures)
+        if verdicts.check(layout_key):
+            print("  OK   (cached):        runtime layout")
+        else:
+            layout_t0 = time.monotonic()
+            runtime_failures = smoke_runtime_layout(tmpdir, probe_env)
+            if not runtime_failures and len(failures) == before_layout:
+                verdicts.record(layout_key, "runtime layout")
+            else:
+                print(f"  (runtime layout re-run: {time.monotonic() - layout_t0:.1f}s)")
+            failures.extend(runtime_failures)
         failures.extend(probe_python_versions(os.path.realpath(os.path.join(tmpdir, "local")), probe_env, repo_dir))
+
+        verdicts.flush()
+        _append_runtime_row(
+            "binary smoke test incremental",
+            install_secs + probe_secs,
+            "PASS" if not failures else "FAIL",
+            f"install {install_secs:.1f}s, probes {probe_secs:.1f}s, "
+            f"{cached_probes} cached / {tested - cached_probes} re-run",
+        )
 
         if failures:
             print(f"FAILED: {len(failures)} smoke checks:")
@@ -2826,17 +3217,8 @@ def main(keep, no_cache):
                 print(f"  {name}: {msg}")
             sys.exit(1)
 
-        if not no_cache:
-            subprocess.run(
-                [sys.executable, fp_script, "--fast", "--write", sidecar, "--roots", *fp_roots],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-        if skipped:
-            print(f"All {tested} binaries OK ({skipped} skipped); runtimes OK")
-        else:
-            print(f"All {tested} binaries OK; runtimes OK")
+        summary = f"All {tested} binaries OK ({skipped} skipped)" if skipped else f"All {tested} binaries OK"
+        print(f"{summary}; runtimes OK (install {install_secs:.1f}s, probes {probe_secs:.1f}s, {cached_probes} cached)")
 
     except subprocess.TimeoutExpired:
         print("ERROR: installer timed out")

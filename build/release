@@ -619,11 +619,15 @@ def _write_smoke_cache(cache_id, key_data, output):
         pass  # a cache we cannot write is not a release failure
 
 
-def _smoke_step(script_dir, smoke_test, use_cache):
-    """Run the binary smoke test, or return a cached PASS when the fingerprint of
-    everything it installs/probes is unchanged. The fingerprint hash runs in this
-    worker thread, overlapping the other parallel gates, so a cache hit turns the
-    slowest gate into a ~40 s hash."""
+def _smoke_step(script_dir, smoke_test, use_cache, smoke_flags):
+    """Run the binary smoke test, or return a cached PASS when the fingerprint
+    of everything it installs/probes is unchanged. The fingerprint hash runs
+    in this worker thread, overlapping the other parallel gates, so a cache
+    hit turns the slowest gate into a ~40 s hash. On a miss the smoke
+    subprocess is itself incremental (stamped install + per-probe verdicts),
+    so a one-artifact change costs that artifact's re-install and probes, not
+    the ~4.5 min full run. --no-cache forwards through smoke_flags and forces
+    the full smoke: wiped tree, every probe re-run."""
     cache_id = key_data = None
     if use_cache:
         cache_id, key_data = _smoke_cache_key(script_dir)
@@ -632,12 +636,12 @@ def _smoke_step(script_dir, smoke_test, use_cache):
             n = key_data["source"]["files"]
             output = (
                 f"  CACHED PASS -- {n} source files unchanged since {entry.get('recorded', '?')}\n"
-                f"  (fingerprint {cache_id[:16]}; skipping the ~4.5 min re-run. "
-                f"Force a fresh run with --no-cache.)\n"
+                f"  (fingerprint {cache_id[:16]}; skipping the smoke re-run. "
+                f"Force a full run with --no-cache.)\n"
             )
             return StepResult(name="binary smoke test", title=STEP_SMOKE_TITLE, returncode=0, output=output)
 
-    result = _command_step("binary smoke test", STEP_SMOKE_TITLE, [smoke_test])
+    result = _command_step("binary smoke test", STEP_SMOKE_TITLE, [smoke_test, *smoke_flags])
     if use_cache and result.returncode == 0:
         _write_smoke_cache(cache_id, key_data, result.output)
     return result
@@ -764,7 +768,7 @@ def _abort_oom(avail):
 
 
 def _run_parallel_pre_release_steps(
-    script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+    script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags, smoke_flags
 ):
     """Run all independent pre-release steps concurrently.
 
@@ -800,7 +804,11 @@ def _run_parallel_pre_release_steps(
                     else _command_step("malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
                 ),
             ),
-            ("binary smoke test", STEP_SMOKE_TITLE, lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache)),
+            (
+                "binary smoke test",
+                STEP_SMOKE_TITLE,
+                lambda: _smoke_step(script_dir, smoke_test, use_smoke_cache, smoke_flags),
+            ),
             ("payload consistency", STEP_PAYLOAD_TITLE, lambda: _payload_consistency_step(script_dir)),
             ("version table", STEP_VERSIONS_TITLE, lambda: _version_step(registry_path)),
             ("checksums", STEP_CHECKSUMS_TITLE, lambda: _checksum_step(script_dir)),
@@ -847,7 +855,7 @@ def _run_parallel_pre_release_steps(
             future = submit(_command_step, "malware scan", STEP_SCAN_TITLE, [malware_scan, *scan_flags])
         futures[future] = ("malware scan", STEP_SCAN_TITLE)
 
-        future = submit(_smoke_step, script_dir, smoke_test, use_smoke_cache)
+        future = submit(_smoke_step, script_dir, smoke_test, use_smoke_cache, smoke_flags)
         futures[future] = ("binary smoke test", STEP_SMOKE_TITLE)
 
         # Cheap (seconds) and independent of the container smoke: the payload
@@ -1333,6 +1341,9 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
         scan_flags.append("--clear-cache")
     if no_cache or clear_cache:
         scan_flags.append("--no-cache")
+    # The smoke subprocess owns its own install tree + probe verdicts; force a
+    # full smoke (wiped tree, every probe) when the operator asked for it.
+    smoke_flags = ["--no-cache"] if (no_cache or clear_cache) else []
 
     signing = _preflight(dry_run, allow_unsigned)
 
@@ -1345,7 +1356,7 @@ def main(tag, dry_run, skip_scan, allow_unsigned, no_cache, clear_cache):
 
     release_t0 = time.monotonic()
     results = _run_parallel_pre_release_steps(
-        script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags
+        script_dir, smoke_test, registry_path, malware_scan, tag, skip_scan, use_smoke_cache, scan_flags, smoke_flags
     )
 
     scan_result = results["malware scan"]

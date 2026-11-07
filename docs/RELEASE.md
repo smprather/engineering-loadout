@@ -346,18 +346,29 @@ moved. Ordering is deliberate — a branch pushed without a release is an ordina
 commit, a release published without its branch is the broken state — so a failure
 here blocks the release rather than half-publishing one.
 
-**What is incremental and what is not** (measured, 2026-07-25):
+**What is incremental and what is not** (measured 2026-07-25; re-measured
+2026-11-07 after the per-artifact verdict work):
 
 - **Stash reuse works and is the big win.** The ~328 MB nvim plugin stash is
   reused when the tag's release already exists and the bytes match (size +
   sha256 from the previous `sha256sums.txt`). Note the gate is
   `_remote_release_exists(tag)` — reuse only fires on a **same-tag re-release**.
   A brand-new tag always re-uploads, no matter how little changed.
-- **The smoke and scan caches are all-or-nothing** on a hash of *all* of
-  `payload/**` plus the installer and probe script. One changed wheel costs the
-  same ~10 minutes as changing everything. That superset is deliberate — a
-  missed input would false-green a shipped-but-untested binary — so treat a
-  payload change as ~10 minutes of gates, always.
+- **The smoke and malware scan are per-artifact now, not all-or-nothing.**
+  Each artifact carries a recorded verdict keyed on the exact bytes it covers
+  under the current engine/rules/script fingerprint: the scan re-extracts and
+  re-scans only changed artifacts, and the smoke re-installs only changed
+  artifacts (installer stamps) and re-probes only binaries whose inputs
+  changed. A one-wheel change costs seconds-to-a-minute of gates, not ~10
+  minutes. The trust model is what makes that sound: detection is a function
+  of (bytes, engine, rules), so a recorded clean verdict over unchanged bytes
+  under an unchanged fingerprint is exactly as strong as re-running; any
+  engine, rules, scanner-script, installer or probe-script change invalidates
+  every verdict and forces the full run. `tests/incremental-verdicts` (T1)
+  pins the behavior. `--no-cache` on `./build/release` (or on
+  `build/scan-for-malware` / `tests/prebuilt-binaries` directly) still forces
+  the full smoke and full 11 GiB scan — use it for a periodic deep scan; a
+  scheduled/periodic release (class C) gets the full run anyway.
 
 **Secret scan, vulnerability scan, SBOM.** Every release also runs
 `build/secret-scan` (tree + full history), `build/vuln-scan` (wheelhouse

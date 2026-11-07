@@ -2289,7 +2289,33 @@ def _copy_tree_item(src, dest, excludes=(), rel_path=""):
     _grant_owner_write(dest)
 
 
+def _capture_source_dep(src):
+    """Capture an envs/ source the installer copies, when the marker is armed.
+
+    install_path()/sync_dir() are the choke points for every env-file copy,
+    and the T2 `--deps auto` tests must re-run when an env source they install
+    changes -- the hole that let `install-env-zsh` stay CACHED PASS across a
+    real zshrc edit. The repo root is derived from the repo-local marker file
+    (`env -i` in the tests strips env vars, so the marker is the only switch);
+    the result is cached per process. Capture is best-effort and diagnostic:
+    it must never break an install.
+    """
+    global _CAPTURE_REPO_DIR
+    if _CAPTURE_REPO_DIR is None:
+        d = os.path.dirname(os.path.abspath(src))
+        found = ""
+        while d not in ("", "/"):
+            if os.path.exists(os.path.join(d, _DEP_CAPTURE_MARKER)):
+                found = d
+                break
+            d = os.path.dirname(d)
+        _CAPTURE_REPO_DIR = found
+    if _CAPTURE_REPO_DIR:
+        _dep_capture_add([src], _CAPTURE_REPO_DIR)
+
+
 def sync_dir(src, dest, delete=False, excludes=None):
+    _capture_source_dep(src)
     excludes = tuple(excludes or ())
     if os.path.islink(dest):
         require_writable_parent(dest, "copy")
@@ -2324,6 +2350,7 @@ def sync_dir(src, dest, delete=False, excludes=None):
 
 
 def install_path(src, dest, links_mode):
+    _capture_source_dep(src)
     if links_mode:
         lns(src, dest, verbose=True)
         return
@@ -8573,6 +8600,8 @@ def _artifact_paths(entry, repo_dir, platform_dir):
 # repo-local marker does, regardless of the test's environment.
 _DEP_CAPTURE_MARKER = ".loadout-dep-capture"
 _DEP_CAPTURE_LOG = ".loadout-deps.log"
+# Repo root resolved from the marker by _capture_source_dep, cached per process.
+_CAPTURE_REPO_DIR = None
 
 
 def _dep_capture_add(paths, repo_dir):

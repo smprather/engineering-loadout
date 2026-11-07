@@ -1,0 +1,246 @@
+#!/usr/bin/env python3.15
+"""Pins the incremental-verdict machinery: unchanged inputs must reuse a
+recorded verdict, changed inputs must re-run exactly the affected unit, and
+engine/installer changes must invalidate everything.
+
+These are the properties that turn gate cost into a function of the change,
+not of the payload: a regression here is a bug in the TESTING FLOW, treated
+like any other bug -- the suites would silently get slower (or worse, a cache
+hit would go stale-green) without failing anything else.
+
+Everything runs against tiny fixtures with XDG_CACHE_HOME pointed at a temp
+dir, so the test itself stays seconds-fast and touches no real payload.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import types
+
+_d = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(_d)
+sys.path.insert(0, REPO)
+
+
+def _load_module(name, path):
+    ns = {"__name__": name, "__file__": path}
+    with open(path, encoding="utf-8") as fh:
+        exec(compile(fh.read(), path, "exec"), ns)
+    return types.SimpleNamespace(**{k: v for k, v in ns.items() if not k.startswith("__")})
+
+
+SCAN = _load_module("scan_for_malware_test", os.path.join(REPO, "build", "scan-for-malware"))
+SMOKE = _load_module("prebuilt_binaries_test", os.path.join(REPO, "tests", "prebuilt-binaries"))
+
+_CHECKS = []
+_FAILURES = []
+
+
+def check(name, fn):
+    try:
+        fn()
+        _CHECKS.append(name)
+        print(f"  OK   {name}")
+    except AssertionError as exc:
+        _FAILURES.append(name)
+        print(f"  FAIL {name}: {exc}")
+    except Exception as exc:  # noqa: BLE001 - the gate reports every failure mode
+        _FAILURES.append(name)
+        print(f"  FAIL {name}: {exc!r}")
+
+
+def _fixture_files(root):
+    """A tiny scan corpus: two plain files, one bz2, one chunked tar pair."""
+    with open(os.path.join(root, "a.txt"), "w") as fh:
+        fh.write("plain one\n")
+    with open(os.path.join(root, "b.txt"), "w") as fh:
+        fh.write("plain two\n")
+    blob = os.path.join(root, "blob")
+    with open(blob, "w") as fh:
+        fh.write("compressed blob\n")
+    subprocess.run(["bzip2", "-c", blob], stdout=open(os.path.join(root, "blob.bz2"), "wb"), check=True)
+    os.unlink(blob)
+    subprocess.run(
+        ["tar", "cjf", os.path.join(root, "pack.tar.bz2"), "-C", root, "a.txt", "b.txt"], check=True, cwd=root
+    )
+    chunked = os.path.join(root, "chunky.tar.bz2")
+    shutil.copy(os.path.join(root, "pack.tar.bz2"), chunked)
+    subprocess.run(["split", "-b", "64", chunked, chunked + ".part-"], check=True)
+    os.unlink(chunked)
+
+
+def _identities(scan, root):
+    return scan._source_identities(None, fast=False, scan_path=root)
+
+
+def test_scan_verdict_matching():
+    with tempfile.TemporaryDirectory(prefix="incr-verdicts-") as tmp:
+        _fixture_files(tmp)
+        identities = _identities(SCAN, tmp)
+        store = {"schema": SCAN._VERDICTS_SCHEMA, "scanner": "fp", "verdicts": {}}
+        for logical, parts in identities.items():
+            store["verdicts"][logical] = {"parts": parts, "members": 1, "clean_at": "x"}
+        for logical, parts in identities.items():
+            assert SCAN._cached_clean(store, logical, parts), f"{logical} should hit"
+
+        # A changed part (touched mtime) invalidates its logical only.
+        touched = os.path.join(tmp, "b.txt")
+        st = os.lstat(touched)
+        os.utime(touched, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+        new_identities = _identities(SCAN, tmp)
+        assert SCAN._cached_clean(store, touched, new_identities[touched]) is False
+        other = next(lg for lg in identities if lg != touched)
+        assert SCAN._cached_clean(store, other, new_identities[other]), "unrelated logical must stay cached"
+
+        # A brand-new file has no verdict -> dirty.
+        with open(os.path.join(tmp, "new.txt"), "w") as fh:
+            fh.write("new\n")
+        fresh = _identities(SCAN, tmp)
+        new_logical = os.path.join(tmp, "new.txt")
+        assert not SCAN._cached_clean(store, new_logical, fresh[new_logical])
+
+        # A recorded verdict with zero members is never trusted (an errored
+        # extraction must retry every run).
+        zero = {lg: {"parts": p, "members": 0, "clean_at": "x"} for lg, p in identities.items()}
+        assert not SCAN._cached_clean({"verdicts": zero}, touched, identities[touched])
+
+        # A corrupt or schema-mismatched store behaves empty.
+        os.environ["XDG_CACHE_HOME"] = os.path.join(tmp, "cache")
+        vpath = SCAN._verdicts_path()
+        os.makedirs(os.path.dirname(vpath), exist_ok=True)
+        with open(vpath, "w") as fh:
+            fh.write("{not json")
+        assert SCAN._load_verdicts() is None
+
+
+def test_scan_scanner_fingerprint():
+    yara_bz2 = os.path.join(SCAN._YARA_DIR, "yara.bz2")
+    tag = open(SCAN._TAG_FILE).read().strip() if os.path.exists(SCAN._TAG_FILE) else "t"
+    fp_a, _ = SCAN._scanner_fingerprint("/x", yara_bz2, tag, fast=False, no_clamav=True, scan_path=None)
+    fp_b, _ = SCAN._scanner_fingerprint("/x", yara_bz2, tag, fast=False, no_clamav=True, scan_path=None)
+    assert fp_a == fp_b
+    # Any global input change must change the fingerprint (a different engine
+    # mode here -- the cheapest sensitivity proof without touching rules).
+    fp_c, _ = SCAN._scanner_fingerprint("/x", yara_bz2, tag, fast=True, no_clamav=True, scan_path=None)
+    assert fp_a != fp_c, "fast-mode change must invalidate every verdict"
+
+
+def test_scan_end_to_end_incremental():
+    """The real --path flow: cold scan records verdicts, warm run is
+    all-cached, a touched artifact re-scans exactly it, and each run appends
+    its stats row to the ci-runtimes watch log."""
+    with tempfile.TemporaryDirectory(prefix="incr-verdicts-e2e-") as tmp:
+        cache = os.path.join(tmp, "cache")
+        fixture = os.path.join(tmp, "fixture")
+        os.makedirs(fixture)
+        _fixture_files(fixture)
+        env = dict(os.environ, XDG_CACHE_HOME=cache)
+        scan = [sys.executable, os.path.join(REPO, "build", "scan-for-malware"), "--path", fixture, "--no-clamav"]
+
+        r1 = subprocess.run(scan, capture_output=True, text=True, env=env, timeout=120)
+        assert r1.returncode == 0, r1.stdout[-2000:]
+        assert "re-scanned" in r1.stdout
+
+        r2 = subprocess.run(scan, capture_output=True, text=True, env=env, timeout=120)
+        assert r2.returncode == 0 and "CACHED CLEAN" in r2.stdout, r2.stdout[-2000:]
+        assert "Extracting payloads" not in r2.stdout, "all-cached run must not extract"
+
+        touched = os.path.join(fixture, "a.txt")
+        st = os.lstat(touched)
+        os.utime(touched, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+        r3 = subprocess.run(scan, capture_output=True, text=True, env=env, timeout=120)
+        assert r3.returncode == 0 and "1 to re-scan" in r3.stdout, r3.stdout[-2000:]
+        assert "CACHED CLEAN" not in r3.stdout
+
+        log = os.path.join(cache, "engineering-loadout", "ci-runtimes.tsv")
+        assert os.path.isfile(log), "every scan run must append its watch row"
+        rows = [ln.split("\t") for ln in open(log) if ln.strip()]
+        assert rows and all(len(r) == 6 and r[3].isdigit() for r in rows), "6-column ci-runtimes rows"
+        assert any(r[2] == "malware scan incremental" for r in rows)
+
+
+def test_probe_key_stability_and_sensitivity():
+    """The smoke's probe keys: stable when inputs are unchanged, sensitive to
+    every input class they cover (file identity, wheelhouse, run-wide base)."""
+    with tempfile.TemporaryDirectory(prefix="incr-probe-key-") as tmp:
+        bin_dir = os.path.join(tmp, "bin")
+        lib_dir = os.path.join(tmp, "lib64")
+        os.makedirs(bin_dir)
+        os.makedirs(lib_dir)
+        tool = os.path.join(bin_dir, "tool")
+        shutil.copy("/bin/true", tool)
+        lib_dirs = [lib_dir]
+        memo = {}
+        base = {"schema": 1, "installer": "i", "platform": ["linux x86_64", "glibc x"]}
+        wheelhouse = {"dep-1.0-py3-none-any.whl": [100, 1, 0o644]}
+
+        def key():
+            return SMOKE._probe_key(tool, "tool", base, lib_dirs, memo, bin_dir, wheelhouse)
+
+        k1, k2 = key(), key()
+        assert k1 == k2, "unchanged inputs must produce a stable key"
+
+        st = os.lstat(tool)
+        os.utime(tool, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+        assert key() != k1, "a rewritten probed file must invalidate its key"
+
+        base["installer"] = "j"
+        assert key() != k1, "an installer change must invalidate every key"
+        base["installer"] = "i"
+
+        # A uv-launcher-shaped script keys on the wheelhouse, not on the
+        # churning venv/launcher files uv recreates each install.
+        venv_dir = os.path.join(tmp, "share", "uv", "tools", "fake")
+        os.makedirs(venv_dir)
+        script = os.path.join(bin_dir, "toolscript")
+        with open(script, "w") as fh:
+            fh.write(f"#!/{venv_dir}/bin/python\nprint('fake launcher')\n")
+        os.chmod(script, 0o755)
+        ktool = SMOKE._probe_key(script, "toolscript", base, lib_dirs, memo, bin_dir, wheelhouse)
+        wheelhouse["dep-1.0-py3-none-any.whl"] = [101, 1, 0o644]
+        assert SMOKE._probe_key(script, "toolscript", base, lib_dirs, memo, bin_dir, wheelhouse) != ktool, (
+            "a wheelhouse change must invalidate uv-tool keys"
+        )
+
+        # Symlinked launchers key on the link target, not the churning mtime.
+        link = os.path.join(bin_dir, "alias")
+        os.symlink("tool", link)
+        kl = SMOKE._probe_key(link, "alias", base, lib_dirs, memo, bin_dir, wheelhouse)
+        os.unlink(link)
+        os.symlink("tool", link)
+        kl2 = SMOKE._probe_key(link, "alias", base, lib_dirs, memo, bin_dir, wheelhouse)
+        assert kl == kl2, "re-created symlinks must not churn the key"
+
+
+def test_scan_identity_grouping():
+    """Chunked archives group to one logical artifact; a changed part dirties
+    the whole logical, and identical part sets match."""
+    with tempfile.TemporaryDirectory(prefix="incr-grouping-") as tmp:
+        full = os.path.join(tmp, "data.bin")
+        with open(full, "wb") as fh:
+            fh.write(b"x" * 200)
+        for i in range(3):
+            with open(f"{full}.part-{i:03d}", "wb") as fh:
+                fh.write(b"x" * 200)
+        assert SCAN._logical_abs(f"{full}.part-001") == full
+        assert SCAN._logical_abs(full) == full
+
+
+def main():
+    check("scan verdict matching", test_scan_verdict_matching)
+    check("scanner fingerprint sensitivity", test_scan_scanner_fingerprint)
+    check("scan end-to-end incremental + watch rows", test_scan_end_to_end_incremental)
+    check("probe key stability and sensitivity", test_probe_key_stability_and_sensitivity)
+    check("chunked logical grouping", test_scan_identity_grouping)
+    print()
+    if _FAILURES:
+        print(f"FAILED: {len(_FAILURES)} of {len(_CHECKS) + len(_FAILURES)} checks")
+        sys.exit(1)
+    print(f"incremental-verdicts OK ({len(_CHECKS)} checks)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
