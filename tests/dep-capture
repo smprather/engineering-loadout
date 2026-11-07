@@ -80,6 +80,38 @@ if grep -q '^payload/el8\.' "$log"; then
 fi
 echo "  OK: armed capture recorded inputs and stayed narrow"
 
+# --- 1b. CROSS-PACKAGE env sources ------------------------------------------
+# env-tcsh copies envs/bash/global/helpers/* into its own tree (env-bash is
+# NOT a dependency -- that is the whole point of SHARED_ENV_HELPERS). A
+# capture that only walks the package's registry `source` (envs/tcsh/) can
+# never see it, so an edit to envs/bash/global/helpers/delete would leave
+# every tcsh install test stale-green. The install_path/sync_dir capture
+# closes that class; this pin fails if it regresses.
+rm -f "$log"
+: > "$marker"
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    LANG="${LANG:-C.UTF-8}" \
+    "$repo_dir/loadout" install -y env-tcsh --dest-dir "$dest_dir" --no-backup \
+    > "$test_home/install.log" 2>&1 || {
+    tail -20 "$test_home/install.log" >&2
+    fail "env-tcsh install exited non-zero"
+}
+rm -f "$marker"
+
+for want in \
+    "envs/tcsh/tcshrc" \
+    "envs/tcsh/global/tcshrc" \
+    "envs/bash/global/helpers/delete"; do
+    grep -qxF "$want" "$log" || fail "env-tcsh capture missing cross-package input: $want"
+done
+if grep -q '^payload/el8\.' "$log"; then
+    grep '^payload/el8\.' "$log" | head -5 >&2
+    fail "env-tcsh capture recorded unrelated payload artifacts"
+fi
+echo "  OK: cross-package env sources (SHARED_ENV_HELPERS) captured"
+
 # --- 2. marker absent -> no capture -----------------------------------------
 rm -f "$log"
 run_install

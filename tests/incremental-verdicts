@@ -214,6 +214,36 @@ def test_probe_key_stability_and_sensitivity():
         assert kl == kl2, "re-created symlinks must not churn the key"
 
 
+def test_probe_verdict_store():
+    """The smoke's ProbeVerdicts store: record -> flush -> reload -> hit;
+    a corrupt store behaves empty (fail-closed); a disabled store never hits."""
+    with tempfile.TemporaryDirectory(prefix="incr-store-") as tmp:
+        os.environ["XDG_CACHE_HOME"] = tmp
+        v = SMOKE.ProbeVerdicts(True)
+        assert not v.check("k1")
+        v.record("k1", "detail")
+        v.flush()
+        assert SMOKE.ProbeVerdicts(True).check("k1")
+        with open(v.path, "w") as fh:
+            fh.write("{corrupt")
+        assert not SMOKE.ProbeVerdicts(True).check("k1")
+        assert SMOKE.ProbeVerdicts(False).check("k1") is False
+
+
+def test_smoke_watch_row():
+    """The smoke's own ci-runtimes row: 6 tab-separated columns, integer
+    seconds, written on every run -- the watch data a gate-cost regression
+    shows up in. A run that stops reporting is a broken system."""
+    with tempfile.TemporaryDirectory(prefix="incr-watch-") as tmp:
+        os.environ["XDG_CACHE_HOME"] = tmp
+        SMOKE._append_runtime_row("binary smoke test incremental", 40, "PASS", "install 0.4m")
+        log = os.path.join(tmp, "engineering-loadout", "ci-runtimes.tsv")
+        rows = [ln.rstrip("\n").split("\t") for ln in open(log) if ln.strip()]
+        assert len(rows) == 1 and len(rows[0]) == 6, rows
+        assert rows[0][2] == "binary smoke test incremental"
+        assert rows[0][3].isdigit() and rows[0][4] == "PASS"
+
+
 def test_scan_identity_grouping():
     """Chunked archives group to one logical artifact; a changed part dirties
     the whole logical, and identical part sets match."""
@@ -233,6 +263,8 @@ def main():
     check("scanner fingerprint sensitivity", test_scan_scanner_fingerprint)
     check("scan end-to-end incremental + watch rows", test_scan_end_to_end_incremental)
     check("probe key stability and sensitivity", test_probe_key_stability_and_sensitivity)
+    check("probe verdict store round-trip and fail-closed", test_probe_verdict_store)
+    check("smoke watch row format", test_smoke_watch_row)
     check("chunked logical grouping", test_scan_identity_grouping)
     print()
     if _FAILURES:
