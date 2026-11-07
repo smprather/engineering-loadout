@@ -17,56 +17,78 @@ a sync target:
 
 Follow-ups 1, 2 and 4 from entry (11) are closed. The release gates and the
 test loop now key every verdict on the exact artifacts it consumed instead of
-all-or-nothing roots, with the full runs kept one flag away.
+all-or-nothing roots, with the full runs kept one flag away. Session commits:
+`47715a9` feature, `a215cd4` minutes units, `3bca9be`+`4789928` (SIGPIPE trap,
+attempted then reverted), `25fbba2` footgun doc, `ab55fad` gate pins.
 
 **Scan** (`build/scan-for-malware`): per-artifact clean verdicts
 (`~/.cache/engineering-loadout/malware-scan-v1/verdicts.json`) under a
 scanner fingerprint (script, YARA engine, rules, ClamAV+DB, schema). A run
 re-extracts/re-scans ONLY changed artifacts; engine/rules/script change →
 full re-scan; errored extractions never earn a verdict; corrupt store →
-everything dirty. `--no-cache` = the full 11 GiB scan on demand. Measured on
-the `--path` fixture: warm 0.07 s (was 1.3 s), one touched artifact re-scans
-only itself, rules change rescans all, new files scan while the rest stay
-cached.
+everything dirty. `--no-cache` = the full 11 GiB scan on demand. Measured:
+333-350 s cold, ~1.5 s warm (2914/2915 cached; `runtime/fish.tar.bz2` is a
+209-byte stub whose extraction yields 0 files, so it correctly retries each
+run at ~0.9 s).
 
 **Smoke** (`tests/prebuilt-binaries`): persistent stamped install tree (no
 wipe on payload change — installer stamps re-extract exactly the changed
-artifacts) + per-probe PASS verdicts keyed on the probe's consumed inputs
-(file identity, staged ELF NEEDED closure, uv-tool probes key on wheelhouse +
-uv + python3.15 because uv recreates venvs/launchers every install, and
-identities deliberately exclude the inode: portable-python and KLayout
-launchers are re-written each install with preserved mtimes). Runtime-layout
-checks cache as one unit over the staged tree. Measured: full smoke 234.6 s →
-~34 s; second run 337/340 probes cached (the 3 live ones are NO_EXEC ldd-only
-by design). A tampered bz2 aborts the smoke via installer content
-verification (fail-closed through three layers). Release forwards
-`--no-cache` into the smoke subprocess.
+artifacts) + per-probe PASS verdicts keyed on the probe's consumed inputs.
+Lessons that mattered: uv recreates venvs/launchers on EVERY install, so
+tool probes key on wheelhouse identities + uv + python3.15 closure (all
+stable) instead of venv files; identities deliberately exclude the inode
+(portable-python and KLayout launchers are re-written each install with
+archive-preserved mtimes); symlinks key on their target string; sh-wrappers
+that exec staged siblings (idle3.15 → python3.15) get the sibling's closure.
+Runtime-layout checks cache as one unit over the staged tree. Measured:
+234.6 s → ~34 s; 337/340 probes cached (3 NO_EXEC ldd-only checks stay live
+by design). Tampered bz2 → installer content verification aborts → smoke
+FAIL, fail-closed through three layers. Release forwards `--no-cache` into
+the smoke subprocess. Editor's trap: editing a script changes its own
+fingerprint and invalidates ITS caches — correct, but verifying a fix pays
+one more cold run (and editing a RUNNING bash script corrupts it).
 
-**Runner holes**: `--deps auto` now captures ENV sources (`install_path`/
-`sync_dir` → `_dep_capture_add`, repo found via the marker file), so an
-`envs/zsh` edit re-runs `install-env-zsh` instead of leaving it stale-green
-(15 paths captured on a real env-zsh install); `container` no longer reaches
-`group_roots` (the `DEP_GROUP[container]: unbound variable` noise is gone).
+**Runner holes**: `--deps auto` captures env sources via
+`install_path`/`sync_dir` → `_capture_source_dep` (repo found via the marker
+file). The registry `source` walk already covered same-tree env files; the
+real hole was CROSS-package copies (env-tcsh ← envs/bash/global/helpers/*),
+now pinned by `tests/dep-capture`'s new negative control. `container` no
+longer reaches `group_roots` (unbound-var noise gone).
 
-**Watching**: smoke and scan append incremental rows (cached/re-run split,
-seconds) to `ci-runtimes.tsv` every run; `tests/incremental-verdicts` (new
-T1, `--deps smoke`, 2.7 s) pins verdict matching, fingerprint sensitivity,
-probe-key stability/sensitivity, chunk grouping and the end-to-end `--path`
-flow with watch rows. AGENTS.md gained an "Incremental verdicts
-(first-class)" section; docs/RELEASE.md §8 rewritten.
+**Watching (first-class)**: smoke and scan append incremental rows
+(cached/re-run, seconds) to `ci-runtimes.tsv` every run; `build/ci-runtimes`
+flags `!!` when a PASS exceeds 2× median; human-facing durations print
+one-decimal minutes (5.8m), TSV columns stay integer seconds.
+`tests/incremental-verdicts` (T1, `--deps smoke`, 7 checks, ~3 s) pins
+verdict matching, fingerprint sensitivity, probe-key stability/sensitivity,
+store round-trip + fail-closed, chunk grouping, e2e `--path` flow and watch
+rows. AGENTS.md has an "Incremental verdicts (first-class)" section;
+docs/RELEASE.md §8 and docs/SECURITY.md rewritten.
+
+**Measured** (night-shift, after all one-time invalidations settled):
+release dry-run 14.7 s warm (430 s uncached); full T1+T2 suite 10.9 s warm
+(29.6 m cold `--container`, all passed); ONE env edit → full T1+T2 in 2.2 m
+(was the 30-45 m habit); T1 18 s warm.
+
+**Footgun**: `tests/run-all | head` kills the suite mid-run before sidecars/
+totals are written (the next run re-does the work). Documented in the
+header; a SIGPIPE trap was tried and reverted (an EPIPE'd builtin still
+trips `set -e`). Use file redirects or EOF-reading consumers (grep/tail).
 
 **Follow-ups, in value order:**
 
 1. **uv-tool install stamps** — the smoke install's residual ~24 s is the
    installer re-running `uv tool install --force` for every selected tool.
    Group-stamp the uv phase on (wheel digests, tool, installer sha, venv
-   state) and the smoke's no-change install drops to ~5 s; user installs get
-   the same win. Class C, needs Tier 2/3.
+   state) and the no-change install drops to ~5 s; user installs get the
+   same win. Class C, needs Tier 2/3.
 2. **Tier 3 remains the env-edit killer if run by habit** — class B
    recommends it, class C requires it; `--container-only` (Tier 3 alone
    after a recorded host T2 PASS) is still the lever from entry (11)'s
    analysis, unbuilt.
 3. `wish`/Tk runtime gap from entry (11) unchanged.
+4. Optional hardening: gate the smoke's end-to-end cache-hit count against a
+   recorded baseline (periodic job) — the watch row covers drift today.
 
 ## 2026-11-06 (11): release 2026.11.3 -- interpreter contract, exclusions, multi-dist open-eda
 
