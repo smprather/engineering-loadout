@@ -86,7 +86,7 @@ def report(rows, limit=15):
         entries.sort(key=lambda e: -sum(e[1]))
         print(f"=== {title} (total time accumulated, slowest first)")
         for name, secs in entries[:limit]:
-            print(f"  {sum(secs):9.1f}s  avg {statistics.mean(secs):7.1f}s  n={len(secs):<4d} {name}")
+            print(f"  {sum(secs) / 60:9.1f}m  avg {statistics.mean(secs) / 60:7.1f}m  n={len(secs):<4d} {name}")
         print()
 
     # The release runs its gates in parallel (4 workers), so the wall time is
@@ -99,8 +99,8 @@ def report(rows, limit=15):
             slowest = max(gate_secs, key=lambda g: g[1])
             print("=== CRITICAL PATH of the last release (gates run in parallel)")
             for name, secs in sorted(gate_secs, key=lambda g: -g[1]):
-                print(f"  {secs:9.1f}s  {name}")
-            print(f"  -> bounded by the slowest gate: {slowest[0]} ({slowest[1]:.1f}s)")
+                print(f"  {secs / 60:9.1f}m  {name}")
+            print(f"  -> bounded by the slowest gate: {slowest[0]} ({slowest[1] / 60:.1f}m)")
             print()
 
 
@@ -148,7 +148,7 @@ def compare(a, b):
     for delta, key, o, n, tag in rows[:25]:
         if abs(delta) < 0.5:
             continue
-        print(f"  {delta:+8.1f}s  {o or 0:7.1f} {n or 0:7.1f}  {key[0]}/{key[1]} {tag}".rstrip())
+        print(f"  {delta / 60:+8.1f}m  {(o or 0) / 60:7.1f} {(n or 0) / 60:7.1f}  {key[0]}/{key[1]} {tag}".rstrip())
 
 
 def read_release_timeline(path):
@@ -192,14 +192,14 @@ def report_timeline(path, limit=12):
         gates = by_release[release]
         slowest = max(gates, key=lambda g: g[1])
         total = sum(s for _g, s in gates)
-        print(f"  {release[:20]:20s}  {slowest[0][:20]:20s}  {slowest[1]:8.1f}s  {total:9.1f}s")
+        print(f"  {release[:20]:20s}  {slowest[0][:20]:20s}  {slowest[1] / 60:8.1f}m  {total / 60:9.1f}m")
     print()
     allgates = defaultdict(list)
     for _r, gate, seconds in rows:
         allgates[gate].append(seconds)
     print("=== gate cost across releases (avg / max)")
     for gate, secs in sorted(allgates.items(), key=lambda kv: -sum(kv[1]))[:limit]:
-        print(f"  {sum(secs) / len(secs):8.1f}s avg {max(secs):8.1f}s max  n={len(secs):<3d} {gate}")
+        print(f"  {sum(secs) / len(secs) / 60:8.1f}m avg {max(secs) / 60:8.1f}m max  n={len(secs):<3d} {gate}")
     print()
 
     # The payload REBUILDS are the dominant cost of a release and they are not
@@ -210,7 +210,7 @@ def report_timeline(path, limit=12):
     if rebuilds:
         print("=== PAYLOAD REBUILDS (build/build-shell) -- the dominant release cost")
         for gate, secs in sorted(rebuilds.items(), key=lambda kv: -sum(kv[1]))[:limit]:
-            print(f"  {sum(secs) / len(secs):8.1f}s avg {max(secs):8.1f}s max  n={len(secs):<3d} {gate}")
+            print(f"  {sum(secs) / len(secs) / 60:8.1f}m avg {max(secs) / 60:8.1f}m max  n={len(secs):<3d} {gate}")
         print()
 
 

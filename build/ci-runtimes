@@ -33,14 +33,8 @@ LOG_PATH = os.path.join(
 
 
 def _fmt_secs(s):
-    s = int(s)
-    if s < 60:
-        return f"{s}s"
-    m, sec = divmod(s, 60)
-    if m < 60:
-        return f"{m}m{sec:02d}s"
-    h, m = divmod(m, 60)
-    return f"{h}h{m:02d}m"
+    """One-decimal floating-point minutes -- the human-facing unit."""
+    return f"{int(s) / 60:.1f}m"
 
 
 def load_rows():

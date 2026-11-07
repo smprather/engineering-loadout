@@ -3182,7 +3182,7 @@ def main(keep, no_cache):
             bin_dir, probe_env, tmpdir, tested, skipped, failures, verdicts, base_inputs, lib_dirs, wheelhouse
         )
         probe_secs = time.monotonic() - probe_t0
-        print(f"\n  ({cached_probes} probes cached, {tested - cached_probes} re-run in {probe_secs:.1f}s)")
+        print(f"\n  ({cached_probes} probes cached, {tested - cached_probes} re-run in {probe_secs / 60:.1f}m)")
 
         print()
         layout_inputs = _layout_inputs(install_cache, bin_dir, repo_dir, lib_dirs, wheelhouse)
@@ -3198,7 +3198,7 @@ def main(keep, no_cache):
             if not runtime_failures and len(failures) == before_layout:
                 verdicts.record(layout_key, "runtime layout")
             else:
-                print(f"  (runtime layout re-run: {time.monotonic() - layout_t0:.1f}s)")
+                print(f"  (runtime layout re-run: {(time.monotonic() - layout_t0) / 60:.1f}m)")
             failures.extend(runtime_failures)
         failures.extend(probe_python_versions(os.path.realpath(os.path.join(tmpdir, "local")), probe_env, repo_dir))
 
@@ -3207,7 +3207,7 @@ def main(keep, no_cache):
             "binary smoke test incremental",
             install_secs + probe_secs,
             "PASS" if not failures else "FAIL",
-            f"install {install_secs:.1f}s, probes {probe_secs:.1f}s, "
+            f"install {install_secs / 60:.1f}m, probes {probe_secs / 60:.1f}m, "
             f"{cached_probes} cached / {tested - cached_probes} re-run",
         )
 
@@ -3218,7 +3218,10 @@ def main(keep, no_cache):
             sys.exit(1)
 
         summary = f"All {tested} binaries OK ({skipped} skipped)" if skipped else f"All {tested} binaries OK"
-        print(f"{summary}; runtimes OK (install {install_secs:.1f}s, probes {probe_secs:.1f}s, {cached_probes} cached)")
+        print(
+            f"{summary}; runtimes OK (install {install_secs / 60:.1f}m, probes {probe_secs / 60:.1f}m, "
+            f"{cached_probes} cached)"
+        )
 
     except subprocess.TimeoutExpired:
         print("ERROR: installer timed out")
