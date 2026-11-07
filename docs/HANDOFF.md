@@ -70,7 +70,8 @@ the test asserts `command -v {cargo,rustc,clang,llvm-ar}` resolves inside the
 install root -- so a fallback to a system toolchain fails the test instead of
 passing on a box that happens to have gcc. Asserts the three cdylibs
 (`lib_native.so`, `liblef_tools_native.so`, `libdef_tools_native.so`) exist and
-are ELF. Measured 49.3 s for the build (8 cores), three cdylibs.
+are ELF. Measured 100.1 s end to end (install ~45 s + 49 s compile, 8 cores),
+three cdylibs.
 
 **Defect it found: the `clang` package was not a C compiler.** It shipped
 `bin/*.bz2` + libs only; clang resolves builtin headers from
