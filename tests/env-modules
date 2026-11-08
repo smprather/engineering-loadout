@@ -1,0 +1,366 @@
+#!/usr/bin/env python3.15
+"""
+env-modules -- `module` reaches non-interactive jobs, a broken inherited EM
+state is really flushed, and the runtime/cache fallbacks follow XDG.
+
+Three issues, one gate, because they are all "the shell env on a farm":
+
+  #17  modules-init sat BELOW the interactive guard, so `bash -l -c`, `tcsh -c`,
+       `ssh host cmd` and LSF batch jobs got no `module` at all (and no flush).
+       Both rc files must source modules-init ABOVE that guard.
+
+  #18  the tcsh broken-state flush unaliased `module` BEFORE detecting the
+       inconsistency and then only unset the EM variables -- so the old
+       modules' PATH / LD_LIBRARY_PATH mutations were never undone and stale
+       foreign PATH entries survived. The purge must run first, through the
+       still-defined alias, using EM's `--silent` (a `>& /dev/null` redirect on
+       an alias built on `!*` is substituted INSIDE the backticks and turns the
+       whole call into a silent no-op), and MODULEPATH must be saved/restored
+       around `reset -f`.
+
+  #20  the fallback runtime dir hardcoded `$HOME/.cache/loadout/runtime`,
+       ignoring XDG_CACHE_HOME (EDA/farm $HOME is a small NFS quota), and
+       `gah()` looked only under `/run/user/*` while the rc files actually use
+       `$XDG_RUNTIME_DIR` (typically `/dev/shm/<uid>`).
+
+Everything runs against FAKE EM installations (`LOADOUT_CFG_SHARED_PREFIX`),
+so no modulefile, network or installed `modules` package is involved.
+"""
+
+import os
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASH_ROOT = os.path.join(REPO, "envs", "bash")
+TCSH_ROOT = os.path.join(REPO, "envs", "tcsh")
+
+FAILS = []
+
+
+def check(what, ok, detail=""):
+    if ok:
+        print(f"  PASS  {what}")
+    else:
+        FAILS.append(f"{what} {detail}".strip())
+        print(f"  FAIL  {what}" + (f"  {detail}" if detail else ""))
+
+
+def run(argv, env, **kw):
+    return subprocess.run(argv, capture_output=True, text=True, env=env, **kw)
+
+
+def base_env(home):
+    return {
+        "HOME": home,
+        "PATH": "/usr/bin:/bin",
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "TERM": "xterm-256color",
+        "USER": os.environ.get("USER", "tester"),
+    }
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    os.chmod(path, mode)
+
+
+def fake_modules(prefix, log):
+    """A fake EM install: `module` records its args and mutates PATH/MODULEPATH.
+
+    purge -> PATH=/clean-path, reset -f -> MODULEPATH=/reset-hint, which is
+    enough to prove the caller ran them and (for MODULEPATH) restored it.
+    """
+    stub = os.path.join(prefix, "module-stub.sh")
+    write(
+        stub,
+        "#!/bin/sh\n"
+        f'log="{log}"\n'
+        'for a in "$@"; do printf "[%s]" "$a" >> "$log"; done\n'
+        'printf "\\n" >> "$log"\n'
+        'last=""\n'
+        'for a in "$@"; do case "$a" in --silent) ;; *) last="$a" ;; esac; done\n'
+        'first=""\n'
+        'for a in "$@"; do case "$a" in --silent) ;; *) first="$a"; break ;; esac; done\n'
+        'case "$first" in\n'
+        # PATH keeps the shell's own dirs: `module purge` leaves a usable
+        # shell, and the next `module` call must still find `sh`.
+        '  purge) printf "setenv PATH /clean-path:/usr/bin:/bin\\n" ;;\n'
+        '  reset) printf "setenv MODULEPATH /reset-hint\\n" ;;\n'
+        "esac\n"
+        "exit 0\n",
+        0o755,
+    )
+    # bash init: a function, like upstream's init/bash defines.
+    write(
+        os.path.join(prefix, "lib", "modules", "init", "bash"),
+        f'module() {{\n  sh "{stub}" "$@"\n}}\nexport FAKE_EM_LOADED=1\n',
+    )
+    # A pre-existing `module` in the inherited shell: the realistic broken
+    # state is "EM was initialized by the submitting shell", and the flush can
+    # only undo mutations if that command still exists.
+    write(
+        os.path.join(prefix, "preinit.tcsh"),
+        f"alias module 'eval `sh \"{stub}\" \\!*`'\n",
+    )
+    # tcsh init: an ALIAS built on `!*`, exactly like upstream's init/tcsh --
+    # that shape is why a trailing redirect would break it.
+    write(
+        os.path.join(prefix, "lib", "modules", "init", "tcsh"),
+        # `\!*`, not `!*`: csh performs HISTORY expansion on any command line
+        # even inside single quotes, so an unescaped `!*` here fails with
+        # "Event not found" while the file is sourced. Upstream's init/tcsh
+        # escapes it for exactly this reason and csh stores the literal `!`.
+        f"alias module 'eval `sh \"{stub}\" \\!*`'\nsetenv FAKE_EM_LOADED 1\n",
+    )
+    return stub
+
+
+def main():
+    tmp = tempfile.mkdtemp(prefix="loadout-env-modules.")
+    try:
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+        prefix = os.path.join(tmp, "prefix")
+        log = os.path.join(tmp, "module.log")
+        fake_modules(prefix, log)
+
+        bashrc = os.path.join(BASH_ROOT, "global", "bashrc")
+        tcshrc = os.path.join(TCSH_ROOT, "global", "tcshrc")
+        bash_text = open(bashrc, encoding="utf-8").read()
+        tcsh_text = open(tcshrc, encoding="utf-8").read()
+
+        # --- static placement (#17) ---------------------------------------
+        def before(text, needle, guard_regex):
+            """needle appears before the first REAL guard line.
+
+            The guard is matched at line start: `if ( $?prompt ) then` also
+            occurs inside a header comment, which is not the guard.
+            """
+            i = text.find(needle)
+            m = re.search(guard_regex, text, re.MULTILINE)
+            return i != -1 and m is not None and i < m.start()
+
+        check(
+            "bashrc sources modules-init above the non-interactive return",
+            before(bash_text, "modules-init.bash", r"^if \[\[ \$- != \*i\* \]\]"),
+            "modules-init.bash must appear before the `$- != *i*` guard",
+        )
+        check(
+            "tcshrc sources modules-init above the interactive block",
+            before(tcsh_text, "modules-init.csh", r"^if \( \$\?prompt \) then"),
+            "modules-init.csh must appear before `if ( $?prompt )`",
+        )
+
+        # --- #17 bash: a NON-interactive login shell gets `module` ---------
+        env = base_env(home)
+        env.update(
+            BASH_CONFIG_ROOT_DIR=BASH_ROOT,
+            LOADOUT_CFG_SHARED_PREFIX=prefix,
+            LOADOUT_CFG_USE_LOADOUT_MODULES="1",
+        )
+        res = run(
+            [
+                "/bin/bash",
+                "-c",
+                '. "$BASH_CONFIG_ROOT_DIR/functions.sh"; . "$BASH_CONFIG_ROOT_DIR/global/bashrc"; '
+                'type module >/dev/null 2>&1 && echo HAVE_MODULE; echo "loaded=${FAKE_EM_LOADED:-no}"',
+            ],
+            env,
+        )
+        check(
+            "bash -c (non-interactive): modules-init runs and defines module",
+            "HAVE_MODULE" in res.stdout and "loaded=1" in res.stdout,
+            f"stdout={res.stdout.strip()!r} stderr={res.stderr.strip()[:120]!r}",
+        )
+
+        # --- #17 tcsh: a NON-interactive tcsh gets `module` ----------------
+        env = base_env(home)
+        env.update(
+            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            LOADOUT_CFG_SHARED_PREFIX=prefix,
+            LOADOUT_CFG_USE_LOADOUT_MODULES="1",
+            LOADOUT_CFG_SHM_DIR=os.path.join(tmp, "shm"),
+        )
+        res = run(
+            [
+                "tcsh",
+                "-c",
+                'source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
+                "which module >& /dev/null && echo HAVE_MODULE; "
+                # csh has no $( ): command substitution is backticks.
+                "echo loaded=`printenv FAKE_EM_LOADED`",
+            ],
+            env,
+        )
+        check(
+            "tcsh -c (non-interactive): modules-init runs and defines module",
+            "HAVE_MODULE" in res.stdout and "loaded=1" in res.stdout,
+            f"stdout={res.stdout.strip()!r} stderr={res.stderr.strip()[:120]!r}",
+        )
+
+        # --- #18 tcsh: a broken inherited state is PURGED -------------------
+        open(log, "w").close()
+        env = base_env(home)
+        env.update(
+            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            LOADOUT_CFG_SHARED_PREFIX=prefix,
+            LOADOUT_CFG_USE_LOADOUT_MODULES="1",
+            LOADOUT_CFG_SHM_DIR=os.path.join(tmp, "shm"),
+            MODULEPATH="/caller/mpath",
+        )
+        # LOADEDMODULES=foo with an EMPTY _LMFILES_ is the inconsistency the
+        # flush exists for (counted 1 vs 0).
+        env["LOADEDMODULES"] = "foo"
+        env["_LMFILES_"] = ""
+        res = run(
+            [
+                "tcsh",
+                "-c",
+                # The submitting shell had EM initialized, so a `module`
+                # command exists for the flush to use (issue #18's premise).
+                'source "$LOADOUT_CFG_SHARED_PREFIX/preinit.tcsh"; '
+                'source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
+                'echo "PATH=`printenv PATH`"; echo "MODULEPATH=`printenv MODULEPATH`"; '
+                'echo "LOADEDMODULES=`printenv LOADEDMODULES`"',
+            ],
+            env,
+        )
+        calls = open(log, encoding="utf-8").read() if os.path.isfile(log) else ""
+        check(
+            "tcsh broken state: the stale modules are purged, not just forgotten",
+            "[--silent][purge]" in calls and "[--silent][reset][-f]" in calls,
+            f"module calls={calls.strip()!r}",
+        )
+        check(
+            "tcsh broken state: the old modules' PATH entries are gone",
+            "PATH=/clean-path:/usr/bin:/bin" in res.stdout,
+            f"stdout={res.stdout.strip()!r}",
+        )
+        check(
+            "tcsh broken state: the caller's MODULEPATH survives reset -f",
+            "MODULEPATH=/caller/mpath" in res.stdout,
+            f"stdout={res.stdout.strip()!r}",
+        )
+        check(
+            "tcsh broken state: EM state variables are cleared",
+            "LOADEDMODULES=" in res.stdout and "LOADEDMODULES=foo" not in res.stdout,
+            f"stdout={res.stdout.strip()!r}",
+        )
+
+        # --- #20 bash: the cache fallback honours XDG_CACHE_HOME ------------
+        # LOADOUT_CFG_SHM_DIR points at a regular FILE, so the shm candidate can
+        # never be a directory: the fallback is taken on any host, as any user.
+        not_a_dir = os.path.join(tmp, "not-a-dir")
+        write(not_a_dir, "")
+        cache = os.path.join(tmp, "cache")
+        env = base_env(home)
+        env.update(
+            BASH_CONFIG_ROOT_DIR=BASH_ROOT,
+            LOADOUT_CFG_SHM_DIR=not_a_dir,
+            XDG_CACHE_HOME=cache,
+        )
+        res = run(
+            [
+                "/bin/bash",
+                "-i",
+                "-c",
+                '. "$BASH_CONFIG_ROOT_DIR/functions.sh"; . "$BASH_CONFIG_ROOT_DIR/global/bashrc"; '
+                'printf "%s" "$XDG_RUNTIME_DIR"',
+            ],
+            env,
+        )
+        want = os.path.join(cache, "loadout", "runtime")
+        rt = res.stdout.strip()
+        mode = stat.S_IMODE(os.stat(rt).st_mode) if os.path.isdir(rt) else 0
+        check(
+            "bash: fallback runtime dir is $XDG_CACHE_HOME/loadout/runtime",
+            rt == want,
+            f"got {rt!r}, want {want!r}",
+        )
+        check("bash: the fallback runtime dir is private (0700)", mode == 0o700, f"mode={oct(mode)}")
+
+        # --- #20 tcsh: same fallback ---------------------------------------
+        cache2 = os.path.join(tmp, "cache2")
+        env = base_env(home)
+        env.update(
+            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            LOADOUT_CFG_SHM_DIR=not_a_dir,
+            XDG_CACHE_HOME=cache2,
+        )
+        res = run(
+            [
+                "tcsh",
+                "-c",
+                # The runtime-dir block is inside the interactive section, so
+                # set a prompt first: that is what makes $?prompt true for a
+                # `tcsh -c` without a PTY.
+                'set prompt = "% "; source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
+                "printenv XDG_RUNTIME_DIR",
+            ],
+            env,
+        )
+        want = os.path.join(cache2, "loadout", "runtime")
+        check(
+            "tcsh: fallback runtime dir is $XDG_CACHE_HOME/loadout/runtime",
+            res.stdout.strip() == want,
+            f"got {res.stdout.strip()!r}, want {want!r}",
+        )
+
+        # --- #20 seed-history: history follows the cache, never $HOME ------
+        cache3 = os.path.join(tmp, "cache3")
+        env = base_env(home)
+        env.update(
+            XDG_CACHE_HOME=cache3,
+            LOADOUT_CFG_SHM_DIR=not_a_dir,
+            TMPDIR=os.path.join(tmp, "tmpdir"),
+        )
+        env.pop("XDG_RUNTIME_DIR", None)
+        res = run(["sh", os.path.join(TCSH_ROOT, "global", "helpers", "seed-history"), str(os.getpid())], env)
+        hist = res.stdout.strip()
+        check(
+            "seed-history: writes under $XDG_CACHE_HOME/loadout/runtime",
+            hist.startswith(os.path.join(cache3, "loadout", "runtime") + os.sep),
+            f"got {hist!r}",
+        )
+
+        # --- #20 gah(): finds history in $XDG_RUNTIME_DIR -------------------
+        rt = os.path.join(tmp, "runtime")
+        os.makedirs(rt, mode=0o700)
+        write(os.path.join(rt, "bash_history.4242"), "make -j8 uniquetoken-abc\n")
+        env = base_env(home)
+        env["XDG_RUNTIME_DIR"] = rt
+        res = run(
+            [
+                "/bin/bash",
+                "-c",
+                '. "$0"; gah uniquetoken-abc',
+                os.path.join(BASH_ROOT, "global", "aliases.sh"),
+            ],
+            env,
+        )
+        check(
+            "gah: searches $XDG_RUNTIME_DIR/bash_history.* (not just /run/user)",
+            "uniquetoken-abc" in res.stdout,
+            f"stdout={res.stdout.strip()[:160]!r} rc={res.returncode}",
+        )
+    finally:
+        subprocess.run(["chmod", "-R", "u+w", tmp], capture_output=True)
+        subprocess.run(["rm", "-rf", tmp], capture_output=True)
+
+    if FAILS:
+        print(f"\nenv-modules: {len(FAILS)} failure(s)")
+        for f in FAILS:
+            print(f"  - {f}")
+        return 1
+    print("\nenv-modules: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

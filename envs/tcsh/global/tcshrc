@@ -244,6 +244,16 @@ endif
 # on headless nodes, X-forwarded sessions, and WSL2 without GPU passthrough.
 setenv EGL_LOG_LEVEL fatal
 
+# ---- Environment Modules (shared by interactive AND non-interactive) --------
+# Batch/`ssh host cmd` jobs get `module` too, and an inherited inconsistent EM
+# state is flushed for them as well (issue #17). modules-init.csh is idempotent
+# when EM is healthy; tests/env-shell-parity pins this position.
+if ( $?LOADOUT_CFG_USE_LOADOUT_MODULES ) then
+    if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_USE_LOADOUT_MODULES" } ) then
+        if ( -r "${_loadout_global}/modules-init.csh" ) source "${_loadout_global}/modules-init.csh"
+    endif
+endif
+
 # ---- everything below is interactive-only ------------------------------------
 if ( $?prompt ) then
 
@@ -350,7 +360,17 @@ if ( $?prompt ) then
         setenv XDG_RUNTIME_DIR "${_loadout_shm}/`id -u`"
         sh "${_loadout_helpers}/private-dir" "$XDG_RUNTIME_DIR" >& /dev/null
         if ( $status != 0 ) then
-            setenv XDG_RUNTIME_DIR "${HOME}/.cache/loadout/runtime"
+            # Honour a site cache redirection (EDA hosts keep $HOME on a small
+            # NFS quota and point XDG_CACHE_HOME at scratch); mirrors bashrc.
+            if ( $?XDG_CACHE_HOME ) then
+                if ( "$XDG_CACHE_HOME" != "" ) then
+                    setenv XDG_RUNTIME_DIR "${XDG_CACHE_HOME}/loadout/runtime"
+                else
+                    setenv XDG_RUNTIME_DIR "${HOME}/.cache/loadout/runtime"
+                endif
+            else
+                setenv XDG_RUNTIME_DIR "${HOME}/.cache/loadout/runtime"
+            endif
             sh "${_loadout_helpers}/private-dir" "$XDG_RUNTIME_DIR" >& /dev/null
         endif
         unset _loadout_rt
@@ -471,11 +491,8 @@ if ( $?prompt ) then
     endif
 
     # ---- Environment Modules --------------------------------------------------
-    if ( $?LOADOUT_CFG_USE_LOADOUT_MODULES ) then
-        if ( { "${_loadout_helpers}/is-truthy" "$LOADOUT_CFG_USE_LOADOUT_MODULES" } ) then
-            if ( -r "${_loadout_global}/modules-init.csh" ) source "${_loadout_global}/modules-init.csh"
-        endif
-    endif
+    # Sourced ABOVE the interactive guard (issue #17): `tcsh -c`, `ssh host cmd`
+    # and LSF batch jobs need `module` too. tests/env-shell-parity pins it.
 
     # ---- aliases, key bindings, completions -----------------------------------
     if ( -r "${_loadout_global}/aliases.csh" )     source "${_loadout_global}/aliases.csh"

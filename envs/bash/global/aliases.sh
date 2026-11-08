@@ -188,8 +188,22 @@ fc() {
 alias h='history | g'
 alias hg='history | /bin/grep -i'
 gah() {
-    local history_files=(/run/user/*/bash_history.*)
-    [[ -e ${history_files[0]} ]] || return 1
+    # Both history stores: the /run/user/<uid> convention AND the runtime dir
+    # the rc files actually pick. On RHEL8/EDA hosts XDG_RUNTIME_DIR is
+    # typically /dev/shm/<uid>, so a /run/user-only glob silently found nothing
+    # (and returned 1) for the common case. Mirrors
+    # envs/tcsh/global/helpers/grep-all-history.
+    local candidates=(
+        /run/user/*/bash_history.*
+        /run/user/*/tcsh_history.*
+        "${XDG_RUNTIME_DIR:-/nonexistent}"/bash_history.*
+        "${XDG_RUNTIME_DIR:-/nonexistent}"/tcsh_history.*
+    )
+    local history_files=() f
+    for f in "${candidates[@]}"; do
+        [[ -e $f ]] && history_files+=("$f")
+    done
+    [[ ${#history_files[@]} -gt 0 ]] || return 1
     if command -v rg >/dev/null 2>&1; then
         rg "$@" "${history_files[@]}" 2>/dev/null
     else

@@ -81,6 +81,16 @@ fi
 # zsh/tcsh export this before their interactive-only section too.
 export EGL_LOG_LEVEL=fatal
 
+# Environment Modules (loadout-local install at <prefix>/lib/modules).
+# Batch and `ssh host cmd` jobs are the FIRST consumers of EM on a farm: an LSF
+# script or `bash -l -c 'module load ...'` gets no `module` at all if this sits
+# below the non-interactive return, and a half-inherited EM state never gets
+# flushed either. modules-init.bash is fork-free and idempotent when EM is
+# healthy, so it is safe here; gate: tests/env-bash-runtime.
+if is_truthy "$LOADOUT_CFG_USE_LOADOUT_MODULES"; then
+    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
+fi
+
 # Exit here if not interactive
 if [[ $- != *i* ]]; then
     # Unset this file's _-prefixed locals, but NOT exported _vars: `unset ${!_@}`
@@ -129,11 +139,14 @@ export PROMPT_NORMAL="\\[$NORMAL\\]"
 
 # Fallback runtime dir. It holds per-PID history and the online-verdict cache,
 # so it must be private (loadout_private_dir); a co-tenant could have created
-# the predictable shm name first.
+# the predictable shm name first. The cache-root fallback honours
+# XDG_CACHE_HOME: on EDA/farm hosts $HOME is on a small NFS quota and sites
+# redirect caches to scratch, and a per-shell history file per interactive
+# shell is exactly the kind of write that fills that quota.
 if [[ ! -r $XDG_RUNTIME_DIR ]]; then
     XDG_RUNTIME_DIR=${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$(id -u)
     if ! loadout_private_dir "$XDG_RUNTIME_DIR"; then
-        XDG_RUNTIME_DIR=$HOME/.cache/loadout/runtime
+        XDG_RUNTIME_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/loadout/runtime
         loadout_private_dir "$XDG_RUNTIME_DIR"
     fi
     export XDG_RUNTIME_DIR
@@ -299,10 +312,8 @@ if is_truthy "${LOADOUT_CFG_ENABLE_TMUX_PATH_STORE}" && command -v tmux-path-sto
     eval $(tmux-path-store --bash)
 fi
 
-# Environment Modules (loadout-local install at ~/.local/bin/modulecmd)
-if is_truthy "$LOADOUT_CFG_USE_LOADOUT_MODULES"; then
-    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/modules-init.bash"
-fi
+# Environment Modules moved ABOVE the non-interactive return: batch jobs and
+# `ssh host cmd` need `module` too (issue #17, tests/env-bash-runtime).
 
 # IceCream-Bash: ic/icp/ict/ictp debug-print helpers (vendored, MIT). The
 # icecream-ext.sh override (sourced after) extends ic/ict to also print

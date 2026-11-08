@@ -33,14 +33,22 @@ fi
 
 # The history may hold secrets, so the fallback runtime dir must be private to
 # us (private-dir); a co-tenant could have created the shm name first. Same
-# fallback chain as the XDG_RUNTIME_DIR block in global/tcshrc.
+# fallback chain as the XDG_RUNTIME_DIR block in global/tcshrc, and the cache
+# root honours XDG_CACHE_HOME for the same reason as bashrc (a small $HOME
+# quota must not collect per-PID history files).
 runtime=${XDG_RUNTIME_DIR:-}
 if [ -z "$runtime" ] || [ ! -d "$runtime" ]; then
     here=$(dirname "$0")
     runtime="${LOADOUT_CFG_SHM_DIR:-/dev/shm}/$(id -u)"
     if ! sh "$here/private-dir" "$runtime"; then
-        runtime=$HOME/.cache/loadout/runtime
-        sh "$here/private-dir" "$runtime" || runtime=$HOME
+        runtime=${XDG_CACHE_HOME:-$HOME/.cache}/loadout/runtime
+        if ! sh "$here/private-dir" "$runtime"; then
+            # Last resort: a private dir under TMPDIR, never $HOME -- a
+            # $HOME that cannot hold a 0700 runtime dir must not silently
+            # collect tcsh_history.<pid> files either.
+            runtime=${TMPDIR:-/tmp}/loadout-history-$(id -u)
+            sh "$here/private-dir" "$runtime" || runtime=${TMPDIR:-/tmp}
+        fi
     fi
 fi
 

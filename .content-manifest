@@ -589,6 +589,7 @@ sha256  20b2270ec1e16109e54bf66f8e4eeb62448a38f25d57c81efed10e3c5fc42b24  payloa
 sha256  20c47ef16be2035db2c7abec9ec61ab1093a6521f8c9c617b37ab021aff75d13  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/wing.so.bz2
 sha256  20d074d2c59ec21055e8cbdd9268d5aae47665b4840fdf871fbaa12e67b968e3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/rust.so.bz2
 sha256  20d432a3306d374ea3ab492206295fe013100d64ad4ea47a4b08e1961edfa53e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/angular/highlights.scm
+sha256  20d52c52421620e181c4fbd2fb91a2bcdd538e55f6dc971671735f4729c4c09a  payload/installed-sizes.json
 sha256  20dcee80272cc39e9376abed0a2c1985db64cef682f50e1dfa373db100a121fe  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/surface/highlights.scm
 sha256  20dcee80272cc39e9376abed0a2c1985db64cef682f50e1dfa373db100a121fe  payload/treesitter/vendor/nvim-treesitter/runtime/queries/surface/highlights.scm
 sha256  20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2  payload/python-loaded/wheels/watchdog-6.0.0-py3-none-manylinux2014_x86_64.whl
@@ -3013,7 +3014,6 @@ sha256  adcd1df230f050570ca5a9d3afc8dcce0d7a10d04bfae04de73053502408895c  payloa
 sha256  add7ee8b0241ea077d7954868ee8b3d26df2f44cfc6b320a527f6af710b0991c  envs/tmux/vendor/plugins/tmux-persist/strategies/vim_session.sh
 sha256  ade934edf66a8b0c86c3a88c2dc3376ecd97c7b943b40f9ad84f2b8554405875  payload/treesitter/vendor/nvim-treesitter/tests/indent/java/annotation_2.java
 sha256  adec4c0f0d2df7cef054aaeb8a31491de3f438fcfa403d1c1e5452c89eb8f5b8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/yaml.lua
-sha256  adff25b06cf93de8f827c0298345c030b1b3f06dec0b082e527c2fc12d8e8b49  payload/installed-sizes.json
 sha256  ae17398ee8ea925aa93112168541b68b01047d5b5450750f9bcc5a3d7292098c  payload/treesitter/vendor/nvim-treesitter/tests/indent/algorithm_spec.lua
 sha256  ae1e05f4474ab893019daefc9f483440db00a5664132175715c76b3773b7e6ba  payload/treesitter/vendor/treesitter-parser-registry/lua/treesitter-registry.lua
 sha256  ae24a212b86ca90f1dde6fb308116b8d9bf20c26c1989624edfc327d54acb83e  payload/el8.x86_64.glibc2p28/lib64/libXinerama.so.1.bz2
