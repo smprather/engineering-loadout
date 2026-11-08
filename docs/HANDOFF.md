@@ -13,6 +13,77 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-07 (15): issues #15, #17, #18, #19, #20 closed (shell env on a farm, export stash, local PyYAML)
+
+Five reported defects, one gate each. #13 and #14 were verified already fixed
+and closed with evidence (see the end).
+
+**#17 -- `module` was invisible to batch jobs.** `modules-init.{bash,csh}` was
+sourced BELOW the interactive guard, so `bash -l -c 'module load ...'`,
+`tcsh -c`, `ssh host cmd` and LSF scripts got no `module` at all, and never
+ran the inconsistent-state flush either. The block now sits in the shared
+"environment for non-interactive shells" region of `envs/bash/global/bashrc`
+and above `if ( $?prompt ) then` in `envs/tcsh/global/tcshrc`. Both are
+fork-free/idempotent when EM is healthy, which is why they are safe there.
+
+**#18 -- the tcsh broken-state flush never purged.** It unaliased `module`
+BEFORE detecting the inconsistency, then only unset the EM variables, so the
+old modules' `PATH` / `LD_LIBRARY_PATH` entries survived and shadowed tools.
+Now: detect -> purge through the still-defined alias -> unalias -> source init.
+`module --silent purge` / `--silent reset -f` (NEVER `module purge >& /dev/null`:
+`module` is an alias on `!*`, so the redirect is substituted INSIDE the
+backticks and the call becomes a silent no-op), `MODULEPATH` saved/restored
+around `reset -f`.
+
+**#20 -- runtime/cache fallbacks ignored XDG.** The fallback runtime dir was a
+hardcoded `$HOME/.cache/loadout/runtime` in `bashrc`, `tcshrc` and
+`helpers/seed-history`; it is now `${XDG_CACHE_HOME:-$HOME/.cache}/loadout/runtime`,
+and seed-history's last resort is a private dir under `$TMPDIR` rather than
+`$HOME` (a small NFS quota must not collect per-PID history files). `gah()`
+searched only `/run/user/*/bash_history.*` while the rc files actually use
+`$XDG_RUNTIME_DIR` (typically `/dev/shm/<uid>`) -- it now searches both, like
+`helpers/grep-all-history` already did.
+
+**#19 -- `build/export --stash-from-file` was 100% broken.** It ran
+`dest/tools/fetch-stash` in the git-less export and never passed `--tag`:
+fetch-stash refuses `--from-file` without a tag, and its trust link is
+`git verify-tag` + the tag's `sha256sums.txt` line, which can only be checked in
+a checkout. `place_stash` now runs `REPO/tools/fetch-stash` with `--tag`
+(default: `git describe --tags --abbrev=0`; `build/export` gained `--tag`,
+`--fetch-stash` passes `--force`) and copies the verified stash +
+`.content-manifest.fetched` into the export.
+
+**#15 -- the bundled PyYAML wheel was load-bearing archaeology.** PyPI has no
+cp315 and no `py3-none-any` wheel for 6.0.3, so EL's copy is the only offline
+source for `uvicorn[standard]` consumers (`liberty-view`), and nothing recorded
+how it was made. `build/build-pyyaml.sh` now reproduces it (sdist ->
+`PYYAML_FORCE_LIBYAML=0 PYYAML_FORCE_YAML=0 setup.py bdist_wheel`, with the two
+documented dead ends: `pip wheel --no-binary :all:` dies building Cython for
+3.15, `--no-build-isolation` dies on `BackendUnavailable`), asserts the result
+is pure-Python with a working `import yaml`, and `build/ADDING_BINARIES.md` has
+the provenance section. `tests/wheelhouse-closure` gained a locally-built-wheel
+allowlist: a declared local wheel must name its script AND document it, so a
+CVE refresh always has a path.
+
+**Gates:** new `tests/env-modules` (T1, `--deps envs`, 12 checks: static
+placement of both modules-init calls, non-interactive `module` in bash and
+tcsh, purge/release in tcsh with MODULEPATH preserved, XDG_CACHE_HOME fallbacks
+in both shells, seed-history's location, and `gah` finding history under
+`$XDG_RUNTIME_DIR`) and new `tests/export-stash` (T1, `--deps build`, pins the
+command/cwd/flags with subprocess stubbed -- the defect WAS the command shape,
+and a real run needs a signed tag plus a 327 MB stash).
+
+**Closed without code:** #13 (persistent per-consumer exclusion) shipped in
+`2026.11.3` -- `config.toml exclude` / `LOADOUT_CFG_EXCLUDE` feed the same
+`skip_set` as `--skip`, the hard-dependency safety is unchanged, `doctor` names
+what the policy dropped (`excluded by policy (...)`), and
+`tests/config-toml-exclude` + `tests/install-exclude-policy` pin it. #14
+(multi-distribution rolling build) shipped the same release as option 1:
+`rolling_subdirs: [".", "lef_tools", "def_tools"]` builds one wheel per
+project into one package, `uv_tools` installs all three dists, and its
+"`vendor/cargo` is incomplete" blocker is disproven in entry (13) above -- a
+clean `git archive` builds both extensions offline.
+
 ## 2026-11-07 (14): installer tests run in parallel — cold suite 2.1× faster, verdicts still per-test
 
 `tests/run-all` no longer runs every `--deps auto` test alone. Installer-driven
