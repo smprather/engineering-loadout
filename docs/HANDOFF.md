@@ -13,6 +13,61 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-08 (1): state at context flush — 2026.11.4 released, all issues closed, what is owed
+
+**Released:** tag `2026.11.4` at commit `a85854e` (class B: payload env files
+changed, installer untouched). Signed tag re-verified (`git tag -v` rc=0, the
+`sha256sums.txt sha256 …` binding line present), release not a draft, four
+assets including the 344 538 464-byte stash, `origin/main` == tag commit at
+publish time. Post-tag commits on `main`: `726c836` (build-pyyaml corrections —
+dev tooling, export-ignored), `dc0ca45` (timing rows), `afde555` (the local
+`.agents/plugins/marketplace.json` deletion absorbed; nothing referenced it).
+
+**Green:** `tests/run-all` (T1+T2) 0 failures, 680 s with T2 parallel (4-way);
+warm T1 9–10 s, warm full suite 6 s / 91 CACHED. Release gates: malware scan
+CLEAN (7 changed artifacts re-scanned, 2 910 verdict-cached), 340-binary smoke,
+checksums+SBOM, secret scan, vuln scan, manifest export.
+
+**Issues:** all seven (#13–#15, #17–#20) closed with evidence comments. #15,
+#17–#20 carried code + new gates (`tests/env-modules`, `tests/export-stash`,
+`build/build-pyyaml.sh`, `tests/wheelhouse-closure` allowlist); #13/#14 were
+verified already shipped in 2026.11.3.
+
+**Owed before the next release (all class C work, deliberately not done here):**
+
+1. **Tier 3 container gate** — NOT run for 2026.11.4 (class B only *recommends*
+   it). `tests/run-all --container` or
+   `tests/prebuilt-binaries-almalinux8 --full` (network-isolated) is required
+   for the next class C, and the interactive-shell PTY gate lives there too.
+2. **Currency sweep** — `build/check-versions --outdated-only` and
+   `./build/update --list-outdated` were not run; the payload may be behind
+   upstream. `open-eda-file-tools` is current (`v2026.11.5-1-g31e2aa3`) as of
+   this session.
+3. **Assurance re-pin** — not needed this time (no `nvim`/`rust`/`treesitter`/
+   `git-nvim` bump). Still owed if the upcoming sweep touches those.
+4. **`--no-cache` writes no verdicts**, so the run AFTER a deep run repopulates
+   the cache (that is why a `--no-cache` run is followed by one full re-run
+   before the loop is warm). If that ever bites, make `--no-cache` compute
+   fresh but still store per-test verdicts.
+5. **PyYAML bump path** — a version bump must also re-lock
+   `payload/python-loaded/requirements.lock.txt` (it pins the wheel's sha256);
+   `build/build-pyyaml.sh` warns instead of silently breaking the pin, and its
+   output is content-identical, NOT byte-identical (wheel zips record mtimes).
+6. **open-eda source payload is additive on upgrade** (HANDOFF (13)): a file
+   upstream DELETES survives in `<prefix>/share/loadout/src/open-eda-file-tools`
+   — same as every other archive package; the vendored-crate checksums catch
+   the case that matters.
+7. `build/build-pyyaml.sh` installs setuptools/wheel into the payload
+   interpreter when absent, i.e. into the container's `.loadout-bootstrap`
+   tree (gitignored, harmless) — not into any shipped artifact.
+
+**Machine facts worth knowing before touching the runner:** installer tests run
+`LOADOUT_TEST_T2_JOBS` (default 4) at a time with per-job `TMPDIR`
+(`${TMPDIR}/lr.XXXXXX/<id>`) — keep those paths SHORT (zsh's build placeholder
+is 97 bytes; console-script shebangs hit the kernel limit), dependency capture
+lands in `<repo>/.loadout-deps.d/` keyed by install root, and a PASS with no
+captured inputs is never cached. Never edit `tests/run-all` while it runs.
+
 ## 2026-11-07 (15): issues #15, #17, #18, #19, #20 closed (shell env on a farm, export stash, local PyYAML)
 
 Five reported defects, one gate each. #13 and #14 were verified already fixed
