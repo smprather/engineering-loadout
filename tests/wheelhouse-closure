@@ -370,6 +370,39 @@ def materialized_wheel(path):
     return out.name, out.name
 
 
+def check_locally_built(index):
+    """Wheels we build OURSELVES must name the script that reproduces them.
+
+    PyPI has no installable wheel for some of these (pyyaml under 3.15 is the
+    case that forced this gate): the bundled copy is then load-bearing and, if
+    nothing records how it was made, unreproducible -- a version bump for a
+    CVE would have no path at all. Each entry names its build script; the
+    script must exist and `build/ADDING_BINARIES.md` must document it.
+    """
+    locally_built = {
+        "pyyaml": "build/build-pyyaml.sh",
+    }
+    problems = []
+    doc = os.path.join(REPO, "build", "ADDING_BINARIES.md")
+    doc_text = ""
+    if os.path.isfile(doc):
+        with open(doc, encoding="utf-8", errors="replace") as fh:
+            doc_text = fh.read()
+    for dist, script in sorted(locally_built.items()):
+        if normalize(dist) not in index:
+            problems.append(f"{dist}: declared locally built but not in the wheelhouse")
+            continue
+        script_path = os.path.join(REPO, script)
+        if not os.access(script_path, os.X_OK):
+            problems.append(f"{dist}: {script} missing or not executable")
+        if script not in doc_text:
+            problems.append(f"{dist}: {script} is not documented in build/ADDING_BINARIES.md")
+    if problems:
+        fail("locally built wheels without a reproducible build path: " + "; ".join(problems))
+    else:
+        ok(f"locally built wheels name their build script ({len(locally_built)} checked)")
+
+
 def main():
     version = shipped_python_version()
     if not version:
@@ -408,6 +441,7 @@ def main():
         index.setdefault(normalize(name), []).append((filename, path, meta))
 
     ok(f"wheelhouse: {sum(len(v) for v in index.values())} wheels, {len(index)} distributions")
+    check_locally_built(index)
 
     # The declared interpreter contract has to agree with the payload: a spec
     # the registry cannot satisfy, or a wheel whose own Requires-Python rejects

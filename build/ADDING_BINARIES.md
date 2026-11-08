@@ -864,6 +864,46 @@ In the build container use `python3.15 -m pip download ...`: the repo's
 `.loadout-bootstrap/bin/pip3.15` carries the portable-python build path as its
 shebang and fails with "bad interpreter".
 
+### PyYAML -- locally built pure-Python wheel (PyPI has no 3.15 wheel)
+
+`payload/el8.x86_64.glibc2p28/wheels/pyyaml-6.0.3-py3-none-any.whl` is **built by
+us**, not downloaded. PyPI publishes PyYAML 6.0.3 as cp38..cp314 wheels plus
+sdists -- **no cp315 and no universal `py3-none-any`** -- so under the shipped
+3.15 interpreter this wheel is the only offline source of PyYAML.
+`uvicorn[standard]` declares `pyyaml>=5.1`, which is how it reaches every
+FastAPI/uvicorn front end (`liberty-view` in liberty-tools, ir-drop-viewer, ...):
+without the wheel in the find-links set, `uv tool install` cannot resolve.
+
+Refresh it with **`build/build-pyyaml.sh`** (issue #15; the wheel was previously
+load-bearing with no recorded provenance):
+
+```bash
+build/build-shell build/build-pyyaml.sh --version 6.0.3
+# offline: --sdist /cache/PyYAML-6.0.3.tar.gz
+```
+
+It unpacks the sdist, builds with `PYYAML_FORCE_LIBYAML=0 PYYAML_FORCE_YAML=0
+python3.15 setup.py -q bdist_wheel`, then asserts the result is
+`pyyaml-<v>-py3-none-any.whl` with no `.so`, a pure-Python `_yaml/__init__.py`
+shim, and a working `import yaml` reporting `__with_libyaml__ is False` before
+copying it into the wheelhouse. Two dead ends, so nobody re-derives them:
+
+- `pip wheel --no-binary :all: PyYAML==<v>` fails: the sdist's
+  `build-system.requires` pins Cython>=3.0 for py3.13+, and Cython has no 3.15
+  wheel, so pip tries to build Cython from source.
+- `pip wheel --no-build-isolation` fails with `BackendUnavailable: Cannot import
+  '_pyyaml_pep517'` -- that shim lives in `packaging/_pyyaml_pep517.py` and is
+  importable only through `backend-path`. `setup.py bdist_wheel` sidesteps both.
+
+The trade-off is deliberate and already shipped: **no libyaml acceleration**
+(`yaml.__with_libyaml__ == False`) in exchange for an ABI-free wheel that
+survives an interpreter minor bump -- the right call for a shared wheelhouse.
+`payload/python-loaded/wheels/` carries a second copy that the suite's
+`requirements.lock.txt` pins by sha256; the script warns instead of silently
+breaking that pin, so a version bump also needs a `build/build-python-loaded.sh`
+re-lock. `tests/wheelhouse-closure` fails if a declared locally-built wheel loses
+its script or this section.
+
 ### Rust extensions (maturin): build inside the container, always
 
 A wheel with a PyO3 cdylib is only `manylinux_2_28` if the **linker** was EL8's.
