@@ -36,6 +36,7 @@ Usage:
     ./build/export /path/to/install-dir
     ./build/export /path/to/install-dir --with-sums        # also copy sha256sums.txt
     ./build/export /path/to/install-dir --fetch-stash      # download the stash fresh
+    ./build/export /path/to/install-dir --stash-from-file F --sums S --tag vX.Y.Z
     ./build/export /path/to/install-dir --no-stash         # skip the stash entirely
     ./build/export /path/to/install-dir --allow-dirty      # ONLY archives HEAD regardless
 """
@@ -254,13 +255,20 @@ def do_archive(dest, force):
     return True
 
 
-def place_stash(dest, mode, from_file, sums):
+def place_stash(dest, mode, from_file, sums, tag=""):
     """Get the plugin stash into the export without weakening its verification.
 
     Reusing the local copy is the fast path, but the hash is RE-CHECKED against
     .content-manifest.fetched rather than trusting that file -- otherwise a stash
     that changed on disk since it was fetched would be copied out with a stale
     attestation, which is exactly the kind of quiet gap this chain exists to close.
+
+    `--fetch-stash` / `--stash-from-file` run `tools/fetch-stash` from THIS
+    CHECKOUT, never from the export: its trust link is `git verify-tag` plus the
+    tag's `sha256sums.txt sha256 <hex>` line, and the export is a `git archive`
+    with no `.git` (issue #19). The verified stash and its
+    `.content-manifest.fetched` record are then copied into the export, which is
+    the same pair the default path places.
     """
     src_stash = os.path.join(REPO, STASH_REL)
     src_fetched = os.path.join(REPO, FETCHED_MANIFEST)
@@ -271,16 +279,30 @@ def place_stash(dest, mode, from_file, sums):
         return True
 
     if mode == "fetch" or from_file:
-        cmd = [os.path.join(dest, "tools/fetch-stash")]
+        tag = tag or _git("describe", "--tags", "--abbrev=0", check=False).stdout.strip()
+        if not tag:
+            eprint("  stash         : no release tag reachable from HEAD -- pass --tag")
+            eprint("                  (fetch-stash binds the sums file to that signed tag)")
+            return False
+        cmd = [os.path.join(REPO, "tools/fetch-stash"), "--tag", tag]
         if from_file:
             cmd += ["--from-file", os.path.abspath(from_file)]
             if sums:
                 cmd += ["--sums", os.path.abspath(sums)]
-        info("  stash         : running fetch-stash in the export ...")
-        rc = subprocess.run(cmd, cwd=dest).returncode
+        else:
+            # A verified local copy already there must not short-circuit
+            # `--fetch-stash`'s whole premise.
+            cmd.append("--force")
+        info(f"  stash         : running fetch-stash in the checkout (tag {tag}) ...")
+        rc = subprocess.run(cmd, cwd=REPO).returncode
         if rc != 0:
             eprint("  stash         : fetch-stash FAILED -- the export has no verified stash")
             return False
+        os.makedirs(os.path.dirname(dest_stash), exist_ok=True)
+        shutil.copy2(src_stash, dest_stash)
+        if os.path.isfile(src_fetched):
+            shutil.copy2(src_fetched, os.path.join(dest, FETCHED_MANIFEST))
+        info("  stash         : verified in the checkout, then copied into the export")
         return True
 
     # Default: reuse the local copy when it is present AND still matches its record.
@@ -375,7 +397,12 @@ def place_sums(dest, with_sums):
     "--stash-from-file", type=click.Path(dir_okay=False), help="Stash file to verify + install into the export."
 )
 @click.option("--sums", type=click.Path(dir_okay=False), help=f"{SUMS_NAME} to verify --stash-from-file against.")
-def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash, stash_from_file, sums):
+@click.option(
+    "--tag",
+    help="Release tag the stash came from (default: git describe --tags --abbrev=0); "
+    "fetch-stash binds the sums file to it.",
+)
+def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash, stash_from_file, sums, tag):
     """Publish a verified, git-less copy of this checkout to DEST.
 
     DEST is then a working loadout: `DEST/loadout install <pkg>` verifies every
@@ -406,7 +433,7 @@ def main(dest, allow_dirty, skip_verify, force, with_sums, fetch_stash, no_stash
     info(f"  version       : {version}")
 
     mode = "none" if no_stash else ("fetch" if fetch_stash else "copy")
-    if not place_stash(dest, mode, stash_from_file, sums):
+    if not place_stash(dest, mode, stash_from_file, sums, tag):
         raise SystemExit(1)
     if not place_sums(dest, with_sums):
         raise SystemExit(1)

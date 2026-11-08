@@ -1,0 +1,180 @@
+#!/usr/bin/env python3.15
+"""
+export-stash -- `build/export --stash-from-file` puts a VERIFIED stash in the
+export, and can actually do it.
+
+Before issue #19 that path was 100% broken, twice over:
+
+  1. it ran `dest/tools/fetch-stash` (the copy INSIDE the export) and never
+     passed `--tag`, which fetch-stash refuses for `--from-file` -- so the very
+     first command exited 2;
+  2. even with a tag, fetch-stash's trust link is `git verify-tag` plus the
+     tag's `sha256sums.txt sha256 <hex>` line, and the export is a `git archive`
+     with NO `.git` -- verification could never succeed there.
+
+The fix moves the run into the checkout (which has the tag) and copies the
+verified stash + `.content-manifest.fetched` into the export. This gate pins
+the command shape (which binary, which cwd, which flags) with subprocess and
+copy2 stubbed out: the defect WAS the command shape, and a real run needs a
+signed tag plus a 327 MB stash, neither of which belongs in Tier 1.
+"""
+
+import importlib.machinery
+import importlib.util
+import os
+import subprocess
+import sys
+import tempfile
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FAILS = []
+
+
+def check(what, ok, detail=""):
+    if ok:
+        print(f"  PASS  {what}")
+    else:
+        FAILS.append(f"{what} {detail}".strip())
+        print(f"  FAIL  {what}" + (f"  {detail}" if detail else ""))
+
+
+def load_export():
+    path = os.path.join(REPO, "build", "export")
+    loader = importlib.machinery.SourceFileLoader("build_export", path)
+    spec = importlib.util.spec_from_loader("build_export", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def main():
+    mod = load_export()
+    real_run = mod.subprocess.run
+    real_copy = mod.shutil.copy2
+    calls = []
+    copies = []
+
+    class Done:
+        def __init__(self, rc=0, out=""):
+            self.returncode = rc
+            self.stdout = out
+            self.stderr = ""
+
+    def fake_run(cmd, *a, **kw):
+        calls.append((list(cmd) if isinstance(cmd, (list, tuple)) else cmd, kw.get("cwd")))
+        done = Done(0)
+        if isinstance(cmd, list) and cmd[:2] == ["git", "-C"] and "describe" in cmd:
+            done.stdout = "v2026.11.4-1-gef72bb6\n"
+        return done
+
+    def fake_copy(src, dst, *a, **kw):
+        copies.append((src, dst))
+
+    tmp = tempfile.mkdtemp(prefix="loadout-export-stash.")
+    try:
+        dest = os.path.join(tmp, "export")
+        os.makedirs(dest)
+        from_file = os.path.join(tmp, "stash.tar.bz2")
+        sums = os.path.join(tmp, "sha256sums.txt")
+        open(from_file, "wb").close()
+        open(sums, "w").close()
+
+        mod.subprocess.run = fake_run
+        mod.shutil.copy2 = fake_copy
+
+        # --- 1. from-file + sums + explicit tag -----------------------------
+        calls.clear()
+        copies.clear()
+        rc = mod.place_stash(dest, "copy", from_file, sums, "v2026.11.4-1-gef72bb6")
+        check("place_stash(--stash-from-file) succeeds", rc is True, f"rc={rc!r}")
+        fetch = [c for c in calls if c[0] and c[0][0].endswith("fetch-stash")]
+        check("it runs fetch-stash exactly once", len(fetch) == 1, f"calls={calls}")
+        if fetch:
+            argv, cwd = fetch[0]
+            check(
+                "fetch-stash comes from the CHECKOUT, not the export",
+                argv[0] == os.path.join(REPO, "tools", "fetch-stash"),
+                f"argv0={argv[0]!r}",
+            )
+            check(
+                "it runs in the checkout (the only tree with .git to verify the tag)",
+                os.path.realpath(cwd or "") == os.path.realpath(REPO),
+                f"cwd={cwd!r}",
+            )
+            check(
+                "it forwards --tag",
+                "--tag" in argv and argv[argv.index("--tag") + 1] == "v2026.11.4-1-gef72bb6",
+                str(argv),
+            )
+            check("it forwards --from-file", "--from-file" in argv, str(argv))
+            check("it forwards --sums", "--sums" in argv, str(argv))
+        check(
+            "the verified stash lands in the export",
+            any(d == os.path.join(dest, mod.STASH_REL) for _s, d in copies),
+            f"copies={copies}",
+        )
+        check(
+            "its .content-manifest.fetched record is copied too",
+            any(d == os.path.join(dest, mod.FETCHED_MANIFEST) for _s, d in copies),
+            f"copies={copies}",
+        )
+
+        # --- 2. no tag anywhere -> refuse, never run ------------------------
+        calls.clear()
+        mod.subprocess.run = lambda cmd, *a, **kw: (calls.append(cmd), Done(1, ""))[1]
+        rc = mod.place_stash(dest, "copy", from_file, sums, "")
+        mod.subprocess.run = fake_run
+        check(
+            "no tag and no reachable release tag: refuses instead of guessing",
+            rc is False,
+            f"rc={rc!r}",
+        )
+        check(
+            "the refusing path never executes fetch-stash",
+            not any(isinstance(c, list) and c and str(c[0]).endswith("fetch-stash") for c in calls),
+            f"calls={calls}",
+        )
+
+        # --- 3. --fetch-stash forces a re-fetch ------------------------------
+        calls.clear()
+        mod.subprocess.run = fake_run
+        rc = mod.place_stash(dest, "fetch", "", "", "")
+        fetch = [c for c in calls if c[0] and c[0][0].endswith("fetch-stash")]
+        check("--fetch-stash runs the checkout's fetch-stash", rc is True and len(fetch) == 1, f"calls={calls}")
+        if fetch:
+            argv = fetch[0][0]
+            check("--fetch-stash passes --force", "--force" in argv, str(argv))
+            check(
+                "--fetch-stash takes the tag from git describe",
+                "--tag" in argv and argv[argv.index("--tag") + 1] == "v2026.11.4-1-gef72bb6",
+                str(argv),
+            )
+
+        # --- 4. a failed fetch is reported, not ignored ---------------------
+        calls.clear()
+        mod.subprocess.run = lambda cmd, *a, **kw: (
+            calls.append(cmd),
+            Done(2 if isinstance(cmd, list) and str(cmd[0]).endswith("fetch-stash") else 0, ""),
+        )[1]
+        rc = mod.place_stash(dest, "copy", from_file, sums, "v1")
+        mod.subprocess.run = fake_run
+        check("a non-zero fetch-stash fails the export", rc is False, f"rc={rc!r}")
+    finally:
+        mod.subprocess.run = real_run
+        mod.shutil.copy2 = real_copy
+        # tests/test-cleanup's rule: a test-owned tree is made writable first
+        # (this one is never sealed, but the rule is mechanical on purpose).
+        subprocess.run(["chmod", "-R", "u+w", tmp], capture_output=True)
+        subprocess.run(["rm", "-rf", tmp], capture_output=True)
+
+    if FAILS:
+        print(f"\nexport-stash: {len(FAILS)} failure(s)")
+        for f in FAILS:
+            print(f"  - {f}")
+        return 1
+    print("\nexport-stash: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
