@@ -882,11 +882,19 @@ build/build-shell build/build-pyyaml.sh --version 6.0.3
 # offline: --sdist /cache/PyYAML-6.0.3.tar.gz
 ```
 
-It unpacks the sdist, builds with `PYYAML_FORCE_LIBYAML=0 PYYAML_FORCE_YAML=0
-python3.15 setup.py -q bdist_wheel`, then asserts the result is
+It resolves the sdist through the **PyPI JSON API** (the
+`files.pythonhosted.org/packages/source/<initial>/<name>/` path is not a stable
+contract -- it 404s), checks the download against PyPI's own sha256, builds with
+`PYYAML_FORCE_LIBYAML=0 PYYAML_FORCE_YAML=0 python3.15 setup.py -q bdist_wheel`
+(installing setuptools/wheel into the payload interpreter if absent;
+`SETUPTOOLS_SPEC='setuptools==84.2.1 wheel==0.48.0'` forces the generator
+version), then asserts the result is
 `pyyaml-<v>-py3-none-any.whl` with no `.so`, a pure-Python `_yaml/__init__.py`
 shim, and a working `import yaml` reporting `__with_libyaml__ is False` before
-copying it into the wheelhouse. Two dead ends, so nobody re-derives them:
+copying it into the wheelhouse. Expect **content-identical, not byte-identical**
+output (the 23 files and the `py3-none-any` tag match; a wheel zip records the
+sdist files' mtimes and the generator version, so only a fixed epoch and a
+pinned setuptools could reproduce the exact bytes). Two dead ends, so nobody re-derives them:
 
 - `pip wheel --no-binary :all: PyYAML==<v>` fails: the sdist's
   `build-system.requires` pins Cython>=3.0 for py3.13+, and Cython has no 3.15
