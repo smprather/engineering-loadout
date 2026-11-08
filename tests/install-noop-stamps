@@ -307,6 +307,117 @@ def test_plugin_stash(m):
             spy.restore()
 
 
+def test_uv_tool_tree_stamp(m):
+    print("uv tool venv stamp")
+    # `uv tool install` carries a mandatory --force, so without a stamp every
+    # install rebuilt every selected tool (~24 s on the smoke). The stamp covers
+    # the wheel digests plus a scan of the venv tree; these are the invalidation
+    # rules, and they are what keeps a skipped install honest.
+    with tempfile.TemporaryDirectory() as tmp:
+        prefix = os.path.join(tmp, "prefix")
+        venv = os.path.join(prefix, "share", "uv", "tools", "demo")
+        site = os.path.join(venv, "lib", "python3.15", "site-packages", "demo")
+        os.makedirs(os.path.join(venv, "bin"))
+        os.makedirs(site)
+        with open(os.path.join(venv, "pyvenv.cfg"), "w") as fh:
+            fh.write("home = /prefix/bin\n")
+        with open(os.path.join(venv, "bin", "demo"), "w") as fh:
+            fh.write("#!/bin/sh\n")
+        with open(os.path.join(site, "mod.py"), "w") as fh:
+            fh.write("x = 1\n")
+        wheel = os.path.join(tmp, "demo-1.0-py3-none-any.whl")
+        with open(wheel, "wb") as fh:
+            fh.write(b"PK\x03\x04 fake wheel")
+        # The wheelhouse is the payload dir, not this file: an UNRELATED wheel
+        # changing must also miss the stamp (a dependency bump alone leaves the
+        # old dependency in the venv, the bug --force exists to prevent).
+        wheels_dir = os.path.join(tmp, "wheels")
+        os.makedirs(wheels_dir)
+        os.rename(wheel, os.path.join(wheels_dir, os.path.basename(wheel)))
+        wheel = os.path.join(wheels_dir, os.path.basename(wheel))
+        python_bin = os.path.join(prefix, "bin", "python3.15")
+        bin_home = os.path.join(prefix, "bin")
+        os.makedirs(bin_home)
+        launcher = os.path.join(bin_home, "demo")
+        with open(launcher, "w") as fh:
+            fh.write("#!/bin/sh\nexec python -m demo\n")
+        stamps = m._InstallStamps(prefix)
+
+        def key():
+            return m._uv_tool_stamp_key("demo", "demo==1.0", python_bin, [wheel], wheels_dir)
+
+        def state():
+            return m._uv_tool_state(venv, bin_home)
+
+        check("a missing venv is never current", m._uv_tool_tree_state(os.path.join(tmp, "nope")) is None)
+        check("... and has no complete state", m._uv_tool_state(os.path.join(tmp, "nope"), bin_home) is None)
+        check("nothing stamped yet", not stamps.tree_current("uv-tool", "demo", key(), state()))
+        stamps.record_tree("uv-tool", "demo", key(), state())
+        fresh = m._InstallStamps(prefix)
+        check("a recorded tree is current", fresh.tree_current("uv-tool", "demo", key(), state()))
+        check("the scan is deterministic", state() == state())
+        fresh.record_tree("uv-tool", "gone", key(), None)
+        check(
+            "a missing tree leaves no stamp",
+            not os.path.exists(os.path.join(prefix, ".loadout-stamps", "uv-tool", "gone.json")),
+        )
+
+        # Bytecode caches appear the first time the tool runs; they are derived
+        # from stamped sources and must not invalidate the stamp.
+        os.makedirs(os.path.join(site, "__pycache__"))
+        with open(os.path.join(site, "__pycache__", "mod.cpython-315.pyc"), "wb") as fh:
+            fh.write(b"\x00bytecode")
+        check("an import's __pycache__ does not invalidate it", fresh.tree_current("uv-tool", "demo", key(), state()))
+
+        with open(os.path.join(site, "mod.py"), "w") as fh:
+            fh.write("x = 2\n")
+        check("an edited file invalidates it", not fresh.tree_current("uv-tool", "demo", key(), state()))
+        fresh.record_tree("uv-tool", "demo", key(), state())
+        check("... and a re-record restores it", fresh.tree_current("uv-tool", "demo", key(), state()))
+
+        os.chmod(os.path.join(site, "mod.py"), 0o600)
+        check(
+            "a chmod invalidates it (file modes are the installer's)",
+            not fresh.tree_current("uv-tool", "demo", key(), state()),
+        )
+        # The LAUNCHER in <prefix>/bin is outside the venv tree but is part of
+        # what the install places: deleted by hand, the next install must redo
+        # it instead of stamping a broken tool as current.
+        os.unlink(launcher)
+        check(
+            "a deleted <prefix>/bin launcher invalidates it", not fresh.tree_current("uv-tool", "demo", key(), state())
+        )
+        with open(launcher, "w") as fh:
+            fh.write("#!/bin/sh\nexec python -m demo\n")
+        fresh.record_tree("uv-tool", "demo", key(), state())
+        check("... and restoring it re-validates", fresh.tree_current("uv-tool", "demo", key(), state()))
+
+        os.unlink(os.path.join(venv, "bin", "demo"))
+        check(
+            "a deleted launcher inside the venv invalidates it",
+            not fresh.tree_current("uv-tool", "demo", key(), state()),
+        )
+        with open(os.path.join(venv, "bin", "demo"), "w") as fh:
+            fh.write("#!/bin/sh\n")
+        fresh.record_tree("uv-tool", "demo", key(), state())
+
+        with open(wheel, "wb") as fh:
+            fh.write(b"PK\x03\x04 fake wheel v2")
+        check("a changed wheel invalidates it (new key)", not fresh.tree_current("uv-tool", "demo", key(), state()))
+        fresh.record_tree("uv-tool", "demo", key(), state())
+
+        with open(os.path.join(wheels_dir, "other-2.0-py3-none-any.whl"), "wb") as fh:
+            fh.write(b"PK\x03\x04 unrelated dependency wheel")
+        check("a dependency wheel appearing invalidates it", not fresh.tree_current("uv-tool", "demo", key(), state()))
+        fresh.record_tree("uv-tool", "demo", key(), state())
+
+        m._IGNORE_INSTALL_STAMPS = True
+        try:
+            check("reinstall (stamps ignored) never matches", not fresh.tree_current("uv-tool", "demo", key(), state()))
+        finally:
+            m._IGNORE_INSTALL_STAMPS = False
+
+
 def main():
     m = load_loadout()
     test_runtime_archive(m)
@@ -315,6 +426,7 @@ def main():
     test_fonts(m)
     test_vim_runtime(m)
     test_plugin_stash(m)
+    test_uv_tool_tree_stamp(m)
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 

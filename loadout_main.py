@@ -1086,6 +1086,13 @@ def _bz2_matches_dest(bz2_file, dest_file):
 # re-extracted, every bin/lib bz2 decompressed just to compare it with the
 # installed copy, and the plugin stash re-extracted. A step that placed files
 # now leaves a stamp, and a later install whose stamp still matches skips it.
+#
+# uv tool venvs are stamped too (uv-tool/<dist>.json): `uv tool install` MUST
+# carry --force (without it uv no-ops on an already-installed tool whatever the
+# bundled wheel carries -- see install_python_tools), so every install re-ran a
+# ~24 s reinstall of every selected tool even when nothing had changed. The
+# stamp records the tool's wheel digest plus a state scan of the venv tree, so
+# a stamped tool is provably what this installer produced and skips uv.
 _IGNORE_INSTALL_STAMPS = False  # set by `reinstall`: every step does its full work
 _STAMP_VERSION = 1
 _INSTALLER_DIGEST = None
@@ -1130,9 +1137,11 @@ class _InstallStamps:
     member name) and the dest's _file_state() right after it was written. <group>/<name>.json
     covers one multi-file step (a runtime archive, the plugin stash): a
     _stamp_key() plus every placed entry's state once the step finished
-    (relocation included). A stamp is only a shortcut -- missing, unreadable
-    or mismatched means do the full step -- and `reinstall` ignores them all
-    (_IGNORE_INSTALL_STAMPS)."""
+    (relocation included). uv tool venvs use the same slot with a different
+    body: {"key": ..., "tree": [...]} -- the tree-wide scan of a venv that no
+    named-file list can describe (tree_current/record_tree). A stamp is only a
+    shortcut -- missing, unreadable or mismatched means do the full step -- and
+    `reinstall` ignores them all (_IGNORE_INSTALL_STAMPS)."""
 
     def __init__(self, prefix):
         self.dir = os.path.join(prefix, ".loadout-stamps")
@@ -1210,6 +1219,22 @@ class _InstallStamps:
                 entries[rel] = state
         if entries:
             self._store(self._step_path(group, name), {"key": key, "files": entries})
+
+    def tree_current(self, group, name, key, state):
+        """The tree scanned at record_tree(group, name, key, state) is unchanged.
+
+        `state` is the caller's own comparable scan (see _uv_tool_tree_state);
+        None means "no tree there", which is never current."""
+        if _IGNORE_INSTALL_STAMPS:
+            return False
+        data = self._load(self._step_path(group, name))
+        return state is not None and data.get("key") == key and data.get("tree") == state
+
+    def record_tree(self, group, name, key, state):
+        """Stamp a whole tree by scan. A tree that is gone (None) is not
+        stamped: there is nothing to vouch for."""
+        if state is not None:
+            self._store(self._step_path(group, name), {"key": key, "tree": state})
 
 
 def _dest_current(bz2_src, dest_file, stamps):
@@ -3908,8 +3933,169 @@ def _assert_uv_tool_imports(tool_name, tools_home, timeout=60):
     return True, proc.stdout.decode("utf-8", "replace").strip()
 
 
+def _uv_tool_wheel_files(wheels_dir, tool_name):
+    """The wheel files one distribution installs from: the whole .whl when the
+    wheelhouse ships one, else its chunk parts in join order.
+
+    Same name patterns the install loop has always matched (the declared tool
+    name and its normalized form), so a wheel is found here exactly when uv
+    can find it. The chunk-part sort is numeric: a 100-part wheel must digest
+    in part order, not in lexicographic name order."""
+    norm = tool_name.lower().replace("-", "_").replace(".", "_")
+    files = []
+    for stem in dict.fromkeys((tool_name, norm)):
+        whole = sorted(glob.glob(os.path.join(wheels_dir, stem + "-*.whl")))
+        if whole:
+            files.extend(f for f in whole if f not in files)
+            continue
+        parts = glob.glob(os.path.join(wheels_dir, stem + "-*.whl.part-*"))
+        for base in sorted({p.rsplit(".part-", 1)[0] for p in parts}):
+            files.extend(
+                sorted(
+                    (p for p in parts if p.rsplit(".part-", 1)[0] == base),
+                    key=lambda p: int(p.rsplit(".part-", 1)[1]),
+                )
+            )
+    return files
+
+
+# A tool venv changes under us in exactly one expected way: bytecode caches
+# appear the first time anything imports the tool's modules. They are derived
+# from the sources the stamp already covers, so they are not part of its state.
+_UV_TOOL_TREE_SKIP_DIRS = frozenset({"__pycache__"})
+_UV_TOOL_TREE_SKIP_SUFFIXES = (".pyc",)
+
+
+def _uv_tool_tree_state(venv_dir):
+    """Comparable state of a uv tool venv: [[rel path, kind, ...identity]].
+
+    A single sorted scandir walk with no content hashing -- the same identities
+    as _file_state() (size, mtime_ns, inode, mode for regular files; link
+    target for symlinks; mode for directories), which a rewrite, an inode swap,
+    a chmod or a relink all change. None when there is no tree there.
+
+    __pycache__ and *.pyc are excluded: they appear lazily on first import, so
+    including them would invalidate every stamp the moment the tool ran."""
+    if not os.path.isdir(venv_dir):
+        return None
+    state = []
+
+    def walk(directory, prefix):
+        try:
+            entries = os.scandir(directory)
+        except OSError:
+            return
+        with entries:
+            for entry in sorted(entries, key=lambda e: e.name):
+                rel = prefix + entry.name
+                try:
+                    st = entry.stat(follow_symlinks=False)
+                except OSError:
+                    continue
+                if stat.S_ISLNK(st.st_mode):
+                    try:
+                        state.append([rel, "l", os.readlink(entry.path)])
+                    except OSError:
+                        state.append([rel, "l", None])
+                elif stat.S_ISDIR(st.st_mode):
+                    if entry.name in _UV_TOOL_TREE_SKIP_DIRS:
+                        continue
+                    state.append([rel, "d", stat.S_IMODE(st.st_mode)])
+                    walk(entry.path, rel + "/")
+                elif stat.S_ISREG(st.st_mode):
+                    if entry.name.endswith(_UV_TOOL_TREE_SKIP_SUFFIXES):
+                        continue
+                    state.append([rel, "f", st.st_size, st.st_mtime_ns, st.st_ino, stat.S_IMODE(st.st_mode)])
+
+    walk(venv_dir, "")
+    return state
+
+
+def _uv_tool_launcher_state(venv_dir, bin_home):
+    """The tool's console scripts as they stand in `bin_home`.
+
+    Only the interpreter plumbing is skipped (python/pip/activate/pydoc); every
+    real entry point is recorded, including one the bundle deliberately prunes
+    (recorded as absent, so it must STAY absent). Without this a launcher deleted
+    or rewritten by hand would leave a stamp that still matched, and the next
+    install would skip uv -- leaving the tool on PATH broken, which is the one
+    thing the pre-stamp `--force` reinstall used to repair.
+    """
+    if not os.path.isdir(venv_dir):
+        return None
+    try:
+        names = sorted(os.listdir(os.path.join(venv_dir, "bin")))
+    except OSError:
+        return None
+    state = {}
+    for name in names:
+        if name.startswith(("python", "pip", "activate", "Activate", "pydoc")):
+            continue
+        state[name] = _file_state(os.path.join(bin_home, name))
+    return state
+
+
+def _uv_tool_state(venv_dir, bin_home):
+    """The full stamp state of one tool venv, or None when it is not there."""
+    tree = _uv_tool_tree_state(venv_dir)
+    if tree is None:
+        return None
+    return {"tree": tree, "bins": _uv_tool_launcher_state(venv_dir, bin_home)}
+
+
+def _uv_tool_closure_state(wheels_dir):
+    """Cheap identity of the whole wheelhouse: [[name, size, mtime_ns], ...].
+
+    The key must move when ANY wheel changes, not just the tool's own: a release
+    that bumps a shared dependency (rich, click, pydantic, ...) without touching
+    the tool's wheel would otherwise leave the old dependency inside the venv
+    this installer built -- exactly the bug the mandatory `--force` exists to
+    prevent. A scandir of the payload wheelhouse is milliseconds (241 entries),
+    and the safe direction here is a spurious reinstall.
+    """
+    entries = []
+    try:
+        with os.scandir(wheels_dir) as it:
+            for entry in it:
+                name = entry.name
+                if not (name.endswith(".whl") or ".whl.part-" in name):
+                    continue
+                try:
+                    st = entry.stat()
+                except OSError:
+                    continue
+                entries.append([name, st.st_size, st.st_mtime_ns])
+    except OSError:
+        return []
+    return sorted(entries)
+
+
+def _uv_tool_stamp_key(tool_name, install_spec, python_bin, wheel_files, wheels_dir):
+    """Key for a tool venv stamp: what this installer would build it from.
+
+    The wheel digests are the point: a bumped or replaced wheel (a version
+    bump, `./loadout upgrade`, a re-rolled rolling-git build) must miss the
+    stamp and reinstall, and that includes a chunked wheel, digested part by
+    part in join order (that is the joined file's digest). The wheelhouse-wide
+    identity covers the other direction -- a DEPENDENCY wheel bumping on its
+    own -- see _uv_tool_closure_state()."""
+    return _stamp_key(
+        "uv-tool",
+        tool_name,
+        install_spec,
+        os.path.realpath(python_bin),
+        [(os.path.basename(path), _sha256_file(path)) for path in wheel_files],
+        _uv_tool_closure_state(wheels_dir),
+    )
+
+
 def install_python_tools(repo_dir, home, selected_tools, registry):
-    """Install Python tools via 'uv tool install' using bundled offline wheels."""
+    """Install Python tools via 'uv tool install' using bundled offline wheels.
+
+    A tool whose uv-tool install stamp still matches (same wheels, same bundled
+    python, venv tree untouched since this installer left it) skips uv entirely:
+    `uv tool install` must carry --force, so without a stamp every run would
+    rebuild every venv for nothing."""
     platform_dir = select_prebuilt_platform_dir(os.path.join(repo_dir, PAYLOAD_DIR))
     if not platform_dir:
         skipped("Python tools (no matching platform)", "")
@@ -3953,7 +4139,13 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
         record_result("Python tools", "FAIL", f"{_BUNDLED_PY_BIN} not installed")
         return
 
+    # uv tool venvs live under the install root's share/, next to the stamps;
+    # the launchers land in its bin/ (a stamped tool's states are recorded there).
+    bin_home = os.path.join(_local_root(home), "bin")
+    tools_home = os.path.join(_local_root(home), "share", "uv", "tools")
+    stamps = _InstallStamps(_local_root(home))
     installed = []
+    unchanged = []
     failed = []
     skipped_tools = []
     progress = _ItemProgress("Python tools", (t[1] for t in tools_to_install))
@@ -3962,17 +4154,25 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
             progress.step(tool_name, prefix="Python tools: ")
             try:
                 # Check if a wheel for this distribution exists (whole or chunked) before install.
-                norm = tool_name.lower().replace("-", "_").replace(".", "_")
-                matches = (
-                    glob.glob(os.path.join(wheels_dir, tool_name + "-*.whl"))
-                    + glob.glob(os.path.join(wheels_dir, norm + "-*.whl"))
-                    + glob.glob(os.path.join(wheels_dir, tool_name + "-*.whl.part-000"))
-                    + glob.glob(os.path.join(wheels_dir, norm + "-*.whl.part-000"))
-                )
-                if not matches:
+                wheel_files = _uv_tool_wheel_files(wheels_dir, tool_name)
+                if not wheel_files:
                     warn(f"skipping {install_spec} -- no wheel found in {wheels_dir}")
                     skipped_tools.append(tool_name)
                     continue
+                venv_dir = os.path.join(tools_home, tool_name)
+                stamp_key = _uv_tool_stamp_key(tool_name, install_spec, python_bin, wheel_files, wheels_dir)
+                if stamps.tree_current("uv-tool", tool_name, stamp_key, _uv_tool_state(venv_dir, bin_home)):
+                    # The venv is exactly what this installer leaves from these
+                    # wheels, wrapping and source patches included: skip
+                    # `uv tool install`, which -- with its mandatory --force --
+                    # would rebuild the same venv from scratch.
+                    unchanged.append(tool_name)
+                    _vprint(f"  Python tool {tool_name}: unchanged (stamp {stamp_key[:12]})")
+                    continue
+                # Drop the stale stamp before uv runs: an install that dies
+                # halfway must never leave a stamp from an earlier run vouching
+                # for the tree it did not finish building.
+                stamps.forget_step("uv-tool", tool_name)
                 cmd = [
                     uv_bin,
                     "tool",
@@ -3986,11 +4186,11 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                     # packages and said it had. Found 2026-08-09 on a box pinned at
                     # tmux-path-store 1.0.0 across two releases that shipped 1.0.1 and
                     # 1.1.0. The rolling-git tools are the worst affected -- they move
-                    # most often. Reinstalling from the local wheelhouse is cheap
-                    # (measured: 5 packages in 46 ms), so this is unconditional rather
-                    # than gated on a version comparison, which would be unreliable
-                    # anyway: rolling-git packages carry `git describe` strings in the
-                    # registry `version` while their wheels carry PEP440.
+                    # most often. --force stays unconditional on this path: the stamp
+                    # above is what decides whether to run uv at all, and a version
+                    # comparison would be unreliable anyway (rolling-git packages
+                    # carry `git describe` strings in the registry `version` while
+                    # their wheels carry PEP440).
                     "--force",
                     "--python",
                     python_bin,
@@ -4004,7 +4204,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                 _env = os.environ.copy()
                 _env["HOME"] = home
                 _env["XDG_DATA_HOME"] = os.path.join(_local_root(home), "share")
-                _env["XDG_BIN_HOME"] = os.path.join(_local_root(home), "bin")
+                _env["XDG_BIN_HOME"] = bin_home
                 _vprint("  running: {}".format(" ".join(cmd)))
                 proc = run(cmd, check=False, env=_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 out = proc.stdout.decode("utf-8", "replace")
@@ -4017,8 +4217,7 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                     warn(f"uv tool install {install_spec} exited {proc.returncode}")
                     failed.append(tool_name)
                 else:
-                    _tools_home = os.path.join(_env["XDG_DATA_HOME"], "uv", "tools")
-                    imported, detail = _assert_uv_tool_imports(tool_name, _tools_home)
+                    imported, detail = _assert_uv_tool_imports(tool_name, tools_home)
                     if not imported:
                         # A venv that cannot import its own launchers is not an
                         # install. Name the interpreter and the reason; the
@@ -4031,19 +4230,24 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
                         continue
                     installed.append(tool_name)
                     _vprint(
-                        f"  Installed Python tool: {tool_name} -> {_env['XDG_BIN_HOME']} "
-                        f"(imports {detail} under {_BUNDLED_PY_BIN})"
+                        f"  Installed Python tool: {tool_name} -> {bin_home} (imports {detail} under {_BUNDLED_PY_BIN})"
                     )
-                    for launcher in _prune_dead_uv_launchers(tool_name, _env["XDG_BIN_HOME"]):
+                    for launcher in _prune_dead_uv_launchers(tool_name, bin_home):
                         _vprint(f"  Removed unsupported launcher: {launcher}")
-                    for launcher in _wrap_uv_tool_launchers(tool_name, _env["XDG_BIN_HOME"], _tools_home):
+                    for launcher in _wrap_uv_tool_launchers(tool_name, bin_home, tools_home):
                         _vprint(
                             f"  Wrapped {launcher} launcher with the tool venv's PYTHONPATH (helper scripts need it)"
                         )
-                    for outcome in _patch_uv_tool_sources(tool_name, _tools_home):
+                    for outcome in _patch_uv_tool_sources(tool_name, tools_home):
                         _vprint(f"  Source patch: {outcome}")
                         if outcome.endswith(": patched"):
                             print(f"  Patched {outcome.rsplit(': ', 1)[0]} (upstream/toolchain incompatibility)")
+                    # Last, so the stamp describes the FINAL tree: uv's install,
+                    # then launcher pruning/wrapping and the source patches. A
+                    # failure above never reaches here (the venv is not what this
+                    # installer would leave), and a stamp of an earlier state would
+                    # make the next run skip a tool this installer did not build.
+                    stamps.record_tree("uv-tool", tool_name, stamp_key, _uv_tool_state(venv_dir, bin_home))
             finally:
                 progress.advance()
     finally:
@@ -4052,8 +4256,13 @@ def install_python_tools(repo_dir, home, selected_tools, registry):
 
     if failed:
         record_result("Python tools", "FAIL", "failed: {}".format(", ".join(failed)))
-    elif installed:
-        record_result("Python tools", "OK", "installed: {}".format(", ".join(installed)))
+    elif installed or unchanged:
+        detail = []
+        if installed:
+            detail.append("installed: {}".format(", ".join(installed)))
+        if unchanged:
+            detail.append("unchanged: {}".format(", ".join(unchanged)))
+        record_result("Python tools", "OK", "; ".join(detail))
     else:
         record_result("Python tools", "SKIP", "no wheels available for: {}".format(", ".join(skipped_tools)))
 

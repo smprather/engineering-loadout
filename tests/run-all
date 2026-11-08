@@ -11,7 +11,8 @@
 #   ./tests/run-all             # Tier 1 + Tier 2
 #   ./tests/run-all --fast      # Tier 1 only
 #   ./tests/run-all --container # Tier 1 + Tier 2 + Tier 3 (Docker)
-#   ./tests/run-all --no-cache  # ignore the result cache (see below)
+#   ./tests/run-all --container-only # Tier 3 only (implies --container)
+#   ./tests/run-all --no-cache  # re-run everything, still RECORD verdicts
 #   ./tests/run-all --serial    # one test at a time (LOADOUT_TEST_JOBS=N too)
 #
 # Tier 1 runs min(4, nproc) tests at a time. Installer-driven (`--deps auto`)
@@ -40,8 +41,12 @@
 # Fingerprints are mtime+size (fast); a touched-but-identical file costs one
 # needless re-run, never a false green. Failed and skipped tests have no
 # cache entry and always re-run. Cache lives in
-# ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1; delete it (or
-# pass --no-cache) to force a full re-run. Sidecars record absolute paths, so a
+# ${XDG_CACHE_HOME:-~/.cache}/engineering-loadout/test-cache-v1. --no-cache
+# IGNORES the stored verdicts (every test really runs, no CACHED PASS) but
+# still RECORDS the fresh ones, so the run after it is warm: a deep
+# `--no-cache --container` is the way to re-verify everything and leave the
+# cache correct. Deleting the cache dir forces a cold run with nothing
+# recorded. Sidecars record absolute paths, so a
 # second checkout of the same commit (git worktree) starts cold once and then
 # keeps its own verdicts.
 #
@@ -82,16 +87,18 @@ fi
 
 FAST=0
 CONTAINER=0
+CONTAINER_ONLY=0
 NO_CACHE=0
 SERIAL=0
 for arg in "$@"; do
     case "$arg" in
         --fast) FAST=1 ;;
         --container) CONTAINER=1 ;;
+        --container-only) CONTAINER_ONLY=1 ;;
         --no-cache) NO_CACHE=1 ;;
         --serial) SERIAL=1 ;;
         -h|--help)
-            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -100,6 +107,19 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# --container-only is the habit gate for a class-C change: the container
+# verdicts are the only ones that count for install behavior, and a Tier 1/2
+# re-run proves nothing about them. It implies --container (Tier 3 needs the
+# container path armed) and contradicts --fast, which is Tier 1 ONLY -- the two
+# together name no tier at all, so that is a usage error rather than a guess.
+if [ "$CONTAINER_ONLY" -eq 1 ] && [ "$FAST" -eq 1 ]; then
+    echo "--container-only contradicts --fast (Tier 1 only): pick one tier" >&2
+    exit 2
+fi
+if [ "$CONTAINER_ONLY" -eq 1 ]; then
+    CONTAINER=1
+fi
 
 # Concurrency limits. Tier 1 tests are CPU-bound gates: JOBS at a time
 # (default min(4, nproc); LOADOUT_TEST_JOBS overrides, --serial forces 1).
@@ -147,7 +167,9 @@ CACHE_SIDECAR="$CACHE_DIR/fingerprint.json"
 # let a later --container run CACHED-PASS the container smoke on a stale .pass
 # from a previous container run (observed 2026-09-23: Tier 2's sidecar rewrite
 # made the Tier 3 smoke skip against a payload it had never seen). Only
-# --container runs write CACHE_SIDECAR_CONTAINER.
+# --container runs write CACHE_SIDECAR_CONTAINER -- and the other direction
+# holds too: a --container-only run writes ONLY this sidecar (see
+# write_cache_sidecars), because it never verified the Tier 1/2 tree.
 CACHE_SIDECAR_CONTAINER="$CACHE_DIR/fingerprint-container.json"
 FP_SCRIPT="$REPO_DIR/build/fingerprint.py"
 # The manifest tooling is part of the cache key even though it lives outside
@@ -215,10 +237,19 @@ _log_runtime() {  # suite test seconds status detail
 # The `all` sidecar is written ONCE at the end of a run (not per test): writing
 # it mid-run would make remaining tests cache against a state the run itself
 # is still verifying. `auto` sidecars are written per test, after it passes.
+#
+# READING and WRITING the cache are two separate switches, on purpose.
+# CACHE_ACTIVE is the READ flag: --no-cache turns it off, so no test may
+# short-circuit on a stored verdict. CACHE_WRITE is the WRITE flag and stays on
+# for --no-cache, because a deep re-run that recorded nothing leaves the cache
+# exactly as stale as it found it -- the run after a `--no-cache` run must be
+# warm, not cold. Everything that decides "may I skip?" tests CACHE_ACTIVE;
+# everything that decides "may I store a fresh result?" tests CACHE_WRITE.
 CACHE_ACTIVE=0
 if [ "$NO_CACHE" -eq 0 ]; then
     CACHE_ACTIVE=1
 fi
+CACHE_WRITE=1
 
 # Safety net: never leave the dependency-capture marker armed, nor the per-run
 # capture/scratch dirs, behind. The marker stays armed for the WHOLE run now
@@ -388,30 +419,40 @@ precompute_verdicts() {
     [ "$CACHE_ACTIVE" -eq 1 ] || return 0
     local dir g
     dir=$(mktemp -d "${TMPDIR:-/tmp}/loadout-verdict.XXXXXX") || return 0
-    (
-        if sidecar_matches "$CACHE_SIDECAR" "${FP_ROOTS[@]}"; then echo 1; else echo 0; fi
-    ) >"$dir/all" &
+    # A --container-only run executes no Tier 1/2 test, so the `all` and group
+    # verdicts would be full tree walks nobody reads. Only the container
+    # verdict below matters (and SIDECAR_OK/GROUP_STATE stay 0, which is the
+    # safe direction: an unverified verdict must never be a cached PASS).
+    if [ "$CONTAINER_ONLY" -eq 0 ]; then
+        (
+            if sidecar_matches "$CACHE_SIDECAR" "${FP_ROOTS[@]}"; then echo 1; else echo 0; fi
+        ) >"$dir/all" &
+    fi
     if [ "$CONTAINER" -eq 1 ]; then
         (
             if sidecar_matches "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}"; then echo 1; else echo 0; fi
         ) >"$dir/container" &
     fi
-    for g in "${!DEP_GROUP[@]}"; do
-        (
-            local -a roots=()
-            mapfile -t roots < <(group_roots "$g")
-            if sidecar_matches "$(group_sidecar "$g")" "${roots[@]}"; then echo 1; else echo 0; fi
-        ) >"$dir/g-$g" &
-    done
+    if [ "$CONTAINER_ONLY" -eq 0 ]; then
+        for g in "${!DEP_GROUP[@]}"; do
+            (
+                local -a roots=()
+                mapfile -t roots < <(group_roots "$g")
+                if sidecar_matches "$(group_sidecar "$g")" "${roots[@]}"; then echo 1; else echo 0; fi
+            ) >"$dir/g-$g" &
+        done
+    fi
     wait
     SIDECAR_OK=$(cat "$dir/all" 2>/dev/null || echo 0)
     if [ "$CONTAINER" -eq 1 ]; then
         SIDECAR_CONTAINER_OK=$(cat "$dir/container" 2>/dev/null || echo 0)
     fi
     GROUP_STATE=""
-    for g in "${!DEP_GROUP[@]}"; do
-        GROUP_STATE="$GROUP_STATE $g=$(cat "$dir/g-$g" 2>/dev/null || echo 0)"
-    done
+    if [ "$CONTAINER_ONLY" -eq 0 ]; then
+        for g in "${!DEP_GROUP[@]}"; do
+            GROUP_STATE="$GROUP_STATE $g=$(cat "$dir/g-$g" 2>/dev/null || echo 0)"
+        done
+    fi
     rm -rf "$dir"
     export SIDECAR_OK SIDECAR_CONTAINER_OK GROUP_STATE
 }
@@ -464,6 +505,15 @@ _run_test() {
     # edits to the generator still invalidate the cached PASS.
     [ -n "$deps_key" ] && test_script=$deps_key
 
+    # Remember every group this test is keyed on so write_cache_sidecars writes
+    # its sidecar. This is about RECORDING, not reading: a --no-cache run
+    # ignores the verdicts but must still leave the group sidecars fresh for
+    # the tests it actually ran (it used to sit in the cache-read branch, so a
+    # --no-cache run never recorded a group at all).
+    if [ "$deps_kind" = group ]; then
+        groups_used "$deps_mode"
+    fi
+
     local deps_file="$CACHE_DIR/$name.deps"
     local fp_file="$CACHE_DIR/$name.fp.json"
     local t0=$SECONDS
@@ -480,7 +530,6 @@ _run_test() {
             fi
             ;;
         group)
-            groups_used "$deps_mode"
             if group_unchanged "$deps_mode" && [ -f "$CACHE_DIR/$name.pass" ] \
                 && [ "$(cat "$CACHE_DIR/$name.pass")" = "$(test_script_hash "$test_script")" ]; then
                 echo "=== $name: CACHED PASS (group inputs unchanged: $deps_mode)"
@@ -509,8 +558,11 @@ _run_test() {
     # That is what makes concurrent installer tests attributable -- the old
     # shared .loadout-deps.log had to be sliced by offset, which only worked
     # while exactly one test ran.
+    # This is the WRITE side (a captured record only exists to be stored), so it
+    # follows CACHE_WRITE: on a --no-cache run the test still gets its private
+    # TMPDIR and still records its inputs, or its PASS could never be cached.
     local armed=0 job_tmp="" saved_tmpdir="${TMPDIR:-}"
-    if [ "$CACHE_ACTIVE" -eq 1 ] && [ "$deps_mode" = auto ] && [ -n "$test_script" ]; then
+    if [ "$CACHE_WRITE" -eq 1 ] && [ "$deps_mode" = auto ] && [ -n "$test_script" ]; then
         mkdir -p "$CACHE_DIR"
         ensure_run_tmp
         # 2-3 bytes of job identity, not the test name: see ensure_run_tmp.
@@ -563,7 +615,7 @@ _run_test() {
         return 77
     fi
     if [ "$rc" -eq 0 ]; then
-        if [ "$CACHE_ACTIVE" -eq 1 ] && [ -n "$test_script" ] \
+        if [ "$CACHE_WRITE" -eq 1 ] && [ -n "$test_script" ] \
             && { [ "$deps_kind" = all ] || [ "$deps_kind" = container ] || [ "$deps_kind" = group ]; }; then
             mkdir -p "$CACHE_DIR"
             test_script_hash "$test_script" > "$CACHE_DIR/$name.pass"
@@ -725,69 +777,79 @@ collect_python_files
 precompute_verdicts
 
 # --- Tier 1: fast, no temp HOME -------------------------------------------
-run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
-run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
-run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
-run_test "unit-resolver" "$PY" tests/unit-resolver
-run_test "config-toml-exclude" --deps payload+loader "$PY" tests/config-toml-exclude
-run_test "unit-private-state" "$PY" tests/unit-private-state
-run_test "unit-install-steps" "$PY" tests/unit-install-steps
-run_test "install-atomic-replace" "$PY" tests/install-atomic-replace
-run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
-run_test "registry-integrity" "$PY" tests/registry-integrity
-run_test "python-requires" --deps payload+loader "$PY" tests/python-requires
-run_test "search-groups" tests/search-groups
-run_test "tar-safety" "$PY" tests/tar-safety
-run_test "content-verify" "$PY" tests/content-verify
-run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
-# build/ is in the key because this gate IMPORTS build/gen-content-manifest for
-# ROOTS and the manifest parser: editing the generator changes the verdict
-# without touching .content-manifest or any ref.
-run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
-run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
-run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
-run_test "incremental-verdicts" --deps smoke "$PY" tests/incremental-verdicts
-run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
-run_test "st font list in sync" --deps stfonts --deps-key build/gen-st-font-comments "$PY" build/gen-st-font-comments --check
-run_test "README table in sync" --deps readme --deps-key build/gen-readme-table "$PY" build/gen-readme-table --check
-run_test "docs-sync" --deps docs "$PY" tests/docs-sync
-run_test "assurance-check" "$PY" tests/assurance-check
-run_test "env-shell-parity" --deps envs+loader "$PY" tests/env-shell-parity
-run_test "env-bash-profile-shim" --deps envs "$PY" tests/env-bash-profile-shim
-run_test "env-bash-runtime" --deps envs tests/env-bash-runtime
-run_test "portable-python-ca" --deps payload tests/portable-python-ca
-run_test "shell-typeahead" --deps envs tests/shell-typeahead
-run_test "install-zsh-relocation" --deps loader "$PY" tests/install-zsh-relocation
-run_test "python-tool-source-patches" --deps payload+loader "$PY" tests/python-tool-source-patches
-run_test "payload-interpreter-abi" --deps payload+loader+build "$PY" tests/payload-interpreter-abi
-run_test "needed-closure" --deps payload+sonames "$PY" tests/needed-closure
-run_test "shim-bootstrap" --deps loader tests/shim-bootstrap
-run_test "env-nvim-no-git" --deps envs tests/env-nvim-no-git
-run_test "env-nvim-smart-quit" --deps envs tests/env-nvim-smart-quit
-run_test "install-noop-stamps" --deps payload+loader+envs "$PY" tests/install-noop-stamps
-run_test "nodejs-runpath" --deps payload+build+loader "$PY" tests/nodejs-runpath
-# The gate loads loadout_main.py for the one specifier evaluator, and reads the
-# payload wheelhouse: either side invalidates its verdict.
-run_test "wheelhouse-closure" --deps payload+loader "$PY" tests/wheelhouse-closure
-run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
-run_test "release-timings" "$PY" tests/release-timings
-run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship
-run_test "prompt-no-rc" --deps envs "$PY" tests/prompt-no-rc
-run_test "test-cleanup" "$PY" tests/test-cleanup
-run_test "pre-commit-hook" tests/pre-commit-hook
-run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
-run_test "env-modules" --deps envs "$PY" tests/env-modules
-run_test "export-stash" --deps build "$PY" tests/export-stash
-run_test "dep-capture" tests/dep-capture
-run_test "oom-guard-reap" "$PY" tests/oom-guard-reap
-run_test "check-installer" --deps loader tests/check-installer
-run_test "st-wrapper" --deps build tests/st-wrapper
-run_test "env-helix-config" --deps envs+payload tests/env-helix-config
-run_test "update-cadence" "$PY" tests/update-cadence
-run_test "release-tag-scheme" "$PY" tests/release-tag-scheme
-run_test "fetch-stash-trust" "$PY" tests/fetch-stash-trust
-run_test "security-pipeline" "$PY" tests/security-pipeline
-run_test "check-versions-contract" "$PY" tests/check-versions-contract
+# --container-only is a Tier 3 gate: it runs the container smoke and nothing
+# else, because a class-C installer change is only answerable inside the
+# container and a Tier 1/2 re-run proves nothing about it. The whole list is
+# skipped rather than each test's verdict, so no .pass/sidecar is refreshed.
+if [ "$CONTAINER_ONLY" -eq 0 ]; then
+    run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
+    run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
+    run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
+    run_test "unit-resolver" "$PY" tests/unit-resolver
+    run_test "config-toml-exclude" --deps payload+loader "$PY" tests/config-toml-exclude
+    run_test "unit-private-state" "$PY" tests/unit-private-state
+    run_test "unit-install-steps" "$PY" tests/unit-install-steps
+    run_test "install-atomic-replace" "$PY" tests/install-atomic-replace
+    run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
+    run_test "registry-integrity" "$PY" tests/registry-integrity
+    run_test "python-requires" --deps payload+loader "$PY" tests/python-requires
+    run_test "search-groups" tests/search-groups
+    run_test "tar-safety" "$PY" tests/tar-safety
+    run_test "content-verify" "$PY" tests/content-verify
+    run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
+    # build/ is in the key because this gate IMPORTS build/gen-content-manifest for
+    # ROOTS and the manifest parser: editing the generator changes the verdict
+    # without touching .content-manifest or any ref.
+    run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
+    run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
+    run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
+    run_test "incremental-verdicts" --deps smoke "$PY" tests/incremental-verdicts
+    run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
+    run_test "st font list in sync" --deps stfonts --deps-key build/gen-st-font-comments "$PY" build/gen-st-font-comments --check
+    run_test "README table in sync" --deps readme --deps-key build/gen-readme-table "$PY" build/gen-readme-table --check
+    run_test "docs-sync" --deps docs "$PY" tests/docs-sync
+    run_test "assurance-check" "$PY" tests/assurance-check
+    run_test "env-shell-parity" --deps envs+loader "$PY" tests/env-shell-parity
+    run_test "env-bash-profile-shim" --deps envs "$PY" tests/env-bash-profile-shim
+    run_test "env-bash-runtime" --deps envs tests/env-bash-runtime
+    run_test "portable-python-ca" --deps payload tests/portable-python-ca
+    run_test "shell-typeahead" --deps envs tests/shell-typeahead
+    run_test "install-zsh-relocation" --deps loader "$PY" tests/install-zsh-relocation
+    run_test "python-tool-source-patches" --deps payload+loader "$PY" tests/python-tool-source-patches
+    run_test "payload-interpreter-abi" --deps payload+loader+build "$PY" tests/payload-interpreter-abi
+    run_test "needed-closure" --deps payload+sonames "$PY" tests/needed-closure
+    run_test "shim-bootstrap" --deps loader tests/shim-bootstrap
+    run_test "env-nvim-no-git" --deps envs tests/env-nvim-no-git
+    run_test "env-nvim-smart-quit" --deps envs tests/env-nvim-smart-quit
+    run_test "install-noop-stamps" --deps payload+loader+envs "$PY" tests/install-noop-stamps
+    run_test "nodejs-runpath" --deps payload+build+loader "$PY" tests/nodejs-runpath
+    # The gate loads loadout_main.py for the one specifier evaluator, and reads the
+    # payload wheelhouse: either side invalidates its verdict.
+    run_test "wheelhouse-closure" --deps payload+loader "$PY" tests/wheelhouse-closure
+    run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
+    run_test "release-timings" "$PY" tests/release-timings
+    run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship
+    run_test "prompt-no-rc" --deps envs "$PY" tests/prompt-no-rc
+    run_test "test-cleanup" "$PY" tests/test-cleanup
+    run_test "pre-commit-hook" tests/pre-commit-hook
+    run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
+    run_test "env-modules" --deps envs "$PY" tests/env-modules
+    run_test "export-stash" --deps build "$PY" tests/export-stash
+    run_test "dep-capture" tests/dep-capture
+    run_test "oom-guard-reap" "$PY" tests/oom-guard-reap
+    run_test "check-installer" --deps loader tests/check-installer
+    run_test "st-wrapper" --deps build tests/st-wrapper
+    run_test "env-helix-config" --deps envs+payload tests/env-helix-config
+    # Both import build scripts, which FP_ROOTS does not cover: without an explicit
+    # build key, editing build/update (or check-versions/farm-versions) left a
+    # stale CACHED PASS standing. `--deps build` covers farm-versions per the
+    # AGENTS.md rule (a key file that imports another build module lists `build`).
+    run_test "update-cadence" --deps build --deps-key build/update "$PY" tests/update-cadence
+    run_test "release-tag-scheme" "$PY" tests/release-tag-scheme
+    run_test "fetch-stash-trust" "$PY" tests/fetch-stash-trust
+    run_test "security-pipeline" "$PY" tests/security-pipeline
+    run_test "check-versions-contract" --deps build --deps-key build/check-versions "$PY" tests/check-versions-contract
+fi
 
 # The sidecars are written even when some tests failed: they only record
 # "inputs unchanged", and the per-test .pass files are the actual cache
@@ -796,11 +858,21 @@ run_test "check-versions-contract" "$PY" tests/check-versions-contract
 # against a state the run itself is still verifying. `--fast` calls this too,
 # before its early exit: a Tier 1 run has to be reusable by the next one.
 write_cache_sidecars() {
-    if [ "$CACHE_ACTIVE" -eq 0 ]; then
+    if [ "$CACHE_WRITE" -eq 0 ]; then
         return 0
     fi
     drain_jobs
     mkdir -p "$CACHE_DIR"
+    if [ "$CONTAINER_ONLY" -eq 1 ]; then
+        # A Tier-3-only run verified the container tests and NOTHING else.
+        # Writing the `all` sidecar (or any group sidecar) here would let the
+        # Tier 1 tests of the next run CACHED-PASS against a tree this run
+        # never looked at -- the same hazard that split the container sidecar
+        # off in the first place, in the other direction. So: container
+        # sidecar only, and no group sidecars (no group test ran).
+        write_sidecar "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}"
+        return 0
+    fi
     write_sidecar "$CACHE_SIDECAR" "${FP_ROOTS[@]}" &
     if [ "$CONTAINER" -eq 1 ]; then
         write_sidecar "$CACHE_SIDECAR_CONTAINER" "${FP_ROOTS_CONTAINER[@]}" &
@@ -838,44 +910,47 @@ fi
 
 # --- Tier 2: integration installs into temp roots --------------------------
 # Installer-driven tests use --deps auto (per-test payload deps). The
-# completion check keeps the global `all` cache.
-run_test "install-fonts-rejoin" --deps loader+payload "$PY" tests/install-fonts-rejoin
-run_test "python-suite-install" --deps auto "$PY" tests/python-suite-install
-run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
-run_test "install-modules" --deps auto tests/install-modules
-run_test "install-python-versions" --deps auto tests/install-python-versions
-run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
-run_test "install-env-bash" --deps auto tests/install-env-bash
-run_test "env-private-dirs" --deps auto tests/env-private-dirs
-run_test "snapshot-restore" --deps auto tests/snapshot-restore
-run_test "install-env-st" --deps auto tests/install-env-st
-run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
-run_test "install-env-zsh" --deps auto tests/install-env-zsh
-run_test "env-interactive-shell" --deps auto tests/env-interactive-shell
-run_test "env-ls-choice" --deps auto tests/env-ls-choice
-run_test "env-linelight" --deps auto tests/env-linelight
-run_test "env-delete" --deps auto tests/env-delete
-run_test "env-tcsh-prompt-resize" --deps auto tests/env-tcsh-prompt-resize
-run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-terminal
-run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
-run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
-run_test "install-env-vim-xdg" --deps auto tests/install-env-vim-xdg
-run_test "install-readonly-source" --deps loader "$PY" tests/install-readonly-source
-run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
-run_test "install-exclude-policy" --deps auto tests/install-exclude-policy
-run_test "optional-packages" --deps auto tests/optional-packages
-run_test "install-parity-plot" --deps payload+loader tests/install-parity-plot
-run_test "install-watchglass" --deps auto tests/install-watchglass
-run_test "install-open-eda-file-tools" --deps auto tests/install-open-eda-file-tools
-run_test "compile-open-eda-from-source" --deps auto tests/compile-open-eda-from-source
-run_test "install-python-tool-upgrade" --deps auto tests/install-python-tool-upgrade
-run_test "uv-launchers" --deps auto tests/uv-launchers
-run_test "install-typescript-language-server" --deps auto tests/install-typescript-language-server
-run_test "install-linux-tmp-home" --deps auto tests/install-linux-tmp-home
-run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
-run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
-run_test "install-nvim-shared-stash" --deps auto tests/install-nvim-shared-stash
-run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
+# completion check keeps the global `all` cache. Skipped by --container-only,
+# which is Tier 3 only (see the Tier 1 guard above).
+if [ "$CONTAINER_ONLY" -eq 0 ]; then
+    run_test "install-fonts-rejoin" --deps loader+payload "$PY" tests/install-fonts-rejoin
+    run_test "python-suite-install" --deps auto "$PY" tests/python-suite-install
+    run_test "install-fonts-shared" --deps auto tests/install-fonts-shared
+    run_test "install-modules" --deps auto tests/install-modules
+    run_test "install-python-versions" --deps auto tests/install-python-versions
+    run_test "valgrind-smoke" --deps auto tests/valgrind-smoke
+    run_test "install-env-bash" --deps auto tests/install-env-bash
+    run_test "env-private-dirs" --deps auto tests/env-private-dirs
+    run_test "snapshot-restore" --deps auto tests/snapshot-restore
+    run_test "install-env-st" --deps auto tests/install-env-st
+    run_test "install-env-tcsh" --deps auto tests/install-env-tcsh
+    run_test "install-env-zsh" --deps auto tests/install-env-zsh
+    run_test "env-interactive-shell" --deps auto tests/env-interactive-shell
+    run_test "env-ls-choice" --deps auto tests/env-ls-choice
+    run_test "env-linelight" --deps auto tests/env-linelight
+    run_test "env-delete" --deps auto tests/env-delete
+    run_test "env-tcsh-prompt-resize" --deps auto tests/env-tcsh-prompt-resize
+    run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-terminal
+    run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
+    run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers
+    run_test "install-env-vim-xdg" --deps auto tests/install-env-vim-xdg
+    run_test "install-readonly-source" --deps loader "$PY" tests/install-readonly-source
+    run_test "install-readonly-tree" --deps auto tests/install-readonly-tree
+    run_test "install-exclude-policy" --deps auto tests/install-exclude-policy
+    run_test "optional-packages" --deps auto tests/optional-packages
+    run_test "install-parity-plot" --deps payload+loader tests/install-parity-plot
+    run_test "install-watchglass" --deps auto tests/install-watchglass
+    run_test "install-open-eda-file-tools" --deps auto tests/install-open-eda-file-tools
+    run_test "compile-open-eda-from-source" --deps auto tests/compile-open-eda-from-source
+    run_test "install-python-tool-upgrade" --deps auto tests/install-python-tool-upgrade
+    run_test "uv-launchers" --deps auto tests/uv-launchers
+    run_test "install-typescript-language-server" --deps auto tests/install-typescript-language-server
+    run_test "install-linux-tmp-home" --deps auto tests/install-linux-tmp-home
+    run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
+    run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
+    run_test "install-nvim-shared-stash" --deps auto tests/install-nvim-shared-stash
+    run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
+fi
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------
 if [ "$CONTAINER" -eq 1 ]; then

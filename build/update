@@ -917,18 +917,65 @@ def _registry_version(name):
         return ""
 
 
-def _version_tuple(v):
-    """Numeric release tuple, or None when the string is not a version.
+# `git describe --tags` suffixes, and the PEP 440 dev placeholder a project
+# stamps when it bumps to the next unreleased version. Both carry the same
+# numeric release as the tag they hang off, so the release tuple alone cannot
+# order them -- which is exactly why `_version_tuple` returns a sortable KEY
+# rather than the bare release parts.
+_DESCRIBE_SUFFIX = re.compile(r"-(\d+)-g[0-9a-f]{7,40}(?:-dirty)?$")
+_DEV_SUFFIX = re.compile(r"\.dev(\d+)$")
+# Releases are padded to a fixed width before the rank/tiebreak are appended.
+# Without it the tail numbers land in different tuple slots and a SHORTER
+# release wins on the wrong digit: `25.07-984-g...` -> (25,7,1,984) would beat
+# `25.07.1` -> (25,7,1,1), i.e. a tag bump (hx 25.07 -> 25.07.1) would be
+# reported as a downgrade. Six components covers every version in the registry.
+_RELEASE_WIDTH = 6
 
-    Returns None for git SHAs and describe strings -- rolling-git packages are
-    ordered by commit, not by number, so they must not be compared here.
+
+def _version_tuple(v):
+    """Sortable key for a version string, or None when it is not comparable.
+
+    The key is `<release parts padded to 6>, <rank>, <tiebreak>`, where the
+    release is the leading numeric dotted run -- what a version comparison is
+    almost always about -- and the two trailing numbers order the same-release
+    variants the way git does:
+
+        v2026.11.2.dev0        -> (2026, 11, 2, 0, 0, 0, 0, 0)   BEFORE the tag
+        v2026.11.2             -> (2026, 11, 2, 0, 0, 0, 1, 0)   the tag itself
+        v2026.11.2-5-g31e2aa3  -> (2026, 11, 2, 0, 0, 0, 1, 5)   five commits PAST
+
+    Without that ordering a correct rolling-git rebuild trips
+    `_check_no_downgrade`: the registry still held the `2026.11.2.dev0`
+    placeholder, the rebuilt source described itself as `2026.11.2-5-g...`,
+    and `(2026,11,2,0) >= (2026,11,2)` is false -- a false DOWNGRADE error
+    that blocked every update of such a package.
+
+    Suffixes with no ordering of their own compare on the release alone: an
+    RPM-style release (`1.20.11-28.el8_10.3`), a `+local` build tag, a
+    `-dirty` tree. Git SHAs and anything that does not start with a digit
+    return None -- those are not versions, and time-plot's `7e9859e` used to
+    parse as `(7, 9859)`.
     """
     if not v or not re.match(r"^v?\d", v):
         return None
     if re.fullmatch(r"[0-9a-f]{7,40}", v) and re.search(r"[a-f]", v):
-        return None  # git SHA, not a version (time-plot 7e9859e parsed as (7,9859))
-    parts = re.findall(r"\d+", v.split("-")[0].split("+")[0])
-    return tuple(int(p) for p in parts) if parts else None
+        return None  # git SHA, not a version
+    m = re.match(r"^v?([0-9]+(?:\.[0-9]+)*)", v)
+    if not m:
+        return None
+    release = tuple(int(p) for p in m.group(1).split(".") if p)
+    if not release:
+        return None
+    if len(release) < _RELEASE_WIDTH:
+        release = release + (0,) * (_RELEASE_WIDTH - len(release))
+    rest = v[len(m.group(0)) :]
+    dev = _DEV_SUFFIX.search(rest)
+    if dev:
+        return release + (0, int(dev.group(1)))
+    described = _DESCRIBE_SUFFIX.search(rest)
+    if described:
+        return release + (1, int(described.group(1)))
+    return release + (1, 0)
 
 
 def _check_no_downgrade(name, before, allow_downgrade, dry_run):

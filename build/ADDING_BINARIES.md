@@ -909,8 +909,10 @@ survives an interpreter minor bump -- the right call for a shared wheelhouse.
 `payload/python-loaded/wheels/` carries a second copy that the suite's
 `requirements.lock.txt` pins by sha256; the script warns instead of silently
 breaking that pin, so a version bump also needs a `build/build-python-loaded.sh`
-re-lock. `tests/wheelhouse-closure` fails if a declared locally-built wheel loses
-its script or this section.
+re-lock. `tests/wheelhouse-closure` (Tier 1) fails if a declared locally-built
+wheel loses its script or this section, **and** on any pinned wheel whose sha256
+no longer matches the lock -- so a bump that forgets the re-lock goes red before
+an install, not inside one.
 
 ### Rust extensions (maturin): build inside the container, always
 
@@ -4027,6 +4029,17 @@ SRC="${XDG_DATA_HOME:-$HOME/.local/share}/loadout/src/open-eda-file-tools"
 cd "$SRC" && python3 scripts/check_vendored_crates.py      # ok: 119 crates, 5536 files
 cd def_tools && CARGO_NET_OFFLINE=true cargo build --release --locked --offline --lib
 ```
+
+**Extraction is additive, deliberately.** An upgrade overwrites the files the
+new archive names and leaves a file upstream DELETED in place -- same contract as
+every other archive package (helix, nvim). `remove_before_extract: "."` is not an
+option here: each entry is removed as `<install_to>/<rel>`, so `"."` deletes
+`install_to` itself -- the directory the archive is then unpacked into -- and a
+failed extract would leave the installed tree gone rather than partially
+updated. The vendored-crate checksums (`scripts/check_vendored_crates.py`, run
+against the installed tree by the install test) catch the case that matters --
+a stale or altered vendor tree -- so a lone surviving obsolete source file is
+cosmetic, not a correctness hole.
 
 `tests/install-open-eda-file-tools` runs exactly the first line against the
 installed tree (with the install's own `python3.15`), so a payload that lost

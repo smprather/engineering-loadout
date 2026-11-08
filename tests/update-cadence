@@ -144,6 +144,59 @@ def main():
             bad.append(f"{name}: {exc}")
     check("every declared auto_update_interval parses", not bad, "; ".join(bad))
 
+    print("version ordering (downgrade guard)")
+    # The guard exists to catch a silent regression, not to reject a correct
+    # update. It used to compare bare release tuples, so a rolling-git package
+    # whose registry entry held a `2026.11.2.dev0` placeholder and whose rebuilt
+    # source described itself as `2026.11.2-5-g...` compared (2026,11,2,0) vs
+    # (2026,11,2) and FAILED the update as a downgrade. Same-release variants
+    # must order the way git does; a genuine regression must still be caught.
+    t = upd._version_tuple
+    check("dev placeholder sorts below its tag", t("v2026.11.2.dev0") < t("v2026.11.2"))
+    check("tag sorts below commits past it", t("v2026.11.2") < t("v2026.11.2-5-g31e2aa3"))
+    check(
+        "dev placeholder sorts below a describe of the same release",
+        t("v2026.11.2.dev0") < t("v2026.11.2-5-g31e2aa3"),
+    )
+    check("more commits past a tag sorts higher than fewer", t("v1.0.0-3-gdeadbee") < t("v1.0.0-9-gdeadbee"))
+    # A tag bump on a SHORTER release must still win: hx moved 25.07 ->
+    # 25.07.1 while its recorded version was a describe of 25.07. Without
+    # padding, (25,7,1,984) beat (25,7,1,1) on the wrong digit.
+    check("a new release beats a describe of the previous one", t("25.07.1") > t("25.07-984-g079a789e"))
+    check("release components compare left to right", t("3.5.0") > t("3.4.99") and t("0.0.91") > t("0.0.9"))
+    check("a later release beats any same-release describe", t("v2026.11.2-5-gabcdef1") < t("v2026.11.3"))
+    check("a real regression still orders backwards", t("v2026.11.5-1-gabcdef1") > t("v2026.11.2-7-gabcdef1"))
+    check(
+        "RPM-style release suffix compares on the release",
+        t("1.20.11-28.el8_10.3") == t("1.20.11"),
+    )
+    check("git SHA is not a version", t("7e9859e") is None)
+    check("non-numeric tag is not a version", t("v-nightly") is None)
+    check("empty is not a version", t("") is None)
+
+    import contextlib as _cl
+    import io as _io
+
+    def guard_accepts(before, after, allow=False):
+        orig_registry = upd._registry_version
+        try:
+            upd._registry_version = lambda name: after
+            buf = _io.StringIO()
+            with _cl.redirect_stdout(buf):
+                ok = upd._check_no_downgrade("widget", before, allow, False)
+            return ok, buf.getvalue()
+        finally:
+            upd._registry_version = orig_registry
+
+    ok, out = guard_accepts("v2026.11.2.dev0", "v2026.11.2-5-g31e2aa3")
+    check("placeholder -> describe passes the guard", ok, out.strip())
+    ok, out = guard_accepts("26.5.0", "26.2.0")
+    check("minor-version regression fails the guard", (not ok) and "BACKWARDS" in out, out.strip())
+    ok, out = guard_accepts("26.5.0", "26.2.0", allow=True)
+    check("--allow-downgrade overrides it", ok and "allow-downgrade given" in out, out.strip())
+    ok, _ = guard_accepts("1.20.11-28.el8_10.3", "1.20.11-30.el8_10.4")
+    check("distro release change is not a downgrade", ok)
+
     print("check-versions failure surfaces through _fetch_latest_map")
     # The 2026-09-02..13 portable-python TLS break made every upstream lookup
     # fail; check-versions printed "(no rows)" and build/update swallowed the

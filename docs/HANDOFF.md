@@ -13,6 +13,182 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-08 (2): the seven owed items closed (version ordering, currency, Tier 3, uv-tool stamps, deep-run verdicts, --container-only, docs)
+
+The OWED list in entry (1) is discharged. Nothing here changes what a user
+installs except (4) and (5): the uv tool step got an install stamp, and a deep
+`--no-cache` run now leaves the cache warm instead of cold.
+
+**1. `build/update` read a describe string as a downgrade (`_version_tuple`).**
+The guard compared bare release tuples, so a rolling-git package whose registry
+`version` held a `2026.11.2.dev0` placeholder and whose rebuilt source described
+itself as `2026.11.2-5-g...` compared `(2026,11,2,0) >= (2026,11,2)` -> false and
+exited "version went BACKWARDS" on a CORRECT update. It now returns a sortable
+key: release parts PADDED to six components, then a rank (0 = `.devN` placeholder,
+1 = tag/other) and a tiebreak (commits past the tag). Padding is load-bearing --
+without it `25.07-984-g079a789e` -> (25,7,1,984) beat `25.07.1` -> (25,7,1,1) on
+the wrong digit, i.e. hx's next tag bump would have been rejected. Git SHAs and
+non-numeric tags still return None (they are not versions); an RPM-style
+`1.20.11-28.el8_10.3` still compares on the release alone. Pinned in
+`tests/update-cadence` (14 checks: placeholder < tag < N-commits-past, tag bump on
+a shorter release, real regression still caught, `--allow-downgrade`).
+**Related stale-verdict gap closed:** `update-cadence` and
+`check-versions-contract` import `build/update` / `build/check-versions` (+
+`build/farm-versions`), and `FP_ROOTS` does not cover `build/`, so editing those
+scripts left a `CACHED PASS` standing. Both now declare `--deps build
+--deps-key <script>`; verified by touching `build/update` (both re-ran, no
+CACHED) and restoring (both `CACHED PASS (group inputs unchanged: build)`).
+
+**2. Currency sweep -- both commands run, nothing bumped.**
+`build/check-versions --outdated-only` (162 lookups, 12 jobs): **39 outdated**,
+1 pinned, 3 unknown, rc=2 because 3 lookups failed (`ncdu` 503, `nethogs` and
+`spice-netlist-ls` timeouts) -- INCOMPLETE, not a clean bill of health.
+`./build/update --list-outdated`: rc=0, same warning. Nothing was bumped: every
+row is a class-C container rebuild, and `auto_update_interval` (the cadence
+layer) owns that decision. Worklist:
+
+| package | current | latest | source |
+|---|---|---|---|
+| amux | 0.0.20 | 0.0.21 | github |
+| biome | 2.6.3 | 2.6.6 | github |
+| broot | 1.61.0 | 1.62.0 | github |
+| btm | 0.14.9 | 0.15.0 | github |
+| btop | 1.4.7 | 1.4.8 | github |
+| cicwave | 0.7.2 | 0.7.4 | pypi |
+| dust | 1.2.6 | 1.2.7 | github |
+| fd | 10.5.0 | 10.5.2 | github |
+| fresh | 0.5.4 | 0.5.8 | github |
+| fzf | 0.74.4 | 0.75.0 | github |
+| gnuplot | 6.0.5 | 6.0.6 | scrape |
+| gopls | 0.23.0 | 0.24.0 | github |
+| gvim | 9.2.1228 | 9.2.1302 | github |
+| ipython | 9.17.1 | 9.18.1 | pypi |
+| jupyterlab | 4.6.4 | 4.6.6 | pypi |
+| just | 1.58.0 | 1.59.0 | github |
+| klayout | 0.30.12 | 0.30.13 | github |
+| lazygit | 0.66.0 | 0.66.3 | github |
+| librelane | 3.0.16 | 3.0.17 | pypi |
+| linelight | 2026.10.31 | 2026.10.32 | github |
+| marktext | 0.20.0 | 0.23.0 | github |
+| nodejs | 26.12.1 | 26.13.0 | github |
+| numr | 0.8.0 | 0.9.3 | github |
+| rsync | 3.5.1 | 3.5.2 | github |
+| ruff | 0.17.2 | 0.17.4 | github |
+| sqlite | 3.53.4 | 3.54.1 | scrape |
+| strace | 7.2 | 7.3 | github |
+| stylua | 2.5.2 | 2.6.0 | github |
+| tmux-path-store | 2026.10.4 | 2026.10.5 | pypi |
+| tree-sitter | 0.27.1 | 0.27.2 | github |
+| ty | 0.0.91 | 0.0.99 | github |
+| typescript-language-server | 6.0.2 | 6.0.3 | github |
+| uv | 0.13.5 | 0.13.7 | github |
+| valgrind | 3.27.1 | 3.28.0 | scrape |
+| verilator | 5.052 | 5.054 | github |
+| vim | 9.2.1228 | 9.2.1302 | github |
+| visidata | 3.4 | 3.5 | pypi |
+| watchglass | 2026.11.3 | 2026.11.3.2 | pypi |
+| yq | 4.54.1 | 4.54.2 | github |
+
+- `pdftotext` is PINNED (poppler >=26.06 needs fontconfig >=2.15; EL8 has 2.13.1).
+- 3 unknown (`ncdu`, `nethogs`, `spice-netlist-ls`) -- re-run before treating the
+  list as complete.
+- `build/update --list-outdated` additionally prints 8 `version/latest format
+  differ` rows; 7 already carry a `pin_reason` that explains the scheme mismatch
+  (iverilog, hx, openroad, patchelf, rust-analyzer, sby, z3), and
+  `liberty-filter` is not reported as outdated by check-versions at all.
+- `time-plot` (rolling-git) is behind its clone HEAD: registry `v2026.9.15`,
+  upstream `b4f6aa3`. A rolling rebuild is the one bump a sweep would take.
+
+**4. uv tool venvs are now stamped (`uv-tool/<dist>`).** `uv tool install` MUST
+carry `--force` (see AGENTS.md), so every install rebuilt every selected venv --
+the smoke's residual cost. The stamp key is the install spec, the distribution's
+own wheel digests (chunked wheels digested part by part in join order), a
+name/size/mtime identity of the WHOLE wheelhouse (a dependency-wheel bump alone
+must miss -- the exact failure `--force` protects against), and the installer's
+own sha256. The state is one sorted `scandir` walk of `<prefix>/share/uv/tools/<dist>`
+plus the console scripts in `<prefix>/bin` (pruned ones recorded as absent, so
+`jupyter-labhub` does not block a match), recorded AFTER the import probe,
+launcher pruning/wrapping and source patches. `reinstall` ignores it; the stamp
+is dropped before uv runs, so a half-finished install can never be vouched for.
+Measured on a temp root, the 13 enabled distributions: **15 s -> 6 s** (13 -> 0
+uv invocations, 13 x `unchanged (stamp ...)`; re-measured on the final code, and
+an earlier pair read 15.7 -> 6.0); venv scans 0.2-47 ms each.
+Invalidation proved by hand: `rm uv-receipt.toml`, hand-deleted
+`<prefix>/bin/<tool>` (uv restored it), out-of-band `uv tool install --force`
+(the pruned launcher was re-pruned), deleted venv. Gate:
+`tests/install-noop-stamps` gained a `uv tool venv stamp` section (16 checks:
+deterministic scan, `__pycache__`/`.pyc` ignored, edited/deleted file, chmod,
+deleted in-venv launcher, deleted `<prefix>/bin` launcher, changed wheel,
+dependency wheel appearing, `reinstall`); `tests/install-python-tool-upgrade`
+pins both sides (first install reaches uv WITH `--force`, second is
+`unchanged (stamp ...)` and never claims `installed:`, a removed receipt sends it
+back through uv).
+
+**5. `--no-cache` now RECORDS verdicts.** Reading and writing were one switch, so
+a deep run left the cache cold and the next run redid everything. `CACHE_ACTIVE`
+is now the read flag (`--no-cache` off), `CACHE_WRITE` the write flag (always on):
+the private per-test TMPDIR + dependency capture, the `.pass` write and
+`write_cache_sidecars` follow the write flag; `groups_used` moved out of the
+cache-READ branch so a deep run still writes its group sidecars. Only deleting
+the cache directory leaves the loop cold now. Verified on this tree:
+`--no-cache --fast` -> exit 0, **0 CACHED / 58 PASS**, and the very next
+`--fast` -> exit 0, **57 CACHED / 1 live** (the live one is `content-manifest in
+sync`, which is uncacheable by design: it has no `tests/*` script token).
+
+**6. `tests/run-all --container-only` -- the Tier 3 habit gate.** Runs the four
+container tests and nothing else (implies `--container`, contradicts `--fast`
+with exit 2). It writes ONLY the container sidecar: a run that verified no
+Tier 1/2 test must not refresh the `all`/group verdicts those tests cache
+against (the mirror image of the 2026-09-23 stale-container-PASS bug, and the
+reason `precompute_verdicts` skips the walks it would never read). Verified with
+throwaway cacheable container probes: only `fingerprint-container.json` written,
+second run CACHED, `--container-only --no-cache` -> 0 CACHED then warm again.
+
+**3. Tier 3 container gate -- RUN, all four green.** `tests/run-all
+--container-only` (the new flag) with `TMPDIR=/var/tmp`: exit 0, **575 s**, and
+PASS for `almalinux8.10 container smoke (--full)`, `almalinux8.10 dynamic
+analysis (--dynamic, network isolated)`, `private-state-two-users` and
+`interactive-shell-almalinux8`. That discharges the class-C obligation the
+installer change in (4) creates. The container-only isolation rule is verified
+on the real path, not just with probes: after the run only
+`test-cache-v1/fingerprint-container.json` carried its timestamp, while
+`fingerprint.json` and every `group-*.json` still carried the Tier 1+2 run's.
+
+**7. PyYAML re-lock and open-eda additive extraction became gate/doc facts, not
+footnotes.** `tests/wheelhouse-closure` (Tier 1) already fails on a pinned wheel
+whose sha256 no longer matches `payload/python-loaded/requirements.lock.txt` --
+proved by flipping one pin (FAIL) and restoring (OK) -- so a PyYAML bump that
+forgets the `build/build-python-loaded.sh` re-lock is red before an install;
+`build/ADDING_BINARIES.md` now says exactly that. The open-eda source tree's
+additive extraction is documented where a maintainer will look (why
+`remove_before_extract: "."` is not an option: it deletes `install_to`, the very
+directory the archive is unpacked into, and a failed extract would leave the tree
+gone).
+
+**Machine fact (cost this session a rerun):** the full T2 phase needs
+`TMPDIR=/var/tmp` here. `/tmp` is a 16 GB tmpfs and four concurrent `@shared`
+installs need ~32 GB of transients, so one run went red with `[Errno 28] No space
+left on device` in `install-linux-tmp-home`, `install-split-shared-envs` and
+`install-nvim-deployments` while every other test passed. `run-all`'s scratch
+guard only moves off `/tmp` when it has <12 GB FREE at start -- an empty 16 GB
+tmpfs passes that test and then fills. All three are green on `/var/tmp`; the
+guard is unchanged (raise the threshold or force `LOADOUT_TEST_T2_JOBS=1` if that
+bite recurs on a small-scratch host).
+
+**Suite on this tree:** `TMPDIR=/var/tmp tests/run-all` -> exit 0, **90 CACHED
+/ 5 live PASS / 0 FAIL** in 260 s (the five live were the three ENOSPC reruns in
+the machine note plus the two uncacheable sync gates), then `--container-only`
+above. `update-cadence`, `install-noop-stamps` and `install-python-tool-upgrade`
+each ran LIVE and green on the final code (the first two then cached against the
+`build`/`payload+loader+envs` groups, which is the new deps-key working).
+
+**Gates/docs touched:** `tests/run-all` (read/write split, `--container-only`,
+two `--deps-key`s), `tests/update-cadence`, `tests/install-noop-stamps`,
+`tests/install-python-tool-upgrade`, `build/update`, `loadout_main.py`,
+`AGENTS.md` (deep-run + container-only + uv stamps, and the stale claim that
+`auto` installs always run alone), `build/ADDING_BINARIES.md`, and the timing
+rows the suite appended.
+
 ## 2026-11-08 (1): state at context flush — 2026.11.4 released, all issues closed, what is owed
 
 **Released:** tag `2026.11.4` at commit `a85854e` (class B: payload env files

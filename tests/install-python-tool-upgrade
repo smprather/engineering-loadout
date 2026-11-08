@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Pins that install_python_tools passes --force to `uv tool install`, and that a
-# repeat install leaves a working tool at the registry's version.
+# Pins that install_python_tools passes --force to `uv tool install`, that a
+# repeat install over an unchanged tool skips uv entirely (the install stamp),
+# and that a venv that changed under the installer gets a real --force reinstall.
 #
 # WHY --force MATTERS, precisely (established 2026-08-09 -- an earlier version of
 # this note overstated it, so here is what was actually measured):
@@ -18,11 +19,17 @@
 #   and every uv_tool package silently freezes at its installed version while the
 #   installer still prints "Installed Python tool: <name>" off uv's exit 0.
 #
+#   install_python_tools now skips the uv invocation when its uv-tool stamp
+#   proves the venv is what this installer would produce from these wheels --
+#   so the other half of the property has to be pinned too: a venv that CHANGED
+#   (an upgrade's new wheel, or anything else touching the tree) must not be
+#   covered by a stale stamp, and must reach uv WITH --force.
+#
 # So this test does NOT try to prove "a second install upgrades" -- under today's
 # payload that passes with or without --force, which makes it a no-op gate (it was
 # written that way first and was caught doing exactly that). It asserts the flag
-# reaches the command line, which is the property that survives the payload
-# changing underneath it.
+# reaches the command line whenever uv runs, which is the property that survives
+# the payload changing underneath it, and it exercises both sides of the stamp.
 
 set -euo pipefail
 
@@ -82,14 +89,46 @@ grep -qE -- "--force( |$)" <<< "$uv_cmd" || fail "uv tool install is missing --f
   one, and every uv_tool package freezes at its installed version while the
   install still reports success. See the header of this test."
 
-echo "Second install (must leave a working tool)"
+echo "Second install (stamped: uv must not run at all)"
 do_install "$test_home/install2.log"
 
-grep -qF "Installed Python tool: $pkg" "$test_home/install2.log" \
-    || fail "second install did not report installing $pkg"
-# A --force reinstall that leaves a broken launcher would pass everything above.
+# The stamp the first install recorded must make the second a no-op: uv is not
+# invoked, and the run reports the tool as unchanged (never as freshly installed).
+grep -qF "Python tool $pkg: unchanged (stamp " "$test_home/install2.log" \
+    || fail "second install did not skip $pkg via the install stamp"
+grep -qF "uv tool install $pkg" "$test_home/install2.log" \
+    && fail "second install re-ran 'uv tool install $pkg' despite the stamp"
 grep -qF "is already installed" "$test_home/install2.log" \
     && fail "uv skipped the tool as already-installed despite --force"
+grep -qE "Python tools *│ *(done|OK)" "$test_home/install2.log" \
+    || fail "second install did not report the Python tools step done"
+grep -qF "installed: $pkg" "$test_home/install2.log" \
+    && fail "second install claimed to install $pkg when it skipped it"
+
+echo "Corrupted venv (must re-run uv with --force)"
+# A stamp that outlives a change inside the venv would freeze every uv_tool
+# package at whatever version happened to be installed -- the exact failure
+# --force exists to prevent. Remove a file the install wrote; the next install
+# must notice and go back through uv.
+rm -f "$receipt"
+if [[ -f $receipt ]]; then
+    chmod u+w "$(dirname "$receipt")" 2>/dev/null || true
+    rm -f "$receipt"
+fi
+if [[ -f $receipt ]]; then
+    fail "could not remove $receipt for the stamp-invalidation check"
+fi
+do_install "$test_home/install3.log"
+
+uv_cmd=$(grep -F "uv tool install $pkg" "$test_home/install3.log" | head -1)
+[[ -n $uv_cmd ]] || fail "installer kept the stamp for a venv it no longer matches:
+  $receipt was removed and the third install never invoked uv"
+grep -qE -- "--force( |$)" <<< "$uv_cmd" || fail "uv tool install is missing --force:
+  $uv_cmd
+  Without it, uv no-ops whenever the recorded find-links matches the requested
+  one, and every uv_tool package freezes at its installed version while the
+  install still reports success. See the header of this test."
+[[ -f $receipt ]] || fail "uv receipt still missing at $receipt after the reinstall"
 
 installed_version=$(
     env -i HOME="$test_home" PATH="$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}" \
