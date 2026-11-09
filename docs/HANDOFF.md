@@ -91,7 +91,14 @@ committed (`beff9b5`) -- a post-tag dev-only commit, same shape as `dc0ca45`.
 `--dry-run`) while a Tier 3 run is in flight. Its cleanup killed a
 `loadout-smoke:almalinux8.10` container that belonged to the *other* run
 (`exitCode=143` mid `--full`), which reads as a Tier 3 failure and costs a rerun.
-The container-only rerun with nothing else running was green in 283 s.
+The rerun with nothing else running (283 s) executed `almalinux8.10 container
+smoke (--full)` LIVE and took the other three from the cache: `dynamic analysis`,
+`private-state-two-users` and `interactive-shell-almalinux8` had each PASSed in
+the killed attempt against the SAME inputs, and the container sidecar keys on
+`loadout_main.py` plus the smoke Dockerfile/entrypoint -- unchanged between the
+two runs -- so those three are valid verdicts for this tree, not fresh ones.
+Say "live" vs "cached" when quoting a Tier 3 result; the number of cached rows
+is how a reader tells how much of the gate actually re-ran.
 
 ## 2026-11-08 (2): the seven owed items closed (version ordering, currency, Tier 3, uv-tool stamps, deep-run verdicts, --container-only, docs)
 
