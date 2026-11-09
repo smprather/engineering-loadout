@@ -165,15 +165,23 @@ additive extraction is documented where a maintainer will look (why
 directory the archive is unpacked into, and a failed extract would leave the tree
 gone).
 
-**Machine fact (cost this session a rerun):** the full T2 phase needs
-`TMPDIR=/var/tmp` here. `/tmp` is a 16 GB tmpfs and four concurrent `@shared`
-installs need ~32 GB of transients, so one run went red with `[Errno 28] No space
-left on device` in `install-linux-tmp-home`, `install-split-shared-envs` and
-`install-nvim-deployments` while every other test passed. `run-all`'s scratch
-guard only moves off `/tmp` when it has <12 GB FREE at start -- an empty 16 GB
-tmpfs passes that test and then fills. All three are green on `/var/tmp`; the
-guard is unchanged (raise the threshold or force `LOADOUT_TEST_T2_JOBS=1` if that
-bite recurs on a small-scratch host).
+**Machine fact (cost this session a rerun), and the host fix:** the full T2
+phase needed `TMPDIR=/var/tmp` here. `/tmp` was a 16 GB tmpfs and four concurrent
+`@shared` installs need ~32 GB of transients, so one run went red with `[Errno 28]
+No space left on device` in `install-linux-tmp-home`, `install-split-shared-envs`
+and `install-nvim-deployments` while every other test passed; `run-all`'s guard
+only moves off `/tmp` when it has <12 GB FREE at start, so an empty 16 GB tmpfs
+passed it and then filled. All three are green on `/var/tmp`. **The runner was
+left alone and the host was reconfigured:** `/etc/fstab` line 16 (`tmpfs /tmp`)
+is now `/var/tmp/systmp  /tmp  none  bind,x-systemd.requires-mounts-for=/var/tmp
+0 0`, i.e. `/tmp` is the btrfs `@tmp` subvol (723 GB free). Backup
+`/etc/fstab.bak-2026-11-08`; rollback = restore it + `systemctl daemon-reload` +
+reboot. Verified after the reboot: `findmnt -T /tmp` ->
+`/dev/nvme0n1p3[/@tmp/systmp] btrfs`, mode 1777, writes land in
+`/var/tmp/systmp`, the X11/ICE socket dirs are recreated by `tmpfiles.d/x11.conf`,
+and plain `tests/run-all` (no `TMPDIR`) uses `/tmp` with no scratch-switch line.
+One behaviour change: `/tmp` no longer vanishes on reboot -- `q /tmp 1777 root
+root 10d` ages files out after 10 days instead.
 
 **Suite on this tree:** `TMPDIR=/var/tmp tests/run-all` -> exit 0, **90 CACHED
 / 5 live PASS / 0 FAIL** in 260 s (the five live were the three ENOSPC reruns in
