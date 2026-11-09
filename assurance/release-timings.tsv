@@ -13349,3 +13349,19 @@
 2026-11-09T16:46:08Z	test:interactive-shell-almalinux8	0	CACHED	mode=container
 2026-11-09T16:50:49Z	test:almalinux8.10 container smoke (--full)	281	PASS	mode=container
 2026-11-09T16:50:50Z	test:total	283	PASS	flags=--container-only skipped=0
+2026-11-09T16:51:09Z	version table	0.0	PASS	2026.11.5
+2026-11-09T16:51:10Z	payload consistency	1.1	PASS	2026.11.5
+2026-11-09T16:51:17Z	manifest export	8.3	PASS	2026.11.5
+2026-11-09T16:51:21Z	checksums	12.4	PASS	2026.11.5
+2026-11-09T16:51:22Z	vulnerability scan	13.2	PASS	2026.11.5
+2026-11-09T16:51:28Z	secret scan	19.3	PASS	2026.11.5
+2026-11-09T16:53:28Z	binary smoke test	139.3	PASS	2026.11.5
+2026-11-09T16:56:58Z	malware scan	348.9	PASS	2026.11.5
+2026-11-09T16:57:04Z	version table	0.0	PASS	2026.11.5
+2026-11-09T16:57:05Z	binary smoke test	0.5	PASS	2026.11.5
+2026-11-09T16:57:05Z	payload consistency	1.1	PASS	2026.11.5
+2026-11-09T16:57:06Z	malware scan	1.8	PASS	2026.11.5
+2026-11-09T16:57:07Z	vulnerability scan	2.7	PASS	2026.11.5
+2026-11-09T16:57:12Z	manifest export	8.2	PASS	2026.11.5
+2026-11-09T16:57:17Z	secret scan	12.8	PASS	2026.11.5
+2026-11-09T16:57:19Z	checksums	14.6	PASS	2026.11.5
