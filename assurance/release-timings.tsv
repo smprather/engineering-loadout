@@ -13336,3 +13336,16 @@
 2026-11-09T16:36:21Z	test:completion in sync	0	PASS	mode=all
 2026-11-09T16:36:21Z	test:total	630	PASS	flags= skipped=0
 2026-11-09T16:36:31Z	test:private-state-two-users	3	PASS	mode=container
+2026-11-09T16:36:35Z	test:interactive-shell-almalinux8	7	PASS	mode=container
+2026-11-09T16:44:21Z	version table	0.0	PASS	2026.11.5
+2026-11-09T16:44:22Z	payload consistency	1.1	PASS	2026.11.5
+2026-11-09T16:44:31Z	manifest export	9.6	PASS	2026.11.5
+2026-11-09T16:44:34Z	checksums	12.7	PASS	2026.11.5
+2026-11-09T16:45:31Z	test:almalinux8.10 container smoke (--full)	543	FAIL	mode=container
+2026-11-09T16:45:41Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	553	PASS	mode=container
+2026-11-09T16:45:42Z	test:total	556	FAIL	flags=--container-only
+2026-11-09T16:46:08Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	0	CACHED	mode=container
+2026-11-09T16:46:08Z	test:private-state-two-users	0	CACHED	mode=container
+2026-11-09T16:46:08Z	test:interactive-shell-almalinux8	0	CACHED	mode=container
+2026-11-09T16:50:49Z	test:almalinux8.10 container smoke (--full)	281	PASS	mode=container
+2026-11-09T16:50:50Z	test:total	283	PASS	flags=--container-only skipped=0
