@@ -161,24 +161,24 @@ export PROMPT_CYAN="\\[$CYAN\\]"
 export PROMPT_BOLD="\\[$BOLD\\]"
 export PROMPT_NORMAL="\\[$NORMAL\\]"
 
-[[ -z "${BASH_CONFIG_ROOT_DIR:-}" ]] && export BASH_CONFIG_ROOT_DIR="$HOME/.config/bash"
-source "$BASH_CONFIG_ROOT_DIR/functions.sh"
+[[ -z "${BASH_CONFIG_DIR:-}" ]] && export BASH_CONFIG_DIR="$HOME/.config/bash"
+source "$BASH_CONFIG_DIR/functions.sh"
 
 # Configuration must come first
 # Since getting PATH setup is critical to the rest of the startup process, do
 # PATH customization in these config files.
-source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/config.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/site/config.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/team/config.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/project/config.sh"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/user/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/global/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/corp/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/site/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/team/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/project/config.sh"
+source_if_exists "$BASH_CONFIG_DIR/user/config.sh"
 
 # Allow user home-dir override in case using a shared bash config installation.
 # Only when the config root is NOT already ~/.config/bash -- otherwise these are
 # the same files just sourced above, and re-sourcing them runs any non-idempotent
 # user-layer logic twice. Compare resolved paths (handles trailing slash/symlink).
-_cfg_root_real=$(realpath "$BASH_CONFIG_ROOT_DIR" 2>/dev/null || echo "$BASH_CONFIG_ROOT_DIR")
+_cfg_root_real=$(realpath "$BASH_CONFIG_DIR" 2>/dev/null || echo "$BASH_CONFIG_DIR")
 _home_bash_real=$(realpath "$HOME/.config/bash" 2>/dev/null || echo "$HOME/.config/bash")
 if [[ "$_cfg_root_real" != "$_home_bash_real" ]]; then
     source_if_exists "$HOME/.config/bash/corp/config.sh"
@@ -196,12 +196,12 @@ fi
 
 # PATH to common linux tools should be established by now
 # More PATH can be added by Environment Modules in corp/site/team/project/user layers.
-source_if_exists "$BASH_CONFIG_ROOT_DIR/global/bashrc"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/corp/bashrc"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/site/bashrc"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/team/bashrc"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/project/bashrc"
-source_if_exists "$BASH_CONFIG_ROOT_DIR/user/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/global/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/corp/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/site/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/team/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/project/bashrc"
+source_if_exists "$BASH_CONFIG_DIR/user/bashrc"
 
 # Allow user home-dir override in case using a shared bash config installation.
 # Guarded by the same root != ~/.config/bash check as the config.sh block above

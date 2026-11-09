@@ -24,8 +24,8 @@ fi
 _zsh_fns_ok=0
 _zsh_extra_fpath=()
 # env-owned completions (the loadout ships _wezterm here).
-if [[ -d "$ZSH_CONFIG_ROOT_DIR/site-functions" ]]; then
-    _zsh_extra_fpath+=("$ZSH_CONFIG_ROOT_DIR/site-functions")
+if [[ -d "$ZSH_CONFIG_DIR/site-functions" ]]; then
+    _zsh_extra_fpath+=("$ZSH_CONFIG_DIR/site-functions")
 fi
 if [[ -d "$_zsh_share/$ZSH_VERSION/functions" ]]; then
     _zsh_extra_fpath+=("$_zsh_share/site-functions" "$_zsh_share/$ZSH_VERSION/functions")
@@ -63,7 +63,7 @@ if is_truthy "${LOADOUT_CFG_ZSH_ENABLE_COMPLETION:-1}"; then
             if autoload -Uz +X bashcompinit 2>/dev/null; then
                 bashcompinit
                 for _layer in global corp site team project user; do
-                    for _comp_file in "$BASH_CONFIG_ROOT_DIR/$_layer"/completions/*.bash(N); do
+                    for _comp_file in "$BASH_CONFIG_DIR/$_layer"/completions/*.bash(N); do
                         source_if_exists "$_comp_file"
                     done
                 done

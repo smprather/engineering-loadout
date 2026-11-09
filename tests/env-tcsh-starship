@@ -50,7 +50,7 @@ README = os.path.join(REPO, "envs", "tcsh", "README.md")
 
 # Where the tcsh env must point STARSHIP_CONFIG: the SHARED config, resolved
 # relative to the tcsh config root the same way the bash env does it.
-SHARED_FROM_TCSH_ROOT = "${TCSH_CONFIG_ROOT_DIR}/../starship/starship.toml"
+SHARED_FROM_TCSH_ROOT = "${TCSH_CONFIG_DIR}/../starship/starship.toml"
 
 # starship style -> the SGR pair it emits. Only the styles this repo actually
 # uses as the directory colour need to be here; an unknown style fails the gate

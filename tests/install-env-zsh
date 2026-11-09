@@ -250,7 +250,7 @@ for want in 1 0; do
     echo "$out" | grep -qx "$want" || fail "ONLINE_DETECT=$want did not give LOADOUT_ONLINE=$want: [$out]"
 done
 
-# --- A shared config root (BASH_CONFIG_ROOT_DIR / ZSH_CONFIG_ROOT_DIR outside
+# --- A shared config root (BASH_CONFIG_DIR / ZSH_CONFIG_DIR outside
 # --- HOME) must still get the HOME corp..user override layers afterwards, in all
 # --- three passes -- as bash and tcsh do. Mirrors tests/install-env-tcsh.
 rm -f "$TMPHOME/.config/bash/user/config.sh"
@@ -271,7 +271,7 @@ export LOADOUT_TEST_OV_ZSHRC=yes
 export LOADOUT_TEST_ZSHRC_COUNT=$(( ${LOADOUT_TEST_ZSHRC_COUNT:-0} + 1 ))
 RC
 out=$(zsh_i_env 'print -r -- "OV=$LOADOUT_TEST_OV_CFGSH,$LOADOUT_TEST_OV_CFGZSH,$LOADOUT_TEST_OV_ZSHRC"' \
-    BASH_CONFIG_ROOT_DIR="$ALTB" ZSH_CONFIG_ROOT_DIR="$ALTZ")
+    BASH_CONFIG_DIR="$ALTB" ZSH_CONFIG_DIR="$ALTZ")
 assert_no_zsh_noise "shared-root overlay" "$out"
 echo "$out" | grep -q 'OV=yes,yes,yes' || fail "home override layers not sourced under shared roots: [$out]"
 # Negative control: default roots are the home layers themselves -- sourced once.

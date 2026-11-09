@@ -13,6 +13,57 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-09 (2): per-family config-root env vars shortened to `*_CONFIG_DIR`
+
+Renamed `BASH_/ZSH_/TCSH_` + `_CONFIG_ROOT_DIR` -> the same prefix + `_CONFIG_DIR`
+(three variables). The value is the root of the LAYERED config tree
+(`global/`, `corp/`, `site/`, `team/`, `project/`, `user/`), not an install root,
+so `*_ROOT_DIR` described the wrong thing; the new spelling also matches the
+`LOADOUT_CFG_*` family.
+
+**Hard cut, no compatibility shim** -- there is ONE real consumer and it is
+migrated in the same change, so a fallback would be dead code. Consequence,
+deliberately accepted: a stale export is now IGNORED and the shell falls back to
+`~/.config/<family>`. Pinned by `tests/env-bash-runtime` case 7 (export only the
+retired spelling -> the resolved root is `$HOME/.config/bash`, never the stale
+path), so the cutover cannot silently resurrect.
+
+**Where it lives:** 23 live files -- the three rcfiles and their `global/` twins,
+completions (bash/zsh/tcsh), `envs/bash/functions.sh`, tcsh `aliases.csh`,
+`build/delete-nfs-check`, six tests, `README.md`, `AGENTS.md`, `envs/{tcsh,zsh}/README.md`.
+The easy one to miss: `loadout_main.py`'s `_shell_config_roots()` builds the name
+dynamically (`f"{family.upper()}_CONFIG_DIR"`), so an exact-name search does not
+find it -- it is what the interactive-shell feature reads, and leaving it behind
+would have silently disabled shared-root detection.
+
+**Not renamed, on purpose:** `build/build-openroad.sh` / `build/build-yosys.sh`
+carry `-DPython3_ROOT_DIR=`, a CMake variable; `.superpowers/`,
+`docs/superpowers/` and `docs/archive/` keep their original wording as history;
+the retired spelling inside the 2026-07 handoff entry stays as written.
+
+**Gates updated:** `tests/docs-sync` now lists the three retired SPELLINGS in its
+stale-pattern table, and the scan is scoped to the CURRENT handoff entry
+(`handoff_current_entry()`) so history is not forced to rename retroactively;
+`installed-sizes.json` re-pinned (env files are tracked there) and
+`.content-manifest` regenerated (the sizes map lives under `payload/`, so the
+manifest hashes it -- regenerating sizes without the manifest turns Tier 1 red);
+`loadout doctor`'s retired-env report now says "absent" rather than "missing",
+because `tests/check-installer` greps doctor's output for `missing|unresolved`
+to mean a REPO defect and that line reports benign host state.
+
+**Verification:** affected gates run individually first (`env-bash-runtime`,
+`env-modules`, `env-delete`, `env-tcsh-starship`, `install-env-tcsh`,
+`install-env-zsh`, `check-installer`, `docs-sync`), then
+`TMPDIR=/var/tmp tests/run-all` -> exit 0, **73 CACHED / 25 live / 0 FAIL** (625 s).
+
+**Performance note (first-class):** this edit re-ran ~25 tests even though it
+touched only `envs/`. Two coarse keys cause that: `envs` is ONE dependency group
+(any env file invalidates every env-keyed test), and 100 `run_test` lines still
+carry the conservative `all` key (payload+envs+installer+tests). Splitting the
+group per family (`envs-bash`/`envs-zsh`/`envs-tcsh`/`envs-shared`) and giving
+the ungrouped tests honest keys is the next lever; measured now: an envs-only
+edit invalidates ~93% of the suite before those two changes.
+
 ## 2026-11-09 (1): issue #21 -- a retired env's `$HOME` state is now cleaned up (and the doctor probe stopped opening windows)
 
 **The defect.** `env-cargo` was deleted from the tree (commit `b1aac32`), but the

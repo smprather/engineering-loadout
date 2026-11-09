@@ -160,7 +160,7 @@ def main():
         # --- #17 bash: a NON-interactive login shell gets `module` ---------
         env = base_env(home)
         env.update(
-            BASH_CONFIG_ROOT_DIR=BASH_ROOT,
+            BASH_CONFIG_DIR=BASH_ROOT,
             LOADOUT_CFG_SHARED_PREFIX=prefix,
             LOADOUT_CFG_USE_LOADOUT_MODULES="1",
         )
@@ -168,7 +168,7 @@ def main():
             [
                 "/bin/bash",
                 "-c",
-                '. "$BASH_CONFIG_ROOT_DIR/functions.sh"; . "$BASH_CONFIG_ROOT_DIR/global/bashrc"; '
+                '. "$BASH_CONFIG_DIR/functions.sh"; . "$BASH_CONFIG_DIR/global/bashrc"; '
                 'type module >/dev/null 2>&1 && echo HAVE_MODULE; echo "loaded=${FAKE_EM_LOADED:-no}"',
             ],
             env,
@@ -182,7 +182,7 @@ def main():
         # --- #17 tcsh: a NON-interactive tcsh gets `module` ----------------
         env = base_env(home)
         env.update(
-            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            TCSH_CONFIG_DIR=TCSH_ROOT,
             LOADOUT_CFG_SHARED_PREFIX=prefix,
             LOADOUT_CFG_USE_LOADOUT_MODULES="1",
             LOADOUT_CFG_SHM_DIR=os.path.join(tmp, "shm"),
@@ -191,7 +191,7 @@ def main():
             [
                 "tcsh",
                 "-c",
-                'source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
+                'source "$TCSH_CONFIG_DIR/global/tcshrc" >& /dev/null; '
                 "which module >& /dev/null && echo HAVE_MODULE; "
                 # csh has no $( ): command substitution is backticks.
                 "echo loaded=`printenv FAKE_EM_LOADED`",
@@ -208,7 +208,7 @@ def main():
         open(log, "w").close()
         env = base_env(home)
         env.update(
-            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            TCSH_CONFIG_DIR=TCSH_ROOT,
             LOADOUT_CFG_SHARED_PREFIX=prefix,
             LOADOUT_CFG_USE_LOADOUT_MODULES="1",
             LOADOUT_CFG_SHM_DIR=os.path.join(tmp, "shm"),
@@ -225,7 +225,7 @@ def main():
                 # The submitting shell had EM initialized, so a `module`
                 # command exists for the flush to use (issue #18's premise).
                 'source "$LOADOUT_CFG_SHARED_PREFIX/preinit.tcsh"; '
-                'source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
+                'source "$TCSH_CONFIG_DIR/global/tcshrc" >& /dev/null; '
                 'echo "PATH=`printenv PATH`"; echo "MODULEPATH=`printenv MODULEPATH`"; '
                 'echo "LOADEDMODULES=`printenv LOADEDMODULES`"',
             ],
@@ -261,7 +261,7 @@ def main():
         cache = os.path.join(tmp, "cache")
         env = base_env(home)
         env.update(
-            BASH_CONFIG_ROOT_DIR=BASH_ROOT,
+            BASH_CONFIG_DIR=BASH_ROOT,
             LOADOUT_CFG_SHM_DIR=not_a_dir,
             XDG_CACHE_HOME=cache,
         )
@@ -270,8 +270,7 @@ def main():
                 "/bin/bash",
                 "-i",
                 "-c",
-                '. "$BASH_CONFIG_ROOT_DIR/functions.sh"; . "$BASH_CONFIG_ROOT_DIR/global/bashrc"; '
-                'printf "%s" "$XDG_RUNTIME_DIR"',
+                '. "$BASH_CONFIG_DIR/functions.sh"; . "$BASH_CONFIG_DIR/global/bashrc"; printf "%s" "$XDG_RUNTIME_DIR"',
             ],
             env,
         )
@@ -289,7 +288,7 @@ def main():
         cache2 = os.path.join(tmp, "cache2")
         env = base_env(home)
         env.update(
-            TCSH_CONFIG_ROOT_DIR=TCSH_ROOT,
+            TCSH_CONFIG_DIR=TCSH_ROOT,
             LOADOUT_CFG_SHM_DIR=not_a_dir,
             XDG_CACHE_HOME=cache2,
         )
@@ -300,8 +299,7 @@ def main():
                 # The runtime-dir block is inside the interactive section, so
                 # set a prompt first: that is what makes $?prompt true for a
                 # `tcsh -c` without a PTY.
-                'set prompt = "% "; source "$TCSH_CONFIG_ROOT_DIR/global/tcshrc" >& /dev/null; '
-                "printenv XDG_RUNTIME_DIR",
+                'set prompt = "% "; source "$TCSH_CONFIG_DIR/global/tcshrc" >& /dev/null; printenv XDG_RUNTIME_DIR',
             ],
             env,
         )

@@ -19,8 +19,8 @@
 # backticks cannot contain a slash -- `2>/dev/null` and any helper PATH break
 # the spec with `Unmatched '`'.`. These aliases are slash-free names whose
 # bodies carry the helper path; the wordlist only names the alias.
-if ( $?TCSH_CONFIG_ROOT_DIR ) then
-    set _lo_helpers = "${TCSH_CONFIG_ROOT_DIR}/global/helpers"
+if ( $?TCSH_CONFIG_DIR ) then
+    set _lo_helpers = "${TCSH_CONFIG_DIR}/global/helpers"
 else
     set _lo_helpers = "$HOME/.config/tcsh/global/helpers"
 endif

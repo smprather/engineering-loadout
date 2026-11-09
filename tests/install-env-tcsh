@@ -53,7 +53,7 @@ tcsh_i_root() {
     _cmd=$2
     : > "$ERRFILE"
     printf '%s\nexit\n' "$_cmd" \
-        | env -i HOME="$TMPHOME" TCSH_CONFIG_ROOT_DIR="$_root" PATH="${PATH:-/usr/bin:/bin}" LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
+        | env -i HOME="$TMPHOME" TCSH_CONFIG_DIR="$_root" PATH="${PATH:-/usr/bin:/bin}" LANG="${LANG:-C.UTF-8}" TERM=xterm-256color \
             script -qec "tcsh -i" /dev/null 2>"$ERRFILE" \
         | tr -d '\r'
 }
@@ -260,9 +260,9 @@ fi
 "$HELPERS/vercmp" 1.2 -eq 1.2.0 || fail "vercmp: 1.2 should equal 1.2.0"
 "$HELPERS/vercmp" --between 1.0 1.5 2.0 || fail "vercmp: 1.5 should be within [1.0,2.0]"
 
-# --- Split/shared config architecture: TCSH_CONFIG_ROOT_DIR can point at a
+# --- Split/shared config architecture: TCSH_CONFIG_DIR can point at a
 # --- loadout-owned shared config root, while HOME-local override layers still
-# --- apply afterwards. This mirrors bash's BASH_CONFIG_ROOT_DIR + home overlay.
+# --- apply afterwards. This mirrors bash's BASH_CONFIG_DIR + home overlay.
 ALTROOT="$TMPHOME/shared-tcsh-root"
 mkdir -p "$ALTROOT"
 cp -a "$TMPHOME/.config/tcsh/global" "$ALTROOT/global"
@@ -272,12 +272,12 @@ done
 mkdir -p "$TMPHOME/.config/tcsh/user"
 echo 'setenv LOADOUT_TEST_HOME_OVERLAY yes' > "$TMPHOME/.config/tcsh/user/config.csh"
 echo 'setenv LOADOUT_TEST_HOME_TCSHRC loaded' > "$TMPHOME/.config/tcsh/user/tcshrc"
-out=$(tcsh_i_root "$ALTROOT" 'echo "ROOT=$TCSH_CONFIG_ROOT_DIR" ; echo "OV=$LOADOUT_TEST_HOME_OVERLAY" ; echo "RC=$LOADOUT_TEST_HOME_TCSHRC" ; alias loadout_tmp_root')
-assert_no_csh_noise "TCSH_CONFIG_ROOT_DIR overlay" "$out"
-echo "$out" | grep -q "ROOT=$ALTROOT" || fail "TCSH_CONFIG_ROOT_DIR not exported/respected: [$out]"
+out=$(tcsh_i_root "$ALTROOT" 'echo "ROOT=$TCSH_CONFIG_DIR" ; echo "OV=$LOADOUT_TEST_HOME_OVERLAY" ; echo "RC=$LOADOUT_TEST_HOME_TCSHRC" ; alias loadout_tmp_root')
+assert_no_csh_noise "TCSH_CONFIG_DIR overlay" "$out"
+echo "$out" | grep -q "ROOT=$ALTROOT" || fail "TCSH_CONFIG_DIR not exported/respected: [$out]"
 echo "$out" | grep -q "OV=yes" || fail "home config overlay not sourced after shared root: [$out]"
 echo "$out" | grep -q "RC=loaded" || fail "home tcshrc overlay not sourced after shared root: [$out]"
-echo "$out" | grep -q "$ALTROOT/global/helpers/tmp-root" || fail "global aliases did not resolve helpers from TCSH_CONFIG_ROOT_DIR: [$out]"
+echo "$out" | grep -q "$ALTROOT/global/helpers/tmp-root" || fail "global aliases did not resolve helpers from TCSH_CONFIG_DIR: [$out]"
 
 # --- The @envs shared-prefix bake must cover tcsh, not only bash. A direct
 # --- tcsh login must find the shared tree even when LOADOUT_CFG_SHARED_PREFIX is
@@ -557,8 +557,8 @@ case $out in *grc*) fail "a GRC alias survived on a tcsh login: [$out]" ;; esac
 # --- and the entry point aborted before defining anything. The guard must
 # --- recover HOME from the passwd entry and keep going, silently.
 out=$(
-    printf 'source "$TCSH_CONFIG_ROOT_DIR/tcshrc"\necho "H=$HOME"\necho AFTER=ok\nexit\n' \
-        | env -i PATH="$FAKEBIN" TCSH_CONFIG_ROOT_DIR="$TMPHOME/.config/tcsh" \
+    printf 'source "$TCSH_CONFIG_DIR/tcshrc"\necho "H=$HOME"\necho AFTER=ok\nexit\n' \
+        | env -i PATH="$FAKEBIN" TCSH_CONFIG_DIR="$TMPHOME/.config/tcsh" \
             TERM=xterm-256color /usr/bin/script -qec "tcsh -f -i" /dev/null 2>"$ERRFILE" \
         | tr -d '\r'
 )

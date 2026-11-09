@@ -589,7 +589,6 @@ sha256  20b2270ec1e16109e54bf66f8e4eeb62448a38f25d57c81efed10e3c5fc42b24  payloa
 sha256  20c47ef16be2035db2c7abec9ec61ab1093a6521f8c9c617b37ab021aff75d13  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/wing.so.bz2
 sha256  20d074d2c59ec21055e8cbdd9268d5aae47665b4840fdf871fbaa12e67b968e3  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/rust.so.bz2
 sha256  20d432a3306d374ea3ab492206295fe013100d64ad4ea47a4b08e1961edfa53e  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/angular/highlights.scm
-sha256  20d52c52421620e181c4fbd2fb91a2bcdd538e55f6dc971671735f4729c4c09a  payload/installed-sizes.json
 sha256  20dcee80272cc39e9376abed0a2c1985db64cef682f50e1dfa373db100a121fe  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/surface/highlights.scm
 sha256  20dcee80272cc39e9376abed0a2c1985db64cef682f50e1dfa373db100a121fe  payload/treesitter/vendor/nvim-treesitter/runtime/queries/surface/highlights.scm
 sha256  20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2  payload/python-loaded/wheels/watchdog-6.0.0-py3-none-manylinux2014_x86_64.whl
@@ -4281,6 +4280,7 @@ sha256  edfcbbed9177774167daa384193be4bcccb1ba163dd6bbfca886c2e12c85a0e1  payloa
 sha256  edfcbbed9177774167daa384193be4bcccb1ba163dd6bbfca886c2e12c85a0e1  payload/treesitter/vendor/nvim-treesitter/runtime/queries/typespec/injections.scm
 sha256  ee04b262bd0b81a9cecb76a73d18631186fd881f02cd6ec53a2f4579fa436ae5  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/styled/highlights.scm
 sha256  ee2d8c86ebdf1104e138e6b329bf9ba3924a4b3ec3b0baf4d27f53f75f4dc963  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/problog.lua
+sha256  ee5eaddfb50dfa373d8a6f20281fcbcba2f07cc218f3b4a5770a720d34fa175c  payload/installed-sizes.json
 sha256  ee75b5a355e65feeda859afdf6802856e0d9b9669ca00593cdea66bad0b21b48  payload/el8.x86_64.glibc2p28/wheels/lln_libparse-0.56.0-cp315-cp315-manylinux_2_28_x86_64.whl
 sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payload/el8.x86_64.glibc2p28/bin/whoami.bz2
 sha256  eea27b01841909316f2cc739807acea1c623df2be8c5cfad7583286397bb8315  payload/el8.x86_64.glibc2p28/wheels/async_lru-2.3.0-py3-none-any.whl

@@ -182,7 +182,7 @@ loadout_find_wezterm_shell_integration() {
     local _subs=(share/wezterm/shell-integration/wezterm.sh share/wezterm/wezterm.sh etc/profile.d/wezterm.sh)
 
     # 1. vendored copy (canonical config root, then home-dir override)
-    for _c in "$BASH_CONFIG_ROOT_DIR/global/wezterm/wezterm.sh" \
+    for _c in "$BASH_CONFIG_DIR/global/wezterm/wezterm.sh" \
         "$HOME/.config/bash/global/wezterm/wezterm.sh"; do
         [[ -r "$_c" ]] && {
             echo "$_c"

@@ -59,6 +59,21 @@ def current_md():
     return [p for p in first_party_md() if not HISTORY.search(p)]
 
 
+def handoff_current_entry():
+    """The newest HANDOFF entry only.
+
+    Older entries are history: they must keep the wording of the release they
+    describe, so a knob renamed today cannot be forced back into them. The
+    stale-pattern scan still covers the CURRENT entry, which is what a reader
+    acts on.
+    """
+    text = read("docs/HANDOFF.md")
+    parts = re.split(r"(?m)^## 20", text)
+    if len(parts) < 2:
+        return text
+    return parts[0] + "## 20" + parts[1]
+
+
 def adding_binaries_generic():
     """The generic (non-history) part of build/ADDING_BINARIES.md: the Build
     Machine and Workflow sections plus the wheel recipe, minus dated status
@@ -166,6 +181,12 @@ def test_cfg_vars_documented():
 
 
 STALE = (
+    # env vars renamed 2026-11-09 (`*_CONFIG_ROOT_DIR` -> `*_CONFIG_DIR`); a
+    # current doc naming one of the old SPELLINGS sends a reader to a dead knob.
+    # The generic form is allowed in history/notes about the rename itself.
+    "BASH_CONFIG_ROOT_DIR",
+    "ZSH_CONFIG_ROOT_DIR",
+    "TCSH_CONFIG_ROOT_DIR",
     "pip3.14",
     "--python-version 3.14",
     "/foo/bar/local",
@@ -177,6 +198,7 @@ STALE = (
 def test_no_stale_patterns():
     sources = {p: read(p) for p in current_md() if p != "build/ADDING_BINARIES.md"}
     sources["build/ADDING_BINARIES.md (generic sections)"] = adding_binaries_generic()
+    sources["docs/HANDOFF.md (current entry)"] = handoff_current_entry()
     for rel in ("loadout_main.py", "tools/fetch-stash", "tools/refresh-stash", "build/update"):
         sources[rel] = read(rel)
     for rel in ("envs/bash/global/config.sh", "envs/tcsh/global/config.csh"):

@@ -11,7 +11,7 @@
 #
 # Layers are sourced lowest-first: global -> corp -> site -> team -> project -> user.
 # Every source is guarded: a missing layer is normal, not an error, and must stay
-# silent. TCSH_CONFIG_ROOT_DIR mirrors BASH_CONFIG_ROOT_DIR/ZSH_CONFIG_ROOT_DIR:
+# silent. TCSH_CONFIG_DIR mirrors BASH_CONFIG_DIR/ZSH_CONFIG_DIR:
 # it may point at a shared config tree, while home-local override layers under
 # ~/.config/tcsh/{corp,site,team,project,user} still apply afterwards.
 
@@ -44,12 +44,12 @@ endif
 # aliases later in the chain still override site aliases of the same name.
 
 set _loadout_tcsh_home_dir = "$HOME/.config/tcsh"
-if ( ! $?TCSH_CONFIG_ROOT_DIR ) then
-    setenv TCSH_CONFIG_ROOT_DIR "$_loadout_tcsh_home_dir"
-else if ( "$TCSH_CONFIG_ROOT_DIR" == "" ) then
-    setenv TCSH_CONFIG_ROOT_DIR "$_loadout_tcsh_home_dir"
+if ( ! $?TCSH_CONFIG_DIR ) then
+    setenv TCSH_CONFIG_DIR "$_loadout_tcsh_home_dir"
+else if ( "$TCSH_CONFIG_DIR" == "" ) then
+    setenv TCSH_CONFIG_DIR "$_loadout_tcsh_home_dir"
 endif
-set _loadout_tcsh_dir = "$TCSH_CONFIG_ROOT_DIR"
+set _loadout_tcsh_dir = "$TCSH_CONFIG_DIR"
 
 # Pass 1: LOADOUT_CFG_* preferences for every layer.
 foreach _loadout_layer (global corp site team project user)

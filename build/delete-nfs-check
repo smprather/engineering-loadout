@@ -80,7 +80,7 @@ cleanup() {
 trap cleanup EXIT
 setpriv --reuid="$LO_UID" --regid="$LO_GID" --clear-groups \
     env -i HOME="$LO_HOME" PATH=/usr/bin:/bin LANG=C.UTF-8 TERM=dumb \
-    BASH_CONFIG_ROOT_DIR="$LO_HOME/.config/bash" TCSH_CONFIG_ROOT_DIR="$LO_HOME/.config/tcsh" \
+    BASH_CONFIG_DIR="$LO_HOME/.config/bash" TCSH_CONFIG_DIR="$LO_HOME/.config/tcsh" \
     LO_TESTS=/lo-tests "$LO_PYTHON" -I /lo-tool/delete-nfs-check --in-container /mnt/nfs/data
 """
 
@@ -105,8 +105,8 @@ def in_container(base):
         "HOME": os.environ["HOME"],
         "LANG": "C.UTF-8",
         "TERM": "dumb",
-        "BASH_CONFIG_ROOT_DIR": os.environ["BASH_CONFIG_ROOT_DIR"],
-        "TCSH_CONFIG_ROOT_DIR": os.environ["TCSH_CONFIG_ROOT_DIR"],
+        "BASH_CONFIG_DIR": os.environ["BASH_CONFIG_DIR"],
+        "TCSH_CONFIG_DIR": os.environ["TCSH_CONFIG_DIR"],
     }
 
     def nfs_files(d):

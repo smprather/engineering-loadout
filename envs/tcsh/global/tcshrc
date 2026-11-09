@@ -14,8 +14,8 @@
 # Everything is guarded: on a machine with no loadout install, this file sets nothing
 # and prints nothing. Startup silence is a hard requirement.
 
-if ( $?TCSH_CONFIG_ROOT_DIR ) then
-    set _loadout_global = "${TCSH_CONFIG_ROOT_DIR}/global"
+if ( $?TCSH_CONFIG_DIR ) then
+    set _loadout_global = "${TCSH_CONFIG_DIR}/global"
 else
     set _loadout_global = "$HOME/.config/tcsh/global"
 endif
@@ -548,7 +548,7 @@ if ( $?prompt ) then
             # colour cannot live IN the config. It is applied afterwards,
             # by helpers/prompt-markers below, which recolours the directory
             # segment. See docs/STARSHIP.md.
-            setenv STARSHIP_CONFIG "${TCSH_CONFIG_ROOT_DIR}/../starship/starship.toml"
+            setenv STARSHIP_CONFIG "${TCSH_CONFIG_DIR}/../starship/starship.toml"
             # The marker conversion must be a `precmd` ALIAS defined BEFORE
             # starship's init: the init captures the current precmd alias into
             # USER_PRECMD and then defines `alias precmd
@@ -556,12 +556,12 @@ if ( $?prompt ) then
             # that alias is DEFINED, so anything set afterwards (a USER_PRECMD
             # variable, say) never runs.
             #
-            # The helper path uses $TCSH_CONFIG_ROOT_DIR (an ENVIRONMENT
+            # The helper path uses $TCSH_CONFIG_DIR (an ENVIRONMENT
             # variable, exported by the entry point) rather than
             # ${_loadout_helpers} (a shell-local one): csh validates an
             # alias body when the alias is defined, and a body naming a
             # shell-local variable that is not yet set is rejected as a
-            # "Faulty alias". $TCSH_CONFIG_ROOT_DIR is set before this file
+            # "Faulty alias". $TCSH_CONFIG_DIR is set before this file
             # runs and is correct for both layouts -- the shared config root
             # and the home-local one.
             # The prompt is rendered HERE and piped straight into the helper,
@@ -572,7 +572,7 @@ if ( $?prompt ) then
             # line. A PIPE inside the backticks preserves it.
             # $STARSHIP_PATH / $STARSHIP_CMD_STATUS / $STARSHIP_DURATION are
             # set by the stock STARSHIP_PRECMD, which runs just before this.
-            alias precmd 'set prompt = "`$STARSHIP_PATH prompt --status $STARSHIP_CMD_STATUS --cmd-duration $STARSHIP_DURATION | $TCSH_CONFIG_ROOT_DIR/global/helpers/prompt-markers`"'
+            alias precmd 'set prompt = "`$STARSHIP_PATH prompt --status $STARSHIP_CMD_STATUS --cmd-duration $STARSHIP_DURATION | $TCSH_CONFIG_DIR/global/helpers/prompt-markers`"'
             # starship's tcsh init defines precmd/postcmd aliases that chain to
             # the precmd alias above (captured as USER_PRECMD), so starship
             # renders the prompt and the alias converts its markers.

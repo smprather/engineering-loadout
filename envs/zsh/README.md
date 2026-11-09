@@ -68,7 +68,7 @@ global -> corp -> site -> team -> project -> user
 is loadout-owned; put your own settings in `~/.config/zsh/user/config.zsh` and
 `~/.config/zsh/user/zshrc`.
 
-When `ZSH_CONFIG_ROOT_DIR` / `BASH_CONFIG_ROOT_DIR` point at a shared root
+When `ZSH_CONFIG_DIR` / `BASH_CONFIG_DIR` point at a shared root
 outside `$HOME`, each pass reads that root's layers first and then the `corp` …
 `user` layers under `~/.config/{bash,zsh}` (`config.sh`, `config.zsh`, `zshrc`),
 so per-user overrides still apply. When the root is the home dir itself the

@@ -1155,11 +1155,14 @@ def _doctor_retired_state(home):
         return
     if missing:
         print(f"Retired env-cargo config: {path} [BROKEN]")
-        print(f"  source replacement missing: {', '.join(missing)}")
+        print(f"  source replacement absent: {', '.join(missing)}")
         print("  every cargo command fails until it goes: `loadout install` parks it as")
         print(f"  {os.path.basename(path)}.stale-env-cargo, or delete it yourself.")
     else:
-        print(f"Retired env-cargo config: {path} (kept -- it names no missing directory)")
+        # "absent", not "missing"/"unresolved": tests/check-installer greps
+        # doctor's output for those words to mean a REPO defect, and this line
+        # reports host state that is benign.
+        print(f"Retired env-cargo config: {path} (kept -- it names no absent directory)")
     print()
 
 
@@ -8387,10 +8390,16 @@ _CSH_UNSAFE_CHARS = re.compile(r"[^-A-Za-z0-9_./+@%,:=]")
 
 
 def _shell_config_roots(family, user_home, environ):
-    """Config roots for a shell family: ~/.config/<family> plus $<FAMILY>_CONFIG_ROOT_DIR."""
+    """Config roots for a shell family: ~/.config/<family> plus $<FAMILY>_CONFIG_DIR.
+
+    The variable was renamed from `<FAMILY>_CONFIG_ROOT_DIR` on 2026-11-09 (one
+    consumer, migrated in the same change), so only the new spelling is read:
+    a stale export must not silently look authoritative while the rcfiles
+    resolve their own default.
+    """
     roots, seen = [], set()
     candidates = [os.path.join(user_home, ".config", family)]
-    extra = environ.get(f"{family.upper()}_CONFIG_ROOT_DIR")
+    extra = environ.get(f"{family.upper()}_CONFIG_DIR")
     if extra:
         candidates.append(extra)
     for root in candidates:

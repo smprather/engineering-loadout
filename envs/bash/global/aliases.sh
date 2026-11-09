@@ -412,7 +412,7 @@ latest() {
 # and offers to kill them. The work is global/helpers/delete, one bash script
 # that every shell env runs (the tcsh env installs its own copy of it).
 unalias delete 2>/dev/null || true
-delete() { "$BASH_CONFIG_ROOT_DIR/global/helpers/delete" "$@"; }
+delete() { "$BASH_CONFIG_DIR/global/helpers/delete" "$@"; }
 
 ### Tmux ###
 alias tl='tmux list-sessions'

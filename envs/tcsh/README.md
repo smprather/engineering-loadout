@@ -60,8 +60,8 @@ global -> corp -> site -> team -> project -> user
 (PATH, aliases, prompt). Every source is guarded — a layer you have not created is
 normal, not an error.
 
-`TCSH_CONFIG_ROOT_DIR` mirrors bash's `BASH_CONFIG_ROOT_DIR` and zsh's
-`ZSH_CONFIG_ROOT_DIR`. It defaults to `~/.config/tcsh`, but can point at a shared
+`TCSH_CONFIG_DIR` mirrors bash's `BASH_CONFIG_DIR` and zsh's
+`ZSH_CONFIG_DIR`. It defaults to `~/.config/tcsh`, but can point at a shared
 loadout-owned tcsh config root. When it differs from the user's home config root,
 the entrypoint still sources the home-local `corp/site/team/project/user` layers
 after the shared root, so personal overrides survive shared config deployments.

@@ -41,8 +41,8 @@ if [[ -n ${_LOADOUT_ZSH_SOURCED:-} ]]; then
 fi
 _LOADOUT_ZSH_SOURCED=1
 
-ZSH_CONFIG_ROOT_DIR="${ZSH_CONFIG_ROOT_DIR:-$HOME/.config/zsh}"
-BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
+ZSH_CONFIG_DIR="${ZSH_CONFIG_DIR:-$HOME/.config/zsh}"
+BASH_CONFIG_DIR="${BASH_CONFIG_DIR:-$HOME/.config/bash}"
 
 # INTERACTIVE_COMMENTS: allow `#` comments interactively, as bash does.
 # Do NOT enable SH_WORD_SPLIT globally -- it breaks zsh's own completion system
@@ -50,7 +50,7 @@ BASH_CONFIG_ROOT_DIR="${BASH_CONFIG_ROOT_DIR:-$HOME/.config/bash}"
 setopt INTERACTIVE_COMMENTS 2>/dev/null
 
 # --- shared function library (must come first; everything below uses it) ------
-[[ -r "$BASH_CONFIG_ROOT_DIR/functions.sh" ]] && source "$BASH_CONFIG_ROOT_DIR/functions.sh"
+[[ -r "$BASH_CONFIG_DIR/functions.sh" ]] && source "$BASH_CONFIG_DIR/functions.sh"
 
 # --- Pass 1a: shared LOADOUT_CFG_* defaults, from the BASH layers -------------
 # Deliberately the bash files: the defaults live in exactly one place so a value
@@ -60,12 +60,12 @@ if typeset -f source_if_exists >/dev/null 2>&1; then
     # layers afterwards, as bash and tcsh do. Skipped when the root IS the home
     # dir (resolved with :A, no fork) -- those files were just sourced.
     _home_overlay_bash=0 _home_overlay_zsh=0 _home_bash=$HOME/.config/bash _home_zsh=$HOME/.config/zsh
-    [[ ${BASH_CONFIG_ROOT_DIR:A} != ${_home_bash:A} ]] && _home_overlay_bash=1
-    [[ ${ZSH_CONFIG_ROOT_DIR:A} != ${_home_zsh:A} ]] && _home_overlay_zsh=1
+    [[ ${BASH_CONFIG_DIR:A} != ${_home_bash:A} ]] && _home_overlay_bash=1
+    [[ ${ZSH_CONFIG_DIR:A} != ${_home_zsh:A} ]] && _home_overlay_zsh=1
 
-    source_if_exists "$BASH_CONFIG_ROOT_DIR/global/config.sh"
+    source_if_exists "$BASH_CONFIG_DIR/global/config.sh"
     for _layer in corp site team project user; do
-        source_if_exists "$BASH_CONFIG_ROOT_DIR/$_layer/config.sh"
+        source_if_exists "$BASH_CONFIG_DIR/$_layer/config.sh"
     done
     if (( _home_overlay_bash )); then
         for _layer in corp site team project user; do
@@ -75,7 +75,7 @@ if typeset -f source_if_exists >/dev/null 2>&1; then
 
     # --- Pass 1b: zsh-specific config, every layer ----------------------------
     for _layer in global corp site team project user; do
-        source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/config.zsh"
+        source_if_exists "$ZSH_CONFIG_DIR/$_layer/config.zsh"
     done
     if (( _home_overlay_zsh )); then
         for _layer in corp site team project user; do
@@ -85,7 +85,7 @@ if typeset -f source_if_exists >/dev/null 2>&1; then
 
     # --- Pass 2: the shell config itself, every layer -------------------------
     for _layer in global corp site team project user; do
-        source_if_exists "$ZSH_CONFIG_ROOT_DIR/$_layer/zshrc"
+        source_if_exists "$ZSH_CONFIG_DIR/$_layer/zshrc"
     done
     if (( _home_overlay_zsh )); then
         for _layer in corp site team project user; do

@@ -187,8 +187,8 @@ def install_envs(root):
         "HOME": home,
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "TERM": "dumb",
-        "BASH_CONFIG_ROOT_DIR": os.path.join(home, ".config", "bash"),
-        "TCSH_CONFIG_ROOT_DIR": os.path.join(home, ".config", "tcsh"),
+        "BASH_CONFIG_DIR": os.path.join(home, ".config", "bash"),
+        "TCSH_CONFIG_DIR": os.path.join(home, ".config", "tcsh"),
     }
 
 
@@ -210,7 +210,7 @@ def argv(shell, args, prelude=""):
     """Run `delete ARGS` in SHELL from the installed env, then print
     DELETE-RC=<status>. Returns (argv, extra environment)."""
     if shell in ("bash", "zsh"):
-        body = f'source "$BASH_CONFIG_ROOT_DIR/global/aliases.sh"; {prelude} delete "$@"; echo "DELETE-RC=$?"'
+        body = f'source "$BASH_CONFIG_DIR/global/aliases.sh"; {prelude} delete "$@"; echo "DELETE-RC=$?"'
         base = ["bash", "--norc", "--noprofile", "-c"] if shell == "bash" else ["zsh", "-f", "-c"]
         return base + [body, "env-delete", *args], {}
     # tcsh -c parses a following `--` or `-x` as ITS option, so the arguments
@@ -220,8 +220,8 @@ def argv(shell, args, prelude=""):
     words = " ".join(f'"$DELETE_ARG{i}"' for i in range(len(args)))
     body = (
         'setenv PATH "$LO_TEST_PATH"; '
-        'source "$TCSH_CONFIG_ROOT_DIR/global/config.csh"; '
-        'source "$TCSH_CONFIG_ROOT_DIR/global/aliases.csh"\n'
+        'source "$TCSH_CONFIG_DIR/global/config.csh"; '
+        'source "$TCSH_CONFIG_DIR/global/aliases.csh"\n'
         f'{prelude} delete {words}; echo "DELETE-RC=$status"'
     )
     return ["tcsh", "-f", "-c", body], {f"DELETE_ARG{i}": a for i, a in enumerate(args)}
@@ -659,8 +659,8 @@ def main():
     root = tempfile.mkdtemp(prefix="loadout-env-delete.", dir=os.environ.get("TMPDIR", "/tmp"))
     try:
         env = install_envs(root)
-        bash_copy = os.path.join(env["BASH_CONFIG_ROOT_DIR"], "global", "helpers", "delete")
-        tcsh_copy = os.path.join(env["TCSH_CONFIG_ROOT_DIR"], "global", "helpers", "delete")
+        bash_copy = os.path.join(env["BASH_CONFIG_DIR"], "global", "helpers", "delete")
+        tcsh_copy = os.path.join(env["TCSH_CONFIG_DIR"], "global", "helpers", "delete")
         check("install: the bash env ships helpers/delete, executable", os.access(bash_copy, os.X_OK))
         check(
             "install: the tcsh env gets its own copy, executable (not a link)",

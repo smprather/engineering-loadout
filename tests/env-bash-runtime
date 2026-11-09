@@ -10,7 +10,7 @@
 #      nothing at definition time, and arguments must pass through as "$@".
 #   3. The ERR trap's file branch ran `cd` inside a subshell -- dead code.
 #
-# Sources the repo copy directly (BASH_CONFIG_ROOT_DIR=$REPO/envs/bash); the
+# Sources the repo copy directly (BASH_CONFIG_DIR=$REPO/envs/bash); the
 # user layer comes from a temp HOME.
 set -eu
 
@@ -22,12 +22,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 clean_bash() {
     env -i HOME="$T" PATH=/usr/bin:/bin TERM=xterm-256color LANG="${LANG:-C.UTF-8}" \
-        BASH_CONFIG_ROOT_DIR="$REPO/envs/bash" "$@"
+        BASH_CONFIG_DIR="$REPO/envs/bash" "$@"
 }
 
 # 1. exported _vars survive the non-interactive early return
 out=$(clean_bash _LMFILES_=/m/a _JAVA_OPTIONS=-Xmx1g \
-    bash -c '. "$BASH_CONFIG_ROOT_DIR/bashrc"; printf "%s|%s" "$_LMFILES_" "$_JAVA_OPTIONS"')
+    bash -c '. "$BASH_CONFIG_DIR/bashrc"; printf "%s|%s" "$_LMFILES_" "$_JAVA_OPTIONS"')
 [ "$out" = "/m/a|-Xmx1g" ] || fail "exported _vars wiped by non-interactive startup: '$out'"
 echo "  PASS  exported _vars survive non-interactive startup"
 
@@ -35,7 +35,7 @@ echo "  PASS  exported _vars survive non-interactive startup"
 mkdir -p "$T/.config/bash/user"
 echo 'export LOADOUT_CFG_PREFERRED_LS=ls' >"$T/.config/bash/user/config.sh"
 # shellcheck disable=SC2016  # expanded by the interactive bash, not here
-echo '. "$BASH_CONFIG_ROOT_DIR/bashrc"' >"$T/.bashrc"
+echo '. "$BASH_CONFIG_DIR/bashrc"' >"$T/.bashrc"
 # Bounded: a prompt that reads the terminal (cd()'s "Create it?") would
 # otherwise hang the suite instead of failing an assertion.
 interactive() {
@@ -93,5 +93,17 @@ case $out in *'does not exist'*) fail "cd -- DIR offered to create a directory: 
 printf '%s\n' "$out" | grep -q "^A=$T/cdtest\$" || fail "cd -- DIR did not land in DIR: [$out]"
 printf '%s\n' "$out" | grep -q "^B=$T/cdtest/-dash\$" || fail "cd -- -dash did not treat -dash as a path: [$out]"
 echo "  PASS  cd -- DIR lands in DIR (dash-led names too)"
+
+# 7. The RETIRED spelling is dead. The config-root variables were renamed
+#    *_CONFIG_ROOT_DIR -> *_CONFIG_DIR on 2026-11-09 (one consumer, migrated in
+#    the same change, so no compatibility shim was kept). A stale export must
+#    fall back to the default -- silently honouring it would be right, but
+#    silently IGNORING it while the old value still looks authoritative is the
+#    failure this pins: the shell must resolve $HOME/.config/bash, never the
+#    retired path.
+out=$(env -i HOME="$T" PATH=/usr/bin:/bin TERM=xterm-256color LANG="${LANG:-C.UTF-8}" \
+    REPO="$REPO" BASH_CONFIG_ROOT_DIR=/nonexistent/retired \
+    bash -c 'unset BASH_CONFIG_DIR; . "$REPO/envs/bash/bashrc"; printf "%s" "$BASH_CONFIG_DIR"')
+[ "$out" = "$T/.config/bash" ] || fail "retired BASH_CONFIG_ROOT_DIR influenced the config root: '$out'"
 
 echo "env-bash-runtime: OK"

@@ -568,7 +568,7 @@ six-layer override chain (`global -> corp -> site -> team -> project -> user`),
   them, then retries
 
 tcsh uses aliases plus POSIX-sh helpers for bash features that need functions,
-and keeps home-local override layers active even when `TCSH_CONFIG_ROOT_DIR`
+and keeps home-local override layers active even when `TCSH_CONFIG_DIR`
 points at a shared tcsh config root.
 
 ### Choosing your interactive shell
