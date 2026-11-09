@@ -81,6 +81,18 @@ retirement to the same step. `docs/INSTALLATION.md` gained the
 the retirement rule next to the install-stamp section (a deleted env must not
 leave immortal `$HOME` state).
 
+**Released** as `2026.11.5` (signed tag at `20f625a`; §9 green: not a draft, four
+assets, `git tag -v` good, tag-message `sha256sums.txt sha256 baf68a89…bd7e13`
+matching the published file, `origin/main` == tag commit at publish time).
+Issue #21 closed with that evidence, then the release's timing rows were
+committed (`beff9b5`) -- a post-tag dev-only commit, same shape as `dc0ca45`.
+
+**Operational trap found the hard way:** do NOT run `./build/release` (even
+`--dry-run`) while a Tier 3 run is in flight. Its cleanup killed a
+`loadout-smoke:almalinux8.10` container that belonged to the *other* run
+(`exitCode=143` mid `--full`), which reads as a Tier 3 failure and costs a rerun.
+The container-only rerun with nothing else running was green in 283 s.
+
 ## 2026-11-08 (2): the seven owed items closed (version ordering, currency, Tier 3, uv-tool stamps, deep-run verdicts, --container-only, docs)
 
 The OWED list in entry (1) is discharged. Nothing here changes what a user
