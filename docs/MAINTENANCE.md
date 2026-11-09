@@ -73,6 +73,62 @@ phases: dnf repos -> toolchains (gcc-toolset-14, llvm, go) -> dev headers
 per-user (rustup, nvm, uv tool meson) -> sanity checks. Idempotent;
 `--check` for dry-run, `--yes` for non-interactive.
 
+## Retired envs (state a deleted env left in $HOME)
+
+When an env bundle is removed from the tree, the files it wrote into `$HOME`
+are not owned by anything any more -- nothing re-writes them and nothing
+removes them, so they outlive the env and can break tools long after the
+retirement. `env-cargo` is the case that exists: it was deleted in commit
+`b1aac32` (the offline Rust subsystem went with it), but `~/.cargo/config.toml`
+survived on every box that ever installed it, still declaring
+
+```toml
+[source.crates-io]
+replace-with = "local-registry"
+
+[source.local-registry]
+local-registry = "<store that no longer exists>"
+```
+
+which makes **every** `cargo fetch` / `build` / `install` fail with
+
+```text
+local registry path is not a directory: <store that no longer exists>
+```
+
+-- an error that reads like "the store is missing, rebuild it" and points at a
+layout the tree abandoned (issue #21).
+
+**What the installer does now:** a confirmed `loadout install` parks that file,
+`~/.cargo/config.toml` -> `~/.cargo/config.toml.stale-env-cargo`, and says so,
+but only when BOTH hold: the file carries the `# Managed by loadout (env-cargo)`
+marker (so it is loadout's, not a hand-written config) and a source-replacement
+directory it names does not exist (so it actually breaks cargo). A hand-written
+config, and a managed one whose store still exists, are left untouched.
+`loadout doctor` reports the state without changing it:
+
+```text
+Retired env-cargo config: ~/.cargo/config.toml [BROKEN]
+  source replacement missing: /vols/.../registry-store
+  every cargo command fails until it goes: `loadout install` parks it as
+  config.toml.stale-env-cargo, or delete it yourself.
+```
+
+**Manual remedy on a box installed before this fix** (no install needed):
+
+```bash
+rm ~/.cargo/config.toml          # the parked copy keeps a record if you prefer `mv`
+```
+
+Gate: `tests/stale-env-cargo-config` (T2) drives a real install against a
+fixture `$HOME` carrying the broken file and asserts it is parked byte-for-byte,
+that a second install parks nothing again, and that hand-written / working
+configs are never touched; `tests/unit-install-steps` covers the marker/path
+matrix in-process.
+
+When the next env is retired, add its `$HOME` artefacts to this section and to
+the same cleanup step -- do not leave a second immortal file behind.
+
 ## Repo development
 
 The repo is the source of truth; editing a file there and re-running

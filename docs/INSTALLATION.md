@@ -243,6 +243,23 @@ carries `etc/fonts/loadout-fonts.conf`) and the gnuplot driver dir from the
 same variable, falling back to `$HOME/.local/share/loadout` when it is unset.
 (For a legacy `dest_dir = "~"` install the value is `$HOME/.local`.)
 
+### Cargo fails with "local registry path is not a directory"
+
+That is stale state from the retired `env-cargo` env, not a crates.io
+problem: `~/.cargo/config.toml` from a pre-2026-10 install still points
+`replace-with` at a crate store the tree no longer ships. A current
+`loadout install` parks the file for you
+(`~/.cargo/config.toml` -> `config.toml.stale-env-cargo`), and
+`loadout doctor` reports it as `Retired env-cargo config: ... [BROKEN]`.
+To fix it by hand:
+
+```bash
+rm ~/.cargo/config.toml
+```
+
+Details, including exactly when the installer touches the file and when it
+leaves it alone, are in `docs/MAINTENANCE.md` under "Retired envs".
+
 ### Shared / read-only deployments
 
 For a single install shared by many users, do not mutate the live tree in

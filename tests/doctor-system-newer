@@ -174,5 +174,39 @@ check(
     repr(rows),
 )
 
+# --- interactive bins are never probed ------------------------------------
+# `wish --version` is not a version flag: Tk enters its event loop, so the probe
+# opened a real window for the whole 4 s timeout on a desktop host -- twice, one
+# per flag (observed 2026-11-09, issue #21 follow-up). The probe must skip it
+# while still probing everything else.
+marker = os.path.join(tmp, "wish-was-executed")
+script(os.path.join(sysbin, "wish"), f'touch "{marker}"\necho "wish 9.9"\n')
+rows = mod._system_newer_rows(
+    {"tk": {"kind": "bin", "version": "8.6", "bins": ["wish"]}},
+    loadbin + os.pathsep + sysbin,
+    LOADOUT_DIRS,
+)
+check("interactive Tk shell is never exec'd by the doctor probe", not os.path.exists(marker))
+check("... and produces no row", rows == [], repr(rows))
+check("... while the skip list names the reason", "wish" in mod._SYSTEM_PROBE_SKIP, repr(mod._SYSTEM_PROBE_SKIP))
+
+# ... and the probe is headless, so ANY GUI binary's event loop cannot draw:
+# it fails instantly with "no display name" instead of showing a window.
+seen_display = os.path.join(tmp, "probe-display")
+script(os.path.join(sysbin, "showdisplay"), f'printf "%s" "$DISPLAY" > "{seen_display}"\necho "showdisplay 3.1"\n')
+saved_display = os.environ.get("DISPLAY")
+os.environ["DISPLAY"] = ":99"
+try:
+    probed = mod._probe_bin_version(os.path.join(sysbin, "showdisplay"))
+finally:
+    if saved_display is None:
+        os.environ.pop("DISPLAY", None)
+    else:
+        os.environ["DISPLAY"] = saved_display
+check("probe still reads a version while DISPLAY is set", probed == (3, 1), repr(probed))
+with open(seen_display, encoding="utf-8") as fh:
+    child_display = fh.read()
+check("probe hands the child no DISPLAY", child_display == "", repr(child_display))
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)

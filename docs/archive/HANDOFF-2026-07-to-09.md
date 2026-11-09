@@ -1739,6 +1739,12 @@ for both layouts. Remedy for the stale box: reinstall env-cargo. No code
 changed. (Also confirmed ADDING_BINARIES already documents the stock-config
 design, and no work-side literal exists in-tree.)
 
+[2026-11-09: `env-cargo` has since been RETIRED (commit `b1aac32`), so the
+"reinstall env-cargo" remedy above no longer resolves to anything -- and the
+`~/.cargo/config.toml` it wrote is now parked automatically by `loadout
+install` (or delete it by hand). See docs/MAINTENANCE.md, "Retired envs", and
+issue #21.]
+
 #2 (RECOMMENDED, crate coverage): wide/lexical-core/axum were absent from
 the 2740-crate store (axum sat in the seed list's REMOVED block, whose own
 comment anticipates pull-backs). Added as unpinned seeds, rebuilt the store

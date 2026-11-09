@@ -1042,6 +1042,127 @@ def remove_stale_openssh_clients(dest_bin_dir):
             warn(f"could not remove stale OpenSSH client {path}: {exc}")
 
 
+_ENV_CARGO_MARKER = "# Managed by loadout (env-cargo)"
+# Source-table keys whose value is a directory cargo must be able to open.
+_ENV_CARGO_PATH_KEYS = ("local-registry", "directory")
+
+
+def _env_cargo_config(marker_path):
+    """(managed, missing_paths) for a cargo config file.
+
+    `managed` says loadout's RETIRED `env-cargo` env wrote this file -- only
+    then is it ours to touch, and only the marker line proves that (a user who
+    wrote their own `[source]` tables must keep them). `missing_paths` are the
+    source-replacement directories the file declares that do not exist: those
+    are what make every cargo command die with
+    "local registry path is not a directory", an error that blames the
+    registry rather than the seven-month-old config that is the actual cause.
+
+    An unparsable or comment-only managed file yields no missing paths: it is
+    inert (the current generation of the env-cargo config is comments plus
+    stock crates.io access), so it is reported, never moved.
+    """
+    try:
+        with open(marker_path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return False, []
+    if not any(line.startswith(_ENV_CARGO_MARKER) for line in text.splitlines()):
+        return False, []
+    missing = []
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError, ValueError:
+        data = {}
+    # A relative `directory`/`local-registry` is resolved against the config's
+    # own directory (that is what cargo does), not against our cwd.
+    base = os.path.dirname(marker_path)
+
+    def _absent(value):
+        target = os.path.expanduser(value)
+        if not os.path.isabs(target):
+            target = os.path.join(base, target)
+        return not os.path.isdir(target)
+
+    for table in (data.get("source") or {}).values():
+        if not isinstance(table, dict):
+            continue
+        for key in _ENV_CARGO_PATH_KEYS:
+            value = table.get(key)
+            if isinstance(value, str) and value and _absent(value):
+                missing.append(value)
+    if not data:
+        # Unparsable fallback: the old env wrote exactly one such line.
+        for match in re.finditer(r'^\s*local-registry\s*=\s*"([^"]+)"', text, re.MULTILINE):
+            value = match.group(1)
+            if _absent(value):
+                missing.append(value)
+    return True, sorted(set(missing))
+
+
+def remove_stale_env_cargo_config(home):
+    """Park a `~/.cargo/config.toml` left by the retired `env-cargo` env.
+
+    `env-cargo` was deleted from the tree (commit b1aac32), and nothing since
+    has owned the file it wrote -- so it survives every upgrade and keeps
+    pointing cargo at a `local-registry` directory that went away with the
+    crate store. Every `cargo fetch`/`build`/`install` on such a box fails with
+    "local registry path is not a directory", which reads like "the store is
+    missing, rebuild it" and sends the reader looking for a design that no
+    longer exists (issue #21).
+
+    The file is PARKED rather than deleted, and only when BOTH hold: the
+    env-cargo marker is present (so it is loadout's, not the user's) AND a
+    source-replacement directory it names is gone (so it actually breaks
+    cargo). A managed config whose store exists is functional and is left
+    alone. Returns "parked" | "ok" | "absent".
+    """
+    path = os.path.join(home, ".cargo", "config.toml")
+    if not os.path.exists(path):
+        return "absent"
+    managed, missing = _env_cargo_config(path)
+    if not managed or not missing:
+        return "ok"
+    parked = path + ".stale-env-cargo"
+    suffix = 1
+    while os.path.exists(parked):
+        parked = f"{path}.stale-env-cargo.{suffix}"
+        suffix += 1
+    try:
+        os.replace(path, parked)
+    except OSError as exc:
+        warn(f"could not park the retired env-cargo config {path}: {exc}")
+        return "ok"
+    warn(
+        f"parked the retired env-cargo config: {path} -> {parked} "
+        f"(its source replacement {', '.join(missing)} no longer exists, which made every "
+        "cargo command fail; delete the parked file once you no longer need it)"
+    )
+    return "parked"
+
+
+def _doctor_retired_state(home):
+    """Report state a RETIRED env left in $HOME (issue #21).
+
+    Read-only: doctor never parks anything. A managed config whose
+    source-replacement path is missing breaks every cargo command, so it is
+    called out with the exact remedy; anything else is just named.
+    """
+    path = os.path.join(home, ".cargo", "config.toml")
+    managed, missing = _env_cargo_config(path)
+    if not managed:
+        print("Retired env state: none found in $HOME.")
+        return
+    if missing:
+        print(f"Retired env-cargo config: {path} [BROKEN]")
+        print(f"  source replacement missing: {', '.join(missing)}")
+        print("  every cargo command fails until it goes: `loadout install` parks it as")
+        print(f"  {os.path.basename(path)}.stale-env-cargo, or delete it yourself.")
+    else:
+        print(f"Retired env-cargo config: {path} (kept -- it names no missing directory)")
+    print()
+
+
 def eprint(*args):
     print(*args, file=sys.stderr)
 
@@ -8019,6 +8140,16 @@ def cmd_resolve(args, registry):
 
 _SYSTEM_VERSION_FLAGS = ("--version", "-V")
 _SYSTEM_PROBE_TIMEOUT = 4
+# Bins whose version probe would START the program instead of printing a
+# version. `wish` (the shipped Tk shell) treats both flags as a script name and
+# enters Tk's event loop, so on a desktop host `loadout doctor` opened a real
+# wish window for the whole timeout -- twice, once per flag (observed
+# 2026-11-09: two ~4 s windows). tests/prebuilt-binaries excludes the same
+# binary for the same reason; any other interactive-Tk entry belongs here too.
+# (The probe also strips DISPLAY below, so this is belt-and-braces for the one
+# binary verified to enter an event loop: gtkwave prints its usage for both
+# flags and xschem prints a version, so neither belongs here.)
+_SYSTEM_PROBE_SKIP = {"wish": "interactive Tk shell: neither flag is a version flag"}
 _VERSION_TOKEN = re.compile(r"(\d+(?:\.\d+)+|\d+)")
 
 
@@ -8089,7 +8220,18 @@ def _find_system_bin(name, path_str, skip_dirs):
 
 
 def _probe_bin_version(path):
-    """Version tuple from `<bin> --version|-V` (stdout or stderr), else None."""
+    """Version tuple from `<bin> --version|-V` (stdout or stderr), else None.
+
+    The probe runs WITHOUT DISPLAY/WAYLAND_DISPLAY. A GUI binary whose flags
+    are not version flags can otherwise start its event loop and put a real
+    window on the user's desktop for the whole timeout (observed 2026-11-09:
+    `loadout doctor` opened two 4 s Tk `wish` windows, one per flag). Headless,
+    such a binary fails instantly with "no display name", which is the
+    no-version answer this function already handles; a CLI tool is unaffected.
+    """
+    env = os.environ.copy()
+    for var in ("DISPLAY", "WAYLAND_DISPLAY"):
+        env.pop(var, None)
     for flag in _SYSTEM_VERSION_FLAGS:
         try:
             proc = subprocess.run(
@@ -8098,6 +8240,7 @@ def _probe_bin_version(path):
                 text=True,
                 errors="replace",
                 timeout=_SYSTEM_PROBE_TIMEOUT,
+                env=env,
             )
         except OSError, subprocess.SubprocessError:
             continue
@@ -8136,6 +8279,8 @@ def _system_newer_rows(registry, path_str=None, loadout_dirs=None):
         if payload_ver is None or not entry.get("bins"):
             continue
         for b in entry["bins"]:
+            if b in _SYSTEM_PROBE_SKIP:
+                continue
             sys_path = _find_system_bin(b, path_str, loadout_dirs)
             if sys_path is None:
                 continue
@@ -8680,6 +8825,7 @@ def cmd_doctor(args, registry, repo_dir):
         print("No system binary is newer than its payload counterpart.")
     print()
 
+    _doctor_retired_state(os.path.expanduser("~"))
     _doctor_exclusions(registry, _resolve_home(None))
     _doctor_layout_audit(repo_dir, registry, _resolve_home(None), os.path.expanduser("~"))
 
@@ -9055,6 +9201,14 @@ def cmd_install(args, registry, selected_tools, repo_dir, home):
 
     # Test-only dependency capture (no-op unless tests/run-all armed the marker).
     _record_install_deps(selected_tools, registry, repo_dir)
+
+    # $HOME state a RETIRED env wrote is nobody's job but ours (issue #21): park
+    # the env-cargo cargo config while it still points at a store that is gone,
+    # so the next `cargo` command works instead of blaming a missing registry.
+    # Both the install root and the invoking user's home are checked: with
+    # --dest-dir they differ, and the file belongs to whichever home it is in.
+    for _base in dict.fromkeys((home, os.path.expanduser("~"))):
+        remove_stale_env_cargo_config(_base)
 
     print(f"Loadout repo: {repo_dir}")
     if args.dest_dir:

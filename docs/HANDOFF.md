@@ -13,6 +13,74 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-09 (1): issue #21 -- a retired env's `$HOME` state is now cleaned up (and the doctor probe stopped opening windows)
+
+**The defect.** `env-cargo` was deleted from the tree (commit `b1aac32`), but the
+file it wrote, `~/.cargo/config.toml`, was owned by nothing afterwards: no env
+rewrote it, no installer step removed it. On a box that once installed the env it
+still declared `replace-with = local-registry` against the crate store that went
+away with the subsystem, so **every** cargo command failed with
+
+```
+local registry path is not a directory: /vols/.../latest/local/share/cargo/registry-store
+```
+
+-- an error that blames a registry and sends the reader looking for a layout the
+tree abandoned. The archived remedy ("reinstall env-cargo") resolved to nothing.
+
+**Fix (`loadout_main.py`).** `remove_stale_env_cargo_config(home)` parks
+`~/.cargo/config.toml` as `config.toml.stale-env-cargo` (numbered if that name is
+taken) -- park, not delete, so the old content is recoverable -- and says so,
+naming the exact missing path. It acts only when BOTH hold: the
+`# Managed by loadout (env-cargo)` marker is present (a hand-written config is
+never ours) and a `local-registry`/`directory` path the file declares does not
+exist (a managed config whose store IS there works and is left alone). TOML is
+parsed with `tomllib`, with a regex fallback for an unparsable managed file. It
+runs from a confirmed `install` for both the install root and the invoking user's
+home (`--dest-dir` makes those different), so a shared-tree install on a farm box
+still repairs the user's `$HOME`. `loadout doctor` reports the same state
+read-only (`Retired env-cargo config: ... [BROKEN]` / `(kept ...)` /
+`none found`), so a user finds it without running an install.
+
+**Bug found while verifying that report: `loadout doctor` opened Tk windows.**
+`_system_newer_rows` probes every payload bin that also exists outside the
+loadout dirs by executing `<bin> --version` then `<bin> -V` (4 s each). `wish`
+treats both as a script name and enters Tk's event loop, so on this desktop host
+every `doctor` run put two 4 s `wish` windows on screen (journal: two
+`windowClosed "wish|..."` 4 s apart -- `tests/prebuilt-binaries` excludes the
+same binary for the same reason, but the doctor probe did not). Fixed two ways:
+`wish` is in `_SYSTEM_PROBE_SKIP`, and `_probe_bin_version` now strips
+`DISPLAY`/`WAYLAND_DISPLAY` from the child, so ANY GUI binary fails headless
+with "no display name" instead of drawing. Verified: `doctor` -> exit 0 and zero
+`appId: "wish"` journal entries afterwards; `gtkwave --version` prints usage and
+`xschem --version` prints a version (both exit without an event loop), so they
+are deliberately not skipped.
+
+**Evidence the fix is the fix** (fixture `$HOME`, `--dest-dir` temp root):
+
+- With the stale file: `cargo fetch` -> `failed to query replaced source
+  registry crates-io` / `local registry path is not a directory: /vols/...`.
+- After `./loadout install -y env-bash`: the file is parked byte-identically and
+  the same `cargo fetch` downloads crates normally.
+- A second install parks nothing again; a hand-written config and a managed
+  config whose store exists both survive.
+
+**Gates.** `tests/stale-env-cargo-config` (T2, new): real install against a
+fixture `$HOME` with the issue's exact file -- parked byte-for-byte, message
+names file + missing store, idempotent, doctor reports clean afterwards, plus the
+two controls. `tests/unit-install-steps` gained the marker/path matrix
+(absent / broken / live store / hand-written / comment-only inert / unparsable /
+numbered park) and doctor's three states. `tests/doctor-system-newer` gained the
+`wish`-is-never-exec'd case and a DISPLAY-stripped-probe case. `tests/docs-sync`
+required the new test to be named in AGENTS.md (done).
+
+**Docs.** `docs/MAINTENANCE.md` "Retired envs": the rule, the exact remedy
+(`rm ~/.cargo/config.toml`), and the standing instruction to add the NEXT
+retirement to the same step. `docs/INSTALLATION.md` gained the
+"local registry path is not a directory" entry pointing at it. `AGENTS.md` states
+the retirement rule next to the install-stamp section (a deleted env must not
+leave immortal `$HOME` state).
+
 ## 2026-11-08 (2): the seven owed items closed (version ordering, currency, Tier 3, uv-tool stamps, deep-run verdicts, --container-only, docs)
 
 The OWED list in entry (1) is discharged. Nothing here changes what a user

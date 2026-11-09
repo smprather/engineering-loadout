@@ -1,0 +1,108 @@
+#!/bin/sh
+# stale-env-cargo-config -- issue #21: a fresh install parks the cargo config
+# the RETIRED `env-cargo` env wrote, so cargo stops dying on a store that no
+# longer exists.
+#
+# The failure this pins (reported from a farm box, 2026-11-09): env-cargo was
+# retired from the tree, but ~/.cargo/config.toml survived every upgrade and
+# still declared `replace-with = local-registry` against a path that went away
+# with the crate store -- so EVERY cargo command failed with
+#
+#   local registry path is not a directory: /vols/.../registry-store
+#
+# an error that reads like "rebuild the store" and sends the reader looking for
+# a design that no longer exists. Nothing owned the file, so nothing removed it.
+#
+# The installer now parks it (config.toml -> config.toml.stale-env-cargo) when
+# BOTH hold: the `# Managed by loadout (env-cargo)` marker is present, and a
+# source-replacement directory the file names is missing. A hand-written file,
+# or a managed one whose store exists, must be left exactly as it is -- those
+# are the two controls below.
+set -eu
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+TMPHOME="$(mktemp -d "${TMPDIR:-/tmp}/loadout-stale-cargo.XXXXXX")"
+ROOT="$(mktemp -d "${TMPDIR:-/tmp}/loadout-stale-cargo-root.XXXXXX")"
+LOG="$TMPHOME/install.log"
+trap 'chmod -R u+w "$TMPHOME" "$ROOT" 2>/dev/null; rm -rf "$TMPHOME" "$ROOT"' EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+CONFIG="$TMPHOME/.cargo/config.toml"
+PARKED="$TMPHOME/.cargo/config.toml.stale-env-cargo"
+
+# Byte-for-byte the file the issue captured.
+write_stale_config() {
+    mkdir -p "$TMPHOME/.cargo"
+    cat > "$CONFIG" <<'EOF'
+# Managed by loadout (env-cargo). Offline crate resolution against the
+# bundled local-registry. Delete this file to restore crates.io fetches.
+[source.crates-io]
+registry = "sparse+https://index.crates.io/"
+replace-with = "local-registry"
+
+[source.local-registry]
+local-registry = "/vols/anvil_release/psg/external/engineering-loadout/latest/local/share/cargo/registry-store"
+EOF
+}
+
+install_env() {
+    HOME="$TMPHOME" "$REPO/loadout" install -y env-bash --dest-dir "$ROOT" --no-backup > "$LOG" 2>&1 \
+        || { tail -20 "$LOG" >&2; fail "install exited non-zero"; }
+}
+
+# --- the defect: a broken managed config is parked ---------------------------
+write_stale_config
+cp "$CONFIG" "$TMPHOME/original.expected"
+install_env
+
+[ ! -e "$CONFIG" ] || fail "the stale managed config survived an install"
+[ -f "$PARKED" ] || fail "the stale managed config was not parked at $PARKED"
+cmp -s "$PARKED" "$TMPHOME/original.expected" || fail "the parked copy is not byte-identical to the original"
+grep -qF "parked the retired env-cargo config" "$LOG" \
+    || fail "the install did not say it parked the retired config"
+grep -qF "$PARKED" "$LOG" || fail "the install message does not name the parked file"
+grep -qF "registry-store" "$LOG" || fail "the install message does not name the missing store"
+
+# --- idempotent: the second install parks nothing again ----------------------
+install_env
+[ ! -e "$PARKED.1" ] || fail "a second install parked the file twice"
+[ ! -e "$CONFIG" ] || fail "a second install left a config behind"
+
+# --- doctor agrees there is nothing left to fix -----------------------------
+HOME="$TMPHOME" "$REPO/loadout" doctor > "$TMPHOME/doctor.log" 2>&1 || fail "doctor exited non-zero"
+grep -q "Retired env state: none found" "$TMPHOME/doctor.log" \
+    || { grep -i retired "$TMPHOME/doctor.log" >&2; fail "doctor still reports retired state after the fix"; }
+
+# --- control: a hand-written config is never touched ------------------------
+cat > "$CONFIG" <<'EOF'
+[source.crates-io]
+replace-with = "local-registry"
+
+[source.local-registry]
+local-registry = "/does/not/exist"
+EOF
+cp "$CONFIG" "$TMPHOME/handwritten.expected"
+install_env
+[ -f "$CONFIG" ] || fail "a hand-written cargo config was moved by an install"
+cmp -s "$CONFIG" "$TMPHOME/handwritten.expected" || fail "a hand-written cargo config was rewritten"
+rm -f "$CONFIG"
+
+# --- control: a managed config whose store EXISTS is functional --------------
+STORE="$TMPHOME/store"
+mkdir -p "$STORE"
+mkdir -p "$TMPHOME/.cargo"
+cat > "$CONFIG" <<EOF
+# Managed by loadout (env-cargo). Offline crate resolution against the
+# bundled local-registry.
+[source.crates-io]
+replace-with = "local-registry"
+
+[source.local-registry]
+local-registry = "$STORE"
+EOF
+install_env
+[ -f "$CONFIG" ] || fail "a managed config with a live store was parked"
+[ ! -e "$PARKED.1" ] || fail "a managed config with a live store was duplicated"
+
+echo "stale-env-cargo-config: OK"

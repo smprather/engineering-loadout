@@ -740,6 +740,110 @@ def test_doctor_shell_audit_csh_chars(m, tmp):
     check("bash family accepts unsafe characters", "csh/tcsh cannot use" not in buf.getvalue(), buf.getvalue())
 
 
+# The config the retired `env-cargo` env wrote, byte-for-byte what issue #21
+# captured. The store path is a placeholder; each case substitutes its own.
+ENV_CARGO_STALE = """\
+# Managed by loadout (env-cargo). Offline crate resolution against the
+# bundled local-registry. Delete this file to restore crates.io fetches.
+[source.crates-io]
+registry = "sparse+https://index.crates.io/"
+replace-with = "local-registry"
+
+[source.local-registry]
+local-registry = "{store}"
+"""
+
+
+def _write_env_cargo_config(home, text):
+    path = os.path.join(home, ".cargo", "config.toml")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return path
+
+
+def test_stale_env_cargo_config(m, tmp):
+    """Issue #21: the retired env-cargo config is parked, never silently kept."""
+    import contextlib
+    import io
+
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    check("no config -> absent", m.remove_stale_env_cargo_config(home) == "absent")
+
+    store = os.path.join(tmp, "store")  # deliberately missing
+    path = _write_env_cargo_config(home, ENV_CARGO_STALE.format(store=store))
+    with open(path, "rb") as fh:
+        original = fh.read()
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        got = m.remove_stale_env_cargo_config(home)
+    err = buf.getvalue()
+    parked = path + ".stale-env-cargo"
+    check("a managed config with a dead store is parked", got == "parked", got)
+    check("... the live config is gone", not os.path.exists(path))
+    check(
+        "... the parked copy is byte-identical",
+        os.path.exists(parked) and os.path.getsize(parked) == len(original),
+    )
+    check("... and the warning names the file and the dead path", parked in err and store in err, err.strip())
+    check("a second run is a no-op", m.remove_stale_env_cargo_config(home) == "absent")
+    check("... and does not re-park it", not os.path.exists(path))
+
+    # A managed config whose store EXISTS is functional: leave it alone.
+    os.makedirs(store)
+    _write_env_cargo_config(home, ENV_CARGO_STALE.format(store=store))
+    check("a managed config with a live store is kept", m.remove_stale_env_cargo_config(home) == "ok")
+    check("... file untouched", os.path.exists(path))
+    os.rmdir(store)
+
+    # A hand-written file is never ours, whatever it declares.
+    _write_env_cargo_config(home, ENV_CARGO_STALE.format(store="/does/not/exist").replace("# Managed by", "# my"))
+    check("a hand-written config is never touched", m.remove_stale_env_cargo_config(home) == "ok")
+    check("... file untouched", os.path.exists(path))
+
+    # The CURRENT generation of the managed config is comment-only: inert.
+    _write_env_cargo_config(home, "# Managed by loadout (env-cargo). Stock crates.io access -- online-first.\n")
+    check("an inert managed config is kept", m.remove_stale_env_cargo_config(home) == "ok")
+
+    # Unparsable TOML: the old env's one literal still identifies the dead store.
+    _write_env_cargo_config(
+        home, '# Managed by loadout (env-cargo)\n[source.local-registry\nlocal-registry = "/gone/store"\n'
+    )
+    check("unparsable managed config with a dead path is parked", m.remove_stale_env_cargo_config(home) == "parked")
+
+    # A RELATIVE source path is resolved against the config's own directory (that
+    # is how cargo reads it), so a vendor dir beside the config is not "missing".
+    rel = '# Managed by loadout (env-cargo)\n[source.vendored-sources]\ndirectory = "vendor"\n'
+    _write_env_cargo_config(home, rel)
+    check("relative directory with no vendor dir is parked", m.remove_stale_env_cargo_config(home) == "parked")
+    _write_env_cargo_config(home, rel)
+    os.makedirs(os.path.join(home, ".cargo", "vendor"))
+    check("relative directory beside the config is respected", m.remove_stale_env_cargo_config(home) == "ok")
+
+    # An older parked copy must not be clobbered.
+    _write_env_cargo_config(home, ENV_CARGO_STALE.format(store="/gone/again"))
+    check(
+        "a second park is numbered",
+        m.remove_stale_env_cargo_config(home) == "parked" and os.path.exists(path + ".stale-env-cargo.1"),
+    )
+
+    # doctor reports without touching anything.
+    check("doctor leaves a broken config in place", os.path.exists(path) is False)
+    _write_env_cargo_config(home, ENV_CARGO_STALE.format(store="/gone/doctor"))
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m._doctor_retired_state(home)
+    out = buf.getvalue()
+    check("doctor reports BROKEN for a dead store", "[BROKEN]" in out and "/gone/doctor" in out, out.strip())
+    check("... and does not modify the file", os.path.exists(path))
+    os.unlink(path)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m._doctor_retired_state(home)
+    check("doctor reports no retired state in a clean home", "none found" in buf.getvalue(), buf.getvalue())
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
@@ -766,6 +870,7 @@ TESTS = (
     test_resolve_interactive_shell,
     test_shell_family,
     test_doctor_shell_audit_csh_chars,
+    test_stale_env_cargo_config,
 )
 
 
