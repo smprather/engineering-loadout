@@ -208,5 +208,23 @@ with open(seen_display, encoding="utf-8") as fh:
     child_display = fh.read()
 check("probe hands the child no DISPLAY", child_display == "", repr(child_display))
 
+# A GUI binary whose version only prints when it can reach a display yields NO
+# row under the headless probe. That is the documented safe direction -- a
+# missed "newer" beats a window on the user's desktop -- and it is pinned here
+# so a future change that forwards DISPLAY shows up as a new row, not as a
+# silent behavioural shift.
+gui_marker = os.path.join(tmp, "gui-probed")
+script(
+    os.path.join(sysbin, "guitool"),
+    f'[ -n "$DISPLAY" ] && touch "{gui_marker}" && echo "guitool 2.0"\n',
+)
+rows = mod._system_newer_rows(
+    {"guitool": {"kind": "bin", "version": "1.0", "bins": ["guitool"]}},
+    loadbin + os.pathsep + sysbin,
+    LOADOUT_DIRS,
+)
+check("a display-only version probe yields no row (safe direction)", rows == [], repr(rows))
+check("... and the GUI binary never sees a display", not os.path.exists(gui_marker))
+
 print(f"\n{PASSED} passed, {FAILED} failed")
 sys.exit(1 if FAILED else 0)
