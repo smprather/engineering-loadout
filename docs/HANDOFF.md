@@ -2399,7 +2399,7 @@ user's request: the four session hooks in `~/.claude/settings.json`, the
 user-scope MCP server, the uv tool, `~/.repowise`, `~/.config/repowise`, and
 the `.repowise/` indexes in five repos. Generated repowise blocks and repowise
 instructions were removed from candelise's agent docs; the `.gitignore` rules
-went from candelise, watchglass (`~/dev/keepwatch`), cachyos-config and
+went from candelise, watchglass (`~/watchglass`), cachyos-config and
 janestreet-blog-serial-protocol-emulator. Do not reintroduce it.
 
 **Noted, not acted on.** `build/build-bash.sh`, `build-expect.sh` and
