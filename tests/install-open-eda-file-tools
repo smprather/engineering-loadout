@@ -98,6 +98,17 @@ for bin in liberty-format lef-tools def-tools; do
 done
 echo "  OK: liberty-format/lef-tools/def-tools --help (python3 poisoned on PATH)"
 
+# The old standalone `def-dump-instances` script was folded into `def-tools`
+# subcommands upstream. `--help` on the parent says nothing about that: the
+# instance dump is the `instances` subcommand, and it must be reachable, so a
+# wheel that lost the module would fail here rather than at a user's first use.
+"${probe_env[@]}" "$local_prefix/bin/def-tools" instances --help > "$test_home/def-instances.help" 2>&1 || {
+    cat "$test_home/def-instances.help" >&2
+    fail "def-tools instances --help (the folded def-dump-instances replacement)"
+}
+grep -qiE "usage|instances" "$test_home/def-instances.help" || fail "def-tools instances printed no usage"
+echo "  OK: def-tools instances --help (the folded def-dump-instances)"
+
 # --- bundled source: the install must be rebuildable, not just runnable ------
 # open-eda-file-tools ships its COMPLETE committed tree -- vendored Rust crates
 # included -- so the Rust extension can be rebuilt on the user's own machine,

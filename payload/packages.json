@@ -244,8 +244,6 @@
         "opentelemetry-api",
         "polars",
         "polars-runtime-32",
-        "polars-runtime-64",
-        "polars-runtime-compat",
         "pydantic",
         "pydantic-core",
         "pygments",
@@ -268,7 +266,7 @@
       "archive_name": "open-eda-file-tools-source.tar.bz2",
       "install_to": "~/.local/share/loadout/src/open-eda-file-tools",
       "sentinel": "Cargo.lock",
-      "version": "v2026.11.9.1",
+      "version": "v2026.11.10",
       "platforms": [
         "linux"
       ],

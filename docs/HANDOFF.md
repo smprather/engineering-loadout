@@ -41,6 +41,26 @@ crates.io. The three stale wheels (`liberty_tools-2.0.6.dev0`,
 from the payload wheelhouse; installed-sizes (6425 artifacts) and
 .content-manifest (4581 files) re-pinned, and the README package row regenerated.
 
+**Update to v2026.11.10 (same day).** Upstream released `v2026.11.10` ("CalVer
+uses the UTC release date"), so the package was rebuilt again in the container:
+`open_eda_file_tools-2026.11.10-cp315-cp315-manylinux_2_28_x86_64.whl`, source
+archive 6713 files / 11.1 MB, registry `version` v2026.11.10, README row
+regenerated. Two follow-ups that came out of reviewing the consolidation:
+
+- **The `wheels` closure is now derived, not inherited.** Resolving the
+  consolidated wheel against the wheelhouse offline (`uv pip install --dry-run`
+  over the rejoined chunked wheels) selects 27 dependencies; the registry still
+  declared 29 from the three-distribution era. `polars-runtime-64` and
+  `polars-runtime-compat` are never chosen (polars requires
+  `polars-runtime-32`), and nothing declared was missing -- the list was broad,
+  not short. Both dropped and their four chunked files deleted (**102 MB**);
+  installed-sizes 9.3 -> 9.0 GiB. Re-proved on v2026.11.10: resolver rc 0 and
+  `declared == resolved + the package's own wheel`, no asymmetry either way.
+- **The folded `def-dump-instances` is gated.** It became the `def-tools
+  instances` subcommand upstream, so `def-tools --help` no longer proves the
+  capability exists; the install gate now runs `def-tools instances --help`
+  against the installed tree (python3 poisoned on PATH).
+
 **Verification.** Affected gates run individually and green: `install-open-eda-file-tools`
 (one venv `open-eda-file-tools 2026.11.9.1`, four launchers, no split venvs, vendored
 crates 119/5536 unchanged), `compile-open-eda-from-source` (one `lib_native.so`,
