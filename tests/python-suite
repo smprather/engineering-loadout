@@ -23,7 +23,6 @@ import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 
@@ -149,18 +148,34 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
-def shared_wheelhouse_dirty():
-    proc = subprocess.run(
-        ["git", "status", "--porcelain", "--", os.path.relpath(SHARED_WHEELS, REPO)],
-        cwd=REPO,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    return proc.returncode != 0 or proc.stdout.strip() != ""
+def shared_wheelhouse_state():
+    """(name, size, mtime_ns) for every file in the shared wheelhouse.
+
+    D8 asks "did the SUITE write into the shared wheelhouse", and the answer
+    must be self-contained: this test is read-only, so a snapshot taken before
+    its work and compared after it can only differ if something wrote during
+    the run. It used to shell out to `git status`, which conflated that with
+    "the payload differs from HEAD" -- so any legitimate uncommitted payload
+    change (a rebuilt wheel, a removed one) failed a gate about the suite's
+    behaviour and cost a second full-suite run after every payload commit.
+    """
+    state = []
+    try:
+        with os.scandir(SHARED_WHEELS) as entries:
+            for entry in sorted(entries, key=lambda e: e.name):
+                try:
+                    st = entry.stat()
+                except OSError:
+                    continue
+                state.append((entry.name, st.st_size, st.st_mtime_ns))
+    except OSError:
+        return []
+    return state
 
 
 def main():
+    # Snapshot before any of this test's reads: D8 compares against it at the end.
+    wheelhouse_before = shared_wheelhouse_state()
     version = shipped_python_version()
     if not version:
         fail("no portable-python archive -- cannot derive the suite ABI")
@@ -247,7 +262,7 @@ def main():
     if any(f.endswith((".tar.gz", ".zip", ".tar.bz2")) for f in strays):
         fail("private wheelhouse contains a source distribution")
 
-    if shared_wheelhouse_dirty():
+    if shared_wheelhouse_state() != wheelhouse_before:
         fail("suite build wrote into the shared wheelhouse (D8)")
 
     module = load_loadout()

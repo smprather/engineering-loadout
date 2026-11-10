@@ -304,6 +304,16 @@ declare -A DEP_GROUP=(
     [payload]="payload"
     [loader]="loadout loadout_main.py installer_vendor"
     [build]="build"
+    # Narrow keys for tests that provably never read the payload or envs.
+    # The rule stands (AGENTS.md): add a test only after reading what it opens.
+    [python]="loadout loadout_main.py tests build tools hooks ruff.toml ty.toml"
+    # Records only: the timing log is appended by EVERY run, so keying the
+    # assurance gates on it made them permanent re-runs.
+    [assurance]="assurance/records"
+    [timings]="assurance/release-timings.tsv"
+    [tests]="tests"
+    [hooks]="hooks"
+    [tools]="tools"
     [sonames]="assurance/el8-stock-sonames.txt"
     [locks]="payload assurance/treesitter-parser-locks.json"
     [readme]="README.md payload/packages.json"
@@ -782,33 +792,33 @@ precompute_verdicts
 # container and a Tier 1/2 re-run proves nothing about it. The whole list is
 # skipped rather than each test's verdict, so no .pass/sidecar is refreshed.
 if [ "$CONTAINER_ONLY" -eq 0 ]; then
-    run_test "py_compile" "$PY" -m py_compile "${PYTHON_FILES[@]}"
-    run_test "ruff check" lint_python_files "${PYTHON_FILES[@]}"
-    run_test "ruff format check" check_python_format "${PYTHON_FILES[@]}"
-    run_test "unit-resolver" "$PY" tests/unit-resolver
+    run_test "py_compile" --deps python "$PY" -m py_compile "${PYTHON_FILES[@]}"
+    run_test "ruff check" --deps python lint_python_files "${PYTHON_FILES[@]}"
+    run_test "ruff format check" --deps python check_python_format "${PYTHON_FILES[@]}"
+    run_test "unit-resolver" --deps payload+loader "$PY" tests/unit-resolver
     run_test "config-toml-exclude" --deps payload+loader "$PY" tests/config-toml-exclude
-    run_test "unit-private-state" "$PY" tests/unit-private-state
-    run_test "unit-install-steps" "$PY" tests/unit-install-steps
-    run_test "install-atomic-replace" "$PY" tests/install-atomic-replace
-    run_test "doctor-system-newer" "$PY" tests/doctor-system-newer
-    run_test "registry-integrity" "$PY" tests/registry-integrity
+    run_test "unit-private-state" --deps payload+loader "$PY" tests/unit-private-state
+    run_test "unit-install-steps" --deps loader "$PY" tests/unit-install-steps
+    run_test "install-atomic-replace" --deps loader "$PY" tests/install-atomic-replace
+    run_test "doctor-system-newer" --deps loader "$PY" tests/doctor-system-newer
+    run_test "registry-integrity" --deps payload+loader "$PY" tests/registry-integrity
     run_test "python-requires" --deps payload+loader "$PY" tests/python-requires
-    run_test "search-groups" tests/search-groups
-    run_test "tar-safety" "$PY" tests/tar-safety
-    run_test "content-verify" "$PY" tests/content-verify
-    run_test "content-manifest in sync" "$PY" build/gen-content-manifest --check
+    run_test "search-groups" --deps loader tests/search-groups
+    run_test "tar-safety" --deps loader "$PY" tests/tar-safety
+    run_test "content-verify" --deps loader "$PY" tests/content-verify
+    run_test "content-manifest in sync" --deps payload+export+build --deps-key build/gen-content-manifest "$PY" build/gen-content-manifest --check
     # build/ is in the key because this gate IMPORTS build/gen-content-manifest for
     # ROOTS and the manifest parser: editing the generator changes the verdict
     # without touching .content-manifest or any ref.
     run_test "content-manifest matches export" --deps export+build --deps-key build/verify-manifest-export "$PY" build/verify-manifest-export
-    run_test "content-manifest shipped-set" "$PY" tests/content-manifest-shipped-set
+    run_test "content-manifest shipped-set" --deps export+build --deps-key build/verify-manifest-export "$PY" tests/content-manifest-shipped-set
     run_test "installed-sizes in sync" --deps envs+payload --deps-key build/gen-installed-sizes "$PY" build/gen-installed-sizes --check
     run_test "incremental-verdicts" --deps smoke "$PY" tests/incremental-verdicts
     run_test "parser-locks in sync" --deps locks --deps-key build/gen-parser-locks "$PY" build/gen-parser-locks --check
     run_test "st font list in sync" --deps stfonts --deps-key build/gen-st-font-comments "$PY" build/gen-st-font-comments --check
     run_test "README table in sync" --deps readme --deps-key build/gen-readme-table "$PY" build/gen-readme-table --check
     run_test "docs-sync" --deps docs "$PY" tests/docs-sync
-    run_test "assurance-check" "$PY" tests/assurance-check
+    run_test "assurance-check" --deps assurance "$PY" tests/assurance-check
     run_test "env-shell-parity" --deps envs+loader "$PY" tests/env-shell-parity
     run_test "env-bash-profile-shim" --deps envs "$PY" tests/env-bash-profile-shim
     run_test "env-bash-runtime" --deps envs tests/env-bash-runtime
@@ -827,16 +837,16 @@ if [ "$CONTAINER_ONLY" -eq 0 ]; then
     # payload wheelhouse: either side invalidates its verdict.
     run_test "wheelhouse-closure" --deps payload+loader "$PY" tests/wheelhouse-closure
     run_test "python-suite" --deps payload+loader+build "$PY" tests/python-suite
-    run_test "release-timings" "$PY" tests/release-timings
+    run_test "release-timings" --deps timings+build "$PY" tests/release-timings
     run_test "env-tcsh-starship" --deps envs "$PY" tests/env-tcsh-starship
     run_test "prompt-no-rc" --deps envs "$PY" tests/prompt-no-rc
-    run_test "test-cleanup" "$PY" tests/test-cleanup
-    run_test "pre-commit-hook" tests/pre-commit-hook
-    run_test "nvim-formatters-resolve" "$PY" tests/nvim-formatters-resolve
+    run_test "test-cleanup" --deps tests "$PY" tests/test-cleanup
+    run_test "pre-commit-hook" --deps hooks tests/pre-commit-hook
+    run_test "nvim-formatters-resolve" --deps payload+envs "$PY" tests/nvim-formatters-resolve
     run_test "env-modules" --deps envs "$PY" tests/env-modules
     run_test "export-stash" --deps build "$PY" tests/export-stash
-    run_test "dep-capture" tests/dep-capture
-    run_test "oom-guard-reap" "$PY" tests/oom-guard-reap
+    run_test "dep-capture" --deps payload+envs tests/dep-capture
+    run_test "oom-guard-reap" --deps build+loader "$PY" tests/oom-guard-reap
     run_test "check-installer" --deps loader tests/check-installer
     run_test "st-wrapper" --deps build tests/st-wrapper
     run_test "env-helix-config" --deps envs+payload tests/env-helix-config
@@ -845,9 +855,9 @@ if [ "$CONTAINER_ONLY" -eq 0 ]; then
     # stale CACHED PASS standing. `--deps build` covers farm-versions per the
     # AGENTS.md rule (a key file that imports another build module lists `build`).
     run_test "update-cadence" --deps build --deps-key build/update "$PY" tests/update-cadence
-    run_test "release-tag-scheme" "$PY" tests/release-tag-scheme
-    run_test "fetch-stash-trust" "$PY" tests/fetch-stash-trust
-    run_test "security-pipeline" "$PY" tests/security-pipeline
+    run_test "release-tag-scheme" --deps build "$PY" tests/release-tag-scheme
+    run_test "fetch-stash-trust" --deps build+tools "$PY" tests/fetch-stash-trust
+    run_test "security-pipeline" --deps build "$PY" tests/security-pipeline
     run_test "check-versions-contract" --deps build --deps-key build/check-versions "$PY" tests/check-versions-contract
 fi
 
@@ -950,7 +960,10 @@ if [ "$CONTAINER_ONLY" -eq 0 ]; then
     run_test "install-split-shared-envs" --deps auto tests/install-split-shared-envs
     run_test "install-nvim-deployments" --deps auto tests/install-nvim-deployments
     run_test "install-nvim-shared-stash" --deps auto tests/install-nvim-shared-stash
-    run_test "completion in sync" bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
+    # Generated from the registry + the CLI surface; the committed file is the
+    # expectation. Without a key this ran on EVERY suite invocation (no tests/*
+    # token to hash, so it could never cache).
+    run_test "completion in sync" --deps loader+payload+envs --deps-key loadout_main.py bash -c './loadout completion bash | diff - envs/bash/global/completions/loadout.bash'
 fi
 
 # --- Tier 3: clean-container smoke (stock AlmaLinux 8.10) -------------------

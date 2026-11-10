@@ -41,6 +41,38 @@ crates.io. The three stale wheels (`liberty_tools-2.0.6.dev0`,
 from the payload wheelhouse; installed-sizes (6425 artifacts) and
 .content-manifest (4581 files) re-pinned, and the README package row regenerated.
 
+**Verification.** Affected gates run individually and green: `install-open-eda-file-tools`
+(one venv `open-eda-file-tools 2026.11.9.1`, four launchers, no split venvs, vendored
+crates 119/5536 unchanged), `compile-open-eda-from-source` (one `lib_native.so`,
+54 s, offline from the vendored tree), `wheelhouse-closure`, `python-requires`,
+`registry-integrity` (23/23), `docs-sync`, `gen-installed-sizes --check`,
+`gen-content-manifest --check`, `gen-readme-table --check`. Then
+`TMPDIR=/var/tmp tests/run-all` -> exit 0, **50 CACHED / 46 live / 0 FAIL** (641 s),
+and `tests/run-all --container-only` -> exit 0, **4/4 container tests PASS, all
+live** (457 s): the payload changed, so the container sidecar invalidated and
+nothing came from the cache. One false start is worth recording: the first full
+run reported `python-suite: FAIL` ("the suite build wrote into the shared
+wheelhouse") purely because that check shelled out to `git status` and the
+payload changes were still uncommitted -- fixed in the same pass, see below.
+
+**Suite cost, measured (testing performance is first-class):** before this
+session's key work an `envs/` edit re-ran ~70 of 75 tests (5 CACHED) because
+every test either carried the conservative `all` key or the single `envs` group.
+24 T1 tests now declare the group they actually read (`python`, `loader`,
+`payload+loader`, `build`, `export+build`, `assurance/records`, `timings`,
+`tests`, `hooks`, `tools`, with `--deps-key` for the generators), `assurance-check`
+no longer keys on the timing log that every run appends, and `completion in
+sync` gained a key (it had no `tests/*` token, so it could never cache).
+Measured after: a warm T1 run is **57 CACHED / 1 live** (only `release-timings`,
+which validates the rows the run just wrote), and an `envs/`-only edit re-runs
+**17** tests instead of ~70 -- 15.7 s wall for the whole T1. Second fix in the
+same pass: `tests/python-suite`'s D8 check asked `git status` whether the shared
+wheelhouse was dirty, so any legitimate uncommitted payload change (a rebuilt or
+removed wheel) failed a gate about the SUITE's behaviour and forced another full
+suite run after the commit; it now snapshots the wheelhouse before its own
+read-only work and compares after, which is what D8 actually means (proved: a
+mid-run `utime` bump is detected, restoring it matches again).
+
 **Tests moved with the shape.**
 `tests/install-open-eda-file-tools` was rewritten: one venv
 `share/uv/tools/open-eda-file-tools`, four launchers, and the retired split
