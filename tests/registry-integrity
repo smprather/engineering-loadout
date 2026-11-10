@@ -57,7 +57,13 @@ KNOWN_KINDS = {
 }
 KNOWN_PLATFORMS = {"linux"}
 SYNTHETIC_NAMES = {"@shared", "@shared-all", "@envs", "@envs-all"}
-OPTIONAL_SCHEMA_FIELDS = {"uv_extras"}
+# Schema fields a CORRECT registry may not use right now. They stay documented
+# because the capability is supported and tested, but no entry exercises them:
+# `uv_tools` and `rolling_subdirs` existed to carry a monorepo's distributions
+# (open-eda-file-tools had three until v2026.11.9.1 consolidated them into one
+# wheel), and `uv_extras` has no consumer today. A NEW documented-but-unused
+# field still fails -- that is the rot this check exists to catch.
+OPTIONAL_SCHEMA_FIELDS = {"uv_extras", "uv_tools", "rolling_subdirs"}
 
 # farm-versions display names that are neither a registry package name nor a
 # bin stem claimed by one (uv-tool launchers and display aliases).

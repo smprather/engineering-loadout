@@ -3964,31 +3964,32 @@ truncating write would both sail past `--version`.
 python3.15 build/gen-readme-table`, then `./loadout install liberty-filter
 --dest-dir <d>` and run the filter above from the installed tree.
 
-## open-eda-file-tools -- three distributions, one package (EDA)
+## open-eda-file-tools -- one project, one wheel, four CLIs (EDA)
 
-First-party (github.com/smprather/open-eda-file-tools). The repo hosts three
-self-contained projects, and the registry exposes them as ONE package, so
-installing the project by name does not depend on an internal split:
+First-party (github.com/smprather/open-eda-file-tools). ONE project, ONE
+distribution, ONE wheel: upstream consolidated what used to be three
+self-contained projects (`liberty-tools`, `lef-tools`, `def-tools`) into the
+root `pyproject.toml` at v2026.11.9.1. The four CLIs are console scripts of that
+single wheel:
 
-| Project dir | Distribution | CLIs |
-|---|---|---|
-| `.` (repo root) | `liberty-tools` | `liberty-format`, `liberty-view` |
-| `lef_tools/` | `lef-tools` | `lef-tools` |
-| `def_tools/` | `def-tools` | `def-tools` |
+| Distribution | CLIs |
+|---|---|
+| `open-eda-file-tools` | `liberty-format`, `liberty-view`, `lef-tools`, `def-tools` |
 
-Registry shape: `uv_tools: ["liberty-tools", "lef-tools", "def-tools"]` (each is
-installed as its OWN uv tool, with its own venv and launchers), `rolling_git`,
-and `rolling_subdirs: [".", "lef_tools", "def_tools"]`. The tag/describe comes
-from the clone root (one release cuts all three); the wheel version comes from
-each project's own `pyproject.toml`, so the registry `version` is a commit
-pointer, not a wheel version. The former split entries `lef-tools`/`def-tools`
-and the separate `lefdef-tools` repo they replaced are gone.
+Registry shape: `uv_tool: "open-eda-file-tools"` -- ONE uv tool, one venv, four
+launchers -- plus `rolling_git`. There is no `uv_tools` list and no
+`rolling_subdirs` any more: both existed for the old split, and keeping either
+would look for a `pyproject.toml` under `lef_tools/`/`def_tools/` that no longer
+exists. The registry `version` is the clone's `git describe`, which IS the wheel
+version now (one version for the project); the former split entries
+`lef-tools`/`def-tools`, the separate `lefdef-tools` repo and the
+`def-dump-instances` launcher (folded into `def-tools` subcommands) are gone.
 
 **Build:** `./build/update open-eda-file-tools` — inside `build/build-shell`,
 after `build/build-shell build/container-rust`. Host builds are refused: maturin
 requires the EL8 linker for a `manylinux_2_28` tag, and this repo's extensions
-are new enough to use `GLIBC_2.30+` symbols when built on a modern host. The
-build loops over `rolling_subdirs` and installs one wheel per distribution.
+are new enough to use `GLIBC_2.30+` symbols when built on a modern host. It builds
+the clone root's single wheel (`rolling_subdirs` no longer applies).
 
 **Python floor is 3.14** (`requires-python >=3.14`), so `uv build` must be given
 the payload's 3.15 or the wheel lands ABI-locked to the wrong minor.

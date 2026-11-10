@@ -13,6 +13,46 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-10 (1): open-eda-file-tools is ONE distribution -- the three-project split is gone
+
+Upstream consolidated `liberty-tools` + `lef-tools` + `def-tools` under the
+single project `open-eda-file-tools` (`pyproject.toml` at the repo root,
+`name = "open-eda-file-tools"`, one Cargo crate, one version; release
+v2026.11.9.1 -- "consolidate into one root project"). EL still described the old
+shape, and that was not cosmetic: with `rolling_subdirs` set, `./build/update`
+looks for a `pyproject.toml` under `lef_tools/` and `def_tools/`, which no longer
+exist, and `uv_tools` would ask uv to install three distributions the wheelhouse
+no longer ships.
+
+**Registry (`payload/packages.json`).** `uv_tools: [liberty-tools, lef-tools,
+def-tools]` -> `uv_tool: "open-eda-file-tools"`; `rolling_subdirs` removed (the
+clone root is the only project); `bins` is four (`def-dump-instances` was folded
+into `def-tools` subcommands upstream); the `wheels` closure now starts at
+`open-eda-file-tools` instead of `liberty-tools`. `loadout info` on the three old
+names fails, and `tests/install-open-eda-file-tools` asserts that.
+
+**Rebuilt in the EL8 container** (`build/build-shell sh -c '. /cache/env &&
+./build/update open-eda-file-tools'`, 88 s): wheel
+`open_eda_file_tools-2026.11.9.1-cp315-cp315-manylinux_2_28_x86_64.whl`, source
+archive 6713 files / 11.1 MB, version stamped `v2026.11.9.1`, vendored crates
+verified (119 crates / 5536 files) so the native build used `vendor/`, not
+crates.io. The three stale wheels (`liberty_tools-2.0.6.dev0`,
+`lef_tools-2026.11.0`, `def_tools-2026.11.5.dev0`, 4.6 MB together) were deleted
+from the payload wheelhouse; installed-sizes (6425 artifacts) and
+.content-manifest (4581 files) re-pinned, and the README package row regenerated.
+
+**Tests moved with the shape.**
+`tests/install-open-eda-file-tools` was rewritten: one venv
+`share/uv/tools/open-eda-file-tools`, four launchers, and the retired split
+venvs must NOT exist -- a stale payload is exactly what would recreate them.
+`tests/compile-open-eda-from-source` now expects ONE cdylib (`lib_native.so`):
+the separate crates each produced one before, the consolidated crate produces a
+single backend for all four CLIs. `tests/registry-integrity` keeps its
+"documented-but-unused schema field" check, so `uv_tools` and `rolling_subdirs`
+were added to `OPTIONAL_SCHEMA_FIELDS` with the reason -- the capabilities stay
+implemented and documented for the next monorepo, but no entry exercises them,
+and a NEW unused field still fails.
+
 ## 2026-11-09 (2): per-family config-root env vars shortened to `*_CONFIG_DIR`
 
 Renamed `BASH_/ZSH_/TCSH_` + `_CONFIG_ROOT_DIR` -> the same prefix + `_CONFIG_DIR`

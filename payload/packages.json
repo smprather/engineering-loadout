@@ -31,7 +31,7 @@
     "requirements": "Maintained tops file (relative to repo root) for kind='python-suite'; deps are resolved, never hand-maintained.",
     "lock": "Fully pinned + hashed requirements lock (relative to repo root) for kind='python-suite'. Its header records version and ABI.",
     "uv_tool": "Base package name passed to 'uv tool install' for Python-based tools. Triggers install_python_tools().",
-    "uv_tools": "List of distribution names installed as SEPARATE uv tools for one registry package (a monorepo's self-contained projects, e.g. liberty-tools/lef-tools/def-tools). Mutually exclusive with uv_tool.",
+    "uv_tools": "List of distribution names installed as SEPARATE uv tools for one registry package, each with its own venv and launchers (the monorepo shape `open-eda-file-tools` had until v2026.11.9.1 consolidated it into one wheel; no entry uses it today). Mutually exclusive with uv_tool.",
     "uv_extras": "Optional Python extras included in the uv tool requirement. Their locked wheel closure must be bundled for offline installation.",
     "requires_python": "PEP 440 specifier the install interpreter must satisfy for a python-tool: '==3.15.*' when any wheel in the entry's closure is ABI-locked (cp315-cp315), else the upstream Requires-Python floor ('>=3.11'). Required on every python-tool; the resolver compares it with the bundled CPython minor and aborts the install with the package named on a mismatch.",
     "version": "Version of the bundled binary or package. Empty string when the payload has no meaningful upstream version.",
@@ -227,11 +227,10 @@
         "liberty-format",
         "liberty-view",
         "lef-tools",
-        "def-tools",
-        "def-dump-instances"
+        "def-tools"
       ],
       "wheels": [
-        "liberty-tools",
+        "open-eda-file-tools",
         "annotated-doc",
         "annotated-types",
         "anyio",
@@ -262,23 +261,14 @@
         "watchfiles",
         "websockets"
       ],
-      "uv_tools": [
-        "liberty-tools",
-        "lef-tools",
-        "def-tools"
-      ],
+      "uv_tool": "open-eda-file-tools",
       "requires_python": "==3.15.*",
       "rolling_git": "https://github.com/smprather/open-eda-file-tools.git",
-      "rolling_subdirs": [
-        ".",
-        "lef_tools",
-        "def_tools"
-      ],
       "archive": "payload/PLATFORM/runtime/open-eda-file-tools-source.tar.bz2",
       "archive_name": "open-eda-file-tools-source.tar.bz2",
       "install_to": "~/.local/share/loadout/src/open-eda-file-tools",
       "sentinel": "Cargo.lock",
-      "version": "v2026.11.5-1-g31e2aa3",
+      "version": "v2026.11.9.1",
       "platforms": [
         "linux"
       ],

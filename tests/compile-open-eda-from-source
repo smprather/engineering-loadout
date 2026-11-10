@@ -3,8 +3,8 @@
 # nothing but what Engineering Loadout ships.
 #
 # WHY THIS TEST EXISTS. `open-eda-file-tools` installs its complete committed
-# source tree (all four projects, lockfiles, and vendor/cargo) so a user can
-# rebuild the Rust extensions on their own machine, offline.
+# source tree (one project, lockfiles, and vendor/cargo) so a user can
+# rebuild the Rust extension on their own machine, offline.
 # tests/install-open-eda-file-tools proves that tree is COMPLETE -- upstream's
 # own script hashes every vendored crate file. Completeness is not compilability,
 # and a tree that "looks complete" but cannot be built defeats the reason the
@@ -124,13 +124,15 @@ grep -q 'Finished `release`' "$test_home/build.log" || {
 }
 echo "  OK: cargo build --release --locked --offline --workspace --lib ($((SECONDS - start))s)"
 
-# Three cdylibs, one per distribution -- the artifacts a rebuild exists for.
-for artifact in lib_native.so liblef_tools_native.so libdef_tools_native.so; do
+# ONE cdylib -- the native backend every CLI in the consolidated project shares.
+# (Before v2026.11.9.1 there were three, one per distribution; the merge left a
+# single crate, so expecting three would fail on a correct tree.)
+for artifact in lib_native.so; do
     path="$test_home/target/release/$artifact"
     [[ -s "$path" ]] || fail "missing build artifact: target/release/$artifact"
     [ "$(head -c 4 "$path" | od -An -c | tr -d ' \n')" = "177ELF" ] || fail "$artifact is not an ELF object"
 done
-echo "  OK: lib_native.so, liblef_tools_native.so, libdef_tools_native.so built"
+echo "  OK: lib_native.so built"
 
 # The build must not have needed the network: --offline with an empty CARGO_HOME
 # means the vendor tree is what supplied every crate, so a registry miss would

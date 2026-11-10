@@ -3,9 +3,8 @@
 # source for el8.x86_64.glibc2p28.
 #
 # First-party project: github.com/smprather/liberty-filter -- a SEPARATE repo from
-# open-eda-file-tools (whose first package is the liberty-tools distribution),
-# which is easy to get wrong because the two ship related CLIs and share a version
-# lineage. open-eda-file-tools is a Python wheel with a PyO3 cdylib (rolling_git,
+# open-eda-file-tools (one project, one distribution since v2026.11.9.1), which is
+# easy to get wrong because the two ship related CLIs and share a version lineage. open-eda-file-tools is a Python wheel with a PyO3 cdylib (rolling_git,
 # built by ./build/update); this is a standalone Rust binary and cannot use that
 # path, because ./build/update's rolling path builds WHEELS.
 #

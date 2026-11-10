@@ -13,7 +13,7 @@ A cp314 wheel is ABI-LOCKED to CPython 3.14 -- it cannot be installed by a
              tag (e.g., `cp315`) ...
 
 which is a FAILED row in the install results -- seven of them
-(liberty-tools, librelane, jupyterlab, time-plot, cicwave, parity-plot,
+(open-eda-file-tools, librelane, jupyterlab, time-plot, cicwave, parity-plot,
 pygwalker). The install reported the failure, but nothing STOPPED the bad
 wheelhouse from being committed, so the next install failed the same way.
 
@@ -547,8 +547,8 @@ def main():
 
         # 3. `bins` are PATH-facing promises. Every one must be a console
         # script of the vendored wheels -- otherwise the registry advertises a
-        # launcher no `uv tool install` will create (this is how an older
-        # def-tools wheel would silently lose def-dump-instances).
+        # launcher no `uv tool install` will create (an older wheel once
+        # silently dropped a launcher the registry still promised).
         scripts = {
             script
             for wheel_name in specs

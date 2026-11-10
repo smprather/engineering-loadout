@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# install-open-eda-file-tools: ONE registry package, three uv distributions.
+# install-open-eda-file-tools: ONE registry package, ONE uv distribution.
 #
-# open-eda-file-tools is a monorepo whose self-contained projects are liberty-tools
-# (liberty-format, liberty-view), lef-tools and def-tools. The registry exposes it
-# as a single package (`uv_tools`), and the installer must install each
-# distribution as its OWN uv tool -- a package that silently installed only
-# liberty-tools would leave the CLIs named in `bins` missing from PATH, and the
-# merged registry entry is exactly the kind of change that can look green while
-# doing that.
+# Upstream consolidated its three self-contained projects into a single project,
+# `open-eda-file-tools` (v2026.11.9.1: one pyproject, one wheel, one version).
+# The four CLIs -- liberty-format, liberty-view, lef-tools, def-tools -- are
+# console scripts of that ONE wheel; the old `liberty-tools` / `lef-tools` /
+# `def-tools` distributions no longer exist, so a payload left behind by the old
+# layout would either miss CLIs or install three venvs nothing imports.
+#
+# The registry therefore declares `uv_tool: open-eda-file-tools` (not `uv_tools`),
+# and this test pins both halves: the single venv that must exist and the split
+# distributions that must not.
 
 set -euo pipefail
 
@@ -44,12 +47,13 @@ env -i \
 # The install must have used the bundled wheelhouse, not the index.
 grep -Fq -- "--no-index" "$test_home/install.log" || fail "uv tool install did not use --no-index"
 grep -Fq -- "--find-links" "$test_home/install.log" || fail "uv tool install did not use --find-links"
-echo "  OK: installed offline from the payload wheelhouse"
+grep -Fq "uv tool install open-eda-file-tools" "$test_home/install.log" \
+    || fail "the installer did not install the consolidated distribution"
+echo "  OK: installed offline from the payload wheelhouse as one distribution"
 
 # PATH poison: a `python3` that is NOT the bundled minor, first on PATH. Every
 # launcher uv wrote carries an absolute-interpreter shebang, so nothing here may
-# depend on what `python3` resolves to (acceptance criterion of issue #16: the
-# tools work with python3 -> 3.12 first on PATH).
+# depend on what `python3` resolves to (acceptance criterion of issue #16).
 poison_dir="$test_home/poison-bin"
 mkdir -p "$poison_dir"
 for name in python python3; do
@@ -58,38 +62,41 @@ for name in python python3; do
 done
 probe_env=(env -i HOME="$test_home" PATH="$poison_dir:$local_prefix/bin:/usr/bin:/bin" LANG="${LANG:-C.UTF-8}")
 
-# Every CLI the registry claims. liberty-view is a server launcher, so it is
-# only checked for presence; the rest print help and are executed.
-# def-dump-instances only exists from def-tools v2026.11.4: a stale wheel in the
-# payload makes the registry promise a launcher nothing creates.
-for bin in liberty-format liberty-view lef-tools def-tools def-dump-instances; do
+# Every CLI the registry claims. liberty-view is a server launcher, so it is only
+# checked for presence; the rest print help and are executed.
+for bin in liberty-format liberty-view lef-tools def-tools; do
     [[ -x "$local_prefix/bin/$bin" ]] || fail "$bin launcher not installed"
 done
-echo "  OK: all five launchers installed"
+echo "  OK: all four launchers installed"
 
-# Three separate uv tools, each with its own venv -- not one venv under the
-# registry package's name.
-for dist in liberty-tools lef-tools def-tools; do
-    tool_python="$local_prefix/share/uv/tools/$dist/bin/python"
-    [[ -x $tool_python ]] || fail "$dist tool venv missing"
-    "${probe_env[@]}" "$tool_python" -c "
+# ONE tool venv named after the distribution -- the consolidated project.
+tool_python="$local_prefix/share/uv/tools/open-eda-file-tools/bin/python"
+[[ -x $tool_python ]] || fail "open-eda-file-tools tool venv missing"
+"${probe_env[@]}" "$tool_python" -c "
 import importlib.metadata as m
-print(m.version('$dist'))
-" > "$test_home/$dist.version" 2>&1 || {
-        cat "$test_home/$dist.version" >&2
-        fail "$dist is not importable from its tool venv"
-    }
-    [[ -s "$test_home/$dist.version" ]] || fail "$dist reported no version"
-done
-echo "  OK: liberty-tools, lef-tools and def-tools each have a tool venv"
+print(m.version('open-eda-file-tools'))
+" > "$test_home/version" 2>&1 || {
+    cat "$test_home/version" >&2
+    fail "open-eda-file-tools is not importable from its tool venv"
+}
+[[ -s "$test_home/version" ]] || fail "open-eda-file-tools reported no version"
+echo "  OK: one tool venv, open-eda-file-tools $(cat "$test_home/version")"
 
-for bin in liberty-format lef-tools def-tools def-dump-instances; do
+# The split distributions are GONE. A stale payload would recreate their venvs,
+# which is exactly the pre-consolidation shape this test exists to reject.
+for dist in liberty-tools lef-tools def-tools; do
+    [[ ! -e "$local_prefix/share/uv/tools/$dist" ]] \
+        || fail "retired distribution '$dist' still has a tool venv"
+done
+echo "  OK: the retired split distributions have no tool venv"
+
+for bin in liberty-format lef-tools def-tools; do
     "${probe_env[@]}" "$local_prefix/bin/$bin" --help > "$test_home/$bin.help" 2>&1 || {
         cat "$test_home/$bin.help" >&2
         fail "$bin --help"
     }
 done
-echo "  OK: liberty-format/lef-tools/def-tools/def-dump-instances --help (python3 poisoned on PATH)"
+echo "  OK: liberty-format/lef-tools/def-tools --help (python3 poisoned on PATH)"
 
 # --- bundled source: the install must be rebuildable, not just runnable ------
 # open-eda-file-tools ships its COMPLETE committed tree -- vendored Rust crates
@@ -114,11 +121,11 @@ vendored=$("$local_prefix/bin/python3.15" "$src_root/scripts/check_vendored_crat
 grep -q 'present and unchanged' <<<"$vendored" || fail "vendored crate check reported no clean tree: $vendored"
 echo "  OK: $vendored"
 
-# The registry must NOT still expose the split entries: one package, not three.
-"$repo_dir/loadout" info lef-tools > "$test_home/old-name.log" 2>&1 && \
-    fail "retired split entry 'lef-tools' is still a registry package"
-"$repo_dir/loadout" info def-tools > "$test_home/old-name2.log" 2>&1 && \
-    fail "retired split entry 'def-tools' is still a registry package"
+# The registry must expose ONE package, not the retired split entries.
+for old in lef-tools def-tools liberty-tools; do
+    "$repo_dir/loadout" info "$old" > "$test_home/old-$old.log" 2>&1 && \
+        fail "retired split entry '$old' is still a registry package"
+done
 echo "  OK: the split entries are gone from the registry"
 
 echo "open-eda-file-tools smoke passed"
