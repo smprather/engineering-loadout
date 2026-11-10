@@ -14520,3 +14520,6 @@
 2026-11-10T15:59:53Z	test:total	724	PASS	flags= skipped=0
 2026-11-10T16:00:03Z	test:private-state-two-users	4	PASS	mode=container
 2026-11-10T16:00:07Z	test:interactive-shell-almalinux8	8	PASS	mode=container
+2026-11-10T16:07:25Z	test:almalinux8.10 container smoke (--full)	446	PASS	mode=container
+2026-11-10T16:07:33Z	test:almalinux8.10 dynamic analysis (--dynamic, network isolated)	454	PASS	mode=container
+2026-11-10T16:07:33Z	test:total	455	PASS	flags=--container-only skipped=0
