@@ -844,6 +844,7 @@ if [ "$CONTAINER_ONLY" -eq 0 ]; then
     run_test "pre-commit-hook" --deps hooks tests/pre-commit-hook
     run_test "nvim-formatters-resolve" --deps payload+envs "$PY" tests/nvim-formatters-resolve
     run_test "env-modules" --deps envs "$PY" tests/env-modules
+    run_test "tmux-managed-hook-names" --deps envs tests/tmux-managed-hook-names
     run_test "export-stash" --deps build "$PY" tests/export-stash
     run_test "dep-capture" --deps payload+envs tests/dep-capture
     run_test "oom-guard-reap" --deps build+loader "$PY" tests/oom-guard-reap

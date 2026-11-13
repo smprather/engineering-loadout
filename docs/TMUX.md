@@ -117,9 +117,10 @@ hide the theme section; a non-empty file is always preserved.
 
 The managed tree is read-only: `tmux.conf`, `tmux-settings-global.conf`,
 `tmux-global.conf`, `word-separators.conf` (0444), and `themes/`, `scripts/`,
-`plugins/` (0555, executable files stay executable). Only the two user layers
--- `tmux-settings-user.conf` and `tmux-user.conf` -- and the top-level
-`~/.config/tmux` directory stay writable. Managed files are replaced by the
+`plugins/` (0555, executable files stay executable). Writable: the two user
+layers (`tmux-settings-user.conf`, `tmux-user.conf`), the top-level
+`~/.config/tmux` directory, and `plugins-local/` (0755, created empty at
+install; see *Local (non-vendored) plugins*). Managed files are replaced by the
 next `loadout install env-tmux`; edit the repo (or the user layers), not the
 installed managed files.
 
@@ -147,6 +148,44 @@ One caveat: `build/update tmux-plugins` discovers `set -g @plugin` declarations
 in the managed `tmux-global.conf` only, so a user-layer declaration is **not**
 refreshed by the updater. The vendored copy stays at the version in the repo
 until the global layer declares it (or you update it yourself).
+
+For a plugin that is **not** vendored here, `@plugin` cannot work: TPM clones
+into the read-only `plugins/` tree. Use `plugins-local/` and `run-shell`
+instead -- see *Local (non-vendored) plugins* below.
+
+## Local (non-vendored) plugins
+
+`plugins/` is the vendored, sealed tree. TPM clones `@plugin` declarations into
+it, and `sync_dir` replaces its contents on every `loadout install env-tmux`, so
+anything you clone there is lost. A plugin that loadout does not vendor
+therefore belongs in `plugins-local/`: `env-tmux` creates it empty (0755),
+never replaces it, never prunes it, and never seals it. Source the plugin's
+entry point from the preserved user layer:
+
+```tmux
+# ~/.config/tmux/tmux-user.conf -- plugin options FIRST, entry LAST
+set -g @example-plugin-opt 'off'
+run-shell 'bash ~/.config/tmux/plugins-local/example/example.tmux'
+```
+
+Ordering is load-bearing: the entry reads its `@...` options when it is
+sourced, so an option set after the `run-shell` line is ignored. Updating the
+clone is your job (`git pull` in it): `build/update tmux-plugins` reads the
+managed layer's `@plugin` declarations only, exactly as for a user-layer
+`@plugin`. A clone in `plugins-local/` is outside `plugins/`, so
+`TMUX_PLUGIN_MANAGER_PATH` (pinned to `plugins/`) never sees it.
+
+### Hook names reserved by tmux-persist
+
+`tmux-persist` reads `@persist-hook-post-save-all` and
+`@persist-hook-post-restore-all` and falls back to the legacy
+`@resurrect-hook-*` names **only while the `@persist-*` name is unset**
+(`scripts/helpers.sh`, `get_tmux_option`). The managed layers therefore never
+set either name: a managed value would silently disable every external
+post-save/post-restore hook -- including a `plugins-local/` plugin whose only
+symptom is that nothing is restored after a reboot. `tests/tmux-managed-hook-names`
+(Tier 1) pins that. If the managed layer ever needs one of those hooks, it must
+**chain** the existing value rather than shadow it.
 
 ## Mouse wheel and cursor
 

@@ -13,6 +13,35 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-13 (2): env-tmux supports local (non-vendored) plugins (issue #22)
+
+`~/.config/tmux/plugins/` is sealed 0555 and `sync_dir(delete=True)` replaces it
+wholesale, while `TMUX_PLUGIN_MANAGER_PATH` pins TPM to it -- so a non-vendored
+plugin had no supported home: `@plugin` cannot clone there, and a manual clone
+was deleted by the next install.
+
+- **Installer (`_install_env_tmux`)**: creates `~/.config/tmux/plugins-local/`
+  (0755 at creation only, so a user's later chmod is respected), empty, outside
+  the sealed `plugins/` tree. It is not in the `_seal_managed` list and no step
+  prunes it, so user clones survive reinstall.
+- **T2 `tests/install-env-tmux-nvim-layers`**: fresh install creates it 0755,
+  writable and empty; a marker file written into it survives a reinstall; no
+  installed managed file sets a `@persist-hook-*` name.
+- **T1 `tests/tmux-managed-hook-names`** (new, `--deps envs`): asserts no repo
+  managed tmux source sets `@persist-hook-post-{save,restore}-all`.
+  `tmux-persist`'s `get_tmux_option` falls back to `@resurrect-hook-*` only
+  while the `@persist-*` name is UNSET, so a managed value would silently
+  disable every external post-save/post-restore hook (the assistant-session
+  plugin this issue comes from). Negative control: one appended `set -g
+  @persist-hook-post-save-all` line fails the test (rc 1).
+- **Docs**: `docs/TMUX.md` gains *Local (non-vendored) plugins* -- the
+  `run-shell` pattern, the options-before-entry ordering rule, the
+  user-updates-it caveat, and the reserved-hook invariant -- plus the
+  Permissions contract; README and AGENTS component text synced.
+
+No payload artifacts change (env sources are not manifest-listed except the
+vendor tree), so the sizes/manifest pins are unaffected by the directory itself.
+
 ## 2026-11-13 (1): copy-mode bottom exit restored for every entry path; Esc exits
 
 **Symptom (operator):** wheel-down at the bottom of scrollback no longer left

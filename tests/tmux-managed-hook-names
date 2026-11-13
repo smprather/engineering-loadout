@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Tier 1: the managed tmux layers must never set a tmux-persist post-hook name.
+#
+# tmux-persist (scripts/helpers.sh, get_tmux_option) falls back to the legacy
+# @resurrect-hook-* names only while the @persist-* name is UNSET, so a managed
+# value silently disables every external post-save/post-restore hook -- e.g. a
+# plugin in the writable plugins-local/ tree whose only symptom is that
+# nothing is restored after a reboot (issue #22). If the managed layer ever
+# needs one of these hooks it must CHAIN the existing value, and this test
+# must be updated deliberately to allow that form.
+set -euo pipefail
+
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$REPO"
+
+managed=(
+    envs/tmux/tmux.conf
+    envs/tmux/tmux-global.conf
+    envs/tmux/tmux-settings-global.conf
+    envs/tmux/tmux-settings-user.conf
+    envs/tmux/tmux-user.conf
+)
+
+status=0
+for f in "${managed[@]}"; do
+    [ -f "$f" ] || { echo "FAIL: managed tmux file missing: $f" >&2; exit 1; }
+    if out=$(grep -nE '^[[:space:]]*set(-option)?[[:space:]].*@persist-hook-post-(save|restore)-all' "$f"); then
+        printf '%s\n' "$out" | while IFS= read -r hit; do
+            printf 'FAIL: %s:%s sets a reserved tmux-persist hook name and\n' \
+                "$f" "$hit" >&2
+            printf '      would shadow external post-hooks (chain instead)\n' >&2
+        done
+        status=1
+    fi
+done
+[ "$status" -eq 0 ] \
+    || exit 1
+echo "ok: no managed tmux file sets @persist-hook-post-{save,restore}-all"

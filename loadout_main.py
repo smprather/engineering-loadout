@@ -7163,6 +7163,18 @@ def _install_env_tmux(repo_dir, home):
         os.path.join(tmux_config, "plugins"),
         delete=True,
     )
+    # Local (non-vendored) plugins: a writable home for user-managed clones,
+    # separate from the sealed plugins/ tree that sync_dir replaces wholesale.
+    # Created empty and left alone afterwards (never pruned, never sealed), so
+    # run-shell entries in tmux-user.conf keep working across reinstalls.
+    local_plugins = os.path.join(tmux_config, "plugins-local")
+    existed = os.path.isdir(local_plugins)
+    ensure_dir(local_plugins, "tmux local plugins")
+    if not existed and not os.path.islink(local_plugins):
+        try:
+            os.chmod(local_plugins, 0o755)
+        except OSError as exc:
+            warn(f"could not set {display_name(local_plugins)} to 0755: {exc}")
     _seed_tmux_autosave_plugin_path(home, tmux_config)
     install_path(os.path.join(repo_dir, "envs", "tmux", "tmux.conf"), os.path.join(tmux_config, "tmux.conf"), False)
     install_path(

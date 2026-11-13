@@ -694,7 +694,10 @@ tmux reads the dispatcher natively from `~/.config/tmux/tmux.conf` (tmux >=
 then your settings (`tmux-settings-user.conf`, which wins), then the managed
 `tmux-global.conf`, then the persistent `tmux-user.conf`, and finally
 initializes TPM. Plugins live at `~/.config/tmux/plugins/`, and tmux-persist
-snapshots live under `~/.local/share/tmux/` (XDG data). The settings layers hold user-facing knobs -- the
+snapshots live under `~/.local/share/tmux/` (XDG data). A plugin loadout does
+not vendor goes in the writable `~/.config/tmux/plugins-local/` and is
+`run-shell`ed from your user layer -- `@plugin` cannot install it, because TPM
+clones into the read-only `plugins/` tree. The settings layers hold user-facing knobs -- the
 `@theme` choice (defaulting to `loadout2`, the fully pinned theme that does not
 depend on the terminal background) and `focus-follows-mouse` (on by default;
 set it off in your settings layer to opt out) -- and the global layer loads

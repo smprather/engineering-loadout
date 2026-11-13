@@ -95,6 +95,25 @@ for user_file in tmux-user.conf tmux-settings-user.conf; do
     assert_writable "$tmux_dir/$user_file"
 done
 
+# Local (non-vendored) plugins get their own writable directory outside the
+# sealed plugins/ tree that sync_dir replaces wholesale; it starts empty and is
+# created 0755 regardless of the caller's umask.
+local_plugins="$tmux_dir/plugins-local"
+[ -d "$local_plugins" ] || fail "plugins-local directory not created"
+[ ! -L "$local_plugins" ] || fail "plugins-local must be a real directory"
+[ "$(mode_of "$local_plugins")" = 755 ] \
+    || fail "plugins-local must be mode 755 (got $(mode_of "$local_plugins"))"
+assert_writable "$local_plugins"
+[ -z "$(ls -A "$local_plugins")" ] || fail "a fresh install must leave plugins-local empty"
+
+# tmux-persist honors external post-hooks only while @persist-hook-* is unset;
+# a managed value would silently disable every one of them.
+for managed_file in tmux.conf tmux-global.conf tmux-settings-global.conf; do
+    ! grep -qE '^[[:space:]]*set(-option)?[[:space:]].*@persist-hook-post-(save|restore)-all' \
+        "$tmux_dir/$managed_file" \
+        || fail "$managed_file sets a reserved tmux-persist hook name"
+done
+
 # tmux-persist-autosave (external companion) defaults to the pre-XDG
 # ~/.tmux/plugins/tmux-persist; after the plugin move that makes every timer
 # tick log `skipped` and exit 0.  A plain env-tmux install must not invent a
@@ -388,6 +407,8 @@ grep -qF 'local LAYERS = { "global", "user" }' "$fresh_home/.config/nvim/init.lu
 # Reinstall refreshes managed files, preserves user files, and warns about
 # populated retired Neovim layers without deleting them.
 printf '%s\n' 'set -g status-left "USER-KEPT"' >> "$tmux_dir/tmux-user.conf"
+# User-managed local plugins must survive a reinstall untouched.
+printf '%s\n' '# USER-LOCAL-PLUGIN' > "$local_plugins/example.tmux"
 # Managed files are read-only now; simulate drift by re-opening them first.
 chmod u+w "$tmux_dir/tmux-global.conf" "$tmux_dir/tmux-settings-global.conf"
 printf '%s\n' '# GLOBAL-STALE' >> "$tmux_dir/tmux-global.conf"
@@ -425,6 +446,11 @@ done
 for user_file in tmux-user.conf tmux-settings-user.conf; do
     assert_writable "$tmux_dir/$user_file"
 done
+grep -qF 'USER-LOCAL-PLUGIN' "$local_plugins/example.tmux" \
+    || fail "reinstall removed a local plugin from plugins-local"
+[ "$(mode_of "$local_plugins")" = 755 ] \
+    || fail "reinstall changed plugins-local mode to $(mode_of "$local_plugins")"
+assert_writable "$local_plugins"
 grep -qF 'user_layer_kept' "$nvim_lua/user/config.lua" || fail "reinstall overwrote the Neovim user layer"
 grep -qF 'retired_layer_must_not_load' "$nvim_lua/corp/config.lua" \
     || fail "reinstall deleted a retired Neovim layer"
