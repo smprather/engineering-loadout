@@ -13,6 +13,33 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-13 (1): copy-mode bottom exit restored for every entry path; Esc exits
+
+**Symptom (operator):** wheel-down at the bottom of scrollback no longer left
+copy-mode, and `Esc` did not leave it either.
+
+**Root cause:** `scroll_exit` is set once, at mode entry (`window_copy_init`
+reads `-e`); the wheels' `scroll-down` only exits at `oy == 0` when that flag is
+on. The bare `PageUp` root binding entered with plain `copy-mode -u`, so every
+wheel-up-then-wheel-down round trip stalled at the bottom. `Down`/`j`/`G` were
+unaffected -- they carry their own format test -- and `PgDn`/`C-f` were
+unaffected because they already send `scroll-exit-on`.
+
+**Fix (`envs/tmux/tmux-global.conf`):** bare `PageUp` -> `copy-mode -eu`;
+`WheelDownPane` in both `copy-mode` and `copy-mode-vi` -> `scroll-exit-on \;
+scroll-down` (`%if`-guarded for tmux < 3.7 with the old plain bind);
+`copy-mode-vi Escape` -> `send-keys -X cancel` (stock bound it to
+`clear-selection`, which keeps the mode). `Enter` still copies and exits.
+
+**Verification** (scratch server, real pty client, real SGR wheel events, not
+`send-keys`): bare PageUp -> wheel exits in 7 notches; -> `Down` at the last
+row; -> `PgDn` in 1; -> `Esc`; `Prefix+PgUp`, `Prefix+[` and wheel-up entries
+all exit on wheel-down; `Enter` exits; wheel-down with an active selection
+stays in the mode. Installed into the live `~/.config/tmux/` first (sealed back
+to 0444), operator confirmed, then absorbed here.
+
+**Docs.** `docs/TMUX.md` "Mouse wheel and cursor" rewritten to match.
+
 ## 2026-11-10 (1): open-eda-file-tools is ONE distribution -- the three-project split is gone
 
 Upstream consolidated `liberty-tools` + `lef-tools` + `def-tools` under the

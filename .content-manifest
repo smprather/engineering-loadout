@@ -625,7 +625,6 @@ sha256  22caa79b5c67703c16d8ac0441323f3e3a94d11a33b6af84f96b0f4f0486496d  payloa
 sha256  22caa79b5c67703c16d8ac0441323f3e3a94d11a33b6af84f96b0f4f0486496d  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ron/locals.scm
 sha256  2316aaae016d02d8380d3f5fcecca6ff69a6ad4611d7e6ec7e69ca74b4b38f88  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/liquidsoap.lua
 sha256  23244b24e9020c598baf902eb1125856333772381b73acd2661ca0e7a608d4dd  payload/el8.x86_64.glibc2p28/lib64/libgtk-3.so.0.bz2
-sha256  23284dbfffab0d39ee490cbcf814cb55b8ffb3be020d0ed96f8058fceefc6ced  payload/installed-sizes.json
 sha256  2334e9821f322ab13cc9efd3ba9e8a94d7d1f40f321dd80ffec47164e14ccba8  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/robot.lua
 sha256  235539a3bf78cb97e9a47e44c5d005b1ff09cc559109e18f0ed375a91786afbc  payload/treesitter/vendor/nvim-treesitter/tests/indent/dot/test.dot
 sha256  23580438f3568c7de5aa38f736f0145f70496db4e1964140cbefd90baf051470  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/qmljs/folds.scm
@@ -3826,6 +3825,7 @@ sha256  e13390e08da77b87fef708e19ed6dcc52476cf56582262b74646579c97068237  payloa
 sha256  e13390e08da77b87fef708e19ed6dcc52476cf56582262b74646579c97068237  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ada/locals.scm
 sha256  e1610c4b058fc5b3b646c4dffcc7327ceaa1a049cdd2058471eb845bd2f08d4d  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/cmake/injections.scm
 sha256  e1610c4b058fc5b3b646c4dffcc7327ceaa1a049cdd2058471eb845bd2f08d4d  payload/treesitter/vendor/nvim-treesitter/runtime/queries/cmake/injections.scm
+sha256  e163f8d28b22d182b9bfdc8e359fbab87e4feda5913f646dae192263e2d07f26  payload/installed-sizes.json
 sha256  e1670d55c1c02535c3fc301c72959d0108dd5db695af02ba24c87568453a87a4  envs/tmux/vendor/plugins/tmux-persist/README.md
 sha256  e177a1070be6b06c7d6d3724d337408b2611febb22c0e9a8bf59b095206042e1  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/mermaid/highlights.scm
 sha256  e177a1070be6b06c7d6d3724d337408b2611febb22c0e9a8bf59b095206042e1  payload/treesitter/vendor/nvim-treesitter/runtime/queries/mermaid/highlights.scm

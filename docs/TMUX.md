@@ -156,16 +156,20 @@ and an application can override it with DECSCUSR -- while tmux's cursor-style is
 enforced on every draw.
 
 Wheel scrolling moves **three lines per notch** (stock tmux uses five) and
-leaves copy-mode when the bottom is reached (`copy-mode -e`, set on
-`Prefix+[` / `PgUp` / `PgDn`). `PgDn` and `C-f` also send `scroll-exit-on`
-before `page-down` (`%if`-guarded to tmux >= 3.7, where that copy-mode command
-first appeared), so the bottom exit no longer depends on how the mode was
-entered; an active selection still keeps the mode alive. `j`, `Down` and `G` do
-not consult `scroll_exit`, so they carry their own test: they leave copy-mode
-when the view is already at the live bottom and the cursor is on the last row,
-and when a scroll-back move reaches the bottom. A Down inside the visible
-screen only moves the cursor, and an active selection is never cancelled --
-`v` + `Down` extends it.
+leaves copy-mode when the bottom is reached, independent of how the mode was
+entered. Entry takes `-e` where it can (`Prefix+[`, `Prefix+PgUp`, and the bare
+`PgUp` binding -- which used to enter with plain `copy-mode -u`, so the wheel
+stalled at the bottom); inside copy-mode `PgDn`/`C-f` send `scroll-exit-on`
+before `page-down`, and both wheel-down bindings send it before `scroll-down`
+(`%if`-guarded to tmux >= 3.7, where that copy-mode command first appeared), so
+even a command-line `copy-mode` exits. `j`, `Down` and `G` do not consult
+`scroll_exit`, so they carry their own test: they leave copy-mode when the view
+is already at the live bottom and the cursor is on the last row, and when a
+scroll-back move reaches the bottom. An active selection keeps the mode alive in
+every case -- `v` + `Down` extends it, and a wheel scroll with a selection only
+moves the view. `Esc` and `Enter` both leave copy-mode (`Enter` copies;
+`Esc` cancels -- stock `copy-mode-vi` bound it to `clear-selection`, which left
+the pane in the mode); `C-c` and `q` also cancel.
 
 The bundled `better-mouse-mode` plugin is **not declared** (dropped 2026-10-20),
 so the managed root-wheel binds above are the ones in effect. They fix a
