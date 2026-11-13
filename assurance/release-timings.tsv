@@ -14582,3 +14582,372 @@
 2026-11-13T16:47:13Z	test:security-pipeline	0	CACHED	mode=build
 2026-11-13T16:47:13Z	test:check-versions-contract	0	CACHED	mode=build
 2026-11-13T16:47:14Z	test:total	47	PASS	flags=--fast skipped=0
+2026-11-13T17:04:58Z	test:ruff format check	0	PASS	mode=python
+2026-11-13T17:04:58Z	test:ruff check	0	PASS	mode=python
+2026-11-13T17:04:58Z	test:unit-resolver	0	PASS	mode=payload+loader
+2026-11-13T17:04:58Z	test:py_compile	0	PASS	mode=python
+2026-11-13T17:04:59Z	test:unit-private-state	0	PASS	mode=payload+loader
+2026-11-13T17:04:59Z	test:install-atomic-replace	0	PASS	mode=loader
+2026-11-13T17:05:01Z	test:unit-install-steps	2	PASS	mode=loader
+2026-11-13T17:05:03Z	test:config-toml-exclude	5	PASS	mode=payload+loader
+2026-11-13T17:05:03Z	test:registry-integrity	0	PASS	mode=payload+loader
+2026-11-13T17:05:03Z	test:doctor-system-newer	0	PASS	mode=loader
+2026-11-13T17:05:04Z	test:tar-safety	1	PASS	mode=loader
+2026-11-13T17:05:04Z	test:content-verify	1	PASS	mode=loader
+2026-11-13T17:05:04Z	test:python-requires	1	PASS	mode=payload+loader
+2026-11-13T17:05:04Z	test:search-groups	1	PASS	mode=loader
+2026-11-13T17:05:05Z	test:content-manifest shipped-set	1	PASS	mode=export+build
+2026-11-13T17:05:05Z	test:installed-sizes in sync	1	PASS	mode=envs+payload
+2026-11-13T17:05:07Z	test:content-manifest in sync	3	PASS	mode=payload+export+build
+2026-11-13T17:05:11Z	test:incremental-verdicts	4	PASS	mode=smoke
+2026-11-13T17:05:14Z	test:content-manifest matches export	10	PASS	mode=export+build
+2026-11-13T17:05:14Z	test:README table in sync	0	PASS	mode=readme
+2026-11-13T17:05:14Z	test:parser-locks in sync	0	PASS	mode=locks
+2026-11-13T17:05:14Z	test:assurance-check	0	PASS	mode=assurance
+2026-11-13T17:05:15Z	test:docs-sync	1	PASS	mode=docs
+2026-11-13T17:05:34Z	test:st font list in sync	20	PASS	mode=stfonts
+2026-11-13T17:05:34Z	test:env-bash-profile-shim	0	PASS	mode=envs
+2026-11-13T17:05:34Z	test:env-shell-parity	0	PASS	mode=envs+loader
+2026-11-13T17:05:35Z	test:install-zsh-relocation	1	PASS	mode=loader
+2026-11-13T17:05:35Z	test:shell-typeahead	1	PASS	mode=envs
+2026-11-13T17:05:36Z	test:env-bash-runtime	2	PASS	mode=envs
+2026-11-13T17:05:37Z	test:python-tool-source-patches	1	PASS	mode=payload+loader
+2026-11-13T17:05:38Z	test:portable-python-ca	4	PASS	mode=payload
+2026-11-13T17:05:38Z	test:env-nvim-no-git	0	PASS	mode=envs
+2026-11-13T17:05:38Z	test:payload-interpreter-abi	0	PASS	mode=payload+loader+build
+2026-11-13T17:05:39Z	test:env-nvim-smart-quit	1	PASS	mode=envs
+2026-11-13T17:05:50Z	test:shim-bootstrap	12	PASS	mode=loader
+2026-11-13T17:06:10Z	test:needed-closure	32	PASS	mode=payload+sonames
+2026-11-13T17:06:11Z	test:python-suite	1	PASS	mode=payload+loader+build
+2026-11-13T17:06:11Z	test:wheelhouse-closure	1	PASS	mode=payload+loader
+2026-11-13T17:06:14Z	test:nodejs-runpath	4	PASS	mode=payload+build+loader
+2026-11-13T17:06:16Z	test:install-noop-stamps	6	PASS	mode=payload+loader+envs
+2026-11-13T17:06:17Z	test:release-timings	1	PASS	mode=timings+build
+2026-11-13T17:06:17Z	test:test-cleanup	1	PASS	mode=tests
+2026-11-13T17:06:17Z	test:pre-commit-hook	0	PASS	mode=hooks
+2026-11-13T17:06:19Z	test:prompt-no-rc	3	FAIL	mode=envs
+2026-11-13T17:06:21Z	test:env-tcsh-starship	5	PASS	mode=envs
+2026-11-13T17:06:21Z	test:tmux-managed-hook-names	0	PASS	mode=envs
+2026-11-13T17:06:21Z	test:export-stash	0	PASS	mode=build
+2026-11-13T17:06:21Z	test:nvim-formatters-resolve	0	PASS	mode=payload+envs
+2026-11-13T17:06:21Z	test:env-modules	0	PASS	mode=envs
+2026-11-13T17:06:21Z	test:st-wrapper	0	PASS	mode=build
+2026-11-13T17:06:22Z	test:oom-guard-reap	1	PASS	mode=build+loader
+2026-11-13T17:06:22Z	test:dep-capture	1	PASS	mode=payload+envs
+2026-11-13T17:06:22Z	test:update-cadence	0	PASS	mode=build
+2026-11-13T17:06:23Z	test:env-helix-config	1	PASS	mode=envs+payload
+2026-11-13T17:06:23Z	test:check-installer	2	PASS	mode=loader
+2026-11-13T17:06:24Z	test:check-versions-contract	1	PASS	mode=build
+2026-11-13T17:06:24Z	test:release-tag-scheme	1	PASS	mode=build
+2026-11-13T17:06:24Z	test:fetch-stash-trust	1	PASS	mode=build+tools
+2026-11-13T17:06:25Z	test:security-pipeline	2	PASS	mode=build
+2026-11-13T17:06:26Z	test:total	90	FAIL	flags=--fast
+2026-11-13T17:06:41Z	test:py_compile	0	CACHED	mode=python
+2026-11-13T17:06:41Z	test:ruff check	0	CACHED	mode=python
+2026-11-13T17:06:41Z	test:ruff format check	0	CACHED	mode=python
+2026-11-13T17:06:41Z	test:unit-resolver	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:config-toml-exclude	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:unit-private-state	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:unit-install-steps	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:install-atomic-replace	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:doctor-system-newer	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:registry-integrity	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:python-requires	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:search-groups	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:tar-safety	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:content-verify	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:content-manifest in sync	0	CACHED	mode=payload+export+build
+2026-11-13T17:06:41Z	test:content-manifest matches export	0	CACHED	mode=export+build
+2026-11-13T17:06:41Z	test:content-manifest shipped-set	0	CACHED	mode=export+build
+2026-11-13T17:06:41Z	test:installed-sizes in sync	0	CACHED	mode=envs+payload
+2026-11-13T17:06:41Z	test:incremental-verdicts	0	CACHED	mode=smoke
+2026-11-13T17:06:41Z	test:parser-locks in sync	0	CACHED	mode=locks
+2026-11-13T17:06:41Z	test:st font list in sync	0	CACHED	mode=stfonts
+2026-11-13T17:06:41Z	test:README table in sync	0	CACHED	mode=readme
+2026-11-13T17:06:41Z	test:docs-sync	0	CACHED	mode=docs
+2026-11-13T17:06:41Z	test:assurance-check	0	CACHED	mode=assurance
+2026-11-13T17:06:41Z	test:env-shell-parity	0	CACHED	mode=envs+loader
+2026-11-13T17:06:41Z	test:env-bash-profile-shim	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:env-bash-runtime	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:portable-python-ca	0	CACHED	mode=payload
+2026-11-13T17:06:41Z	test:shell-typeahead	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:install-zsh-relocation	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:python-tool-source-patches	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:payload-interpreter-abi	0	CACHED	mode=payload+loader+build
+2026-11-13T17:06:41Z	test:needed-closure	0	CACHED	mode=payload+sonames
+2026-11-13T17:06:41Z	test:shim-bootstrap	0	CACHED	mode=loader
+2026-11-13T17:06:41Z	test:env-nvim-no-git	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:env-nvim-smart-quit	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:install-noop-stamps	0	CACHED	mode=payload+loader+envs
+2026-11-13T17:06:41Z	test:nodejs-runpath	0	CACHED	mode=payload+build+loader
+2026-11-13T17:06:41Z	test:wheelhouse-closure	0	CACHED	mode=payload+loader
+2026-11-13T17:06:41Z	test:python-suite	0	CACHED	mode=payload+loader+build
+2026-11-13T17:06:41Z	test:env-tcsh-starship	0	CACHED	mode=envs
+2026-11-13T17:06:41Z	test:test-cleanup	0	CACHED	mode=tests
+2026-11-13T17:06:41Z	test:release-timings	0	PASS	mode=timings+build
+2026-11-13T17:06:41Z	test:pre-commit-hook	0	CACHED	mode=hooks
+2026-11-13T17:06:41Z	test:nvim-formatters-resolve	0	CACHED	mode=payload+envs
+2026-11-13T17:06:42Z	test:prompt-no-rc	1	PASS	mode=envs
+2026-11-13T17:06:42Z	test:env-modules	0	CACHED	mode=envs
+2026-11-13T17:06:42Z	test:tmux-managed-hook-names	0	CACHED	mode=envs
+2026-11-13T17:06:42Z	test:export-stash	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:dep-capture	0	CACHED	mode=payload+envs
+2026-11-13T17:06:42Z	test:oom-guard-reap	0	CACHED	mode=build+loader
+2026-11-13T17:06:42Z	test:check-installer	0	CACHED	mode=loader
+2026-11-13T17:06:42Z	test:st-wrapper	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:env-helix-config	0	CACHED	mode=envs+payload
+2026-11-13T17:06:42Z	test:update-cadence	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:release-tag-scheme	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:fetch-stash-trust	0	CACHED	mode=build+tools
+2026-11-13T17:06:42Z	test:security-pipeline	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:check-versions-contract	0	CACHED	mode=build
+2026-11-13T17:06:42Z	test:total	3	PASS	flags=--fast skipped=0
+2026-11-13T17:06:54Z	test:ruff check	0	PASS	mode=python
+2026-11-13T17:06:54Z	test:ruff format check	0	PASS	mode=python
+2026-11-13T17:06:54Z	test:unit-resolver	0	PASS	mode=payload+loader
+2026-11-13T17:06:55Z	test:py_compile	0	PASS	mode=python
+2026-11-13T17:06:55Z	test:unit-private-state	0	PASS	mode=payload+loader
+2026-11-13T17:06:55Z	test:install-atomic-replace	0	PASS	mode=loader
+2026-11-13T17:06:57Z	test:unit-install-steps	2	PASS	mode=loader
+2026-11-13T17:06:59Z	test:config-toml-exclude	4	PASS	mode=payload+loader
+2026-11-13T17:06:59Z	test:registry-integrity	0	PASS	mode=payload+loader
+2026-11-13T17:06:59Z	test:doctor-system-newer	0	PASS	mode=loader
+2026-11-13T17:06:59Z	test:content-verify	0	PASS	mode=loader
+2026-11-13T17:06:59Z	test:tar-safety	0	PASS	mode=loader
+2026-11-13T17:07:00Z	test:python-requires	1	PASS	mode=payload+loader
+2026-11-13T17:07:00Z	test:search-groups	1	PASS	mode=loader
+2026-11-13T17:07:01Z	test:content-manifest shipped-set	1	PASS	mode=export+build
+2026-11-13T17:07:01Z	test:installed-sizes in sync	1	PASS	mode=envs+payload
+2026-11-13T17:07:03Z	test:content-manifest in sync	3	PASS	mode=payload+export+build
+2026-11-13T17:07:06Z	test:incremental-verdicts	3	PASS	mode=smoke
+2026-11-13T17:07:07Z	test:content-manifest matches export	7	PASS	mode=export+build
+2026-11-13T17:07:07Z	test:README table in sync	0	PASS	mode=readme
+2026-11-13T17:07:07Z	test:parser-locks in sync	0	PASS	mode=locks
+2026-11-13T17:07:07Z	test:assurance-check	0	PASS	mode=assurance
+2026-11-13T17:07:07Z	test:docs-sync	0	PASS	mode=docs
+2026-11-13T17:07:16Z	test:st font list in sync	9	PASS	mode=stfonts
+2026-11-13T17:07:16Z	test:env-bash-profile-shim	0	PASS	mode=envs
+2026-11-13T17:07:16Z	test:env-shell-parity	0	PASS	mode=envs+loader
+2026-11-13T17:07:16Z	test:install-zsh-relocation	0	PASS	mode=loader
+2026-11-13T17:07:17Z	test:shell-typeahead	1	PASS	mode=envs
+2026-11-13T17:07:17Z	test:env-bash-runtime	1	PASS	mode=envs
+2026-11-13T17:07:17Z	test:python-tool-source-patches	0	PASS	mode=payload+loader
+2026-11-13T17:07:18Z	test:portable-python-ca	2	PASS	mode=payload
+2026-11-13T17:07:18Z	test:env-nvim-no-git	0	PASS	mode=envs
+2026-11-13T17:07:19Z	test:payload-interpreter-abi	1	PASS	mode=payload+loader+build
+2026-11-13T17:07:19Z	test:env-nvim-smart-quit	0	PASS	mode=envs
+2026-11-13T17:07:28Z	test:shim-bootstrap	10	PASS	mode=loader
+2026-11-13T17:07:44Z	test:needed-closure	26	PASS	mode=payload+sonames
+2026-11-13T17:07:44Z	test:python-suite	0	PASS	mode=payload+loader+build
+2026-11-13T17:07:44Z	test:wheelhouse-closure	0	PASS	mode=payload+loader
+2026-11-13T17:07:47Z	test:nodejs-runpath	3	PASS	mode=payload+build+loader
+2026-11-13T17:07:50Z	test:install-noop-stamps	6	PASS	mode=payload+loader+envs
+2026-11-13T17:07:50Z	test:release-timings	0	PASS	mode=timings+build
+2026-11-13T17:07:50Z	test:test-cleanup	0	PASS	mode=tests
+2026-11-13T17:07:50Z	test:pre-commit-hook	0	PASS	mode=hooks
+2026-11-13T17:07:51Z	test:prompt-no-rc	1	PASS	mode=envs
+2026-11-13T17:07:53Z	test:env-tcsh-starship	3	PASS	mode=envs
+2026-11-13T17:07:53Z	test:tmux-managed-hook-names	0	PASS	mode=envs
+2026-11-13T17:07:53Z	test:export-stash	0	PASS	mode=build
+2026-11-13T17:07:53Z	test:nvim-formatters-resolve	0	PASS	mode=payload+envs
+2026-11-13T17:07:53Z	test:env-modules	0	PASS	mode=envs
+2026-11-13T17:07:53Z	test:st-wrapper	0	PASS	mode=build
+2026-11-13T17:07:53Z	test:oom-guard-reap	0	PASS	mode=build+loader
+2026-11-13T17:07:54Z	test:dep-capture	1	PASS	mode=payload+envs
+2026-11-13T17:07:54Z	test:update-cadence	0	PASS	mode=build
+2026-11-13T17:07:55Z	test:env-helix-config	1	PASS	mode=envs+payload
+2026-11-13T17:07:55Z	test:check-installer	2	PASS	mode=loader
+2026-11-13T17:07:55Z	test:release-tag-scheme	0	PASS	mode=build
+2026-11-13T17:07:55Z	test:check-versions-contract	0	PASS	mode=build
+2026-11-13T17:07:56Z	test:fetch-stash-trust	1	PASS	mode=build+tools
+2026-11-13T17:07:56Z	test:security-pipeline	1	PASS	mode=build
+2026-11-13T17:07:57Z	test:total	63	PASS	flags=--fast skipped=0
+2026-11-13T17:08:28Z	test:ruff check	0	CACHED	mode=python
+2026-11-13T17:08:28Z	test:py_compile	0	CACHED	mode=python
+2026-11-13T17:08:28Z	test:ruff format check	0	CACHED	mode=python
+2026-11-13T17:08:28Z	test:unit-resolver	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:config-toml-exclude	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:unit-private-state	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:unit-install-steps	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:install-atomic-replace	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:doctor-system-newer	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:registry-integrity	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:python-requires	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:search-groups	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:tar-safety	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:content-verify	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:content-manifest in sync	0	CACHED	mode=payload+export+build
+2026-11-13T17:08:28Z	test:content-manifest matches export	0	CACHED	mode=export+build
+2026-11-13T17:08:28Z	test:content-manifest shipped-set	0	CACHED	mode=export+build
+2026-11-13T17:08:28Z	test:installed-sizes in sync	0	CACHED	mode=envs+payload
+2026-11-13T17:08:28Z	test:incremental-verdicts	0	CACHED	mode=smoke
+2026-11-13T17:08:28Z	test:parser-locks in sync	0	CACHED	mode=locks
+2026-11-13T17:08:28Z	test:st font list in sync	0	CACHED	mode=stfonts
+2026-11-13T17:08:28Z	test:README table in sync	0	CACHED	mode=readme
+2026-11-13T17:08:28Z	test:docs-sync	0	CACHED	mode=docs
+2026-11-13T17:08:28Z	test:assurance-check	0	CACHED	mode=assurance
+2026-11-13T17:08:28Z	test:env-shell-parity	0	CACHED	mode=envs+loader
+2026-11-13T17:08:28Z	test:env-bash-profile-shim	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:env-bash-runtime	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:portable-python-ca	0	CACHED	mode=payload
+2026-11-13T17:08:28Z	test:shell-typeahead	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:install-zsh-relocation	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:python-tool-source-patches	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:payload-interpreter-abi	0	CACHED	mode=payload+loader+build
+2026-11-13T17:08:28Z	test:needed-closure	0	CACHED	mode=payload+sonames
+2026-11-13T17:08:28Z	test:shim-bootstrap	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:env-nvim-no-git	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:env-nvim-smart-quit	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:install-noop-stamps	0	CACHED	mode=payload+loader+envs
+2026-11-13T17:08:28Z	test:nodejs-runpath	0	CACHED	mode=payload+build+loader
+2026-11-13T17:08:28Z	test:wheelhouse-closure	0	CACHED	mode=payload+loader
+2026-11-13T17:08:28Z	test:python-suite	0	CACHED	mode=payload+loader+build
+2026-11-13T17:08:28Z	test:env-tcsh-starship	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:prompt-no-rc	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:test-cleanup	0	CACHED	mode=tests
+2026-11-13T17:08:28Z	test:release-timings	0	PASS	mode=timings+build
+2026-11-13T17:08:28Z	test:pre-commit-hook	0	CACHED	mode=hooks
+2026-11-13T17:08:28Z	test:nvim-formatters-resolve	0	CACHED	mode=payload+envs
+2026-11-13T17:08:28Z	test:env-modules	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:tmux-managed-hook-names	0	CACHED	mode=envs
+2026-11-13T17:08:28Z	test:export-stash	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:dep-capture	0	CACHED	mode=payload+envs
+2026-11-13T17:08:28Z	test:oom-guard-reap	0	CACHED	mode=build+loader
+2026-11-13T17:08:28Z	test:check-installer	0	CACHED	mode=loader
+2026-11-13T17:08:28Z	test:st-wrapper	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:env-helix-config	0	CACHED	mode=envs+payload
+2026-11-13T17:08:28Z	test:update-cadence	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:release-tag-scheme	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:fetch-stash-trust	0	CACHED	mode=build+tools
+2026-11-13T17:08:28Z	test:security-pipeline	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:check-versions-contract	0	CACHED	mode=build
+2026-11-13T17:08:28Z	test:install-fonts-rejoin	0	CACHED	mode=loader+payload
+2026-11-13T17:08:29Z	test:install-modules	1	PASS	mode=auto
+2026-11-13T17:08:33Z	test:install-fonts-shared	5	PASS	mode=auto
+2026-11-13T17:09:29Z	test:install-python-versions	61	PASS	mode=auto
+2026-11-13T17:09:50Z	test:python-suite-install	82	PASS	mode=auto
+2026-11-13T17:09:58Z	test:valgrind-smoke	8	PASS	mode=auto
+2026-11-13T17:09:58Z	test:install-env-bash	8	PASS	mode=auto
+2026-11-13T17:10:00Z	test:install-env-st	2	PASS	mode=auto
+2026-11-13T17:10:06Z	test:stale-env-cargo-config	16	PASS	mode=auto
+2026-11-13T17:10:07Z	test:snapshot-restore	9	PASS	mode=auto
+2026-11-13T17:10:08Z	test:env-private-dirs	18	PASS	mode=auto
+2026-11-13T17:10:17Z	test:install-env-zsh	9	PASS	mode=auto
+2026-11-13T17:10:19Z	test:env-ls-choice	11	PASS	mode=auto
+2026-11-13T17:10:36Z	test:install-env-tcsh	30	PASS	mode=auto
+2026-11-13T17:10:45Z	test:env-linelight	9	PASS	mode=auto
+2026-11-13T17:10:50Z	test:env-interactive-shell	42	PASS	mode=auto
+2026-11-13T17:10:51Z	test:install-env-xfce4-terminal	1	PASS	mode=auto
+2026-11-13T17:10:54Z	test:env-managed-readonly	3	PASS	mode=auto
+2026-11-13T17:10:55Z	test:env-tcsh-prompt-resize	5	PASS	mode=auto
+2026-11-13T17:11:03Z	test:env-delete	27	PASS	mode=auto
+2026-11-13T17:11:03Z	test:install-readonly-source	0	CACHED	mode=loader
+2026-11-13T17:11:06Z	test:install-env-vim-xdg	3	PASS	mode=auto
+2026-11-13T17:11:13Z	test:install-env-tmux-nvim-layers	10	PASS	mode=auto
+2026-11-13T17:11:13Z	test:install-parity-plot	0	CACHED	mode=payload+loader
+2026-11-13T17:11:15Z	test:install-exclude-policy	2	PASS	mode=auto
+2026-11-13T17:12:06Z	test:optional-packages	53	PASS	mode=auto
+2026-11-13T17:16:32Z	test:install-readonly-tree	329	PASS	mode=auto
+2026-11-13T17:17:03Z	test:install-watchglass	31	PASS	mode=auto
+2026-11-13T17:17:18Z	test:install-open-eda-file-tools	46	PASS	mode=auto
+2026-11-13T17:17:24Z	test:install-python-tool-upgrade	52	PASS	mode=auto
+2026-11-13T17:17:28Z	test:install-typescript-language-server	10	PASS	mode=auto
+2026-11-13T17:17:30Z	test:uv-launchers	27	PASS	mode=auto
+2026-11-13T17:19:03Z	test:compile-open-eda-from-source	150	PASS	mode=auto
+2026-11-13T17:20:11Z	test:install-nvim-shared-stash	68	PASS	mode=auto
+2026-11-13T17:21:23Z	test:install-nvim-deployments	140	PASS	mode=auto
+2026-11-13T17:24:57Z	test:install-split-shared-envs	354	PASS	mode=auto
+2026-11-13T17:25:50Z	test:install-linux-tmp-home	407	PASS	mode=auto
+2026-11-13T17:25:51Z	test:completion in sync	1	PASS	mode=loader+payload+envs
+2026-11-13T17:25:51Z	test:total	1045	PASS	flags= skipped=0
+2026-11-13T17:33:30Z	version table	0.0	PASS	2026.11.6
+2026-11-13T17:33:31Z	payload consistency	1.1	PASS	2026.11.6
+2026-11-13T17:33:38Z	manifest export	8.3	PASS	2026.11.6
+2026-11-13T17:33:44Z	checksums	14.2	PASS	2026.11.6
+2026-11-13T17:33:45Z	vulnerability scan	15.1	FAIL	2026.11.6
+2026-11-13T17:33:51Z	secret scan	20.6	PASS	2026.11.6
+2026-11-13T17:36:19Z	build:shell	1	FAIL	build-shell
+2026-11-13T17:36:39Z	binary smoke test	188.8	PASS	2026.11.6
+2026-11-13T17:36:39Z	build:shell	0	PASS	build-shell
+2026-11-13T17:36:51Z	build:shell	1	FAIL	build-shell
+2026-11-13T17:36:59Z	build:shell	2	PASS	build-shell
+2026-11-13T17:37:14Z	build:shell	1	FAIL	build-shell
+2026-11-13T17:37:27Z	build:shell	6	PASS	build-shell
+2026-11-13T17:38:15Z	build:shell	38	PASS	build-shell
+2026-11-13T17:39:22Z	malware scan	352.2	FAIL	2026.11.6
+2026-11-13T17:40:47Z	test:py_compile	0	CACHED	mode=python
+2026-11-13T17:40:47Z	test:ruff check	0	CACHED	mode=python
+2026-11-13T17:40:47Z	test:ruff format check	0	CACHED	mode=python
+2026-11-13T17:40:47Z	test:unit-install-steps	0	CACHED	mode=loader
+2026-11-13T17:40:47Z	test:unit-private-state	0	PASS	mode=payload+loader
+2026-11-13T17:40:47Z	test:unit-resolver	0	PASS	mode=payload+loader
+2026-11-13T17:40:47Z	test:install-atomic-replace	0	CACHED	mode=loader
+2026-11-13T17:40:52Z	test:config-toml-exclude	5	PASS	mode=payload+loader
+2026-11-13T17:40:52Z	test:doctor-system-newer	0	CACHED	mode=loader
+2026-11-13T17:40:52Z	test:search-groups	0	CACHED	mode=loader
+2026-11-13T17:40:52Z	test:tar-safety	0	CACHED	mode=loader
+2026-11-13T17:40:52Z	test:registry-integrity	0	PASS	mode=payload+loader
+2026-11-13T17:40:52Z	test:content-verify	0	CACHED	mode=loader
+2026-11-13T17:40:53Z	test:python-requires	1	PASS	mode=payload+loader
+2026-11-13T17:40:53Z	test:content-manifest shipped-set	0	PASS	mode=export+build
+2026-11-13T17:40:54Z	test:installed-sizes in sync	1	PASS	mode=envs+payload
+2026-11-13T17:40:55Z	test:content-manifest in sync	2	PASS	mode=payload+export+build
+2026-11-13T17:40:55Z	test:incremental-verdicts	0	CACHED	mode=smoke
+2026-11-13T17:41:00Z	test:content-manifest matches export	7	PASS	mode=export+build
+2026-11-13T17:41:00Z	test:st font list in sync	0	CACHED	mode=stfonts
+2026-11-13T17:41:00Z	test:README table in sync	0	CACHED	mode=readme
+2026-11-13T17:41:00Z	test:parser-locks in sync	0	PASS	mode=locks
+2026-11-13T17:41:00Z	test:assurance-check	0	CACHED	mode=assurance
+2026-11-13T17:41:00Z	test:env-shell-parity	0	CACHED	mode=envs+loader
+2026-11-13T17:41:00Z	test:env-bash-profile-shim	0	CACHED	mode=envs
+2026-11-13T17:41:00Z	test:docs-sync	0	PASS	mode=docs
+2026-11-13T17:41:00Z	test:env-bash-runtime	0	CACHED	mode=envs
+2026-11-13T17:41:00Z	test:shell-typeahead	0	CACHED	mode=envs
+2026-11-13T17:41:00Z	test:install-zsh-relocation	0	CACHED	mode=loader
+2026-11-13T17:41:00Z	test:python-tool-source-patches	0	PASS	mode=payload+loader
+2026-11-13T17:41:03Z	test:portable-python-ca	3	PASS	mode=payload
+2026-11-13T17:41:03Z	test:shim-bootstrap	0	CACHED	mode=loader
+2026-11-13T17:41:03Z	test:env-nvim-no-git	0	CACHED	mode=envs
+2026-11-13T17:41:03Z	test:payload-interpreter-abi	0	PASS	mode=payload+loader+build
+2026-11-13T17:41:03Z	test:env-nvim-smart-quit	0	CACHED	mode=envs
+2026-11-13T17:41:21Z	test:needed-closure	18	PASS	mode=payload+sonames
+2026-11-13T17:41:21Z	test:python-suite	0	PASS	mode=payload+loader+build
+2026-11-13T17:41:22Z	test:wheelhouse-closure	1	PASS	mode=payload+loader
+2026-11-13T17:41:24Z	test:nodejs-runpath	3	PASS	mode=payload+build+loader
+2026-11-13T17:41:27Z	test:install-noop-stamps	6	PASS	mode=payload+loader+envs
+2026-11-13T17:41:27Z	test:env-tcsh-starship	0	CACHED	mode=envs
+2026-11-13T17:41:27Z	test:prompt-no-rc	0	CACHED	mode=envs
+2026-11-13T17:41:27Z	test:test-cleanup	0	CACHED	mode=tests
+2026-11-13T17:41:27Z	test:release-timings	0	PASS	mode=timings+build
+2026-11-13T17:41:27Z	test:pre-commit-hook	0	CACHED	mode=hooks
+2026-11-13T17:41:27Z	test:env-modules	0	CACHED	mode=envs
+2026-11-13T17:41:27Z	test:tmux-managed-hook-names	0	CACHED	mode=envs
+2026-11-13T17:41:27Z	test:export-stash	0	CACHED	mode=build
+2026-11-13T17:41:28Z	test:nvim-formatters-resolve	1	PASS	mode=payload+envs
+2026-11-13T17:41:28Z	test:oom-guard-reap	0	CACHED	mode=build+loader
+2026-11-13T17:41:28Z	test:check-installer	0	CACHED	mode=loader
+2026-11-13T17:41:28Z	test:st-wrapper	0	CACHED	mode=build
+2026-11-13T17:41:29Z	test:dep-capture	1	PASS	mode=payload+envs
+2026-11-13T17:41:29Z	test:update-cadence	0	CACHED	mode=build
+2026-11-13T17:41:29Z	test:release-tag-scheme	0	CACHED	mode=build
+2026-11-13T17:41:29Z	test:fetch-stash-trust	0	CACHED	mode=build+tools
+2026-11-13T17:41:29Z	test:env-helix-config	0	PASS	mode=envs+payload
+2026-11-13T17:41:29Z	test:security-pipeline	0	CACHED	mode=build
+2026-11-13T17:41:29Z	test:check-versions-contract	0	CACHED	mode=build
+2026-11-13T17:41:30Z	test:total	45	PASS	flags=--fast skipped=0
+2026-11-13T17:46:58Z	version table	0.0	PASS	2026.11.6
+2026-11-13T17:46:59Z	payload consistency	1.1	PASS	2026.11.6
+2026-11-13T17:47:06Z	manifest export	8.1	PASS	2026.11.6
+2026-11-13T17:47:10Z	checksums	11.9	PASS	2026.11.6
+2026-11-13T17:47:11Z	vulnerability scan	12.7	PASS	2026.11.6
+2026-11-13T17:47:19Z	secret scan	20.6	PASS	2026.11.6
+2026-11-13T17:47:41Z	binary smoke test	42.2	PASS	2026.11.6
+2026-11-13T17:52:32Z	malware scan	333.6	PASS	2026.11.6
+2026-11-13T17:52:42Z	version table	0.0	PASS	2026.11.6
+2026-11-13T17:52:42Z	binary smoke test	0.5	PASS	2026.11.6
+2026-11-13T17:52:43Z	payload consistency	1.1	PASS	2026.11.6
+2026-11-13T17:52:43Z	malware scan	1.7	PASS	2026.11.6
+2026-11-13T17:52:44Z	vulnerability scan	2.4	PASS	2026.11.6
+2026-11-13T17:52:49Z	manifest export	7.6	PASS	2026.11.6
+2026-11-13T17:52:54Z	checksums	12.2	PASS	2026.11.6
+2026-11-13T17:52:55Z	secret scan	13.0	PASS	2026.11.6
