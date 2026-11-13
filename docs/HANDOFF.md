@@ -13,6 +13,34 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-13 (3): release dry-run blocked on wheelhouse advisories -- two wheels bumped
+
+The issue #22 release dry-run failed `vuln-scan` on two unbaselined findings. Both
+are **fixed rather than accepted**, because the fix is a wheel swap with no API
+change for anything EL ships:
+
+- `opentelemetry_api` **1.45.1 -> 1.45.2** (GHSA-mf5v-w3w3-f6cg: ReDoS while
+  parsing `traceparent`; fix is a patch bump). Reachable only through
+  `fastapi`/`starlette[full]` in the open-eda-file-tools and parity-plot
+  closures; neither calls the propagator itself. Metadata: requires only
+  `typing-extensions`.
+- `soupsieve` **2.10 -> 4.0** (GHSA-6655-6qjp-jx7x + GHSA-7g44-g9rc-x53w fixed
+  in 3.0.2, GHSA-mmhr-3c5m-f64f fixed in 4.0.0: CSS-selector DoS vectors). The
+  newest fix needs 4.0; `beautifulsoup4 4.15.0` requires only
+  `soupsieve>=1.6.1`, so the closure accepts it.
+
+Wheels downloaded in the EL8 container with every acceptable platform tag
+(`--only-binary --no-deps`, pip3.15), copied into the wheelhouse, superseded
+wheels pruned. Registered names are unchanged, so `packages.json` is untouched.
+
+**Verification.** `tests/wheelhouse-closure` (14 python-tools resolve offline),
+`tests/python-suite`, `tests/install-open-eda-file-tools`, plus: a fresh jupyterlab
+install from the wheelhouse (`--dest-dir`, offline) whose venv runs
+`beautifulsoup4` selection on soupsieve 4.0, and `opentelemetry.version` imports
+1.45.2. The first dry-run's malware scan crashed (not a detection: CLEAN 0/81294)
+because it raced the wheel replacement -- `.content-manifest` still named the
+deleted file; re-run after the commit/pins. No `vuln-baseline` entry was added.
+
 ## 2026-11-13 (2): env-tmux supports local (non-vendored) plugins (issue #22)
 
 `~/.config/tmux/plugins/` is sealed 0555 and `sync_dir(delete=True)` replaces it
