@@ -5525,6 +5525,11 @@ def _install_runtime_archive(pkg_name, entry, platform_dir, home, sentinel_rel, 
     return bins
 
 
+_PYTHON_MODULE_FAMILY_BLOCK = (
+    'if {[info commands family] ne ""} {\n    family python\n} else {\n    conflict python\n}\n'
+)
+
+
 def _python_modulefile_text(prefix, minor):
     """The exact Environment Modules file for one bundled interpreter.
 
@@ -5533,6 +5538,7 @@ def _python_modulefile_text(prefix, minor):
     LD_LIBRARY_PATH or UV_PYTHON: UV_PYTHON outranks a project's
     .python-version and redirects `uv pip` inside an activated venv, and the
     Python* variables leak into every child Python (EDA tools' own builds).
+    `family python` (EM 5.1+) degrades to `conflict python` on older host EM.
     """
     return (
         "#%Module1.0\n"
@@ -5543,35 +5549,183 @@ def _python_modulefile_text(prefix, minor):
         f'    puts stderr "CPython {minor} from loadout ({prefix}/opt/python/{minor})"\n'
         "}\n"
         f'module-whatis "CPython {minor} (loadout)"\n'
-        "family python\n"
-        f"prepend-path PATH {{{prefix}/opt/python/{minor}/bin}}\n"
+        + _PYTHON_MODULE_FAMILY_BLOCK
+        + f"prepend-path PATH {{{prefix}/opt/python/{minor}/bin}}\n"
         f"setenv LOADOUT_PYTHON {{{prefix}/opt/python/{minor}/bin/python3}}\n"
         "setenv UV_PYTHON_DOWNLOADS never\n"
     )
 
 
-def install_python_modulefiles(repo_dir, home, selected_tools, registry):
-    """Write <prefix>/share/modulefiles/python/<minor> for each installed
-    python-base interpreter that declares `python_version`.
+def _python_loaded_modulefile_text(prefix, minor, calver):
+    """Environment Modules file for the curated python-loaded venv.
 
-    Skipped when the package is not selected or the interpreter is absent (a
-    modulefile pointing at nothing is worse than none). The file is rewritten
-    only when its content changed, through the same atomic inode swap as every
-    other installed file, so an already-loaded `module load python/3.12` in a
-    running shell keeps its loaded interpreter.
+    Lives under the same `python/` root (`python/loaded/<minor>/<calver>`) so
+    one-argument `module switch` works between base interpreters and the suite,
+    and `<4.5` `conflict python` covers both without extra root names. Never
+    exports VIRTUAL_ENV: PEP 405 resolves pyvenv.cfg from argv[0], while
+    VIRTUAL_ENV would let bare `uv pip install` mutate the shared suite and
+    make the uv launcher skip project `.venv` discovery.
+    """
+    venv = f"{prefix}/share/python-loaded/venv"
+    return (
+        "#%Module1.0\n"
+        "##\n"
+        f"## python/loaded/{minor}/{calver} -- loadout-managed python-loaded {calver} (CPython {minor})\n"
+        "##\n"
+        "proc ModulesHelp { } {\n"
+        f'    puts stderr "python-loaded {calver} (CPython {minor}) from loadout ({venv})"\n'
+        "}\n"
+        f'module-whatis "python-loaded {calver} on CPython {minor} (loadout)"\n'
+        + _PYTHON_MODULE_FAMILY_BLOCK
+        + f"prepend-path PATH {{{venv}/bin}}\n"
+        f"setenv LOADOUT_PYTHON {{{venv}/bin/python3}}\n"
+        "setenv UV_PYTHON_DOWNLOADS never\n"
+    )
+
+
+def _stage_primary_python_opt_bin(prefix, minor):
+    """Populate <prefix>/opt/python/<minor>/bin with symlinks to <prefix>/bin's
+    Python entrypoints so `python/<minor>` can prepend PATH without hoisting
+    every non-Python tool in <prefix>/bin or stripping <prefix>/bin on unload.
+    """
+    src_bin = os.path.join(prefix, "bin")
+    opt_bin = os.path.join(prefix, "opt", "python", minor, "bin")
+    ensure_dir(opt_bin, f"python-{minor} opt bin")
+    names = (
+        f"python{minor}",
+        "python3",
+        f"python{minor}-config",
+        "python3-config",
+        f"pip{minor}",
+        "pip3",
+        "pip",
+        f"idle{minor}",
+        "idle3",
+        f"pydoc{minor}",
+        "pydoc3",
+    )
+    for name in names:
+        src = os.path.join(src_bin, name)
+        if not os.path.lexists(src):
+            continue
+        target = os.path.join("..", "..", "..", "..", "bin", name)
+        link = os.path.join(opt_bin, name)
+        try:
+            if os.path.islink(link) and os.readlink(link) == target:
+                continue
+        except OSError:
+            pass
+        tmp_link = f"{link}.tmp.{os.getpid()}"
+        remove_if_exists(tmp_link)
+        os.symlink(target, tmp_link)
+        os.replace(tmp_link, link)
+    py_link = os.path.join(opt_bin, "python")
+    py_target = (
+        os.path.join("..", "..", "..", "..", "bin", "python")
+        if os.path.lexists(os.path.join(src_bin, "python"))
+        else "python3"
+    )
+    try:
+        if not (os.path.islink(py_link) and os.readlink(py_link) == py_target):
+            tmp_link = f"{py_link}.tmp.{os.getpid()}"
+            remove_if_exists(tmp_link)
+            os.symlink(py_target, tmp_link)
+            os.replace(tmp_link, py_link)
+    except OSError:
+        pass
+
+
+def _write_modulefile_if_changed(dest, text, result_name):
+    try:
+        with open(dest, encoding="utf-8") as fh:
+            if fh.read() == text:
+                record_result(result_name, "OK", f"unchanged ({dest})")
+                _vprint(f"  unchanged: {result_name}")
+                return
+    except OSError:
+        pass
+    ensure_dir(os.path.dirname(dest), result_name)
+    _write_stream_atomic(io.BytesIO(text.encode()), dest, 0o644)
+    record_result(result_name, "OK", dest)
+    print(f"  Installed: modulefile {dest}")
+
+
+def _sync_python_modulerc(mf_root):
+    if not os.path.isdir(mf_root):
+        return
+    lines = ["#%Module1.0\n"]
+    if os.path.isfile(os.path.join(mf_root, _BUNDLED_PY)):
+        lines.append(f"module-version python/{_BUNDLED_PY} default\n")
+    loaded_root = os.path.join(mf_root, "loaded")
+    if os.path.isdir(loaded_root):
+        for minor in sorted(os.listdir(loaded_root)):
+            minor_dir = os.path.join(loaded_root, minor)
+            if os.path.isdir(minor_dir) and any(
+                os.path.isfile(os.path.join(minor_dir, f)) for f in os.listdir(minor_dir)
+            ):
+                lines.append(f"module-alias python/{minor}-loaded python/loaded/{minor}\n")
+    text = "".join(lines)
+    dest = os.path.join(mf_root, ".modulerc")
+    try:
+        with open(dest, encoding="utf-8") as fh:
+            if fh.read() == text:
+                return
+    except OSError:
+        pass
+    _write_stream_atomic(io.BytesIO(text.encode()), dest, 0o644)
+
+
+def install_python_modulefiles(repo_dir, home, selected_tools, registry):
+    """Write <prefix>/share/modulefiles/python/... for installed base Pythons
+    (including portable-python 3.15) and python-loaded, plus python/.modulerc.
+
+    Skipped when a package is not selected or its interpreter is absent (a
+    modulefile pointing at nothing is worse than none). Files are rewritten
+    only when their content changed, through the same atomic inode swap as
+    every other installed file, so an already-loaded module in a running shell
+    keeps its loaded interpreter.
     """
     prefix = _local_root(home)
-    for pkg_name, entry in (registry or {}).items():
+    reg = registry or {}
+    mf_root = os.path.join(prefix, "share", "modulefiles", "python")
+    python_pkgs = {"portable-python", "python-loaded"} | {
+        name
+        for name, entry in reg.items()
+        if not name.startswith("@") and entry.get("kind") == "python-base" and entry.get("python_version")
+    }
+    any_python_selected = selected_tools is None or bool(python_pkgs & set(selected_tools))
+
+    if "portable-python" in reg:
+        result_name = "portable-python modulefile"
+        explicitly_selected = selected_tools is None or "portable-python" in selected_tools
+        primary_bin = os.path.join(prefix, "bin", _BUNDLED_PY_BIN)
+        if not os.access(primary_bin, os.X_OK):
+            primary_bin = os.path.join(prefix, "bin", "python3")
+        if not explicitly_selected and not (any_python_selected and os.access(primary_bin, os.X_OK)):
+            record_result(result_name, "SKIP", "not in selected tools")
+        elif not os.access(primary_bin, os.X_OK):
+            skipped(
+                f"{result_name} (no interpreter at {primary_bin})",
+                f"`module load python/{_BUNDLED_PY}` will NOT work",
+            )
+            record_result(result_name, "SKIP", f"no interpreter at {primary_bin}")
+        else:
+            _stage_primary_python_opt_bin(prefix, _BUNDLED_PY)
+            dest = os.path.join(mf_root, _BUNDLED_PY)
+            _write_modulefile_if_changed(dest, _python_modulefile_text(prefix, _BUNDLED_PY), result_name)
+
+    for pkg_name, entry in reg.items():
         if pkg_name.startswith("@") or entry.get("kind") != "python-base":
             continue
         minor = entry.get("python_version")
         if not minor:
             continue
         result_name = f"{pkg_name} modulefile"
-        if selected_tools is not None and pkg_name not in selected_tools:
+        explicitly_selected = selected_tools is None or pkg_name in selected_tools
+        interpreter = os.path.join(_resolve_install_to(entry.get("install_to", ""), home), "bin", "python3")
+        if not explicitly_selected and not (any_python_selected and os.access(interpreter, os.X_OK)):
             record_result(result_name, "SKIP", "not in selected tools")
             continue
-        interpreter = os.path.join(_resolve_install_to(entry.get("install_to", ""), home), "bin", "python3")
         if not os.access(interpreter, os.X_OK):
             skipped(
                 f"{result_name} (no interpreter at {interpreter})",
@@ -5579,20 +5733,39 @@ def install_python_modulefiles(repo_dir, home, selected_tools, registry):
             )
             record_result(result_name, "SKIP", f"no interpreter at {interpreter}")
             continue
-        dest = os.path.join(prefix, "share", "modulefiles", "python", minor)
-        text = _python_modulefile_text(prefix, minor)
-        try:
-            with open(dest, encoding="utf-8") as fh:
-                if fh.read() == text:
-                    record_result(result_name, "OK", f"unchanged ({dest})")
-                    _vprint(f"  unchanged: {result_name}")
-                    continue
-        except OSError:
-            pass
-        ensure_dir(os.path.dirname(dest), result_name)
-        _write_stream_atomic(io.BytesIO(text.encode()), dest, 0o644)
-        record_result(result_name, "OK", dest)
-        print(f"  Installed: modulefile {dest}")
+        dest = os.path.join(mf_root, minor)
+        _write_modulefile_if_changed(dest, _python_modulefile_text(prefix, minor), result_name)
+
+    if "python-loaded" in reg:
+        suite_entry = reg["python-loaded"]
+        result_name = "python-loaded modulefile"
+        explicitly_selected = selected_tools is None or "python-loaded" in selected_tools
+        suite_dest = _resolve_install_to(_SUITE_INSTALL_TO, home)
+        suite_py = os.path.join(suite_dest, "venv", "bin", "python3")
+        if not explicitly_selected and not (any_python_selected and os.access(suite_py, os.X_OK)):
+            record_result(result_name, "SKIP", "not in selected tools")
+        else:
+            lock_rel = suite_entry.get("lock", "")
+            lock_path = os.path.join(repo_dir, lock_rel) if lock_rel else ""
+            meta = _suite_lock_meta(lock_path) if lock_path and os.path.isfile(lock_path) else {}
+            calver = meta.get("version") or suite_entry.get("version", "")
+            py_ver = meta.get("python", "")
+            minor = ".".join(py_ver.split(".")[:2]) if py_ver and "." in py_ver else _BUNDLED_PY
+            if not os.access(suite_py, os.X_OK) or not calver:
+                skipped(
+                    f"{result_name} (no suite interpreter at {suite_py})",
+                    f"`module load python/loaded/{minor}` will NOT work",
+                )
+                record_result(result_name, "SKIP", f"no suite interpreter at {suite_py}")
+            else:
+                loaded_dir = os.path.join(mf_root, "loaded", minor)
+                dest = os.path.join(loaded_dir, calver)
+                _write_modulefile_if_changed(dest, _python_loaded_modulefile_text(prefix, minor, calver), result_name)
+                if os.path.isdir(loaded_dir):
+                    for name in sorted(os.listdir(loaded_dir)):
+                        if name != calver:
+                            remove_if_exists(os.path.join(loaded_dir, name))
+    _sync_python_modulerc(mf_root)
 
 
 def _prefix_bin_names(home, root, rels):

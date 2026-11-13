@@ -151,6 +151,30 @@ def main():
             print("no suite interpreter; stopping")
             return 1
 
+        mf_loaded = os.path.join(dest, "share", "modulefiles", "python", "loaded", "3.15", "2026.10.23")
+        modulerc = os.path.join(dest, "share", "modulefiles", "python", ".modulerc")
+        check("suite modulefile exists", os.path.isfile(mf_loaded), mf_loaded)
+        if os.path.isfile(mf_loaded):
+            with open(mf_loaded, encoding="utf-8") as fh:
+                mf_text = fh.read()
+            check(
+                "suite modulefile has family+conflict guard and stable venv paths",
+                "family python" in mf_text
+                and "conflict python" in mf_text
+                and f"prepend-path PATH {{{os.path.join(venv, 'bin')}}}" in mf_text
+                and f"setenv LOADOUT_PYTHON {{{python}}}" in mf_text
+                and "VIRTUAL_ENV" not in mf_text,
+                mf_text,
+            )
+        check("python/.modulerc exists", os.path.isfile(modulerc), modulerc)
+        if os.path.isfile(modulerc):
+            with open(modulerc, encoding="utf-8") as fh:
+                rc_text = fh.read()
+            check(
+                "python/.modulerc aliases python/3.15-loaded",
+                "module-alias python/3.15-loaded python/loaded/3.15" in rc_text,
+                rc_text,
+            )
         probe = run(
             [
                 python,

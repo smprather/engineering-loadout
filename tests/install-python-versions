@@ -56,7 +56,7 @@ echo "Installing interpreters + modules into fresh root: $dest_dir"
 install_selection install
 
 # --- 1. stable per-minor paths and versions --------------------------------
-for minor in 3.12 3.13; do
+for minor in 3.12 3.13 3.15; do
     interp="$dest_dir/opt/python/$minor/bin/python$minor"
     [[ -x "$interp" ]] || fail "missing interpreter: $interp"
     got=$("$interp" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
@@ -66,17 +66,20 @@ for minor in 3.12 3.13; do
 done
 
 # --- 2. generated modulefiles ----------------------------------------------
-for minor in 3.12 3.13; do
+for minor in 3.12 3.13 3.15; do
     mf="$dest_dir/share/modulefiles/python/$minor"
     [[ -f "$mf" ]] || fail "missing modulefile: $mf"
-    for needle in 'family python' 'LOADOUT_PYTHON' 'UV_PYTHON_DOWNLOADS never'; do
+    for needle in 'if {[info commands family] ne ""}' 'family python' 'conflict python' 'LOADOUT_PYTHON' 'UV_PYTHON_DOWNLOADS never'; do
         grep -Fq "$needle" "$mf" || fail "$mf lacks: $needle"
     done
-    if grep -Eq 'PYTHONPATH|PYTHONHOME|LD_LIBRARY_PATH|setenv UV_PYTHON ' "$mf"; then
+    if grep -Eq 'PYTHONPATH|PYTHONHOME|LD_LIBRARY_PATH|VIRTUAL_ENV|setenv UV_PYTHON ' "$mf"; then
         fail "$mf exports Python environment that would leak into child processes"
     fi
     echo "  OK  modulefile $mf"
 done
+modulerc="$dest_dir/share/modulefiles/python/.modulerc"
+[[ -f "$modulerc" ]] || fail "missing .modulerc: $modulerc"
+grep -Fq 'module-version python/3.15 default' "$modulerc" || fail "$modulerc lacks python/3.15 default"
 
 # --- 3/4/7. bash: load, switch, leak check, EL default unchanged -----------
 env -i \
@@ -94,7 +97,15 @@ env -i \
         }
         source "$DEST/lib/modules/init/bash"
         module use "$DEST/share/modulefiles"
-        module load python/3.12
+        module load python
+        python3 -c "import sys; assert sys.version_info[:2] == (3, 15), sys.version"
+        [[ "$LOADOUT_PYTHON" == "$DEST/opt/python/3.15/bin/python3" ]] || {
+            echo "default LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+        if module load python/3.12 2>/dev/null; then
+            echo "module load python/3.12 succeeded while python/3.15 was loaded (expected conflict)" >&2
+            exit 1
+        fi
+        module switch python/3.12
         python3 -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
         [[ "$LOADOUT_PYTHON" == "$DEST/opt/python/3.12/bin/python3" ]] || {
             echo "LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
@@ -166,6 +177,12 @@ env -i \
         }
     ' || fail "venv creation from the loaded interpreter"
 
+# Stage a suite venv symlink before reinstall so install_python_modulefiles also
+# writes python/loaded/3.15/<calver> and the python/3.15-loaded alias in .modulerc.
+mkdir -p "$dest_dir/share/python-loaded/venv/bin"
+ln -s ../../../../bin/python3.15 "$dest_dir/share/python-loaded/venv/bin/python3"
+ln -s python3 "$dest_dir/share/python-loaded/venv/bin/python"
+
 inode_before=$(stat -c %i "$dest_dir/opt/python/3.12/bin/python3.12")
 install_selection reinstall >/dev/null
 inode_after=$(stat -c %i "$dest_dir/opt/python/3.12/bin/python3.12")
@@ -175,5 +192,31 @@ inode_after=$(stat -c %i "$dest_dir/opt/python/3.12/bin/python3.12")
 "$venv_dir/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12)' \
     || fail "venv interpreter changed version after reinstall"
 echo "  OK  venv kept the stable path across an in-place reinstall"
+
+# --- 8. python-loaded modulefile + one-arg switch + conflict ----------------
+env -i \
+    HOME="$test_home" \
+    PATH="/usr/bin:/bin" \
+    TERM=dumb \
+    DEST="$dest_dir" \
+    bash --noprofile --norc -c '
+        set -euo pipefail
+        source "$DEST/lib/modules/init/bash"
+        module use "$DEST/share/modulefiles"
+        module load python/loaded
+        [[ "$LOADOUT_PYTHON" == "$DEST/share/python-loaded/venv/bin/python3" ]] || {
+            echo "loaded LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+        if module load python/3.12 2>/dev/null; then
+            echo "module load python/3.12 succeeded while python/loaded was loaded" >&2
+            exit 1
+        fi
+        module switch python/3.12
+        [[ "$LOADOUT_PYTHON" == "$DEST/opt/python/3.12/bin/python3" ]] || {
+            echo "after switch to 3.12 LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+        module switch python/3.15-loaded
+        [[ "$LOADOUT_PYTHON" == "$DEST/share/python-loaded/venv/bin/python3" ]] || {
+            echo "after switch to 3.15-loaded LOADOUT_PYTHON=$LOADOUT_PYTHON" >&2; exit 1; }
+    ' || fail "python-loaded module load/switch/conflict assertions"
+echo "  OK  python/loaded + python/3.15-loaded load, conflict, and one-arg switch"
 
 echo "install-python-versions OK"

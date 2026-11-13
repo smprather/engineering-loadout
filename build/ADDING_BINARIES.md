@@ -7677,11 +7677,15 @@ build/build-shell sh -c 'build/build-python-standalone.sh \
 
 ### Modulefiles (installed, not in the archive)
 
-`install_python_modulefiles()` (a phase after `runtime archives`) writes
-`<prefix>/share/modulefiles/python/<minor>` for every selected `python-base`
-entry with `python_version`. It is skipped when the package is not selected or
-`<prefix>/opt/python/<minor>/bin/python3` is absent, rewritten only when the
-content changed, and written through `_write_stream_atomic`. The exact text:
+`install_python_modulefiles()` (a phase after `runtime archives`) writes a
+single `python/` modulefile hierarchy under `<prefix>/share/modulefiles/python/`:
+`python/3.15` (plus `<prefix>/opt/python/3.15/bin` symlinks to `<prefix>/bin`'s
+Python 3.15 entrypoints so unloading never removes `<prefix>/bin` from `PATH`),
+`python/<minor>` for every installed `python-base` with `python_version`
+(`3.12`, `3.13`), `python/loaded/<minor>/<calver>` for `python-loaded` (pruning
+superseded `<calver>` modulefiles), and `python/.modulerc` (`python/3.15`
+default + `python/<minor>-loaded` alias). Files are rewritten only when content
+changed, via `_write_stream_atomic`. The base modulefile text:
 
 ```tcl
 #%Module1.0
@@ -7692,19 +7696,25 @@ proc ModulesHelp { } {
     puts stderr "CPython <minor> from loadout ({prefix}/opt/python/<minor>)"
 }
 module-whatis "CPython <minor> (loadout)"
-family python
+if {[info commands family] ne ""} {
+    family python
+} else {
+    conflict python
+}
 prepend-path PATH {<prefix>/opt/python/<minor>/bin}
 setenv LOADOUT_PYTHON {<prefix>/opt/python/<minor>/bin/python3}
 setenv UV_PYTHON_DOWNLOADS never
 ```
 
-It sets no `PYTHONPATH`, `PYTHONHOME`, `LD_LIBRARY_PATH` or `UV_PYTHON`:
-those leak into child Pythons (EDA tools' own builds) and `UV_PYTHON` outranks
-a project pin. `family python` makes a second member conflict; Environment
-Modules 5.6.1 supports `module switch python/3.13`, and unload+load is the
-fallback for older sites. Gate: `tests/install-python-versions` (bash load,
-switch, tcsh load, env-leak asserts, venv stability across reinstall, and EL's
-3.15 default unchanged).
+It sets no `VIRTUAL_ENV`, `PYTHONPATH`, `PYTHONHOME`, `LD_LIBRARY_PATH` or
+`UV_PYTHON`: those leak into child Pythons (EDA tools' own builds),
+`VIRTUAL_ENV` would let bare `uv pip install` mutate `python-loaded` and cause
+the uv launcher to skip project `.venv` discovery, and `UV_PYTHON` outranks a
+project pin. Putting both base interpreters and `python/loaded/<minor>/<calver>`
+under the `python/` root makes one-argument `module switch` work across all of
+them in EM 5.4+, while `[info commands family]` degrades cleanly to
+`conflict python` on pre-5.1 host EM. Gate: `tests/install-python-versions` and
+`tests/python-suite-install`.
 
 ### uv launcher policy
 

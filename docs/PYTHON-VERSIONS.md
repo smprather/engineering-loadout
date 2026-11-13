@@ -21,38 +21,65 @@ always stay on 3.15; installing a second interpreter does not change them.
 
 ## Selecting a version with Environment Modules
 
-The installer writes one modulefile per installed interpreter under
-`<prefix>/share/modulefiles/python/<minor>` (for the default root:
-`~/.local/share/loadout/share/modulefiles/python/3.12`). If `module` is not
-already available, source the bundled Environment Modules init:
+The installer writes a unified `python/` modulefile tree under
+`<prefix>/share/modulefiles/python/` (for the default root:
+`~/.local/share/loadout/share/modulefiles/python/`):
+
+- `python/3.15` (and `.modulerc` setting `module-version python/3.15 default`)
+  for the primary `portable-python` interpreter (`<prefix>/opt/python/3.15/bin`
+  holds symlinks to `<prefix>/bin`'s Python 3.15 entrypoints so unloading never
+  strips `<prefix>/bin` from `PATH`);
+- `python/3.12` and `python/3.13` for the optional `@python-versions`
+  interpreters;
+- `python/loaded/3.15/<calver>` (plus the `.modulerc` alias
+  `python/3.15-loaded -> python/loaded/3.15`) when `python-loaded` is installed;
+  older `<calver>` modulefiles are pruned alongside superseded suite versions.
+
+If `module` is not already available, source the bundled Environment Modules
+init:
 
 ```bash
 source <prefix>/lib/modules/init/bash     # or .../init/csh in tcsh
 module use <prefix>/share/modulefiles
-module load python/3.12
-python3 --version                          # Python 3.12.16
-module switch python/3.13                  # or: module unload python/3.12; module load python/3.13
+module load python                         # default: python/3.15
+module switch python/3.12                  # CPython 3.12.16
+module switch python/loaded                # or python/loaded/3.15 or python/3.15-loaded
 ```
 
-The modulefile does exactly three things:
+Each modulefile does three things:
 
-- prepends `<prefix>/opt/python/<minor>/bin` to `PATH`, so `python3`,
-  `python3.<minor>` and `pip*` are that version;
-- sets `LOADOUT_PYTHON=<prefix>/opt/python/<minor>/bin/python3` for the uv
-  launcher (see below);
+- prepends that environment's `bin` directory (`<prefix>/opt/python/<minor>/bin`
+  or `<prefix>/share/python-loaded/venv/bin`) to `PATH`;
+- sets `LOADOUT_PYTHON` to that environment's `bin/python3` for the uv launcher
+  (see below);
 - sets `UV_PYTHON_DOWNLOADS=never`, so even a user's own uv never tries to
   download an interpreter on an air-gapped node.
 
-It deliberately sets **no** `PYTHONPATH`, `PYTHONHOME`, `LD_LIBRARY_PATH` or
-`UV_PYTHON`. Those leak into every child Python — including EDA tools' own
-bundled interpreters and EL's 3.15 tools — and `UV_PYTHON` outranks a project's
-own pin.
+It deliberately sets **no** `VIRTUAL_ENV`, `PYTHONPATH`, `PYTHONHOME`,
+`LD_LIBRARY_PATH` or `UV_PYTHON`. Those leak into every child Python —
+including EDA tools' own bundled interpreters and EL's 3.15 tools —
+`VIRTUAL_ENV` would let bare `uv pip install` mutate the shared `python-loaded`
+venv and make the uv launcher skip project `.venv` discovery, and `UV_PYTHON`
+outranks a project's own pin.
 
-Only the minor is shipped (`python/3.12`, not `python/3.12.16`): the minor is
-the compatibility promise, and patch releases update the tree in place. The
-site's own Environment Modules must support `family` (5.1 or newer) for the
-family conflict/switching behavior; older versions can wrap the modulefile with
-`conflict python` instead.
+Every modulefile sits under the single `python/` root and guards `family python`
+with a fallback to `conflict python`:
+
+```tcl
+if {[info commands family] ne ""} {
+    family python
+} else {
+    conflict python
+}
+```
+
+In Environment Modules 5.1+ (including 5.4 and the bundled 5.6.1), `family
+python` makes a second `module load` conflict and exports
+`MODULES_FAMILY_PYTHON`, while sharing the `python/` root makes one-argument
+`module switch python/...` work between every base interpreter and
+`python/loaded/...`. On pre-5.1 host Environment Modules (e.g. RHEL 8's 4.5),
+the guard falls back to `conflict python` instead of failing on an unknown Tcl
+command.
 
 ## What uv does with a loaded interpreter
 

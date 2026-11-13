@@ -844,6 +844,113 @@ def test_stale_env_cargo_config(m, tmp):
     check("doctor reports no retired state in a clean home", "none found" in buf.getvalue(), buf.getvalue())
 
 
+def test_python_modulefiles_hierarchy_and_em_compat(m, tmp):
+    repo = os.path.join(tmp, "repo")
+    home = os.path.join(tmp, "tree")
+    bin_dir = os.path.join(home, "bin")
+    os.makedirs(bin_dir)
+    for name in ("python3.15", "python3", "python3.15-config", "python3-config", "pip3.15", "pip3", "pip", "rg"):
+        p = os.path.join(bin_dir, name)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\nexit 0\n")
+        os.chmod(p, 0o755)
+
+    py312_bin = os.path.join(home, "opt", "python", "3.12", "bin")
+    os.makedirs(py312_bin)
+    py312 = os.path.join(py312_bin, "python3")
+    with open(py312, "w", encoding="utf-8") as fh:
+        fh.write("#!/bin/sh\nexit 0\n")
+    os.chmod(py312, 0o755)
+
+    suite_bin = os.path.join(home, "share", "python-loaded", "venv", "bin")
+    os.makedirs(suite_bin)
+    suite_py = os.path.join(suite_bin, "python3")
+    with open(suite_py, "w", encoding="utf-8") as fh:
+        fh.write("#!/bin/sh\nexit 0\n")
+    os.chmod(suite_py, 0o755)
+
+    lock_rel = os.path.join("payload", "python-loaded", "requirements.lock.txt")
+    lock_path = os.path.join(repo, lock_rel)
+    os.makedirs(os.path.dirname(lock_path))
+    with open(lock_path, "w", encoding="utf-8") as fh:
+        fh.write("# python-loaded lock 2026.10.23\n# abi: cpython-315\n# python: 3.15.0\n")
+
+    stale_loaded = os.path.join(home, "share", "modulefiles", "python", "loaded", "3.15", "2026.09.01")
+    os.makedirs(os.path.dirname(stale_loaded))
+    with open(stale_loaded, "w", encoding="utf-8") as fh:
+        fh.write("#%Module1.0\n")
+
+    registry = {
+        "portable-python": {"kind": "python-base", "install_to": "~/.local", "version": "3.15.0"},
+        "python-3.12": {
+            "kind": "python-base",
+            "python_version": "3.12",
+            "install_to": "~/.local/opt/python/3.12",
+            "version": "3.12.16",
+        },
+        "python-loaded": {"kind": "python-suite", "lock": lock_rel, "version": "2026.10.23"},
+    }
+
+    m.install_python_modulefiles(repo, home, {"portable-python", "python-3.12", "python-loaded"}, registry)
+
+    opt315_bin = os.path.join(home, "opt", "python", "3.15", "bin")
+    check("opt/python/3.15/bin/python3 link created", os.access(os.path.join(opt315_bin, "python3"), os.X_OK))
+    check("opt/python/3.15/bin/python link created", os.access(os.path.join(opt315_bin, "python"), os.X_OK))
+    check(
+        "non-Python tool not linked into opt/python/3.15/bin",
+        not os.path.lexists(os.path.join(opt315_bin, "rg")),
+    )
+
+    mf_root = os.path.join(home, "share", "modulefiles", "python")
+    mf_312 = os.path.join(mf_root, "3.12")
+    mf_315 = os.path.join(mf_root, "3.15")
+    mf_loaded = os.path.join(mf_root, "loaded", "3.15", "2026.10.23")
+    modulerc = os.path.join(mf_root, ".modulerc")
+
+    check("python/3.12 modulefile written", os.path.isfile(mf_312))
+    check("python/3.15 modulefile written", os.path.isfile(mf_315))
+    check("python/loaded/3.15/2026.10.23 modulefile written", os.path.isfile(mf_loaded))
+    check("stale python/loaded/3.15/2026.09.01 pruned", not os.path.exists(stale_loaded))
+    check("python/.modulerc written", os.path.isfile(modulerc))
+
+    for path in (mf_312, mf_315, mf_loaded):
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        check(
+            f"{os.path.basename(path)} guards family with conflict fallback",
+            'if {[info commands family] ne ""} {\n    family python\n} else {\n    conflict python\n}' in text,
+            text,
+        )
+        for forbidden in ("PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "VIRTUAL_ENV", "setenv UV_PYTHON "):
+            check(f"{os.path.basename(path)} does not set {forbidden}", forbidden not in text, text)
+
+    if os.path.isfile(mf_loaded):
+        with open(mf_loaded, encoding="utf-8") as fh:
+            loaded_text = fh.read()
+        check(
+            "loaded modulefile prepends stable suite venv bin",
+            f"prepend-path PATH {{{suite_bin}}}" in loaded_text,
+            loaded_text,
+        )
+        check(
+            "loaded modulefile sets LOADOUT_PYTHON to stable suite python3",
+            f"setenv LOADOUT_PYTHON {{{suite_py}}}" in loaded_text,
+            loaded_text,
+        )
+
+    if os.path.isfile(modulerc):
+        with open(modulerc, encoding="utf-8") as fh:
+            rc_text = fh.read()
+        check(".modulerc sets python/3.15 default", "module-version python/3.15 default" in rc_text, rc_text)
+        check(
+            ".modulerc aliases python/3.15-loaded",
+            "module-alias python/3.15-loaded python/loaded/3.15" in rc_text,
+            rc_text,
+        )
+
+
 TESTS = (
     test_rmtree_healing_sealed_tree,
     test_sync_dir_delete_sealed_subdir,
@@ -871,6 +978,7 @@ TESTS = (
     test_shell_family,
     test_doctor_shell_audit_csh_chars,
     test_stale_env_cargo_config,
+    test_python_modulefiles_hierarchy_and_em_compat,
 )
 
 

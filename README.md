@@ -486,8 +486,11 @@ installs under the install root (`<prefix>/bin/python3.15`, default
 Optional CPython **3.12** and **3.13** interpreters are bundled for scripts
 that cannot move to 3.15: `./loadout install @python-versions`, then
 `module load python/3.12` (see [docs/PYTHON-VERSIONS.md](docs/PYTHON-VERSIONS.md)).
-They install to `<prefix>/opt/python/<minor>/`, are not in `@shared`, and do
-not change `python-loaded` or EL's own 3.15-based tools.
+The installer also writes `python/3.15` (default for `module load python`) and,
+when `python-loaded` is installed, `python/loaded/3.15/<calver>` (aliased as
+`python/3.15-loaded`); all share the `python/` module root and `family python`
+(with a pre-5.1 `conflict python` fallback), so they are mutually exclusive and
+one-argument `module switch` works across all of them.
 
 ---
 

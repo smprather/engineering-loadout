@@ -79,7 +79,7 @@ Shared tree (`<prefix>`):
 | `<prefix>/lib64/` | `payload/<platform>/lib64/*.bz2` (decompressed) |
 | `<prefix>/bin/python3.15` | `payload/<platform>/portable-python-*.tar.bz2` |
 | `<prefix>/opt/python/3.12/`, `<prefix>/opt/python/3.13/` | `payload/<platform>/runtime/python-3.{12,13}.tar.bz2` (optional `@python-versions`; see [PYTHON-VERSIONS.md](PYTHON-VERSIONS.md)) |
-| `<prefix>/share/modulefiles/python/` | generated modulefiles for each installed `python-base` (`module load python/3.12`) |
+| `<prefix>/share/modulefiles/python/` | generated modulefiles for `python/3.15` (default), `python/3.12`, `python/3.13`, and `python/loaded/3.15/<calver>` (`python/3.15-loaded`) |
 | `<prefix>/share/helix/runtime/` | `payload/<platform>/runtime/helix.tar.bz2` |
 | `<prefix>/share/vim/vim92/` | `payload/<platform>/runtime/vim92.tar.bz2` |
 | `<prefix>/share/nvim/runtime/` | `payload/<platform>/runtime/nvim.tar.bz2` |

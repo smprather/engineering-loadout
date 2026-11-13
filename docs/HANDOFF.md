@@ -13,6 +13,35 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-13 (4): unified `python/` modulefiles for 3.15, 3.12/3.13, and `python-loaded` + EM <5.1 fallback
+
+- **Single `python/` module root (`<prefix>/share/modulefiles/python/`):**
+  `install_python_modulefiles()` now writes `python/3.15` (staging narrow
+  Python-only symlinks in `<prefix>/opt/python/3.15/bin` so unloading `python/3.15`
+  never removes `<prefix>/bin` from `PATH`), `python/3.12`, `python/3.13`,
+  `python/loaded/3.15/<calver>` (pruning superseded `<calver>` files on lock
+  updates), and `python/.modulerc` (`module-version python/3.15 default` and
+  `module-alias python/3.15-loaded python/loaded/3.15`).
+- **Why a single `python/` root:** in Environment Modules 5.4–5.6.1
+  (`libexec/modulecmd.tcl:cmdModuleSwitch`), one-argument `module switch <new>`
+  only matches a loaded module that shares the same top-level root name. Under
+  `python/`, `module load python` (3.15 default), `module switch python/3.12`,
+  `module switch python/loaded`, and `module switch python/3.15-loaded` all work
+  with one argument, while a second `module load` hard-conflicts.
+- **Graceful degradation on old host EM:** every generated modulefile guards
+  `family python` (EM 5.1+, native in 5.4–5.6.1) with
+  `if {[info commands family] ne ""} { family python } else { conflict python }`,
+  so pre-5.1 host Environment Modules (e.g. RHEL 8 BaseOS 4.5) still enforces
+  mutual exclusion instead of aborting on an unknown Tcl command.
+- **No `VIRTUAL_ENV` export in `python/loaded`:** PEP 405 resolves `pyvenv.cfg`
+  from `argv[0]`; leaving `VIRTUAL_ENV` unset keeps bare `uv pip install`
+  refused and preserves project `.venv` discovery in `build/uv-launcher.sh`,
+  while `LOADOUT_PYTHON=<prefix>/share/python-loaded/venv/bin/python3` steers
+  `uv run --no-project` to the suite and `uv venv` to the base 3.15 interpreter.
+- **Gates:** `tests/unit-install-steps`
+  (`test_python_modulefiles_hierarchy_and_em_compat`),
+  `tests/install-python-versions`, and `tests/python-suite-install`.
+
 ## 2026-11-13 (3): release dry-run blocked on wheelhouse advisories -- two wheels bumped
 
 The issue #22 release dry-run failed `vuln-scan` on two unbaselined findings. Both
