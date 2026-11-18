@@ -13,6 +13,43 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-18 (2): xfce4-terminal in @envs + FcInit shim; release 2026.11.9 PUBLISHED
+
+**`@envs` now includes `env-xfce4-terminal`** (`1629063`). The bundle is
+config-only (no `xfce4-terminal` dependency), so a GUI node gets the terminal
+settings from the default per-user install and a headless node gets two inert
+seed files under `~/.config/xfce4`. `@envs-all` was already complete.
+`tests/unit-resolver` pins the new membership; `AGENTS.md` and the
+`expand_groups` table/docstring are updated.
+
+**Host-fontconfig `FcInit` warning fixed** (`1629063`). fontconfig 2.17+ prints
+`Fontconfig warning: using without calling FcInit()` when a client uses
+fontconfig before `FcInit()`; the bundled EL8 xfce4-terminal 1.0.4 does. The
+GUI wrapper preloads host fontconfig (bundled 2.13 cannot parse newer
+`/etc/fonts`), which exposed the warning on every launch on this host. New
+`build/fcinit-shim.c` -> `lib64/libloadout-fcinit.so` is a constructor that
+`dlopen()`s `libfontconfig.so.1` and calls `FcInit()`; the wrapper appends it to
+`LD_PRELOAD` **after** host fontconfig, following
+`${LOADOUT_GUI_LIB64:-$prefix/lib64}`. It has no `DT_NEEDED` on fontconfig, so
+`LOADOUT_GUI_HOST_FONTCONFIG=0` is unchanged. `tests/xfce4-fcinit-shim` proves
+the wrapper loads it only with host fontconfig, follows `LOADOUT_GUI_LIB64`, and
+that a `FcNameUnparse`-before-`FcInit` probe warns without the shim and is
+silent with it. Verified on the reported case: after reinstalling into `/tmp`,
+`/tmp/bin/xfce4-terminal` prints no warning. `build-xfce4-terminal.sh` builds
+the shim and the package `libs` list ships it.
+
+**Release `2026.11.9`** (class C: `loadout_main.py` + payload changed) -- signed
+tag on `1629063`, `isDraft=false`, four assets, stash 344,538,464 bytes matching
+local, tag binds `sha256sums.txt sha256 dd4377c6...de727`, `origin/main` == tag
+commit.
+
+**Gates.** T1 PASS. T2 727 s, 0 failures (60 live, 38 cached). T3 4/4 LIVE PASS
+in 585.72 s. Release dry-run re-scanned all 2914 artifacts after the installer
+change: CLEAN 0/81296 files; vuln-scan CLEAN, manifest export 4578 at HEAD,
+secret scan CLEAN, SBOM 498 components. Currency sweep: nothing bumped (fix
+release, 2026.11.6 swept six days earlier); YARA held (5 d), ClamAV DB current,
+`python-loaded` still cadence-DUE as the next class-C worklist.
+
 ## 2026-11-18 (1): issue #24 fixed; release 2026.11.8 PUBLISHED and verified
 
 **Issue #24 (fixed, released, closing).** The shell layers exported
