@@ -2555,7 +2555,8 @@
         "libxfce4util.so.7",
         "libxfconf-0.so.3",
         "libvte-2.91.so.0",
-        "libstartup-notification-1.so.0"
+        "libstartup-notification-1.so.0",
+        "libloadout-fcinit.so"
       ],
       "version": "1.0.4",
       "platforms": [

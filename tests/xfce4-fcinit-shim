@@ -1,0 +1,71 @@
+#!/bin/sh
+# xfce4-fcinit-shim: host fontconfig 2.17+ warns when a client touches
+# fontconfig before FcInit(); the bundled xfce4-terminal 1.0.4 does exactly
+# that. The wrapper preloads host fontconfig (bundled 2.13 cannot parse newer
+# hosts' /etc/fonts) and must then append our FcInit shim. This proves the
+# wrapper loads the shim only with host fontconfig, and that the shim actually
+# removes the warning from a minimal client.
+set -eu
+
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/loadout-xfce-fcinit.XXXXXX")
+trap 'rm -rf "$TMP"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+HOST_FC=""
+if command -v ldconfig >/dev/null 2>&1; then
+    HOST_FC=$(ldconfig -p 2>/dev/null | awk '/libfontconfig\.so\.1 /{print $NF; exit}')
+fi
+[ -n "$HOST_FC" ] && [ -f "$HOST_FC" ] || { echo "SKIP: no host libfontconfig"; exit 77; }
+grep -a -q "using without calling FcInit" "$HOST_FC" ||
+    { echo "SKIP: host fontconfig does not emit the FcInit warning"; exit 77; }
+
+mkdir -p "$TMP/home"
+HOME="$TMP/home" "$REPO/loadout" install -y --no-backup xfce4-terminal \
+    --dest-dir "$TMP/tree" >"$TMP/install.log" 2>&1 ||
+    fail "xfce4-terminal install failed:
+$(tail -10 "$TMP/install.log")"
+
+WRAP="$TMP/tree/bin/xfce4-terminal"
+SHIM="$TMP/tree/lib64/libloadout-fcinit.so"
+[ -f "$SHIM" ] || fail "shim not installed: $SHIM"
+grep -q 'libloadout-fcinit.so' "$WRAP" || fail "wrapper does not reference the shim"
+
+# The wrapper must load the shim when (and only when) host fontconfig is
+# preloaded. LD_DEBUG makes the loader's decision observable.
+LD_DEBUG=libs "$WRAP" --version >/dev/null 2>"$TMP/ld-positive.log" ||
+    fail "wrapper --version failed"
+grep -q 'calling init: .*libloadout-fcinit.so' "$TMP/ld-positive.log" ||
+    fail "wrapper did not load the shim with host fontconfig:
+$(grep -i fontconfig "$TMP/ld-positive.log" | head -5)"
+LOADOUT_GUI_HOST_FONTCONFIG=0 LD_DEBUG=libs "$WRAP" --version \
+    >/dev/null 2>"$TMP/ld-negative.log" || fail "wrapper --version failed (bundled fc)"
+if grep -q 'libloadout-fcinit.so' "$TMP/ld-negative.log"; then
+    fail "wrapper loaded the shim without host fontconfig"
+fi
+
+# LOADOUT_GUI_LIB64 relocates the libdir; the shim lookup must follow it.
+ALT="$TMP/alt-lib64"
+mkdir -p "$ALT"
+cp "$SHIM" "$ALT/"
+LOADOUT_GUI_LIB64="$ALT" LD_DEBUG=libs "$WRAP" --version \
+    >/dev/null 2>"$TMP/ld-split.log" || fail "wrapper --version failed (split libdir)"
+grep -q "calling init: $ALT/libloadout-fcinit.so" "$TMP/ld-split.log" ||
+    fail "wrapper ignored LOADOUT_GUI_LIB64 for the shim"
+
+# Shim behaviour against the real host library: a client that skips FcInit()
+# warns without the shim and is silent with it, in the wrapper's load order.
+cc -O2 -o "$TMP/probe" "$REPO/tests/xfce4-fcinit-probe.c" "$HOST_FC" ||
+    fail "could not build the fontconfig probe"
+LD_PRELOAD="$HOST_FC" "$TMP/probe" >/dev/null 2>"$TMP/control.err" ||
+    fail "control probe failed"
+grep -q "using without calling FcInit" "$TMP/control.err" ||
+    fail "control probe did not reproduce the warning"
+LD_PRELOAD="$HOST_FC:$SHIM" "$TMP/probe" >/dev/null 2>"$TMP/fixed.err" ||
+    fail "shimmed probe failed"
+if grep -q "using without calling FcInit" "$TMP/fixed.err"; then
+    fail "shim did not call FcInit:
+$(cat "$TMP/fixed.err")"
+fi
+
+echo "xfce4-fcinit-shim: OK"

@@ -101,6 +101,11 @@ EPEL_RELEASE="1.el8"
 # mate-terminal, so it is declared (below) rather than repackaged.
 BUNDLE_LIBS="libxfce4ui-2.so.0 libxfce4util.so.7 libxfconf-0.so.3 libstartup-notification-1.so.0"
 
+# Libraries we build ourselves and install with this package. The FcInit shim
+# is appended to LD_PRELOAD by the wrapper; see build/fcinit-shim.c.
+OUR_LIBS="libloadout-fcinit.so"
+SHIM_SRC="$REPO/build/fcinit-shim.c"
+
 # soname -> providing EL8 package. Every BUNDLE_LIBS entry must map to exactly
 # one package so the extraction loop knows which RPM tree to pull it from.
 LIB_PKGS="libxfce4ui libxfce4util xfconf startup-notification"
@@ -313,6 +318,18 @@ for soname in $BUNDLE_LIBS; do
     "$PATCHELF" --set-rpath '$ORIGIN' "$STAGE/lib64/$soname"
 done
 
+# --- FcInit shim -------------------------------------------------------------
+# Host fontconfig 2.17+ warns when the app calls fontconfig before FcInit();
+# the EL8 1.0.4 binary predates that call. Built here (not taken from an RPM)
+# and installed in the package's libs list; the wrapper appends it to
+# LD_PRELOAD after the host libfontconfig.
+echo "==> Building the FcInit shim ..."
+[ -r "$SHIM_SRC" ] || { echo "ERROR: missing $SHIM_SRC" >&2; exit 1; }
+cc -shared -fPIC -O2 -Wl,-soname,libloadout-fcinit.so \
+    -o "$STAGE/lib64/libloadout-fcinit.so" "$SHIM_SRC" -ldl
+chmod 755 "$STAGE/lib64/libloadout-fcinit.so"
+"$STRIP" "$STAGE/lib64/libloadout-fcinit.so"
+
 # --- verify the split is still true -----------------------------------------
 # Build-box masking guard: every NEEDED soname of the binary AND of every lib we
 # bundle must be accounted for by our bundle, by a payload stem this package
@@ -322,7 +339,7 @@ done
 # Xephyr's libfontenc in AGENTS.md.
 echo "==> Checking NEEDED closure ..."
 scan_targets="$STAGE/bin/$PKG_NAME.bin"
-for soname in $BUNDLE_LIBS; do
+for soname in $BUNDLE_LIBS $OUR_LIBS; do
     scan_targets="$scan_targets $STAGE/lib64/$soname"
 done
 
@@ -381,6 +398,19 @@ done
     # shellcheck disable=SC2016  # $0/$prefix must stay literal here
     printf 'prefix=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)\n\n'
     cat "$GUI_ENV_BLOCK" "$GTK3_ENV_BLOCK"
+    # Host fontconfig 2.17+ warns when an app uses fontconfig before FcInit();
+    # xfce4-terminal 1.0.4 does not call it. Append our constructor shim AFTER
+    # the host libfontconfig so its dlopen() finds the already-loaded copy.
+    printf '%s\n' 'case "${LD_PRELOAD:-}" in'
+    printf '%s\n' '  *libfontconfig.so.1*)'
+    printf '%s\n' '    _fc_shim="${LOADOUT_GUI_LIB64:-$prefix/lib64}/libloadout-fcinit.so"'
+    printf '%s\n' '    if [ -f "$_fc_shim" ]; then'
+    printf '%s\n' '      LD_PRELOAD="${LD_PRELOAD}:$_fc_shim"'
+    printf '%s\n' '      export LD_PRELOAD'
+    printf '%s\n' '    fi'
+    printf '%s\n' '    unset _fc_shim'
+    printf '%s\n' '    ;;'
+    printf '%s\n' 'esac'
     # shellcheck disable=SC2016  # $prefix/$@ must stay literal here
     printf 'exec "$prefix/bin/%s.bin" "$@"\n' "$PKG_NAME"
 } > "$STAGE/bin/$PKG_NAME"
@@ -490,7 +520,7 @@ for f in "$PKG_NAME" "$PKG_NAME.bin"; do
     cp "$STAGE/bin/$f.bz2" "$BIN_DIR/$f.bz2"
     chmod 644 "$BIN_DIR/$f.bz2"
 done
-for soname in $BUNDLE_LIBS; do
+for soname in $BUNDLE_LIBS $OUR_LIBS; do
     bzip2 -kf "$STAGE/lib64/$soname"
     cp "$STAGE/lib64/$soname.bz2" "$LIB_DIR/$soname.bz2"
     chmod 644 "$LIB_DIR/$soname.bz2"
@@ -520,6 +550,10 @@ PROV="$PROV_DIR/PROVENANCE"
     echo "build box):"
     printf '  %s\n' $BUNDLE_LIBS
     echo ""
+    echo "Locally built libs:"
+    printf '  %s (build/fcinit-shim.c: FcInit() constructor; fixes the\n' $OUR_LIBS
+    printf '    host-fontconfig-2.17+ warning in the 1.0.4 binary)\n'
+    echo ""
     echo "libstartup-notification-1.so.0 is a NEEDED of the bundled"
     echo "libxfce4ui-2.so.0, is owned by no other loadout package, and is absent"
     echo "from a stock EL8 install -- hence bundled rather than assumed."
@@ -535,7 +569,7 @@ echo "Staged:"
 for f in "$PKG_NAME" "$PKG_NAME.bin"; do
     echo "  payload/$PLATFORM/bin/$f.bz2"
 done
-for soname in $BUNDLE_LIBS; do
+for soname in $BUNDLE_LIBS $OUR_LIBS; do
     echo "  payload/$PLATFORM/lib64/$soname.bz2"
 done
 echo ""

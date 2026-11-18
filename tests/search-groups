@@ -21,7 +21,7 @@ for g in @editor-cli @shared @shared-all @all; do
 done
 
 # Synthetic semantics: env bundles live in the per-user tree, never @shared;
-# env-bash is one of the two shells @envs covers.
+# env-bash is one of the bundles @envs covers.
 env_row=$(COLUMNS=1000 "$repo/loadout" search env-tmux 2>&1 | grep -E '^env-tmux[[:space:]]') \
     || fail "no env-tmux row"
 grep -q '@envs-all' <<<"$env_row" || fail "env-tmux missing @envs-all"

@@ -264,7 +264,7 @@ sha256  ee7de245adf35c7bacbf72f3fea93b7856f80a810f3e7646dba46c9bf47ffa61  payloa
 sha256  16fb1705b4d8bd15e5bb5a920e658d63156b3e0c792553f7d9834a6aa1ef1640  payload/el8.x86_64.glibc2p28/bin/wish.bz2
 sha256  2d9baf49e8333edf159fc33dd47dc90c3784c5255a3526d959592934993e136d  payload/el8.x86_64.glibc2p28/bin/xclip.bz2
 sha256  104460dc05e612840a6bcc4ec8cb4ee0feafb459ab59d22af5616320a0253a12  payload/el8.x86_64.glibc2p28/bin/xfce4-terminal.bin.bz2
-sha256  834775ca80dcb582b8f956988cb7f9328db261d877abc68ee46b569a790c23e6  payload/el8.x86_64.glibc2p28/bin/xfce4-terminal.bz2
+sha256  f34091e1943c5bf2e97330953f9d04022ca7f9b9ad6612d7d9fd69ad61b1b83f  payload/el8.x86_64.glibc2p28/bin/xfce4-terminal.bz2
 sha256  b94f57abfce1d46fd5b22863489e3d40077d25c4afbf0b3afed836868a9d012a  payload/el8.x86_64.glibc2p28/bin/xml2stems.bz2
 sha256  d57b7cc82eeabc40b4fc40332ad8d77dbe05cb1d5574ff96b148cc17044eee5f  payload/el8.x86_64.glibc2p28/bin/xschem.bz2
 sha256  fdc77252e20129ddd4bd25a85bda5faa05ac580c2a21103aee948c21cd156ac9  payload/el8.x86_64.glibc2p28/bin/xsel.bz2
@@ -390,6 +390,7 @@ sha256  997ae07d7cedac00a4ed8d0cce7da9c1002d12b8ec128c1c9eca69c201bed53c  payloa
 sha256  997ae07d7cedac00a4ed8d0cce7da9c1002d12b8ec128c1c9eca69c201bed53c  payload/el8.x86_64.glibc2p28/lib64/libjq.so.1.bz2
 sha256  997ae07d7cedac00a4ed8d0cce7da9c1002d12b8ec128c1c9eca69c201bed53c  payload/el8.x86_64.glibc2p28/lib64/libjq.so.bz2
 sha256  20555a81f47b03b12df884f63468829fd0b7df45f44bf496c7f3214b704bacec  payload/el8.x86_64.glibc2p28/lib64/liblcms2.so.2.bz2
+sha256  2f56645bb2891cce2b4b48efb4b5ed8314d47bff11a247c594b1c8e829958b8c  payload/el8.x86_64.glibc2p28/lib64/libloadout-fcinit.so.bz2
 sha256  1bf41ab62104a37d778550f46dd92cf593ebd678bdd01c3ef63f42dcaff632e0  payload/el8.x86_64.glibc2p28/lib64/libncurses.so.6.bz2
 sha256  7ed65c7a4944be6db8f6828a75afd97ee67657f7391210c673335b3719f0ebbb  payload/el8.x86_64.glibc2p28/lib64/liboctave.so.13.bz2
 sha256  befae875b354e83cc1572701ea049ec672c6161026e81bb72dc067b352444c4d  payload/el8.x86_64.glibc2p28/lib64/liboctinterp.so.15.bz2

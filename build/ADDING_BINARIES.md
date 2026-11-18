@@ -7538,6 +7538,19 @@ this entry and mate-terminal's `libs` (two owners of one payload path is the
 accepted pattern, cf. `libz.so.1`); `gui_libs` covers the GTK3/X11/pango/cairo
 closure. Member of `@gui-suite`.
 
+**FcInit shim (`lib64/libloadout-fcinit.so`).** Host fontconfig 2.17+ prints
+`Fontconfig warning: using without calling FcInit()` when a client uses
+fontconfig before `FcInit()`; the EL8 1.0.4 binary does. The wrapper preloads
+host fontconfig (`gui-wrapper-env.sh`) because bundled 2.13 cannot parse newer
+hosts' `/etc/fonts`, so the warning is exposed on every launch on a new host.
+`build/fcinit-shim.c` is compiled by the build script into a constructor that
+`dlopen()`s `libfontconfig.so.1` and calls `FcInit()`; the wrapper appends it to
+`LD_PRELOAD` **after** the host libfontconfig. It records no `DT_NEEDED` on
+fontconfig, so the `LOADOUT_GUI_HOST_FONTCONFIG=0` (bundled 2.13) path is
+unchanged. It is in the package `libs` list; `tests/xfce4-fcinit-shim` proves
+the wrapper loads it only with host fontconfig and that it suppresses the
+warning for a client that skips `FcInit()` on a real 2.17+ host.
+
 **Why `libstartup-notification-1.so.0` is bundled although it is not a direct
 NEEDED:** it is a NEEDED of our own bundled `libxfce4ui-2.so.0`, no other
 loadout package owns it, and stock `almalinux:8.10` does not have it (measured:
