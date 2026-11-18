@@ -13,6 +13,47 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-17 (2): issue #23 fixed; release 2026.11.7 PUBLISHED and verified
+
+**Issue #23 (fixed, released, closing).** `_write_fontconfig_snippet()` wrote the
+shared-tree `etc/fonts/loadout-fonts.conf` through `tempfile.mkstemp()` (0600) and
+`os.replace()` kept that mode, so every user except the installer got
+"Fontconfig error: Cannot load default config file" from `FONTCONFIG_FILE`.
+`3794024` sets 0644 on the temp file before the replace; the other eight
+`mkstemp` publication sites in `loadout_main.py` already chmod explicitly.
+`tests/install-fonts-shared` asserts `stat -c %a` == 644 -- RED at 600 before the
+fix, GREEN after. `AGENTS.md` and `docs/INSTALLATION.md` record the mode.
+
+**Release `2026.11.7`** (class C: `loadout_main.py` changed) -- signed tag on
+`0fcb487`, `isDraft=false`, four assets, stash 344,538,464 bytes matching local,
+`git tag -v` Good ED25519 signature, tag binds
+`sha256sums.txt sha256 b75e7d4f...9971a`, `origin/main` == tag commit. Carries the
+two previously-unreleased commits (`2516091` unified python modulefiles,
+`32a1f04` timings) plus this fix.
+
+The first dry-run was blocked by `build/vuln-scan`: tornado 6.6
+(GHSA-5cjw-f85j-cv6r, fixed 6.6.1). `0fcb487` downloads the cp311-abi3 EL8 wheel
+in `build/build-shell` with the full platform set (`--no-deps`, sha256 matches
+PyPI `1b6ff57c...ba640`), prunes 6.6, and regenerates the payload chain
+(strip-all-elf-binaries, gen-installed-sizes, gen-content-manifest, both
+`--check` modes). Verified: wheelhouse-closure (14 python-tools resolve offline),
+python-suite lock, vuln-scan CLEAN with zero baseline entries, and a fresh
+offline jupyterlab install reports tornado 6.6.1 (jupyter-lab 4.6.4).
+
+**Gates.** T1 PASS. T2 `tests/run-all` 694 s, 0 failures (45 live PASS, 62
+CACHED). T3 `tests/run-all --container-only` 4/4 LIVE PASS in 605.84 s (the
+container sidecar keys on `loadout_main.py`, so none were cached). Release gates:
+malware CLEAN 0/81295 files (full re-scan after the installer change), manifest
+export 4577 files at HEAD, secret scan tree+history CLEAN, SBOM 498 components.
+
+**Currency sweep (class C) run, nothing bumped** -- ruling as 2026.10.8: a fix
+release, 2026.11.6 swept five days earlier, and each bump needs its own build +
+smoke. `./build/update --currency` shows only `python-loaded` DUE (never
+auto-updated); `build/check-versions --outdated-only` lists 37 behind upstream
+(ncdu lookup 503'd, so incomplete) -- the next class C worklist. YARA-Forge
+20261108 held (4 d old), ClamAV DB 2026-11-17 00:30 current. No assurance re-pin
+(no nvim/rust/treesitter/git-nvim bump).
+
 ## 2026-11-17 (1): session state -- 2026.11.6 is published, two commits are NOT, issue #23 is next
 
 **Published release: `2026.11.6`** (signed tag, verified: `isDraft=false`, four
@@ -32,7 +73,7 @@ refresh (`0eec7d1`). Issue #22 was closed with that evidence.
 agent needs the passphrase: `SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock"
 /usr/bin/ssh-add ~/.ssh/id_ed25519` (the socket exists but starts empty).
 
-**Open issue #23 (next task):** `_write_fontconfig_snippet()` publishes
+**Issue #23 (fixed and released in the 2026-11-17 (2) entry):** `_write_fontconfig_snippet()` publishes
 `<prefix>/etc/fonts/loadout-fonts.conf` with mode `0600` because
 `tempfile.mkstemp()` creates `0600` and `os.replace()` keeps it -- so every OTHER
 user of a shared tree gets "Fontconfig error: Cannot load default config file"
