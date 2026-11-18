@@ -12,7 +12,7 @@ majority interactive shell for the target EE users.
 
 ```
 ./loadout install env-tcsh     # by name
-./loadout install @envs        # bash + tcsh + Xfce Terminal config
+./loadout install @envs        # bash + tcsh + Xfce/GTK3 config
 ./loadout install @envs-all    # every env bundle, optionals included
 ```
 

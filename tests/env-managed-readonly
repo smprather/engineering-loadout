@@ -5,8 +5,8 @@
 #   * user-owned -> writable (seed-once files and the corp..user layers).
 #
 # This is the guard against agentic experiments silently editing a file that
-# `loadout install` will overwrite. xfce4-terminal is the deliberate seed-once
-# exception: the terminal rewrites its own files.
+# `loadout install` will overwrite. xfce4-terminal and gtk3 are the deliberate
+# seed-once exceptions: the apps rewrite their own files.
 set -eu
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,7 +26,7 @@ assert_user_writable() {
 }
 
 H="$TMPHOME"
-ENVS="env-bash env-tcsh env-zsh env-nvim env-vim env-tmux env-st env-starship env-helix env-editorconfig env-pip env-btop env-wezterm env-xfce4-terminal"
+ENVS="env-bash env-tcsh env-zsh env-nvim env-vim env-tmux env-st env-starship env-helix env-editorconfig env-pip env-btop env-wezterm env-xfce4-terminal env-gtk3"
 HOME="$H" "$REPO/loadout" install -y $ENVS --no-backup >"$H/install.log" 2>&1
 
 # --- managed config: read-only -------------------------------------------
@@ -81,7 +81,8 @@ for f in \
     "$H/.config/tmux/tmux-settings-user.conf" \
     "$H/.config/nvim/lazy-lock.json" \
     "$H/.config/xfce4/terminal/terminalrc" \
-    "$H/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"; do
+    "$H/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml" \
+    "$H/.config/gtk-3.0/settings.ini"; do
     assert_user_writable "$f"
 done
 

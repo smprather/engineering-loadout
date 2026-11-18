@@ -101,19 +101,19 @@ done
 # Settings the two formats share must survive the terminalrc translation.
 for line in \
     'CommandLoginShell=TRUE' \
-    'FontName=Hack Nerd Font Mono 12' \
+    'FontName=CaskaydiaCove Nerd Font Mono 12' \
     'FontUseSystem=FALSE' \
     'MiscCopyOnSelect=TRUE' \
-    'MiscHighlightUrls=FALSE' \
+    'MiscHighlightUrls=TRUE' \
     'MiscMenubarDefault=FALSE' \
     'MiscRightClickAction=TERMINAL_RIGHT_CLICK_ACTION_PASTE_SELECTION' \
-    'MiscShowUnsafePasteDialog=FALSE' \
+    'MiscShowUnsafePasteDialog=TRUE' \
     'ScrollingBar=TERMINAL_SCROLLBAR_NONE' \
     'ScrollingOnKeystroke=TRUE' \
     'TextBlinkMode=TERMINAL_TEXT_BLINK_MODE_NEVER'; do
     grep -qxF "$line" "$TRC" || fail "terminalrc missing: $line"
 done
-grep -q '^ColorPalette=rgb(0,0,0);rgb(224,27,36);rgb(0,170,0);rgb(170,85,0);' "$TRC" \
+grep -q '^ColorPalette=rgb(0,0,0);rgb(170,0,0);rgb(0,170,0);rgb(170,85,0);rgb(63,58,254);' "$TRC" \
     || fail "terminalrc palette was not absorbed"
 
 # The 1.1+ property the loadout build cannot represent still applies to 1.1+.

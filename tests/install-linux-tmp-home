@@ -122,8 +122,8 @@ install_args=(
     install
     -y
     "@shared-all"
-    # @envs is intentionally Bash-only. Keep this full fresh-home smoke broad
-    # enough to exercise the explicitly opt-in editor/shell config bundles.
+    # @envs-all is the full per-user env set. Keep this fresh-home smoke broad
+    # enough to exercise every config bundle.
     "@envs-all"
     --post-install-hook "$test_hooks/hook1.sh"
     --post-install-hook "$test_hooks/hook2.sh"

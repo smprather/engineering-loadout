@@ -13,6 +13,12 @@ xfce4-terminal -l` shows the same thirteen properties). `terminalrc` is its
 translation for 1.0.4, whose rc reader takes each property's blurb as the key
 (`terminal/terminal-preferences.c`).
 
+Refreshed 2026-11-18 from the EL 1.0.4 preferences dialog: CaskaydiaCove Nerd
+Font Mono 12, the GUI's colour palette, unsafe-paste dialog on, URL highlighting
+on. The seed keeps `CommandLoginShell=TRUE` (the repo default for the
+interactive-shell switch); a GUI write that leaves the key out means off for
+that user, and seed-once semantics keep it that way.
+
 Both files are **seeded once and then owned by the user**: xfce4-terminal
 rewrites them when preferences change, so a reinstall leaves them untouched
 and they stay writable. Delete a seeded file to have the next install recreate

@@ -1,0 +1,50 @@
+#!/bin/sh
+# env-gtk3: seeds ~/.config/gtk-3.0/settings.ini once, keeps it user-writable,
+# leaves the sibling user/theme files alone, and is part of @envs.
+set -eu
+
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/loadout-env-gtk3.XXXXXX")
+trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+mode_of() { stat -c %a "$1"; }
+
+H="$TMP/home"
+GTK="$H/.config/gtk-3.0"
+mkdir -p "$GTK"
+printf 'user css\n' >"$GTK/gtk.css"
+printf 'user bookmarks\n' >"$GTK/bookmarks"
+
+HOME="$H" "$REPO/loadout" install -y --no-backup env-gtk3 >"$TMP/install.log" 2>&1 ||
+    fail "env-gtk3 install failed:
+$(tail -10 "$TMP/install.log")"
+
+SET="$GTK/settings.ini"
+[ -f "$SET" ] || fail "settings.ini not seeded"
+cmp -s "$REPO/envs/gtk3/settings.ini" "$SET" || fail "seeded settings.ini differs from the shipped file"
+case $(mode_of "$SET") in
+    [2367]*) ;;
+    *) fail "settings.ini must stay user-writable (got $(mode_of "$SET"))" ;;
+esac
+[ "$(cat "$GTK/gtk.css")" = 'user css' ] || fail "gtk.css was touched"
+[ "$(cat "$GTK/bookmarks")" = 'user bookmarks' ] || fail "bookmarks was touched"
+[ ! -e "$H/.config/gtk-4.0/settings.ini" ] || fail "env-gtk3 must not seed GTK4"
+
+# Seed-once: a GTK/theme rewrite survives a reinstall.
+printf '%s\n' '[Settings]' 'gtk-theme-name=Edited' >"$SET"
+HOME="$H" "$REPO/loadout" install -y --no-backup env-gtk3 >"$TMP/reinstall.log" 2>&1 ||
+    fail "env-gtk3 reinstall failed:
+$(tail -10 "$TMP/reinstall.log")"
+grep -qxF 'gtk-theme-name=Edited' "$SET" || fail "reinstall overwrote the user settings.ini"
+[ "$(cat "$GTK/gtk.css")" = 'user css' ] || fail "reinstall touched gtk.css"
+
+# @envs carries it (the default per-user env set).
+H2="$TMP/envs-home"
+mkdir -p "$H2"
+HOME="$H2" "$REPO/loadout" install -y --no-backup @envs >"$TMP/envs.log" 2>&1 ||
+    fail "@envs install failed:
+$(tail -10 "$TMP/envs.log")"
+[ -f "$H2/.config/gtk-3.0/settings.ini" ] || fail "@envs did not seed settings.ini"
+[ -f "$H2/.config/xfce4/terminal/terminalrc" ] || fail "@envs did not seed the xfce terminal config"
+
+echo "install-env-gtk3: OK"
