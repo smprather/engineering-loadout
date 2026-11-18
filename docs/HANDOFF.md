@@ -13,6 +13,45 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-17 (1): session state -- 2026.11.6 is published, two commits are NOT, issue #23 is next
+
+**Published release: `2026.11.6`** (signed tag, verified: `isDraft=false`, four
+assets, `git tag -v` Good signature, tag message binds `sha256sums.txt`).
+Its content: the tmux copy-mode fix (`5d2c5af`), `env-tmux` local-plugin support
+(`8d14d0f`), the wheelhouse advisory bumps (`cb0449f`), and the YARA/currency
+refresh (`0eec7d1`). Issue #22 was closed with that evidence.
+
+**Unreleased (on `main`, pushed, but NOT in the `2026.11.6` payload):**
+
+- `2516091` -- unified `python/` modulefiles (see the 2026-11-13 (4) entry).
+  It is installer-only, so it rides the NEXT release; nothing needs a payload
+  rebuild for it.
+- `32a1f04` -- the timing rows from the 2026.11.6 gate runs.
+
+**Next release** is `2026.11.7` (bare `./build/release` derives it). The signing
+agent needs the passphrase: `SSH_AUTH_SOCK="$HOME/.ssh/loadout-agent.sock"
+/usr/bin/ssh-add ~/.ssh/id_ed25519` (the socket exists but starts empty).
+
+**Open issue #23 (next task):** `_write_fontconfig_snippet()` publishes
+`<prefix>/etc/fonts/loadout-fonts.conf` with mode `0600` because
+`tempfile.mkstemp()` creates `0600` and `os.replace()` keeps it -- so every OTHER
+user of a shared tree gets "Fontconfig error: Cannot load default config file"
+from `FONTCONFIG_FILE`. The sibling `share/fonts/fonts.scale` is `0444`. Fix:
+`os.chmod(tmp, 0o644)` (or `0444` to match the read-only convention) before the
+replace, and check the other `mkstemp` sites in the shared-tree path. Gate:
+`tests/install-fonts-shared` should assert the snippet mode.
+
+**Live tree on this host** (`~/.local/share/loadout`): `opt/python/{3.12,3.15}`
+and `share/modulefiles/python/{3.12,3.15}` are installed; `python-loaded` is NOT
+installed here (no `share/python-loaded/`), so `python/loaded/...` exists only in
+the test trees. The tmux copy-mode fix is live in `~/.config/tmux/tmux-global.conf`
+(sealed `0444` again; the repo copy differs only in the two pre-existing
+`default-shell` / `extended-keys` blocks, which the next `env-tmux` install
+syncs).
+
+**Working tree:** clean except untracked `.omp/` (local OMP session state --
+do not commit; not gitignored yet).
+
 ## 2026-11-13 (4): unified `python/` modulefiles for 3.15, 3.12/3.13, and `python-loaded` + EM <5.1 fallback
 
 - **Single `python/` module root (`<prefix>/share/modulefiles/python/`):**
