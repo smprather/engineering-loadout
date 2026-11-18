@@ -13,6 +13,32 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-18 (1): issue #24 fixed; release 2026.11.8 PUBLISHED and verified
+
+**Issue #24 (fixed, released, closing).** The shell layers exported
+`FONTCONFIG_FILE` only when it was unset, so a *stale* inherited path (a retired
+or moved shared tree) survived and fontconfig errored -- `exec bash` cannot
+repair it because it passes the environment through. `df4e888` keeps a
+caller-set value only when it names a real file: bash/zsh test
+`( -z || ! -f )`, tcsh uses a nested test (an `else if` condition is expanded
+even when the first branch runs, which aborted on the unset variable).
+`tests/install-fonts-shared` now installs `env-zsh` and asserts, for all three
+shells: unset/empty -> snippet path, stale path -> snippet path, existing user
+file -> preserved. Each shell's assertion was RED on the old guard (bash
+`stale ... was kept`, zsh same, tcsh empty-not-defaulted). `installed-sizes.json`
+and `.content-manifest` regenerated in `build-shell` for the changed env sources.
+
+**Release `2026.11.8`** (class B: env configs only, installer untouched) --
+signed tag on `df4e888`, `isDraft=false`, four assets, stash 344,538,464 bytes
+matching local, tag binds `sha256sums.txt sha256 f5fb9720...f3de0`,
+`origin/main` == tag commit.
+
+**Gates.** T1 PASS (the T1 `installed-sizes in sync` gate caught the env-source
+size change before regeneration, as designed). T2 536 s, 0 failures (20 live,
+77 cached). T3 4/4 LIVE PASS in 457.49 s (envs are container inputs, so the
+sidecar was invalidated). Release gates: malware passed, vuln-scan CLEAN, manifest
+export 4577 files at HEAD, secret scan CLEAN, SBOM 498 components.
+
 ## 2026-11-17 (2): issue #23 fixed; release 2026.11.7 PUBLISHED and verified
 
 **Issue #23 (fixed, released, closing).** `_write_fontconfig_snippet()` wrote the
