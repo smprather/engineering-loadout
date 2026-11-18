@@ -75,7 +75,7 @@ env -i \
     LANG="${LANG:-C.UTF-8}" \
     TERM="xterm-256color" \
     LOADOUT_CFG_SHARED_PREFIX="$tree" \
-    "$repo_dir/loadout" install -y --no-backup @envs >"$work/envs.log" 2>&1 ||
+    "$repo_dir/loadout" install -y --no-backup @envs env-zsh >"$work/envs.log" 2>&1 ||
     fail "@envs install failed:
 $(cat "$work/envs.log")"
 
@@ -89,6 +89,53 @@ got=$(
         sed -n 's/^FONTCONFIG_FILE=//p' | head -n 1
 )
 [ "$got" = "$conf" ] || fail "shell startup exported FONTCONFIG_FILE='$got', want '$conf'"
+
+# A stale inherited path (retired/moved tree) must be recomputed; a genuine
+# override that names an existing file must be preserved. `exec bash` cannot
+# repair a stale inherited value, so the guard itself has to.
+stale="$work/stale-fonts.conf"
+user_fc="$work/user-fonts.conf"
+cp "$conf" "$user_fc"
+
+bash_fc() {
+    local fc_env=()
+    [ "$1" = __unset ] || fc_env=(FONTCONFIG_FILE="$1")
+    env -i HOME="$home" PATH="$basic_path" LANG="${LANG:-C.UTF-8}" TERM="dumb" \
+        "${fc_env[@]}" \
+        bash --noprofile --norc -c 'source "$HOME/.config/bash/bashrc"; printf "%s" "${FONTCONFIG_FILE:-}"'
+}
+[ "$(bash_fc __unset)" = "$conf" ] || fail "bash: unset FONTCONFIG_FILE was not defaulted"
+[ "$(bash_fc "")" = "$conf" ] || fail "bash: empty FONTCONFIG_FILE was not defaulted"
+[ "$(bash_fc "$stale")" = "$conf" ] || fail "bash: stale FONTCONFIG_FILE was kept: $(bash_fc "$stale")"
+[ "$(bash_fc "$user_fc")" = "$user_fc" ] || fail "bash: existing user FONTCONFIG_FILE was overwritten"
+
+if command -v zsh >/dev/null 2>&1; then
+    zsh_fc() {
+        local fc_env=()
+        [ "$1" = __unset ] || fc_env=(FONTCONFIG_FILE="$1")
+        env -i HOME="$home" PATH="$basic_path" LANG="${LANG:-C.UTF-8}" TERM="dumb" \
+            "${fc_env[@]}" \
+            zsh -f -c 'source "$HOME/.config/zsh/zshrc"; print -r -- "${FONTCONFIG_FILE:-}"'
+    }
+    [ "$(zsh_fc __unset)" = "$conf" ] || fail "zsh: unset FONTCONFIG_FILE was not defaulted"
+    [ "$(zsh_fc "")" = "$conf" ] || fail "zsh: empty FONTCONFIG_FILE was not defaulted"
+    [ "$(zsh_fc "$stale")" = "$conf" ] || fail "zsh: stale FONTCONFIG_FILE was kept: $(zsh_fc "$stale")"
+    [ "$(zsh_fc "$user_fc")" = "$user_fc" ] || fail "zsh: existing user FONTCONFIG_FILE was overwritten"
+fi
+
+if command -v tcsh >/dev/null 2>&1; then
+    tcsh_fc() {
+        local fc_env=()
+        [ "$1" = __unset ] || fc_env=(FONTCONFIG_FILE="$1")
+        env -i HOME="$home" PATH="$basic_path" LANG="${LANG:-C.UTF-8}" TERM="dumb" \
+            "${fc_env[@]}" \
+            tcsh -f -c 'source "$HOME/.tcshrc"; echo "$FONTCONFIG_FILE"'
+    }
+    [ "$(tcsh_fc __unset)" = "$conf" ] || fail "tcsh: unset FONTCONFIG_FILE was not defaulted"
+    [ "$(tcsh_fc "")" = "$conf" ] || fail "tcsh: empty FONTCONFIG_FILE was not defaulted"
+    [ "$(tcsh_fc "$stale")" = "$conf" ] || fail "tcsh: stale FONTCONFIG_FILE was kept: $(tcsh_fc "$stale")"
+    [ "$(tcsh_fc "$user_fc")" = "$user_fc" ] || fail "tcsh: existing user FONTCONFIG_FILE was overwritten"
+fi
 
 # ---- 3. default (HOME-mode) install stays per-user ---------------------------
 h4="$work/home4"

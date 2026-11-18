@@ -213,12 +213,23 @@ endif
 # ---- shared fonts: the tree may carry a generated fontconfig config -----------
 # Written when the fonts were installed once with the tools instead of into every
 # user's $HOME. It re-includes /etc/fonts/fonts.conf, so the system dirs and the
-# user's own ~/.config/fontconfig/fonts.conf keep working. Caller-set var wins.
+# user's own ~/.config/fontconfig/fonts.conf keep working. Caller-set var wins
+# only when it names a real file: a stale inherited path (retired/moved tree)
+# would otherwise keep fontconfig erroring. Nested (not one `||` condition)
+# because csh expands variables on the whole line even when skipping it.
 if ( ! $?FONTCONFIG_FILE ) then
-    if ( -f "${_loadout_prefix}/etc/fonts/loadout-fonts.conf" ) then
-        setenv FONTCONFIG_FILE "${_loadout_prefix}/etc/fonts/loadout-fonts.conf"
+    set _loadout_fc_stale = 1
+else
+    if ( -f "$FONTCONFIG_FILE" ) then
+        set _loadout_fc_stale = 0
+    else
+        set _loadout_fc_stale = 1
     endif
 endif
+if ( $_loadout_fc_stale && -f "${_loadout_prefix}/etc/fonts/loadout-fonts.conf" ) then
+    setenv FONTCONFIG_FILE "${_loadout_prefix}/etc/fonts/loadout-fonts.conf"
+endif
+unset _loadout_fc_stale
 # gnuplot's x11 terminal spawns a separate gnuplot_x11 helper; point gnuplot at
 # the bundled one so it does not look for the build-time libexec path.
 if ( -x "${_loadout_prefix}/libexec/gnuplot/6.0/gnuplot_x11" ) then

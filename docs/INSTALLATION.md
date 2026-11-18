@@ -283,7 +283,9 @@ re-includes `/etc/fonts/fonts.conf` (the system dirs and any user fontconfig
 file keep working) and adds that one `<dir>`. The shell layer exports
 `FONTCONFIG_FILE` for it, so a per-user `@envs` install with
 `LOADOUT_CFG_SHARED_PREFIX=<dest>` is all a user needs -- their `$HOME` gets no
-font files and no per-user `~/.local/share/fonts`.
+font files and no per-user `~/.local/share/fonts`. A caller-set
+`FONTCONFIG_FILE` is kept only when it names a real file; a stale inherited path
+from a retired or moved tree is replaced.
 
 `@shared` = all non-`env`, non-`optional` packages (binaries, libs,
 runtimes, fonts, data, python tools); `@shared-all` = the same with the

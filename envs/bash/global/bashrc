@@ -51,8 +51,11 @@ fi
 # Shared fonts: a shared tree that was installed with the fonts carries a generated
 # fontconfig config. It re-includes /etc/fonts/fonts.conf, so the system dirs and a
 # user's own ~/.config/fontconfig/fonts.conf keep working, and adding one <dir> makes
-# every user see the shared fonts with no per-user copy. A caller-set var wins.
-if [[ -z ${FONTCONFIG_FILE:-} && -f $_loadout_local_prefix/etc/fonts/loadout-fonts.conf ]]; then
+# every user see the shared fonts with no per-user copy. A caller-set var wins
+# only when it names a real file: a stale inherited path (retired/moved tree)
+# would otherwise keep fontconfig erroring, and `exec bash` cannot recover
+# because it passes the environment through unchanged.
+if [[ ( -z ${FONTCONFIG_FILE:-} || ! -f ${FONTCONFIG_FILE} ) && -f $_loadout_local_prefix/etc/fonts/loadout-fonts.conf ]]; then
     export FONTCONFIG_FILE=$_loadout_local_prefix/etc/fonts/loadout-fonts.conf
 fi
 # gnuplot's x11 terminal spawns a separate gnuplot_x11 helper. Point gnuplot at
