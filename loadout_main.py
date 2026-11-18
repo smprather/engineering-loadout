@@ -4782,6 +4782,9 @@ def _write_fontconfig_snippet(fonts_dir, shared_root):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(body)
+        # mkstemp creates 0600 and os.replace keeps it; the snippet is read by every
+        # user of the shared tree through FONTCONFIG_FILE, so publish it world-readable.
+        os.chmod(tmp, 0o644)
         os.replace(tmp, conf_path)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):

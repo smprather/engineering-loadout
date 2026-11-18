@@ -277,7 +277,8 @@ is therefore the value per-user env installs need (baked automatically by a
 split env install).
 
 The shared tree carries the fonts too: `@shared` installs them once into
-`<dest>/share/fonts` and writes `<dest>/etc/fonts/loadout-fonts.conf`, which
+`<dest>/share/fonts` and writes `<dest>/etc/fonts/loadout-fonts.conf` (published
+world-readable, 0644, so every user of the tree can load it), which
 re-includes `/etc/fonts/fonts.conf` (the system dirs and any user fontconfig
 file keep working) and adds that one `<dir>`. The shell layer exports
 `FONTCONFIG_FILE` for it, so a per-user `@envs` install with

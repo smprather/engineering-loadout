@@ -56,6 +56,11 @@ grep -qF "<dir>$fonts_dir</dir>" "$conf" || fail "snippet does not point at the 
 $(cat "$conf")"
 grep -qF "/etc/fonts/fonts.conf" "$conf" || fail "snippet does not re-include the system config"
 
+# Another user of the tree must be able to read it: mkstemp used to leave 0600,
+# which produced "Fontconfig error: Cannot load default config file" for them.
+conf_mode=$(stat -c '%a' "$conf")
+[ "$conf_mode" = 644 ] || fail "fontconfig snippet mode is $conf_mode, want 644 (world-readable)"
+
 if [ -e "$home/.local" ]; then
     fail "shared font install wrote into HOME:
 $(find "$home/.local" -maxdepth 4 | head -20)"
