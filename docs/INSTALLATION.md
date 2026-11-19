@@ -101,7 +101,7 @@ Per-user (`$HOME`):
 | `~/.config/helix/` | `envs/helix/` |
 | `~/.config/starship/starship.toml` | `envs/starship/starship.toml` + `envs/starship/config-schema.json` |
 | `~/.config/xfce4/terminal/terminalrc`, `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml` | `envs/xfce4-terminal/` (seeded once; the terminal/user owns them) |
-| `~/.config/gtk-3.0/settings.ini` | `envs/gtk3/settings.ini` (seeded once; GTK and theme tools rewrite it) |
+| `~/.config/gtk-3.0/gtk.css` | `envs/xfce4-terminal/gtk.css` (marked VTE padding block merged; theme imports preserved) |
 | `~/.local/share/fonts/` | `payload/fonts/*.zip` (Nerd Font archives; a shared tree outside `$HOME` installs them once to `<prefix>/share/fonts` instead, with a generated `<prefix>/etc/fonts/loadout-fonts.conf`) |
 | `~/.local/share/nvim/lazy/`, `~/.local/state/nvim/` | per-user plugin clones and Neovim state |
 | `~/.config/engineering-loadout/config.toml` | your `dest_dir` / `prefer` / `prefer_off` settings |

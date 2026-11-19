@@ -3508,20 +3508,7 @@
         "env",
         "terminal"
       ],
-      "description": "Xfce Terminal settings seeded once in both storage formats: xfconf XML (1.1+) and terminalrc (1.0.x); user edits and unrelated Xfce config preserved"
-    },
-    "env-gtk3": {
-      "kind": "env",
-      "source": "envs/gtk3/settings.ini",
-      "install_to": "~/.config/gtk-3.0/settings.ini",
-      "platforms": [
-        "linux"
-      ],
-      "tags": [
-        "env",
-        "gui"
-      ],
-      "description": "GTK3 settings.ini (theme, icons, cursor, font, Xft) seeded once and user-owned; unrelated ~/.config/gtk-3.0 files preserved"
+      "description": "Xfce Terminal settings in both storage formats plus the marked VTE-padding block merged into gtk.css; user edits and unrelated Xfce/GTK config preserved"
     },
     "env-editorconfig": {
       "kind": "env",

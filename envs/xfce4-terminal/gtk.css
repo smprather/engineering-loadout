@@ -1,0 +1,9 @@
+/* BEGIN loadout vte-padding */
+/* Keep terminal text clear of the window's left edge so a left-button drag
+ * selection is easier. vte-terminal covers xfce4-terminal/mate-terminal (VTE3);
+ * VteTerminal is the widget class. */
+vte-terminal,
+VteTerminal {
+    padding-left: 4px;
+}
+/* END loadout vte-padding */

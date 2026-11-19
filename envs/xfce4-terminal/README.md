@@ -7,6 +7,16 @@ upstream project has used.
 |---|---|---|
 | `xfce4-terminal.xml` | `~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml` | xfce4-terminal 1.1.0+ (Xfconf channel `xfce4-terminal`) |
 | `terminalrc` | `~/.config/xfce4/terminal/terminalrc` | xfce4-terminal 1.0.x, including the loadout build |
+| `gtk.css` | `~/.config/gtk-3.0/gtk.css` (marked block merged) | every GTK3 app; `vte-terminal`/`VteTerminal` gets 4px left padding |
+
+`gtk.css` is not a whole-file config: a marked block is **merged into the
+existing** GTK3 CSS, so Noctalia's `@import` lines, colours and any user rules
+stay. It adds `padding-left: 4px` to VTE terminals (xfce4-terminal,
+mate-terminal), keeping text clear of the window edge so LMB drag-selection is
+easier. xfce4-terminal has no padding setting and VTE exposes no padding
+property, so GTK3's user-CSS file is the supported mechanism. The merge is
+idempotent; a user edit inside the marked block is preserved; an unmarked
+equivalent rule already in the file is left alone.
 
 The xfconf XML is the absorbed operator config (`xfconf-query -c
 xfce4-terminal -l` shows the same thirteen properties). `terminalrc` is its

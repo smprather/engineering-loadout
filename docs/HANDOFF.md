@@ -13,7 +13,7 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
-## 2026-11-18 (3): EL terminal GUI config captured; env-gtk3 added to @envs
+## 2026-11-18 (3): EL terminal GUI config captured; VTE padding in env-xfce4-terminal
 
 **EL terminal config captured** from the 1.0.4 preferences dialog. The GUI
 writes every key (33, mostly defaults); the seed stays curated to the 12 mapped
@@ -25,16 +25,23 @@ write left it out, i.e. off for that user -- seed-once keeps their live file
 off). `xfce4-terminal.xml` carries the same values;
 `tests/install-env-xfce4-terminal` asserts them.
 
-**New `env-gtk3` package** (`envs/gtk3/settings.ini`): seeds
-`~/.config/gtk-3.0/settings.ini` once and leaves it user-writable (GTK and theme
-switchers rewrite it), touching none of the sibling `gtk.css`/`colors.css`/
-`bookmarks`. GTK4 is deliberately not covered. It is in `@envs`:
-`env-bash + env-tcsh + env-xfce4-terminal + env-gtk3` (plus env-bash's
-recommends). It is excluded from snapshot backup/restore for the same reason as
-env-xfce4-terminal -- app-owned seed-once files.
-`tests/install-env-gtk3` covers seeding, writability, sibling preservation,
-reinstall preservation and `@envs`; `env-managed-readonly` and
-`tests/unit-resolver` are extended.
+**VTE padding merged into `env-xfce4-terminal`** (`envs/xfce4-terminal/gtk.css`):
+a marked block adds `padding-left: 4px` on `vte-terminal`/`VteTerminal`, keeping
+terminal text clear of the window edge so left-button drag selection is easier.
+There is no xfce4-terminal or VTE padding setting; GTK3's user-CSS file is the
+supported mechanism. The block is **merged into an existing** `gtk.css`
+(Noctalia's `@import` lines and colours stay), idempotent on reinstall, and a
+user edit inside the block is preserved; an unmarked equivalent rule is left
+alone. `settings.ini` is deliberately **not** managed: the effective
+theme/icon/cursor/font values come from GSettings/the settings portal on this
+KDE session (`adw-gtk3-dark`, `breeze-dark`, `Noto Sans 10`); the on-disk file
+was stale (`Catppuccin-Mocha`, Sep 7) and is overridden. GTK4 is not covered.
+The separate `env-gtk3` package created earlier the same day was removed before
+any release; it was one rule, and `@envs` already carried the terminal env.
+`tests/install-env-xfce4-terminal` covers merge, theme-import preservation, no
+duplicate on reinstall, user-edit preservation, a pre-existing HOME, an
+unmarked rule, and `@envs`; `env-managed-readonly` and `tests/unit-resolver`
+are updated.
 
 **Gates.** T1 PASS. T2 528 s, 0 failures (18 live, 81 cached). The first T2 run
 failed `completion in sync` after the new package name changed the generated

@@ -25,6 +25,11 @@ XML="$XFCE/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"
 mkdir -p "$(dirname "$XML")"
 printf '%s\n' '<channel name="other" version="1.0"/>' >"$XFCE/xfconf/xfce-perchannel-xml/other.xml"
 
+# A theme-generated gtk.css proves the VTE-padding block merges into it.
+GTK="$TMPHOME/.config/gtk-3.0"
+mkdir -p "$GTK"
+printf '%s\n' '@import url("noctalia.css");' '@import "colors.css";' >"$GTK/gtk.css"
+
 HOME="$TMPHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
 
 [ -f "$TRC" ] || fail "terminalrc not seeded"
@@ -38,6 +43,16 @@ cmp -s "$REPO/envs/xfce4-terminal/xfce4-terminal.xml" "$XML" || fail "xfconf XML
 for f in "$TRC" "$XML"; do
     [ "$(mode_of "$f")" = 644 ] || fail "$f must be user-writable (got $(mode_of "$f"))"
 done
+
+# gtk.css: the VTE padding block is merged, not a replacement.
+CSS="$GTK/gtk.css"
+grep -q 'padding-left: 4px' "$CSS" || fail "gtk.css lacks the VTE padding"
+grep -q '^@import url("noctalia.css");' "$CSS" || fail "install replaced the GTK theme imports"
+[ "$(grep -c 'BEGIN loadout vte-padding' "$CSS")" -eq 1 ] || fail "padding block not present exactly once"
+case $(mode_of "$CSS") in
+    [2367]*) ;;
+    *) fail "gtk.css must stay user-writable (got $(mode_of "$CSS"))" ;;
+esac
 
 # --- 1.2.0 -> 1.0.4 compatibility gate. 1.0.4 reads each property's blurb as
 # --- its terminalrc key (terminal/terminal-preferences.c). Every property in
@@ -127,6 +142,13 @@ HOME="$TMPHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/
 grep -qxF 'FontName=User Changed 13' "$TRC" || fail "reinstall overwrote the user terminalrc"
 grep -q 'user-changed' "$XML" || fail "reinstall overwrote the user xfconf XML"
 [ -f "$XFCE/xfconf/xfce-perchannel-xml/other.xml" ] || fail "reinstall deleted the unrelated xfconf channel"
+[ "$(grep -c 'BEGIN loadout vte-padding' "$CSS")" -eq 1 ] || fail "reinstall duplicated the padding block"
+grep -q '^@import url("noctalia.css");' "$CSS" || fail "reinstall lost the GTK theme imports"
+
+# A user edit inside the block is preserved (marker present -> no rewrite).
+sed -i 's/padding-left: 4px/padding-left: 8px/' "$CSS"
+HOME="$TMPHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
+grep -q 'padding-left: 8px' "$CSS" || fail "reinstall overwrote the user padding"
 
 # A pre-existing config in an otherwise empty HOME is also left alone.
 OLDHOME="$TMPHOME/old"
@@ -135,5 +157,16 @@ printf '%s\n' '[Configuration]' 'FontName=Existing 9' >"$OLDHOME/.config/xfce4/t
 HOME="$OLDHOME" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
 grep -qxF 'FontName=Existing 9' "$OLDHOME/.config/xfce4/terminal/terminalrc" \
     || fail "install overwrote a pre-existing terminalrc"
+grep -q 'padding-left: 4px' "$OLDHOME/.config/gtk-3.0/gtk.css" \
+    || fail "install did not add gtk.css to a pre-existing HOME"
+
+# An unmarked hand-written rule is left alone (no duplicate block appended).
+UNMARKED="$TMPHOME/unmarked"
+mkdir -p "$UNMARKED/.config/gtk-3.0"
+printf '%s\n' 'vte-terminal,' 'VteTerminal {' '    padding-left: 4px;' '}' >"$UNMARKED/.config/gtk-3.0/gtk.css"
+cp "$UNMARKED/.config/gtk-3.0/gtk.css" "$TMPHOME/unmarked.before"
+HOME="$UNMARKED" "$REPO/loadout" install -y env-xfce4-terminal --no-backup >/dev/null
+cmp -s "$TMPHOME/unmarked.before" "$UNMARKED/.config/gtk-3.0/gtk.css" \
+    || fail "install modified an existing unmarked VTE padding rule"
 
 echo "install-env-xfce4-terminal: OK"

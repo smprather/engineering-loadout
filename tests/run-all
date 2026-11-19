@@ -943,7 +943,6 @@ if [ "$CONTAINER_ONLY" -eq 0 ]; then
     run_test "env-delete" --deps auto tests/env-delete
     run_test "env-tcsh-prompt-resize" --deps auto tests/env-tcsh-prompt-resize
     run_test "install-env-xfce4-terminal" --deps auto tests/install-env-xfce4-terminal
-    run_test "install-env-gtk3" --deps auto tests/install-env-gtk3
     run_test "xfce4-fcinit-shim" --deps auto tests/xfce4-fcinit-shim
     run_test "env-managed-readonly" --deps auto tests/env-managed-readonly
     run_test "install-env-tmux-nvim-layers" --deps auto env LOADOUT_TEST_PY="$PY" tests/install-env-tmux-nvim-layers

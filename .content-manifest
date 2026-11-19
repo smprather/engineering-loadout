@@ -638,6 +638,7 @@ sha256  23aee61828b70fe85bb0bd5333b351b8404329e5ed2a0b4d3ce502dba0736ad6  payloa
 sha256  23b023132bd91855c3efa671c834ea816bfc5bbd83ee92a29837c9b497532e6f  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/ron.lua
 sha256  23cca3b63d3425d3e3defcd4b617f0c327866f94c2f273f582a8a08f392160ce  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/luau.lua
 sha256  23dad9b8bc594dde3a11259ec3af0039112851b55b472570cd9d5da1f58277ec  payload/treesitter/vendor/nvim-treesitter/tests/query/highlights/tiger/literals.tig
+sha256  24022d48a82a800ab9dd4491e88224a4434b1c92162f6d8d8c6eb05ffc1304a0  payload/packages.json
 sha256  24136f06fec594ad3df3167950947a77ac3672ae32a46995d42fd412431c5255  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/elixir/indents.scm
 sha256  24136f06fec594ad3df3167950947a77ac3672ae32a46995d42fd412431c5255  payload/treesitter/vendor/nvim-treesitter/runtime/queries/elixir/indents.scm
 sha256  243b430b5090d1f2980439dd51a17ff177cff38434ed29cb03dbc263bd540282  payload/el8.x86_64.glibc2p28/lib64/libCbcSolver.so.2.bz2
@@ -859,7 +860,6 @@ sha256  3111969912bd5f60c6a726690a23f425d0f3b4fee1c9be759fb2fd8a6db5ee51  payloa
 sha256  31156ae27be96ab33589bec1f7881f8a765d750c1d0658ee9333f2e014e08fc1  payload/el8.x86_64.glibc2p28/bin/llvm-readobj.bz2
 sha256  3132d2ed93bd73479b54df848a7a19e7474d1d2217fbded7a67629f1123c246d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/objc.so.bz2
 sha256  3149f5b031ee5d6e38ea348fe966673c94a3d47bb648b54a320a6fa700966d97  envs/tmux/vendor/plugins/tmux-persist/tests/test_pruning.sh
-sha256  314d3ff3b402fd6949cbe669b5993d96699b04d0406cb064fdabe03d8e4dc0c4  payload/installed-sizes.json
 sha256  31742137b4798ef4b2fa1a9885afdfb687452249e7469781253501e5785fd1be  payload/el8.x86_64.glibc2p28/bin/taplo.bz2
 sha256  317c8470e05a88475255407fe7fba8dc00b24947e35ace4ffdd36815384d7e44  payload/treesitter/vendor/nvim-treesitter/tests/query/injections/query/test-query-injections.scm
 sha256  3187c8a58d9a41bebb034e74593241db751077f434988a4dead55f14483df9f2  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/facility.so.bz2
@@ -1033,7 +1033,6 @@ sha256  3b9870ef5bbf627b1f5f80eceebe9b7b8df444727c9a5aaa5a4e3b6a5ef3bc77  payloa
 sha256  3bb36b361a5663dedbeb5d96a82faa3ad1c67d8d0905e70b2857a99ed0ae63d8  envs/tmux/vendor/plugins/tmux-persist/save_command_strategies/pgrep.sh
 sha256  3bc4031862f11fc19f39f1babfddc56709e25412b4c7400e3cd3cb2ecf63cb6c  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/gdscript/indents.scm
 sha256  3bc4031862f11fc19f39f1babfddc56709e25412b4c7400e3cd3cb2ecf63cb6c  payload/treesitter/vendor/nvim-treesitter/runtime/queries/gdscript/indents.scm
-sha256  3c0d3fc51d45023bec0d59cc48dcc31319fe12b2fe4848155e8c227753fac29b  payload/packages.json
 sha256  3c2bd5aa41d0ccd15fd1c39f57cbea0821f912d46bc34e258145c0be9fb6b3ea  payload/treesitter/prebuilt/linux-x86_64-glibc/queries/query/highlights.scm
 sha256  3c2bd5aa41d0ccd15fd1c39f57cbea0821f912d46bc34e258145c0be9fb6b3ea  payload/treesitter/vendor/nvim-treesitter/runtime/queries/query/highlights.scm
 sha256  3c2e96801bdbb60777825bb82bd7de068ca0da0c23f83b2b79e74edda565d29a  payload/treesitter/vendor/nvim-treesitter/scripts/templates/query-validate.yml
@@ -1096,6 +1095,7 @@ sha256  3f84652d98726d6e943b156e53ecbb99d88a1bdd7356c415505b5637ce3ffe05  payloa
 sha256  3f84652d98726d6e943b156e53ecbb99d88a1bdd7356c415505b5637ce3ffe05  payload/treesitter/vendor/nvim-treesitter/runtime/queries/ocaml_interface/locals.scm
 sha256  3fa8c80b6d0329bf3a6cab21cd9b5e630f6b8391cd490663e8ae224222283470  payload/treesitter/vendor/nvim-treesitter/tests/indent/c/issue-2086.c
 sha256  3faa6c766b9e683df21477876704b5e37c2dd81da02d0fbfe43683132ba90e02  payload/el8.x86_64.glibc2p28/bin/mermaid-ascii.bz2
+sha256  3fb02e8a15a719933368caec1c716a9adb4c4f204b0a8c340890ac5f348c4ff1  payload/installed-sizes.json
 sha256  3fb6a65b350ada5e7e7583ec94eff4f74c34bf9d9bffd34350f402009e2734aa  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/printf.so.bz2
 sha256  3fd48aa2fdc80297d16bfb072bda24df204c0325f6494ddfb3765de2880a882d  payload/treesitter/prebuilt/linux-x86_64-glibc/parser-info/pug.lua
 sha256  3fd8c457068847ae522be7ff2bb49265bd82d2ab0b613937ee826b7ace27a598  payload/treesitter/prebuilt/linux-x86_64-glibc/parser/htmldjango.so.bz2

@@ -112,7 +112,7 @@ def test_snapshot_targets_cover_env_handlers(m, tmp):
     targets = m._env_snapshot_targets(reg)
     missing = []
     for name in list(m.ENV_HANDLERS) + [n for n, v in reg.items() if isinstance(v, dict) and v.get("kind") == "env"]:
-        if name in ("env-xfce4-terminal", "env-gtk3"):
+        if name == "env-xfce4-terminal":
             continue  # seed-once, app-owned files: deliberately never backed up or restored
         install_to = (reg.get(name) or {}).get("install_to", "")
         if not install_to.startswith("~/"):

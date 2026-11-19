@@ -393,7 +393,7 @@ def _expand_glob_names(names, registry):
 _SYNTHETIC_GROUPS = {
     "@shared": "Every non-env, non-optional package -- install set for a shared/read-only tree.",
     "@shared-all": "@shared plus every non-env optional package (surfer, cicwave, openssh, ...).",
-    "@envs": "Bash + tcsh configuration plus Xfce Terminal and GTK3 settings (env-bash, env-tcsh, env-xfce4-terminal, env-gtk3); install other per-user config bundles explicitly.",
+    "@envs": "Bash + tcsh configuration plus Xfce Terminal settings and its VTE-padding gtk.css block (env-bash, env-tcsh, env-xfce4-terminal); install other per-user config bundles explicitly.",
     "@envs-all": "Every per-user env config bundle, including optional ones (env-tcsh).",
     "@all": "Literally everything: @shared-all plus @envs-all. No exceptions, no optionals held back.",
 }
@@ -471,7 +471,7 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
 
     The full sweeps are:
 
-        @shared      non-env, non-optional        @envs      env-bash + env-tcsh + env-xfce4-terminal + env-gtk3 (+ env-bash's recommends)
+        @shared      non-env, non-optional        @envs      env-bash + env-tcsh + env-xfce4-terminal (+ env-bash's recommends)
         @shared-all  non-env, optional included   @envs-all  every env, optional included
 
     Cycles in the group graph raise ResolverError.
@@ -518,11 +518,11 @@ def expand_groups(names, registry, _stack=None, _disabled=None):
             # env-bash plus env-tcsh: tcsh is the majority interactive shell on
             # the target EE farm nodes, so the default per-user shell setup
             # covers both majors. env-starship rides along through env-bash's
-            # recommends. env-xfce4-terminal and env-gtk3 are config-only (no
-            # GUI dependency), so a headless node gets a few inert seed files
-            # and GUI nodes get the terminal/GTK settings without naming the
-            # bundles. Other env bundles stay explicit (use @envs-all).
-            for bundle in ("env-bash", "env-tcsh", "env-xfce4-terminal", "env-gtk3"):
+            # recommends. env-xfce4-terminal is config-only (no GUI dependency)
+            # and carries the VTE-padding gtk.css block, so a headless node gets
+            # inert seed files and GUI nodes get the terminal settings without
+            # naming the bundle. Other env bundles stay explicit (@envs-all).
+            for bundle in ("env-bash", "env-tcsh", "env-xfce4-terminal"):
                 if bundle in registry:
                     out.add(bundle)
             continue
@@ -7572,6 +7572,36 @@ def _install_env_st(repo_dir, home):
     _seal_managed(os.path.join(st_dir, "global"))
 
 
+def _ensure_marked_css_block(src, dest, thing):
+    """Merge the marked block in src into dest, preserving existing content.
+
+    Used for GTK3's user gtk.css: Noctalia/theme generators own the imports and
+    colours, and a theme-generated file must keep them. The block is idempotent:
+    absent markers -> append; present markers -> leave (a user edit inside the
+    block, e.g. a different padding, is preserved); an unmarked VTE padding rule
+    already in the file is left alone rather than duplicated.
+    """
+    with open(src, encoding="utf-8") as fh:
+        block = fh.read()
+    if not os.path.isfile(dest):
+        ensure_dir(os.path.dirname(dest), thing)
+        install_path(src, dest, False)
+        return
+    if os.path.islink(dest):
+        return
+    with open(dest, encoding="utf-8") as fh:
+        text = fh.read()
+    if "/* BEGIN loadout vte-padding */" in text and "/* END loadout vte-padding */" in text:
+        return
+    if "vte-terminal" in text and "padding-left" in text:
+        return
+    if text and not text.endswith("\n"):
+        text += "\n"
+    text += "\n" + block
+    mode = stat.S_IMODE(os.stat(dest).st_mode)
+    _write_stream_atomic(io.BytesIO(text.encode()), dest, mode)
+
+
 def _install_env_xfce4_terminal(repo_dir, home):
     """Install Xfce Terminal settings in both upstream storage formats.
 
@@ -7587,6 +7617,11 @@ def _install_env_xfce4_terminal(repo_dir, home):
     rewrites them when preferences change, so a reinstall must not clobber the
     current settings. They stay owner-writable; only this seeding step creates
     them.
+
+    Also merges the VTE-padding block into ~/.config/gtk-3.0/gtk.css:
+    xfce4-terminal has no padding preference and VTE exposes no padding
+    property, so GTK3's user-CSS file is the supported way to keep terminal
+    text clear of the left edge for easier drag selection.
     """
     src = os.path.join(repo_dir, "envs", "xfce4-terminal")
     if not os.path.isdir(src):
@@ -7606,26 +7641,11 @@ def _install_env_xfce4_terminal(repo_dir, home):
         if os.path.isfile(src_file):
             ensure_dir(os.path.dirname(dest), "xfce4-terminal config")
             install_path(src_file, dest, False)
+    gtk_css = os.path.join(src, "gtk.css")
+    if os.path.isfile(gtk_css):
+        _ensure_marked_css_block(gtk_css, os.path.join(home, ".config", "gtk-3.0", "gtk.css"), "gtk3 css")
     # Deliberately not sealed: these are seed-once user files (the terminal
     # rewrites them), so the read-only rule for managed config does not apply.
-
-
-def _install_env_gtk3(repo_dir, home):
-    """Seed ~/.config/gtk-3.0/settings.ini once and leave it user-owned.
-
-    GTK3, desktop settings daemons and theme switchers rewrite this file, so a
-    reinstall must not clobber the current settings. Install the one file, not
-    the directory: ~/.config/gtk-3.0 also holds user/theme CSS and bookmarks.
-    """
-    src = os.path.join(repo_dir, "envs", "gtk3", "settings.ini")
-    if not os.path.isfile(src):
-        return
-    dest = os.path.join(home, ".config", "gtk-3.0", "settings.ini")
-    if os.path.lexists(dest):
-        return
-    ensure_dir(os.path.dirname(dest), "gtk3 settings")
-    install_path(src, dest, False)
-    # Deliberately not sealed: GTK and theme tools rewrite it.
 
 
 def _install_env_tcsh(repo_dir, home):
@@ -7718,7 +7738,6 @@ ENV_HANDLERS = {
     "env-tcsh": _install_env_tcsh,
     "env-zsh": _install_env_zsh,
     "env-xfce4-terminal": _install_env_xfce4_terminal,
-    "env-gtk3": _install_env_gtk3,
 }
 
 
@@ -7736,7 +7755,6 @@ ENV_INSTALL_ORDER = (
     "env-tcsh",
     "env-zsh",
     "env-xfce4-terminal",
-    "env-gtk3",
 )
 
 # Package names hardcoded as phase gates elsewhere in this file (per-phase
