@@ -43,12 +43,14 @@ duplicate on reinstall, user-edit preservation, a pre-existing HOME, an
 unmarked rule, and `@envs`; `env-managed-readonly` and `tests/unit-resolver`
 are updated.
 
-**Gates.** T1 PASS. T2 528 s, 0 failures (18 live, 81 cached). The first T2 run
-failed `completion in sync` after the new package name changed the generated
-Bash completion; regenerated (`./loadout completion bash`) and re-ran. AGENTS.md
-now says 15 env source dirs. No release cut -- the request was commit+push; the
-payload/manifest are regenerated and the next release (class C: `loadout_main.py`)
-picks these up.
+**Gates.** T1 PASS (a pre-commit T1 run saw the not-yet-committed `envs/gtk3/`
+deletion as a stale docs-sync path because `git ls-files` still listed it; after
+the commit it passes). T2 576 s, 0 failures (33 live, 65 cached). The separate
+`env-gtk3` package existed briefly during this work; the Bash completion was
+regenerated when it appeared and again when it was merged away. AGENTS.md now
+says 14 env source dirs. No release cut -- the request was commit+push; the
+payload/manifest are regenerated and the next release (class C:
+`loadout_main.py`) picks these up.
 
 ## 2026-11-18 (2): xfce4-terminal in @envs + FcInit shim; release 2026.11.9 PUBLISHED
 
