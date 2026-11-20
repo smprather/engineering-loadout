@@ -13,6 +13,48 @@ a sync target:
 - `docs/archive/2026-09-04-enhancement-request-permissions-management.md` -- the
   permissions-management request fielded and implemented 2026-09-04
 
+## 2026-11-20 (1): issue #25 -- open-eda rebuilt at ed884cc; release 2026.11.10 staged
+
+**Issue #25 fixed** (`ac1730e`). `./build/update open-eda-file-tools` in
+`build/build-shell` after `build/container-rust` built wheel `2026.11.13.1`
+(`v2026.11.13.1-52-ged884cc`, fat-LTO dist profile, 119 vendored crates) and
+rebuilt the source archive. The wheel exposes **seven** console scripts
+(`liberty-format`, `liberty-view`, `liberty-tools`, `pex-tools`, `lef-tools`,
+`def-tools`, `sdc-tools`); registry `bins`, the README table and
+`tests/install-open-eda-file-tools` now cover all seven. Verified:
+`tests/install-open-eda-file-tools`, `tests/wheelhouse-closure`, T1.
+Build notes in `build/ADDING_BINARIES.md` record the profile/core-crate/vendor
+delta and the old-split cleanup.
+
+**Live dev box (issue #25 "done when").** Installed into
+`~/.local/share/loadout` (explicit `--dest-dir`: this shell exports
+`XDG_DATA_HOME=.../loadout/share`, which otherwise nests the default root),
+uninstalled the old `def-tools`/`lef-tools`/`liberty-tools`/`lefdef-tools`
+venvs, and reset uv's launcher receipt by uninstalling/reinstalling the new
+tool. All seven launchers report `2026.11.13.1`; old venvs and `lefdef-tools`
+are gone; the bundled source tree is restored at
+`share/loadout/src/open-eda-file-tools`. `liberty-filter` stays: it is a
+separate `kind: bin` package, not an old split launcher. An accidental nested
+root (`.../share/loadout`) created by the XDG default was removed.
+
+**Security / currency.** YARA-Forge **20261115** refreshed
+(`assurance/downloads.log`, sha256 `fdd03916...`); ClamAV DB is 2026-11-18
+(`freshclam` cannot take the log lock from the running service, DB is current).
+`./build/update --currency`: nothing due except `python-loaded` (never
+auto-updated); no other bumps. `check-versions` had two 503 lookups
+(ncdu, valgrind), so that worklist is incomplete.
+
+**Gates.** T1 PASS. T2 132 s, 0 failures (10 live, 88 cached) -- run with
+`XDG_DATA_HOME`/`XDG_BIN_HOME` unset. The first T2 (666 s, 3 failures) was
+environmental: this shell exports those two vars into the loadout tree, and the
+tcsh/nvim tests that do not scrub them resolved the default root to
+`~/.local/share/loadout/share/loadout`. T3 4/4 LIVE PASS, 583.97 s.
+
+**Release 2026.11.10** is staged on `ac1730e`. The signing key is
+passphrase-encrypted and the fixed agent is empty, so the tag/release step is
+armed behind a watcher on `~/.ssh/loadout-agent.sock`; it runs
+`./build/release` as soon as the key appears.
+
 ## 2026-11-18 (3): EL terminal GUI config captured; VTE padding in env-xfce4-terminal
 
 **EL terminal config captured** from the 1.0.4 preferences dialog. The GUI
