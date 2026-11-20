@@ -226,8 +226,11 @@
       "bins": [
         "liberty-format",
         "liberty-view",
+        "liberty-tools",
+        "pex-tools",
         "lef-tools",
-        "def-tools"
+        "def-tools",
+        "sdc-tools"
       ],
       "wheels": [
         "open-eda-file-tools",
@@ -266,7 +269,7 @@
       "archive_name": "open-eda-file-tools-source.tar.bz2",
       "install_to": "~/.local/share/loadout/src/open-eda-file-tools",
       "sentinel": "Cargo.lock",
-      "version": "v2026.11.10",
+      "version": "v2026.11.13.1-52-ged884cc",
       "platforms": [
         "linux"
       ],
@@ -281,7 +284,7 @@
         "portable-python",
         "uv"
       ],
-      "description": "open-eda-file-tools — open EDA data-file tooling: Liberty (liberty-format, liberty-view), LEF (lef-tools) and DEF (def-tools) parsing and queries, Rust-backed, with the complete source tree (vendored crates included) installed for offline rebuilds"
+      "description": "open-eda-file-tools — open EDA data-file tooling: Liberty (liberty-format, liberty-view, liberty-tools), LEF (lef-tools), DEF (def-tools), PEX (pex-tools) and SDC (sdc-tools), Rust-backed, with the complete source tree (vendored crates included) installed for offline rebuilds"
     },
     "librelane": {
       "kind": "python-tool",

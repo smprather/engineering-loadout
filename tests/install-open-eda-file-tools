@@ -64,10 +64,10 @@ probe_env=(env -i HOME="$test_home" PATH="$poison_dir:$local_prefix/bin:/usr/bin
 
 # Every CLI the registry claims. liberty-view is a server launcher, so it is only
 # checked for presence; the rest print help and are executed.
-for bin in liberty-format liberty-view lef-tools def-tools; do
+for bin in liberty-format liberty-view liberty-tools lef-tools def-tools pex-tools sdc-tools; do
     [[ -x "$local_prefix/bin/$bin" ]] || fail "$bin launcher not installed"
 done
-echo "  OK: all four launchers installed"
+echo "  OK: all seven launchers installed"
 
 # ONE tool venv named after the distribution -- the consolidated project.
 tool_python="$local_prefix/share/uv/tools/open-eda-file-tools/bin/python"
@@ -90,13 +90,13 @@ for dist in liberty-tools lef-tools def-tools; do
 done
 echo "  OK: the retired split distributions have no tool venv"
 
-for bin in liberty-format lef-tools def-tools; do
+for bin in liberty-format liberty-tools lef-tools def-tools pex-tools sdc-tools; do
     "${probe_env[@]}" "$local_prefix/bin/$bin" --help > "$test_home/$bin.help" 2>&1 || {
         cat "$test_home/$bin.help" >&2
         fail "$bin --help"
     }
 done
-echo "  OK: liberty-format/lef-tools/def-tools --help (python3 poisoned on PATH)"
+echo "  OK: liberty-format/liberty-tools/lef-tools/def-tools/pex-tools/sdc-tools --help (python3 poisoned on PATH)"
 
 # The old standalone `def-dump-instances` script was folded into `def-tools`
 # subcommands upstream. `--help` on the parent says nothing about that: the

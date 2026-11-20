@@ -3985,6 +3985,29 @@ version now (one version for the project); the former split entries
 `lef-tools`/`def-tools`, the separate `lefdef-tools` repo and the
 `def-dump-instances` launcher (folded into `def-tools` subcommands) are gone.
 
+**2026-11-13.1 wheel (`ed884cc`, 52 commits past the tag, built 2026-11-20).**
+The wheel now carries **seven** console scripts: `liberty-format`,
+`liberty-view`, `liberty-tools`, `pex-tools`, `lef-tools`, `def-tools`,
+`sdc-tools`; the registry `bins` list and `tests/install-open-eda-file-tools`
+cover all seven. The Rust extension moved to a fat-LTO `[profile.dist]`
+(`[tool.maturin] profile = "dist"`; `maturin develop --release` stays thin), the
+root `Cargo.toml` is now a workspace with `core/` (`open-eda-file-tools-core`),
+and `hashbrown` 0.17.1 is a new vendored crate (`scripts/check_vendored_crates.py`:
+119 crates). The in-container dist wheel build was ~1 min of compile after the
+toolchain cache; container peak memory was not measured. Also in this build:
+`def-tools clock-instances` no longer re-queues a clock cell's nets (quadratic
+memory), DEF route geometry/shape fixes, and `( inst pin + SYNTHESIZED )`
+connectivity parsing.
+
+**Old split tools on an existing box.** Installing the consolidated wheel takes
+over the launchers whose names match, but the old venvs and exclusive launchers
+survive. With loadout's dirs (`XDG_DATA_HOME=<root>/share`,
+`XDG_BIN_HOME=<root>/bin`): `uv tool uninstall def-tools lef-tools liberty-tools
+lefdef-tools`, then reinstall `open-eda-file-tools` (uv's `--force` keeps a
+receipt that lists launchers an uninstall removed, so a plain re-install may not
+recreate them; `uv tool uninstall open-eda-file-tools` + a loadout reinstall is
+the reliable reset).
+
 **Build:** `./build/update open-eda-file-tools` — inside `build/build-shell`,
 after `build/build-shell build/container-rust`. Host builds are refused: maturin
 requires the EL8 linker for a `manylinux_2_28` tag, and this repo's extensions
